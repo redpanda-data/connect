@@ -190,7 +190,7 @@ payload_mapping: root = metadata()
 
 === `tls`
 
-TLS(HTTPS) config to use when connecting
+Custom TLS settings can be used to override system defaults.
 
 *Type*: `object`
 

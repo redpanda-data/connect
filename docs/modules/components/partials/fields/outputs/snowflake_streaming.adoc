@@ -4,8 +4,22 @@
 
 === `account`
 
-The Snowflake https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account name^]. Which should be formatted as `<orgname>-<account_name>` where `<orgname>` is the name of your Snowflake organization and `<account_name>` is the unique name of your account within your organization.
+The https://docs.snowflake.com/en/user-guide/admin-account-identifier#account-name[Snowflake account name to use^].
 
+Use the format `<orgname>-<account_name>` where:
+
+- The `<orgname>` is the name of your Snowflake organization.
+- The `<account_name>` is the unique name of your account within your Snowflake organization.
+
+To find the correct value for this field, run the following query in Snowflake:
+
+```sql
+WITH HOSTLIST AS
+(SELECT * FROM TABLE(FLATTEN(INPUT => PARSE_JSON(SYSTEM$allowlist()))))
+SELECT REPLACE(VALUE:host,'.snowflakecomputing.com','') AS ACCOUNT_IDENTIFIER
+FROM HOSTLIST
+WHERE VALUE:type = 'SNOWFLAKE_DEPLOYMENT_REGIONLESS';
+```
 
 *Type*: `string`
 
@@ -127,13 +141,13 @@ processors:
 
 === `build_options`
 
-Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.
+Options for optimizing the build of the output data that is sent to Snowflake. Monitor the `snowflake_build_output_latency_ns` metric to assess whether you need to update these options.
 
 *Type*: `object`
 
 === `build_options.chunk_size`
 
-The number of rows to chunk for parallelization.
+The number of table rows to submit in each chunk for processing.
 
 *Type*: `int`
 
@@ -141,7 +155,7 @@ The number of rows to chunk for parallelization.
 
 === `build_options.parallelism`
 
-The maximum amount of parallelism to use.
+The maximum amount of parallel processing to use when building the output for Snowflake.
 
 *Type*: `int`
 
@@ -149,15 +163,13 @@ The maximum amount of parallelism to use.
 
 === `channel_name`
 
-The channel name to use.
-Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-Note that batches are assumed to all contain messages for the same channel, so this interpolation is only executed on the first
-message in each batch. It's recommended to batch at the input level to ensure that batches contain messages for the same channel
-if using an input that is partitioned (such as an Apache Kafka topic).
+The channel name to use when connecting to a Snowflake table. Duplicate channel names cause errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 
-This option is mutually exclusive with `channel_prefix`.
+Redpanda Connect assumes that a message batch contains messages for a single channel, which means that interpolation is only executed on the first message in each batch. If your pipeline uses an input that is partitioned, such as an Apache Kafka topic, batch messages at the input level to make sure all messages in a batch are written to the same channel.
 
-NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.
+You can specify either the `channel_name` or `channel_prefix`, but not both. If neither field is populated, this output creates a channel name based on a table's fully-qualified name, which results in a single stream per table.
+
+NOTE: Snowflake limits the number of streams per table to 10,000. If you need to use more than 10,000 streams, contact https://www.snowflake.com/en/support/[Snowflake support^].
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -171,15 +183,13 @@ channel_name: partition-${!@kafka_partition}
 
 === `channel_prefix`
 
-The prefix to use when creating a channel name.
-Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default if neither `channel_prefix` or `channel_name is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
+The prefix to use when creating a channel name for connecting to a Snowflake table. Adding a `channel_prefix` avoids the creation of duplicate channel names, which result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 
-At most `max_in_flight` channels will be opened.
+You can specify either the `channel_prefix` or `channel_name`, but not both. If neither field is populated, this output creates a channel name based on a table's fully-qualified name, which results in a single stream per table.
 
-This option is mutually exclusive with `channel_name`.
+The maximum number of channels open at any time is determined by the value in the `max_in_flight` field.
 
-NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.
+NOTE: Snowflake limits the number of streams per table to 10,000. If you need to use more than 10,000 streams, contact https://www.snowflake.com/en/support/[Snowflake support^].
 
 *Type*: `string`
 
@@ -229,7 +239,7 @@ The factor by which the poll interval grows on each attempt.
 
 === `database`
 
-The Snowflake database to ingest data into.
+The Snowflake database you want to write data to.
 
 *Type*: `string`
 
@@ -241,9 +251,9 @@ database: MY_DATABASE
 
 === `init_statement`
 
+Optional SQL statements to execute immediately after this output connects to Snowflake for the first time. This is a useful way to initialize tables before processing data.
 
-Optional SQL statements to execute immediately upon the first connection. This is a useful way to initialize tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
-
+NOTE: Make sure your SQL statements are idempotent, so they do not cause issues when run multiple times after service restarts.
 
 *Type*: `string`
 
@@ -266,7 +276,7 @@ init_statement: |-
 
 === `mapping`
 
-A bloblang mapping to execute on each message.
+The xref:guides:bloblang/about.adoc[Bloblang `mapping`] to execute on each message.
 
 *Type*: `string`
 
@@ -280,7 +290,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `message_format`
 
-The format at which to expect incoming messages from the rest of the pipeline in.
+The format to expect incoming messages from the rest of the pipeline.
 
 *Type*: `string`
 
@@ -306,20 +316,15 @@ message_format: array
 
 === `offset_token`
 
-The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
-is compared to the latest token for a channel. If the offset token is less than the latest in the channel, it's assumed the message is a duplicate and
-is dropped. This means it is *very important* to have ordered delivery to the output, any out of order messages to the output will be seen as duplicates and dropped.
-Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
-output should be employed for failed messages.
+The offset token to use for exactly-once delivery of data to a Snowflake table.
 
-Offset tokens that both parse as base-10 integers (up to 64 bits) are compared numerically, so a bare numeric token such as `${!@kafka_offset}` does not need padding. Any
-other token, including numbers outside of the 64-bit integer range or a numeric value combined with a prefix or separator (as in the examples below), falls back to a
-lexicographic comparison of its string representation, so if you're using one of those as an offset token, make sure to pad it so that it's lexicographically ordered in its
-string representation.
+This output assumes that messages within a batch are in increasing order by offset token. When data is sent on a channel, the offset token of each message in the batch is compared to the latest token processed by the channel. If the offset token is less than the latest token, it's assumed the message is a duplicate and is dropped. Messages must be delivered to the output in order, otherwise they are processed as duplicates and dropped.
 
-NOTE: It's assumed that messages within a batch are in increasing order by offset token.
+Retried messages can also be seen as duplicates if later messages have succeeded in the meantime, so in most cases use a dead-letter queue to process failed messages. See the `Ingesting data exactly once from Redpanda` example.
 
-For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]
+If both offset tokens parse as base-10 integers (up to 64 bits), they are compared numerically, so a bare numeric token such as `${!@kafka_offset}` does not need padding. Any other token, including numbers outside of the 64-bit integer range or a numeric value combined with a prefix or separator, falls back to a lexicographic comparison of its string representation. If you use one of these tokens, pad it so that it's lexicographically ordered in its string representation.
+
+For more information about offset tokens, see the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[Snowflake documentation^].
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -337,7 +342,7 @@ offset_token: postgres-${!@lsn}
 
 === `private_key`
 
-The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.
+The PEM-encoded private RSA key to use for authentication with Snowflake. You must specify a value for this field or the `private_key_file` field.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -345,13 +350,13 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `private_key_file`
 
-The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.
+A `.p8`, PEM-encoded file to load the private RSA key from. You must specify a value for this field or the `private_key` field.
 
 *Type*: `string`
 
 === `private_key_pass`
 
-The RSA key passphrase if the RSA key is encrypted.
+If the RSA key is encrypted, specify the RSA key passphrase.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -359,7 +364,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `role`
 
-The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.
+The role of the user specified in the `user` field. The user's role must have the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-configuration#authentication-and-authorization[required privileges^] to call the Snowpipe Streaming APIs. For more information about user roles, see the https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake documentation^].
 
 *Type*: `string`
 
@@ -371,7 +376,7 @@ role: ACCOUNTADMIN
 
 === `schema`
 
-The Snowflake schema to ingest data into.
+The schema of the Snowflake database you want to write data to.
 
 *Type*: `string`
 
@@ -383,19 +388,24 @@ schema: PUBLIC
 
 === `schema_evolution`
 
-Options to control schema evolution within the pipeline as new columns are added to the pipeline.
+Options to control schema updates when messages are written to the Snowflake table, such as adding columns as new fields appear in messages.
 
 *Type*: `object`
 
 === `schema_evolution.enabled`
 
-Whether schema evolution is enabled.
+Whether schema evolution is enabled. When set to `true`, the Snowflake table is automatically created based on the schema of the first message written to it, if the table does not already exist. As new fields are added to subsequent messages in the pipeline, new columns are created in the Snowflake table. Any required columns are marked as `nullable` if new messages do not include data for them.
 
 *Type*: `bool`
 
 === `schema_evolution.ignore_nulls`
 
-If `true`, then new columns that are `null` are ignored and schema evolution is not triggered. If `false` then null columns trigger schema migrations in Snowflake. NOTE: unless you already know what type this column will be in advance, it's highly encouraged to ignore null values.
+When set to `true` and schema evolution is enabled, new columns that have `null` values _are not_ added to the Snowflake table and do not trigger schema evolution. When set to `false`, `null` columns trigger schema migrations in Snowflake. Ignoring `null` values:
+
+- Prevents unnecessary schema changes caused by placeholder or incomplete data.
+- Avoids creating table columns with incorrect data types.
+
+NOTE: Redpanda does not recommend changing the default setting (`true`) unless you know the data type of `null` columns in advance.
 
 *Type*: `bool`
 
@@ -403,10 +413,16 @@ If `true`, then new columns that are `null` are ignored and schema evolution is 
 
 === `schema_evolution.processors[]`
 
+A series of processors to execute when new columns are added to the Snowflake table. You can use these processors to:
 
-A series of processors to execute when new columns are added to the table. Specifying this can support running side effects when the schema evolves or enriching the message with additional data to guide the schema changes. For example, one could read the schema the message was produced with from the schema registry and use that to decide which type the new column in Snowflake should be.
+- Run side effects when the schema evolves.
+- Enrich the message with additional information to guide the schema changes.
 
-        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`. The output of these series of processors should be a single message, where the contents of the message is a string indicating the column data type to use (FLOAT, VARIANT, NUMBER(38, 0), etc. An ALTER TABLE statement will then be executed on the table in Snowflake to add the column with the corresponding data type.
+For example, a processor could read the schema from the schema registry that a message was produced with and use that schema to determine the data type of the new column in Snowflake.
+
+The input to these processors is an object with the value and name of the new column, the original message, and details of the Snowflake table the output writes to. The metadata remains the same as in the original message that triggered the schema update. For example: `{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`
+
+The output from the processors must be a single message that contains a string specifying the column data type to use, such as `FLOAT`, `VARIANT`, or `NUMBER(38, 0)`. The output then runs an `ALTER TABLE` statement on the Snowflake table to add the column with the corresponding data type.
 
 *Type*: `array<processor>`
 
@@ -428,7 +444,7 @@ processors:
 
 === `table`
 
-The Snowflake table to ingest data into.
+The Snowflake table you want to write data to.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -442,7 +458,7 @@ table: MY_TABLE
 
 === `timestamp_format`
 
-The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.
+The format to parse string values for `TIMESTAMP`, `TIMESTAMP_LTZ` and `TIMESTAMP_NTZ` columns. Should be a layout for https://pkg.go.dev/time#Parse[time.Parse^] in Go.
 
 *Type*: `string`
 
@@ -450,7 +466,7 @@ The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ
 
 === `url`
 
-Override the default URL used to connect to Snowflake which is https://ORG-ACCOUNT.snowflakecomputing.com
+Specify a custom URL to connect to Snowflake. This parameter overrides the default URL, which is generated from the value of the `account` field: `https://<account>.snowflakecomputing.com`.
 
 *Type*: `string`
 
@@ -462,7 +478,7 @@ url: https://org-account.privatelink.snowflakecomputing.com
 
 === `user`
 
-The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user.
+Specify a user to run the Snowpipe Stream. To learn how to create a user, see the https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake documentation^].
 
 *Type*: `string`
 

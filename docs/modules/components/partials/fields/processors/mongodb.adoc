@@ -110,7 +110,7 @@ The name of the target MongoDB database.
 
 === `document_map`
 
-A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations insert-one, replace-one, update-one and aggregate.
+A Bloblang map that represents a document to store in MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The `document_map` parameter is required for the following database operations: `insert-one`, `replace-one`, `update-one`, and `aggregate`.
 
 *Type*: `string`
 
@@ -126,7 +126,9 @@ document_map: |-
 
 === `filter_map`
 
-A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should have the fields required to locate the document to delete.
+A Bloblang map that represents a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The `filter_map` parameter is required for all database operations except `insert-one`.
+
+The `filter_map` is used to find documents for the specified operation. For example, for a `delete-one` operation, the filter map should include the fields required to locate the document for deletion.
 
 *Type*: `string`
 
@@ -142,7 +144,9 @@ filter_map: |-
 
 === `hint_map`
 
-A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations except insert-one. It is used to improve performance of finding the documents in the mongodb.
+A Bloblang map that represents a hint or index for a MongoDB command to use, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional, and is used with all operations except `insert-one`.
+
+Define a `hint_map` to improve performance when finding documents in the MongoDB database.
 
 *Type*: `string`
 
@@ -158,7 +162,7 @@ hint_map: |-
 
 === `json_marshal_mode`
 
-The json_marshal_mode setting is optional and controls the format of the output message.
+Controls the format used to convert BSON documents to JSON in the output message.
 
 ifndef::env-cloud[]
 Requires version 3.60.0 or later.
@@ -182,7 +186,7 @@ endif::[]
 
 === `operation`
 
-The mongodb operation to perform.
+The MongoDB database operation to perform.
 
 *Type*: `string`
 
@@ -192,7 +196,7 @@ The mongodb operation to perform.
 
 === `password`
 
-The password to connect to the database.
+The password to use for authentication. Used together with `username` for basic authentication.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -202,7 +206,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `upsert`
 
-The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
+The `upsert` parameter is optional, and only applies for `update-one` and `replace-one` operations. If the filter specified in `filter_map` matches an existing document, this operation updates or replaces the document, otherwise a new document is created.
 
 ifndef::env-cloud[]
 Requires version 3.60.0 or later.
@@ -234,13 +238,13 @@ The username to connect to the database.
 
 === `write_concern`
 
-The write concern settings for the mongo connection.
+The https://www.mongodb.com/docs/manual/reference/write-concern/[write concern settings^] for the MongoDB connection.
 
 *Type*: `object`
 
 === `write_concern.j`
 
-J requests acknowledgement from MongoDB that write operations are written to the journal.
+The `j` option requests acknowledgement from MongoDB that write operations are written to the journal.
 
 *Type*: `bool`
 
@@ -248,7 +252,7 @@ J requests acknowledgement from MongoDB that write operations are written to the
 
 === `write_concern.w`
 
-W requests acknowledgement that write operations propagate to the specified number of mongodb instances. Can be the string "majority" to wait for a calculated majority of nodes to acknowledge the write operation, or an integer value specifying an minimum number of nodes to acknowledge the operation, or a string specifying the name of a custom write concern configured in the cluster.
+The `w` option requests acknowledgement that write operations propagate to the specified number of MongoDB instances. Set it to `majority` to wait for a calculated majority of nodes to acknowledge the write operation, to an integer to specify the minimum number of nodes that must acknowledge the operation, or to the name of a custom write concern configured in the cluster.
 
 *Type*: `string`
 

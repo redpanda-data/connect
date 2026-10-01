@@ -335,6 +335,15 @@ func isConnPoolError(err error) bool {
 		strings.Contains(msg, "server selection error")
 }
 
+const (
+	// ClientUsernameDescription describes the username field of MongoDB
+	// components that parse their connection with ClientConfigFromParsed.
+	ClientUsernameDescription = "The username to connect to the database."
+	// ClientPasswordDescription describes the password field of MongoDB
+	// components that parse their connection with ClientConfigFromParsed.
+	ClientPasswordDescription = "The password to use for authentication. Used together with `username` for basic authentication."
+)
+
 func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLField(commonFieldClientURL).
@@ -343,10 +352,10 @@ func clientFields() []*service.ConfigField {
 		service.NewStringField(commonFieldClientDatabase).
 			Description("The name of the target MongoDB database."),
 		service.NewStringField(commonFieldClientUsername).
-			Description("The username to connect to the database.").
+			Description(ClientUsernameDescription).
 			Default(""),
 		service.NewStringField(commonFieldClientPassword).
-			Description("The password to connect to the database.").
+			Description(ClientPasswordDescription).
 			Default("").
 			Secret(),
 		service.NewURLField(commonFieldClientAppName).
@@ -456,6 +465,8 @@ const (
 	commonFieldOperation = "operation"
 )
 
+const operationDescription = "The MongoDB database operation to perform."
+
 func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
 	return service.NewStringEnumField("operation",
 		string(OperationInsertOne),
@@ -465,7 +476,7 @@ func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationUpdateOne),
 		string(OperationFindOne),
 		string(OperationAggregate),
-	).Description("The mongodb operation to perform.").
+	).Description(operationDescription).
 		Default(string(defaultOperation))
 }
 
@@ -476,7 +487,7 @@ func outputOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationDeleteMany),
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
-	).Description("The mongodb operation to perform.").
+	).Description(operationDescription).
 		Default(string(defaultOperation))
 }
 
@@ -505,16 +516,16 @@ const (
 func writeConcernDocs() *service.ConfigField {
 	return service.NewObjectField(commonFieldWriteConcern,
 		service.NewStringField(commonFieldWriteConcernW).
-			Description(`W requests acknowledgement that write operations propagate to the specified number of mongodb instances. Can be the string "majority" to wait for a calculated majority of nodes to acknowledge the write operation, or an integer value specifying an minimum number of nodes to acknowledge the operation, or a string specifying the name of a custom write concern configured in the cluster.`).
+			Description(`The `+"`"+`w`+"`"+` option requests acknowledgement that write operations propagate to the specified number of MongoDB instances. Set it to `+"`"+`majority`+"`"+` to wait for a calculated majority of nodes to acknowledge the write operation, to an integer to specify the minimum number of nodes that must acknowledge the operation, or to the name of a custom write concern configured in the cluster.`).
 			ShortDescription("How many MongoDB instances must acknowledge a write. Can be majority to wait for a calculated majority.").
 			Default("majority"),
 		service.NewBoolField(commonFieldWriteConcernJ).
-			Description("J requests acknowledgement from MongoDB that write operations are written to the journal.").
+			Description("The `j` option requests acknowledgement from MongoDB that write operations are written to the journal.").
 			Default(false),
 		service.NewStringField(commonFieldWriteConcernWTimeout).
 			Description("The write concern timeout.").
 			Default(""),
-	).Description("The write concern settings for the mongo connection.")
+	).Description("The https://www.mongodb.com/docs/manual/reference/write-concern/[write concern settings^] for the MongoDB connection.")
 }
 
 func writeConcernSpecFromParsed(pConf *service.ParsedConfig) (spec *writeConcernSpec, err error) {
@@ -570,26 +581,26 @@ const (
 func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
-			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
-				"insert-one, replace-one, update-one and aggregate.").
+			Description("A Bloblang map that represents a document to store in MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The `document_map` parameter is required for the following database operations: `insert-one`, `replace-one`, `update-one`, and `aggregate`.").
 			ShortDescription("A Bloblang map producing the document to store in MongoDB, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
-			Description("A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except " +
-				"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should " +
-				"have the fields required to locate the document to delete.").
+			Description(`A Bloblang map that represents a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The ` + "`" + `filter_map` + "`" + ` parameter is required for all database operations except ` + "`" + `insert-one` + "`" + `.
+
+The ` + "`" + `filter_map` + "`" + ` is used to find documents for the specified operation. For example, for a ` + "`" + `delete-one` + "`" + ` operation, the filter map should include the fields required to locate the document for deletion.`).
 			ShortDescription("A Bloblang map producing a MongoDB filter, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldHintMap).
-			Description("A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations " +
-				"except insert-one. It is used to improve performance of finding the documents in the mongodb.").
+			Description(`A Bloblang map that represents a hint or index for a MongoDB command to use, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional, and is used with all operations except ` + "`" + `insert-one` + "`" + `.
+
+Define a ` + "`" + `hint_map` + "`" + ` to improve performance when finding documents in the MongoDB database.`).
 			ShortDescription("An optional Bloblang map producing the MongoDB command hint, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBoolField(commonFieldUpsert).
-			Description("The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
+			Description("The `upsert` parameter is optional, and only applies for `update-one` and `replace-one` operations. If the filter specified in `filter_map` matches an existing document, this operation updates or replaces the document, otherwise a new document is created.").
 			ShortDescription("Insert the document when the filter matches nothing. Applies only to update-one and replace-one.").
 			Version("3.60.0").
 			Default(false),

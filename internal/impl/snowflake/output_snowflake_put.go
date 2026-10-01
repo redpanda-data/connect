@@ -205,11 +205,11 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			ShortDescription("The cloud part of the Account Identifier. Required when using an Account Locator.").Example("aws").Example("gcp").Example("azure").Optional()).
 		Field(service.NewStringField("user").Description("Username.")).
 		Field(service.NewStringField("password").Description("An optional password.").Optional().Secret()).
-		Field(service.NewStringField("private_key").Description("The private SSH key. `private_key_pass` is required when using encrypted keys.").
+		Field(service.NewStringField("private_key").Description("Your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.").
 			ShortDescription("The private SSH key. Encrypted keys also need private_key_pass.").Optional().Secret()).
-		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.").
+		Field(service.NewStringField("private_key_file").Description("The path to a file containing your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.").
 			ShortDescription("Path to a file containing the private SSH key. Encrypted keys also need private_key_pass.").Optional()).
-		Field(service.NewStringField("private_key_pass").Description("An optional private SSH key passphrase.").Optional().Secret()).
+		Field(service.NewStringField("private_key_pass").Description("The passphrase for your private SSH key.").Optional().Secret()).
 		Field(service.NewStringField("role").Description("Role.")).
 		Field(service.NewStringField("database").Description("Database.")).
 		Field(service.NewStringField("warehouse").Description("Warehouse.")).
@@ -217,9 +217,9 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 		Field(service.NewInterpolatedStringField("stage").Description(`Stage name. Use either one of the
 		https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html[supported^] stage types.`).
 			ShortDescription("Stage name, using one of the supported stage types.")).
-		Field(service.NewInterpolatedStringField("path").Description("Stage path.").Default("")).
-		Field(service.NewInterpolatedStringField("file_name").Description("Stage file name. Will be equal to the Request ID if not set or empty.").Optional().Default("").Version("v4.12.0")).
-		Field(service.NewInterpolatedStringField("file_extension").Description("Stage file extension. Will be derived from the configured `compression` if not set or empty.").
+		Field(service.NewInterpolatedStringField("path").Description(`Stage path.`).Default("")).
+		Field(service.NewInterpolatedStringField("file_name").Description(`Stage file name. Will be equal to the Request ID if not set or empty.`).Optional().Default("").Version("v4.12.0")).
+		Field(service.NewInterpolatedStringField("file_extension").Description(`Stage file extension. Will be derived from the configured `+"`"+`compression`+"`"+` if not set or empty.`).
 			ShortDescription("Stage file extension. Derived from the configured compression if unset.").Optional().Default("").Example("csv").Example("parquet").Version("v4.12.0")).
 		Field(service.NewIntField("upload_parallel_threads").Description("Specifies the number of threads to use for uploading files.").Advanced().Default(4).LintRule(`root = if this < 1 || this > 99 { [ "upload_parallel_threads must be between 1 and 99" ] }`)).
 		Field(service.NewStringAnnotatedEnumField("compression", map[string]string{
@@ -230,7 +230,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			string(CompressionTypeRawDeflate): "Messages must be pre-compressed using the flate algorithm (without header, RFC1951). Default `file_extension`: `raw_deflate`.",
 			string(CompressionTypeZstandard):  "Messages must be pre-compressed using the Zstandard algorithm. Default `file_extension`: `zst`.",
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
-		Field(service.NewInterpolatedStringField("request_id").Description("Request ID. Will be assigned a random UUID (v4) string if not set or empty.").Optional().Default("").Version("v4.12.0")).
+		Field(service.NewInterpolatedStringField("request_id").Description(`Request ID. Will be assigned a random UUID (v4) string if not set or empty.`).Optional().Default("").Version("v4.12.0")).
 		Field(service.NewInterpolatedStringField("snowpipe").Description("An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`. `private_key` or `private_key_file` must be set when using this feature.").
 			ShortDescription("An optional Snowpipe name. Requires private_key or private_key_file to be set.").Optional()).
 		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).

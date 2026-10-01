@@ -15,5 +15,12 @@ ifndef::env-cloud[]
 Introduced in version 4.39.0.
 endif::[]
 
-Using this field overrides the SSL/TLS settings in the environment and DSN.
+Streams changes from a PostgreSQL database for Change Data Capture (CDC).
+Additionally, if `stream_snapshot` is set to true, then the existing data in the database is also streamed too.
+
+include::connect:components:partial$metadata/inputs/postgres_cdc.adoc[]
+
+== Unserializable rows
+
+A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the `errored()` Bloblang function and routed with error-handling components (for example a `switch` output with `reject_errored`, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
 // end::body[]

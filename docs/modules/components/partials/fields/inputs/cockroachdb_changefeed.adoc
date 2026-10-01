@@ -12,7 +12,7 @@ Whether messages that are rejected (nacked) at the output level should be automa
 
 === `cursor_cache`
 
-A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.
+A xref:components:caches/about.adoc[cache resource] to use for storing the latest cursor that has been successfully delivered. This allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.
 
 *Type*: `string`
 

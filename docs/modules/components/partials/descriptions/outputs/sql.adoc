@@ -17,5 +17,5 @@ endif::[]
 
 == Alternatives
 
-For basic inserts use the xref:components:outputs/sql.adoc[`sql_insert`] output. For more complex queries use the xref:components:outputs/sql_raw.adoc[`sql_raw`] output.
+For basic inserts use the xref:components:outputs/sql_insert.adoc[`sql_insert`] output. For more complex queries use the xref:components:outputs/sql_raw.adoc[`sql_raw`] output.
 // end::body[]

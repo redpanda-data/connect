@@ -15,7 +15,7 @@ ifndef::env-cloud[]
 Introduced in version 3.65.0.
 endif::[]
 
-If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
+If the query fails to execute, the message remains unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
 
 == Alternatives
 

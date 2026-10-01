@@ -316,7 +316,7 @@ init_statement: |-
 
 === `max_in_flight`
 
-The maximum number of inserts to run in parallel.
+The maximum number of message batches to write in parallel.
 
 *Type*: `int`
 

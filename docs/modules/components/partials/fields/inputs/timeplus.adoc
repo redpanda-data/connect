@@ -4,7 +4,7 @@
 
 === `apikey`
 
-The API key. Required when reads from Timeplus Enterprise Cloud
+The API key for the Timeplus Enterprise REST API. You need to generate the key in the web console of Timeplus Enterprise (Cloud). This field is required if you are reading messages from Timeplus Enterprise (Cloud).
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -12,7 +12,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `password`
 
-The password. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd
+The password for the Timeplus application server. This field is required if you are reading messages from Timeplus Enterprise (Self-Hosted) or `timeplusd`.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -20,7 +20,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `query`
 
-The query to run
+The query to execute on Timeplus Enterprise (Cloud or Self-Hosted) or `timeplusd`.
 
 *Type*: `string`
 
@@ -36,7 +36,7 @@ query: select count(*) from table(iot)
 
 === `url`
 
-The url should always include schema and host.
+The URL of your Timeplus instance, which should always include the schema and host.
 
 *Type*: `string`
 
@@ -44,13 +44,13 @@ The url should always include schema and host.
 
 === `username`
 
-The username. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd
+The username for the Timeplus application server. This field is required if you are reading messages from Timeplus Enterprise (Self-Hosted) or `timeplusd`.
 
 *Type*: `string`
 
 === `workspace`
 
-ID of the workspace. Required when reads from Timeplus Enterprise.
+The ID of the workspace you want to read messages from. This field is required if you are connecting to Timeplus Enterprise (Cloud or Self-Hosted) using HTTP.
 
 *Type*: `string`
 
