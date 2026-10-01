@@ -2,6 +2,29 @@
 # Prints the review threads of a pull request as one JSON array: the resolved and outdated
 # state, the path and line, and each comment with its author and authorAssociation.
 #
+# Example output:
+#
+#   [
+#     {
+#       "isResolved": true,
+#       "isOutdated": false,
+#       "path": ".github/workflows/needs-review-digest.yml",
+#       "line": 38,
+#       "originalLine": 29,
+#       "comments": {
+#         "nodes": [
+#           {"author": {"login": "claude"}, "authorAssociation": "NONE",
+#            "body": "**A `gh pr list` failure is swallowed (...)", "createdAt": "2026-09-16T14:12:07Z"},
+#           {"author": {"login": "josephwoodward"}, "authorAssociation": "MEMBER",
+#            "body": "83ebdfdec480", "createdAt": "2026-09-16T14:25:24Z"}
+#         ]
+#       }
+#     },
+#     (...)
+#   ]
+#
+# "line" is null when the thread is outdated.
+#
 # Used by the /review skill and by the CI reviewer (.github/workflows/claude-code-review.yml).
 # The skill allows this script instead of `gh api graphql *`. That pattern also matches
 # mutations, so a prompt injection in PR content could write to GitHub with the user's token.
