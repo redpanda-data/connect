@@ -607,7 +607,6 @@ func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
 	tests := []struct {
 		name      string
 		txBEvents []*sqlredo.RedoEvent
-		wantBelow replication.SCN
 	}{
 		{
 			name: "SecureFile locator and write",
@@ -629,7 +628,6 @@ func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
 					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
 				},
 			},
-			wantBelow: 110,
 		},
 		{
 			name: "deferred write only",
@@ -643,7 +641,6 @@ func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
 					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
 				},
 			},
-			wantBelow: 110,
 		},
 	}
 	for _, tt := range tests {
@@ -678,7 +675,7 @@ func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
 			}))
 
 			require.Len(t, pub.messages, 1)
-			assert.Less(t, pub.messages[0].CheckpointSCN, tt.wantBelow)
+			assert.Equal(t, replication.SCN(109), pub.messages[0].CheckpointSCN, "the checkpoint must stay below the first LOB event of txB")
 		})
 	}
 }

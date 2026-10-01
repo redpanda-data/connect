@@ -9,6 +9,7 @@
 package oracledb_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2435,23 +2437,18 @@ oracledb_cdc:
 	})
 }
 
-// TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart verifies that a LOB update
-// in an open transaction B is not lost when another transaction A commits and
-// the connector restarts before B commits. A SecureFile out-of-row LOB update
-// emits only LOB events, which the transaction cache low watermark does not see.
-// If A's checkpoint passes B's LOB events, the restart does not mine them again.
+// TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart verifies that an open
+// transaction with only LOB events does not lose its update when another
+// transaction commits and the connector restarts before it commits.
 func TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobresume",
-		`CREATE TABLE `+db.Schema+`.lobresume (
-		id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
-		clobcol CLOB
-	)`))
+		"CREATE TABLE "+db.Schema+".lobresume (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, clobcol CLOB)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobresume_other",
-		`CREATE TABLE `+db.Schema+`.lobresume_other (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY)`))
+		"CREATE TABLE "+db.Schema+".lobresume_other (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY)"))
 
 	cfg := `
 oracledb_cdc:
@@ -2466,30 +2463,19 @@ oracledb_cdc:
   include: ["` + db.Schema + `.LOBRESUME", "` + db.Schema + `.LOBRESUME_OTHER"]`
 
 	var batch oracledbtest.MsgBatch
-	findMsg := func(match func(msg *service.Message) bool) *service.Message {
-		for _, msg := range batch.Clone() {
-			if match(msg) {
-				return msg
-			}
-		}
-		return nil
-	}
-	checkpointSCN := func() replication.SCN {
-		var val []byte
-		if err := db.QueryRowContext(t.Context(), "SELECT cache_val FROM "+db.CheckpointTable()).Scan(&val); err != nil {
-			return replication.InvalidSCN
-		}
-		scn, err := replication.SCNFromBytes(val)
-		require.NoError(t, err)
-		return scn
+	hasMsg := func(match func(*service.Message) bool) bool {
+		return slices.ContainsFunc(batch.Clone(), match)
 	}
 	updatedClob := strings.Repeat("B", 5000)
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
 
 	t.Log("Inserting the LOB row")
-	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
-	db.MustExec("INSERT INTO "+db.Schema+".lobresume (clobcol) VALUES (:1)", strings.Repeat("A", 5000))
-	require.Eventually(t, func() bool { return batch.Count() >= 1 }, time.Minute, 500*time.Millisecond, "timed out waiting for the INSERT")
+	{
+		db.MustExec("INSERT INTO "+db.Schema+".lobresume (clobcol) VALUES (:1)", strings.Repeat("A", 5000))
+		require.Eventually(t, func() bool { return batch.Count() >= 1 }, time.Minute, 500*time.Millisecond)
+	}
 
+	// An out-of-row SecureFile update emits only LOB events, with no DML row.
 	t.Log("Updating the LOB in transaction B and leaving B open")
 	conn, err := db.Conn(t.Context())
 	require.NoError(t, err)
@@ -2499,40 +2485,42 @@ oracledb_cdc:
 	_, err = txB.ExecContext(t.Context(), "UPDATE "+db.Schema+".lobresume SET clobcol = :1 WHERE id = 1", updatedClob)
 	require.NoError(t, err)
 
-	t.Log("Committing transaction A on another table")
-	db.MustExec("INSERT INTO " + db.Schema + ".lobresume_other (id) VALUES (DEFAULT)")
-	var msgA *service.Message
-	require.Eventually(t, func() bool {
-		msgA = findMsg(func(msg *service.Message) bool {
-			table, _ := msg.MetaGet("table_name")
-			return table == "LOBRESUME_OTHER"
-		})
-		return msgA != nil
-	}, time.Minute, 500*time.Millisecond, "timed out waiting for the INSERT of transaction A")
-	rawSCN, ok := msgA.MetaGet("checkpoint_scn")
-	require.True(t, ok, "message of transaction A has no checkpoint_scn")
-	scnA, err := strconv.ParseUint(rawSCN, 10, 64)
-	require.NoError(t, err)
-	require.Eventually(t, func() bool { return checkpointSCN() >= replication.SCN(scnA) }, time.Minute, 500*time.Millisecond,
-		"timed out waiting for the checkpoint of transaction A")
-	require.NoError(t, stream.StopWithin(10*time.Second))
-
-	t.Log("Committing transaction B while the connector is stopped, then restarting")
-	require.NoError(t, txB.Commit())
-	batch.Reset()
-	stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
-	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
-
-	require.Eventually(t, func() bool {
-		return findMsg(func(msg *service.Message) bool {
-			var row map[string]any
-			b, err := msg.AsBytes()
-			if err != nil || json.Unmarshal(b, &row) != nil {
+	t.Log("Committing transaction A and stopping after its checkpoint is stored")
+	{
+		db.MustExec("INSERT INTO " + db.Schema + ".lobresume_other (id) VALUES (DEFAULT)")
+		require.Eventually(t, func() bool {
+			var val []byte
+			if err := db.QueryRowContext(t.Context(), "SELECT cache_val FROM "+db.CheckpointTable()).Scan(&val); err != nil {
 				return false
 			}
-			return row["CLOBCOL"] == updatedClob
-		}) != nil
-	}, time.Minute, 500*time.Millisecond, "the LOB update of transaction B was lost after the restart")
+			stored, err := replication.SCNFromBytes(val)
+			if err != nil {
+				return false
+			}
+			return hasMsg(func(msg *service.Message) bool {
+				table, _ := msg.MetaGet("table_name")
+				raw, _ := msg.MetaGet("checkpoint_scn")
+				scnA, err := replication.ParseSCN(raw)
+				return table == "LOBRESUME_OTHER" && err == nil && stored >= scnA
+			})
+		}, time.Minute, 500*time.Millisecond, "timed out waiting for the checkpoint of transaction A")
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	}
+
+	t.Log("Committing transaction B while stopped and expecting its update after the restart")
+	{
+		require.NoError(t, txB.Commit())
+		batch.Reset()
+		stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
+		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+		require.Eventually(t, func() bool {
+			return hasMsg(func(msg *service.Message) bool {
+				b, err := msg.AsBytes()
+				return err == nil && bytes.Contains(b, []byte(updatedClob))
+			})
+		}, time.Minute, 500*time.Millisecond, "the LOB update of transaction B was lost after the restart")
+	}
 }
 
 // TestIntegrationOracleDBCDCNationalCharset verifies that non-ASCII data in
