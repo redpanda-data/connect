@@ -124,6 +124,10 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		msg := "txB has no DML events so it must not hold back the checkpoint"
 		assert.Equal(t, replication.SCN(txACommit), pub.messages[0].CheckpointSCN, msg)
 	})
+
+	t.Run("open transaction with only LOB rows holds back checkpoint", func(t *testing.T) {
+		testLOBOnlyTransactionHoldsCheckpoint(t, NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default())))
+	})
 }
 
 func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
@@ -230,6 +234,10 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 
 		assert.Equal(t, replication.SCN(txACommit), pub.messages[0].CheckpointSCN,
 			"txB has no DML events so it must not hold back the checkpoint")
+	})
+
+	t.Run("open transaction with only LOB rows holds back checkpoint", func(t *testing.T) {
+		testLOBOnlyTransactionHoldsCheckpoint(t, newCacheResource(t))
 	})
 }
 
@@ -526,6 +534,42 @@ func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing
 
 	row1 := pub.messages[0].Data.(map[string]any)
 	assert.NotContains(t, row1, "DESC", "LOBEnabled=false must not merge or leak LOB column data")
+}
+
+func testLOBOnlyTransactionHoldsCheckpoint(t *testing.T, cache TransactionCache) {
+	t.Helper()
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+
+	const (
+		txAStart  = uint64(900)
+		txBStart  = uint64(910)
+		txBLOB    = uint64(920)
+		txACommit = uint64(1000)
+	)
+
+	require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+	require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+	require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
+
+	err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           txBLOB,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txB",
+		SQLRedo:       sql.NullString{Valid: true, String: "DECLARE \n loc_c CLOB; \nBEGIN\n select \"CLOBCOL\" into loc_c from \"APP\".\"LOBRESUME\" where \"ID\" = '1' and ROWID = 'AAAXxxx' for update;\nEND;"},
+	})
+	require.NoError(t, err)
+
+	err = lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           txACommit,
+		Operation:     sqlredo.OpCommit,
+		TransactionID: "txA",
+	})
+	require.NoError(t, err)
+	require.Len(t, pub.messages, 1, "A's commit must publish its events")
+
+	assert.Equal(t, replication.SCN(txBStart-1), pub.messages[0].CheckpointSCN,
+		"txB has LOB rows so CheckpointSCN must be held back to B.startSCN-1")
 }
 
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {

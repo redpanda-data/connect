@@ -30,7 +30,12 @@ type TransactionCache interface {
 	// if no other open transactions exist. Used to compute a safe checkpoint SCN
 	// on commit: advancing the checkpoint past an open transaction's start SCN
 	// would cause its already-seen DML events to be missed on restart.
+	// Only transactions with buffered events, or marked by HoldWatermark, count.
 	LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64
+	// HoldWatermark makes an open transaction count towards LowWatermarkSCN
+	// before it has buffered events, e.g. one with only LOB rows, which are
+	// buffered outside the cache. Unknown transactions are ignored.
+	HoldWatermark(ctx context.Context, txnID sqlredo.TransactionID) error
 }
 
 // Transaction buffers events until commit
@@ -38,6 +43,8 @@ type Transaction struct {
 	ID     sqlredo.TransactionID
 	SCN    uint64
 	Events []*sqlredo.DMLEvent
+
+	holdsWatermark bool
 }
 
 // InMemoryCache is an in-memory implementation of TransactionCache that stores
@@ -142,11 +149,19 @@ func (tc *InMemoryCache) CommitTransaction(_ context.Context, txnID sqlredo.Tran
 func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
 	lowestOpenSCN := uint64(math.MaxUint64)
 	for id, txn := range tc.transactions {
-		if id != excludeTxnID && len(txn.Events) > 0 {
+		if id != excludeTxnID && (len(txn.Events) > 0 || txn.holdsWatermark) {
 			lowestOpenSCN = min(lowestOpenSCN, txn.SCN)
 		}
 	}
 	return lowestOpenSCN
+}
+
+// HoldWatermark marks the open transaction so that LowWatermarkSCN counts it.
+func (tc *InMemoryCache) HoldWatermark(_ context.Context, txnID sqlredo.TransactionID) error {
+	if txn, exists := tc.transactions[txnID]; exists {
+		txn.holdsWatermark = true
+	}
+	return nil
 }
 
 // RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.

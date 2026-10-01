@@ -2707,3 +2707,121 @@ oracledb_cdc:
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
+
+// TestIntegrationOracleDBCDCLOBOnlyTxnOpenAcrossRestart reproduces a lost LOB
+// update across a restart. Transaction B updates an out-of-row SecureFile LOB
+// and stays open, so LogMiner emits only LOB rows for it and no DML row. The
+// transaction cache holds no events for B, so the low watermark ignores it.
+// Transaction A then commits on another table and its checkpoint moves past B's
+// LOB rows. After a restart B's commit finds no cached transaction and the LOB
+// update is silently dropped.
+func TestIntegrationOracleDBCDCLOBOnlyTxnOpenAcrossRestart(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobresume",
+		`CREATE TABLE `+db.Schema+`.lobresume (
+		id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
+		clobcol CLOB
+	)`))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".lobresume_other",
+		`CREATE TABLE `+db.Schema+`.lobresume_other (
+		id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY
+	)`))
+
+	// Out-of-row LOB, committed before the pipeline starts so it is not streamed.
+	db.MustExec("INSERT INTO "+db.Schema+".lobresume (clobcol) VALUES (:1)", strings.Repeat("A", 5000))
+
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + db.Schema + `.LOBRESUME", "` + db.Schema + `.LOBRESUME_OTHER"]`
+
+	var batch oracledbtest.MsgBatch
+	updatedClob := strings.Repeat("B", 5000)
+
+	tableCount := func(table string) int {
+		n := 0
+		for _, msg := range batch.Clone() {
+			if tbl, _ := msg.MetaGet("table_name"); tbl == table {
+				n++
+			}
+		}
+		return n
+	}
+
+	t.Log("Starting pipeline, opening transaction B and committing transaction A...")
+	conn, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	{
+		stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
+
+		// Transaction B: update the LOB and leave the transaction open.
+		tx, err := conn.BeginTx(t.Context(), nil)
+		require.NoError(t, err)
+		_, err = tx.ExecContext(t.Context(), `
+		DECLARE
+			v CLOB := RPAD('B', 5000, 'B');
+		BEGIN
+			UPDATE `+db.Schema+`.lobresume SET clobcol = v WHERE id = 1;
+		END;`)
+		require.NoError(t, err)
+
+		// Transaction A: commits after B's LOB rows in the redo.
+		db.MustExec("INSERT INTO " + db.Schema + ".lobresume_other (id) VALUES (DEFAULT)")
+
+		require.Eventually(t, func() bool {
+			return tableCount("LOBRESUME_OTHER") >= 1
+		}, time.Minute*2, time.Millisecond*500, "timed out waiting for transaction A's event")
+
+		// Without a snapshot the checkpoint is first written when A's batch is
+		// acked, so wait for it to be persisted before stopping. Don't compare
+		// it with A's SCN: a correct checkpoint is held back to before B.
+		require.Eventually(t, func() bool {
+			var n int
+			return db.QueryRow("SELECT COUNT(*) FROM "+db.CheckpointTable()).Scan(&n) == nil && n > 0
+		}, time.Minute, time.Millisecond*500, "timed out waiting for transaction A's checkpoint to be persisted")
+		require.NoError(t, stream.StopWithin(time.Second*10))
+
+		t.Log("Committing transaction B while the connector is stopped...")
+		require.NoError(t, tx.Commit())
+	}
+
+	t.Log("Restarting pipeline from checkpoint...")
+	{
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
+
+		assert.Eventually(t, func() bool {
+			for _, msg := range batch.Clone() {
+				if tbl, _ := msg.MetaGet("table_name"); tbl != "LOBRESUME" {
+					continue
+				}
+				b, err := msg.AsBytes()
+				if err != nil {
+					continue
+				}
+				var row map[string]any
+				if err := json.Unmarshal(b, &row); err != nil {
+					continue
+				}
+				if v, ok := row["CLOBCOL"].(string); ok && v == updatedClob {
+					return true
+				}
+			}
+			return false
+		}, time.Minute, time.Millisecond*500, "LOB-only update from transaction open across restart was lost: checkpoint advanced past its LOB rows")
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	}
+}

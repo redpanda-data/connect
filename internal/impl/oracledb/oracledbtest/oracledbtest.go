@@ -603,8 +603,9 @@ type containerCfg struct {
 // this does not change what a pipeline delivers or checkpoints:
 //   - LogMiner returns DML only for the tables in the include list, and each
 //     test has its own schemas and checkpoint table.
-//   - An open transaction holds back the checkpoint only if it has events for
-//     a captured table (see logminer.TransactionCache.LowWatermarkSCN). So an
+//   - An open transaction holds back the checkpoint only if it has events or
+//     LOB rows for a captured table (see
+//     logminer.TransactionCache.LowWatermarkSCN). So an
 //     open transaction in one test cannot hold back the checkpoint of another.
 //
 // Tests that restart or change the instance must not call t.Parallel(). Go runs
