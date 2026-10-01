@@ -22,7 +22,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `encoding`
 
-Encoding format for messages in the batch. Options: 'protobuf' or 'json'.
+The encoding format for messages in each batch, either `protobuf` or `json`.
 
 *Type*: `string`
 
@@ -40,7 +40,7 @@ Maximum size of gRPC messages to receive in bytes.
 
 === `rate_limit`
 
-An optional rate limit resource to throttle requests.
+The name of an optional rate limit resource to throttle incoming requests.
 
 *Type*: `string`
 
@@ -48,7 +48,7 @@ An optional rate limit resource to throttle requests.
 
 === `schema_registry`
 
-Optional Schema Registry configuration for adding Schema Registry wire format headers to messages.
+Optional Schema Registry configuration. When set, the input registers the OTLP schemas for each signal type and prepends the Schema Registry wire format header to each message.
 
 *Type*: `object`
 

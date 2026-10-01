@@ -5,8 +5,11 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
+:description: Connects to Slack using Socket Mode and receives events, interactions, and slash commands.
 // end::meta[]
 
 // tag::body[]
-Connects to Slack using https://api.slack.com/apis/socket-mode[^Socket Mode]. This allows for receiving events, interactions and slash commands. Each message emitted from this input has a @type metadata of the event type "events_api", "interactions" or "slash_commands".
+Connects to Slack using Socket Mode and receives events, interactions, and slash commands.
+
+This input connects to Slack using https://api.slack.com/apis/socket-mode[Socket Mode^]. Each message emitted from this input has a `type` metadata field that contains the event type: `events_api`, `interactive`, or `slash_commands`.
 // end::body[]

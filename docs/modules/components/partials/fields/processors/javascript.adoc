@@ -4,19 +4,19 @@
 
 === `code`
 
-An inline JavaScript program to run. One of `code` or `file` must be defined.
+An inline JavaScript program to run. You must specify a value for either the `code` or `file` field.
 
 *Type*: `string`
 
 === `file`
 
-A file containing a JavaScript program to run. One of `code` or `file` must be defined.
+A file containing a JavaScript program to run. You must specify a value for either the `code` or `file` field.
 
 *Type*: `string`
 
 === `global_folders[]`
 
-List of folders that will be used to load modules from if the requested JS module is not found elsewhere.
+A list of directories to load modules from if the requested JavaScript module is not found elsewhere.
 
 *Type*: `array<string>`
 

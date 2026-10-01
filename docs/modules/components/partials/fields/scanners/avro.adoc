@@ -12,7 +12,7 @@ The maximum size, in bytes, that a single compressed Avro OCF block is allowed t
 
 === `raw_json`
 
-Whether messages should be decoded into normal JSON rather than https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {"type": value} wrappers).
+Whether to decode messages into normal JSON rather than https://avro.apache.org/docs/1.12.0/specification/#json-encoding[Avro JSON^]. When true, this unwraps union values (bare values instead of {"type": value} wrappers).
 
 *Type*: `bool`
 

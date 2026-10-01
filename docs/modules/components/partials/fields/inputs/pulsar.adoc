@@ -110,13 +110,13 @@ Specify the subscription type for this consumer.
 
 === `tls`
 
-Specify the path to a custom CA certificate to trust broker TLS service.
+Specify the path to a custom CA certificate to trust the broker TLS service.
 
 *Type*: `object`
 
 === `tls.root_cas_file`
 
-An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
+An optional path of a root certificate authority file to use. This is a file, often with a `.pem` extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.
 
 *Type*: `string`
 

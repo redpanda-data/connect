@@ -10,7 +10,7 @@ Configuration for how to decode schemas that are of type AVRO.
 
 === `avro.mapping`
 
-A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.
+Define a custom mapping to apply to the JSON representation of Avro schemas. You can use mappings to convert custom types emitted by other tools, such as Debezium, into standard Avro types.
 
 *Type*: `string`
 
@@ -38,7 +38,12 @@ mapping: |-
 
 === `avro.preserve_logical_types`
 
-Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.
+Choose whether to:
+
+- Transform logical types into their primitive type (default). For example, decimals become raw bytes and timestamps become plain integers.
+- Preserve logical types.
+
+Set to `true` to preserve logical types, which keeps decimal types as numbers in Bloblang and timestamps as time values.
 
 *Type*: `bool`
 
@@ -46,18 +51,23 @@ Whether logical types should be preserved or transformed back into their primiti
 
 === `avro.raw_unions`
 
-Whether avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/#json-encoding[JSON as specified in the Avro Spec^].
+Whether Avro messages should be decoded into normal JSON (JSON that meets the expectations of regular internet JSON) rather than https://avro.apache.org/docs/current/specification/#json-encoding[Avro JSON^].
 
-For example, if there is a union schema `["null", "string", "Foo"]` where `Foo` is a record name, with raw_unions as false (the default) you get:
-- `null` as `null`;
-- the string `"a"` as `{"string": "a"}`; and
-- a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
+If set to `false` (default), Avro messages are decoded as Avro JSON.
 
-When raw_unions is set to true then the above union schema is decoded as the following:
-- `null` as `null`;
-- the string `"a"` as `"a"`; and
-- a `Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
+For example, the union schema `["null","string","Transaction"]`, where `Transaction` is a record name, would be decoded as:
 
+- A `null` as a JSON `null`
+- The string `"a"` as `{"string": "a"}`
+- A `Transaction` instance as `{"Transaction": {...}}`, where `{...}` indicates the JSON encoding of a `Transaction` instance.
+
+If set to `true`, Avro messages are decoded as standard JSON.
+
+For example, the same union schema `["null","string","Transaction"]` is decoded as:
+
+- A `null` as JSON `null`
+- The string `"a"` as `"a"`
+- A `Transaction` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Transaction` instance.
 
 *Type*: `bool`
 
@@ -159,7 +169,7 @@ A username to authenticate as.
 
 === `cache_duration`
 
-The duration after which a schema is considered stale and will be removed from the cache.
+The duration after which a cached schema is considered stale and is removed from the cache.
 
 *Type*: `string`
 
@@ -177,7 +187,11 @@ cache_duration: 5m
 
 === `default_schema_id`
 
-If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned. WARNING: This is configuration does not work with PROTOBUF schemas. You may also use `with_schema_registry_header` bloblang function to add a schema ID to messages.
+This schema ID is used when a message's schema header cannot be read (`ErrBadHeader`). If this value is not set, schema header errors are returned.
+
+This configuration does not work with protobuf schemas.
+
+TIP: You can also use the xref:guides:bloblang/functions.adoc#with_schema_registry_header[`with_schema_registry_header`] bloblang function to add a schema ID to messages.
 
 *Type*: `int`
 
@@ -189,7 +203,7 @@ Configuration for how to decode schemas that are of type JSON.
 
 === `json.coerce_data`
 
-Whether decoded values should be coerced to match the types declared in the JSON Schema. By default JSON Schema decoding only validates the message and leaves it untouched, which means numbers are later interpreted as floating point (`double`) and date-time values as strings. When set to `true` the decoder rebuilds the message so that values match the schema: `integer` fields become 64-bit integers, `number` fields stay floating point, `string` fields with `format: date-time` become timestamps, and any `default` values declared in the schema are applied to absent fields. This is useful for downstream components that infer their schema from the decoded values, such as the `iceberg` outputs, which will then create `bigint` columns for integer fields rather than `double`. Note that, unlike the default behaviour, this is no longer a read-only operation: the message contents are transformed. Because coercion is stricter than validation, a message that passes validation may still fail coercion (for example an integer that overflows a 64-bit value, or a `date-time` string that is not valid RFC 3339), in which case the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
+Whether decoded values should be coerced to match the types declared in the JSON Schema. By default JSON Schema decoding only validates the message and leaves it untouched, which means numbers are later interpreted as floating point (`double`) and date-time values as strings. When set to `true` the decoder rebuilds the message so that values match the schema: `integer` fields become 64-bit integers, `number` fields stay floating point, `string` fields with `format: date-time` become timestamps, and any `default` values declared in the schema are applied to absent fields. This is useful for downstream components that infer their schema from the decoded values, such as the `iceberg` outputs, which will then create `bigint` columns for integer fields rather than `double`. Note that, unlike the default behavior, this is no longer a read-only operation: the message contents are transformed. Because coercion is stricter than validation, a message that passes validation may still fail coercion (for example an integer that overflows a 64-bit value, or a `date-time` string that is not valid RFC 3339), in which case the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
 
 ifndef::env-cloud[]
 Requires version 4.97.0 or later.

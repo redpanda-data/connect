@@ -41,13 +41,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 			Example("foo.bar.baz").
 			Example(`${! meta("kafka_topic") }`).
 			Example(`foo.${! json("meta.type") }`)).
-		Field(service.NewInterpolatedStringMapField("headers").
-			Description("Explicit message headers to add to messages.").
-			Default(map[string]any{}).
-			Example(map[string]any{
-				"Content-Type": "application/json",
-				"Timestamp":    `${!meta("Timestamp")}`,
-			}).Version("4.1.0")).
+		Field(headersField().Version("4.1.0")).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).

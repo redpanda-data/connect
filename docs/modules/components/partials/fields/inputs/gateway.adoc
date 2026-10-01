@@ -20,6 +20,8 @@ An optional xref:components:rate_limits/about.adoc[rate limit] to throttle reque
 
 === `sync_response`
 
+Customize messages returned using xref:guides:sync_responses.adoc[synchronous responses].
+
 *Type*: `object`
 
 === `sync_response.headers`
@@ -110,7 +112,7 @@ status: ${! meta("status") }
 
 === `tcp`
 
-Customize messages returned via xref:guides:sync_responses.adoc[synchronous responses].
+TCP listener socket configuration.
 
 *Type*: `object`
 

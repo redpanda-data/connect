@@ -17,21 +17,21 @@ endif::[]
 
 Sends OpenTelemetry telemetry data to a remote collector via OTLP/gRPC protocol.
 
-Accepts batches of Redpanda OTEL v1 protobuf messages (spans, log records, or metrics) and converts them to OTLP format for transmission to OpenTelemetry collectors.
+Accepts batches of Redpanda OTEL v1 messages (spans, log records, or metrics) and converts them to OTLP format for transmission to OpenTelemetry collectors.
 
-## Input Format
+== Input format
 
-Expects messages in Redpanda OTEL v1 protobuf format with metadata:
-- `signal_type`: "trace", "log", or "metric"
+This output expects messages in Redpanda OTEL v1 format (protobuf or JSON, detected automatically) with the following metadata:
 
-Each batch must contain messages of the same signal type.
-The entire batch is converted to a single OTLP export request and sent via gRPC.
+- `otel_signal_type`: The signal type (`trace`, `log`, or `metric`)
 
-## Authentication
+Messages produced by the `otlp_grpc` and `otlp_http` inputs already include this metadata.
 
-Supports multiple authentication methods:
-- Bearer token authentication (via auth_token field)
-- OAuth v2 (via oauth2 configuration block)
+Each batch must contain messages of the same signal type. The entire batch is converted to a single OTLP export request and sent via gRPC.
 
-Note: OAuth2 requires TLS to be enabled.
+== Authentication
+
+This output supports OAuth v2 authentication using the `oauth2` configuration block. OAuth v2 requires TLS to be enabled.
+
+To send a static bearer token, add an `authorization` header using the `headers` field.
 // end::body[]

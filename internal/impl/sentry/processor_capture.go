@@ -41,7 +41,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 				Description("The DSN address to send sentry events to. If left empty, then SENTRY_DSN is used."),
 
 			service.NewInterpolatedStringField("message").
-				Description("A message to set on the sentry event").
+				Description(`A message to set on the sentry event`).
 				Example("webhook event received").
 				Example("failed to find product in database: ${! error() }"),
 
@@ -61,7 +61,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 
 			service.NewInterpolatedStringMapField("tags").
 				Optional().
-				Description("Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations.").
+				Description(`Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations.`).
 				ShortDescription("Key/value string tags on an event. Indexed and searchable, but length limited."),
 
 			service.NewStringField("environment").

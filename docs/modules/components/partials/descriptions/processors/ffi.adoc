@@ -5,11 +5,15 @@
 //   body:   include::...[tag=body]   (renders the summary and description)
 
 // tag::meta[]
-:description: Invoke a function within a shared library as a processing step.
+:description: Invoke functions from shared libraries using Foreign Function Interface (FFI).
 // end::meta[]
 
 // tag::body[]
-Invoke a function within a shared library as a processing step.
+Invoke functions from shared libraries using Foreign Function Interface (FFI).
 
-A processor that allows for dlopen'ing (or platform equivalent) and invoking functions dynamically at runtime. The result from this processor is an array, where the first element is the return type if not void, and then each `out` parameter in parameter order.
+The `ffi` processor allows you to dynamically load shared libraries (.so, .dylib, or .dll files) and invoke their functions as a processing step. This enables integration with external C/C++ libraries without requiring custom Go code or rebuilding Redpanda Connect.
+
+The processor uses `dlopen` (or platform equivalent) to load the specified library at runtime, looks up the function by name, and invokes it with arguments provided through Bloblang mapping. Function signatures are defined using the `signature` field, specifying parameter and return types.
+
+Results are returned as an array, where the first element is the return value (if not void), followed by any output parameters in their declaration order.
 // end::body[]

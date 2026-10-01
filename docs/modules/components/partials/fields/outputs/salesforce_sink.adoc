@@ -542,7 +542,7 @@ Rate limit in requests per second. 0 disables rate limiting.
 
 === `max_concurrent_bulk_jobs`
 
-Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.
+Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory. Lower this value if memory usage is a concern.
 
 *Type*: `int`
 
@@ -550,7 +550,7 @@ Maximum number of bulk jobs polling concurrently in the background. Each in-flig
 
 === `max_in_flight`
 
-Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.
+Maximum number of batches to send concurrently. Increasing this value improves real-time write throughput.
 
 *Type*: `int`
 
@@ -574,13 +574,13 @@ org_url: https://acme--staging.sandbox.my.salesforce.com
 
 === `topic_mappings[]`
 
-Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.
+Per-topic Salesforce write configuration. Each entry maps a topic to an sObject and write settings.
 
 *Type*: `array<object>`
 
 === `topic_mappings[].all_or_none`
 
-Realtime only: roll back the entire batch if any record fails
+Real-time only: rolls back the entire batch if any record fails.
 
 *Type*: `bool`
 
@@ -588,7 +588,7 @@ Realtime only: roll back the entire batch if any record fails
 
 === `topic_mappings[].external_id_field`
 
-External ID field name, required for upsert
+External ID field name. Required for upsert operations.
 
 *Type*: `string`
 
@@ -596,7 +596,7 @@ External ID field name, required for upsert
 
 === `topic_mappings[].mode`
 
-Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)
+Write mode: `realtime` (sObject Collections API) or `bulk` (Bulk API 2.0).
 
 *Type*: `string`
 
@@ -604,7 +604,7 @@ Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)
 
 === `topic_mappings[].operation`
 
-Write operation: insert, update, upsert, or delete
+Write operation: insert, update, upsert, or delete.
 
 *Type*: `string`
 
@@ -612,13 +612,13 @@ Write operation: insert, update, upsert, or delete
 
 === `topic_mappings[].sobject`
 
-Salesforce SObject API name (for example, Account, Contact, MyObject__c)
+Salesforce sObject API name (for example, Account, Contact, MyObject__c).
 
 *Type*: `string`
 
 === `topic_mappings[].topic`
 
-topic name to match against the message's 'topic' field
+The topic name to match against the message's `topic` field.
 
 *Type*: `string`
 
