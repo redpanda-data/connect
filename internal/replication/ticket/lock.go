@@ -23,7 +23,9 @@ import (
 	"sync"
 )
 
-// ErrSealed is returned by Wait after the lock is sealed.
+// ErrSealed identifies the error of a sealed Lock. The error from Wait and
+// Lock.Err wraps ErrSealed and also the cause given to Seal. Use errors.Is
+// to test for it.
 var ErrSealed = errors.New("ticket lock sealed")
 
 // Lock is a FIFO ticket lock. It works like the "take a number" counter at
@@ -87,8 +89,10 @@ type Lock struct {
 	// their turn. advanceLocked skips each one when its turn comes, and
 	// removes it.
 	abandoned map[uint64]struct{}
-	// sealed refuses all further turns. It is never cleared.
-	sealed bool
+	// err is nil until the first seal. Then it holds ErrSealed joined with
+	// the seal cause, and it does not change again. Wait and Err return it.
+	// A non-nil err refuses all further turns.
+	err error
 }
 
 // Take draws the next ticket. If the ticket is abandoned, the lock is
@@ -127,31 +131,45 @@ func (l *Lock) take(sealOnAbandon bool) Ticket {
 	return t
 }
 
-// Seal refuses all further turns, for good. Every parked Wait wakes up and
-// returns ErrSealed, and every later Wait returns ErrSealed at once.
+// Seal refuses all further turns, for good. cause says why, for example
+// the error of a failed Track. Wait and Err then return an error that wraps
+// both ErrSealed and cause. A nil cause is allowed: the error is then
+// ErrSealed alone.
 //
-// A holder whose Wait already returned nil keeps its turn, and must still
-// call Release. For example, a holder whose Track fails seals the lock, and
-// then releases its turn as usual.
+// Only the first seal sets the cause. Later calls do nothing, so the error
+// always shows the first failure.
+//
+// Every parked Wait wakes up and returns the seal error, and every later
+// Wait returns it at once. A holder whose Wait already returned nil keeps
+// its turn, and must still call Release. For example, a holder whose Track
+// fails seals the lock, and then releases its turn as usual.
 //
 // You can call Seal while you hold the caller lock of Take.
-func (l *Lock) Seal() {
+func (l *Lock) Seal(cause error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.sealLocked()
+	l.sealLocked(cause)
 }
 
-// Sealed reports whether the lock is sealed.
-func (l *Lock) Sealed() bool {
+// Err returns nil if the lock is not sealed. If it is sealed, Err returns
+// the error that wraps ErrSealed and the first seal cause.
+func (l *Lock) Err() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.sealed
+	return l.err
 }
 
-// sealLocked seals the lock and wakes every parked Wait. Each one sees
-// sealed and returns ErrSealed. The caller must hold mu.
-func (l *Lock) sealLocked() {
-	l.sealed = true
+// sealLocked seals the lock and wakes every parked Wait. Each one sees err
+// and returns it. If the lock is already sealed, sealLocked does nothing.
+// The caller must hold mu.
+func (l *Lock) sealLocked(cause error) {
+	if l.err != nil {
+		return
+	}
+	l.err = ErrSealed
+	if cause != nil {
+		l.err = fmt.Errorf("%w: %w", ErrSealed, cause)
+	}
 	for t, ch := range l.waiters {
 		close(ch)
 		delete(l.waiters, t)
@@ -159,16 +177,16 @@ func (l *Lock) sealLocked() {
 }
 
 // abandonLocked marks ticket t as abandoned. If t is a Take ticket, it also
-// seals the lock. If it is already the turn of t, the turn goes at once to
-// the next ticket. The caller must hold mu.
+// seals the lock, with cause as the seal cause. If it is already the turn
+// of t, the turn goes at once to the next ticket. The caller must hold mu.
 //
 // The seal happens in the same critical section that marks t as abandoned.
 // It cannot happen later: as soon as t is marked, the holder before t can
 // call Release, skip t, and give the turn to t+1. A seal after that is too
 // late, because t+1 already passed the gap.
-func (l *Lock) abandonLocked(t Ticket) {
+func (l *Lock) abandonLocked(t Ticket, cause error) {
 	if t.sealOnAbandon {
-		l.sealLocked()
+		l.sealLocked(cause)
 	}
 	if l.serving == t.n {
 		l.advanceLocked()
@@ -229,8 +247,9 @@ type Ticket struct {
 //   - It is the turn of t. Wait returns nil, and t holds the turn. Call
 //     Release when you are done.
 //   - ctx is cancelled. Wait abandons t and returns ctx.Err(). For a Take
-//     ticket, the abandon also seals the lock.
-//   - The lock is sealed. Wait returns ErrSealed.
+//     ticket, the abandon also seals the lock, with the context cause in
+//     the seal cause.
+//   - The lock is sealed. Wait returns the seal error (see Lock.Err).
 //
 // If it is already the turn of t, Wait returns nil and does not look at
 // ctx. After an error, Release is still safe to call, and does nothing.
@@ -240,9 +259,9 @@ type Ticket struct {
 func (t Ticket) Wait(ctx context.Context) error {
 	l := t.l
 	l.mu.Lock()
-	if l.sealed {
+	if l.err != nil {
 		l.mu.Unlock()
-		return ErrSealed
+		return l.err
 	}
 
 	// The turn of t already passed, or t is abandoned: nobody can wake a
@@ -292,7 +311,7 @@ func (t Ticket) Wait(ctx context.Context) error {
 
 		// Nobody woke us, so we abandon the ticket.
 		delete(l.waiters, t.n)
-		l.abandonLocked(t)
+		l.abandonLocked(t, fmt.Errorf("ticket %d abandoned: %w", t.n, context.Cause(ctx)))
 		return ctx.Err()
 	}
 }
@@ -301,8 +320,8 @@ func (t Ticket) Wait(ctx context.Context) error {
 // The channel is closed by a seal, or because it is the turn of the ticket.
 // The caller must hold mu.
 func (l *Lock) wokenLocked() error {
-	if l.sealed {
-		return ErrSealed
+	if l.err != nil {
+		return l.err
 	}
 	l.held = true
 	return nil
@@ -339,5 +358,5 @@ func (t Ticket) Release() {
 		return
 	}
 	// t never held the turn. Abandon it.
-	l.abandonLocked(t)
+	l.abandonLocked(t, fmt.Errorf("ticket %d released before its turn", t.n))
 }
