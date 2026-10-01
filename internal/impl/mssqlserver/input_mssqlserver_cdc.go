@@ -344,7 +344,11 @@ func (i *sqlServerCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error
 	if !publisher.poisoned() {
 		return publisher, nil
 	}
-	i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	if err := publisher.queue.Err(); err != nil {
+		i.log.Warnf("Rebuilding publisher: rows were dropped, so the flush queue is sealed: %v", err)
+	} else {
+		i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	}
 	publisher.close()
 	batcher, err := i.batching.NewBatcher(i.res)
 	if err != nil {
@@ -637,7 +641,7 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	// runs under the publisher's OWN signaller, and a flush parked in
 	// sendTracked (nothing drains msgChan once ReadBatch stops) would
 	// otherwise hold its flush ticket forever - wedging every other flusher
-	// waiting in queue.Acquire and leaking the session goroutines past the
+	// waiting in Ticket.Wait and leaking the session goroutines past the
 	// timeout. Cancelling the loop's context releases its ticket, and the
 	// chain then drains: each later ticket holder's Track/send escapes via
 	// its stopSig-derived context.

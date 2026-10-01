@@ -10,6 +10,7 @@ package mssqlserver
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"testing"
@@ -144,7 +145,7 @@ func TestRebuildPublisherIfSealed(t *testing.T) {
 	i, _ := newTestInput(t)
 	old := i.publisher.Load()
 
-	old.queue.Seal()
+	old.queue.Seal(errors.New("test seal"))
 	rebuilt, err := i.rebuildPublisherIfPoisoned()
 	require.NoError(t, err)
 	require.NotSame(t, old, rebuilt, "a publisher with a sealed flush queue must be replaced")
