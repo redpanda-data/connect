@@ -349,7 +349,7 @@ Controls how the SCN range mined per cycle is sized:
 
 === `max_parallel_snapshot_tables`
 
-Specifies a number of tables that will be processed in parallel during the snapshot processing stage.
+The maximum number of tables to read in parallel during the initial snapshot. Each table is read by its own reader.
 
 *Type*: `int`
 

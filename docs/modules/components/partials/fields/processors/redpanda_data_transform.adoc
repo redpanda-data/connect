@@ -72,7 +72,7 @@ The maximum amount of wasm memory pages (64KiB) that an individual wasm module i
 
 === `module_path`
 
-The path of the target WASM module to execute.
+The path of the compiled Redpanda Data Transform module to run, such as the `.wasm` file built by `rpk transform build`.
 
 *Type*: `string`
 

@@ -235,7 +235,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			ShortDescription("An optional Snowpipe name. Requires private_key or private_key_file to be set.").Optional()).
 		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).
 		Field(service.NewBatchPolicyField("batching")).
-		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
+		Field(service.NewIntField("max_in_flight").Description("The maximum number of message batches to have in flight at any given time. Batches share one Snowflake connection and are uploaded one at a time, so a higher value lets batches queue but doesn't upload them in parallel.").Default(1)).
 		LintRule(`root = match {
   (!this.exists("password") || this.password == "") && (!this.exists("private_key") || this.private_key == "") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "either `+"`password`"+` or `+"`private_key`"+` or `+"`private_key_file`"+` must be set" ],
   this.exists("password") && this.password != "" && (this.exists("private_key") && this.private_key != "" || this.exists("private_key_file") && this.private_key_file != "") => [ "only one of `+"`password`"+`, `+"`private_key`"+` and `+"`private_key_file`"+` can be set" ],

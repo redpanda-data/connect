@@ -154,7 +154,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `metadata`
 
-Specify criteria for which metadata values are attached to messages as headers.
+Specify which message metadata keys are added to each AMQP 1.0 message as message annotations.
 
 *Type*: `object`
 
@@ -433,7 +433,7 @@ Whether to skip server side certificate verification.
 
 === `urls[]`
 
-A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+A list of AMQP 1.0 broker URLs to connect to. Each URL is tried in order until a connection is established, and that URL is then used until the connection is closed. This field replaces the deprecated `url` field, which is only read when `urls` is empty.
 
 If an item in the list contains commas, it is split into multiple URLs.
 

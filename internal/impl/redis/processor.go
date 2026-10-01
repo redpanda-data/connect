@@ -48,7 +48,7 @@ performed for each message and the message contents are replaced with the result
 			Example(`${! meta("command") }`).
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of arguments for `command`, such as the key followed by any values. The array must contain as many values as the Redis command requires.").
 			ShortDescription("A Bloblang mapping evaluating to an array of values matching the arguments the Redis command requires.").
 			Version("4.3.0").
 			Optional().

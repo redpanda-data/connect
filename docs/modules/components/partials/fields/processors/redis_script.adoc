@@ -4,7 +4,7 @@
 
 === `args_mapping`
 
-A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis script.
+A xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values passed to the script, where they are available as `ARGV[1]`, `ARGV[2]`, and so on.
 
 *Type*: `string`
 

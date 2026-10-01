@@ -4,7 +4,7 @@
 
 === `codec`
 
-The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.
+The way in which the bytes of messages are written to the file. With the `delim:x` codec, each message is followed by the custom delimiter `x`, which can be any character sequence. A delimiter is not added to a message that already ends with it.
 
 ifndef::env-cloud[]
 Requires version 3.33.0 or later.

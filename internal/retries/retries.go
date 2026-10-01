@@ -39,7 +39,7 @@ func CommonRetryBackOffFields(
 ) []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewIntField(crboFieldMaxRetries).
-			Description("The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").
+			Description(MaxRetriesDescription).
 			Default(defaultMaxRetries).
 			Advanced(),
 		service.NewObjectField(crboFieldBackOff,
@@ -53,10 +53,14 @@ func CommonRetryBackOffFields(
 				Description("The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").
 				Default(defaultMaxElapsed),
 		).
-			Description("Control time intervals between retry attempts.").
+			Description("The exponential backoff between retry attempts. The wait starts at `initial_interval` and grows with each failed attempt, up to `max_interval`.").
 			Advanced(),
 	}
 }
+
+// MaxRetriesDescription describes a max_retries field whose zero value means
+// retry without a limit.
+const MaxRetriesDescription = "The maximum number of retries before giving up on the request. If set to zero there is no discrete limit."
 
 func fieldDurationOrEmptyStr(pConf *service.ParsedConfig, path ...string) (time.Duration, error) {
 	if dStr, err := pConf.FieldString(path...); err == nil && dStr == "" {

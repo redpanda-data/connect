@@ -94,7 +94,7 @@ server_address: http://127.0.0.1:11434
 
 === `text`
 
-The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.
+The text you want to generate vector embeddings for. By default, the processor submits the entire payload of each message as a string.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

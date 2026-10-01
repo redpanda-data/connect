@@ -182,7 +182,7 @@ When a message with a specific offset is delivered to the output, the offset is 
 
 === `kafka.commit_period`
 
-The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
+The period of time between each commit of the current partition offsets to the consumer group. Offsets are always committed during shutdown.
 
 *Type*: `string`
 

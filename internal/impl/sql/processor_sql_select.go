@@ -47,20 +47,11 @@ func SelectProcessorConfig() *service.ConfigSpec {
 		Field(selectWhereField().
 			Example("meow = ? and woof = ?").
 			Example("user_id = ?")).
-		Field(service.NewBloblangField("args_mapping").
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
-			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
+		Field(selectArgsMappingField().
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
-			Optional()).
-		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the query (before SELECT).").
-			Optional().
-			Advanced()).
-		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the select query.").
-			Optional().
-			Advanced())
+			Example(`root = [ meta("user.id") ]`)).
+		Field(selectPrefixField()).
+		Field(selectSuffixField())
 
 	for _, f := range connFields() {
 		spec = spec.Field(f)

@@ -232,7 +232,7 @@ endif::[]
 
 === `max_in_flight`
 
-The maximum number of parallel message batches to have in flight at any given time.
+The maximum number of message batches to have in flight at any given time. Batches share one Snowflake connection and are uploaded one at a time, so a higher value lets batches queue but doesn't upload them in parallel.
 
 *Type*: `int`
 

@@ -38,13 +38,13 @@ endif::[]
 
 === `backoff`
 
-Control time intervals between retry attempts.
+The backoff the Cassandra driver applies between retries of a failed query.
 
 *Type*: `object`
 
 === `backoff.initial_interval`
 
-The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
+The period to wait before the first retry of a failed query. Each later retry doubles the previous wait, with random jitter of up to half this value, until `backoff.max_interval` is reached.
 
 *Type*: `string`
 
@@ -52,7 +52,7 @@ The initial period to wait between retry attempts. The retry interval increases 
 
 === `backoff.max_interval`
 
-The maximum period to wait between retry attempts.
+The longest wait between retries of a failed query.
 
 *Type*: `string`
 
@@ -200,7 +200,7 @@ The initial period to wait between retry attempts.
 
 === `exponential_reconnection.max_interval`
 
-The maximum period to wait between retry attempts.
+The longest wait between reconnection attempts to a node marked as DOWN.
 
 *Type*: `string`
 

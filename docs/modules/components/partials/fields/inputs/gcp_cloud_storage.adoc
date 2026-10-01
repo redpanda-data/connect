@@ -20,7 +20,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `delete_objects`
 
-Whether to delete downloaded objects from the bucket once they are processed.
+Whether to remove objects from the Cloud Storage bucket once the messages read from them are delivered without error. An object is kept if delivery fails.
 
 *Type*: `bool`
 

@@ -32,31 +32,31 @@ The MySQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.co
 
 === `aws.id`
 
-The ID of credentials to use.
+The AWS access key ID to authenticate with. When empty, the default AWS credential chain is used.
 
 *Type*: `string`
 
 === `aws.region`
 
-The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.
+The AWS region where the MySQL instance is located. The region is used to sign the IAM authentication token and for STS calls when assuming roles. If no region is specified, the environment default is used.
 
 *Type*: `string`
 
 === `aws.role`
 
-Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.
+Optional AWS IAM role ARN to assume for authentication. When `roles` is also set, this role is assumed first and the `roles` entries are assumed after it.
 
 *Type*: `string`
 
 === `aws.role_external_id`
 
-Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.
+Optional external ID to use when assuming the role set in `role`. Each entry in `roles` sets its own external ID.
 
 *Type*: `string`
 
 === `aws.roles[]`
 
-Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.
+Optional array of AWS IAM roles to assume for authentication. Roles are assumed in sequence, each using the credentials of the previous one, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. When `role` is also set, it is assumed before the first entry.
 
 *Type*: `array<object>`
 
@@ -78,7 +78,7 @@ Optional external ID for the role assumption.
 
 === `aws.secret`
 
-The secret for the credentials being used.
+The AWS secret access key that pairs with `id`.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -86,7 +86,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `aws.token`
 
-The token for the credentials being used, required when using short term credentials.
+The AWS session token to use with `id` and `secret`. Required only when using short-term credentials.
 
 *Type*: `string`
 
@@ -216,7 +216,7 @@ The key identifier used to store the binlog position in `checkpoint_cache`. If y
 
 === `checkpoint_limit`
 
-The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given binlog position is not acknowledged until all messages under that offset are delivered.
+The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given binlog position is not acknowledged until all messages up to that position are delivered.
 
 *Type*: `int`
 
@@ -300,7 +300,7 @@ tables:
 
 === `tls`
 
-Using this field overrides the SSL/TLS settings in the environment and DSN.
+Custom TLS settings for the MySQL connection. When `enabled` is `true`, these settings replace any `tls` parameter in the `dsn`, and the server name is set to the host from the DSN.
 
 *Type*: `object`
 

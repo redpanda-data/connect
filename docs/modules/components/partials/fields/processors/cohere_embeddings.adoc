@@ -76,7 +76,7 @@ model: embed-multilingual-light-v3.0
 
 === `text_mapping`
 
-The text you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.
+A Bloblang mapping that returns the text you want to generate vector embeddings for. By default, the processor submits the entire payload of each message as a string.
 
 *Type*: `string`
 

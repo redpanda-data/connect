@@ -83,13 +83,13 @@ func clientFields() []*service.ConfigField {
 			Default(3),
 		service.NewObjectField(cFieldBackoff,
 			service.NewDurationField(cFieldBackoffInitInterval).
-				Description("The initial period to wait between retry attempts. The retry interval increases for each failed attempt, up to the `backoff.max_interval` value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+				Description("The period to wait before the first retry of a failed query. Each later retry doubles the previous wait, with random jitter of up to half this value, until `backoff.max_interval` is reached.").
 				Default("1s"),
 			service.NewDurationField(cFieldBackoffMaxInterval).
-				Description("The maximum period to wait between retry attempts.").
+				Description("The longest wait between retries of a failed query.").
 				Default("5s"),
 		).
-			Description("Control time intervals between retry attempts.").
+			Description("The backoff the Cassandra driver applies between retries of a failed query.").
 			Advanced(),
 		service.NewDurationField(cFieldTimeout).
 			Description("The client connection timeout.").
@@ -117,7 +117,7 @@ func clientFields() []*service.ConfigField {
 				Description("The initial period to wait between retry attempts.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.initial_interval must be a positive duration"}`),
 			service.NewDurationField(cFieldExponentialReconnectionMaxInterval).
-				Description("The maximum period to wait between retry attempts.").
+				Description("The longest wait between reconnection attempts to a node marked as DOWN.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.max_interval must be a positive duration"}`),
 		).
 			Description("Configure exponential backoff for reconnection attempts to DOWN nodes. When enabled, this replaces the driver's default constant reconnection policy with an exponential backoff strategy that gradually increases the delay between reconnection attempts. This reduces connection storm scenarios during widespread outages while ensuring eventual recovery.").

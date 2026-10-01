@@ -158,7 +158,7 @@ endif::[]
 
 === `client_id`
 
-An identifier for the client connection.
+The client ID sent to brokers with every request, which lets brokers attribute requests to this client in their logs, metrics, and client quotas.
 
 *Type*: `string`
 
@@ -166,7 +166,7 @@ An identifier for the client connection.
 
 === `commit_period`
 
-The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
+The period of time between each commit of the current partition offsets to the consumer group. Offsets are always committed during shutdown.
 
 *Type*: `string`
 

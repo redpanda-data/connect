@@ -4,7 +4,7 @@
 
 === `args_mapping`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values for the `?` placeholders in the `where` field, in order. Each value is sent to BigQuery as a positional query parameter.
 
 *Type*: `string`
 
@@ -40,7 +40,7 @@ A map of labels to add to the query job.
 
 === `prefix`
 
-An optional prefix to prepend to the select query (before SELECT).
+Optional GoogleSQL text to add before the `SELECT` keyword of the generated query, for example a `WITH` clause.
 
 *Type*: `string`
 
@@ -52,7 +52,7 @@ The GCP project where the query job runs.
 
 === `suffix`
 
-An optional suffix to append to the select query.
+Optional GoogleSQL text to append after the generated query, for example `GROUP BY`, `ORDER BY`, or `LIMIT` clauses.
 
 *Type*: `string`
 

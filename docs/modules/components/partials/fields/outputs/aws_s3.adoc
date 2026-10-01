@@ -150,7 +150,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `content_encoding`
 
-An optional content encoding to set for each object.
+An optional `Content-Encoding` value, such as `gzip`, to store with each uploaded S3 object. When empty, S3 stores the object without a content encoding.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -170,7 +170,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `content_type`
 
-The content type to set for each object.
+The MIME type to store as the `Content-Type` of each uploaded S3 object.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
@@ -264,7 +264,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 === `metadata`
 
-Specify criteria for which metadata values are attached to objects as headers.
+Specify which message metadata keys are stored as user-defined metadata on each S3 object, which S3 returns as `x-amz-meta-*` headers.
 
 *Type*: `object`
 
@@ -412,7 +412,7 @@ Maximum time to wait for acknowledgment of transmitted data before killing the c
 
 === `timeout`
 
-The maximum period to wait on an upload before abandoning it and reattempting.
+The maximum period to wait for every object in a message batch to upload to S3. When the timeout is reached, the batch upload is abandoned and reattempted.
 
 *Type*: `string`
 

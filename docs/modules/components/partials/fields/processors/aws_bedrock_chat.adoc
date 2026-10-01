@@ -98,7 +98,9 @@ model: mistral.mistral-large-2402-v1:0
 
 === `prompt`
 
-The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.
+The user prompt you want to generate a response for. By default, the processor submits the entire payload of each message as a string.
+
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 *Type*: `string`
 
@@ -116,7 +118,9 @@ A list of stop sequences. A stop sequence is a sequence of characters that cause
 
 === `system_prompt`
 
-The system prompt to submit to the AWS Bedrock LLM.
+The system prompt to submit along with the user prompt.
+
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 *Type*: `string`
 

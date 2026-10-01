@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
@@ -142,10 +144,7 @@ This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set 
 
 If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
-		Field(service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given log sequence number (LSN) is not acknowledged until all messages under that offset are delivered.").
-			ShortDescription("The maximum number of messages that can be processed at a given time.").
-			Default(1024)).
+		Field(replication.CheckpointLimitField("log sequence number (LSN)")).
 		Field(service.NewBoolField(fieldTemporarySlot).
 			Description(`If set to ` + "`" + `true` + "`" + `, the input creates a temporary replication slot that is automatically dropped when the connection to your source database is closed. You might use this option to:
 
@@ -190,48 +189,16 @@ To avoid granting the replication user permission to create publications, you ca
 			Example("24h").
 			Advanced()).
 		Field(service.NewTLSField("tls").
-			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.")).
-		Field(service.NewObjectField(fieldAWSIAMAuth,
+			Description("Custom TLS settings for the PostgreSQL connection. When `enabled` is `true`, these settings replace the TLS settings derived from the `dsn` and from `PG*` environment variables such as `PGSSLMODE`, and the server name is set to the host from the DSN.")).
+		Field(service.NewObjectField(fieldAWSIAMAuth, slices.Concat([]*service.ConfigField{
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
 				ShortDescription("Enable AWS IAM authentication, generating a temporary token to use as the password.").
 				Default(false),
-			service.NewStringField("region").
-				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
-				ShortDescription("The AWS region where the PostgreSQL instance is located. Defaults to the environment region.").
-				Optional(),
+			awsconfig.IAMAuthRegionField("PostgreSQL"),
 			service.NewStringField("endpoint").
 				Description("The PostgreSQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com)."),
-			service.NewStringField("id").
-				Description("The ID of credentials to use.").
-				Optional().Advanced(),
-			service.NewStringField("secret").
-				Description("The secret for the credentials being used.").
-				Optional().Advanced().Secret(),
-			service.NewStringField("token").
-				Description("The token for the credentials being used, required when using short term credentials.").
-				Optional().Advanced(),
-			service.NewStringField("role").
-				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
-				Optional(),
-			service.NewStringField("role_external_id").
-				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
-				Optional(),
-			service.NewObjectListField("roles",
-				service.NewStringField("role").
-					Default("").
-					Description("AWS IAM role ARN to assume."),
-				service.NewStringField("role_external_id").
-					Description("Optional external ID for the role assumption.").
-					Default("").
-					Optional(),
-			).
-				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
-				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-				Optional(),
-		).
+		}, awsconfig.IAMAuthStaticCredentialFields(), awsconfig.IAMAuthRoleFields(false))...).
 			Description(`AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.
 
 This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with IAM database authentication enabled. The generated tokens are valid for 15 minutes and are automatically refreshed.

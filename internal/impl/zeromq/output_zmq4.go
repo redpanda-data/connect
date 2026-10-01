@@ -45,11 +45,9 @@ make TAGS=x_benthos_extra
 ` + "```" + `
 
 There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing this component.`).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+		Field(urlsField().
 			Example([]string{"tcp://localhost:5556"})).
-		Field(service.NewBoolField("bind").
-			Description("Whether to bind to the specified URLs (otherwise they are connected to).").
+		Field(bindField().
 			Default(true)).
 		Field(service.NewStringEnumField("socket_type", "PUSH", "PUB").
 			Description("The socket type to connect as.")).

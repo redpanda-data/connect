@@ -34,6 +34,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -89,7 +90,7 @@ When a target subject presents a protobuf schema that contains multiple messages
 
 We will be considering alternative approaches in future so please https://redpanda.com/slack[get in touch^] with thoughts and feedback.
 `).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewURLField("url").Description(schemaregistry.URLFieldDescription)).
 		Field(service.NewInterpolatedStringField("subject").Description(`The schema subject to derive schemas from.`).
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).

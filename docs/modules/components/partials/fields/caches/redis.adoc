@@ -16,7 +16,7 @@ endif::[]
 
 === `default_ttl`
 
-An optional default TTL to set for items, calculated from the moment the item is cached.
+An optional expiration applied to keys that are written without a TTL of their own. When unset or zero, such keys never expire.
 
 *Type*: `string`
 
@@ -46,7 +46,7 @@ master: mymaster
 
 === `prefix`
 
-An optional string to prefix item keys with in order to prevent collisions with similar services.
+An optional string added to the start of every key that this cache reads, writes, or deletes, which keeps its keys separate from other data in the same Redis database.
 
 *Type*: `string`
 

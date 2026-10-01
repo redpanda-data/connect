@@ -36,7 +36,7 @@ collector_url: https://jaeger-collector:14268/api/traces
 
 === `flush_interval`
 
-The period of time between each flush of tracing spans.
+The maximum time to wait before exporting a batch of tracing spans. When unset, the `OTEL_BSP_SCHEDULE_DELAY` environment variable is used if set, otherwise the OpenTelemetry SDK default of `5s`.
 
 *Type*: `string`
 

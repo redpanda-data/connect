@@ -36,7 +36,7 @@ addresses:
 
 === `backoff`
 
-Control time intervals between retry attempts.
+The exponential backoff between attempts to resend messages that failed to send.
 
 *Type*: `object`
 
@@ -206,7 +206,7 @@ processors:
 
 === `client_id`
 
-An identifier for the client connection.
+The client ID sent to brokers with every request, which lets brokers attribute requests to this client in their logs, metrics, and client quotas.
 
 *Type*: `string`
 
@@ -316,7 +316,7 @@ The maximum number of retries before giving up on the request. If set to zero th
 
 === `metadata`
 
-Specify criteria for which metadata values are sent with messages as headers.
+Specify which metadata values are added to each record as Kafka headers. Headers are only sent when `target_version` is `0.11.0` or later.
 
 *Type*: `object`
 

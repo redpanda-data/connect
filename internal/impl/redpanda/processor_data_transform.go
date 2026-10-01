@@ -55,7 +55,7 @@ This processor executes a Redpanda Data Transform WebAssembly module, calling On
 You can find out about how transforms work here: https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/[https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/^]
 `).
 		Field(service.NewStringField(dtpFieldModulePath).
-			Description("The path of the target WASM module to execute.")).
+			Description("The path of the compiled Redpanda Data Transform module to run, such as the `.wasm` file built by `rpk transform build`.")).
 		Field(service.NewInterpolatedStringField(dtpFieldInputKey).
 			Description("An optional key to populate for each message.").Optional()).
 		Field(service.NewStringField(dtpFieldOutputKey).

@@ -36,6 +36,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/oauth2"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
@@ -149,7 +150,7 @@ tracer:
 			service.NewObjectField("schema_registry",
 				slices.Concat(
 					[]*service.ConfigField{
-						service.NewURLField("url").Description("The base URL of the schema registry service.").Optional(),
+						service.NewURLField("url").Description(schemaregistry.URLFieldDescription).Optional(),
 						service.NewTLSField("tls"),
 						oauth2.FieldSpec(),
 					},
