@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,14 +21,17 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 
@@ -46,8 +49,141 @@ func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Endp
 	return
 }
 
+// setGlobalImportMode switches the schema registry at the given URL into IMPORT mode. The `schema_registry` output
+// requires this on the destination whenever `translate_ids` is `false` (the default), since schemas are then created
+// with their original IDs and versions.
+func setGlobalImportMode(t *testing.T, url string) {
+	t.Helper()
+
+	client, err := franz_sr.NewClient(franz_sr.URLs(url))
+	require.NoError(t, err)
+
+	res := client.SetMode(t.Context(), franz_sr.ModeImport)
+	require.Len(t, res, 1)
+	require.NoError(t, res[0].Err)
+	require.Equal(t, franz_sr.ModeImport, res[0].Mode)
+}
+
+// requireGlobalMode asserts the global mode of the schema registry at the given URL. Besides checking a precondition,
+// this also warms up a freshly started registry, whose first request can take several seconds while it creates its
+// backing topic.
+func requireGlobalMode(t *testing.T, url string, want franz_sr.Mode) {
+	t.Helper()
+
+	client, err := franz_sr.NewClient(franz_sr.URLs(url))
+	require.NoError(t, err)
+
+	res := client.Mode(t.Context())
+	require.Len(t, res, 1)
+	require.NoError(t, res[0].Err)
+	require.Equal(t, want, res[0].Mode)
+}
+
+// createSchemaWithID registers a schema under the given subject with a fixed ID and version. The registry must be in
+// IMPORT mode.
+func createSchemaWithID(t *testing.T, url, subject, schema string, id, version int) {
+	t.Helper()
+
+	client, err := franz_sr.NewClient(franz_sr.URLs(url))
+	require.NoError(t, err)
+
+	_, err = client.CreateSchemaWithIDAndVersion(t.Context(), subject, franz_sr.Schema{Schema: schema}, id, version)
+	require.NoError(t, err)
+}
+
+// schemasEqual compares two schema objects for equality, ignoring newlines and leading/trailing spaces in the schema
+// string, since registries may reformat normalised schemas.
+func schemasEqual(lhs, rhs franz_sr.Schema) bool {
+	lhsSchema := strings.TrimSpace(strings.ReplaceAll(lhs.Schema, "\n", ""))
+	rhsSchema := strings.TrimSpace(strings.ReplaceAll(rhs.Schema, "\n", ""))
+	if lhsSchema != rhsSchema {
+		return false
+	}
+	return cmp.Equal(lhs, rhs, cmpopts.IgnoreFields(franz_sr.Schema{}, "Schema"))
+}
+
+// logCapture is a service.PrintLogger which records every line logged by a stream.
+type logCapture struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (l *logCapture) Printf(format string, v ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = append(l.lines, fmt.Sprintf(format, v...))
+}
+
+func (l *logCapture) Println(v ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = append(l.lines, fmt.Sprintln(v...))
+}
+
+func (l *logCapture) contains(substr string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, line := range l.lines {
+		if strings.Contains(line, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *logCapture) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.lines, "")
+}
+
+// runSchemaMigrationStream runs a `schema_registry` input -> `schema_registry` output stream from src to dst with
+// `translate_ids: false`, logging and dropping failed writes instead of retrying them, and returns the captured logs.
+func runSchemaMigrationStream(t *testing.T, src, dst redpandatest.Endpoints) *logCapture {
+	t.Helper()
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: %s
+output:
+  fallback:
+    - schema_registry:
+        url: %s
+        subject: ${! @schema_registry_subject }
+        translate_ids: false
+    - drop: {}
+      processors:
+        - log:
+            level: ERROR
+            message: 'schema write failed: ${! @fallback_error }'
+`, src.SchemaRegistryURL, dst.SchemaRegistryURL)))
+
+	logs := &logCapture{}
+	streamBuilder.SetPrintLogger(logs)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(t.Context(), 5*time.Second)
+	defer done()
+	require.NoError(t, stream.Run(ctx), "logs:\n%s", logs.String())
+
+	return logs
+}
+
+// requireSubjectVersionStatus asserts the HTTP status returned when fetching a subject version from a registry.
+func requireSubjectVersionStatus(t *testing.T, url, subject string, version, wantStatus int) {
+	t.Helper()
+
+	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", url, subject, version))
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, wantStatus, resp.StatusCode)
+}
+
 func TestSchemaRegistryIntegration(t *testing.T) {
-	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	dummySchema := `{"name":"foo", "type": "string"}`
@@ -80,6 +216,7 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 	}
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
+	setGlobalImportMode(t, dst.SchemaRegistryURL)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -176,7 +313,7 @@ output:
 			require.NoError(t, json.Unmarshal(body, &sd))
 			assert.Equal(t, subject, sd.Subject)
 			assert.Equal(t, 1, sd.Version)
-			assert.JSONEq(t, "{}", sd.Schema.Schema)
+			assert.JSONEq(t, dummySchema, sd.Schema.Schema)
 
 			if test.schemaWithReference {
 				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, test.extraSubject))
@@ -239,11 +376,11 @@ schema_registry:
 }
 
 func TestSchemaRegistryProtobufSchemasIntegration(t *testing.T) {
-	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	sr, err := redpandatest.StartRedpanda(t, true)
 	require.NoError(t, err)
+	setGlobalImportMode(t, sr.SchemaRegistryURL)
 
 	t.Logf("Schema Registry URL: %s", sr.SchemaRegistryURL)
 
@@ -318,7 +455,7 @@ message SampleRecord {
 		if ruleSet != "" {
 			inputSS.SchemaRuleSet = nil
 		}
-		assert.True(t, kafka.SchemasEqual(inputSS.Schema, returnedSS.Schema))
+		assert.True(t, schemasEqual(inputSS.Schema, returnedSS.Schema))
 	}
 
 	const dummySubject = "foo"
@@ -384,10 +521,10 @@ message SampleRecord {
 }
 
 func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {
-	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
+	setGlobalImportMode(t, dst.SchemaRegistryURL)
 
 	dummySubject := "foobar"
 	dummySchema := `{"name":"foo", "type": "string"}`
@@ -435,8 +572,43 @@ output:
 	assert.JSONEq(t, dummySchema, sd.Schema.Schema)
 }
 
+func TestSchemaRegistryConflictingSchemaIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	src, dst := runRedpandaPairForSchemaMigration(t)
+	setGlobalImportMode(t, dst.SchemaRegistryURL)
+
+	dummySubject := "foobar"
+	createSchema(t, src.SchemaRegistryURL, dummySubject, `{"name":"foo", "type": "string"}`, nil)
+
+	// Register a different schema under the same ID at the destination so that the migration is a genuine conflict.
+	createSchemaWithID(t, dst.SchemaRegistryURL, "other", `{"name":"other", "type": "int"}`, 1, 1)
+
+	logs := runSchemaMigrationStream(t, src, dst)
+
+	// The conflict must be surfaced as an error rather than swallowed, and the subject must not be created.
+	assert.True(t, logs.contains("Overwrite new schema with id 1 is not permitted"), "logs:\n%s", logs.String())
+	requireSubjectVersionStatus(t, dst.SchemaRegistryURL, dummySubject, 1, http.StatusNotFound)
+}
+
+func TestSchemaRegistryReadWriteDestinationIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	// The destination is deliberately left in READWRITE mode, which rejects schemas created with their original IDs.
+	src, dst := runRedpandaPairForSchemaMigration(t)
+	requireGlobalMode(t, dst.SchemaRegistryURL, franz_sr.ModeReadWrite)
+
+	dummySubject := "foobar"
+	createSchema(t, src.SchemaRegistryURL, dummySubject, `{"name":"foo", "type": "string"}`, nil)
+
+	logs := runSchemaMigrationStream(t, src, dst)
+
+	assert.True(t, logs.contains("translate_ids is false"), "expected a mode mismatch warning at connect time, logs:\n%s", logs.String())
+	assert.True(t, logs.contains("is not in import mode"), "logs:\n%s", logs.String())
+	requireSubjectVersionStatus(t, dst.SchemaRegistryURL, dummySubject, 1, http.StatusNotFound)
+}
+
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
-	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
@@ -530,10 +702,10 @@ output:
 }
 
 func TestSchemaRegistryCompatibilityLevelIntegration(t *testing.T) {
-	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
+	setGlobalImportMode(t, dst.SchemaRegistryURL)
 
 	compatLevel := franz_sr.CompatFull
 
@@ -597,10 +769,10 @@ output:
 }
 
 func TestSchemaRegistryMaxInFlightIntegration(t *testing.T) {
-	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
+	setGlobalImportMode(t, dst.SchemaRegistryURL)
 
 	u4, err := uuid.NewV4()
 	require.NoError(t, err)
