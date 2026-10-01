@@ -99,8 +99,9 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 }
 
 // renderFunctionsList renders the includes that make up the Bloblang
-// functions reference, in name order.
-func renderFunctionsList(specs []bloblangSpec) string {
+// functions reference. Functions that the Redpanda Cloud build doesn't allow
+// (inCloud is false) are wrapped so that Cloud docs leave them out.
+func renderFunctionsList(specs []bloblangSpec, inCloud map[string]bool) string {
 	var names []string
 	for _, s := range specs {
 		if s.Name != "" {
@@ -111,16 +112,27 @@ func renderFunctionsList(specs []bloblangSpec) string {
 	var b strings.Builder
 	b.WriteString(generatedBanner + "\n")
 	for _, n := range names {
-		b.WriteString("\ninclude::connect:components:partial$bloblang-functions/" + n + ".adoc[leveloffset=+1]\n")
+		b.WriteString(selfManagedOnly("include::connect:components:partial$bloblang-functions/"+n+".adoc[leveloffset=+1]\n", inCloud[n]))
 	}
 	return b.String()
+}
+
+// selfManagedOnly returns block preceded by a blank line, wrapped in
+// ifndef::env-cloud[] unless it is available in Redpanda Cloud.
+func selfManagedOnly(block string, inCloud bool) string {
+	if inCloud {
+		return "\n" + block
+	}
+	return "\nifndef::env-cloud[]\n" + block + "endif::[]\n"
 }
 
 var defaultCollator = collate.New(language.Und)
 
 // renderMethodsList renders the includes that make up the Bloblang methods
 // reference, grouped by category. General comes first and Deprecated last.
-func renderMethodsList(specs []bloblangSpec) string {
+// Methods that the Redpanda Cloud build doesn't allow are wrapped as in
+// renderFunctionsList.
+func renderMethodsList(specs []bloblangSpec, inCloud map[string]bool) string {
 	byCategory := map[string][]string{}
 	var categories []string
 	for _, s := range specs {
@@ -158,9 +170,18 @@ func renderMethodsList(specs []bloblangSpec) string {
 	for _, c := range categories {
 		methods := byCategory[c]
 		sort.Strings(methods)
-		b.WriteString("\n== " + toSentenceCase(c) + "\n")
+		var section strings.Builder
+		section.WriteString("\n== " + toSentenceCase(c) + "\n")
+		anyInCloud := false
 		for _, m := range methods {
-			b.WriteString("\ninclude::connect:components:partial$bloblang-methods/" + m + ".adoc[leveloffset=+2]\n")
+			anyInCloud = anyInCloud || inCloud[m]
+			section.WriteString(selfManagedOnly("include::connect:components:partial$bloblang-methods/"+m+".adoc[leveloffset=+2]\n", inCloud[m]))
+		}
+		if anyInCloud {
+			b.WriteString(section.String())
+		} else {
+			// No method in this category is in Cloud, so hide the heading too.
+			b.WriteString("\nifndef::env-cloud[]" + section.String() + "endif::[]\n")
 		}
 	}
 	return b.String()

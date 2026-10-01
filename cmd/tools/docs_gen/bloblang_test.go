@@ -197,3 +197,30 @@ func assertEqualOrJSON(t *testing.T, expected, actual string, msgAndArgs ...any)
 
 	return assert.Equal(t, a, b, msgAndArgs...)
 }
+
+func TestBloblangListsHideSelfManagedOnlyInCloud(t *testing.T) {
+	fns := []bloblangSpec{{Name: "now"}, {Name: "env"}}
+	got := renderFunctionsList(fns, map[string]bool{"now": true})
+	want := generatedBanner + "\n" +
+		"\nifndef::env-cloud[]\ninclude::connect:components:partial$bloblang-functions/env.adoc[leveloffset=+1]\nendif::[]\n" +
+		"\ninclude::connect:components:partial$bloblang-functions/now.adoc[leveloffset=+1]\n"
+	if got != want {
+		t.Errorf("functions list:\n%s\nwant:\n%s", got, want)
+	}
+
+	cat := func(c string) []bloblangCategory { return []bloblangCategory{{Category: c}} }
+	methods := []bloblangSpec{
+		{Name: "uppercase", Categories: cat("String Manipulation")},
+		{Name: "read_file", Categories: cat("Environment")},
+	}
+	got = renderMethodsList(methods, map[string]bool{"uppercase": true})
+	want = generatedBanner + "\n" +
+		"\nifndef::env-cloud[]\n== Environment\n" +
+		"\nifndef::env-cloud[]\ninclude::connect:components:partial$bloblang-methods/read_file.adoc[leveloffset=+2]\nendif::[]\n" +
+		"endif::[]\n" +
+		"\n== String manipulation\n" +
+		"\ninclude::connect:components:partial$bloblang-methods/uppercase.adoc[leveloffset=+2]\n"
+	if got != want {
+		t.Errorf("methods list:\n%s\nwant:\n%s", got, want)
+	}
+}
