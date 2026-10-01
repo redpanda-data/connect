@@ -35,6 +35,8 @@ var (
 	EncodeOffsetHeader     = encodeOffsetHeader
 )
 
+type PartialSyncError = partialSyncError
+
 func ReadRecordTimestamp(
 	ctx context.Context,
 	client *kgo.Client,
@@ -83,6 +85,10 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		}))),
 		knownSubjects: make(map[schemaSubjectVersion]struct{}),
 		knownSchemas:  make(map[int]schemaInfo),
+		failedSchemas: make(map[int]error),
+
+		retryMinBackoff: 100 * time.Millisecond,
+		retryMaxBackoff: time.Second,
 	}
 }
 
