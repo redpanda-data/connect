@@ -26,7 +26,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 	t.Run("single transaction commit", func(t *testing.T) {
 		cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		pub := &publisherStub{}
-		lm := newLogMiner(pub, cache)
+		rp := newRedoProcessor(pub, cache)
 
 		const (
 			txAStart  = uint64(900)
@@ -36,7 +36,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
 		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
-		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err := rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txA",
@@ -54,7 +54,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 	t.Run("concurrent transactions commit", func(t *testing.T) {
 		cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		pub := &publisherStub{}
-		lm := newLogMiner(pub, cache)
+		rp := newRedoProcessor(pub, cache)
 
 		const (
 			txAStart  = uint64(900)
@@ -70,7 +70,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		require.NoError(t, cache.AddEvent(t.Context(), "txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
 		// Commit tranaction A, transaction B still open.
-		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err := rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txA",
@@ -82,7 +82,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		assert.Equal(t, replication.SCN(txBStart-1), pub.messages[0].CheckpointSCN, msg)
 
 		// Commit B — no open transactions remain.
-		err = lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err = rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txBCommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txB",
@@ -100,7 +100,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 	t.Run("open transaction with no events does not hold back checkpoint", func(t *testing.T) {
 		cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		pub := &publisherStub{}
-		lm := newLogMiner(pub, cache)
+		rp := newRedoProcessor(pub, cache)
 
 		const (
 			txAStart  = uint64(900)
@@ -113,7 +113,7 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		// txB is started but never receives any DML events
 		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
 
-		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err := rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txA",
@@ -137,7 +137,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	t.Run("single transaction commit", func(t *testing.T) {
 		cache := newCacheResource(t)
 		pub := &publisherStub{}
-		lm := newLogMiner(pub, cache)
+		rp := newRedoProcessor(pub, cache)
 
 		const (
 			txAStart  = uint64(900)
@@ -147,7 +147,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
 		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
-		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err := rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txA",
@@ -164,7 +164,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	t.Run("concurrent transactions checkpoint held back to lowest open SCN", func(t *testing.T) {
 		cache := newCacheResource(t)
 		pub := &publisherStub{}
-		lm := newLogMiner(pub, cache)
+		rp := newRedoProcessor(pub, cache)
 
 		const (
 			txAStart  = uint64(900)
@@ -178,7 +178,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
 		require.NoError(t, cache.AddEvent(t.Context(), "txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
-		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err := rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txA",
@@ -189,7 +189,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 		msg := "while B is open, CheckpointSCN must be held back to B.startSCN-1 to avoid skipping transaction B on restart"
 		assert.Equal(t, replication.SCN(txBStart-1), pub.messages[0].CheckpointSCN, msg)
 
-		err = lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err = rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txBCommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txB",
@@ -207,7 +207,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	t.Run("open transaction with no events does not hold back checkpoint", func(t *testing.T) {
 		cache := newCacheResource(t)
 		pub := &publisherStub{}
-		lm := newLogMiner(pub, cache)
+		rp := newRedoProcessor(pub, cache)
 
 		const (
 			txAStart  = uint64(900)
@@ -220,7 +220,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 		// txB is started but never receives any DML events
 		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
 
-		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		err := rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
 			Operation:     sqlredo.OpCommit,
 			TransactionID: "txA",
@@ -342,14 +342,14 @@ func TestShouldDeferMiningCycle(t *testing.T) {
 func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 	pub := &publisherStub{}
-	lm := newLogMiner(pub, cache)
-	lm.cfg.LOBEnabled = true
-	lm.lobColTypes = map[string]string{
+	rp := newRedoProcessor(pub, cache)
+	rp.lobEnabled = true
+	rp.lobColTypes = map[string]string{
 		"TESTDB.T.OOL_COL":        "CLOB",
 		"TESTDB.T.SECUREFILE_COL": "CLOB",
 	}
 
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
 	}))
 
@@ -358,7 +358,7 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 		" buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);",
 		" buf_c := 'world';\n  dbms_lob.write(loc_c, 5, 6, buf_c);",
 	} {
-		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           101,
 			Operation:     sqlredo.OpLobWrite,
 			TransactionID: "txA",
@@ -367,11 +367,11 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 			SQLRedo:       sql.NullString{String: write, Valid: true},
 		}))
 	}
-	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "OOL_COL LOB_WRITEs should be deferred")
+	assert.Len(t, rp.pendingLOBWrites["txA"], 2, "OOL_COL LOB_WRITEs should be deferred")
 
 	// Oracle emits a LOB-only UPDATE for SECUREFILE_COL. OOL_COL (BASICFILE OOR) is
 	// absent from the SET clause — this is the case that triggered the CI failure.
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           102,
 		Operation:     sqlredo.OpUpdate,
 		TransactionID: "txA",
@@ -381,7 +381,7 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	}))
 
 	// SECUREFILE_COL gets its real data via SELECT_LOB_LOCATOR + LOB_WRITE.
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           103,
 		Operation:     sqlredo.OpSelectLobLocator,
 		TransactionID: "txA",
@@ -389,7 +389,7 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 		TableName:     sql.NullString{String: "T", Valid: true},
 		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "SECUREFILE_COL" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
 	}))
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           104,
 		Operation:     sqlredo.OpLobWrite,
 		TransactionID: "txA",
@@ -400,7 +400,7 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 
 	// COMMIT — replay deferred LOB_WRITEs; inferLOBLocator must find OOL_COL as a
 	// candidate from the LOB-only UPDATE (absent from SET = BASICFILE OOR, not a skip).
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
 	}))
 
@@ -409,7 +409,7 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	require.True(t, ok, "Data should be map[string]any")
 	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE OOR column should have deferred LOB_WRITEs assembled")
 	assert.Equal(t, "securedata", data["SECUREFILE_COL"], "SecureFile column should have its LOB_WRITE data")
-	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
+	assert.Empty(t, rp.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
 }
 
 // TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable verifies that a LOB-only UPDATE is
@@ -418,17 +418,17 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
 	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 	pub := &publisherStub{}
-	lm := newLogMiner(pub, cache)
-	lm.cfg.LOBEnabled = true
-	lm.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
+	rp := newRedoProcessor(pub, cache)
+	rp.lobEnabled = true
+	rp.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
 
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
 	}))
 
 	// Row 1: INSERT (LOB column omitted, as Oracle does) followed by its inline
 	// LOB-init UPDATE - merges into the INSERT and is suppressed.
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           101,
 		Operation:     sqlredo.OpInsert,
 		TransactionID: "txA",
@@ -436,7 +436,7 @@ func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
 		TableName:     sql.NullString{String: "T", Valid: true},
 		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID","NAME") values ('1','foo')`, Valid: true},
 	}))
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           102,
 		Operation:     sqlredo.OpUpdate,
 		TransactionID: "txA",
@@ -447,7 +447,7 @@ func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
 
 	// Row 2: a LOB-only UPDATE with no matching INSERT anywhere in the transaction,
 	// despite being in the same table as row 1's INSERT.
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           103,
 		Operation:     sqlredo.OpUpdate,
 		TransactionID: "txA",
@@ -456,7 +456,7 @@ func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
 		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row2 desc' where "ID" = '2'`, Valid: true},
 	}))
 
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
 	}))
 
@@ -479,17 +479,17 @@ func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
 func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing.T) {
 	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 	pub := &publisherStub{}
-	lm := newLogMiner(pub, cache)
-	lm.cfg.LOBEnabled = false
-	lm.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
+	rp := newRedoProcessor(pub, cache)
+	rp.lobEnabled = false
+	rp.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
 
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
 	}))
 
 	// Row 1: INSERT followed by its inline LOB-init UPDATE. No merge is attempted
 	// with LOBEnabled=false, but the UPDATE must still be suppressed.
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           101,
 		Operation:     sqlredo.OpInsert,
 		TransactionID: "txA",
@@ -497,7 +497,7 @@ func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing
 		TableName:     sql.NullString{String: "T", Valid: true},
 		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID","NAME") values ('1','foo')`, Valid: true},
 	}))
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           102,
 		Operation:     sqlredo.OpUpdate,
 		TransactionID: "txA",
@@ -509,7 +509,7 @@ func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing
 	// Row 2: a LOB-only UPDATE with no INSERT of its own, but the table still has row
 	// 1's INSERT. The table-level fallback suppresses this too - unlike LOBEnabled=true,
 	// there is no per-row merge outcome here that could be lost by suppressing it.
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           103,
 		Operation:     sqlredo.OpUpdate,
 		TransactionID: "txA",
@@ -518,7 +518,7 @@ func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing
 		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row2 desc' where "ID" = '2'`, Valid: true},
 	}))
 
-	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+	require.NoError(t, rp.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
 	}))
 
@@ -528,15 +528,15 @@ func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing
 	assert.NotContains(t, row1, "DESC", "LOBEnabled=false must not merge or leak LOB column data")
 }
 
-func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
-	return &LogMiner{
-		publisher:        pub,
+func newRedoProcessor(pub replication.ChangePublisher, cache TransactionCache) *redoProcessor {
+	return &redoProcessor{
+		lobEnabled:       DefaultLOBEnabled,
 		txnCache:         cache,
-		dmlParser:        sqlredo.NewParser(),
-		log:              service.NewLoggerFromSlog(slog.Default()),
-		cfg:              NewDefaultConfig(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		dmlParser:        sqlredo.NewParser(),
+		publisher:        pub,
+		log:              service.NewLoggerFromSlog(slog.Default()),
 	}
 }
 
