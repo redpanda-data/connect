@@ -95,7 +95,7 @@ output:
 				Advanced().
 				Default("QUORUM"),
 			service.NewBoolField(coFieldLoggedBatch).
-				Description("If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.").
+				Description("If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.").Version("4.10.0").
 				ShortDescription("Perform a logged batch. Disable for unlogged batches, which are less efficient but more widely supported.").
 				Advanced().
 				Default(true),

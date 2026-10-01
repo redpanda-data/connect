@@ -87,21 +87,21 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 		service.NewStringField(sroFieldURL).Description(schemaregistry.URLFieldDescription),
 		service.NewInterpolatedStringField(sroFieldSubject).Description(`The subject name.`),
 		service.NewInterpolatedStringField(sroFieldSubjectCompatibilityLevel).
-			Description("The compatibility level for the subject. Can be one of `BACKWARD`, `BACKWARD_TRANSITIVE`, `FORWARD`, `FORWARD_TRANSITIVE`, `FULL`, `FULL_TRANSITIVE`, `NONE`.").
+			Description("The compatibility level for the subject. Can be one of `BACKWARD`, `BACKWARD_TRANSITIVE`, `FORWARD`, `FORWARD_TRANSITIVE`, `FULL`, `FULL_TRANSITIVE`, `NONE`.").Version("4.62.0").
 			ShortDescription("The compatibility level for the subject.").
 			Optional().
 			Advanced(),
-		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill missing schema references and previous schema versions. If set to `true`, you must also configure a xref:components:inputs/schema_registry.adoc[`schema_registry`] input to read source schemas.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill missing schema references and previous schema versions. If set to `true`, you must also configure a xref:components:inputs/schema_registry.adoc[`schema_registry`] input to read source schemas.").Default(true).Advanced().Version("4.40.0"),
 		service.NewBoolField(sroFieldTranslateIDs).
 			Description("Translate schema IDs. When `false`, schemas are created on the destination with their original IDs and versions, which requires the destination schema registry to be in `IMPORT` mode (Redpanda v25.3 or later, or Confluent Schema Registry). When `true`, the destination assigns new IDs and must be in `READWRITE` mode, since schemas registered without an explicit ID are rejected in `IMPORT` mode.").
 			ShortDescription("Translate schema IDs.").
 			Default(false).
-			Advanced(),
+			Advanced().Version("4.50.0"),
 		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced().Version("4.61.0"),
-		service.NewBoolField(sroFieldRemoveMetadata).Description("Removes metadata fields from schema output. Use this to produce leaner schema definitions for downstream consumers or when metadata is not required.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldRemoveRuleSet).Description("Removes rule set definitions from schema output. Useful for simplifying schemas when rule sets are not required by consumers or applications.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldRemoveMetadata).Description("Removes metadata fields from schema output. Use this to produce leaner schema definitions for downstream consumers or when metadata is not required.").Version("4.61.0").Default(true).Advanced(),
+		service.NewBoolField(sroFieldRemoveRuleSet).Description("Removes rule set definitions from schema output. Useful for simplifying schemas when rule sets are not required by consumers or applications.").Version("4.61.0").Default(true).Advanced(),
 		service.NewStringField(sroFieldInputResource).
-			Description("The label of the xref:components:inputs/schema_registry.adoc[`schema_registry` input] from which to read source schemas.").
+			Description("The label of the xref:components:inputs/schema_registry.adoc[`schema_registry` input] from which to read source schemas.").Version("4.40.0").
 			Default(sriResourceDefaultLabel).
 			Advanced(),
 		service.NewTLSToggledField(sroFieldTLS),

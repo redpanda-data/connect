@@ -11,6 +11,10 @@
 // tag::body[]
 Writes messages to Salesforce, routing each topic to its own SObject configuration.
 
+ifndef::env-cloud[]
+Introduced in version 4.85.0.
+endif::[]
+
 Consumes batches of messages and writes them to Salesforce.
 
 Each message must have a `topic` field (set by the per-topic processor) and a `data` field

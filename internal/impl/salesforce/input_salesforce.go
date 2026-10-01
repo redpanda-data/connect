@@ -65,7 +65,7 @@ This input adds the following metadata fields to each message:
 == Authentication
 
 Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in Salesforce, enable OAuth settings and the Client Credentials Flow, then supply the Consumer Key as ` + "`client_id`" + ` and Consumer Secret as ` + "`client_secret`" + `.
-`)
+`).Version("4.90.3")
 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringField(sfiFieldObject).

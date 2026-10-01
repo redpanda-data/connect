@@ -6,6 +6,10 @@
 
 Allows you to configure the input subscription and creates if it doesn't exist.
 
+ifndef::env-cloud[]
+Requires version 4.11.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `create_subscription.enabled`
@@ -30,6 +34,10 @@ The Google Service Account credentials in JSON format (optional). Provide the co
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.33.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -37,6 +45,10 @@ include::connect:components:partial$secret_warning.adoc[]
 === `endpoint`
 
 An optional endpoint that overrides the default of `pubsub.googleapis.com:443`. Use this field to connect to a region-specific Pub/Sub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[Pub/Sub regional endpoints^].
+
+ifndef::env-cloud[]
+Requires version 4.12.0 or later.
+endif::[]
 
 *Type*: `string`
 

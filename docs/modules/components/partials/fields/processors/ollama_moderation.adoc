@@ -6,6 +6,10 @@
 
 If `server_address` is not set, download the Ollama binary to this directory and use it as a model cache.
 
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -17,6 +21,10 @@ cache_directory: /opt/cache/connect/ollama
 === `download_url`
 
 If `server_address` is not set, download the Ollama binary from this URL. The default value is the official Ollama GitHub release for this platform.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -71,6 +79,10 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `runner`
 
 Options for the model runner that are used when the model is first loaded into memory.
+
+ifndef::env-cloud[]
+Requires version 4.34.0 or later.
+endif::[]
 
 *Type*: `object`
 

@@ -311,6 +311,10 @@ The maximum number of batches to send in parallel at any given time. When multip
 
 A list of database statements to run in addition to the main `query`. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries are executed for each message within a single transaction.
 
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
+
 *Type*: `array<object>`
 
 === `queries[].args_mapping`
@@ -378,6 +382,10 @@ You must include the correct placeholders for the specified database driver. Som
 
 An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -444,6 +452,10 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 === `unsafe_dynamic_query`
 
 Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Make sure your queries are defended against injection attacks.
+
+ifndef::env-cloud[]
+Requires version 4.8.0 or later.
+endif::[]
 
 *Type*: `bool`
 

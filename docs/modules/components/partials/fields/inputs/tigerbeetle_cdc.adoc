@@ -59,6 +59,10 @@ An optional https://docs.redpanda.com/redpanda-connect/components/rate_limits/ab
 
 The timeout in seconds, for querying the TigerBeetle cluster.
 
+ifndef::env-cloud[]
+Requires version 4.82.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `15`

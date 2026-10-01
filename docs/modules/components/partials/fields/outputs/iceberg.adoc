@@ -116,6 +116,10 @@ processors:
 
 Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive; set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `"COLUMN"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.
 
+ifndef::env-cloud[]
+Requires version 4.89.3 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -371,6 +375,10 @@ Cleanup is already skipped automatically whenever a commit's outcome is ambiguou
 
 Setting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.
 
+ifndef::env-cloud[]
+Requires version 4.105.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -404,6 +412,10 @@ Maximum age of snapshots to retain for time-travel queries. Set to zero to disab
 The columns forming the row identity (the Iceberg identifier fields, or equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.
 
 See the Row-level operations section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.
+
+ifndef::env-cloud[]
+Requires version 4.99.0 or later.
+endif::[]
 
 *Type*: `array<string>`
 
@@ -439,6 +451,10 @@ How `upsert` and `delete` are materialised on disk.
 
 See the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.
 
+ifndef::env-cloud[]
+Requires version 4.105.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `merge-on-read`
@@ -467,6 +483,10 @@ namespace: production
 
 Parquet writer configuration.
 
+ifndef::env-cloud[]
+Requires version 4.90.3 or later.
+endif::[]
+
 *Type*: `object`
 
 === `parquet.compression`
@@ -480,6 +500,10 @@ If you rely on the table property instead, use a lower-case codec name: this fie
 Only codecs that every engine this output targets can read are offered. If the table property names something else (`lz4`, `lz4_raw`, `brotli`, `lzo`), it is reported in the log and the data files this output writes are uncompressed instead.
 
 Measurement found no throughput penalty worth planning around, at one core or four; the size benefit though is entirely data-dependent, ranging from ~15x smaller on a repetitive record shape to ~2% on random content. Note also that the uncompressed fallback applies only when the table property is absent, and tables created through the Iceberg library carry a `zstd` property by default. See <<data-file-compression,Data file compression>> for the resolution order and the copy-on-write caveat.
+
+ifndef::env-cloud[]
+Requires version 4.109.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -502,6 +526,10 @@ The row-level operation to apply for each message: `insert` (append), `upsert` (
 See the Row-level operations section above for the full semantics, the format-version-2 upgrade, batching behavior, and important caveats.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.99.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -538,6 +566,10 @@ Enable automatic schema evolution. When enabled, new columns will be automatical
 === `schema_evolution.new_column_type_mapping`
 
 An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.
+
+ifndef::env-cloud[]
+Requires version 4.85.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -585,6 +617,10 @@ partition_spec: (day(my_ts_col), void(`non.nested column.with.dots`), identity(n
 
 When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds; convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.
 
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -592,6 +628,10 @@ When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, 
 === `schema_evolution.schema_metadata`
 
 The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing; record keys are matched by case-folding and the metadata's name is what lands in the table.
+
+ifndef::env-cloud[]
+Requires version 4.85.0 or later.
+endif::[]
 
 *Type*: `string`
 

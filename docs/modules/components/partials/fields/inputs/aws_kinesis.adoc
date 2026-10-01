@@ -450,6 +450,10 @@ Whether to consume from the oldest message when a sequence does not yet exist fo
 
 Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.
 
+ifndef::env-cloud[]
+Requires version 4.55.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `2s`

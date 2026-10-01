@@ -48,7 +48,7 @@ func inputSpec() *service.ConfigSpec {
 			service.NewStringField(siFieldUser).Description("Splunk account user."),
 			service.NewStringField(siFieldPassword).Description("Splunk account password.").Secret(),
 			service.NewStringField(siFieldQuery).Description("Splunk search query."),
-			service.NewTLSToggledField(siFieldTLS),
+			service.NewTLSToggledField(siFieldTLS).Version("4.31.0"),
 			service.NewAutoRetryNacksToggleField(),
 		)
 }

@@ -186,6 +186,10 @@ An optional explicit partition to set for each message. This field is only relev
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.13.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -199,6 +203,10 @@ partition: ${! meta("partition") }
 An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.40.0 or later.
+endif::[]
 
 *Type*: `string`
 

@@ -146,7 +146,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			saramaClientIDField(iskFieldClientID).
 				Advanced().Default("benthos"),
 			service.NewStringField(iskFieldInstanceID).
-				Description("When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.").
+				Description("When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.").Version("4.46.0").
 				ShortDescription("An identifier for this input that persists across restarts. Must be unique per input.").
 				Advanced().
 				Optional(),
@@ -186,7 +186,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("The maximum number of unprocessed messages to fetch at a given time.").
 				Advanced().Default(256),
 			service.NewBoolField(iskFieldMultiHeader).
-				Description("Decode headers into lists to allow handling of multiple values with the same key").
+				Description("Decode headers into lists to allow handling of multiple values with the same key").Version("4.10.0").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
 		)

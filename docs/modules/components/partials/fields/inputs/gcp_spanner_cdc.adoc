@@ -139,6 +139,10 @@ processors:
 
 The maximum number of messages that can be processed at a given time per partition. Increasing this limit enables parallel processing and batching at the output level. Any given partition watermark will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.
 
+ifndef::env-cloud[]
+Requires version 4.107.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1024`

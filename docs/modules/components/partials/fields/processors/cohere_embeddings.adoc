@@ -28,6 +28,10 @@ The number of dimensions (numerical values) in each vector embedding generated b
 
 The type of text input passed to the model.
 
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `search_document`

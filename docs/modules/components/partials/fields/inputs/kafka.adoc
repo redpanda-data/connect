@@ -242,6 +242,10 @@ A period after which a consumer of the group is kicked after no heartbeats.
 
 When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.
 
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `max_processing_period`
@@ -255,6 +259,10 @@ A maximum estimate for the time taken to process a message, this is used for tun
 === `multi_header`
 
 Decode headers into lists to allow handling of multiple values with the same key
+
+ifndef::env-cloud[]
+Requires version 4.10.0 or later.
+endif::[]
 
 *Type*: `bool`
 

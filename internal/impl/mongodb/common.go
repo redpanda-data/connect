@@ -336,7 +336,7 @@ func clientFields() []*service.ConfigField {
 			Default("").
 			Secret(),
 		service.NewURLField(commonFieldClientAppName).
-			Description("The client application name.").
+			Description("The client application name.").Version("4.32.0").
 			Default("benthos").
 			Advanced(),
 		AWSIAMAuthField(),

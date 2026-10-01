@@ -123,7 +123,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 					Description("The replication factor to use for new topics. Leave at -1 to use the broker configured default. Must be an odd number, and less then or equal to the number of brokers.").
 					ShortDescription("Replication factor for new topics. Leave at -1 for the broker default. Must be an odd number.").
 					Default(-1),
-			).Description("If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").
+			).Description("If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").Version("4.23.0").
 				ShortDescription("Create topics with the specified partition count and replication factor if they do not exist.").
 				Advanced().Optional(),
 			service.NewStringEnumField(oskFieldCompression, "none", "snappy", "lz4", "gzip", "zstd").
@@ -138,7 +138,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").Version("4.26.0").
 				ShortDescription("Enable the idempotent write producer option. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(false).
 				Advanced(),
@@ -172,7 +172,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().
 				Deprecated(),
 			service.NewInterpolatedStringField(oskFieldTimestampMs).
-				Description(kafkaOutputTimestampMsDescription).
+				Description(kafkaOutputTimestampMsDescription).Version("4.40.0").
 				Example(`${! timestamp_unix_milli() }`).
 				Example(`${! metadata("kafka_timestamp_ms") }`).
 				Optional().

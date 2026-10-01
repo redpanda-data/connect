@@ -6,6 +6,10 @@
 
 Salesforce REST API version to target, prefixed with `v`. Affects endpoint paths (`/services/data/\{api_version}/...`) and available fields/objects. Must be supported by your org; check Setup → Company Information. Older versions may lack recent fields.
 
+ifndef::env-cloud[]
+Requires version 4.90.3 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `v65.0`
@@ -90,11 +94,19 @@ columns:
 
 HTTP client configuration for Salesforce REST calls (OAuth token endpoint and, where applicable, data queries).
 
+ifndef::env-cloud[]
+Requires version 4.90.3 or later.
+endif::[]
+
 *Type*: `object`
 
 === `http.access_log_body_limit`
 
 Maximum bytes of request/response body to include in logs. 0 to skip body logging.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -103,6 +115,10 @@ Maximum bytes of request/response body to include in logs. 0 to skip body loggin
 === `http.access_log_level`
 
 Log level for HTTP request/response logging. Empty disables logging.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -113,6 +129,10 @@ Log level for HTTP request/response logging. Empty disables logging.
 === `http.backoff`
 
 Adaptive backoff configuration for 429 (Too Many Requests) responses. Always active.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -144,6 +164,10 @@ Maximum number of retries on 429 responses.
 
 Disable HTTP/2 and force HTTP/1.1.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `false`
@@ -151,6 +175,10 @@ Disable HTTP/2 and force HTTP/1.1.
 === `http.http`
 
 HTTP transport settings controlling connection pooling, timeouts, and HTTP/2.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -340,6 +368,10 @@ Size in bytes of the per-connection write buffer.
 
 HTTP proxy URL. Empty string disables proxying.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -347,6 +379,10 @@ HTTP proxy URL. Empty string disables proxying.
 === `http.tcp`
 
 TCP socket configuration.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -400,6 +436,10 @@ Maximum time to wait for acknowledgment of transmitted data before killing the c
 
 HTTP request timeout.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `5s`
@@ -407,6 +447,10 @@ HTTP request timeout.
 === `http.tls`
 
 Custom TLS settings can be used to override system defaults.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -556,6 +600,10 @@ Whether to skip server side certificate verification.
 
 Maximum burst size for rate limiting.
 
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1`
@@ -563,6 +611,10 @@ Maximum burst size for rate limiting.
 === `http.tps_limit`
 
 Rate limit in requests per second. 0 disables rate limiting.
+
+ifndef::env-cloud[]
+Requires version 4.83.0 or later.
+endif::[]
 
 *Type*: `float`
 

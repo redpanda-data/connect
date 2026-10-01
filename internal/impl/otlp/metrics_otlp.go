@@ -25,6 +25,7 @@ import (
 
 func otlpMetricsSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.88.0").
 		Summary("Send metrics to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
 		Fields(
 			service.NewStringField(otFieldService).

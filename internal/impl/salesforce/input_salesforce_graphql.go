@@ -63,7 +63,7 @@ This input adds no Salesforce-specific metadata. GraphQL response shapes vary by
 == Authentication
 
 Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in Salesforce, enable OAuth settings and the Client Credentials Flow, grant the ` + "`api`" + ` OAuth scope, then supply the Consumer Key as ` + "`client_id`" + ` and Consumer Secret as ` + "`client_secret`" + `. The Connected App must have access to the target UIAPI objects.
-`)
+`).Version("4.90.3")
 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringField(sfgqlFieldQuery).

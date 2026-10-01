@@ -34,7 +34,7 @@ func driveLabelsProcessorConfig() *service.ConfigSpec {
 		Summary("Lists labels for a file in Google Drive").
 		Description(`
 Can list all labels from Google Drive.
-		` + authDescription("https://www.googleapis.com/auth/drive.labels.readonly")).
+		` + authDescription("https://www.googleapis.com/auth/drive.labels.readonly")).Version("4.53.0").
 		Fields(commonFields()...)
 }
 

@@ -145,6 +145,10 @@ WARNING: When using xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.33.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -238,6 +242,10 @@ By default, this value is set to `false`, and records containing unknown values 
 
 A map of labels to add to the load job.
 
+ifndef::env-cloud[]
+Requires version 4.1.0 or later.
+endif::[]
+
 *Type*: `object`
 
 *Default*: `{}`
@@ -245,6 +253,10 @@ A map of labels to add to the load job.
 === `job_project`
 
 Specify the project ID in which jobs are executed. If not set, the `project` value is used.
+
+ifndef::env-cloud[]
+Requires version 4.35.0 or later.
+endif::[]
 
 *Type*: `string`
 

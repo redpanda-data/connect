@@ -87,7 +87,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Description("The maximum size (in bytes) for each batch yielded by this input. " +
 				"This value must be less than or equal to the `partition_buffer_bytes`. " +
 				"If using Redpanda output, this value should not be greater than the `max_message_bytes` option value (1MB by default), " +
-				"and for high-throughput scenarios they should be equal.").
+				"and for high-throughput scenarios they should be equal.").Version("4.55.0").
 			ShortDescription("Maximum size in bytes of each batch yielded by this input. Must not exceed partition_buffer_bytes.").
 			Default("32KB").
 			Advanced(),

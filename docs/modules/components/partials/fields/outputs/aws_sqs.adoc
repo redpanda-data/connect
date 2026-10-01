@@ -202,6 +202,10 @@ An optional delay time in seconds for messages. The value must be between `0` an
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.24.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `endpoint`
@@ -221,6 +225,10 @@ The maximum number of parallel message batches to have in flight at any given ti
 === `max_records_per_request`
 
 The maximum number of records delivered in a single SQS request. Enter a value from `1` to `10`.
+
+ifndef::env-cloud[]
+Requires version 4.41.0 or later.
+endif::[]
 
 *Type*: `int`
 

@@ -37,7 +37,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 		Fields(
 			parquetSchemaConfig().Optional(),
 			service.NewStringField("schema_metadata").
-				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").
+				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").Version("4.62.0").
 				ShortDescription("A metadata field containing a schema definition to encode with, instead of a static schema.").
 				Default(""),
 			service.NewStringEnumField("default_compression",

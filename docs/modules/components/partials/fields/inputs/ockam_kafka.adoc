@@ -39,6 +39,10 @@ If this value is set to `true`:
 
 The fields to encrypt in the Kafka messages when the record is a valid JSON map. By default, the whole record is encrypted.
 
+ifndef::env-cloud[]
+Requires version 4.37.0 or later.
+endif::[]
+
 *Type*: `array<string>`
 
 *Default*: `[]`
@@ -64,6 +68,10 @@ The name of the https://command.ockam.io/manual/ockam-identity.html[Ockam identi
 === `kafka.batching`
 
 Configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions, so that the input batches messages together before flushing them for processing. Batching can improve performance and is useful for windowed processing. Batching this way preserves the ordering of topic partitions.
+
+ifndef::env-cloud[]
+Requires version 4.15.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -184,6 +192,10 @@ When a message with a specific offset is delivered to the output, the offset is 
 
 The period of time between each commit of the current partition offsets to the consumer group. Offsets are always committed during shutdown.
 
+ifndef::env-cloud[]
+Requires version 4.3.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `5s`
@@ -207,6 +219,10 @@ If individual records are larger than the `fetch_max_bytes` value, brokers still
 
 This field is equivalent to the Java setting `fetch.max.bytes`.
 
+ifndef::env-cloud[]
+Requires version 4.39.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `50MiB`
@@ -217,6 +233,10 @@ The maximum number of bytes that are consumed from a single partition in a fetch
 
 If a single batch is larger than the `fetch_max_partition_bytes` value, the batch is still sent so that the client can make progress.
 
+ifndef::env-cloud[]
+Requires version 4.39.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `1MiB`
@@ -225,6 +245,10 @@ If a single batch is larger than the `fetch_max_partition_bytes` value, the batc
 
 The maximum period of time a broker can wait for a fetch response to reach the required minimum number of bytes (`fetch_min_bytes`). This field is equivalent to the Java setting `fetch.max.wait.ms`.
 
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `5s`
@@ -232,6 +256,10 @@ The maximum period of time a broker can wait for a fetch response to reach the r
 === `kafka.fetch_min_bytes`
 
 The minimum number of bytes that a broker tries to send during a fetch. This field is equivalent to the Java setting `fetch.min.bytes`.
+
+ifndef::env-cloud[]
+Requires version 4.39.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -245,6 +273,10 @@ You must set `heartbeat_interval` to less than one-third of `session_timeout`.
 
 This field is equivalent to the Java `heartbeat.interval.ms` setting and accepts Go duration format strings such as `10s` or `2m`.
 
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `3s`
@@ -255,6 +287,10 @@ When you specify a `consumer_group`, assign a unique value to `instance_id` to d
 
 When you assign an instance ID, the client does not automatically leave the consumer group when it disconnects. To remove the client, you must use an external admin command on behalf of the instance ID.
 
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -262,6 +298,10 @@ When you assign an instance ID, the client does not automatically leave the cons
 === `kafka.multi_header`
 
 Decode headers into lists to allow the handling of multiple values with the same key.
+
+ifndef::env-cloud[]
+Requires version 4.10.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -271,6 +311,10 @@ Decode headers into lists to allow the handling of multiple values with the same
 
 A rack specifies where the client is physically located, and changes fetch requests to consume from the closest replica as opposed to the leader replica.
 
+ifndef::env-cloud[]
+Requires version 4.21.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -278,6 +322,10 @@ A rack specifies where the client is physically located, and changes fetch reque
 === `kafka.rebalance_timeout`
 
 When you specify a `consumer_group`, `rebalance_timeout` sets a time limit for all consumer group members to complete their work and commit offsets after a rebalance has begun. The timeout excludes the time taken to detect a failed or late heartbeat, which indicates a rebalance is required. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
+
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -291,6 +339,10 @@ Each pattern is a full regular expression evaluated against the complete topic n
 
 Example: `regexp_topics_exclude: ["^_", ".*-temp$", ".*-test.*"]` excludes topics starting with underscore, ending with `-temp`, or containing `-test`.
 
+ifndef::env-cloud[]
+Requires version 4.69.0 or later.
+endif::[]
+
 *Type*: `array<string>`
 
 === `kafka.regexp_topics_include[]`
@@ -302,6 +354,10 @@ Each pattern is a full regular expression evaluated against the complete topic n
 This field enables regex mode (replacing the deprecated `regexp_topics` boolean) and cannot be used together with explicit `topics` lists. Use `regexp_topics_exclude` to filter out specific patterns from the matched topics.
 
 Example: `regexp_topics_include: ["events_.*", "logs_.*"]` consumes from all topics starting with `events_` or `logs_`.
+
+ifndef::env-cloud[]
+Requires version 4.69.0 or later.
+endif::[]
 
 *Type*: `array<string>`
 
@@ -335,6 +391,10 @@ seed_brokers:
 
 When you specify a `consumer_group`, `session_timeout` sets the maximum interval between heartbeats sent by a consumer group member to the broker. If a broker doesn't receive a heartbeat from a group member before the timeout expires, it removes the member from the consumer group and initiates a rebalance. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
 
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `1m`
@@ -342,6 +402,10 @@ When you specify a `consumer_group`, `session_timeout` sets the maximum interval
 === `kafka.start_offset`
 
 Specify the offset from which this input starts or restarts consuming messages. Restarts occur when the `OffsetOutOfRange` error is seen during a fetch.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -514,6 +578,10 @@ Whether to skip server side certificate verification.
 
 The interval between consumer lag refreshes. During each cycle, this input asks the brokers for the consumer group's committed offsets and the partition end offsets, and records the difference (the number of unread messages) for each topic partition in the consumer lag metric and the `kafka_lag` metadata field. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.
 
+ifndef::env-cloud[]
+Requires version 4.54.1 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `5s`
@@ -568,6 +636,10 @@ topics:
 === `kafka.transaction_isolation_level`
 
 The isolation level for handling transactional messages. This setting determines how transactions are processed and affects data consistency guarantees.
+
+ifndef::env-cloud[]
+Requires version 4.53.0 or later.
+endif::[]
 
 *Type*: `string`
 

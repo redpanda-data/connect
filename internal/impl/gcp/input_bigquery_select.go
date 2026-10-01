@@ -105,7 +105,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Field(bqSelectProjectField()).
 		Field(service.NewStringField("credentials_json").
-			Description(credentialsJSONDescription).
+			Description(credentialsJSONDescription).Version("4.33.0").
 			Secret().
 			Default("")).
 		Field(bqSelectTableField()).
@@ -113,7 +113,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(bqSelectWhereField()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(bqJobLabelsField("query")).
-		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
+		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Version("4.7.0").Default("")).
 		Field(bqSelectArgsMappingField()).
 		Field(bqSelectPrefixField()).
 		Field(bqSelectSuffixField()).

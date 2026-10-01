@@ -68,7 +68,7 @@ func routeToKafkaOutletField() *service.ConfigField {
 
 func encryptedFieldsField() *service.ConfigField {
 	return service.NewStringListField("encrypted_fields").
-		Description("The fields to encrypt in the Kafka messages when the record is a valid JSON map. By default, the whole record is encrypted.").
+		Description("The fields to encrypt in the Kafka messages when the record is a valid JSON map. By default, the whole record is encrypted.").Version("4.37.0").
 		ShortDescription("Fields to encrypt within JSON records. The whole record is encrypted by default.").
 		Default([]string{})
 }

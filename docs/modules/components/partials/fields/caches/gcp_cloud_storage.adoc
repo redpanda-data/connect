@@ -12,6 +12,10 @@ The Google Cloud Storage bucket to store items in.
 
 Optional field to explicitly set the Content-Type.
 
+ifndef::env-cloud[]
+Requires version 4.5.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `credentials_json`
@@ -19,6 +23,10 @@ Optional field to explicitly set the Content-Type.
 An optional field to set Google Service Account Credentials json.
 
 include::connect:components:partial$secret_warning.adoc[]
+
+ifndef::env-cloud[]
+Requires version 4.33.0 or later.
+endif::[]
 
 *Type*: `string`
 

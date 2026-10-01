@@ -8,5 +8,9 @@
 // end::meta[]
 
 // tag::body[]
+ifndef::env-cloud[]
+Introduced in version 4.58.0.
+endif::[]
+
 Adds or removes an emoji reaction on a Slack message using the https://api.slack.com/methods/reactions.add[`reactions.add`^] and https://api.slack.com/methods/reactions.remove[`reactions.remove`^] API methods.
 // end::body[]

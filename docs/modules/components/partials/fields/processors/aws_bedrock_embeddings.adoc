@@ -66,6 +66,10 @@ A custom endpoint URL for AWS API requests. Use this to connect to AWS-compatibl
 
 Specifies the type of input passed to the model. Required by Cohere embedding models; ignored by Amazon Titan models.
 
+ifndef::env-cloud[]
+Requires version 4.97.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [cols="1m,2a"]

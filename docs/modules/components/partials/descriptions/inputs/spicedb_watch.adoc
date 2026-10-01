@@ -11,6 +11,10 @@
 // tag::body[]
 Consume messages from the Watch API from SpiceDB.
 
+ifndef::env-cloud[]
+Introduced in version 4.39.0.
+endif::[]
+
 The SpiceDB input allows you to consume messages from the Watch API of a SpiceDB instance.
 This input is useful for applications that need to react to changes in the data managed by SpiceDB in real-time.
 

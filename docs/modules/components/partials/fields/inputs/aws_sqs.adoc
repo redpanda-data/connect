@@ -82,6 +82,10 @@ The maximum number of messages that Redpanda Connect can return each time it pol
 
 The maximum number of pending messages that Redpanda Connect can have in flight at the same time.
 
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1000`
@@ -89,6 +93,10 @@ The maximum number of pending messages that Redpanda Connect can have in flight 
 === `message_timeout`
 
 The maximum time allowed to process a received message before Redpanda Connect must refresh its https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html[receipt handle^]. If the handle is not refreshed in time, the message becomes visible in the queue again. Redpanda Connect attempts to refresh the receipt handle after half of the timeout has elapsed. This value sets the visibility timeout for each received message.
+
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -173,6 +181,10 @@ The SQS URL to consume from.
 === `wait_time_seconds`
 
 The wait time, in seconds, for each receive request. Valid values are `0` to `20`. Set a value from `1` to `20` to enable https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html[long polling^] for queued messages.
+
+ifndef::env-cloud[]
+Requires version 4.6.0 or later.
+endif::[]
 
 *Type*: `int`
 

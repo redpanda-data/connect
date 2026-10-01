@@ -4,6 +4,10 @@
 
 Compares the current value with another value and returns a detailed changelog describing all differences. The changelog contains operations (create, update, delete) with their paths and values, enabling you to track changes between data versions, implement audit logs, or synchronize data between systems.
 
+ifndef::env-cloud[]
+Introduced in version 4.25.0.
+endif::[]
+
 
 == Parameters
 

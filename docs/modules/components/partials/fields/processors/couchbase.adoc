@@ -75,6 +75,10 @@ include::connect:components:partial$secret_warning.adoc[]
 
 Bucket scope.
 
+ifndef::env-cloud[]
+Requires version 4.56.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `timeout`
@@ -117,6 +121,10 @@ The Couchbase transcoder to use for converting the data format of documents writ
 === `ttl`
 
 An optional TTL to set for items.
+
+ifndef::env-cloud[]
+Requires version 4.73.0 or later.
+endif::[]
 
 *Type*: `string`
 

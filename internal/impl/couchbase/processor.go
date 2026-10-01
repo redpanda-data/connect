@@ -45,7 +45,7 @@ func ProcessorConfig() *service.ConfigSpec {
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.").
 		Field(service.NewInterpolatedStringField("id").Description(`Document id.`).Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
-		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Optional().Advanced()).
+		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Version("4.73.0").Optional().Advanced()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
 			string(client.OperationGet):     "fetch a document.",
 			string(client.OperationInsert):  "insert a new document.",

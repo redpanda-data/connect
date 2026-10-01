@@ -34,9 +34,9 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
-			Description("Optional field to explicitly set the Content-Type.").Optional()).
+			Description("Optional field to explicitly set the Content-Type.").Version("4.5.0").Optional()).
 		Field(service.NewStringField("credentials_json").
-			Description("An optional field to set Google Service Account Credentials json.").Secret().Default(""))
+			Description("An optional field to set Google Service Account Credentials json.").Version("4.33.0").Secret().Default(""))
 
 	return spec
 }

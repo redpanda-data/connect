@@ -85,14 +85,14 @@ For example, the union schema `+"`[\"null\",\"string\",\"Foo\"]`, where `Foo`"+`
 However, it is possible to instead create documents in standard/raw JSON format by setting the field `+"<<avro_raw_json,`avro_raw_json`>> to `true`"+`.
 
 This scanner also emits the canonical Avro schema as `+"`@avro_schema`"+` metadata, along with the schema's fingerprint available via `+"`@avro_schema_fingerprint`"+`.
-`).
+`).Version("4.25.0").
 		Fields(
 			service.NewBoolField(sFieldRawJSON).
 				Description("Whether to decode messages into normal JSON rather than https://avro.apache.org/docs/1.12.0/specification/#json-encoding[Avro JSON^]. When true, this unwraps union values (bare values instead of {\"type\": value} wrappers).").
 				Advanced().
 				Default(false),
 			service.NewIntField(sFieldMaxDecompressedBlockBytes).
-				Description("The maximum size, in bytes, that a single compressed Avro OCF block is allowed to expand to when decompressed. This guards against decompression-amplification (\"deflate bomb\") inputs, where a tiny compressed block would otherwise expand into a very large allocation. A block that exceeds this limit causes the scan to fail rather than be materialized. There is deliberately no way to disable this cap: pipelines with legitimately larger blocks should set an explicit higher value. Set to `0` to use the default (equivalent to omitting the field).").
+				Description("The maximum size, in bytes, that a single compressed Avro OCF block is allowed to expand to when decompressed. This guards against decompression-amplification (\"deflate bomb\") inputs, where a tiny compressed block would otherwise expand into a very large allocation. A block that exceeds this limit causes the scan to fail rather than be materialized. There is deliberately no way to disable this cap: pipelines with legitimately larger blocks should set an explicit higher value. Set to `0` to use the default (equivalent to omitting the field).").Version("4.109.0").
 				Advanced().
 				Default(defaultMaxDecompressedBlockBytes).
 				LintRule(`root = if this < 0 { [ "`+sFieldMaxDecompressedBlockBytes+` must be >= 0" ] }`),

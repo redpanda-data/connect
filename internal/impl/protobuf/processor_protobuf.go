@@ -106,11 +106,11 @@ This operator is also considerably faster in scenario where you manipulate the d
 		service.NewStringField(fieldMessage).
 			Description("The fully-qualified name of the protobuf message to convert from or to JSON."),
 		service.NewBoolField(fieldDiscardUnknown).
-			Description("When set to `true`, the `from_json` operator discards fields that are unknown to the schema.").
+			Description("When set to `true`, the `from_json` operator discards fields that are unknown to the schema.").Version("4.24.0").
 			ShortDescription("Discard fields that are unknown to the schema.").
 			Default(false),
 		service.NewBoolField(fieldUseProtoNames).
-			Description("When set to `true`, the `to_json` or `decode` operator deserializes fields exactly as named in the schema file.").
+			Description("When set to `true`, the `to_json` or `decode` operator deserializes fields exactly as named in the schema file.").Version("4.24.0").
 			ShortDescription("Deserialize fields exactly as named in the schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
@@ -118,7 +118,7 @@ This operator is also considerably faster in scenario where you manipulate the d
 			ShortDescription("Directories containing the .proto files needed to parse the target message. Defaults to the current directory.").
 			Default([]string{}),
 		service.NewBoolField(fieldUseEnumNumbers).
-			Description("When set to `true`, the `to_json` or `decode` operator deserializes enumeration fields as their numerical values instead of their string names. For example, an enum field with a value of `ENUM_VALUE_ONE` is represented as `1` in the JSON output.").
+			Description("When set to `true`, the `to_json` or `decode` operator deserializes enumeration fields as their numerical values instead of their string names. For example, an enum field with a value of `ENUM_VALUE_ONE` is represented as `1` in the JSON output.").Version("4.53.0").
 			ShortDescription("Deserialize enums as numeric values rather than string names.").
 			Default(false),
 		service.NewObjectListField(fieldBSRConfig,
@@ -134,7 +134,7 @@ This operator is also considerably faster in scenario where you manipulate the d
 			service.NewStringField(fieldBSRVersion).
 				Description("Version to retrieve from the Buf Schema Registry, leave blank for latest.").
 				Default("").Advanced(),
-		).Description("Buf Schema Registry configuration. Either this field or `import_paths` must be populated. Note that this field is an array, and multiple BSR configurations can be provided.").
+		).Description("Buf Schema Registry configuration. Either this field or `import_paths` must be populated. Note that this field is an array, and multiple BSR configurations can be provided.").Version("4.63.0").
 			ShortDescription("Buf Schema Registry configuration. Either this or import_paths must be populated.").
 			Default([]any{}),
 	).LintRule(`

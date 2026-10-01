@@ -11,6 +11,10 @@
 // tag::body[]
 Send tracing events to a Redpanda topic in OpenTelemetry format for distributed tracing and observability.
 
+ifndef::env-cloud[]
+Introduced in version 4.71.0.
+endif::[]
+
 The Redpanda tracer exports distributed tracing data to a Redpanda topic, enabling you to monitor and debug your Redpanda Connect pipelines. Traces are exported in OpenTelemetry format, as JSON by default, allowing integration with observability platforms like Jaeger, Grafana Tempo, or custom trace consumers. Use the `format` field to emit spans as protobuf, or to publish schemas to a Schema Registry alongside the data.
 
 This tracer automatically captures trace spans as messages flow through your pipeline, recording timing information, component metadata, and error details. Use this tracer to:

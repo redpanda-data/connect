@@ -143,6 +143,10 @@ processors:
 
 Options for optimizing the build of the output data that is sent to Snowflake. Monitor the `snowflake_build_output_latency_ns` metric to assess whether you need to update these options.
 
+ifndef::env-cloud[]
+Requires version 4.40.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `build_options.chunk_size`
@@ -173,6 +177,10 @@ NOTE: Snowflake limits the number of streams per table to 10,000. If you need to
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -202,6 +210,10 @@ channel_prefix: channel-${HOST}
 === `commit_backoff`
 
 Control how frequently Snowflake is polled to check if data has been committed.
+
+ifndef::env-cloud[]
+Requires version 4.82.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -292,6 +304,10 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 The format to expect incoming messages from the rest of the pipeline.
 
+ifndef::env-cloud[]
+Requires version 4.79.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `object`
@@ -327,6 +343,10 @@ If both offset tokens parse as base-10 integers (up to 64 bits), they are compar
 For more information about offset tokens, see the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[Snowflake documentation^].
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+ifndef::env-cloud[]
+Requires version 4.45.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -407,6 +427,10 @@ When set to `true` and schema evolution is enabled, new columns that have `null`
 
 NOTE: Redpanda does not recommend changing the default setting (`true`) unless you know the data type of `null` columns in advance.
 
+ifndef::env-cloud[]
+Requires version 4.48.0 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -423,6 +447,10 @@ For example, a processor could read the schema from the schema registry that a m
 The input to these processors is an object with the value and name of the new column, the original message, and details of the Snowflake table the output writes to. The metadata remains the same as in the original message that triggered the schema update. For example: `{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`
 
 The output from the processors must be a single message that contains a string specifying the column data type to use, such as `FLOAT`, `VARIANT`, or `NUMBER(38, 0)`. The output then runs an `ALTER TABLE` statement on the Snowflake table to add the column with the corresponding data type.
+
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
 
 *Type*: `array<processor>`
 
@@ -460,6 +488,10 @@ table: MY_TABLE
 
 The format to parse string values for `TIMESTAMP`, `TIMESTAMP_LTZ` and `TIMESTAMP_NTZ` columns. Should be a layout for https://pkg.go.dev/time#Parse[time.Parse^] in Go.
 
+ifndef::env-cloud[]
+Requires version 4.79.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `2006-01-02T15:04:05.999999999Z07:00`
@@ -467,6 +499,10 @@ The format to parse string values for `TIMESTAMP`, `TIMESTAMP_LTZ` and `TIMESTAM
 === `url`
 
 Specify a custom URL to connect to Snowflake. This parameter overrides the default URL, which is generated from the value of the `account` field: `https://<account>.snowflakecomputing.com`.
+
+ifndef::env-cloud[]
+Requires version 4.48.0 or later.
+endif::[]
 
 *Type*: `string`
 

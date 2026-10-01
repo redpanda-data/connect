@@ -53,7 +53,7 @@ func FranzReaderToggledConfigFields() []*service.ConfigField {
 				Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance and useful for windowed processing, and doing so preserves the ordering of topic partitions.").
 				ShortDescription("Batching policy applied per topic partition, grouping messages before they are flushed for processing."),
 		).
-			Description("Allows consumers to process messages of any given partition in parallel, which may result in unordered processing. This option enables asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the `checkpoint_limit` field.").
+			Description("Allows consumers to process messages of any given partition in parallel, which may result in unordered processing. This option enables asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the `checkpoint_limit` field.").Version("4.68.0").
 			ShortDescription("Allow parallel, and therefore unordered, processing of messages within a single partition.").
 			Advanced(),
 	)

@@ -18,6 +18,10 @@ This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with 
 
 For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.
 
+ifndef::env-cloud[]
+Requires version 4.71.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `aws.enabled`
@@ -38,6 +42,10 @@ The PostgreSQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazona
 
 The AWS access key ID to authenticate with. When empty, the default AWS credential chain is used.
 
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `aws.region`
@@ -50,17 +58,29 @@ The AWS region where the PostgreSQL instance is located. The region is used to s
 
 Optional AWS IAM role ARN to assume for authentication. When `roles` is also set, this role is assumed first and the `roles` entries are assumed after it.
 
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `aws.role_external_id`
 
 Optional external ID to use when assuming the role set in `role`. Each entry in `roles` sets its own external ID.
 
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `aws.roles[]`
 
 Optional array of AWS IAM roles to assume for authentication. Roles are assumed in sequence, each using the credentials of the previous one, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. When `role` is also set, it is assumed before the first entry.
+
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
 
 *Type*: `array<object>`
 
@@ -86,11 +106,19 @@ The AWS secret access key that pairs with `id`.
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `aws.token`
 
 The AWS session token to use with `id` and `secret`. Required only when using short-term credentials.
+
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -233,6 +261,10 @@ Heartbeat messages are useful when you subscribe to data changes from tables wit
 Set `heartbeat_interval` to `0s` to disable heartbeats.
 
 Heartbeats also pace `incremental_snapshot`. On a quiet table they're the only thing that advances the snapshot. This interval keeps the slot current, and `incremental_snapshot.heartbeat_interval` applies alongside it: the more frequent of the two wins for the life of the input. A non-zero value is still required here.
+
+ifndef::env-cloud[]
+Requires version 4.48.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -455,6 +487,10 @@ placeholder as the only value the destination ever receives for it. `REPLICA IDE
 makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
 set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.
 
+ifndef::env-cloud[]
+Requires version 4.105.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -541,6 +577,10 @@ If the pipeline is restarted and `stream_snapshot` is enabled, another data snap
 === `tls`
 
 Custom TLS settings for the PostgreSQL connection. When `enabled` is `true`, these settings replace the TLS settings derived from the `dsn` and from `PG*` environment variables such as `PGSSLMODE`, and the server name is set to the host from the DSN.
+
+ifndef::env-cloud[]
+Requires version 4.70.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -683,6 +723,10 @@ Whether to skip server side certificate verification.
 Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.
 
 Prefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `incremental_snapshot`, where a backfilled row can be the only delivery that carries a large column's real value. See `signal_table_name`.
+
+ifndef::env-cloud[]
+Requires version 4.46.0 or later.
+endif::[]
 
 *Type*: `unknown`
 

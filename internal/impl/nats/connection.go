@@ -34,7 +34,7 @@ func connectionHeadFields() []*service.ConfigField {
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"}),
 		service.NewIntField("max_reconnects").
-			Description("The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.").
+			Description("The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.").Version("4.56.0").
 			Optional().
 			Advanced(),
 	}
@@ -44,7 +44,7 @@ func connectionTailFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewTLSToggledField("tls"),
 		service.NewBoolField("tls_handshake_first").
-			Description("Whether to perform the initial TLS handshake before sending the NATS INFO protocol message. This is required when connecting to some NATS servers that expect TLS to be established immediately after connection, before any protocol negotiation.").
+			Description("Whether to perform the initial TLS handshake before sending the NATS INFO protocol message. This is required when connecting to some NATS servers that expect TLS to be established immediately after connection, before any protocol negotiation.").Version("4.60.0").
 			Default(false).
 			Advanced(),
 		authFieldSpec(),

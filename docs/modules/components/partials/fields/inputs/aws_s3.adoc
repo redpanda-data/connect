@@ -190,6 +190,10 @@ The maximum number of SQS messages to consume from each request.
 
 Custom SQS Nack Visibility timeout in seconds. Default is 0
 
+ifndef::env-cloud[]
+Requires version 4.78.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `0`
@@ -206,6 +210,10 @@ An optional SQS URL to connect to. When specified this queue will control which 
 
 Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.
 
+ifndef::env-cloud[]
+Requires version 4.17.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `0`
@@ -213,6 +221,10 @@ Whether to set the wait time. Enabling this activates long-polling. Valid values
 === `sqs.zero_key_warn_interval`
 
 A message from which no target key can be extracted (for example, due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.
+
+ifndef::env-cloud[]
+Requires version 4.103.2 or later.
+endif::[]
 
 *Type*: `string`
 

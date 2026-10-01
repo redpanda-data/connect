@@ -130,6 +130,10 @@ A xref:components:caches/about.adoc[cache resource] to store the current Log Seq
 
 An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, this creates the checkpoint cache table on the remote server instead of the source database. If `checkpoint_cache` is also set, that takes precedence.
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -142,6 +146,10 @@ checkpoint_cache_connection_string: sqlserver://username:password@remotehost/ins
 
 The key to use to store the snapshot position in `checkpoint_cache`. An alternative key can be provided if multiple CDC inputs share the same cache.
 
+ifndef::env-cloud[]
+Requires version 4.67.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `microsoft_sql_server_cdc`
@@ -149,6 +157,10 @@ The key to use to store the snapshot position in `checkpoint_cache`. An alternat
 === `checkpoint_cache_table_name`
 
 The multipart identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.
+
+ifndef::env-cloud[]
+Requires version 4.67.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -207,6 +219,10 @@ include: dbo.products
 === `max_parallel_snapshot_tables`
 
 The maximum number of tables to read in parallel during the initial snapshot. Each table is read by its own reader.
+
+ifndef::env-cloud[]
+Requires version 4.69.0 or later.
+endif::[]
 
 *Type*: `int`
 

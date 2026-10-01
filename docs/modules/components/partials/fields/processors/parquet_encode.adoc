@@ -97,6 +97,10 @@ The type of the column, only applicable for leaf columns with no child fields. S
 
 Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.
 
+ifndef::env-cloud[]
+Requires version 4.62.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`

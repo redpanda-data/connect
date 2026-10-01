@@ -12,6 +12,10 @@ A list of grpc collectors.
 
 The endpoint of a collector to send events to.
 
+ifndef::env-cloud[]
+Requires version 4.26.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -23,6 +27,10 @@ address: localhost:4317
 === `grpc[].secure`
 
 Connect to the collector with client transport security
+
+ifndef::env-cloud[]
+Requires version 4.20.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -38,6 +46,10 @@ A list of http collectors.
 
 The endpoint of a collector to send events to.
 
+ifndef::env-cloud[]
+Requires version 4.26.0 or later.
+endif::[]
+
 *Type*: `string`
 
 [source,yaml]
@@ -49,6 +61,10 @@ address: localhost:4318
 === `http[].secure`
 
 Connect to the collector over HTTPS
+
+ifndef::env-cloud[]
+Requires version 4.20.0 or later.
+endif::[]
 
 *Type*: `bool`
 
@@ -91,6 +107,10 @@ ratio: 0.5
 === `service`
 
 The name of the service in traces.
+
+ifndef::env-cloud[]
+Requires version 4.54.0 or later.
+endif::[]
 
 *Type*: `string`
 

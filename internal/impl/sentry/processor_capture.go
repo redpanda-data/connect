@@ -53,7 +53,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 				Example(`root = deleted()`),
 
 			service.NewBloblangField("extras").
-				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)").
+				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)").Version("4.55.0").
 				ShortDescription("A mapping evaluating to an object, attached to the Sentry event as a context named extras.").
 				Optional().
 				Example(`root.foo = "bar"`).

@@ -11,6 +11,10 @@
 // tag::body[]
 A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
+ifndef::env-cloud[]
+Introduced in version 4.39.0.
+endif::[]
+
 When a consumer group is specified this input consumes one or more topics, and partitions automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified, topics can either be consumed in their entirety or with explicit partitions.
 
 == Delivery Guarantees

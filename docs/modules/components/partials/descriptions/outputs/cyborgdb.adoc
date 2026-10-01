@@ -11,6 +11,10 @@
 // tag::body[]
 Inserts items into a CyborgDB encrypted vector index.
 
+ifndef::env-cloud[]
+Introduced in version 4.66.0.
+endif::[]
+
 This output allows you to write vectors to a CyborgDB encrypted index. CyborgDB provides
 end-to-end encrypted vector storage with automatic dimension detection and index optimization.
 

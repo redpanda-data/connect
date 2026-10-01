@@ -108,7 +108,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Advanced().
 				Optional(),
 			service.NewBloblangField(vaicpFieldHistory).
-				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where role is "user" or "model".`).
+				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where role is "user" or "model".`).Version("4.56.0").
 				ShortDescription("Historical messages to include in the chat request, as an array of role and content objects.").
 				Optional(),
 			service.NewBloblangField(vaicpFieldAttachment).
@@ -156,12 +156,12 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewIntField(vaicpFieldMaxToolCalls).
 				Default(10).
 				Advanced().
-				Description(`The maximum number of sequential tool calls.`).
+				Description(`The maximum number of sequential tool calls.`).Version("4.56.0").
 				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
 			service.NewObjectListField(
 				vaicpFieldTool,
 				llm.ToolFields(llm.ToolParametersField())...,
-			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").Version("4.56.0").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),
 		).

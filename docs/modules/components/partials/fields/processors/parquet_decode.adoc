@@ -10,6 +10,10 @@ In Parquet format, logical types are represented using standard physical types a
 
 NOTE: Each version enables the logical type handling for that version and all earlier versions, which allows handling of new logical types to be introduced without breaking existing pipelines. When creating new pipelines, Redpanda recommends that you use the newest available version.
 
+ifndef::env-cloud[]
+Requires version 4.51.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `v1`

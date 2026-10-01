@@ -228,6 +228,10 @@ Type of transaction operation.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
+ifndef::env-cloud[]
+Requires version 4.10.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `INSERT`

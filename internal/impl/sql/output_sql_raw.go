@@ -38,7 +38,7 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").Optional()).
-		Field(unsafeDynamicQueryField()).
+		Field(unsafeDynamicQueryField().Version("4.8.0")).
 		Field(rawQueryArgsMappingField()).
 		Field(service.NewObjectListField(
 			"queries",
@@ -46,7 +46,7 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 			rawQueryArgsMappingField(),
 			rawQueryWhenField(),
 		).
-			Description("A list of database statements to run in addition to the main `query`. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries are executed for each message within a single transaction.").
+			Description("A list of database statements to run in addition to the main `query`. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries are executed for each message within a single transaction.").Version("4.45.0").
 			ShortDescription("A list of query statements. The first whose when condition passes is executed for each message.").
 			Optional()).
 		Field(service.NewIntField("max_in_flight").

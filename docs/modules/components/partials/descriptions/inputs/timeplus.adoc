@@ -11,6 +11,10 @@
 // tag::body[]
 Executes a query on Timeplus Enterprise and creates a message from each row received
 
+ifndef::env-cloud[]
+Introduced in version 4.39.0.
+endif::[]
+
 This input can execute a query on Timeplus Enterprise Cloud, Timeplus Enterprise (self-hosted) or Timeplusd. A structured message will be created
 from each row received.
 

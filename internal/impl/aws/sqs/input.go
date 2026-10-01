@@ -126,14 +126,14 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 				Default(10).
 				Advanced(),
 			service.NewIntField(sqsiFieldMaxOutstanding).
-				Description("The maximum number of pending messages that Redpanda Connect can have in flight at the same time.").
+				Description("The maximum number of pending messages that Redpanda Connect can have in flight at the same time.").Version("4.45.0").
 				Default(1000),
 			service.NewIntField(sqsiFieldWaitTimeSeconds).
-				Description("The wait time, in seconds, for each receive request. Valid values are `0` to `20`. Set a value from `1` to `20` to enable https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html[long polling^] for queued messages.").
+				Description("The wait time, in seconds, for each receive request. Valid values are `0` to `20`. Set a value from `1` to `20` to enable https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html[long polling^] for queued messages.").Version("4.6.0").
 				Default(0).
 				Advanced(),
 			service.NewDurationField(sqsiFieldMessageTimeout).
-				Description("The maximum time allowed to process a received message before Redpanda Connect must refresh its https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html[receipt handle^]. If the handle is not refreshed in time, the message becomes visible in the queue again. Redpanda Connect attempts to refresh the receipt handle after half of the timeout has elapsed. This value sets the visibility timeout for each received message.").
+				Description("The maximum time allowed to process a received message before Redpanda Connect must refresh its https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html[receipt handle^]. If the handle is not refreshed in time, the message becomes visible in the queue again. Redpanda Connect attempts to refresh the receipt handle after half of the timeout has elapsed. This value sets the visibility timeout for each received message.").Version("4.45.0").
 				ShortDescription("How long to process messages before the receipt handle must be refreshed.").
 				Default("30s").
 				Advanced(),

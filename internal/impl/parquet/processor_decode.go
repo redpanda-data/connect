@@ -54,7 +54,7 @@ func parquetDecodeProcessorConfig() *service.ConfigSpec {
 
 In Parquet format, logical types are represented using standard physical types along with metadata that provides additional context. For example, UUIDs are stored as a `+"`"+`FIXED_LEN_BYTE_ARRAY`+"`"+` physical type, but the schema metadata identifies them as UUIDs. By enabling `+"`"+`v2`+"`"+`, this processor uses the metadata descriptions of logical types to produce more meaningful values during decoding.
 
-NOTE: Each version enables the logical type handling for that version and all earlier versions, which allows handling of new logical types to be introduced without breaking existing pipelines. When creating new pipelines, Redpanda recommends that you use the newest available version.`).
+NOTE: Each version enables the logical type handling for that version and all earlier versions, which allows handling of new logical types to be introduced without breaking existing pipelines. When creating new pipelines, Redpanda recommends that you use the newest available version.`).Version("4.51.0").
 			ShortDescription("Decode logical types into their logical form rather than the underlying physical type.").
 			Example("v2").
 			Default("v1")). // TODO: V5 bump this to the latest version

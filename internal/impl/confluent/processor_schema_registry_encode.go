@@ -103,15 +103,15 @@ We will be considering alternative approaches in future so please https://redpan
 			Description("DEPRECATED: Use avro.raw_json instead.").
 			Advanced().Default(false).Version("3.59.0").Deprecated()).
 		Field(service.NewStringField(sreFieldSchemaMeta).
-			Description("When set, the processor reads a schema in benthos common schema format from this metadata key on each message, converts it to the format specified by `format`, registers it with the schema registry under the configured subject, and encodes the message. When empty (the default), the processor pulls the latest schema from the registry instead.").
+			Description("When set, the processor reads a schema in benthos common schema format from this metadata key on each message, converts it to the format specified by `format`, registers it with the schema registry under the configured subject, and encodes the message. When empty (the default), the processor pulls the latest schema from the registry instead.").Version("4.83.0").
 			ShortDescription("Read a common-format schema from this metadata key, register it, and encode the message with it.").
 			Default("")).
 		Field(service.NewStringEnumField(sreFieldFormat, "avro", "json_schema").
-			Description("The encoding format to use when converting a common schema from metadata. Required when `schema_metadata` is set.").
+			Description("The encoding format to use when converting a common schema from metadata. Required when `schema_metadata` is set.").Version("4.83.0").
 			ShortDescription("The encoding format used when converting a common schema from metadata. Required with schema_metadata.").
 			Optional()).
 		Field(service.NewBoolField(sreFieldNormalize).
-			Description("Whether to normalize the schema before registering with the schema registry (schema_metadata mode only).").
+			Description("Whether to normalize the schema before registering with the schema registry (schema_metadata mode only).").Version("4.83.0").
 			Advanced().Default(true))
 
 	spec = spec.Fields(
@@ -129,7 +129,7 @@ Avro JSON and plain JSON disagree about strings, and neither reading is a supers
 - `+"`avro_json`"+` reads every message as Avro JSON. Set this when the data came from `+"`schema_registry_decode`"+`, including when something between the two processors has parsed it. A message that carries Go values Avro JSON has no spelling for (a `+"`[]byte`"+` from `+"`content()`"+` or `+"`decode(\"base64\")`"+`, or the `+"`[]byte`"+` and `+"`time.Time`"+` values that `+"`preserve_logical_types`"+` produces for bytes, fixed and timestamp fields) is rejected rather than encoded as the wrong value, so a pipeline that mixes those with Avro JSON values has no mode that reads both: map such fields to their Avro JSON spelling first, or split the encode.
 - `+"`native`"+` reads every message as Go and plain JSON values. Set this for hand-written JSON and for sources that spell decimals in decimal notation.
 
-This is independent of `+"`raw_json`"+`, which does not affect how values are read.`).
+This is independent of `+"`raw_json`"+`, which does not affect how values are read.`).Version("4.108.0").
 				ShortDescription("How to read each message's values: by message form, always as Avro JSON, or always as Go and plain JSON values.").
 				Advanced().Default(avroInputEncAuto),
 			service.NewStringField(sreFieldAvroRecordName).
@@ -139,7 +139,7 @@ This is independent of `+"`raw_json`"+`, which does not affect how values are re
 			service.NewStringField(sreFieldAvroNamespace).
 				Description("The Avro namespace for the root record type when encoding from a common schema (schema_metadata mode).").
 				Default("").Optional(),
-		).Description("Configuration for Avro encoding."),
+		).Description("Configuration for Avro encoding.").Version("4.83.0"),
 	)
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {

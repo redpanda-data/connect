@@ -11,5 +11,9 @@
 // tag::body[]
 Posts a new message to a Slack channel using the Slack API method chat.postMessage.
 
+ifndef::env-cloud[]
+Introduced in version 4.52.0.
+endif::[]
+
 This output calls the https://api.slack.com/methods/chat.postMessage[`chat.postMessage`^] Slack API method once for each message.
 // end::body[]

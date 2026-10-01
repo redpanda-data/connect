@@ -24,11 +24,12 @@ import (
 
 func otlpTracerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.5.0").
 		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
 		Fields(
 			service.NewStringField(otFieldService).
 				Default("benthos").
-				Description("The name of the service in traces."),
+				Description("The name of the service in traces.").Version("4.54.0"),
 		).
 		Fields(collectorListFields()...).
 		Fields(

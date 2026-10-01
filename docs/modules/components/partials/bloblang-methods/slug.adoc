@@ -4,6 +4,10 @@
 
 Converts a string into a URL-friendly slug by replacing spaces with hyphens, removing special characters, and converting to lowercase. Supports multiple languages for proper transliteration of non-ASCII characters.
 
+ifndef::env-cloud[]
+Introduced in version 4.2.0.
+endif::[]
+
 
 == Parameters
 

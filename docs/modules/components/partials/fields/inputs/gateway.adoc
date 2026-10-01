@@ -114,6 +114,10 @@ status: ${! meta("status") }
 
 TCP listener socket configuration.
 
+ifndef::env-cloud[]
+Requires version 4.72.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `tcp.reuse_addr`

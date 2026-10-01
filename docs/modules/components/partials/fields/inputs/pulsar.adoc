@@ -54,6 +54,10 @@ The path to a file containing a private key.
 
 OAuth2 scope to request.
 
+ifndef::env-cloud[]
+Requires version 4.29.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `""`
@@ -84,6 +88,10 @@ Actual base64 encoded token.
 
 Specify the subscription initial position for this consumer.
 
+ifndef::env-cloud[]
+Requires version 4.29.0 or later.
+endif::[]
+
 *Type*: `string`
 
 *Default*: `latest`
@@ -112,6 +120,10 @@ Specify the subscription type for this consumer.
 
 Specify the path to a custom CA certificate to trust the broker TLS service.
 
+ifndef::env-cloud[]
+Requires version 4.11.0 or later.
+endif::[]
+
 *Type*: `object`
 
 === `tls.root_cas_file`
@@ -137,6 +149,10 @@ A list of topics to subscribe to. This or topics_pattern must be set.
 === `topics_pattern`
 
 A regular expression matching the topics to subscribe to. This or topics must be set.
+
+ifndef::env-cloud[]
+Requires version 4.19.0 or later.
+endif::[]
 
 *Type*: `string`
 

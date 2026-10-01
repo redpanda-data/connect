@@ -224,6 +224,10 @@ backoff_interval: 1m
 
 When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.
 
+ifndef::env-cloud[]
+Requires version 4.84.1 or later.
+endif::[]
+
 *Type*: `bool`
 
 *Default*: `true`
@@ -232,6 +236,10 @@ When enabled, large object (CLOB, BLOB) columns are included in both snapshot an
 
 The maximum SCN range that can be mined in a single cycle. The window starts at scn_window_size and grows by scn_window_size each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.
 
+ifndef::env-cloud[]
+Requires version 4.97.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `100000`
@@ -239,6 +247,10 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 === `logminer.max_session_age`
 
 The maximum duration a single LogMiner session may stay open before being forcibly ended and restarted, even if the underlying redo log files haven't changed. By default, a LogMiner session is only restarted when a redo log switch is detected. On databases where switches are infrequent, a session can stay open for a long time, and LogMiner has been observed to accumulate server-side PGA memory (particularly around online catalog dictionary lookups) until Oracle terminates the session with ORA-04036. Setting this forces a periodic restart independent of log switches. Set to 0 (default) to disable and restart only on log switches.
+
+ifndef::env-cloud[]
+Requires version 4.103.2 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -261,6 +273,10 @@ The maximum number of events that can be buffered for a single transaction. If a
 === `logminer.min_scn_window_size`
 
 The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `window_strategy`. Set to 0 to disable.
+
+ifndef::env-cloud[]
+Requires version 4.97.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -324,11 +340,19 @@ Each in-flight transaction is stored as N+1 cache entries: one metadata key hold
 
 This cache is designed for low-latency stores with cheap per-operation cost. Redis and Memcached are the recommended backends. The built-in `memory:{}` cache works but provides no durability across restarts. High-latency or per-request-cost stores such as S3 or DynamoDB are not recommended. A transaction with 1000 events generates approximately 3000 cache operations across its lifetime, and because LogMiner processes events on a single goroutine, per-call latency directly reduces throughput. A backend that causes timeouts or errors will also cause the mining cycle to restart from an earlier checkpoint SCN, which can result in duplicate event delivery.
 
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `logminer.transaction_cache_key`
 
 The key prefix used when storing transactions in `transaction_cache`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.
+
+ifndef::env-cloud[]
+Requires version 4.94.0 or later.
+endif::[]
 
 *Type*: `string`
 
@@ -351,6 +375,10 @@ Controls how the SCN range mined per cycle is sized:
 
 The maximum number of tables to read in parallel during the initial snapshot. Each table is read by its own reader.
 
+ifndef::env-cloud[]
+Requires version 4.69.0 or later.
+endif::[]
+
 *Type*: `int`
 
 *Default*: `1`
@@ -359,11 +387,19 @@ The maximum number of tables to read in parallel during the initial snapshot. Ea
 
 The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.
 
+ifndef::env-cloud[]
+Requires version 4.88.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `prefetch_rows`
 
 The number of rows fetched per network round-trip, for both snapshot and streaming reads. Higher values mean fewer round-trips but more memory per fetch, for each table snapshotted in parallel. A `PREFETCH_ROWS` query parameter in `connection_string` takes precedence.
+
+ifndef::env-cloud[]
+Requires version 4.111.0 or later.
+endif::[]
 
 *Type*: `int`
 
@@ -374,6 +410,10 @@ The number of rows fetched per network round-trip, for both snapshot and streami
 A map of fully-qualified table names (for example `SCHEMA.TABLE`) to SQL `SELECT` queries that override the default snapshot query for each table. Use this to filter or shape the rows captured during the initial snapshot.
 
 Each query must project every column of the table's primary key (all columns of a composite key), even if it otherwise selects only a subset of columns. During a snapshot, Redpanda Connect pages through a table's rows by filtering and sorting on the full primary key against the query's own result set. If a primary key column isn't projected, the snapshot fails part-way through, after the first batch of rows is read.
+
+ifndef::env-cloud[]
+Requires version 4.101.0 or later.
+endif::[]
 
 *Type*: `object`
 
@@ -411,11 +451,19 @@ Password for the `ewallet.p12` PKCS#12 wallet file. Only use this when the walle
 
 include::connect:components:partial$secret_warning.adoc[]
 
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
+
 *Type*: `string`
 
 === `wallet_path`
 
 Path to the Oracle Wallet directory. When set, this automatically enables SSL. The directory must contain either `cwallet.sso` (auto-login, does not require a password) or `ewallet.p12` (requires `wallet_password`).
+
+ifndef::env-cloud[]
+Requires version 4.87.0 or later.
+endif::[]
 
 *Type*: `string`
 

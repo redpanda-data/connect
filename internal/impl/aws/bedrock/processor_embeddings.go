@@ -63,7 +63,7 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 			"classification":  "Used for embeddings passed through a text classifier.",
 			"clustering":      "Used for the embeddings run through a clustering algorithm.",
 		}).
-			Description("Specifies the type of input passed to the model. Required by Cohere embedding models; ignored by Amazon Titan models.").
+			Description("Specifies the type of input passed to the model. Required by Cohere embedding models; ignored by Amazon Titan models.").Version("4.97.0").
 			Optional()).
 		Example(
 			"Store embedding vectors in Clickhouse",
