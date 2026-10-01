@@ -4,6 +4,20 @@
 # leave a concern to a sibling PR on purpose, so the reviewer checks these before it flags one.
 # Bodies are truncated to 2000 characters to keep the review input small.
 #
+# Example output:
+#
+#   [
+#     {
+#       "number": 4541,
+#       "title": "oracledb_cdc: Pre-filter relevant transactions via a common table expression",
+#       "body": "(...)",
+#       "baseRefName": "main",
+#       "headRefName": "jw/oracledbcte",
+#       "files": ["cmd/tools/integration/packages.json", "internal/impl/oracledb/(...)", (...)]
+#     },
+#     (...)
+#   ]
+#
 # Used by the /review skill and by the CI reviewer (.github/workflows/claude-code-review.yml).
 set -euo pipefail
 
