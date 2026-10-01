@@ -12,7 +12,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -114,15 +113,15 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 	return b
 }
 
-// sealQueue permanently refuses further admissions: called when
+// sealQueue permanently refuses further turns: called when
 // flushed-but-untracked rows were dropped (a failed Flush or trackBatch), so
 // no later batch can be tracked (and therefore no ack can persist a position)
-// past the dropped rows before Connect rebuilds. The seal also makes
-// poisoned true, so a drop path does not set a separate flag. Safe to call
-// while holding batcherMu: the established order is batcherMu before the
-// queue lock, never the reverse.
-func (b *batchPublisher) sealQueue() {
-	b.queue.Seal()
+// past the dropped rows before Connect rebuilds. cause says why, and the
+// rebuild warning shows it. The seal also makes poisoned true, so a drop path
+// does not set a separate flag. Safe to call while holding batcherMu: the
+// established order is batcherMu before the queue lock, never the reverse.
+func (b *batchPublisher) sealQueue(cause error) {
+	b.queue.Seal(cause)
 }
 
 // poisoned reports whether this publisher can never checkpoint again, so
@@ -130,7 +129,7 @@ func (b *batchPublisher) sealQueue() {
 // queue is sealed) or when a checkpoint slot can never resolve (a failed
 // send).
 func (b *batchPublisher) poisoned() bool {
-	return b.queue.Sealed() || b.sendFailed.Load()
+	return b.queue.Err() != nil || b.sendFailed.Load()
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
@@ -203,7 +202,7 @@ func (p *batchPublisher) loop() {
 				sendBatch, flushErr := p.batcher.Flush(closeAtLeisureCtx)
 				var (
 					checkpointLSN []byte
-					tkt           uint64
+					tkt           ticket.Ticket
 				)
 				if flushErr == nil {
 					// Any successful Flush drains the buffer - including an
@@ -226,11 +225,12 @@ func (p *batchPublisher) loop() {
 					// tracked. Seal BEFORE releasing batcherMu: in the gap
 					// after the unlock another flusher could take the next
 					// ticket and be admitted past the dropped rows.
-					p.sealQueue()
+					flushErr = fmt.Errorf("flushing timed batch: %w", flushErr)
+					p.sealQueue(flushErr)
 				}
 				p.batcherMu.Unlock()
 				if flushErr != nil {
-					return fmt.Errorf("flushing timed batch: %w", flushErr)
+					return flushErr
 				}
 				if len(sendBatch) == 0 {
 					return nil
@@ -312,7 +312,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	var (
 		flushedBatch  service.MessageBatch
 		checkpointLSN []byte
-		tkt           uint64
+		tkt           ticket.Ticket
 	)
 	b.batcherMu.Lock()
 	if b.closed {
@@ -338,11 +338,12 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 		// releasing batcherMu: in the gap after the unlock another flusher
 		// could flush, take the next ticket, and be admitted past the
 		// dropped rows.
-		b.sealQueue()
+		err = fmt.Errorf("flushing batch due to reaching count limit: %w", err)
+		b.sealQueue(err)
 	}
 	b.batcherMu.Unlock()
 	if err != nil {
-		return fmt.Errorf("flushing batch due to reaching count limit: %w", err)
+		return err
 	}
 	if len(flushedBatch) == 0 {
 		return nil
@@ -358,20 +359,18 @@ type trackedBatch struct {
 	isSnapshot bool
 }
 
-// dispatch admits the flush ticket, tracks the batch, and hands it to
-// ReadBatch, applying the shared failure actions: a cancelled rows-owning
-// admission seals inside queue.Acquire itself, and a track failure seals here since
-// the rows already left the batcher while the deferred release lets later
-// tickets proceed. A ticket with no batch (flushCurrent's barrier) passes
-// through the empty skip after admission.
-func (b *batchPublisher) dispatch(ctx context.Context, tkt uint64, batch service.MessageBatch, checkpointLSN []byte) error {
-	if err := b.queue.Acquire(ctx, tkt, len(batch) > 0); err != nil {
-		if errors.Is(err, ticket.ErrSealed) {
-			return fmt.Errorf("publisher flush queue sealed after an abandoned batch; reconnecting rebuilds the publisher: %w", err)
-		}
+// dispatch waits for the turn of the flush ticket, tracks the batch, and
+// hands it to ReadBatch. dispatch owns tkt and always releases it. A
+// cancelled Wait of a ticket from Take seals the queue inside Wait itself.
+// A track failure seals here, because the rows already left the batcher and
+// the deferred release lets later tickets proceed. A ticket with no batch
+// (the barrier of flushCurrent) passes through the empty skip after its
+// turn.
+func (b *batchPublisher) dispatch(ctx context.Context, tkt ticket.Ticket, batch service.MessageBatch, checkpointLSN []byte) error {
+	defer tkt.Release()
+	if err := tkt.Wait(ctx); err != nil {
 		return err
 	}
-	defer b.queue.Release()
 	if len(batch) == 0 {
 		return nil
 	}
@@ -380,7 +379,7 @@ func (b *batchPublisher) dispatch(ctx context.Context, tkt uint64, batch service
 		// The rows left the batcher but were never tracked, and the deferred
 		// release lets later tickets proceed: seal so nothing can be tracked
 		// (and persisted) past the gap.
-		b.sealQueue()
+		b.sealQueue(fmt.Errorf("tracking flushed batch: %w", err))
 		return err
 	}
 	return b.sendTracked(ctx, tracked)
@@ -512,18 +511,18 @@ func (b *batchPublisher) CheckpointWindow(ctx context.Context, lsn replication.L
 		b.batcherMu.Unlock()
 		return nil
 	}
-	tkt := b.queue.Take()
+	// The marker owns no rows: an abandoned marker drops nothing, so its
+	// ticket is skippable - the next drained window re-marks.
+	tkt := b.queue.TakeSkippable()
 	b.batcherMu.Unlock()
+	defer tkt.Release()
 
 	// The marker joins the checkpoint sequence like any flush: it takes a
 	// ticket so no later flush can Track ahead of it, and Track runs outside
 	// batcherMu (it may block on checkpoint_limit).
-	// The marker owns no rows: an abandoned marker drops nothing, so no
-	// seal is needed - the next drained window re-marks.
-	if err := b.queue.Acquire(ctx, tkt, false); err != nil {
+	if err := tkt.Wait(ctx); err != nil {
 		return err
 	}
-	defer b.queue.Release()
 	resolveFn, err := b.checkpoint.Track(ctx, lsn, 1)
 	if err != nil {
 		return fmt.Errorf("tracking window checkpoint: %w", err)
@@ -553,37 +552,39 @@ func (b *batchPublisher) flushCurrent(ctx context.Context) error {
 		return context.Canceled
 	}
 	remaining, err := b.batcher.Flush(ctx)
-	var checkpointLSN []byte
-	if err == nil {
-		// Any successful Flush drains the buffer, even one emptied by
-		// batching.processors filtering.
-		b.buffered = 0
-	}
-	if err == nil && len(remaining) > 0 {
-		checkpointLSN = []byte(b.pendingCheckpointLSN)
-	}
-	// The ticket is taken unconditionally - even when the batcher is empty -
-	// so that admission below doubles as a sequence barrier: another flusher
-	// (the timed loop) may already hold the final snapshot rows while parked
-	// in checkpoint.Track, before it has counted them on the snapshot ack
-	// gate. Being admitted proves every earlier flush has finished
-	// trackBatch+send, so once flushCurrent returns the gate counts every
-	// published snapshot batch and waitSnapshotAcks cannot release early.
-	tkt := b.queue.Take()
 	if err != nil {
 		// The failed Flush may have drained rows that were never tracked.
 		// Seal BEFORE releasing batcherMu: in the gap after the unlock
-		// another flusher could flush, take the next ticket, and be admitted
-		// past the dropped rows.
-		b.sealQueue()
-	}
-	b.batcherMu.Unlock()
-	if err != nil {
-		// The seal is already applied under batcherMu; return the real flush
-		// error rather than letting the sealed refusal of Acquire mask it (the
-		// operator needs the batching.processors failure, not the seal).
+		// another flusher could flush, take the next ticket, and get its
+		// turn past the dropped rows. Return the real flush error, not the
+		// seal error of a later Wait: the operator needs the
+		// batching.processors failure.
+		b.sealQueue(fmt.Errorf("flushing remaining batch: %w", err))
+		b.batcherMu.Unlock()
 		return err
 	}
+	// Any successful Flush drains the buffer, even one emptied by
+	// batching.processors filtering.
+	b.buffered = 0
+	// The ticket is taken also when the batcher is empty, so that its turn
+	// doubles as a sequence barrier: another flusher (the timed loop) may
+	// already hold the final snapshot rows while parked in checkpoint.Track,
+	// before it has counted them on the snapshot ack gate. The turn proves
+	// that every earlier flush has finished trackBatch+send, so once
+	// flushCurrent returns the gate counts every published snapshot batch and
+	// waitSnapshotAcks cannot release early. An empty barrier loses nothing
+	// if it is abandoned, so it is skippable.
+	var (
+		checkpointLSN []byte
+		tkt           ticket.Ticket
+	)
+	if len(remaining) > 0 {
+		checkpointLSN = []byte(b.pendingCheckpointLSN)
+		tkt = b.queue.Take()
+	} else {
+		tkt = b.queue.TakeSkippable()
+	}
+	b.batcherMu.Unlock()
 	return b.dispatch(ctx, tkt, remaining, checkpointLSN)
 }
 
