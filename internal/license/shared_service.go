@@ -36,15 +36,24 @@ func LoadFromResources(res *service.Resources) (license.RedpandaLicense, error) 
 // CheckRunningEnterprise returns a non-nil error if the instance of Redpanda
 // Connect is not operating with a valid enterprise license.
 func CheckRunningEnterprise(res *service.Resources) error {
+	// A binary that does not register a license service, such as
+	// redpanda-connect-community, cannot run enterprise features. Report this
+	// as a missing license and not as an internal fault, because the
+	// community bundle can import enterprise components.
+	if getSharedService(res) == nil {
+		return errEnterpriseLicenseRequired
+	}
 	l, err := LoadFromResources(res)
 	if err != nil {
 		return err
 	}
 	if !l.AllowsEnterpriseFeatures() || !l.IncludesProduct(license.ProductConnect) {
-		return errors.New("this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product. For more information check out: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+		return errEnterpriseLicenseRequired
 	}
 	return nil
 }
+
+var errEnterpriseLicenseRequired = errors.New("this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product. For more information check out: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
 
 type sharedServiceKeyType int
 
