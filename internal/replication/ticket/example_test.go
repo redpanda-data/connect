@@ -10,6 +10,7 @@ package ticket_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -93,14 +94,15 @@ func ExampleLock_Seal() {
 	t0, t1 := queue.Take(), queue.Take()
 
 	fmt.Println("t0:", t0.Wait(context.Background()))
-	queue.Seal()
+	queue.Seal(errors.New("track failed"))
 	t0.Release() // The holder still releases its turn.
 
-	fmt.Println("t1:", t1.Wait(context.Background()))
-	fmt.Println("sealed:", queue.Sealed())
+	err := t1.Wait(context.Background())
+	fmt.Println("t1:", err)
+	fmt.Println("sealed:", errors.Is(err, ticket.ErrSealed))
 
 	// Output:
 	// t0: <nil>
-	// t1: ticket lock sealed
+	// t1: ticket lock sealed: track failed
 	// sealed: true
 }
