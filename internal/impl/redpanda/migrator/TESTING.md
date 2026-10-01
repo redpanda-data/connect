@@ -243,6 +243,39 @@ Verifies registry misconfiguration still fails the sync outright, so that it kee
   - Sync fails with an error that is not a partial sync error
   - Error reports that the destination must be in `READWRITE or IMPORT` mode
 
+### `TestIntegrationSchemaRegistryMigratorSyncFixedIDCollision`
+
+Verifies that, with fixed IDs, a schema whose source ID already holds a different schema at the destination fails the sync outright, since records copied with that ID would resolve to the wrong schema.
+- Sets source and destination registry mode to `IMPORT`
+- Registers a schema at source with ID 100, and a different schema at destination with ID 100
+- Syncs with `versions: latest` and `translate_ids: false`
+- Validates:
+  - Sync fails with an error that is not a partial sync error
+  - Error suggests enabling `translate_ids`
+
+### `TestIntegrationSchemaRegistryMigratorSyncFailedReferenceBlocksReferrer`
+
+Verifies a schema is not synced when a schema it references failed, which could otherwise bind it to a different schema at the destination.
+- Registers two incompatible versions of a subject at source, and a second subject that references v2
+- Pre-registers v1 and a different, compatible v2 of the referenced subject at destination under the default `BACKWARD` compatibility
+- Syncs with `versions: latest` and `translate_ids: true`
+- Validates:
+  - Sync reports the referenced v2 as failed and the referrer as skipped
+  - The referrer is not registered at destination
+  - Records encoded with the referrer are rejected
+
+### `TestIntegrationSchemaRegistryMigratorSyncLoopRetriesFailedAtZeroInterval`
+
+Verifies that with `interval: 0s` the subjects that failed the initial sync are retried until they sync.
+- Registers two incompatible versions of one subject at source, and pre-registers only v1 at destination under the default `BACKWARD` compatibility
+- Runs an initial sync with `versions: all` and `translate_ids: true`, which partially fails
+- Registers a new subject at source, then starts the sync loop with `interval: 0s`
+- Relaxes the destination subject compatibility to `NONE`
+- Validates:
+  - The failed subject is synced without another explicit sync, and its records translate
+  - The loop stops once nothing is left to retry
+  - The subject added after the initial sync is not migrated
+
 ## Schema Registry Fan-out Test (`migrator_schema_registry_fanout_integration_test.go`)
 
 ### `TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout`

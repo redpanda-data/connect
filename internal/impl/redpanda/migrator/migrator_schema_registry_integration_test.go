@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -1374,4 +1375,197 @@ func TestIntegrationSchemaRegistryMigratorSyncFailedVersionBlocksLaterVersions(t
 	vers, err := dst.SubjectVersions(ctx, subj)
 	require.NoError(t, err)
 	assert.Equal(t, []int{1}, vers)
+}
+
+// With translate_ids disabled, a schema whose source ID holds a different
+// schema at the destination must fail the sync rather than a single subject:
+// records are copied with the source ID unchanged, so they would resolve to
+// the wrong schema.
+func TestIntegrationSchemaRegistryMigratorSyncFixedIDCollision(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		srcSubj   = "foo-value"
+		srcSchema = `{"type":"record","name":"Foo","fields":[{"name":"a","type":"string"}]}`
+		dstSubj   = "bar-value"
+		dstSchema = `{"type":"record","name":"Bar","fields":[{"name":"b","type":"int"}]}`
+		id        = 100
+	)
+
+	t.Log("Given: source and destination Schema Registry in import mode")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+	modeRes := src.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
+	modeRes = dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
+
+	t.Log("And: a schema at source with a fixed ID")
+	_, err := src.CreateSchemaWithIDAndVersion(t.Context(), srcSubj, sr.Schema{Schema: srcSchema}, id, 1)
+	require.NoError(t, err)
+
+	t.Log("And: a different schema with the same ID at destination")
+	_, err = dst.CreateSchemaWithIDAndVersion(t.Context(), dstSubj, sr.Schema{Schema: dstSchema}, id, 1)
+	require.NoError(t, err)
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:  true,
+		Versions: migrator.VersionsLatest,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	err = m.Sync(ctx)
+
+	t.Log("Then: sync fails and the failure is not partial")
+	require.Error(t, err)
+	var pErr *migrator.PartialSyncError
+	assert.NotErrorAs(t, err, &pErr)
+	assert.Contains(t, err.Error(), "try enabling translate-ids")
+}
+
+// A schema must not be registered when a schema it references failed to sync:
+// if the referenced version exists at the destination as a different schema,
+// the referrer would bind to it.
+func TestIntegrationSchemaRegistryMigratorSyncFailedReferenceBlocksReferrer(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		addrSubj     = "addr-value"
+		addrV1       = `{"type":"record","name":"Address","namespace":"com.example","fields":[{"name":"street","type":"string"}]}`
+		addrV2       = `{"type":"record","name":"Address","namespace":"com.example","fields":[{"name":"street","type":"int"}]}`
+		addrV2Dst    = `{"type":"record","name":"Address","namespace":"com.example","fields":[{"name":"street","type":"string"},{"name":"zip","type":"string","default":""}]}`
+		personSubj   = "person-value"
+		personSchema = `{"type":"record","name":"Person","namespace":"com.example","fields":[{"name":"address","type":"com.example.Address"}]}`
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	t.Log("And: a subject evolved incompatibly at source, and a subject referencing the incompatible version")
+	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	for _, s := range []string{addrV1, addrV2} {
+		_, err := src.CreateSchema(t.Context(), addrSubj, sr.Schema{Schema: s})
+		require.NoError(t, err)
+	}
+	personSS, err := src.CreateSchema(t.Context(), personSubj, sr.Schema{
+		Schema:     personSchema,
+		References: []sr.SchemaReference{{Name: "com.example.Address", Subject: addrSubj, Version: 2}},
+	})
+	require.NoError(t, err)
+
+	t.Log("And: destination holds a different version 2 of the referenced subject under BACKWARD compatibility")
+	for _, s := range []string{addrV1, addrV2Dst} {
+		_, err := dst.CreateSchema(t.Context(), addrSubj, sr.Schema{Schema: s})
+		require.NoError(t, err)
+	}
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsLatest,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	err = m.Sync(ctx)
+
+	t.Log("Then: the referenced version fails and the referrer is skipped")
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, err, &pErr)
+	require.Len(t, pErr.Failed, 2)
+	var msgs []string
+	for _, e := range pErr.Failed {
+		msgs = append(msgs, e.Error())
+	}
+	assert.Contains(t, strings.Join(msgs, "\n"), "reference "+addrSubj+" version 2 not synced")
+
+	t.Log("And: the referrer is not registered at destination")
+	_, err = dst.SubjectVersions(ctx, personSubj)
+	require.Error(t, err)
+
+	t.Log("And: records encoded with the referrer are rejected")
+	_, err = m.DestinationSchemaID(personSS.ID)
+	require.Error(t, err)
+}
+
+// With interval 0s, subjects that failed the initial sync are retried until
+// they sync, so records waiting on them do not block the output forever.
+// Subjects added at the source afterwards are still not migrated.
+func TestIntegrationSchemaRegistryMigratorSyncLoopRetriesFailedAtZeroInterval(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		badSubj  = "bad-value"
+		badV1    = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
+		badV2    = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"int"}]}`
+		lateSubj = "late-value"
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	t.Log("And: a subject evolved incompatibly at source")
+	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	_, err := src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
+	require.NoError(t, err)
+	badSS, err := src.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV2})
+	require.NoError(t, err)
+
+	t.Log("And: destination holds only the old version under BACKWARD compatibility")
+	_, err = dst.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
+	require.NoError(t, err)
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsAll,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: the initial sync partially fails")
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, m.Sync(ctx), &pErr)
+
+	t.Log("And: a subject is added at source after the initial sync")
+	_, err = src.CreateSchema(ctx, lateSubj, sr.Schema{Schema: `{"type":"string"}`})
+	require.NoError(t, err)
+
+	t.Log("And: the sync loop is started with interval 0s")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.SyncLoop(ctx)
+	}()
+
+	t.Log("And: destination subject compatibility is relaxed")
+	set = dst.SetCompatibility(ctx, sr.SetCompatibility{Level: sr.CompatNone}, badSubj)
+	require.NoError(t, set[0].Err)
+
+	t.Log("Then: the failed subject is synced without another Sync call")
+	require.Eventually(t, func() bool {
+		_, err := m.DestinationSchemaID(badSS.ID)
+		return err == nil
+	}, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("And: the loop stops once nothing is left to retry")
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("sync loop did not stop")
+	}
+
+	t.Log("And: the subject added after the initial sync is not migrated")
+	_, err = dst.SubjectVersions(ctx, lateSubj)
+	require.Error(t, err)
 }

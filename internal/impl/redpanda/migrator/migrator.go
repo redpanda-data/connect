@@ -507,6 +507,9 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			knownSubjects: make(map[schemaSubjectVersion]struct{}),
 			knownSchemas:  make(map[int]schemaInfo),
 			failedSchemas: make(map[int]error),
+
+			retryMinBackoff: 10 * time.Second,
+			retryMaxBackoff: 5 * time.Minute,
 		},
 		groups: groupsMigrator{
 			metrics:         newGroupsMetrics(mgr.Metrics()),
@@ -656,7 +659,7 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 		}
 		retry := fmt.Sprintf("retrying every %s", m.sr.conf.Interval)
 		if m.sr.conf.Interval <= 0 {
-			retry = "not retrying because schema_registry.interval is 0s"
+			retry = "retrying with backoff until synced"
 		}
 		m.log.Errorf("Schema migration: initial sync incomplete, %d schemas synced, %d failed; topic and data migration continues, failed subjects %s",
 			pErr.Synced, len(pErr.Failed), retry)
