@@ -2437,9 +2437,9 @@ oracledb_cdc:
 	})
 }
 
-// TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart verifies that an open
-// transaction with only LOB events does not lose its update when another
-// transaction commits and the connector restarts before it commits.
+// TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart verifies that a LOB update
+// is not lost after a restart. Transaction B has only LOB events. Transaction A
+// commits while B is open. Then the connector restarts before B commits.
 func TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -2475,7 +2475,7 @@ oracledb_cdc:
 		require.Eventually(t, func() bool { return batch.Count() >= 1 }, time.Minute, 500*time.Millisecond)
 	}
 
-	// An out-of-row SecureFile update emits only LOB events, with no DML row.
+	// Oracle emits only LOB events for an out-of-row SecureFile update. It emits no DML row.
 	t.Log("Updating the LOB in transaction B and leaving B open")
 	conn, err := db.Conn(t.Context())
 	require.NoError(t, err)

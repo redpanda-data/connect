@@ -390,11 +390,11 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
 	switch redoEvent.Operation {
 	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim, sqlredo.OpLobWrite:
-		// A transaction with only LOB events has no DML event, so AddEvent does not
-		// create it in the cache. After a restart that resumes past its START, the
-		// commit finds no transaction and drops the LOB data. Thus start the
-		// transaction on its first LOB event. StartTransaction does nothing if the
-		// transaction exists or was discarded.
+		// AddEvent creates a missing transaction only for a DML event. After a
+		// restart past its START, a transaction with only LOB events is not in
+		// the cache. Then the commit finds no transaction and drops the LOB data.
+		// To prevent this, start the transaction on its first LOB event.
+		// StartTransaction does nothing if the transaction exists or was discarded.
 		_, hasState := lm.lobStates[redoEvent.TransactionID]
 		if lm.cfg.LOBEnabled && !hasState && len(lm.pendingLOBWrites[redoEvent.TransactionID]) == 0 {
 			if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
@@ -828,16 +828,14 @@ func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.T
 	return nil
 }
 
-// lowWatermarkSCN returns the lowest SCN of an event that is still held in
-// memory for an open transaction other than excludeTxnID, or math.MaxUint64 if
-// there is none. The commit path caps its checkpoint below this SCN.
+// lowWatermarkSCN returns the lowest SCN of the events in memory for open
+// transactions. It ignores excludeTxnID. It returns math.MaxUint64 if there is
+// no such event. The commit checkpoint stays below this SCN.
 //
-// The transaction cache low watermark counts only transactions with DML
-// events. A transaction can also have only LOB events: a SecureFile out-of-row
-// LOB update emits SELECT_LOB_LOCATOR and LOB_WRITE with no DML, and a
-// LOB_WRITE can be deferred before its INSERT arrives. The commit synthesizes
-// or merges the DML event from this LOB state, so the LOB state must also
-// hold the checkpoint back.
+// The transaction cache counts only transactions with DML events. But some
+// transactions have only LOB events. Examples are a SecureFile out-of-row LOB
+// update and a LOB_WRITE that arrives before its INSERT. At commit, these LOB
+// events become DML events, so they must also hold the checkpoint back.
 func (lm *LogMiner) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
 	lowest := lm.txnCache.LowWatermarkSCN(excludeTxnID)
 	for txnID, state := range lm.lobStates {

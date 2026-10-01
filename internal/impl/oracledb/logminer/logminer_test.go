@@ -533,11 +533,11 @@ func TestLowWatermarkSCN(t *testing.T) {
 	tests := []struct {
 		name         string
 		excludeTxnID sqlredo.TransactionID
-		// dmlTxns maps each open transaction with one DML event to its start SCN.
+		// dmlTxns gives the start SCN of each open transaction. Each one has one DML event.
 		dmlTxns map[sqlredo.TransactionID]uint64
-		// lobStates maps each transaction with LOB state to its first LOB SCN.
+		// lobStates gives the first LOB SCN of each transaction with LOB state.
 		lobStates map[sqlredo.TransactionID]uint64
-		// pending maps each transaction with deferred LOB writes to their SCNs.
+		// pending gives the SCNs of the deferred LOB writes of each transaction.
 		pending map[sqlredo.TransactionID][]uint64
 		want    uint64
 	}{
@@ -583,11 +583,10 @@ func TestLowWatermarkSCN(t *testing.T) {
 	}
 }
 
-// TestCommitCheckpointStaysBelowOpenLOBTransaction verifies that a commit of
-// transaction A does not checkpoint past the LOB events of a transaction B that
-// is still open. B has no DML event, so the transaction cache low watermark does
-// not see it. A restart from a higher checkpoint does not mine B's LOB events
-// again, and B's change is lost.
+// TestCommitCheckpointStaysBelowOpenLOBTransaction verifies the checkpoint of a
+// commit. Transaction A commits while transaction B is open. B has only LOB
+// events. The checkpoint of A must stay below the first LOB event of B. If not,
+// a restart does not mine the LOB events of B again, and the update of B is lost.
 func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
 	tests := []struct {
 		name      string
