@@ -2469,14 +2469,12 @@ oracledb_cdc:
 	updatedClob := strings.Repeat("B", 5000)
 	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
 
-	t.Log("Inserting the LOB row")
-	{
-		db.MustExec("INSERT INTO "+db.Schema+".lobresume (clobcol) VALUES (:1)", strings.Repeat("A", 5000))
-		require.Eventually(t, func() bool { return batch.Count() >= 1 }, time.Minute, 500*time.Millisecond)
-	}
+	// Insert the LOB row.
+	db.MustExec("INSERT INTO "+db.Schema+".lobresume (clobcol) VALUES (:1)", strings.Repeat("A", 5000))
+	require.Eventually(t, func() bool { return batch.Count() >= 1 }, time.Minute, 500*time.Millisecond)
 
-	// Oracle emits only LOB events for an out-of-row SecureFile update. It emits no DML row.
-	t.Log("Updating the LOB in transaction B and leaving B open")
+	// Update the LOB in transaction B and leave B open. Oracle emits only LOB
+	// events for an out-of-row SecureFile update. It emits no DML row.
 	conn, err := db.Conn(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -2485,42 +2483,38 @@ oracledb_cdc:
 	_, err = txB.ExecContext(t.Context(), "UPDATE "+db.Schema+".lobresume SET clobcol = :1 WHERE id = 1", updatedClob)
 	require.NoError(t, err)
 
-	t.Log("Committing transaction A and stopping after its checkpoint is stored")
-	{
-		db.MustExec("INSERT INTO " + db.Schema + ".lobresume_other (id) VALUES (DEFAULT)")
-		require.Eventually(t, func() bool {
-			var val []byte
-			if err := db.QueryRowContext(t.Context(), "SELECT cache_val FROM "+db.CheckpointTable()).Scan(&val); err != nil {
-				return false
-			}
-			stored, err := replication.SCNFromBytes(val)
-			if err != nil {
-				return false
-			}
-			return hasMsg(func(msg *service.Message) bool {
-				table, _ := msg.MetaGet("table_name")
-				raw, _ := msg.MetaGet("checkpoint_scn")
-				scnA, err := replication.ParseSCN(raw)
-				return table == "LOBRESUME_OTHER" && err == nil && stored >= scnA
-			})
-		}, time.Minute, 500*time.Millisecond, "timed out waiting for the checkpoint of transaction A")
-		require.NoError(t, stream.StopWithin(10*time.Second))
-	}
+	// Commit transaction A. Stop the connector after the checkpoint of A is stored.
+	db.MustExec("INSERT INTO " + db.Schema + ".lobresume_other (id) VALUES (DEFAULT)")
+	require.Eventually(t, func() bool {
+		var val []byte
+		if err := db.QueryRowContext(t.Context(), "SELECT cache_val FROM "+db.CheckpointTable()).Scan(&val); err != nil {
+			return false
+		}
+		stored, err := replication.SCNFromBytes(val)
+		if err != nil {
+			return false
+		}
+		return hasMsg(func(msg *service.Message) bool {
+			table, _ := msg.MetaGet("table_name")
+			raw, _ := msg.MetaGet("checkpoint_scn")
+			scnA, err := replication.ParseSCN(raw)
+			return table == "LOBRESUME_OTHER" && err == nil && stored >= scnA
+		})
+	}, time.Minute, 500*time.Millisecond, "timed out waiting for the checkpoint of transaction A")
+	require.NoError(t, stream.StopWithin(10*time.Second))
 
-	t.Log("Committing transaction B while stopped and expecting its update after the restart")
-	{
-		require.NoError(t, txB.Commit())
-		batch.Reset()
-		stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
-		t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+	// Commit transaction B while the connector is stopped. Restart and expect the update of B.
+	require.NoError(t, txB.Commit())
+	batch.Reset()
+	stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
+	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
 
-		require.Eventually(t, func() bool {
-			return hasMsg(func(msg *service.Message) bool {
-				b, err := msg.AsBytes()
-				return err == nil && bytes.Contains(b, []byte(updatedClob))
-			})
-		}, time.Minute, 500*time.Millisecond, "the LOB update of transaction B was lost after the restart")
-	}
+	require.Eventually(t, func() bool {
+		return hasMsg(func(msg *service.Message) bool {
+			b, err := msg.AsBytes()
+			return err == nil && bytes.Contains(b, []byte(updatedClob))
+		})
+	}, time.Minute, 500*time.Millisecond, "the LOB update of transaction B was lost after the restart")
 }
 
 // TestIntegrationOracleDBCDCNationalCharset verifies that non-ASCII data in
