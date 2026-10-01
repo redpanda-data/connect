@@ -115,7 +115,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Description("Specify criteria for which metadata values are sent as headers.").
 				Version("3.60.0"),
 			service.NewDurationField(snsoFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("The maximum period to wait on a publish request before abandoning it and reattempting.").
 				Advanced().
 				Default("5s"),
 		).

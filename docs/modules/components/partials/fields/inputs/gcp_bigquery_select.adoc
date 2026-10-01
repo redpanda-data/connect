@@ -30,7 +30,7 @@ A list of columns to query.
 
 === `credentials_json`
 
-An optional field to set Google Service Account Credentials json.
+The Google Service Account credentials in JSON format (optional). Provide the contents of the credentials file as plain JSON, not Base64-encoded. Use this field to authenticate with Google Cloud services. If this field is empty, the component uses https://cloud.google.com/docs/authentication/application-default-credentials[Application Default Credentials^]. For more information about creating service account credentials, see https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google's service account documentation^].
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -40,7 +40,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `job_labels`
 
-A list of labels to add to the query job.
+A map of labels to add to the query job.
 
 *Type*: `object`
 
@@ -62,7 +62,7 @@ The priority with which to schedule the query.
 
 === `project`
 
-GCP project where the query job will execute.
+The GCP project where the query job runs.
 
 *Type*: `string`
 
@@ -74,7 +74,7 @@ An optional suffix to append to the select query.
 
 === `table`
 
-Fully-qualified BigQuery table name to query.
+The fully-qualified name of the BigQuery table to query.
 
 *Type*: `string`
 
@@ -86,7 +86,7 @@ table: bigquery-public-data.samples.shakespeare
 
 === `where`
 
-An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks (`?`).
+An optional `WHERE` clause to add to the query. The `args_mapping` field populates the placeholder arguments. Placeholders must always be question marks (`?`).
 
 *Type*: `string`
 

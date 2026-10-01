@@ -12,7 +12,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `delete_objects`
 
-Whether to delete downloaded objects from the blob once they are processed.
+Whether to delete downloaded blobs from the container once they are processed.
 
 *Type*: `bool`
 
@@ -44,7 +44,7 @@ to_the_end: {}
 
 === `storage_access_key`
 
-The storage account access key. This field is ignored if `storage_connection_string` is set.
+The access key for the storage account. Use this field along with `storage_account` for authentication. This field is ignored when the `storage_connection_string` field is populated.
 
 *Type*: `string`
 
@@ -52,7 +52,7 @@ The storage account access key. This field is ignored if `storage_connection_str
 
 === `storage_account`
 
-The storage account to access. This field is ignored if `storage_connection_string` is set.
+The storage account to access. This field is ignored when the `storage_connection_string` field is populated, unless the connection string does not contain the `AccountName` parameter.
 
 *Type*: `string`
 
@@ -60,7 +60,9 @@ The storage account to access. This field is ignored if `storage_connection_stri
 
 === `storage_connection_string`
 
-A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.
+The connection string for the storage account. This field is required if `storage_account` is not set.
+
+NOTE: If the `storage_connection_string` field does not contain the `AccountName` parameter value, specify it in the `storage_account` field.
 
 *Type*: `string`
 
@@ -68,7 +70,7 @@ A storage account connection string. This field is required if `storage_account`
 
 === `storage_sas_token`
 
-The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.
+The SAS token for the storage account. Use this field along with `storage_account` for authentication. This field is ignored when either the `storage_connection_string` or `storage_access_key` fields are populated.
 
 *Type*: `string`
 
@@ -76,7 +78,12 @@ The storage account SAS token. This field is ignored if `storage_connection_stri
 
 === `targets_input`
 
-EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.
+CAUTION: This is an experimental field that provides an optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.
+
+This requires setting up https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[Azure Blob Storage as an Event Grid source^] and an associated event handler that a Redpanda Connect input can read from. For example, use either one of the following:
+
+* https://learn.microsoft.com/en-gb/azure/event-grid/handler-event-hubs[Azure Event Hubs] using the `kafka` input
+* https://learn.microsoft.com/en-gb/azure/event-grid/handler-event-grid-namespace-topic[Namespace topics] using the `mqtt` input
 
 ifndef::env-cloud[]
 Requires version 4.27.0 or later.

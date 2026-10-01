@@ -4,7 +4,7 @@
 
 === `credentials_json`
 
-An optional field to set google Service Account Credentials json.
+Set your Google Service Account Credentials as JSON (optional).
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -12,7 +12,7 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `location`
 
-The location of the model.
+The location of the Vertex AI model that you want to use.
 
 *Type*: `string`
 
@@ -20,7 +20,7 @@ The location of the model.
 
 === `model`
 
-The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].
+The name of the embedding model to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden^].
 
 *Type*: `string`
 
@@ -36,19 +36,19 @@ model: text-multilingual-embedding-002
 
 === `output_dimensions`
 
-The maximum length for the output embedding size. If set, the output embeddings will be truncated to this size.
+The maximum length of a generated vector embedding. If this value is set, generated embeddings are truncated to this size.
 
 *Type*: `int`
 
 === `project`
 
-GCP project ID to use
+The ID of your Google Cloud project.
 
 *Type*: `string`
 
 === `task_type`
 
-The way to optimize embeddings that the model generates for specific use cases.
+Use the following options to optimize embeddings that the model generates for specific use cases.
 
 *Type*: `string`
 
@@ -83,7 +83,7 @@ The way to optimize embeddings that the model generates for specific use cases.
 
 === `text`
 
-The text you want to compute vector embeddings for. By default, the processor submits the entire payload as a string.
+The text you want to generate vector embeddings for. By default, the processor submits the entire payload as a string.
 
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 

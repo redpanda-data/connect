@@ -4,7 +4,11 @@
 
 === `auto_detect`
 
-Indicates if we should automatically infer the options and schema for CSV and JSON sources. If the table doesn't exist and this field is set to `false` the output may not be able to insert data and will throw insertion error. Be careful using this field since it delegates to the GCP BigQuery service the schema detection and values like `"no"` may be treated as booleans for the CSV format.
+Whether this component automatically infers the options and schema for `CSV` and `NEWLINE_DELIMITED_JSON` sources.
+
+If this value is set to `false` and the destination table doesn't exist, the output throws an insertion error as it is unable to insert data.
+
+CAUTION: This field delegates schema detection to the GCP BigQuery service. For the `CSV` format, values like `no` may be treated as booleans.
 
 *Type*: `bool`
 
@@ -122,7 +126,10 @@ processors:
 
 === `create_disposition`
 
-Specifies the circumstances under which destination table will be created. If CREATE_IF_NEEDED is used the GCP BigQuery will create the table if it does not already exist and tables are created atomically on successful completion of a job. The CREATE_NEVER option ensures the table must already exist and will not be automatically created.
+Specifies the circumstances under which a destination table is created.
+
+* Use `CREATE_IF_NEEDED` to create the destination table if it does not already exist. Tables are created atomically on successful completion of a job.
+* Use `CREATE_NEVER` if the destination table must already exist. Tables are not created automatically.
 
 *Type*: `string`
 
@@ -132,7 +139,9 @@ Specifies the circumstances under which destination table will be created. If CR
 
 === `credentials_json`
 
-An optional field to set Google Service Account Credentials json.
+Sets the https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google Service Account Credentials JSON^] (optional).
+
+WARNING: When using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] to populate this field, wrap the function in single quotes, not double quotes. For example, use `'$\{secrets.GCP_CREDENTIALS_JSON}'` instead of `"$\{secrets.GCP_CREDENTIALS_JSON}"`. Double quotes cause JSON parsing errors because the credentials already contain JSON content.
 
 include::connect:components:partial$secret_warning.adoc[]
 
@@ -142,13 +151,13 @@ include::connect:components:partial$secret_warning.adoc[]
 
 === `csv`
 
-Specify how CSV data should be interpreted.
+Specify how CSV data is interpreted.
 
 *Type*: `object`
 
 === `csv.allow_jagged_rows`
 
-Causes missing trailing optional columns to be tolerated when reading CSV data. Missing values are treated as nulls.
+Set to `true` to tolerate missing trailing optional columns in CSV data. Missing values are treated as nulls.
 
 *Type*: `bool`
 
@@ -156,7 +165,7 @@ Causes missing trailing optional columns to be tolerated when reading CSV data. 
 
 === `csv.allow_quoted_newlines`
 
-Sets whether quoted data sections containing newlines are allowed when reading CSV data.
+Whether quoted data sections containing new lines are allowed when reading CSV data.
 
 *Type*: `bool`
 
@@ -164,7 +173,7 @@ Sets whether quoted data sections containing newlines are allowed when reading C
 
 === `csv.encoding`
 
-Encoding is the character encoding of data to be read.
+The character encoding of CSV data.
 
 *Type*: `string`
 
@@ -174,7 +183,7 @@ Encoding is the character encoding of data to be read.
 
 === `csv.field_delimiter`
 
-The separator for fields in a CSV file, used when reading or exporting data.
+The separator for fields in a CSV file. The output uses this value when reading or exporting data.
 
 *Type*: `string`
 
@@ -182,7 +191,7 @@ The separator for fields in a CSV file, used when reading or exporting data.
 
 === `csv.header[]`
 
-A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.
+A list of values to use as the header for each batch of messages. If not specified, the first line of each message is used as the header.
 
 *Type*: `array<string>`
 
@@ -190,7 +199,7 @@ A list of values to use as header for each batch of messages. If not specified t
 
 === `csv.skip_leading_rows`
 
-The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.
+The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is `1`, which allows Redpanda Connect to add the specified header in the first line of each batch sent to BigQuery.
 
 *Type*: `int`
 
@@ -214,7 +223,12 @@ The format of each incoming message.
 
 === `ignore_unknown_values`
 
-Causes values not matching the schema to be tolerated. Unknown values are ignored. For CSV this ignores extra values at the end of a line. For JSON this ignores named values that do not match any column name. If this field is set to false (the default value), records containing unknown values are treated as bad records. The max_bad_records field can be used to customize how bad records are handled.
+Set this value to `true` to tolerate values that do not match the schema. Unknown values are ignored:
+
+* For the `CSV` format, extra values at the end of a line are ignored.
+* For the `NEWLINE_DELIMITED_JSON` format, values that do not match any column name are ignored.
+
+By default, this value is set to `false`, and records containing unknown values are treated as bad records. Use the `max_bad_records` field to customize how bad records are handled.
 
 *Type*: `bool`
 
@@ -222,7 +236,7 @@ Causes values not matching the schema to be tolerated. Unknown values are ignore
 
 === `job_labels`
 
-A list of labels to add to the load job.
+A map of labels to add to the load job.
 
 *Type*: `object`
 
@@ -230,7 +244,7 @@ A list of labels to add to the load job.
 
 === `job_project`
 
-The project ID in which jobs will be executed. If not set, project will be used.
+Specify the project ID in which jobs are executed. If not set, the `project` value is used.
 
 *Type*: `string`
 
@@ -238,7 +252,7 @@ The project ID in which jobs will be executed. If not set, project will be used.
 
 === `max_bad_records`
 
-The maximum number of bad records that will be ignored when reading data.
+The maximum number of bad records that BigQuery ignores when reading data. This includes records with unknown values when `ignore_unknown_values` is `false`. If the number of bad records exceeds this value, the load job fails.
 
 *Type*: `int`
 
@@ -246,7 +260,7 @@ The maximum number of bad records that will be ignored when reading data.
 
 === `max_in_flight`
 
-The maximum number of message batches to have in flight at a given time. Increase this to improve throughput.
+The maximum number of message batches to have in flight at a given time. Increase this value to improve throughput.
 
 *Type*: `int`
 
@@ -254,7 +268,7 @@ The maximum number of message batches to have in flight at a given time. Increas
 
 === `project`
 
-The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.
+Specify the project ID of the dataset to insert data into. If not set, the project ID is inferred from the project linked to the service account or read from the `GOOGLE_CLOUD_PROJECT` environment variable.
 
 *Type*: `string`
 
@@ -262,7 +276,7 @@ The project ID of the dataset to insert data to. If not set, it will be inferred
 
 === `table`
 
-The table to insert messages to.
+The table to insert messages into.
 
 *Type*: `string`
 

@@ -123,17 +123,17 @@ DynamoDB Streams capture item-level changes in DynamoDB tables. This input suppo
 - Optional initial snapshot of existing table data
 - Multi-table streaming with auto-discovery by tags or explicit table lists
 
-### Table Discovery Modes
+== Table discovery modes
 
 This input supports three table discovery modes:
 
-- `+"`single`"+` (default) - Stream from a single table specified in the `+"`tables`"+` field
+- `+"`single`"+` (default) - Stream from the tables specified in the `+"`tables`"+` field
 - `+"`tag`"+` - Auto-discover and stream from multiple tables based on DynamoDB table tags. Use `+"`table_tag_filter`"+` to filter tables (for example, `+"`key:value`"+`)
-- `+"`includelist`"+` - Stream from an explicit list of tables specified in the `+"`tables`"+` field
+- `+"`includelist`"+` - Stream from an explicit list of tables specified in the `+"`tables`"+` field. This mode is kept for backward compatibility. Use `+"`single`"+` instead.
 
-When using `+"`tag`"+` or `+"`includelist`"+` mode, the connector will stream from all matching tables simultaneously. Each table maintains its own checkpoint state. Use `+"`table_discovery_interval`"+` to periodically rescan for new tables (useful for dynamically tagged tables).
+When the input streams from more than one table, it reads from all matching tables simultaneously. Each table maintains its own checkpoint state. In `+"`tag`"+` or `+"`includelist`"+` mode, use `+"`table_discovery_interval`"+` to periodically rescan for new tables (useful for dynamically tagged tables).
 
-### Prerequisites
+== Prerequisites
 
 The source DynamoDB table(s) must have streams enabled. You can enable streams with one of these view types:
 
@@ -142,29 +142,31 @@ The source DynamoDB table(s) must have streams enabled. You can enable streams w
 - `+"`OLD_IMAGE`"+` - The entire item as it appeared before the modification
 - `+"`NEW_AND_OLD_IMAGES`"+` - Both the new and old item images
 
-### Snapshots
+== Snapshots
 
-When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+` or `+"`snapshot_and_cdc`"+`, the input will first scan the entire table before (or instead of) streaming changes. This is useful for:
+When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+` or `+"`snapshot_and_cdc`"+`, the input first scans the entire table before (or instead of) streaming changes. This is useful for:
 
 - Building a replica or cache with all existing data
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
+Snapshots are supported only when streaming from a single table.
+
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `+"`snapshot_segments`"+` and `+"`snapshot_throttle`"+` to control RCU consumption.
 
 NOTE: Snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `+"`snapshot_deduplicate`"+` to minimize duplicates.
 
-### Checkpointing
+== Checkpointing
 
 Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
 
-Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Note that namespaces do not coordinate consumers: two pipelines sharing the *same* namespace will still overwrite each other's checkpoints.
+Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Namespaces do not coordinate consumers: two pipelines sharing the _same_ namespace still overwrite each other's checkpoints.
 
-### Alternative
+== Alternative
 
 For better performance and longer retention (up to 1 year vs 24 hours), consider using Kinesis Data Streams for DynamoDB with the `+"`aws_kinesis`"+` input instead.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -174,7 +176,7 @@ This input adds the following metadata fields to each message:
 - `+"`dynamodb_event_name`"+` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
 
-### Metrics
+== Metrics
 
 This input emits the following metrics:
 
@@ -188,7 +190,7 @@ This input emits the following metrics:
 - `+"`dynamodb_cdc_checkpoint_failures`"+` - Number of failed checkpoint writes to the checkpoint table (counter)
 - `+"`dynamodb_cdc_failover_skipped`"+` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
 
-### Global Table Checkpoints (multi-region failover)
+== Global table checkpoints (multi-region failover)
 
 In active/active or active/passive multi-region deployments, set `+"`global_table: true`"+` and list the other regions in `+"`global_table_replicas`"+` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. If the checkpoint table already exists, enabling `+"`global_table`"+` reconciles it towards the desired configuration: any missing replica regions are added via `+"`UpdateTable`"+`. The existing table must have been created in global mode (it must use a `+"`TableId`"+` hash key); pointing `+"`global_table`"+` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
 
@@ -200,12 +202,12 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				ShortDescription("Table names to stream from. Provide one for single-table mode, or several for multi-table.").
 				Default([]any{}),
 			service.NewStringEnumField(dciFieldTableDiscoveryMode, "single", "tag", "includelist").
-				Description("Table discovery mode. `single`: stream from tables specified in `tables` list. `tag`: auto-discover tables by tags (ignores `tables` field). `includelist`: stream from tables in `tables` list (alias for `single`, kept for compatibility).").
+				Description("`single`: Streams from tables specified in the `tables` list. `tag`: Auto-discovers tables by tags (ignores the `tables` field). `includelist`: Streams from tables in the `tables` list. Use `single` instead; `includelist` is kept for backward compatibility.").
 				ShortDescription("How tables are discovered: single, tag, or includelist.").
 				Default("single").
 				Advanced(),
 			service.NewStringField(dciFieldTableTagFilter).
-				Description("Multi-tag filter: 'key1:v1,v2;key2:v3,v4'. Matches tables with (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.").
+				Description("Multi-tag filter in the format `key1:v1,v2;key2:v3,v4`. Matches tables where (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.").
 				ShortDescription("Multi-tag filter such as key1:v1,v2;key2:v3. Required when table_discovery_mode is tag.").
 				Default("").
 				Advanced(),
@@ -218,19 +220,21 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.").
 				Default("redpanda_dynamodb_checkpoints"),
 			service.NewStringField(dciFieldCheckpointNamespace).
-				Description("An optional namespace for checkpoints, allowing multiple independent pipelines (for example one per developer or environment) to share a single checkpoint table without overwriting each other's positions. Checkpoints written under one namespace are invisible to pipelines using a different namespace (or none), so changing this value causes the pipeline to restart from `start_from`. Must not contain `#`.").
+				Description("Isolates this pipeline's checkpoints within a shared `checkpoint_table` by prefixing the namespace to the checkpoint key. Use this so that multiple pipelines reading the same stream can share one checkpoint table without overwriting each other's positions, for example per-developer or per-environment test pipelines. Leave empty (the default) to keep the original checkpoint keys unchanged. A namespace isolates readers but does not coordinate them: pipelines that share the same namespace still collide. Changing or removing the namespace changes the checkpoint key. If no checkpoints exist yet under the new key, the pipeline starts from `start_from`. Switching back to a previously used namespace resumes from that namespace's last checkpoints. The value cannot contain a `#` character.").
 				ShortDescription("Namespace for checkpoints, letting independent pipelines share one checkpoint table without overwriting each other.").
 				Default(""),
 			service.NewBoolField(dciFieldGlobalTable).
-				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key); enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
+				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added by calling `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key). Enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
 				ShortDescription("Provision the checkpoint table as a DynamoDB Global Table so checkpoints replicate across regions. Requires global_table_replicas.").
 				Default(false).
-				Advanced(),
+				Advanced().
+				Version("4.99.0"),
 			service.NewStringListField(dciFieldGlobalTableReplicas).
 				Description("Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Applied both when the checkpoint table is created and, for an existing global table, when reconciling replicas (missing regions are added; this list is not used to remove regions).").
 				ShortDescription("Additional regions to replicate the checkpoint table to. This pipeline's own region is always included.").
 				Default([]any{}).
-				Advanced(),
+				Advanced().
+				Version("4.99.0"),
 			service.NewIntField(dciFieldBatchSize).
 				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
@@ -259,11 +263,11 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
-				Description("Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table then stream changes.").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes.").
 				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
-				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.").
+				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with.").
 				ShortDescription("Number of parallel scan segments, from 1 to 10. Higher parallelism scans faster but uses more RCUs.").
 				Default(1).
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
@@ -275,7 +279,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this < 1 || this > 1000 { ["snapshot_batch_size must be between 1 and 1000"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotThrottle).
-				Description("Minimum time between scan requests per segment. Use this to limit RCU consumption during snapshot.").
+				Description("Minimum time between scan requests per segment. Use this to limit Read Capacity Unit (RCU) consumption during snapshot.").
 				Default("100ms").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),

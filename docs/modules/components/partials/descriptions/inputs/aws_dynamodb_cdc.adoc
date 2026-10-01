@@ -25,17 +25,17 @@ DynamoDB Streams capture item-level changes in DynamoDB tables. This input suppo
 - Optional initial snapshot of existing table data
 - Multi-table streaming with auto-discovery by tags or explicit table lists
 
-### Table Discovery Modes
+== Table discovery modes
 
 This input supports three table discovery modes:
 
-- `single` (default) - Stream from a single table specified in the `tables` field
+- `single` (default) - Stream from the tables specified in the `tables` field
 - `tag` - Auto-discover and stream from multiple tables based on DynamoDB table tags. Use `table_tag_filter` to filter tables (for example, `key:value`)
-- `includelist` - Stream from an explicit list of tables specified in the `tables` field
+- `includelist` - Stream from an explicit list of tables specified in the `tables` field. This mode is kept for backward compatibility. Use `single` instead.
 
-When using `tag` or `includelist` mode, the connector will stream from all matching tables simultaneously. Each table maintains its own checkpoint state. Use `table_discovery_interval` to periodically rescan for new tables (useful for dynamically tagged tables).
+When the input streams from more than one table, it reads from all matching tables simultaneously. Each table maintains its own checkpoint state. In `tag` or `includelist` mode, use `table_discovery_interval` to periodically rescan for new tables (useful for dynamically tagged tables).
 
-### Prerequisites
+== Prerequisites
 
 The source DynamoDB table(s) must have streams enabled. You can enable streams with one of these view types:
 
@@ -44,39 +44,33 @@ The source DynamoDB table(s) must have streams enabled. You can enable streams w
 - `OLD_IMAGE` - The entire item as it appeared before the modification
 - `NEW_AND_OLD_IMAGES` - Both the new and old item images
 
-### Snapshots
+== Snapshots
 
-When `snapshot_mode` is set to `snapshot_only` or `snapshot_and_cdc`, the input will first scan the entire table before (or instead of) streaming changes. This is useful for:
+When `snapshot_mode` is set to `snapshot_only` or `snapshot_and_cdc`, the input first scans the entire table before (or instead of) streaming changes. This is useful for:
 
 - Building a replica or cache with all existing data
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
+Snapshots are supported only when streaming from a single table.
+
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `snapshot_segments` and `snapshot_throttle` to control RCU consumption.
 
 NOTE: Snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `snapshot_deduplicate` to minimize duplicates.
 
-### Checkpointing
+== Checkpointing
 
 Checkpoints are stored in a separate DynamoDB table (configured via `checkpoint_table`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
 
-Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `checkpoint_namespace` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `start_from`. Note that namespaces do not coordinate consumers: two pipelines sharing the *same* namespace will still overwrite each other's checkpoints.
+Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `checkpoint_namespace` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `start_from`. Namespaces do not coordinate consumers: two pipelines sharing the _same_ namespace still overwrite each other's checkpoints.
 
-### Alternative
+== Alternative
 
 For better performance and longer retention (up to 1 year vs 24 hours), consider using Kinesis Data Streams for DynamoDB with the `aws_kinesis` input instead.
 
-### Metadata
+include::connect:components:partial$metadata/inputs/aws_dynamodb_cdc.adoc[]
 
-This input adds the following metadata fields to each message:
-
-- `dynamodb_shard_id` - The shard ID from which the record was read (empty for snapshot records)
-- `dynamodb_sequence_number` - The sequence number of the record in the stream (empty for snapshot records)
-- `dynamodb_approximate_creation_time` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
-- `dynamodb_event_name` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
-- `dynamodb_table` - The name of the DynamoDB table
-
-### Metrics
+== Metrics
 
 This input emits the following metrics:
 
@@ -90,7 +84,7 @@ This input emits the following metrics:
 - `dynamodb_cdc_checkpoint_failures` - Number of failed checkpoint writes to the checkpoint table (counter)
 - `dynamodb_cdc_failover_skipped` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
 
-### Global Table Checkpoints (multi-region failover)
+== Global table checkpoints (multi-region failover)
 
 In active/active or active/passive multi-region deployments, set `global_table: true` and list the other regions in `global_table_replicas` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. If the checkpoint table already exists, enabling `global_table` reconciles it towards the desired configuration: any missing replica regions are added via `UpdateTable`. The existing table must have been created in global mode (it must use a `TableId` hash key); pointing `global_table` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
 

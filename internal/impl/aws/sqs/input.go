@@ -111,29 +111,29 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 			service.NewURLField(sqsiFieldURL).
 				Description("The SQS URL to consume from."),
 			service.NewBoolField(sqsiFieldDeleteMessage).
-				Description("Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").
+				Description("Whether to delete the consumed message when it's acknowledged. Set to `false` to handle the deletion using a different mechanism.").
 				ShortDescription("Delete the consumed message once it is acked.").
 				Default(true).
 				Advanced(),
 			service.NewBoolField(sqsiFieldResetVisibility).
-				Description("Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").
+				Description("Whether to set the visibility timeout of the consumed message to zero when Redpanda Connect receives a negative acknowledgement, which releases the message immediately for reprocessing. Set to `false` to honor the https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html[queue's visibility timeout^] instead.").
 				ShortDescription("Set the visibility timeout of a consumed message to zero once it is nacked.").
 				Version("3.58.0").
 				Default(true).
 				Advanced(),
 			service.NewIntField(sqsiFieldMaxNumberOfMessages).
-				Description("The maximum number of messages to return on one poll. Valid values: 1 to 10.").
+				Description("The maximum number of messages that Redpanda Connect can return each time it polls the SQS queue. Enter a value from `1` to `10`.").
 				Default(10).
 				Advanced(),
 			service.NewIntField(sqsiFieldMaxOutstanding).
-				Description("The maximum number of outstanding pending messages to be consumed at a given time.").
+				Description("The maximum number of pending messages that Redpanda Connect can have in flight at the same time.").
 				Default(1000),
 			service.NewIntField(sqsiFieldWaitTimeSeconds).
-				Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
+				Description("The wait time, in seconds, for each receive request. Valid values are `0` to `20`. Set a value from `1` to `20` to enable https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html[long polling^] for queued messages.").
 				Default(0).
 				Advanced(),
 			service.NewDurationField(sqsiFieldMessageTimeout).
-				Description("The time to process messages before needing to refresh the receipt handle. Messages will be eligible for refresh when half of the timeout has elapsed. This sets MessageVisibility for each received message.").
+				Description("The maximum time allowed to process a received message before Redpanda Connect must refresh its https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html[receipt handle^]. If the handle is not refreshed in time, the message becomes visible in the queue again. Redpanda Connect attempts to refresh the receipt handle after half of the timeout has elapsed. This value sets the visibility timeout for each received message.").
 				ShortDescription("How long to process messages before the receipt handle must be refreshed.").
 				Default("30s").
 				Advanced(),
