@@ -64,9 +64,12 @@ pipeline:
 
 # Send resulting documents either to our hydrated topic or the retry topic.
 output:
-  kafka:
-    addresses: [ TODO ]
+  redpanda:
+    seed_brokers: [ TODO ]
     topic: '${!meta("output_topic")}'
+    # Forward metadata as record headers, the retry input reads last_attempted.
+    metadata:
+      include_patterns: [ '.*' ]
 
 cache_resources:
   - label: hydration_cache
