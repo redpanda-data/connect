@@ -3,6 +3,24 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.112.0 - 2026-10-02
+
+### Added
+
+- opensearch: Added compress_request_body option to the OpenSearch output to enable gzip compression of HTTP request bodies, reducing bandwidth usage on cross-cloud or cross-region bulk writes. ([@doradojl](https://github.com/doradojl), [#4896](https://github.com/redpanda-data/connect/pull/4896))
+- postgres_cdc: Added incremental snapshot support to Postgres CDC, enabling tables to be backfilled in chunks while replication continues running, eliminating the need for snapshot-induced stream blocking or restart from the beginning. ([@josephwoodward](https://github.com/josephwoodward), [#4811](https://github.com/redpanda-data/connect/pull/4811))
+
+### Fixed
+
+- gcp_spanner_cdc: Fixed Cloud Spanner CDC metadata indexes being recreated on every connector restart by deriving index names deterministically from a hash instead of generating new UUIDs, preventing the 128-index-per-table limit from being exceeded. ([@bfbarkhouse-redpanda](https://github.com/bfbarkhouse-redpanda), [#4830](https://github.com/redpanda-data/connect/pull/4830))
+- iceberg: Fixed table creation and schema evolution failures with nanosecond timestamp columns by validating and rejecting unsupported nanosecond timestamp types before creating or modifying tables. ([@squiidz](https://github.com/squiidz), [#4853](https://github.com/redpanda-data/connect/pull/4853))
+- metrics: Fixed Prometheus histogram timing metrics being incorrectly exported with _ns suffix instead of _seconds, which caused remote-write targets to reject batches when mixed use_histogram_timing settings were present in a fleet. ([@squiidz](https://github.com/squiidz), [#4546](https://github.com/redpanda-data/connect/pull/4546))
+- oracledb_cdc: Fixed Oracle CDC losing LOB (Large Object) updates when transactions contained only LOB events without DML events, by tracking LOB event SCNs and holding the commit checkpoint until all open LOB transactions complete. ([@Leward](https://github.com/Leward), [#4902](https://github.com/redpanda-data/connect/pull/4902))
+
+### Changed
+
+- kafka: Removed the schema registry fixed-ID workaround for Redpanda versions before 25.3 by leveraging native IMPORT mode support, now requiring the destination registry to be in IMPORT mode when translate_ids is false. ([@Jeffail](https://github.com/Jeffail), [#4843](https://github.com/redpanda-data/connect/pull/4843))
+
 ## 4.111.0 - 2026-09-24
 
 ### Added
