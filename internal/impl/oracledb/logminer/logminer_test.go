@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -526,6 +527,178 @@ func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing
 
 	row1 := pub.messages[0].Data.(map[string]any)
 	assert.NotContains(t, row1, "DESC", "LOBEnabled=false must not merge or leak LOB column data")
+}
+
+func TestLowWatermarkSCN(t *testing.T) {
+	tests := []struct {
+		name         string
+		excludeTxnID sqlredo.TransactionID
+		// dmlTxns gives the start SCN of each open transaction. Each one has one DML event.
+		dmlTxns map[sqlredo.TransactionID]uint64
+		// lobStates gives the first LOB SCN of each transaction with LOB state.
+		lobStates map[sqlredo.TransactionID]uint64
+		// pending gives the SCNs of the deferred LOB writes of each transaction.
+		pending map[sqlredo.TransactionID][]uint64
+		want    uint64
+	}{
+		{
+			name: "no open state",
+			want: math.MaxUint64,
+		},
+		{
+			name:      "lowest of all open state",
+			dmlTxns:   map[sqlredo.TransactionID]uint64{"txB": 900},
+			lobStates: map[sqlredo.TransactionID]uint64{"txC": 800},
+			pending:   map[sqlredo.TransactionID][]uint64{"txD": {850}},
+			want:      800,
+		},
+		{
+			name:         "committing transaction is excluded",
+			excludeTxnID: "txA",
+			dmlTxns:      map[sqlredo.TransactionID]uint64{"txA": 700},
+			lobStates:    map[sqlredo.TransactionID]uint64{"txA": 710, "txB": 900},
+			pending:      map[sqlredo.TransactionID][]uint64{"txA": {720}},
+			want:         900,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+			lm := newLogMiner(&publisherStub{}, cache)
+			for txnID, scn := range tt.dmlTxns {
+				require.NoError(t, cache.StartTransaction(t.Context(), txnID, scn))
+				require.NoError(t, cache.AddEvent(t.Context(), txnID, scn, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+			}
+			for txnID, scn := range tt.lobStates {
+				lm.getOrCreateLOBState(txnID, scn)
+			}
+			for txnID, scns := range tt.pending {
+				for _, scn := range scns {
+					lm.pendingLOBWrites[txnID] = append(lm.pendingLOBWrites[txnID], &sqlredo.RedoEvent{SCN: scn, TransactionID: txnID})
+				}
+			}
+
+			assert.Equal(t, tt.want, lm.lowWatermarkSCN(tt.excludeTxnID))
+		})
+	}
+}
+
+// TestCommitCheckpointStaysBelowOpenLOBTransaction verifies the checkpoint of a
+// commit. Transaction A commits while transaction B is open. B has only LOB
+// events. The checkpoint of A must stay below the first LOB event of B. If not,
+// a restart does not mine the LOB events of B again, and the update of B is lost.
+func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
+	tests := []struct {
+		name      string
+		txBEvents []*sqlredo.RedoEvent
+	}{
+		{
+			name: "SecureFile locator and write",
+			txBEvents: []*sqlredo.RedoEvent{
+				{
+					SCN:           110,
+					Operation:     sqlredo.OpSelectLobLocator,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+				},
+				{
+					SCN:           111,
+					Operation:     sqlredo.OpLobWrite,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+				},
+			},
+		},
+		{
+			name: "deferred write only",
+			txBEvents: []*sqlredo.RedoEvent{
+				{
+					SCN:           110,
+					Operation:     sqlredo.OpLobWrite,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+			pub := &publisherStub{}
+			lm := newLogMiner(pub, cache)
+			lm.cfg.LOBEnabled = true
+			lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txB",
+			}))
+			for _, ev := range tt.txBEvents {
+				require.NoError(t, lm.processRedoEvent(t.Context(), ev))
+			}
+			require.NotEmpty(t, len(lm.lobStates)+len(lm.pendingLOBWrites), "txB must hold LOB state")
+
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 120, Operation: sqlredo.OpStart, TransactionID: "txA",
+			}))
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN:           121,
+				Operation:     sqlredo.OpInsert,
+				TransactionID: "txA",
+				SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+				TableName:     sql.NullString{String: "U", Valid: true},
+				SQLRedo:       sql.NullString{String: `insert into "TESTDB"."U" ("ID") values ('1')`, Valid: true},
+			}))
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 130, Operation: sqlredo.OpCommit, TransactionID: "txA",
+			}))
+
+			require.Len(t, pub.messages, 1)
+			assert.Equal(t, replication.SCN(109), pub.messages[0].CheckpointSCN, "the checkpoint must stay below the first LOB event of txB")
+		})
+	}
+}
+
+// TestLOBOnlyTransactionWithoutStartIsPublished verifies that a transaction with
+// only LOB events is published when its START is not mined. This occurs after a
+// restart from a checkpoint between the START and the first LOB event.
+func TestLOBOnlyTransactionWithoutStartIsPublished(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           110,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txB",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           111,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txB",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 140, Operation: sqlredo.OpCommit, TransactionID: "txB",
+	}))
+
+	require.Len(t, pub.messages, 1, "the synthesized UPDATE must be published")
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "hello", data["DOC"])
+	assert.Equal(t, replication.SCN(140), pub.messages[0].CheckpointSCN)
 }
 
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
