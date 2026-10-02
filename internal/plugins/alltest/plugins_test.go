@@ -84,3 +84,30 @@ func TestPluginCloudEnablement(t *testing.T) {
 		}
 	}
 }
+
+// notInAll lists plugins from internal/plugins/info.csv that are expected to
+// be absent from the "all" distribution under a default test build, and why.
+var notInAll = map[string]string{
+	"a2a_message-processor": "cloud-only",
+	"ffi-processor":         "requires the x_benthos_extra build tag",
+	"zmq4-input":            "requires the x_benthos_extra build tag",
+	"zmq4-output":           "requires the x_benthos_extra build tag",
+}
+
+// TestInfoCSVPluginsRegistered ensures that every plugin listed in
+// internal/plugins/info.csv is registered in the "all" distribution.
+func TestInfoCSVPluginsRegistered(t *testing.T) {
+	for k := range notInAll {
+		if _, exists := plugins.BaseInfo[k]; !exists {
+			t.Errorf("notInAll entry %q is not listed in internal/plugins/info.csv; remove it", k)
+		}
+	}
+
+	missing := plugins.BaseInfo.Unregistered(service.GlobalEnvironment(), func(info plugins.PluginInfo) bool {
+		_, excluded := notInAll[fmt.Sprintf("%v-%v", info.Name, info.Type)]
+		return !excluded
+	})
+	for _, k := range missing {
+		t.Errorf("plugin %q is listed in internal/plugins/info.csv but is not registered in the all distribution", k)
+	}
+}
