@@ -138,3 +138,72 @@ END;`)
 	initialSCN := binary.LittleEndian.Uint64(expectedSCN)
 	assert.Greaterf(t, finalSCN, initialSCN, "expected final SCN (%d) to have advanced beyond initial SCN (%d)", finalSCN, initialSCN)
 }
+
+// TestIntegrationCheckpointCacheTablesInSameSchema makes sure that each pipeline writes its checkpoint to its own
+// checkpoint_cache_table_name when two pipelines use two tables in the same schema.
+func TestIntegrationCheckpointCacheTablesInSameSchema(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".cpfoo",
+		"CREATE TABLE "+db.Schema+".cpfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	tableA := db.Schema + ".CDC_CHECKPOINT_A"
+	tableB := db.Schema + ".CDC_CHECKPOINT_B"
+
+	queryKeyCount := func(table, key string) (int, error) {
+		var n int
+		err := db.QueryRowContext(t.Context(), fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE cache_key = :1`, table), key).Scan(&n)
+		return n, err
+	}
+	countKey := func(table, key string) int {
+		n, err := queryKeyCount(table, key)
+		require.NoError(t, err)
+		return n
+	}
+
+	// runPipeline starts a pipeline, inserts rows until a checkpoint for the key is in one of pollTables, then stops
+	// the pipeline. Pipeline B also polls the table of pipeline A: with the bug, its checkpoint lands there, and the
+	// test then fails on the assertion instead of the timeout.
+	runPipeline := func(table, key string, pollTables ...string) {
+		cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  stream_snapshot: false
+  checkpoint_cache_table_name: ` + table + `
+  checkpoint_cache_key: ` + key + `
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + db.Schema + `.CPFOO"]`
+
+		var batch oracledbtest.MsgBatch
+		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
+
+		require.Eventually(t, func() bool {
+			// No require in here: Eventually runs the condition on another goroutine.
+			_, err := db.ExecContext(t.Context(), "INSERT INTO "+db.Schema+".cpfoo (id) VALUES (DEFAULT)")
+			assert.NoError(t, err)
+			// The pipeline creates its table at start up, so ignore query errors until the table exists.
+			for _, pt := range pollTables {
+				if n, err := queryKeyCount(pt, key); err == nil && n > 0 {
+					return true
+				}
+			}
+			return false
+		}, time.Minute, time.Second, "expected a checkpoint for key '%s'", key)
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	}
+
+	t.Log("Running pipeline A...")
+	runPipeline(tableA, "pipeline_a", tableA)
+	assert.Equal(t, 1, countKey(tableA, "pipeline_a"), "expected checkpoint of pipeline A in its own table")
+
+	t.Log("Running pipeline B...")
+	runPipeline(tableB, "pipeline_b", tableA, tableB)
+	assert.Equal(t, 1, countKey(tableB, "pipeline_b"), "expected checkpoint of pipeline B in its own table")
+	assert.Equal(t, 0, countKey(tableA, "pipeline_b"), "expected no checkpoint of pipeline B in the table of pipeline A")
+}

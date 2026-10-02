@@ -26,9 +26,6 @@ import (
 const (
 	// defaultCheckpointCache can be configured by the user
 	defaultCheckpointCache = "RPCN.CDC_CHECKPOINT_CACHE"
-	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
-	// the stored procedure name cannot be configured by the user
-	defaultStoredProcName = "CDC_CHECKPOINT_CACHE_UPDATE"
 	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
 	checkpointCacheKeyLimit = 128
 )
@@ -47,6 +44,9 @@ func (t cacheTable) String() string {
 // checkpointCache is an Oracle specific cache created for the CDC component.
 // We have a custom cache because the cache_sql component doesn't support Oracle due to its
 // inability to support upserting (meaning it can't be expressed in the cache_sql configs).
+//
+// Set upserts with a MERGE statement. Older versions used a stored procedure,
+// <schema>.CDC_CHECKPOINT_CACHE_UPDATE, which can still exist in the schema. It is unused.
 type checkpointCache struct {
 	db             *sql.DB
 	cacheSetStmt   *sql.Stmt
@@ -57,8 +57,8 @@ type checkpointCache struct {
 }
 
 // newCheckpointCache create a new instance of the Oracle cache specific for CDC purposes.
-// It initialises the state of the oracle based checkpoint cache, first creating the
-// checkpoint cache table if it doesn't already exist then the checkpoint upsert stored procedure.
+// It initialises the state of the oracle based checkpoint cache, creating the checkpoint cache
+// table if it doesn't already exist.
 func newCheckpointCache(
 	ctx context.Context,
 	connStr string,
@@ -97,13 +97,14 @@ func newCheckpointCache(
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
 	}
 
-	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
-	}
-
-	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
-	if cacheSetStmt, err = db.PrepareContext(ctx, fmt.Sprintf("BEGIN %s.%s(:1, :2); END;", cacheTable.schema, defaultStoredProcName)); err != nil {
+	// The connection has no open transaction, so go-ora commits every execution (autocommit is on by default).
+	upsertQuery := fmt.Sprintf(`
+		MERGE INTO %s t
+		USING (SELECT :1 AS cache_key, :2 AS cache_val FROM dual) s
+		ON (t.cache_key = s.cache_key)
+		WHEN MATCHED THEN UPDATE SET t.cache_val = s.cache_val
+		WHEN NOT MATCHED THEN INSERT (cache_key, cache_val) VALUES (s.cache_key, s.cache_val)`, cacheTable.String())
+	if cacheSetStmt, err = db.PrepareContext(ctx, upsertQuery); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("preparing checkpoint cache statement: %w", err)
 	}
@@ -234,48 +235,6 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 	}
 
 	return true, nil
-}
-
-func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
-	// Check if stored proc already exists
-	var count int
-	q := `SELECT COUNT(*) FROM ALL_PROCEDURES WHERE OWNER = :1 AND OBJECT_NAME = :2 AND OBJECT_TYPE = 'PROCEDURE'`
-	if err := db.QueryRowContext(ctx, q, strings.ToUpper(cacheTable.schema), strings.ToUpper(defaultStoredProcName)).Scan(&count); err != nil {
-		return fmt.Errorf("checking if stored procedure exists: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	// Create the upsert procedure
-	// Note: go-ora driver handles []byte parameters as RAW type
-	storedProcFullName := fmt.Sprintf("%s.%s", cacheTable.schema, defaultStoredProcName)
-	tableName := cacheTable.String()
-
-	createQuery := fmt.Sprintf(`
-		CREATE PROCEDURE %s (
-			p_key IN VARCHAR2,
-			p_value IN RAW
-		)
-		AS
-			v_count NUMBER;
-		BEGIN
-			SELECT COUNT(*) INTO v_count FROM %s WHERE cache_key = p_key;
-
-			IF v_count > 0 THEN
-				UPDATE %s SET cache_val = p_value WHERE cache_key = p_key;
-			ELSE
-				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, p_value);
-			END IF;
-
-			COMMIT;
-		END;`, storedProcFullName, tableName, tableName, tableName)
-
-	if _, err := db.ExecContext(ctx, createQuery); err != nil {
-		return fmt.Errorf("creating procedure: %w", err)
-	}
-
-	return nil
 }
 
 // Add is unused
