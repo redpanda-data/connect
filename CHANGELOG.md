@@ -7,8 +7,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- opensearch: Added compress_request_body option to the OpenSearch output to enable gzip compression of HTTP request bodies, reducing bandwidth usage on cross-cloud or cross-region bulk writes. ([@doradojl](https://github.com/doradojl), [#4896](https://github.com/redpanda-data/connect/pull/4896))
 - postgres_cdc: Added incremental snapshot support to Postgres CDC, enabling tables to be backfilled in chunks while replication continues running, eliminating the need for snapshot-induced stream blocking or restart from the beginning. ([@josephwoodward](https://github.com/josephwoodward), [#4811](https://github.com/redpanda-data/connect/pull/4811))
+- oracledb_cdc: Implemented a log_count based algorithm for the Oracle CDC window strategy to improve change capture efficiency. ([@josephwoodward](https://github.com/josephwoodward), [#4864](https://github.com/redpanda-data/connect/pull/4864))
+- opensearch: Added compress_request_body option to the OpenSearch output to enable gzip compression of HTTP request bodies, reducing bandwidth usage on cross-cloud or cross-region bulk writes. ([@doradojl](https://github.com/doradojl), [#4896](https://github.com/redpanda-data/connect/pull/4896))
 
 ### Fixed
 
