@@ -41,6 +41,7 @@ type checkpointDynamoAPI interface {
 	GetItem(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
 	PutItem(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 	Query(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
+	DeleteItem(context.Context, *dynamodb.DeleteItemInput, ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
 }
 
 // CheckpointerConfig carries the construction inputs for a Checkpointer.
@@ -497,9 +498,13 @@ func (c *Checkpointer) FlushCheckpoints(ctx context.Context, checkpoints map[str
 func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoint, error) {
 	checkpoint := NewSnapshotCheckpoint()
 
+	// Both reads are strongly consistent: right after ResetSnapshotProgress
+	// an eventually consistent read can still see the deleted marker or
+	// completed segments, and the snapshot would be skipped or truncated.
 	res, err := c.svc.GetItem(ctx, &dynamodb.GetItemInput{
-		TableName: aws.String(c.tableName),
-		Key:       c.checkpointKey("snapshot#complete"),
+		TableName:      aws.String(c.tableName),
+		Key:            c.checkpointKey("snapshot#complete"),
+		ConsistentRead: aws.Bool(true),
 	})
 	if err != nil {
 		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
@@ -515,22 +520,35 @@ func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoin
 	}
 
 	hashName, hashVal := c.hashAttrName(), c.hashKeyValue()
-	queryRes, err := c.svc.Query(ctx, &dynamodb.QueryInput{
-		TableName:              aws.String(c.tableName),
-		KeyConditionExpression: aws.String(hashName + " = :hash AND begins_with(ShardID, :snapshot_prefix)"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":hash":            &types.AttributeValueMemberS{Value: hashVal},
-			":snapshot_prefix": &types.AttributeValueMemberS{Value: "snapshot#segment#"},
-		},
-	})
-	if err != nil {
-		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
-			return nil, fmt.Errorf("querying snapshot progress: %w", err)
+	var startKey map[string]types.AttributeValue
+	for {
+		queryRes, err := c.svc.Query(ctx, &dynamodb.QueryInput{
+			TableName:              aws.String(c.tableName),
+			KeyConditionExpression: aws.String(hashName + " = :hash AND begins_with(ShardID, :snapshot_prefix)"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":hash":            &types.AttributeValueMemberS{Value: hashVal},
+				":snapshot_prefix": &types.AttributeValueMemberS{Value: "snapshot#segment#"},
+			},
+			ConsistentRead:    aws.Bool(true),
+			ExclusiveStartKey: startKey,
+		})
+		if err != nil {
+			if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
+				return nil, fmt.Errorf("querying snapshot progress: %w", err)
+			}
+			return checkpoint, nil
 		}
-		return checkpoint, nil
+		c.addSegmentProgress(checkpoint, queryRes.Items)
+		if len(queryRes.LastEvaluatedKey) == 0 {
+			return checkpoint, nil
+		}
+		startKey = queryRes.LastEvaluatedKey
 	}
+}
 
-	for _, item := range queryRes.Items {
+// addSegmentProgress parses snapshot segment rows into checkpoint.
+func (c *Checkpointer) addSegmentProgress(checkpoint *SnapshotCheckpoint, items []map[string]types.AttributeValue) {
+	for _, item := range items {
 		shardID, ok := item["ShardID"].(*types.AttributeValueMemberS)
 		if !ok {
 			c.log.Warn("Unexpected ShardID type in snapshot checkpoint item, skipping.")
@@ -561,8 +579,6 @@ func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoin
 
 		checkpoint.SegmentProgress[segmentID] = state
 	}
-
-	return checkpoint, nil
 }
 
 // UpdateSnapshotProgress updates the checkpoint for a snapshot segment.
@@ -605,5 +621,58 @@ func (c *Checkpointer) MarkSnapshotComplete(ctx context.Context) error {
 	}
 
 	c.log.Info("Marked snapshot as complete in checkpoint table")
+	return nil
+}
+
+// ResetSnapshotProgress deletes every snapshot segment position and then the
+// snapshot completion marker, so the next snapshot starts from scratch.
+// Segments go first and the marker last: the reset runs before any shard
+// reader advances a stream checkpoint, so a crash midway leaves the snapshot
+// complete and still stale, and the next start resets it again. Segment rows
+// are found with their own Query rather than SnapshotProgress, which stops
+// at the completion marker and would skip them.
+func (c *Checkpointer) ResetSnapshotProgress(ctx context.Context) error {
+	hashName, hashVal := c.hashAttrName(), c.hashKeyValue()
+	var startKey map[string]types.AttributeValue
+	for {
+		out, err := c.svc.Query(ctx, &dynamodb.QueryInput{
+			TableName:              aws.String(c.tableName),
+			KeyConditionExpression: aws.String(hashName + " = :hash AND begins_with(ShardID, :snapshot_prefix)"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":hash":            &types.AttributeValueMemberS{Value: hashVal},
+				":snapshot_prefix": &types.AttributeValueMemberS{Value: "snapshot#segment#"},
+			},
+			ConsistentRead:    aws.Bool(true),
+			ExclusiveStartKey: startKey,
+		})
+		if err != nil {
+			if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
+				break
+			}
+			return fmt.Errorf("querying snapshot segments: %w", err)
+		}
+		for _, item := range out.Items {
+			shardID, ok := item[checkpointRangeKey].(*types.AttributeValueMemberS)
+			if !ok {
+				continue
+			}
+			if _, err := c.svc.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+				TableName: aws.String(c.tableName),
+				Key:       c.checkpointKey(shardID.Value),
+			}); err != nil {
+				return fmt.Errorf("deleting snapshot progress row %s: %w", shardID.Value, err)
+			}
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = out.LastEvaluatedKey
+	}
+	if _, err := c.svc.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(c.tableName),
+		Key:       c.checkpointKey("snapshot#complete"),
+	}); err != nil {
+		return fmt.Errorf("deleting snapshot completion marker: %w", err)
+	}
 	return nil
 }

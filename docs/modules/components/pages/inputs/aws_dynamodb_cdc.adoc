@@ -78,6 +78,8 @@ input:
     snapshot_throttle: 100ms
     snapshot_deduplicate: true
     snapshot_buffer_size: 100000
+    snapshot_watermark_margin: 2s
+    snapshot_idle_shard_grace: 1m
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
     tcp:
@@ -131,7 +133,7 @@ The source DynamoDB table(s) must have streams enabled. You can enable streams w
 
 ### Snapshots
 
-When `snapshot_mode` is set to `snapshot_only` or `snapshot_and_cdc`, the input will first scan the entire table before (or instead of) streaming changes. This is useful for:
+When `snapshot_mode` is set to `snapshot_only`, `snapshot_and_cdc`, or `incremental`, the input scans the entire table before, instead of, or while streaming changes. This is useful for:
 
 - Building a replica or cache with all existing data
 - Syncing historical data to a data warehouse
@@ -139,7 +141,9 @@ When `snapshot_mode` is set to `snapshot_only` or `snapshot_and_cdc`, the input 
 
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `snapshot_segments` and `snapshot_throttle` to control RCU consumption.
 
-NOTE: Snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `snapshot_deduplicate` to minimize duplicates.
+NOTE: In `snapshot_only` and `snapshot_and_cdc` modes, snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `snapshot_deduplicate` to minimize duplicates.
+
+When `snapshot_mode` is `incremental`, each table is backfilled page by page while it streams, in single- or multi-table mode; in multi-table mode this includes tables found by periodic discovery. A snapshot item is dropped when a stream record for its key arrives while its page is held, so no snapshot item leaves the input after a newer change to the same key, and the last value per key the input emits matches the table. This ordering holds at the input; output stages with `max_in_flight` above 1 can still reorder messages. Incremental mode requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, uses strongly consistent Scans (twice the RCU), and backfills each table once the first time it is enabled. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000).
 
 ### Checkpointing
 
@@ -174,6 +178,10 @@ This input emits the following metrics:
 - `dynamodb_cdc_snapshot_segment_duration` - Time taken by each snapshot scan segment to complete (timer)
 - `dynamodb_cdc_checkpoint_failures` - Number of failed checkpoint writes to the checkpoint table (counter)
 - `dynamodb_cdc_failover_skipped` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
+- `dynamodb_cdc_snapshot_window_held_items` - Snapshot items held in the incremental snapshot window, waiting for the streams to catch up (gauge)
+- `dynamodb_cdc_snapshot_window_dropped_items` - Snapshot items dropped by the incremental snapshot window because a stream record for the same key arrived while the page was held (counter)
+- `dynamodb_cdc_snapshot_window_wait` - Time from reading an incremental snapshot page to releasing it (timer)
+- `dynamodb_cdc_snapshot_backfill_tables_pending` - Tables queued for an incremental backfill that has not started yet (gauge)
 
 ### Global Table Checkpoints (multi-region failover)
 
@@ -436,7 +444,7 @@ Time to wait when applying backpressure due to too many in-flight messages.
 
 === `snapshot_mode`
 
-Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table then stream changes.
+Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table while streaming changes. `incremental`: backfill each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too), and never emit a snapshot item after a newer change to the same key. `incremental` requires a stream view of NEW_IMAGE or NEW_AND_OLD_IMAGES, reads with strongly consistent Scans (twice the RCU of the other modes), and backfills a table once the first time it is enabled, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000).
 
 
 *Type*: `string`
@@ -447,6 +455,7 @@ Options:
 `none`
 , `snapshot_only`
 , `snapshot_and_cdc`
+, `incremental`
 .
 
 === `snapshot_segments`
@@ -478,7 +487,7 @@ Minimum time between scan requests per segment. Use this to limit RCU consumptio
 
 === `snapshot_deduplicate`
 
-Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.
+Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss. Not used by snapshot_mode incremental.
 
 
 *Type*: `bool`
@@ -487,12 +496,30 @@ Deduplicate records that appear in both snapshot and CDC stream. Requires buffer
 
 === `snapshot_buffer_size`
 
-Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.
+Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. Not used by snapshot_mode incremental.
 
 
 *Type*: `int`
 
 *Default*: `100000`
+
+=== `snapshot_watermark_margin`
+
+Incremental snapshot only. Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.
+
+
+*Type*: `string`
+
+*Default*: `"2s"`
+
+=== `snapshot_idle_shard_grace`
+
+Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.
+
+
+*Type*: `string`
+
+*Default*: `"1m"`
 
 === `region`
 
