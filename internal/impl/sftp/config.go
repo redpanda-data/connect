@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"os/user"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 
@@ -38,6 +40,10 @@ const (
 	sFieldCredentialsPrivateKey        = "private_key"
 	sFieldCredentialsPrivateKeyFile    = "private_key_file"
 	sFieldCredentialsPrivateKeyPass    = "private_key_pass"
+	sFieldCredentialsSSHAlgorithms     = "ssh_algorithms"
+	sFieldSSHAlgorithmsKeyExchanges    = "additional_key_exchanges"
+	sFieldSSHAlgorithmsCiphers         = "additional_ciphers"
+	sFieldSSHAlgorithmsMACs            = "additional_macs"
 )
 
 func connectionFields() []*service.ConfigField {
@@ -57,6 +63,19 @@ func connectionFields() []*service.ConfigField {
 				service.NewStringField(sFieldCredentialsPrivateKeyFile).Description("The path to the private key file, used for authenticating the username.").Optional(),
 				service.NewStringField(sFieldCredentialsPrivateKey).Description("The raw contents of the private key, used for authenticating the username.").Optional().Secret(),
 				service.NewStringField(sFieldCredentialsPrivateKeyPass).Description("Optional passphrase for decrypting the private key, if it's encrypted.").Secret().Default(""),
+				service.NewObjectField(sFieldCredentialsSSHAlgorithms,
+					service.NewStringListField(sFieldSSHAlgorithmsKeyExchanges).
+						Description("Key exchange algorithms to permit in addition to the defaults, for example `diffie-hellman-group1-sha1` or `diffie-hellman-group-exchange-sha1`.").
+						Optional(),
+					service.NewStringListField(sFieldSSHAlgorithmsCiphers).
+						Description("Ciphers to permit in addition to the defaults, for example `aes128-cbc`.").
+						Optional(),
+					service.NewStringListField(sFieldSSHAlgorithmsMACs).
+						Description("MAC algorithms to permit in addition to the defaults.").
+						Optional(),
+				).Description("Additional SSH transport algorithms to permit for compatibility with legacy SFTP servers. Configured algorithms are appended to the default algorithms, which remain preferred, and when unset the defaults are used unchanged. Algorithms the underlying SSH library classifies as insecure weaken transport security and should only be enabled when required by a known server. These settings do not affect host key verification.").
+					Advanced().
+					Optional(),
 			}...,
 		).Description("The credentials to use to log into the target server.").
 			LintRule(`
@@ -198,7 +217,13 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 		}
 	}
 
+	transportConfig, err := sshTransportConfigFromParsed(pConf)
+	if err != nil {
+		return nil, err
+	}
+
 	sshConfig := ssh.ClientConfig{
+		Config:            transportConfig,
 		User:              username,
 		Auth:              auth,
 		HostKeyCallback:   keyCallback,
@@ -206,4 +231,74 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 	}
 
 	return &sshConfig, nil
+}
+
+// sshTransportConfigFromParsed builds the key exchange, cipher and MAC lists of
+// an ssh.Config from the optional "ssh_algorithms" block. Setting any of
+// ssh.Config's algorithm lists replaces the library defaults, so configured
+// algorithms are appended to the defaults obtained from ssh.Config.SetDefaults
+// rather than used on their own. When nothing is configured a zero ssh.Config
+// is returned, leaving the library defaults in place.
+func sshTransportConfigFromParsed(pConf *service.ParsedConfig) (ssh.Config, error) {
+	var conf ssh.Config
+	if !pConf.Contains(sFieldCredentialsSSHAlgorithms) {
+		return conf, nil
+	}
+	pConf = pConf.Namespace(sFieldCredentialsSSHAlgorithms)
+
+	var defaults ssh.Config
+	defaults.SetDefaults()
+	supported, insecure := ssh.SupportedAlgorithms(), ssh.InsecureAlgorithms()
+
+	var err error
+	if conf.KeyExchanges, err = additionalAlgorithms(pConf, sFieldSSHAlgorithmsKeyExchanges, "key exchange", defaults.KeyExchanges,
+		availableAlgorithms(ssh.Config{KeyExchanges: slices.Concat(supported.KeyExchanges, insecure.KeyExchanges)}).KeyExchanges); err != nil {
+		return conf, err
+	}
+	if conf.Ciphers, err = additionalAlgorithms(pConf, sFieldSSHAlgorithmsCiphers, "cipher", defaults.Ciphers,
+		availableAlgorithms(ssh.Config{Ciphers: slices.Concat(supported.Ciphers, insecure.Ciphers)}).Ciphers); err != nil {
+		return conf, err
+	}
+	if conf.MACs, err = additionalAlgorithms(pConf, sFieldSSHAlgorithmsMACs, "MAC", defaults.MACs,
+		availableAlgorithms(ssh.Config{MACs: slices.Concat(supported.MACs, insecure.MACs)}).MACs); err != nil {
+		return conf, err
+	}
+	return conf, nil
+}
+
+// availableAlgorithms filters the algorithm lists of c down to those
+// implemented by the current build. ssh.Config.SetDefaults silently drops
+// unimplemented algorithms (e.g. non-FIPS algorithms in FIPS 140 mode), which
+// would otherwise turn a configured algorithm into a handshake failure.
+func availableAlgorithms(c ssh.Config) ssh.Config {
+	c.SetDefaults()
+	return c
+}
+
+// additionalAlgorithms returns the default algorithms followed by any
+// configured algorithms not already present, in the order configured. It
+// returns nil when no algorithms are configured so that the library defaults
+// apply.
+func additionalAlgorithms(pConf *service.ParsedConfig, field, kind string, defaults, available []string) ([]string, error) {
+	if !pConf.Contains(field) {
+		return nil, nil
+	}
+	extra, err := pConf.FieldStringList(field)
+	if err != nil {
+		return nil, err
+	}
+	if len(extra) == 0 {
+		return nil, nil
+	}
+
+	algos := slices.Clone(defaults)
+	for _, a := range extra {
+		if !slices.Contains(available, a) && !slices.Contains(defaults, a) {
+			return nil, fmt.Errorf("unsupported SSH %s algorithm %q, available algorithms: %s", kind, a, strings.Join(available, ", "))
+		}
+		if !slices.Contains(algos, a) {
+			algos = append(algos, a)
+		}
+	}
+	return algos, nil
 }
