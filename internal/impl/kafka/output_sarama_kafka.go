@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ const (
 // OSKConfigSpec creates a new config spec for a kafka output.
 func OSKConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Stable().
+		Deprecated().
 		Categories("Services").
 		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
 		Description(`
