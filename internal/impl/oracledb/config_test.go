@@ -391,6 +391,177 @@ oracledb_cdc:
 	}
 }
 
+func TestParseReadTimeoutConfig(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`
+	tests := []struct {
+		name          string
+		yaml          string
+		wantOverrides map[string]string
+		errContains   string
+	}{
+		{
+			name:          "unset defaults to 300 seconds",
+			yaml:          minimalOracleCDCYAML,
+			wantOverrides: map[string]string{"TIMEOUT": "300"},
+		},
+		{
+			name:          "explicit 30 becomes a TIMEOUT override",
+			yaml:          minimalOracleCDCYAML + "read_timeout: 30\n",
+			wantOverrides: map[string]string{"TIMEOUT": "30"},
+		},
+		{
+			name:          "explicit 3600 becomes a TIMEOUT override",
+			yaml:          minimalOracleCDCYAML + "read_timeout: 3600\n",
+			wantOverrides: map[string]string{"TIMEOUT": "3600"},
+		},
+		{
+			name:          "0 disables the timeout but is still set explicitly",
+			yaml:          minimalOracleCDCYAML + "read_timeout: 0\n",
+			wantOverrides: map[string]string{"TIMEOUT": "0"},
+		},
+		{
+			name:        "negative value is rejected",
+			yaml:        minimalOracleCDCYAML + "read_timeout: -5\n",
+			errContains: "read_timeout must be greater than or equal to 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			overrides := map[string]string{}
+			err = parseReadTimeoutConfig(conf, overrides, service.MockResources().Logger())
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				assert.Empty(t, overrides)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOverrides, overrides)
+		})
+	}
+
+	t.Run("duration strings are rejected as the value is in seconds", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML+"read_timeout: 5m\n", nil)
+		if err == nil {
+			err = parseReadTimeoutConfig(conf, map[string]string{}, service.MockResources().Logger())
+		}
+		require.Error(t, err)
+	})
+
+	t.Run("existing overrides are left untouched", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML+"read_timeout: 30\n", nil)
+		require.NoError(t, err)
+
+		overrides := map[string]string{"PREFETCH_ROWS": "500"}
+		require.NoError(t, parseReadTimeoutConfig(conf, overrides, service.MockResources().Logger()))
+		assert.Equal(t, map[string]string{"PREFETCH_ROWS": "500", "TIMEOUT": "30"}, overrides)
+	})
+
+	t.Run("connection_string timeout keys take precedence", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			queryParam  string
+			wantNoOverr bool
+		}{
+			{name: "TIMEOUT", queryParam: "TIMEOUT=120", wantNoOverr: true},
+			{name: "lowercase timeout is matched case-insensitively", queryParam: "timeout=120", wantNoOverr: true},
+			{name: "READ TIMEOUT", queryParam: "READ%20TIMEOUT=120", wantNoOverr: true},
+			{name: "SOCKET TIMEOUT", queryParam: "SOCKET%20TIMEOUT=120", wantNoOverr: true},
+			{name: "unrelated CONNECT TIMEOUT does not take precedence", queryParam: "CONNECT%20TIMEOUT=5", wantNoOverr: false},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				conf, err := oracleDBStreamConfigSpec.ParseYAML(`connection_string: "oracle://user:pass@host:1521/svc?`+tt.queryParam+`"
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`, nil)
+				require.NoError(t, err)
+
+				overrides := map[string]string{}
+				require.NoError(t, parseReadTimeoutConfig(conf, overrides, service.MockResources().Logger()))
+				if tt.wantNoOverr {
+					assert.Empty(t, overrides, "no TIMEOUT override must be added when connection_string already sets a read timeout")
+				} else {
+					assert.Equal(t, map[string]string{"TIMEOUT": "300"}, overrides,
+						"CONNECT TIMEOUT is not a read timeout, so the default TIMEOUT override must still be added")
+				}
+			})
+		}
+	})
+
+	t.Run("default override produces a TIMEOUT=300 query param in the final connection string", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML, nil)
+		require.NoError(t, err)
+
+		connStr, err := conf.FieldString(ociFieldConnectionString)
+		require.NoError(t, err)
+
+		overrides := map[string]string{}
+		require.NoError(t, parseReadTimeoutConfig(conf, overrides, service.MockResources().Logger()))
+
+		built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
+		require.NoError(t, err)
+		assert.Contains(t, built, "TIMEOUT=300")
+	})
+}
+
+func TestReadTimeoutConfigLinting(t *testing.T) {
+	const minimalOracleCDCYAML = `
+oracledb_cdc:
+  connection_string: oracle://user:pass@host:1521/svc
+  include:
+    - SCHEMA.TABLE
+  logminer: {}
+`
+	linter := service.NewEnvironment().NewComponentConfigLinter()
+
+	tests := []struct {
+		name    string
+		conf    string
+		lintErr string
+	}{
+		{
+			name:    "unset",
+			conf:    minimalOracleCDCYAML,
+			lintErr: "",
+		},
+		{
+			name:    "zero",
+			conf:    minimalOracleCDCYAML + "  read_timeout: 0\n",
+			lintErr: "",
+		},
+		{
+			name:    "positive value",
+			conf:    minimalOracleCDCYAML + "  read_timeout: 600\n",
+			lintErr: "",
+		},
+		{
+			name:    "negative",
+			conf:    minimalOracleCDCYAML + "  read_timeout: -5\n",
+			lintErr: "(7,1) read_timeout must be greater than or equal to 0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lints, err := linter.LintInputYAML([]byte(tt.conf))
+			require.NoError(t, err)
+			if tt.lintErr != "" {
+				require.Len(t, lints, 1)
+				assert.Equal(t, tt.lintErr, lints[0].Error())
+			} else {
+				assert.Empty(t, lints)
+			}
+		})
+	}
+}
+
 func TestParseLogMinerConfigWindowStrategyCrossFields(t *testing.T) {
 	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
 include:
