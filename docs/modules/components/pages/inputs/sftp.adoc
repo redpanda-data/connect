@@ -79,6 +79,10 @@ input:
       private_key_file: "" # No default (optional)
       private_key: "" # No default (optional)
       private_key_pass: ""
+      ssh_algorithms:
+        additional_key_exchanges: [] # No default (optional)
+        additional_ciphers: [] # No default (optional)
+        additional_macs: [] # No default (optional)
     max_sftp_sessions: 10
     paths: [] # No default (required)
     auto_replay_nacks: true
@@ -204,6 +208,38 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 *Default*: `""`
+
+=== `credentials.ssh_algorithms`
+
+Additional SSH transport algorithms to permit for compatibility with legacy SFTP servers. Configured algorithms are appended to the default algorithms, which remain preferred, and when unset the defaults are used unchanged. Algorithms the underlying SSH library classifies as insecure weaken transport security and should only be enabled when required by a known server. These settings do not affect host key verification.
+
+
+*Type*: `object`
+
+
+=== `credentials.ssh_algorithms.additional_key_exchanges`
+
+Key exchange algorithms to permit in addition to the defaults, for example `diffie-hellman-group1-sha1` or `diffie-hellman-group-exchange-sha1`.
+
+
+*Type*: `array`
+
+
+=== `credentials.ssh_algorithms.additional_ciphers`
+
+Ciphers to permit in addition to the defaults, for example `aes128-cbc`.
+
+
+*Type*: `array`
+
+
+=== `credentials.ssh_algorithms.additional_macs`
+
+MAC algorithms to permit in addition to the defaults.
+
+
+*Type*: `array`
+
 
 === `max_sftp_sessions`
 
