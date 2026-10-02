@@ -55,6 +55,7 @@ const (
 	esFieldAuthPassword    = "password"
 	esFieldAPIKey          = "api_key"
 	esFieldBatching        = "batching"
+	esFieldTimeout         = "timeout"
 )
 
 type esConfig struct {
@@ -66,6 +67,7 @@ type esConfig struct {
 	pipeline        *service.InterpolatedString
 	routing         *service.InterpolatedString
 	retryOnConflict int
+	timeout         time.Duration
 }
 
 func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
@@ -106,9 +108,16 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 		return nil, err
 	}
 	if tlsEnabled {
-		conf.clientOpts.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
+		// Derive from http.DefaultTransport rather than a zero value so that the
+		// standard dial, TLS handshake and idle connection timeouts are retained.
+		// This mirrors what elastictransport does when Transport is left nil.
+		defaultTransport, ok := http.DefaultTransport.(*http.Transport)
+		if !ok {
+			return nil, errors.New("cannot clone http.DefaultTransport")
 		}
+		transport := defaultTransport.Clone()
+		transport.TLSClientConfig = tlsConf
+		conf.clientOpts.Transport = transport
 	}
 
 	if conf.action, err = pConf.FieldInterpolatedString(esFieldAction); err != nil {
@@ -132,8 +141,21 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 	if conf.clientOpts.APIKey, err = pConf.FieldString(esFieldAPIKey); err != nil {
 		return nil, err
 	}
+	if conf.timeout, err = pConf.FieldDuration(esFieldTimeout); err != nil {
+		return nil, err
+	}
 
 	return conf, nil
+}
+
+// withTimeout bounds a single request against the cluster. The Elasticsearch
+// client offers no timeout of its own, so without this a stalled connection
+// blocks the output indefinitely.
+func (c *esConfig) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if c.timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, c.timeout)
 }
 
 func elasticsearchConfigSpec() *service.ConfigSpec {
@@ -172,6 +194,10 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewStringField(esFieldAPIKey).
 				Description("An API key to authenticate with. If set, it supersedes basic authentication.").
 				Default("").Secret(),
+			service.NewDurationField(esFieldTimeout).
+				Description("The maximum period to wait on a single request to the cluster before abandoning it. This covers the whole request, including connecting, sending the batch and reading the response, so it must be generous enough for the largest batch the pipeline produces. The default of `0s` waits indefinitely, in which case a stalled connection blocks the output until the pipeline is shut down.").
+				Advanced().
+				Default("0s"),
 		).
 		Fields(
 			service.NewObjectField(esFieldAuth,
@@ -335,6 +361,9 @@ func (e *esOutput) ConnectionTest(ctx context.Context) service.ConnectionTestRes
 		return service.ConnectionTestFailed(fmt.Errorf("creating client: %w", err)).AsList()
 	}
 
+	ctx, cancel := e.conf.withTimeout(ctx)
+	defer cancel()
+
 	// Test connection by pinging the cluster
 	_, err = client.Info().Do(ctx)
 	if err != nil {
@@ -367,6 +396,9 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 			return fmt.Errorf("adding operation to batch: %w", err)
 		}
 	}
+
+	ctx, cancel := e.conf.withTimeout(ctx)
+	defer cancel()
 
 	result, err := bulkWriter.Do(ctx)
 	if err != nil {
