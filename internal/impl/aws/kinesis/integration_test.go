@@ -35,10 +35,19 @@ import (
 
 func TestIntegrationKinesis(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	kinesisIntegrationSuite(t, servicePort)
 }
+
+const (
+	// createStreamTimeout is the time budget for all CreateStream attempts of
+	// one stream.
+	createStreamTimeout = 30 * time.Second
+	// createStreamRetryDelay is the pause between two CreateStream attempts.
+	createStreamRetryDelay = time.Second
+)
 
 func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int32) ([]string, error) {
 	endpoint := fmt.Sprintf("http://localhost:%v", awsPort)
@@ -53,9 +62,15 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	client := kinesis.NewFromConfig(conf)
 
 	strmID := "stream-" + id
+
+	// Bound the retries. If LocalStack is dead, the test fails after
+	// createStreamTimeout instead of waiting for the package timeout.
+	createCtx, cancel := context.WithTimeout(ctx, createStreamTimeout)
+	defer cancel()
+
 	for {
 		t.Logf("Creating stream '%v'", id)
-		_, err := client.CreateStream(ctx, &kinesis.CreateStreamInput{
+		_, err := client.CreateStream(createCtx, &kinesis.CreateStreamInput{
 			ShardCount: &numShards,
 			StreamName: &strmID,
 		})
@@ -66,9 +81,9 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 
 		t.Logf("Failed to create stream '%v': %v", id, err)
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(time.Second):
+		case <-createCtx.Done():
+			return nil, fmt.Errorf("creating stream '%v': %w (last error: %v)", id, createCtx.Err(), err)
+		case <-time.After(createStreamRetryDelay):
 		}
 	}
 
@@ -197,6 +212,7 @@ func kinesisIntegrationSuite(t *testing.T, lsPort string) {
 
 func TestIntegrationKinesisPollPeriod(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 
@@ -223,6 +239,7 @@ func TestIntegrationKinesisPollPeriod(t *testing.T) {
 
 func TestIntegrationKinesisEFO(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 
