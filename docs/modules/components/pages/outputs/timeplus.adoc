@@ -1,6 +1,6 @@
 = timeplus
 :type: output
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 
@@ -17,7 +17,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
@@ -108,7 +108,7 @@ To Timeplus Enterprise (self-hosted)::
 +
 --
 
-For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server
+For self-hosted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server
 
 ```yaml
 output:
