@@ -1058,16 +1058,130 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		lm.contentStmt = stmt
 	}
 	queryStart := time.Now()
-	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN)
+	// Cancelled on return so a failing consumer stops the reader, including a
+	// fetch blocked on the network.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN) //nolint:rowserrcheck // checked by the reader goroutine
 	if err != nil {
 		return lastSCN, fmt.Errorf("querying logminer: %w", err)
 	}
-	defer rows.Close()
 
+	// The reader owns rows and closes it before closing batches, so once
+	// batches is drained or closed the cursor is released.
+	batches := make(chan []logMinerRow, logMinerReadAheadBatches)
+	var readErr error // written by the reader before close(batches)
+	go func() {
+		defer close(batches)
+		defer rows.Close()
+		if readErr = lm.readLogMinerRows(ctx, rows, batches, queryStart, startSCN, endSCN); readErr == nil {
+			readErr = rows.Err()
+		}
+	}()
+
+	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
+	for batch := range batches {
+		for _, row := range batch {
+			event, csf := row.event, row.csf
+
+			// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
+			// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
+			// Concatenate all fragments before emitting the event.
+			if pending != nil {
+				// Append this fragment's SQL to the accumulated SQL.
+				if event.SQLRedo.Valid {
+					pending.SQLRedo.String += event.SQLRedo.String
+				}
+				if csf == 0 {
+					// Final fragment — emit the accumulated event.
+					if err := processEvent(ctx, pending); err != nil {
+						cancel()
+						drainLogMinerBatches(batches)
+						return lastSCN, fmt.Errorf("processing redo event: %w", err)
+					}
+					// The first fragment's SCN, so a retry re-reads the whole statement.
+					lastSCN = pending.SCN
+					pending = nil
+				}
+				// If csf == 1, continue accumulating.
+				continue
+			}
+
+			if csf == 1 {
+				// Start accumulating a multi-part SQL.
+				pending = event
+				continue
+			}
+
+			if err := processEvent(ctx, event); err != nil {
+				cancel()
+				drainLogMinerBatches(batches)
+				return lastSCN, fmt.Errorf("processing redo event: %w", err)
+			}
+			lastSCN = event.SCN
+		}
+	}
+
+	// batches is closed, so the reader has finished writing readErr.
+	if readErr != nil {
+		return lastSCN, readErr
+	}
+
+	// Flush any incomplete pending event (shouldn't happen in practice).
+	if pending != nil {
+		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
+		if err := processEvent(ctx, pending); err != nil {
+			return lastSCN, fmt.Errorf("processing redo event: %w", err)
+		}
+	}
+
+	return lastSCN, nil
+}
+
+const (
+	// logMinerReadBatchSize is the number of scanned rows sent per channel
+	// operation, which keeps channel overhead negligible.
+	logMinerReadBatchSize = 500
+	// logMinerReadAheadBatches bounds buffering to roughly one default prefetch
+	// batch (4 x 500 = 2000 rows, each possibly several KB of SQL_REDO), which
+	// is enough for the next fetch to overlap with processing without letting
+	// memory grow when processing is the bottleneck.
+	logMinerReadAheadBatches = 4
+)
+
+type logMinerRow struct {
+	event *sqlredo.RedoEvent
+	csf   int64
+}
+
+// drainLogMinerBatches blocks until the reader has closed rows and exited.
+func drainLogMinerBatches(batches <-chan []logMinerRow) {
+	for range batches {
+	}
+}
+
+// readLogMinerRows scans rows into batches until the result set is exhausted,
+// an error occurs or ctx is cancelled. The caller checks rows.Err. Rows scanned before an error are still
+// sent so the consumer processes everything preceding the failure.
+func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batches chan<- []logMinerRow, queryStart time.Time, startSCN, endSCN uint64) error {
 	var (
-		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
+		batch    = make([]logMinerRow, 0, logMinerReadBatchSize)
 		firstRow = true
 	)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		select {
+		case batches <- batch:
+			batch = make([]logMinerRow, 0, logMinerReadBatchSize)
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	for rows.Next() {
 		if firstRow {
 			elapsed := time.Since(queryStart)
@@ -1093,62 +1207,30 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&csf,
 			&event.Username,
 		); err != nil {
-			return lastSCN, err
-		}
-
-		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
-		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
-		// Concatenate all fragments before emitting the event.
-		if pending != nil {
-			// Append this fragment's SQL to the accumulated SQL.
-			if event.SQLRedo.Valid {
-				pending.SQLRedo.String += event.SQLRedo.String
+			if ferr := flush(); ferr != nil {
+				return ferr
 			}
-			if csf == 0 {
-				// Final fragment — emit the accumulated event.
-				if err := processEvent(ctx, pending); err != nil {
-					return lastSCN, fmt.Errorf("processing redo event: %w", err)
-				}
-				// The first fragment's SCN, so a retry re-reads the whole statement.
-				lastSCN = pending.SCN
-				pending = nil
+			return err
+		}
+
+		batch = append(batch, logMinerRow{event: event, csf: csf})
+		if len(batch) == logMinerReadBatchSize {
+			if err := flush(); err != nil {
+				return err
 			}
-			// If csf == 1, continue accumulating.
-			continue
 		}
-
-		if csf == 1 {
-			// Start accumulating a multi-part SQL.
-			pending = event
-			continue
-		}
-
-		if err := processEvent(ctx, event); err != nil {
-			return lastSCN, fmt.Errorf("processing redo event: %w", err)
-		}
-		lastSCN = event.SCN
 	}
 
-	if err := rows.Err(); err != nil {
-		return lastSCN, err
+	if err := flush(); err != nil {
+		return err
 	}
-
 	// capture timings if 0 rows
 	if firstRow {
 		elapsed := time.Since(queryStart)
 		lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
 		lm.log.Debugf("LogMiner query returned no rows after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
 	}
-
-	// Flush any incomplete pending event (shouldn't happen in practice).
-	if pending != nil {
-		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
-		if err := processEvent(ctx, pending); err != nil {
-			return lastSCN, fmt.Errorf("processing redo event: %w", err)
-		}
-	}
-
-	return lastSCN, nil
+	return nil
 }
 
 const (
