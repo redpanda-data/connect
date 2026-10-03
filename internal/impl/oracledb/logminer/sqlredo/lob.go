@@ -147,6 +147,10 @@ func NewTxnLOBState() *TxnLOBState {
 // Oracle SecureFile out-of-row LOBs may emit only SELECT_LOB_LOCATOR + LOB_WRITE +
 // LOB_TRIM with no DML UPDATE. In that case all three passes find nothing and the
 // accumulator is returned as unmerged so the caller can synthesize a synthetic UPDATE.
+//
+// When one UPDATE rewrites a LOB and changes a non-LOB column, the locator's
+// WHERE clause reflects the post-update row, so Pass 2 also matches UPDATE events
+// against their after-image (OldValues overlaid with Data).
 func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service.Logger) []*LobAccumulator {
 	logDebugf := func(msg string, args ...any) {
 		if log != nil {
@@ -195,12 +199,17 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// Pass 2: fall back to the most-recent DML event of any type with a matching PK.
 		// For LOB-only UPDATE events the SET clause contains only LOB columns, so
 		// PK columns are not in ev.Data — they are in ev.OldValues (WHERE clause).
+		// For UPDATEs that also change a non-LOB column, Oracle builds the
+		// SELECT_LOB_LOCATOR WHERE clause from the row's values after the update,
+		// so a locator key may match neither Data nor OldValues alone. UPDATEs are
+		// therefore also compared against their after-image (see pkMatchesAfterImage).
 		for i := len(events) - 1; i >= 0; i-- {
 			ev := events[i]
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}
-			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) {
+			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) ||
+				(ev.Operation == OpUpdate && pkMatchesAfterImage(ev, acc.PKValues)) {
 				ev.Data[acc.Column] = assembled
 				merged = true
 				logDebugf("LOB merge: set %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
@@ -302,6 +311,30 @@ func pkMatches(data map[string]any, pkValues map[string]any) bool {
 			return false
 		}
 		if fmt.Sprintf("%v", dataVal) != fmt.Sprintf("%v", pkVal) {
+			return false
+		}
+	}
+	return true
+}
+
+// pkMatchesAfterImage is like pkMatches but resolves each key against the
+// UPDATE's after-image: Data (SET clause) first, then OldValues (WHERE clause).
+// This equals matching against OldValues overlaid with Data without allocating
+// a merged map. Every locator key must resolve and be equal, so a row whose
+// after-image differs on any key is never matched. It applies only to UPDATEs:
+// INSERT Data is already the full after-image and DELETEs carry no LOBs.
+func pkMatchesAfterImage(ev *DMLEvent, pkValues map[string]any) bool {
+	if len(pkValues) == 0 {
+		return false
+	}
+	for k, pkVal := range pkValues {
+		val, exists := ev.Data[k]
+		if !exists {
+			if val, exists = ev.OldValues[k]; !exists {
+				return false
+			}
+		}
+		if fmt.Sprintf("%v", val) != fmt.Sprintf("%v", pkVal) {
 			return false
 		}
 	}
