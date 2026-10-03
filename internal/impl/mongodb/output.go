@@ -47,6 +47,7 @@ func outputSpec() *service.ConfigSpec {
 			writeConcernDocs(),
 		).
 		Fields(writeMapsFields()...).
+		Fields(compatibilityFields()...).
 		Fields(
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(moFieldBatching),
