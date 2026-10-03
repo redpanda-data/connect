@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/connect/v4/internal/pool"
@@ -74,4 +75,56 @@ func TestIndexedCtorCancellation(t *testing.T) {
 	}()
 	_, err := p.Acquire(ctx, "foo")
 	require.Equal(t, context.Canceled, err)
+}
+
+// TestIndexedAcquireIsFIFO checks that waiters queued behind the current
+// holder are handed the item in the order they called Acquire. The snowflake
+// output's exactly-once dedup relies on that ordering.
+func TestIndexedAcquireIsFIFO(t *testing.T) {
+	p := pool.NewIndexed(func(context.Context, string) (int, error) { return 0, nil })
+
+	held, err := p.Acquire(t.Context(), "shared")
+	require.NoError(t, err)
+
+	const n = 30
+	// Asserting order == arrival (recorded just before each Acquire) rather
+	// than order == 0..n-1 keeps the test independent of which goroutine's
+	// stagger timer happens to fire first.
+	var mu sync.Mutex
+	var arrival, order []int
+	release := make(chan struct{}, n)
+
+	for i := range n {
+		go func(i int) {
+			time.Sleep(time.Duration(i) * 5 * time.Millisecond)
+			mu.Lock()
+			arrival = append(arrival, i)
+			mu.Unlock()
+			item, err := p.Acquire(t.Context(), "shared")
+			if !assert.NoError(t, err) {
+				return
+			}
+			mu.Lock()
+			order = append(order, i)
+			mu.Unlock()
+			<-release
+			p.Release("shared", item)
+		}(i)
+	}
+	time.Sleep(time.Duration(n) * 5 * time.Millisecond)
+	p.Release("shared", held)
+	for range n {
+		release <- struct{}{}
+	}
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(order) == n
+	}, 10*time.Second, 10*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, arrival, n)
+	require.Equal(t, arrival, order, "waiters were handed the item in a different order than they called Acquire")
 }

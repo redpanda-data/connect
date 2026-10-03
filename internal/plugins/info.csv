@@ -266,6 +266,7 @@ slack_users               ,input     ,Slack Users               ,enterprise ,n  
 sleep                     ,processor ,sleep                     ,certified  ,n          ,y     ,y              ,
 snowflake_put             ,output    ,Snowflake                 ,enterprise ,n          ,y     ,y              ,
 snowflake_streaming       ,output    ,Snowflake Streaming       ,enterprise ,n          ,y     ,y              ,
+snowflake_streaming_pipe  ,output    ,Snowflake Streaming Pipe  ,enterprise ,n          ,y     ,y              ,
 socket                    ,input     ,Socket                    ,certified  ,n          ,n     ,n              ,security: raw socket access
 socket                    ,output    ,Socket                    ,certified  ,n          ,n     ,n              ,security: raw socket access
 socket_server             ,input     ,socket_server             ,certified  ,n          ,n     ,n              ,security: opens a listener unreachable from cloud
