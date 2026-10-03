@@ -233,3 +233,69 @@ func TestMergeLOBsEmptyPKSingleCandidate(t *testing.T) {
 	assert.Empty(t, unmerged)
 	assert.Equal(t, "hello", events[0].Data["DOC"])
 }
+
+func afterImageAcc(state *TxnLOBState, col, content string, pks map[string]any) {
+	acc := &LobAccumulator{Schema: "TESTDB", Table: "T_CKC_RUNTIME", Column: col, PKValues: pks}
+	acc.AddFragment(1, []byte(content))
+	state.Accumulators[LobKey{Schema: "TESTDB", Table: "T_CKC_RUNTIME", Column: col, PKString: FormatPKString(pks)}] = acc
+}
+
+func afterImageUpdate(id, oldNum, newNum string) *DMLEvent {
+	return &DMLEvent{
+		Operation: OpUpdate, Schema: "TESTDB", Table: "T_CKC_RUNTIME",
+		Data:      map[string]any{"VIOLATION_NUM": newNum},
+		OldValues: map[string]any{"CALC2_ID": id, "VIOLATION_NUM": oldNum},
+	}
+}
+
+func TestMergeLOBsUpdateAfterImage(t *testing.T) {
+	t.Run("lob merges into update with changed non-lob column", func(t *testing.T) {
+		state := NewTxnLOBState()
+		afterImageAcc(state, "CKC_BLOB", "blobdata", map[string]any{"CALC2_ID": "1000002855", "VIOLATION_NUM": "1"})
+		ev := afterImageUpdate("1000002855", "0", "1")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, "blobdata", ev.Data["CKC_BLOB"])
+		assert.Equal(t, "1", ev.Data["VIOLATION_NUM"])
+	})
+
+	t.Run("two rows each get their own lob", func(t *testing.T) {
+		state := NewTxnLOBState()
+		afterImageAcc(state, "CKC_BLOB", "row-a", map[string]any{"CALC2_ID": "A", "VIOLATION_NUM": "1"})
+		afterImageAcc(state, "CKC_CLOB", "row-b", map[string]any{"CALC2_ID": "B", "VIOLATION_NUM": "1"})
+		a := afterImageUpdate("A", "0", "1")
+		b := afterImageUpdate("B", "0", "1")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{a, b}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, "row-a", a.Data["CKC_BLOB"])
+		assert.NotContains(t, a.Data, "CKC_CLOB")
+		assert.Equal(t, "row-b", b.Data["CKC_CLOB"])
+		assert.NotContains(t, b.Data, "CKC_BLOB")
+	})
+
+	t.Run("same row updated twice most recent wins", func(t *testing.T) {
+		state := NewTxnLOBState()
+		afterImageAcc(state, "CKC_BLOB", "blobdata", map[string]any{"CALC2_ID": "A", "VIOLATION_NUM": "2"})
+		first := afterImageUpdate("A", "0", "1")
+		second := afterImageUpdate("A", "1", "2")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{first, second}, nil)
+		assert.Empty(t, unmerged)
+		assert.NotContains(t, first.Data, "CKC_BLOB")
+		assert.Equal(t, "blobdata", second.Data["CKC_BLOB"])
+	})
+
+	t.Run("mismatched after-image stays unmerged", func(t *testing.T) {
+		state := NewTxnLOBState()
+		afterImageAcc(state, "CKC_BLOB", "blobdata", map[string]any{"CALC2_ID": "A", "VIOLATION_NUM": "9"})
+		x := afterImageUpdate("A", "0", "1")
+		y := afterImageUpdate("B", "0", "1")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{x, y}, nil)
+		require.Len(t, unmerged, 1)
+		assert.NotContains(t, x.Data, "CKC_BLOB")
+		assert.NotContains(t, y.Data, "CKC_BLOB")
+	})
+}

@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"os"
 	"slices"
 	"strconv"
@@ -2435,6 +2436,140 @@ oracledb_cdc:
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
+
+	t.Run("LOB merged into an UPDATE that also changes a non-LOB column", func(t *testing.T) {
+		// A single UPDATE that rewrites an out-of-row LOB and changes a non-LOB
+		// column logs the UPDATE (new value in SET, old value in WHERE) followed by
+		// a SELECT_LOB_LOCATOR whose WHERE clause carries the row's after-update
+		// values. The LOB must be merged into that one UPDATE, not emitted as the
+		// UPDATE without the LOB plus a synthesized, sparse UPDATE holding only the LOB.
+		tests := []struct {
+			name string
+			// pk adds a primary key and PRIMARY KEY supplemental logging; otherwise
+			// the table has no key and logs ALL COLUMNS.
+			pk bool
+		}{
+			{name: "no primary key with ALL COLUMNS supplemental logging"},
+			{name: "primary key with PRIMARY KEY supplemental logging", pk: true},
+		}
+
+		for i, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				table := db.Schema + ".lobsplit" + string(rune('a'+i))
+				idCol, suppl := "id NUMBER NOT NULL", "(ALL)"
+				if test.pk {
+					idCol, suppl = "id NUMBER PRIMARY KEY", "(PRIMARY KEY)"
+				}
+				// SECUREFILE out of row, so every write produces LOB_WRITE records.
+				db.MustExec(`CREATE TABLE ` + table + ` (
+					` + idCol + `,
+					name          VARCHAR2(64),
+					violation_num NUMBER NOT NULL,
+					payload       BLOB
+				) LOB(payload) STORE AS SECUREFILE (DISABLE STORAGE IN ROW)`)
+				db.MustExec(`ALTER TABLE ` + table + ` ADD SUPPLEMENTAL LOG DATA ` + suppl + ` COLUMNS`)
+
+				// Seed before the pipeline starts so that these inserts are not streamed.
+				oldPayload := lobTestBytes(1, 4096)
+				for id := 1; id <= 4; id++ {
+					db.MustExec("INSERT INTO "+table+" (id, name, violation_num, payload) VALUES (:1, :2, 0, :3)",
+						id, "row", oldPayload)
+				}
+
+				var batch oracledbtest.MsgBatch
+				cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  stream_snapshot: false
+  checkpoint_cache_key: lobsplit` + string(rune('a'+i)) + `
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + strings.ToUpper(table) + `"]`
+				stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
+				t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+				// 32KB of non-repeating bytes per value is far beyond the inline limit.
+				newPayloads := map[int][]byte{
+					1: lobTestBytes(11, 32*1024),
+					2: lobTestBytes(12, 32*1024),
+					3: lobTestBytes(13, 32*1024),
+				}
+
+				// One transaction: rows 1 and 2 change a non-LOB column together with
+				// the LOB. Row 3 is a control that re-assigns name to its current value.
+				tx, err := db.BeginTx(t.Context(), nil)
+				require.NoError(t, err)
+				for _, u := range []struct {
+					id   int
+					name string
+					viol int
+				}{{1, "row", 1}, {2, "row", 2}, {3, "row", 0}} {
+					_, err := tx.ExecContext(t.Context(),
+						"UPDATE "+table+" SET payload = :1, violation_num = :2, name = :3 WHERE id = :4",
+						newPayloads[u.id], u.viol, u.name, u.id)
+					require.NoError(t, err)
+				}
+				require.NoError(t, tx.Commit())
+
+				// A later transaction acts as a barrier: once its event arrives, every
+				// event of the first transaction has been delivered too, so the count
+				// of messages below is final without any sleeping.
+				db.MustExec("UPDATE " + table + " SET name = 'marker' WHERE id = 4")
+				assert.Eventually(t, func() bool {
+					for _, m := range batch.Clone() {
+						if b, err := m.AsBytes(); err == nil && bytes.Contains(b, []byte(`"marker"`)) {
+							return true
+						}
+					}
+					return false
+				}, 2*time.Minute, 500*time.Millisecond, "timed out waiting for the marker UPDATE")
+
+				updates := map[string][]map[string]any{}
+				total := 0
+				for _, m := range batch.Clone() {
+					op, _ := m.MetaGet("operation")
+					require.Equal(t, "update", op)
+					b, err := m.AsBytes()
+					require.NoError(t, err)
+					var row map[string]any
+					require.NoError(t, json.Unmarshal(b, &row))
+					id, _ := row["ID"].(string)
+					updates[id] = append(updates[id], row)
+					total++
+				}
+
+				// Four real UPDATEs (3 rows + marker); any more are synthesized
+				// sparse UPDATEs holding only the LOB column.
+				assert.Equal(t, 4, total, "expected exactly one UPDATE message per updated row, got extra (synthesized) messages: %s", summarizeLOBUpdates(updates))
+
+				want := map[string]struct {
+					violation string
+					payload   []byte
+				}{
+					"1": {"1", newPayloads[1]},
+					"2": {"2", newPayloads[2]},
+					"3": {"0", newPayloads[3]},
+				}
+				for id, w := range want {
+					rows := updates[id]
+					if !assert.Len(t, rows, 1, "row %s: expected exactly one UPDATE message, got: %s", id, summarizeLOBUpdates(updates)) {
+						continue
+					}
+					row := rows[0]
+					assert.Equal(t, w.violation, fmt.Sprint(row["VIOLATION_NUM"]), "row %s: wrong VIOLATION_NUM", id)
+					enc, _ := row["PAYLOAD"].(string)
+					got, err := base64.StdEncoding.DecodeString(enc)
+					assert.NoError(t, err)
+					assert.Truef(t, bytes.Equal(w.payload, got),
+						"row %s: UPDATE is missing the new BLOB bytes (want %d bytes, got %d bytes)", id, len(w.payload), len(got))
+				}
+			})
+		}
+	})
 }
 
 // TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart verifies that a LOB update
@@ -2789,4 +2924,26 @@ oracledb_cdc:
 	assert.Contains(t, logBuf.String(), "retrying from SCN")
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
+// lobTestBytes returns n deterministic, non-repeating bytes.
+func lobTestBytes(seed uint64, n int) []byte {
+	r := rand.New(rand.NewPCG(seed, seed))
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(r.UintN(256))
+	}
+	return b
+}
+
+// summarizeLOBUpdates describes the UPDATE messages per ID, without dumping BLOB bytes.
+func summarizeLOBUpdates(updates map[string][]map[string]any) string {
+	var sb strings.Builder
+	for id, rows := range updates {
+		for _, row := range rows {
+			enc, _ := row["PAYLOAD"].(string)
+			fmt.Fprintf(&sb, "[id=%q name=%v violation_num=%v payload_base64_len=%d] ", id, row["NAME"], row["VIOLATION_NUM"], len(enc))
+		}
+	}
+	return sb.String()
 }
