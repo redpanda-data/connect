@@ -39,7 +39,7 @@ To use this mechanism locally, the following gcloud commands can be used:
 	gcloud auth application-default set-quota-project <project-id>
 
 Otherwise if using a service account, you can create a JSON key for the service account and set it in the `+"`"+baseFieldCredentialsJSON+"`"+` field.
-In order for a service account to access files in Google Drive either files need to be explicitly shared with the service account email, otherwise https://support.google.com/a/answer/162106[^domain wide delegation] can be used to share all files within a Google Workspace.
+In order for a service account to access files in Google Drive either files need to be explicitly shared with the service account email, otherwise https://support.google.com/a/answer/162106[domain wide delegation^] can be used to share all files within a Google Workspace.
 `, "$SCOPE", scope)
 }
 

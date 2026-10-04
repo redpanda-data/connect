@@ -52,7 +52,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 		).Fields(commonFields()...).
 		Example(
 			"Store embedding vectors in Qdrant",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/qdrant.adoc[Qdrant]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/qdrant.adoc[Qdrant].",
 			`input:
   generate:
     interval: 1s
@@ -72,7 +72,7 @@ output:
 `).
 		Example(
 			"Store embedding vectors in CyborgDB",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/cyborgdb.adoc[CyborgDB].",
 			`input:
   generate:
     interval: 1s

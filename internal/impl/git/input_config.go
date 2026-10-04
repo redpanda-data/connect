@@ -50,7 +50,7 @@ You can access these metadata fields using function interpolation.`
 		Stable().
 		Categories("Services").
 		Version("4.51.0").
-		Summary(`A Git input that clones (or pulls) a repository and reads the repository contents.`).
+		Summary(`Clones a Git repository, reads its contents, then polls for new commits at a configurable interval.`).
 		Description(desc).
 		Fields(
 			// General git cloning & polling settings

@@ -42,6 +42,11 @@ func init() {
 func ockamKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Uses Ockam to decrypt and read end-to-end encrypted messages from Kafka topics.").
+		Description(`For more information about Ockam, see the https://docs.ockam.io/[Ockam documentation^]. You can write encrypted messages using the ` + "`ockam_kafka`" + ` output or by https://command.ockam.io/manual/ockam-kafka-inlet-create.html[creating a Kafka Portal Inlet^] using Ockam Command.
+
+https://docs.ockam.io/reference/command/secure-channels[Ockam Secure Channels^] guarantee that topic data can only be consumed by authenticated and authorized consumers, and that the data can't be leaked or tampered with in flight between the producer and consumer. Neither Kafka brokers, service providers, nor other components can see or manipulate the messages.
+
+You can use Ockam to encrypt whole messages, or only the fields listed in ` + "`encrypted_fields`" + `.`).
 		Categories("Services").
 		Field(service.NewObjectField("kafka", slices.Concat(
 			[]*service.ConfigField{

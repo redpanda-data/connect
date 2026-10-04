@@ -166,6 +166,12 @@ Multiple independent pipelines can share a single checkpoint table by giving eac
 
 For better performance and longer retention (up to 1 year vs 24 hours), consider using Kinesis Data Streams for DynamoDB with the `+"`aws_kinesis`"+` input instead.
 
+== Message format
+
+Each change event is a JSON object with the fields `+"`tableName`"+`, `+"`eventID`"+`, `+"`eventName`"+` (`+"`INSERT`"+`, `+"`MODIFY`"+`, or `+"`REMOVE`"+`), `+"`eventVersion`"+`, `+"`eventSource`"+`, and `+"`awsRegion`"+`, plus a `+"`dynamodb`"+` object. The `+"`dynamodb`"+` object contains `+"`keys`"+`, `+"`newImage`"+`, and `+"`oldImage`"+` when the stream view type provides them, along with `+"`sequenceNumber`"+`, `+"`streamViewType`"+`, and `+"`sizeBytes`"+`. Snapshot records have an `+"`eventName`"+` of `+"`READ`"+` and carry the whole item in `+"`dynamodb.newImage`"+`.
+
+Attribute values are converted from DynamoDB's typed format, such as `+"`{\"S\": \"value\"}`"+`, to plain values, such as `+"`\"value\"`"+`. Number attributes stay strings, so convert them in a mapping if you need numeric values.
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -222,6 +228,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			service.NewStringField(dciFieldCheckpointNamespace).
 				Description("Isolates this pipeline's checkpoints within a shared `checkpoint_table` by prefixing the namespace to the checkpoint key. Use this so that multiple pipelines reading the same stream can share one checkpoint table without overwriting each other's positions, for example per-developer or per-environment test pipelines. Leave empty (the default) to keep the original checkpoint keys unchanged. A namespace isolates readers but does not coordinate them: pipelines that share the same namespace still collide. Changing or removing the namespace changes the checkpoint key. If no checkpoints exist yet under the new key, the pipeline starts from `start_from`. Switching back to a previously used namespace resumes from that namespace's last checkpoints. The value cannot contain a `#` character.").
 				ShortDescription("Namespace for checkpoints, letting independent pipelines share one checkpoint table without overwriting each other.").
+				Version("4.101.0").
 				Default(""),
 			service.NewBoolField(dciFieldGlobalTable).
 				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added by calling `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key). Enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").

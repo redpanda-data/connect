@@ -55,8 +55,8 @@ func schemaRegistryOutputSpec() *service.ConfigSpec {
 		Stable().
 		Version("4.32.2").
 		Categories("Integration").
-		Summary(`Publishes schemas to SchemaRegistry.`).
-		Description(service.OutputPerformanceDocs(true, false)).
+		Summary(`Publishes schemas to a schema registry.`).
+		Description("This output uses the https://github.com/twmb/franz-go/tree/master/pkg/sr[Franz Kafka Schema Registry client^].\n\n"+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			schemaRegistryOutputConfigFields()...,
 		).Example("Write schemas", "Write schemas to a Schema Registry instance which is in IMPORT mode, preserving their IDs. Re-writing a schema which already exists is idempotent, so the only errors which need handling are genuine conflicts, where a different schema is already registered under the same ID. These are logged and dropped, while any other error is rejected.", `

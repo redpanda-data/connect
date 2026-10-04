@@ -29,7 +29,7 @@ func natsOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary("Publish to an NATS subject.").
+		Summary("Publishes to a NATS subject.").
 		Description(`This output will interpolate functions within the subject field, you can find a list of functions xref:configuration:interpolation.adoc#bloblang-queries[here].
 
 ` + connectionNameDescription() + authDescription()).

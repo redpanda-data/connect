@@ -54,13 +54,13 @@ func migratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.67.0").
-		Summary("Kafka consumer for migration pipelines. All migration logic is handled by the redpanda_migrator output.").
+		Summary("Consumes records from a source Kafka or Redpanda cluster for the redpanda_migrator output to migrate.").
 		Description(`
 The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream.
 It does not perform topic/schema/group synchronisation.
 All migration features and coordination live in the paired ` + "`redpanda_migrator`" + ` output.
 
-**IMPORTANT:** This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
+IMPORTANT: This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
 Each pipeline must have both input and output components configured.
 For capabilities, guarantees, scheduling, and examples, see the output documentation.
 
@@ -87,12 +87,12 @@ func migratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.67.0").
-		Summary("A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.").
+		Summary("Migrates topics, records, schemas, consumer group offsets, and topic ACLs from a source Kafka or Redpanda cluster to a destination cluster.").
 		Description(`
 The `+"`redpanda_migrator`"+` output performs all migration work.
 It coordinates topics, schema registry, and consumer groups to migrate data from a source Kafka/Redpanda cluster to a destination cluster.
 
-**IMPORTANT:** This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline.
+IMPORTANT: This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline.
 Each pipeline must have both input and output components configured.
 
 **Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline,

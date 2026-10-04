@@ -94,6 +94,8 @@ func newPostgresCDCConfig() *service.ConfigSpec {
 		Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
 
+This input was renamed from ` + "`pg_stream`" + ` to ` + "`postgres_cdc`" + ` in version 4.43.0. The ` + "`pg_stream`" + ` name still works, but it's deprecated.
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -107,6 +109,13 @@ This input adds the following metadata fields to each message:
 == Unserializable rows
 
 A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+
+== Metrics
+
+This input emits the following metrics:
+
+- ` + "`postgres_snapshot_progress`" + `: A gauge, labeled by ` + "`table`" + `, that reports the estimated fraction of each table's rows read so far in the initial snapshot. The value is 1 when the table's snapshot completes. The total row count comes from the PostgreSQL planner's row estimate, so the value is approximate until then.
+- ` + "`postgres_replication_lag_bytes`" + `: A gauge that reports how far, in bytes, the replication slot's restart position lags behind the current position of the source database's write-ahead log (WAL).
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.").
@@ -157,7 +166,9 @@ If the pipeline is restarted and ` + "`" + `stream_snapshot` + "`" + ` is enable
 		Field(service.NewStringField(fieldSlotName).
 			Description(`The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.`).
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.
+
+Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" + ` to the names of the replication slots it creates. To keep using a replication slot that an earlier version created, add the ` + "`rs_`" + ` prefix to this field yourself.`).
 			ShortDescription("The name of the PostgreSQL logical replication slot to use. The input creates the slot if it does not exist.").
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).

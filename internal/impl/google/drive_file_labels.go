@@ -31,7 +31,7 @@ func init() {
 func driveLabelsProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Unstructured").
-		Summary("Lists labels for a file in Google Drive").
+		Summary("Lists labels for a file in Google Drive.").
 		Description(`
 Can list all labels from Google Drive.
 		` + authDescription("https://www.googleapis.com/auth/drive.labels.readonly")).

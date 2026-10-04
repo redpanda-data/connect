@@ -35,7 +35,7 @@ func natsKVOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Version("4.12.0").
-		Summary("Put messages in a NATS key-value bucket.").
+		Summary("Puts messages in a NATS key-value bucket.").
 		Description(`
 The field ` + "`key`" + ` supports
 xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing

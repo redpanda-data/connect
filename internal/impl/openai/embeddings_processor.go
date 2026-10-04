@@ -64,7 +64,7 @@ To learn more about vector embeddings, see the https://platform.openai.com/docs/
 		).
 		Example(
 			"Store embedding vectors in Pinecone",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/pinecone.adoc[Pinecone]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/pinecone.adoc[Pinecone].",
 			`input:
   generate:
     interval: 1s
@@ -84,7 +84,7 @@ output:
     vector_mapping: "root = this"`).
 		Example(
 			"Store embedding vectors in CyborgDB",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/cyborgdb.adoc[CyborgDB].",
 			`input:
   generate:
     interval: 1s

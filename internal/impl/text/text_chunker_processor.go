@@ -52,7 +52,7 @@ const (
 func newTextChunkerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("A processor that allows chunking and splitting text based on some strategy. Usually used for creating vector embeddings of large documents.").
+		Summary("Breaks text-based message content into chunks using a configurable strategy, typically to create vector embeddings of large documents.").
 		Description(`A processor allowing splitting text into chunks based on several different strategies.`).
 		Fields(
 			service.NewStringAnnotatedEnumField(tcpFieldStrategy, map[string]string{

@@ -75,7 +75,7 @@ To learn more about vector embeddings, see the https://docs.cohere.com/docs/embe
 		).
 		Example(
 			"Store embedding vectors in Qdrant",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/qdrant.adoc[Qdrant]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/qdrant.adoc[Qdrant].",
 			`input:
   generate:
     interval: 1s

@@ -41,7 +41,7 @@ import (
 
 func tracerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Send tracing events to a Redpanda topic in OpenTelemetry format for distributed tracing and observability.").
+		Summary("Sends tracing events to a Redpanda topic in OpenTelemetry format for distributed tracing and observability.").
 		Description(`
 The Redpanda tracer exports distributed tracing data to a Redpanda topic, enabling you to monitor and debug your Redpanda Connect pipelines. Traces are exported in OpenTelemetry format, as JSON by default, allowing integration with observability platforms like Jaeger, Grafana Tempo, or custom trace consumers. Use the `+"`format`"+` field to emit spans as protobuf, or to publish schemas to a Schema Registry alongside the data.
 

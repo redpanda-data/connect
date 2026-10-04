@@ -47,7 +47,7 @@ var (
 
 func ffiProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Invoke functions from shared libraries using Foreign Function Interface (FFI).").
+		Summary("Invokes functions from shared libraries using a Foreign Function Interface (FFI).").
 		Description(`The `+"`"+`ffi`+"`"+` processor allows you to dynamically load shared libraries (.so, .dylib, or .dll files) and invoke their functions as a processing step. This enables integration with external C/C++ libraries without requiring custom Go code or rebuilding Redpanda Connect.
 
 The processor uses `+"`"+`dlopen`+"`"+` (or platform equivalent) to load the specified library at runtime, looks up the function by name, and invokes it with arguments provided through Bloblang mapping. Function signatures are defined using the `+"`"+`signature`+"`"+` field, specifying parameter and return types.

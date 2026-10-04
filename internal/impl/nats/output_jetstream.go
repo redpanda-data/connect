@@ -33,7 +33,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Version("3.46.0").
-		Summary("Write messages to a NATS JetStream subject.").
+		Summary("Writes messages to a NATS JetStream subject.").
 		Description(connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
