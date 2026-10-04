@@ -84,6 +84,18 @@ func main() {
 		panic(err)
 	}
 
+	// Platforms come first, so a failure leaves the committed docs in place.
+	plat, err := loadPlatforms(full)
+	if err != nil {
+		panic(fmt.Errorf("finding the components that only cgo builds include: %w", err))
+	}
+	if builtWithAllComponents && len(plat.cgoOnlyKeys()) == 0 {
+		// x_benthos_extra exists to add components, so a full build that finds
+		// none means the standard build didn't run the way it should.
+		panic("found no cgo-only components in a build with x_benthos_extra; check that componentlist runs with CGO_ENABLED=0 and no build tags")
+	}
+	fmt.Printf("Components that only cgo builds include: %v\n", strings.Join(plat.cgoOnlyKeys(), ", "))
+
 	// Only a build with every component can tell which files are stale. Two
 	// build constraints add components: x_benthos_extra adds zmq4 (which also
 	// needs cgo and libzmq) and ffi (pure Go), and cgo adds tigerbeetle_cdc. A
@@ -99,17 +111,6 @@ func main() {
 	} else {
 		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping existing files, so docs for removed components are not pruned. CI runs `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`.")
 	}
-
-	plat, err := loadPlatforms(full)
-	if err != nil {
-		panic(fmt.Errorf("finding the components that only cgo builds include: %w", err))
-	}
-	if builtWithAllComponents && len(plat.cgoOnlyKeys()) == 0 {
-		// x_benthos_extra exists to add components, so a full build that finds
-		// none means the standard build didn't run the way it should.
-		panic("found no cgo-only components in a build with x_benthos_extra; check that componentlist runs with CGO_ENABLED=0 and no build tags")
-	}
-	fmt.Printf("Components that only cgo builds include: %v\n", strings.Join(plat.cgoOnlyKeys(), ", "))
 
 	w := writer{root: root, platforms: plat}
 	for _, g := range full.Groups {
