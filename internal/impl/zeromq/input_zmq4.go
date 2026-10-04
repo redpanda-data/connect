@@ -28,23 +28,28 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// zmqBuildDescription explains how to get a Redpanda Connect build that
+// includes the zmq4 components. It is shared by the input and the output.
+const zmqBuildDescription = `
+This component links to the ZeroMQ C library (` + "`libzmq`" + `), so only cgo builds of Redpanda Connect include it. The standard release binaries, ` + "`rpk connect`" + `, and the Docker images don't include it.
+
+To get a build that includes this component, either download the ` + "`redpanda-connect-cgo_<version>_linux_amd64.tar.gz`" + ` archive from the https://github.com/redpanda-data/connect/releases[Redpanda Connect releases^], or build from source with cgo enabled and the ` + "`x_benthos_extra`" + ` build tag:
+
+` + "```bash" + `
+# Install the libzmq headers first, for example on Debian or Ubuntu
+sudo apt-get install libzmq3-dev
+
+CGO_ENABLED=1 go build -tags x_benthos_extra,timetzdata ./cmd/redpanda-connect
+` + "```" + `
+
+Both builds link ` + "`libzmq`" + ` dynamically, so the machine that runs Redpanda Connect also needs the ZeroMQ shared library installed.`
+
 func zmqInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Network").
 		Summary("Consumes messages from a ZeroMQ socket.").
-		Description(`
-By default Redpanda Connect does not build with components that require linking to external libraries. If you wish to build Redpanda Connect locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
-
-` + "```bash" + `
-# With go
-go install -tags "x_benthos_extra" github.com/redpanda-data/benthos/v4/cmd/benthos@latest
-
-# Using make
-make TAGS=x_benthos_extra
-` + "```" + `
-
-There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing this component.`).
+		Description(zmqBuildDescription).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"tcp://localhost:5555"})).
