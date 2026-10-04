@@ -45,7 +45,7 @@ func driveSearchProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor searches for files in Google Drive using the provided query.
 
-Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[^Google Drive File]
+Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[Google Drive File^]
 
 `+authDescription("https://www.googleapis.com/auth/drive.readonly")).
 		Fields(commonFields()...).

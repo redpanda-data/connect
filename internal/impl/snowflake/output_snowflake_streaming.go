@@ -78,9 +78,9 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.39.0").
-		Summary("Ingest data into Snowflake using Snowpipe Streaming.").
+		Summary("Ingests data into Snowflake using the Snowpipe Streaming classic architecture.").
 		Description(`
-Ingest data into Snowflake using Snowpipe Streaming.
+For more information, see the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-overview[Snowpipe Streaming classic architecture^] documentation. This output doesn't work with the Snowpipe Streaming high-performance architecture.
 
 [%header,format=dsv]
 |===

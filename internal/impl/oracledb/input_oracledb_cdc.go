@@ -81,8 +81,7 @@ var oracleDBStreamConfigSpec = service.NewConfigSpec().
 	Categories("Services").
 	Version("4.83.0").
 	Summary("Enables Change Data Capture by consuming from OracleDB.").
-	Description(`Streams changes from an Oracle database for Change Data Capture (CDC).
-Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+	Description(`Streams changes from an Oracle database for Change Data Capture (CDC). Use the ` + "`" + ociFieldSnapshotMode + "`" + ` field to control whether existing data is captured in an initial snapshot before streaming changes.
 
 == Metadata
 
@@ -93,14 +92,14 @@ This input adds the following metadata fields to each message:
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
 - scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
-- source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
+- source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time. Not present on snapshot (` + "`read`" + `) messages.
 - commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - username: The Oracle database username of the session that performed the DML, sourced from ` + "`V$LOGMNR_CONTENTS.USERNAME`" + `. Not present on snapshot (` + "`read`" + `) messages, nor on change messages where Oracle reports a NULL or empty username.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
 
-When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 
 == Performance
 

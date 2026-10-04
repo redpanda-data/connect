@@ -145,7 +145,7 @@ func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an sObject and write settings.")
 
 	spec := service.NewConfigSpec().
-		Summary("Writes messages to Salesforce, routing each topic to its own SObject configuration.").
+		Summary("Writes messages to Salesforce, routing each Kafka topic to its own sObject configuration.").
 		Description(`Consumes batches of messages and writes them to Salesforce.
 
 Each message must have a ` + "`topic`" + ` field (set by the per-topic processor) and a ` + "`data`" + ` field

@@ -60,6 +60,8 @@ func snowflakePutOutputConfig() *service.ConfigSpec {
 		Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").
 		Description(`
+TIP: Use the xref:components:outputs/snowflake_streaming.adoc[`+"`snowflake_streaming`"+` output] for better performance, lower cost, and simpler configuration.
+
 In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described in
 xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries]. When using batching, messages are grouped by the calculated
 stage and Snowpipe and are streamed to individual files in their corresponding stage and, optionally, a Snowpipe

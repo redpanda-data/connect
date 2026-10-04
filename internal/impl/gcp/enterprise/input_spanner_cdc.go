@@ -133,7 +133,7 @@ func spannerCDCInputSpec() *service.ConfigSpec {
 		Stable().
 		Version("4.56.0").
 		Categories("Services", "GCP").
-		Summary("Creates an input that consumes from a spanner change stream.").
+		Summary("Consumes change records from a Google Cloud Spanner change stream.").
 		Description(`
 Consumes change records from a Google Cloud Spanner change stream. This input allows
 you to track and process database changes in real time, making it useful for data

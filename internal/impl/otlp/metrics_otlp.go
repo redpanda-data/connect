@@ -25,7 +25,10 @@ import (
 
 func otlpMetricsSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Send metrics to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
+		Summary("Sends metrics to one or more OpenTelemetry Collector endpoints.").
+		Description(`Exports Redpanda Connect metrics to one or more https://opentelemetry.io/docs/collector/[OpenTelemetry Collector^] endpoints, encoded with the OpenTelemetry metrics protocol (OTLP). Any collector endpoint that supports OTLP can receive them.
+
+You can configure HTTP and gRPC endpoints at the same time. Every configured endpoint receives the same metrics, which is useful for redundancy or for sending metrics to several observability platforms.`).
 		Fields(
 			service.NewStringField(otFieldService).
 				Default("benthos").

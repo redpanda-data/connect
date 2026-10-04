@@ -29,7 +29,10 @@ const (
 
 func reactionSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Description(`Adds or removes an emoji reaction on a Slack message using the https://api.slack.com/methods/reactions.add[`+"`reactions.add`"+`^] and https://api.slack.com/methods/reactions.remove[`+"`reactions.remove`"+`^] API methods.`).
+		Summary("Adds or removes an emoji reaction on a Slack message.").
+		Description(`This output uses the https://api.slack.com/methods/reactions.add[`+"`reactions.add`"+`^] and https://api.slack.com/methods/reactions.remove[`+"`reactions.remove`"+`^] API methods.
+
+Raising `+"`max_in_flight`"+` can improve throughput in high-volume pipelines, but it can also exceed Slack API rate limits.`).
 		Fields(
 			service.NewStringField(oFieldBotToken).
 				Description("Your Slack bot user's OAuth token, which must have the https://api.slack.com/scopes/reactions:write[`reactions:write` scope^]. The token starts with `xoxb-`.").

@@ -41,6 +41,8 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Description(`
 Decodes messages automatically from a schema stored within a https://docs.confluent.io/platform/current/schema-registry/index.html[Confluent Schema Registry service^] by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
 
+This processor uses the https://github.com/twmb/franz-go/tree/master/pkg/sr[Franz Kafka Schema Registry client^].
+
 Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
 == Avro JSON format

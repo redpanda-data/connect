@@ -126,16 +126,16 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"If empty, all subjects are included (unless excluded). " +
 				"Note: the migrator consumer group is always ignored.").
 			ShortDescription("Regular expressions for schema subjects to include in migration. All subjects are included if empty.").
-			Example(`["prod-.*", "staging-.*"]`).
-			Example(`["user-.*", "order-.*"]`).
+			Example([]any{"prod-.*", "staging-.*"}).
+			Example([]any{"user-.*", "order-.*"}).
 			Optional(),
 		service.NewStringListField(srFieldExclude).
 			Description("Regular expressions for schema subjects to exclude from migration. " +
 				"Takes precedence over include patterns. " +
 				"Note: the migrator consumer group is always ignored.").
 			ShortDescription("Regular expressions for schema subjects to exclude from migration. Takes precedence over include.").
-			Example(`[".*-test", ".*-temp"]`).
-			Example(`["dev-.*", "local-.*"]`).
+			Example([]any{".*-test", ".*-temp"}).
+			Example([]any{"dev-.*", "local-.*"}).
 			Optional(),
 		service.NewInterpolatedStringField(srFieldSubject).
 			Description("Template for transforming subject names during migration. Use interpolation to rename subjects systematically.").

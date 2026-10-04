@@ -216,9 +216,9 @@ func icebergOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Version("4.80.0").
-		Summary("Write data to Apache Iceberg tables via REST catalog.").
+		Summary("Writes data to Apache Iceberg tables using the REST catalog API.").
 		Description(`
-Write streaming data to Apache Iceberg tables using the REST catalog API. This output supports:
+This output supports:
 
 * Multiple storage backends (S3, GCS, Azure)
 * Automatic table creation with schema detection

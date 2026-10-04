@@ -67,7 +67,7 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Version("4.12.0").
-		Summary("Perform operations on a NATS key-value bucket.").
+		Summary("Performs operations on a NATS key-value bucket.").
 		Description(`
 == KV operations
 

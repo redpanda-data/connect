@@ -29,7 +29,7 @@ func natsInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary(`Subscribe to a NATS subject.`).
+		Summary(`Subscribes to a NATS subject.`).
 		Description(`
 == Metadata
 

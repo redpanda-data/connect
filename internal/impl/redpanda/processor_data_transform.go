@@ -48,7 +48,7 @@ const (
 func dataTransformProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Utility").
-		Summary("Executes a Redpanda Data Transform as a processor").
+		Summary("Executes a Redpanda Data Transform as a processor.").
 		Description(`
 This processor executes a Redpanda Data Transform WebAssembly module, calling OnRecordWritten for each message being processed.
 

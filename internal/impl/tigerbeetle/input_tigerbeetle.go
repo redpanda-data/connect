@@ -103,14 +103,14 @@ func configSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Version("0.0.1").
-		Summary("Enables TigerBeetle CDC streaming for Redpanda Connect.").
+		Summary("Streams change data capture (CDC) events from a TigerBeetle cluster.").
 		Description(`Listens to a TigerBeetle cluster and creates a message for each change.
 
 Each message is a JSON object like:
 
 `+fmt.Sprintf("```json\n%s\n```", string(jsonSampleObject))+`
 
-For more information refer to https://docs.tigerbeetle.com/operating/cdc/
+For more information, see the https://docs.tigerbeetle.com/operating/cdc/[TigerBeetle CDC documentation^].
 
 == Metadata
 

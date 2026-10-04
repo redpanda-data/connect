@@ -72,8 +72,10 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
 	Version("4.45.0").
-	Summary("Enables MySQL streaming for Redpanda Connect.").
+	Summary("Streams data changes from a MySQL or MariaDB database, using the binary log to capture data updates.").
 	Description(`
+This input is built on the https://github.com/go-mysql-org/go-mysql?tab=readme-ov-file#replication[`+"`go-mysql` canal library"+`^] but uses a custom approach for streaming historical data.
+
 == Metadata
 
 This input adds the following metadata fields to each message:

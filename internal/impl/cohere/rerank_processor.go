@@ -44,7 +44,7 @@ func init() {
 func rerankProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Generates vector embeddings to represent input text, using the Cohere API.").
+		Summary("Reranks a list of documents by their relevance to a query, using the Cohere API.").
 		Description(`
 This processor sends document strings to the Cohere API, which reranks them based on the relevance to the query.
 

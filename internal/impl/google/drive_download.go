@@ -39,7 +39,7 @@ func init() {
 func driveDownloadProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Unstructured").
-		Summary("Downloads files from Google Drive").
+		Summary("Downloads files from Google Drive.").
 		Description(`
 Can download a file from Google Drive based on a file ID.
 `+authDescription("https://www.googleapis.com/auth/drive.readonly")).

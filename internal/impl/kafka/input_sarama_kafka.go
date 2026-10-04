@@ -83,7 +83,7 @@ Offsets are managed within Kafka under the specified consumer group, and partiti
 
 The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
 
-In order to enforce ordered processing of partition messages set the `+"<checkpoint_limit,`checkpoint_limit`>> to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+In order to enforce ordered processing of partition messages set the `+"<<checkpoint_limit,`checkpoint_limit`>> to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
 
 Batching messages before processing can be enabled using the `+"<<batching,`batching`>>"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"<<checkpoint_limit,`checkpoint_limit`>>"+`, in which case the next batch will only be created upon delivery of the current one.
 
