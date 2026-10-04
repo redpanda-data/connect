@@ -45,8 +45,8 @@ const (
 func FranzConnectionOptionalFields() []*service.ConfigField {
 	fields := FranzConnectionFields()
 	fields[0] = fields[0].
-		Description(kfcFieldSeedBrokersDescription + "\n\nIf you omit this field, this component takes its entire connection configuration, including TLS and SASL settings, from the top-level `redpanda` block, and ignores the connection fields set on this component.").
-		ShortDescription("Broker addresses used to establish connections. If omitted, the whole connection comes from the top-level redpanda block.").
+		Description(kfcFieldSeedBrokersDescription + "\n\nIf you omit this field, this component ignores the connection fields set on it, including `tls` and `sasl`, and takes its entire connection configuration from the top-level `redpanda` block. In Redpanda Cloud, the platform sets the top-level `redpanda` block for pipeline logs and status reporting, and its credentials can't access your topics, so always set this field in Redpanda Cloud.").
+		ShortDescription("Broker addresses used to establish connections. If omitted, the whole connection comes from the top-level redpanda block, which can't access your topics in Redpanda Cloud.").
 		Optional()
 	return fields
 }
