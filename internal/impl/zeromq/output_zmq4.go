@@ -33,18 +33,7 @@ func zmqOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Network").
 		Summary("Writes messages to a ZeroMQ socket.").
-		Description(`
-By default Redpanda Connect does not build with components that require linking to external libraries. If you wish to build Redpanda Connect locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
-
-` + "```bash" + `
-# With go
-go install -tags "x_benthos_extra" github.com/redpanda-data/benthos/v4/cmd/benthos@latest
-
-# Using make
-make TAGS=x_benthos_extra
-` + "```" + `
-
-There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing this component.`).
+		Description(zmqBuildDescription).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"tcp://localhost:5556"})).
