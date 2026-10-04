@@ -68,16 +68,23 @@ type componentSpec struct {
 	Summary     string             `json:"summary"`
 	Description string             `json:"description"`
 	Version     string             `json:"version"`
+	Categories  []string           `json:"categories"`
+	Footnotes   string             `json:"footnotes"`
 	Config      fieldSpec          `json:"config"`
 	Examples    []componentExample `json:"examples"`
 }
 
 type bloblangParam struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	IsOptional  bool   `json:"is_optional"`
+	Name        string          `json:"name"`
+	Type        string          `json:"type"`
+	Description string          `json:"description"`
+	IsOptional  bool            `json:"is_optional"`
+	Default     json.RawMessage `json:"default"`
 }
+
+// optional reports whether a call can leave the parameter out. As in benthos,
+// a parameter with a default is optional even when is_optional isn't set.
+func (p bloblangParam) optional() bool { return p.IsOptional || len(p.Default) > 0 }
 
 type bloblangExample struct {
 	Mapping string      `json:"mapping"`
@@ -94,7 +101,8 @@ type bloblangSpec struct {
 	Status      string `json:"status"`
 	Description string `json:"description"`
 	Params      *struct {
-		Named []bloblangParam `json:"named"`
+		Named    []bloblangParam `json:"named"`
+		Variadic bool            `json:"variadic"`
 	} `json:"params"`
 	Examples   []bloblangExample  `json:"examples"`
 	Categories []bloblangCategory `json:"categories"`

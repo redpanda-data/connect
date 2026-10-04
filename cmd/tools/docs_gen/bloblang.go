@@ -15,6 +15,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"regexp"
 	"sort"
 	"strings"
@@ -69,8 +71,8 @@ func renderBloblangExample(ex bloblangExample) string {
 func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	var b strings.Builder
 	b.WriteString(generatedBanner + "\n\n= " + htmlEscaper.Replace(spec.Name) + "\n")
-	if spec.Status == "deprecated" {
-		b.WriteString("\n[WARNING]\n====\nThis " + kind + " is deprecated and will be removed in a future version.\n====\n")
+	if notice := statusNotice(spec.Status, kind); notice != "" {
+		b.WriteString("\n" + notice)
 	}
 	if spec.Description != "" {
 		b.WriteString("\n" + ensurePeriod(spec.Description) + "\n")
@@ -80,12 +82,18 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 		b.WriteString("\n== Parameters\n\n[cols=\"1,1,3\"]\n|===\n| Name | Type | Description\n\n")
 		for _, p := range spec.Params.Named {
 			b.WriteString("| `" + htmlEscaper.Replace(p.Name) + "`")
-			if p.IsOptional {
+			if p.optional() {
 				b.WriteString(" (optional)")
 			}
-			b.WriteString("\n| `" + htmlEscaper.Replace(p.Type) + "`\n| " + p.Description + "\n\n")
+			desc := p.Description
+			if d, ok := bloblangDefault(p.Default); ok {
+				desc = strings.TrimFunc(ensurePeriod(desc)+" Default: "+d+".", jsIsSpace)
+			}
+			b.WriteString("\n| `" + htmlEscaper.Replace(p.Type) + "`\n| " + desc + "\n\n")
 		}
 		b.WriteString("|===\n\n")
+	} else if spec.Params != nil && spec.Params.Variadic {
+		b.WriteString("\n== Parameters\n\nThis " + kind + " accepts any number of arguments.\n\n")
 	}
 	b.WriteString("\n")
 	if len(spec.Examples) > 0 {
@@ -98,15 +106,65 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	return b.String()
 }
 
+// statusNotice returns the admonition for a component, function, or method
+// whose status warrants one, or "" for stable and hidden specs. kind names the
+// thing in the notice, for example "component" or "method".
+func statusNotice(status, kind string) string {
+	switch status {
+	case "deprecated":
+		return "[WARNING]\n====\nThis " + kind + " is deprecated and will be removed in a future version.\n====\n"
+	case "beta":
+		return "[CAUTION]\n====\nThis " + kind + " is in beta. Its behavior might change in a future release.\n====\n"
+	case "experimental":
+		return "[CAUTION]\n====\nThis " + kind + " is experimental. It might change or be removed in a future release.\n====\n"
+	}
+	return ""
+}
+
+// bloblangDefault formats a parameter default as an inline code span. It
+// reports false when there is no default, or when the default is an object or
+// array, which is how benthos marshals defaults built in Go (random_int seed,
+// for example, marshals as {"Value": 0}) rather than a value a user can type.
+func bloblangDefault(raw json.RawMessage) (string, bool) {
+	if len(raw) == 0 {
+		return "", false
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err != nil {
+		return "", false
+	}
+	v := compact.String()
+	if strings.HasPrefix(v, "{") || strings.HasPrefix(v, "[") {
+		return "", false
+	}
+	if strings.ContainsAny(v, "+`") {
+		return "`" + htmlEscaper.Replace(v) + "`", true
+	}
+	// A passthrough keeps quotes and whitespace, such as an indent of four
+	// spaces, exactly as the schema declares them.
+	return "`+" + v + "+`", true
+}
+
+// visibleBloblang drops the functions and methods that benthos hides from the
+// docs, such as `var` and `nothing`, so neither their partials nor the list
+// includes are written.
+func visibleBloblang(specs []bloblangSpec) []bloblangSpec {
+	var out []bloblangSpec
+	for _, s := range specs {
+		if s.Name != "" && s.Status != "hidden" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // renderFunctionsList renders the includes that make up the Bloblang
 // functions reference. Functions that the Redpanda Cloud build doesn't allow
 // (inCloud is false) are wrapped so that Cloud docs leave them out.
 func renderFunctionsList(specs []bloblangSpec, inCloud map[string]bool) string {
 	var names []string
-	for _, s := range specs {
-		if s.Name != "" {
-			names = append(names, s.Name)
-		}
+	for _, s := range visibleBloblang(specs) {
+		names = append(names, s.Name)
 	}
 	sort.Strings(names)
 	var b strings.Builder
@@ -135,10 +193,7 @@ var defaultCollator = collate.New(language.Und)
 func renderMethodsList(specs []bloblangSpec, inCloud map[string]bool) string {
 	byCategory := map[string][]string{}
 	var categories []string
-	for _, s := range specs {
-		if s.Name == "" {
-			continue
-		}
+	for _, s := range visibleBloblang(specs) {
 		for _, c := range s.Categories {
 			if c.Category == "" {
 				continue

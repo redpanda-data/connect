@@ -24,10 +24,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/redpanda-data/connect/v4/internal/plugins"
 	"github.com/redpanda-data/connect/v4/public/schema"
 
-	_ "github.com/redpanda-data/connect/v4/public/components/a2a"
-	_ "github.com/redpanda-data/connect/v4/public/components/all"
+	_ "github.com/redpanda-data/connect/v4/cmd/tools/docs_gen/allcomponents"
 )
 
 const (
@@ -38,13 +38,14 @@ const (
 		"//\n" +
 		"// Pages consume this partial in two places so both stay fresh:\n" +
 		"//   header: include::...[tag=meta]  (sets :description: for search snippets and meta tags)\n" +
-		"//   body:   include::...[tag=body]   (renders the summary and description)"
+		"//   body:   include::...[tag=body]   (renders the status notice, summary, and description)\n" +
+		"// Pages with reference sections also include [tag=footnotes] where those sections belong."
 )
 
 const (
 	emptyMetadataPartial    = bannerPrefix + " The component description has no Metadata section, so this partial is empty.\n"
 	emptyDescriptionPartial = bannerPrefix + " The component has no summary or description, so this partial is empty.\n" +
-		"\n// tag::meta[]\n// end::meta[]\n\n// tag::body[]\n// end::body[]\n"
+		"\n// tag::meta[]\n// end::meta[]\n\n// tag::body[]\n// end::body[]\n\n// tag::footnotes[]\n// end::footnotes[]\n"
 )
 
 // generatedDirs are the directories under the components module that this
@@ -55,6 +56,8 @@ var generatedDirs = []string{
 	"partials/examples",
 	"partials/metadata",
 	"partials/descriptions",
+	"partials/availability",
+	"partials/platforms",
 	"partials/bloblang",
 	"partials/bloblang-functions",
 	"partials/bloblang-methods",
@@ -81,9 +84,12 @@ func main() {
 		panic(err)
 	}
 
-	// Only a build with every component can tell which files are stale.
-	// Without x_benthos_extra the cgo-only components (zmq4, ffi) are missing,
-	// so clearing would delete their committed docs.
+	// Only a build with every component can tell which files are stale. Two
+	// build constraints add components: x_benthos_extra adds zmq4 (which also
+	// needs cgo and libzmq) and ffi (pure Go), and cgo adds tigerbeetle_cdc. A
+	// tagged build can't compile without cgo, so builtWithAllComponents also
+	// implies cgo. A partial build would delete the docs of the missing
+	// components, so it keeps existing files instead.
 	if builtWithAllComponents {
 		for _, d := range generatedDirs {
 			if err := os.RemoveAll(filepath.Join(root, d)); err != nil {
@@ -94,7 +100,18 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping existing files, so docs for removed components are not pruned. CI runs `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`.")
 	}
 
-	w := writer{root: root}
+	plat, err := loadPlatforms(full)
+	if err != nil {
+		panic(fmt.Errorf("finding the components that only cgo builds include: %w", err))
+	}
+	if builtWithAllComponents && len(plat.cgoOnlyKeys()) == 0 {
+		// x_benthos_extra exists to add components, so a full build that finds
+		// none means the standard build didn't run the way it should.
+		panic("found no cgo-only components in a build with x_benthos_extra; check that componentlist runs with CGO_ENABLED=0 and no build tags")
+	}
+	fmt.Printf("Components that only cgo builds include: %v\n", strings.Join(plat.cgoOnlyKeys(), ", "))
+
+	w := writer{root: root, platforms: plat}
 	for _, g := range full.Groups {
 		for _, c := range g.Components {
 			if c.Name != "" {
@@ -102,15 +119,16 @@ func main() {
 			}
 		}
 	}
-	for _, f := range full.BloblangFunctions {
-		if f.Name != "" {
-			w.write(filepath.Join("partials/bloblang-functions", f.Name+".adoc"), renderBloblangSpec(f, "function"))
-		}
+	if builtWithAllComponents {
+		w.platformFiles(full)
+	} else {
+		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping the existing component catalog and cgo-only list, which need every component.")
 	}
-	for _, m := range full.BloblangMethods {
-		if m.Name != "" {
-			w.write(filepath.Join("partials/bloblang-methods", m.Name+".adoc"), renderBloblangSpec(m, "method"))
-		}
+	for _, f := range visibleBloblang(full.BloblangFunctions) {
+		w.write(filepath.Join("partials/bloblang-functions", f.Name+".adoc"), renderBloblangSpec(f, "function"))
+	}
+	for _, m := range visibleBloblang(full.BloblangMethods) {
+		w.write(filepath.Join("partials/bloblang-methods", m.Name+".adoc"), renderBloblangSpec(m, "method"))
 	}
 	// The Cloud build only allows pure Bloblang, so its schema decides which
 	// functions and methods the Cloud docs list.
@@ -129,8 +147,19 @@ func main() {
 }
 
 type writer struct {
-	root  string
-	count int
+	root      string
+	count     int
+	platforms platformSet
+}
+
+// platformFiles writes the component catalog and the cgo-only list.
+func (w *writer) platformFiles(full *fullSchema) {
+	catalog, err := renderCatalog(full, w.platforms, plugins.BaseInfo)
+	if err != nil {
+		panic(err)
+	}
+	w.write("partials/platforms/catalog.json", catalog)
+	w.write("partials/availability/cgo_only.adoc", renderCgoOnlyList(full, w.platforms))
 }
 
 func (w *writer) write(rel, content string) {
@@ -167,8 +196,10 @@ func (w *writer) component(key string, c componentSpec) {
 	} else {
 		w.write(filepath.Join("partials/metadata", typeDir, file), emptyMetadataPartial)
 	}
-	if c.Summary != "" || c.Description != "" || c.Version != "" {
-		w.write(filepath.Join("partials/descriptions", typeDir, file), renderDescriptionPartial(c, typeDir))
+	plat := w.platforms.get(key, c.Name)
+	w.write(filepath.Join("partials/availability", typeDir, file), renderAvailabilityPartial(plat))
+	if c.Summary != "" || c.Description != "" || c.Version != "" || c.Status != "" || c.Footnotes != "" {
+		w.write(filepath.Join("partials/descriptions", typeDir, file), renderDescriptionPartial(c, typeDir, plat, w.platforms.cloudExcluded))
 	} else {
 		w.write(filepath.Join("partials/descriptions", typeDir, file), emptyDescriptionPartial)
 	}
@@ -184,24 +215,6 @@ func (w *writer) component(key string, c componentSpec) {
 	snippet := buildValueConfigYAML(key, c.Name, c.Config)
 	w.write(filepath.Join("examples/common", base), snippet)
 	w.write(filepath.Join("examples/advanced", base), snippet)
-}
-
-func renderDescriptionPartial(c componentSpec, typeDir string) string {
-	summary := escapePlaceholderBraces(c.Summary)
-	var b strings.Builder
-	b.WriteString(descBanner + "\n\n// tag::meta[]\n")
-	if summary != "" {
-		b.WriteString(":description: " + flattenToAttributeValue(summary) + "\n")
-	}
-	b.WriteString("// end::meta[]\n\n// tag::body[]\n")
-	if summary != "" {
-		b.WriteString(summary + "\n\n")
-	}
-	if c.Version != "" {
-		b.WriteString("ifndef::env-cloud[]\nIntroduced in version " + htmlEscaper.Replace(c.Version) + ".\nendif::[]\n\n")
-	}
-	b.WriteString(renderDescriptionBody(c.Description, typeDir, c.Name) + "\n// end::body[]\n")
-	return b.String()
 }
 
 func bloblangNames(specs []bloblangSpec) map[string]bool {

@@ -16,6 +16,7 @@ package main
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -365,4 +366,186 @@ func flattenToAttributeValue(text string) string {
 	text = attrCode.ReplaceAllString(text, "${1}")
 	text = strings.Join(strings.FieldsFunc(text, jsIsSpace), " ")
 	return text
+}
+
+var (
+	summaryBlockLine = regexp.MustCompile("^(?:`{3,}|~{3,}|-{4,}$|={4,}$|\\*{4,}$|\\.{4,}$|\\s*[-*]\\s|\\s*\\d+\\.\\s)")
+	sentenceEnd      = regexp.MustCompile(`[.!?](?:\s|$)`)
+)
+
+// summaryHasBlocks reports whether a summary holds block content, such as a
+// code fence, a delimited block, a list, or a second paragraph. A summary like
+// that can't become a one-line :description: attribute. Soft line breaks
+// inside a paragraph are fine.
+func summaryHasBlocks(summary string) bool {
+	trimmed := strings.TrimFunc(summary, jsIsSpace)
+	if strings.Contains(trimmed, "\n\n") {
+		return true
+	}
+	return slices.ContainsFunc(strings.Split(trimmed, "\n"), summaryBlockLine.MatchString)
+}
+
+// metaSummary returns the text for the :description: attribute. When the
+// summary holds block content, such as the sample message in the
+// cockroachdb_changefeed summary, only its first sentence is used, so search
+// snippets never show flattened code.
+func metaSummary(summary string) string {
+	if !summaryHasBlocks(summary) {
+		return summary
+	}
+	first := strings.TrimFunc(summary, jsIsSpace)
+	if i := strings.Index(first, "\n\n"); i >= 0 {
+		first = first[:i]
+	}
+	for i, l := range strings.Split(first, "\n") {
+		if summaryBlockLine.MatchString(l) {
+			first = strings.Join(strings.Split(first, "\n")[:i], "\n")
+			break
+		}
+	}
+	if loc := sentenceEnd.FindStringIndex(first); loc != nil {
+		first = first[:loc[0]+1]
+	}
+	return strings.TrimFunc(first, jsIsSpace)
+}
+
+var componentXref = regexp.MustCompile(`xref:(?:components:)?(inputs|outputs|processors|caches|rate_limits|buffers|metrics|tracers|scanners)/([a-z0-9_]+)\.adoc(?:#[^\[\s]*)?\[([^\]]*)\]`)
+
+// cloudGuardXrefs keeps links to components that Redpanda Cloud doesn't
+// include out of the Cloud docs, which include the same partials. Each
+// paragraph with such a link renders as is outside Cloud, and in Cloud with
+// those links replaced by their text. excluded reports whether the component
+// at <typeDir>/<name> is a documented component that Cloud doesn't include.
+// Paragraphs already inside an env-cloud conditional are left alone.
+func cloudGuardXrefs(body string, excluded func(typeDir, name string) bool) string {
+	unlink := func(text string) (string, bool) {
+		changed := false
+		out := componentXref.ReplaceAllStringFunc(text, func(x string) string {
+			m := componentXref.FindStringSubmatch(x)
+			if !excluded(m[1], m[2]) {
+				return x
+			}
+			changed = true
+			if m[3] != "" {
+				return m[3]
+			}
+			return "`" + m[2] + "`"
+		})
+		return out, changed
+	}
+	var out, para, cloudPara []string
+	depth := 0
+	needsGuard := false
+	flush := func() {
+		if needsGuard {
+			out = append(out, "ifndef::env-cloud[]")
+			out = append(out, para...)
+			out = append(out, "endif::[]", "ifdef::env-cloud[]")
+			out = append(out, cloudPara...)
+			out = append(out, "endif::[]")
+		} else {
+			out = append(out, para...)
+		}
+		para, cloudPara, needsGuard = nil, nil, false
+	}
+	for _, l := range annotateLines(body) {
+		text := l.text
+		switch {
+		case l.verbatim:
+			para, cloudPara = append(para, text), append(cloudPara, text)
+			continue
+		case strings.TrimSpace(text) == "":
+			flush()
+			out = append(out, text)
+			continue
+		case strings.HasPrefix(text, "ifdef::") || strings.HasPrefix(text, "ifndef::"):
+			flush()
+			depth++
+			out = append(out, text)
+			continue
+		case strings.HasPrefix(text, "endif::"):
+			flush()
+			if depth > 0 {
+				depth--
+			}
+			out = append(out, text)
+			continue
+		}
+		cloudText := text
+		if depth == 0 {
+			var changed bool
+			if cloudText, changed = unlink(text); changed {
+				needsGuard = true
+			}
+		}
+		para, cloudPara = append(para, text), append(cloudPara, cloudText)
+	}
+	flush()
+	return strings.Join(out, "\n")
+}
+
+// componentPlatform is where a component is available, as computed from the
+// builds and the Redpanda Cloud schemas.
+type componentPlatform struct {
+	CgoOnly bool
+	Cloud   bool
+	CloudAI bool
+}
+
+// inCloud reports whether any Redpanda Cloud pipeline can use the component.
+func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
+
+// renderDescriptionPartial renders the description partial of a component.
+// The meta tag sets page attributes for the page header, the body tag renders
+// the status notice, summary, version note, and description, and the
+// footnotes tag renders the spec footnotes. Every tag is always present, so a
+// page that includes one keeps building when the spec drops that content.
+// excluded is as in cloudGuardXrefs, and is used only for components that
+// Redpanda Cloud includes.
+func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool) string {
+	guard := func(body string) string {
+		if !plat.inCloud() || excluded == nil {
+			return body
+		}
+		return cloudGuardXrefs(body, excluded)
+	}
+	summary := escapePlaceholderBraces(c.Summary)
+	var b strings.Builder
+	b.WriteString(descBanner + "\n\n// tag::meta[]\n")
+	if summary != "" {
+		b.WriteString(":description: " + flattenToAttributeValue(escapePlaceholderBraces(metaSummary(c.Summary))) + "\n")
+	}
+	if c.Status != "" {
+		b.WriteString(":status: " + c.Status + "\n")
+	}
+	if plat.CgoOnly {
+		b.WriteString(":page-cgo-only: true\n")
+	}
+	b.WriteString("// end::meta[]\n\n// tag::body[]\n")
+	if notice := statusNotice(c.Status, "component"); notice != "" {
+		b.WriteString(notice + "\n")
+	}
+	if summary != "" {
+		b.WriteString(guard(summary) + "\n\n")
+	}
+	if c.Version != "" {
+		b.WriteString("ifndef::env-cloud[]\nIntroduced in version " + htmlEscaper.Replace(c.Version) + ".\nendif::[]\n\n")
+	}
+	b.WriteString(guard(renderDescriptionBody(c.Description, typeDir, c.Name)) + "\n// end::body[]\n\n")
+	b.WriteString("// tag::footnotes[]\n")
+	if footnotes := renderFootnotes(c.Footnotes); footnotes != "" {
+		b.WriteString(guard(footnotes) + "\n")
+	}
+	b.WriteString("// end::footnotes[]\n")
+	return b.String()
+}
+
+// renderFootnotes prepares spec footnotes the same way as the description,
+// keeping their source heading levels.
+func renderFootnotes(footnotes string) string {
+	body := strings.TrimFunc(footnotes, jsIsSpace)
+	if body == "" {
+		return ""
+	}
+	return protectCodeSpans(escapePlaceholderBraces(ensureHeadingSeparation(body)))
 }

@@ -224,3 +224,55 @@ func TestBloblangListsHideSelfManagedOnlyInCloud(t *testing.T) {
 		t.Errorf("methods list:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+func TestRenderBloblangSpecParams(t *testing.T) {
+	var spec bloblangSpec
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"name": "format_json", "status": "beta", "description": "Formats a value as JSON",
+		"params": {"named": [
+			{"name": "indent", "type": "string", "description": "Indentation for each level.", "default": "    "},
+			{"name": "no_indent", "type": "bool", "description": "Disables indentation.", "default": false},
+			{"name": "seed", "type": "timestamp", "description": "A seed.", "default": {"Value": 0}},
+			{"name": "path", "type": "string", "description": "A path."},
+			{"name": "extra", "type": "string", "description": "Extra.", "is_optional": true}
+		]}
+	}`), &spec))
+
+	got := renderBloblangSpec(spec, "method")
+	assert.Contains(t, got, "[CAUTION]\n====\nThis method is in beta.")
+	assert.Contains(t, got, "| `indent` (optional)\n| `string`\n| Indentation for each level. Default: `+\"    \"+`.\n")
+	assert.Contains(t, got, "| `no_indent` (optional)\n| `bool`\n| Disables indentation. Default: `+false+`.\n")
+	assert.Contains(t, got, "| `seed` (optional)\n| `timestamp`\n| A seed.\n", "object defaults built in Go aren't shown")
+	assert.Contains(t, got, "| `path`\n| `string`\n| A path.\n", "a param with no default stays required")
+	assert.Contains(t, got, "| `extra` (optional)\n")
+
+	variadic := bloblangSpec{Name: "concat", Status: "stable"}
+	require.NoError(t, json.Unmarshal([]byte(`{"variadic": true}`), &variadic.Params))
+	got = renderBloblangSpec(variadic, "method")
+	assert.Contains(t, got, "== Parameters\n\nThis method accepts any number of arguments.\n")
+	assert.NotContains(t, got, "CAUTION")
+
+	assert.Contains(t, renderBloblangSpec(bloblangSpec{Name: "counter", Status: "experimental"}, "function"),
+		"[CAUTION]\n====\nThis function is experimental.")
+	assert.Contains(t, renderBloblangSpec(bloblangSpec{Name: "old", Status: "deprecated"}, "function"),
+		"[WARNING]\n====\nThis function is deprecated")
+}
+
+func TestVisibleBloblang(t *testing.T) {
+	got := visibleBloblang([]bloblangSpec{{Name: "now", Status: "stable"}, {Name: "var", Status: "hidden"}, {Name: ""}, {Name: "counter", Status: "experimental"}})
+	var names []string
+	for _, s := range got {
+		names = append(names, s.Name)
+	}
+	assert.Equal(t, []string{"now", "counter"}, names)
+}
+
+func TestBloblangListsLeaveOutHiddenSpecs(t *testing.T) {
+	fns := []bloblangSpec{{Name: "now"}, {Name: "var", Status: "hidden"}}
+	all := map[string]bool{"now": true, "var": true}
+	assert.NotContains(t, renderFunctionsList(fns, all), "var.adoc")
+
+	cat := []bloblangCategory{{Category: "General"}}
+	methods := []bloblangSpec{{Name: "apply", Categories: cat}, {Name: "secret", Status: "hidden", Categories: cat}}
+	assert.NotContains(t, renderMethodsList(methods, all), "secret.adoc")
+}
