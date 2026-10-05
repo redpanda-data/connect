@@ -84,10 +84,14 @@ Each OTLP export request is unbatched into individual messages:
 
 Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable using the `+"`encoding`"+` field).
 
-Each message includes the following metadata:
+== Metadata
 
-- `+"`otel_signal_type`"+`: The signal type (`+"`trace`"+`, `+"`log`"+`, or `+"`metric`"+`)
-- `+"`otel_encoding`"+`: The message encoding (`+"`json`"+` or `+"`protobuf`"+`)
+This input adds the following metadata fields to each message:
+
+- `+"`otel_signal_type`"+`: The signal type (`+"`trace`"+`, `+"`log`"+`, or `+"`metric`"+`).
+- `+"`otel_encoding`"+`: The message encoding (`+"`json`"+` or `+"`protobuf`"+`).
+- `+"`otel_trace_id`"+`: The base64-encoded trace ID. Set on trace messages only.
+- `+"`otel_span_id`"+`: The base64-encoded span ID. Set on trace messages only.
 
 == Authentication
 

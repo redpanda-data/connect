@@ -91,18 +91,15 @@ When a consumer group is set, this input emits a ` + "`redpanda_lag`" + ` metric
 
 This input adds the following metadata fields to each message:
 
-` + "```text" + `
-- kafka_key
-- kafka_topic
-- kafka_partition
-- kafka_offset
-- kafka_lag
-- kafka_timestamp_ms
-- kafka_timestamp_unix
-- kafka_tombstone_message
-- All record headers
-` + "```" + `
-`).
+- ` + "`kafka_key`" + `
+- ` + "`kafka_topic`" + `
+- ` + "`kafka_partition`" + `
+- ` + "`kafka_offset`" + `
+- ` + "`kafka_lag`" + `: Set only when ` + "`consumer_group`" + ` is set.
+- ` + "`kafka_timestamp_ms`" + `
+- ` + "`kafka_timestamp_unix`" + `
+- ` + "`kafka_tombstone_message`" + `
+- All record headers`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzConsumerFields()...).

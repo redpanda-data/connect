@@ -58,7 +58,7 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in standard/raw JSON format by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
+However, it is possible to instead create documents in standard/raw JSON format by setting the field ` + "<<avro-raw_unions, `avro.raw_unions`>> to `true`" + `.
 
 == Protobuf format
 

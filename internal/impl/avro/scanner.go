@@ -82,9 +82,14 @@ For example, the union schema `+"`[\"null\",\"string\",\"Foo\"]`, where `Foo`"+`
 - the string `+"`\"a\"` as `{\"string\": \"a\"}`"+`; and
 - a `+"`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
 
-However, it is possible to instead create documents in standard/raw JSON format by setting the field `+"<<avro_raw_json,`avro_raw_json`>> to `true`"+`.
+However, it is possible to instead create documents in standard/raw JSON format by setting the field `+"<<raw_json,`raw_json`>> to `true`"+`.
 
-This scanner also emits the canonical Avro schema as `+"`@avro_schema`"+` metadata, along with the schema's fingerprint available via `+"`@avro_schema_fingerprint`"+`.
+== Metadata
+
+This scanner adds the following metadata fields to each message:
+
+- `+"`avro_schema`"+`: The Parsing Canonical Form of the Avro schema in the OCF file header.
+- `+"`avro_schema_fingerprint`"+`: The CRC-64-AVRO (Rabin) fingerprint of the schema's canonical form, as an unsigned 64-bit integer.
 `).
 		Fields(
 			service.NewBoolField(sFieldRawJSON).
