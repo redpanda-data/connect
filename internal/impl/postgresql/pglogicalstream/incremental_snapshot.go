@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	errSignalRejected   = errors.New("rejected")
-	errSnapshotDisabled = errors.New("a " + replication.SnapshotSignalType + " signal needs incremental_snapshot.enabled set to true, so no backfill was queued for it")
+	errSignalRejected   = replication.ErrSignalRejected
+	errSnapshotDisabled = fmt.Errorf("%w: set incremental_snapshot.enabled to true", replication.ErrSnapshotDisabled)
 	// errIncSnapshotHeldOff marks a retryable error returned without issuing
 	// SQL, because a cooldown from an earlier failure is still in force. The
 	// log reports it at debug: the warning belongs to the read that actually
@@ -947,12 +947,9 @@ func (s *Stream) snapshotSignalTables(ctx context.Context, message *StreamMessag
 	if !isText {
 		return nil, fmt.Errorf("signal row: %w: expected string data column, got %T", errSignalRejected, row["data"])
 	}
-	var signal replication.SnapshotSignal
-	if err := json.Unmarshal([]byte(payload), &signal); err != nil {
-		return nil, fmt.Errorf("signal row: %w: parsing %s payload: %w", errSignalRejected, replication.SnapshotSignalType, err)
-	}
-	if len(signal.Tables) == 0 {
-		return nil, fmt.Errorf("signal row: %w: %s payload lists no tables", errSignalRejected, replication.SnapshotSignalType)
+	signal, err := replication.ParseSnapshotSignal([]byte(payload))
+	if err != nil {
+		return nil, fmt.Errorf("signal row: %w", err)
 	}
 
 	tables := make([]incrementalsnapshot.TableID, 0, len(signal.Tables))
