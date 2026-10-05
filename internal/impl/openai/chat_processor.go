@@ -220,7 +220,7 @@ Redpanda recommends adding a value for this field or `+"`"+`temperature`+"`"+`, 
 				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
 			).Description(`External tools the model can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified model can choose when to invoke them to help answer a prompt.
 
-NOTE: If you don't want to use external tools, enter an empty array `+"`"+`tools:[]`+"`"+`.`).
+NOTE: If you don't want to use external tools, enter an empty array `+"`"+`tools: []`+"`"+`.`).
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions."),
 		).LintRule(`
       root = match {

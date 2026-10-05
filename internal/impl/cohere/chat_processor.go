@@ -153,14 +153,14 @@ Redpanda recommends adding a value for this field or `+"`"+`temperature`+"`"+`, 
 				Optional().
 				Advanced().
 				Description("A number between `0.0` and `1.0`. Higher values penalize new tokens more strongly based on the frequency of their appearance in the prompt and the text so far. This decreases the model's likelihood to repeat the same line verbatim.").
-				ShortDescription("Between 0.0 and 1.0. Higher values penalise frequent tokens, reducing verbatim repetition.").
-				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
+				ShortDescription("Between 0.0 and 1.0. Higher values penalize frequent tokens, reducing verbatim repetition.").
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
 			service.NewFloatField(ccpFieldPresencePenalty).
 				Optional().
 				Advanced().
 				Description("A number between `0.0` and `1.0`. Higher values penalize new tokens more strongly if they have already appeared in the prompt or the text so far, regardless of how often. This increases the model's likelihood to talk about new topics.").
 				ShortDescription("Between 0.0 and 1.0. Higher values encourage the model to raise new topics.").
-				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
 			service.NewIntField(ccpFieldSeed).
 				Advanced().
 				Optional().
