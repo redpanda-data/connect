@@ -884,15 +884,36 @@ func TestIncludeInLowWatermark(t *testing.T) {
 	}
 }
 
-// RS_ID and SSN must reach the published MessageEvent through both transaction
-// cache kinds. The Connect cache resource serializes events to JSON, so it also
-// proves the marshal/unmarshal round trip in cache_resource.go.
+// RS_ID and SSN must survive both transaction cache kinds. The Connect cache
+// resource stores events as JSON, so this also covers cache_resource.go.
 func TestProcessRedoEventPropagatesRecordIdentity(t *testing.T) {
-	caches := map[string]func(t *testing.T) TransactionCache{
-		"in-memory cache": func(_ *testing.T) TransactionCache {
+	// One transaction with one INSERT that carries a record identity.
+	redoEvents := []*sqlredo.RedoEvent{
+		{
+			SCN:           100,
+			Operation:     sqlredo.OpStart,
+			TransactionID: "txA",
+		},
+		{
+			SCN:           101,
+			Operation:     sqlredo.OpInsert,
+			TransactionID: "txA",
+			SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID") values ('1')`, Valid: true},
+			RSID:          sql.NullString{String: "0x000027.00001a33.0010", Valid: true},
+			SSN:           sql.NullInt64{Int64: 2, Valid: true},
+		},
+		{
+			SCN:           200,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txA",
+		},
+	}
+
+	caches := map[string]func() TransactionCache{
+		"in-memory cache": func() TransactionCache {
 			return NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		},
-		"connect cache resource": func(_ *testing.T) TransactionCache {
+		"connect cache resource": func() TransactionCache {
 			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
 			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: 0}
 			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
@@ -902,24 +923,11 @@ func TestProcessRedoEventPropagatesRecordIdentity(t *testing.T) {
 	for name, newCache := range caches {
 		t.Run(name, func(t *testing.T) {
 			pub := &publisherStub{}
-			lm := newLogMiner(pub, newCache(t))
+			lm := newLogMiner(pub, newCache())
 
-			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
-				SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
-			}))
-			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
-				SCN:           101,
-				Operation:     sqlredo.OpInsert,
-				TransactionID: "txA",
-				SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
-				TableName:     sql.NullString{String: "T", Valid: true},
-				SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID") values ('1')`, Valid: true},
-				RSID:          sql.NullString{String: " 0x000027.00001a33.0010 ", Valid: true},
-				SSN:           sql.NullInt64{Int64: 2, Valid: true},
-			}))
-			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
-				SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
-			}))
+			for _, ev := range redoEvents {
+				require.NoError(t, lm.processRedoEvent(t.Context(), ev))
+			}
 
 			require.Len(t, pub.messages, 1)
 			assert.Equal(t, "0x000027.00001a33.0010", pub.messages[0].RSID)
