@@ -37,6 +37,7 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.52.0").
 		Summary("Posts a new message to a Slack channel using the Slack API method chat.postMessage.").
 		Description(`This output calls the https://api.slack.com/methods/chat.postMessage[`+"`chat.postMessage`"+`^] Slack API method once for each message.`).
 		Fields(

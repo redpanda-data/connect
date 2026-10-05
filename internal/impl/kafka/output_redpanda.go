@@ -32,6 +32,7 @@ const (
 func redpandaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
+		Version("4.39.0").
 		Categories("Services").
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
