@@ -11,7 +11,9 @@ package oracledb_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2569,6 +2571,157 @@ oracledb_cdc:
 		}
 	})
 
+	t.Run("LOB updated twice in one transaction", func(t *testing.T) {
+		// A transaction that writes the same row's out-of-row LOB more than once
+		// logs one UPDATE per statement, each followed by its own
+		// SELECT_LOB_LOCATOR + LOB_WRITE(s) (+ LOB_TRIM). Each UPDATE message must
+		// carry exactly the bytes written by its own statement: a shorter second
+		// write must not inherit the tail of the first, and the first UPDATE must
+		// not lose its LOB to the second.
+		tests := []struct {
+			name string
+			// pk adds a primary key and PRIMARY KEY supplemental logging; otherwise
+			// the table has no key and logs ALL COLUMNS.
+			pk bool
+		}{
+			{name: "no primary key with ALL COLUMNS supplemental logging"},
+			{name: "primary key with PRIMARY KEY supplemental logging", pk: true},
+		}
+
+		for i, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				suffix := "lobtwice" + string(rune('a'+i))
+				table := db.Schema + "." + suffix
+				idCol, suppl := "id NUMBER NOT NULL", "(ALL)"
+				if test.pk {
+					idCol, suppl = "id NUMBER PRIMARY KEY", "(PRIMARY KEY)"
+				}
+				db.MustExec(`CREATE TABLE ` + table + ` (
+					` + idCol + `,
+					name          VARCHAR2(64),
+					violation_num NUMBER NOT NULL,
+					payload       BLOB
+				) LOB(payload) STORE AS SECUREFILE (DISABLE STORAGE IN ROW)`)
+				db.MustExec(`ALTER TABLE ` + table + ` ADD SUPPLEMENTAL LOG DATA ` + suppl + ` COLUMNS`)
+
+				// Seed before the pipeline starts so that these inserts are not streamed.
+				// Rows: 1 = A (long then short), 2 = B (short then long), 3 = C (second
+				// write also changes a non-LOB column), 4 = control, 5 = marker.
+				oldPayload := lobTestBytes(1, 4096)
+				for id := 1; id <= 5; id++ {
+					db.MustExec("INSERT INTO "+table+" (id, name, violation_num, payload) VALUES (:1, :2, 0, :3)",
+						id, "row", oldPayload)
+				}
+
+				var batch oracledbtest.MsgBatch
+				cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  stream_snapshot: false
+  checkpoint_cache_key: ` + suffix + `
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + strings.ToUpper(table) + `"]`
+				stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
+				t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+				type write struct {
+					viol    int
+					payload []byte
+				}
+				// The writes per row, in statement order.
+				writes := map[int][]write{
+					1: {{0, lobTestBytes(21, 32*1024)}, {0, lobTestBytes(22, 8*1024)}},
+					2: {{0, lobTestBytes(23, 8*1024)}, {0, lobTestBytes(24, 32*1024)}},
+					3: {{0, lobTestBytes(25, 16*1024)}, {1, lobTestBytes(26, 24*1024)}},
+					4: {{0, lobTestBytes(27, 16*1024)}},
+				}
+
+				// One transaction. Statements of different rows are interleaved in the
+				// order A1, B1, A2, B2, C1, C2, control. Name is re-assigned to its
+				// current value so that Oracle logs a DML UPDATE for each statement.
+				tx, err := db.BeginTx(t.Context(), nil)
+				require.NoError(t, err)
+				for _, s := range []struct{ id, n int }{{1, 0}, {2, 0}, {1, 1}, {2, 1}, {3, 0}, {3, 1}, {4, 0}} {
+					w := writes[s.id][s.n]
+					_, err := tx.ExecContext(t.Context(),
+						"UPDATE "+table+" SET payload = :1, violation_num = :2, name = :3 WHERE id = :4",
+						w.payload, w.viol, "row", s.id)
+					require.NoError(t, err)
+				}
+				require.NoError(t, tx.Commit())
+
+				// A later transaction acts as a barrier: once its event arrives, every
+				// event of the first transaction has been delivered too, so the count
+				// of messages below is final without any sleeping.
+				db.MustExec("UPDATE " + table + " SET name = 'marker' WHERE id = 5")
+				assert.Eventually(t, func() bool {
+					for _, m := range batch.Clone() {
+						if b, err := m.AsBytes(); err == nil && bytes.Contains(b, []byte(`"marker"`)) {
+							return true
+						}
+					}
+					return false
+				}, 2*time.Minute, 500*time.Millisecond, "timed out waiting for the marker UPDATE")
+
+				updates := map[string][]map[string]any{}
+				total := 0
+				for _, m := range batch.Clone() {
+					op, _ := m.MetaGet("operation")
+					require.Equal(t, "update", op)
+					b, err := m.AsBytes()
+					require.NoError(t, err)
+					var row map[string]any
+					require.NoError(t, json.Unmarshal(b, &row))
+					id, _ := row["ID"].(string)
+					updates[id] = append(updates[id], row)
+					total++
+				}
+
+				// Seven UPDATE statements plus the marker; any more are synthesized
+				// sparse UPDATEs holding only the LOB column.
+				assert.Equal(t, 8, total, "expected exactly one UPDATE message per UPDATE statement, got: %s", summarizeLOBUpdates(updates))
+
+				for id, ws := range writes {
+					key := fmt.Sprint(id)
+					rows := updates[key]
+					if !assert.Len(t, rows, len(ws), "row %s: expected one UPDATE message per statement, got: %s", key, summarizeLOBUpdates(updates)) {
+						continue
+					}
+					for n, w := range ws {
+						row := rows[n]
+						assert.Equal(t, fmt.Sprint(w.viol), fmt.Sprint(row["VIOLATION_NUM"]), "row %s message %d: wrong VIOLATION_NUM", key, n)
+						assert.Equal(t, "row", row["NAME"], "row %s message %d: wrong NAME", key, n)
+						enc, ok := row["PAYLOAD"].(string)
+						if !assert.Truef(t, ok, "row %s message %d: PAYLOAD is null/absent (want %d bytes): %s", key, n, len(w.payload), summarizeLOBUpdates(updates)) {
+							continue
+						}
+						got, err := base64.StdEncoding.DecodeString(enc)
+						assert.NoError(t, err)
+						if !bytes.Equal(w.payload, got) {
+							// Say which statement's bytes (if any) the message carries,
+							// and whether it is a splice of one write over another.
+							var diag []string
+							for k, other := range ws {
+								switch {
+								case bytes.Equal(other.payload, got):
+									diag = append(diag, fmt.Sprintf("equals write #%d", k))
+								case len(got) > len(other.payload) && bytes.HasPrefix(got, other.payload):
+									diag = append(diag, fmt.Sprintf("starts with write #%d followed by a tail of %d bytes", k, len(got)-len(other.payload)))
+								}
+							}
+							assert.Failf(t, "wrong PAYLOAD", "row %s message %d: PAYLOAD does not match the statement's bytes (want %d bytes sha=%s, got %d bytes sha=%s; %s)",
+								key, n, len(w.payload), lobDigest(w.payload), len(got), lobDigest(got), strings.Join(diag, ", "))
+						}
+					}
+				}
+			})
+		}
+	})
 }
 
 // TestIntegrationOracleDBCDCNationalCharset verifies that non-ASCII data in
@@ -2855,13 +3008,21 @@ func lobTestBytes(seed uint64, n int) []byte {
 	return b
 }
 
+// lobDigest returns a short digest identifying a BLOB value without dumping it.
+func lobDigest(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:4])
+}
+
 // summarizeLOBUpdates describes the UPDATE messages per ID, without dumping BLOB bytes.
 func summarizeLOBUpdates(updates map[string][]map[string]any) string {
 	var sb strings.Builder
 	for id, rows := range updates {
 		for _, row := range rows {
 			enc, _ := row["PAYLOAD"].(string)
-			fmt.Fprintf(&sb, "[id=%q name=%v violation_num=%v payload_base64_len=%d] ", id, row["NAME"], row["VIOLATION_NUM"], len(enc))
+			raw, _ := base64.StdEncoding.DecodeString(enc)
+			_, has := row["PAYLOAD"]
+			fmt.Fprintf(&sb, "[id=%q name=%v violation_num=%v has_payload=%t payload_len=%d sha=%s] ", id, row["NAME"], row["VIOLATION_NUM"], has, len(raw), lobDigest(raw))
 		}
 	}
 	return sb.String()

@@ -30,15 +30,6 @@ func FormatPKString(pkValues map[string]any) string {
 	return strings.Join(parts, ";")
 }
 
-// LobKey uniquely identifies a LOB accumulator within a transaction.
-// PKString is a stable string representation of the PK values map used as a map key.
-type LobKey struct {
-	Schema   string
-	Table    string
-	Column   string
-	PKString string
-}
-
 // LobFragment is a single LOB_WRITE chunk with its 1-based Oracle offset.
 type LobFragment struct {
 	Offset int64
@@ -46,7 +37,9 @@ type LobFragment struct {
 }
 
 // LobAccumulator collects LOB_WRITE fragments for a single LOB column value
-// and assembles them into the complete value on commit.
+// and assembles them into the complete value on commit. One accumulator exists
+// per SELECT_LOB_LOCATOR, so each statement that writes a LOB gets its own value
+// even when the same row's LOB is written several times in one transaction.
 type LobAccumulator struct {
 	Schema    string
 	Table     string
@@ -54,11 +47,48 @@ type LobAccumulator struct {
 	IsBinary  bool
 	PKValues  map[string]any
 	Fragments []LobFragment
+
+	// EventLimit is the number of DML events buffered for the transaction when
+	// the accumulator's locator arrived. MergeLOBsIntoDMLEvents only considers
+	// events[:EventLimit], because a statement's LOB cannot belong to a DML event
+	// logged after its locator. Zero means unbounded (accumulators with no prior
+	// locator, such as those inferred from deferred LOB_WRITEs at commit).
+	EventLimit int
 }
 
 // AddFragment appends a fragment.
 func (a *LobAccumulator) AddFragment(offset int64, data []byte) {
 	a.Fragments = append(a.Fragments, LobFragment{Offset: offset, Data: data})
+}
+
+// Trim applies a dbms_lob.trim(loc, N) to the fragments accumulated so far, so
+// that a shorter rewrite does not keep the tail of the bytes it replaced. N is
+// in bytes for BLOBs and characters for CLOB/NCLOB. A non-positive N or a trim
+// with nothing accumulated is a no-op: the former is BASICFILE's clear-then-write
+// prelude, the latter keeps a prefix of a pre-existing LOB that redo does not
+// hold. A trim beyond the accumulated length leaves the value as is.
+func (a *LobAccumulator) Trim(n int64) {
+	if n <= 0 || len(a.Fragments) == 0 {
+		return
+	}
+	data := a.assembleBytes()
+	cut := int64(len(data))
+	if a.IsBinary {
+		cut = min(cut, n)
+	} else {
+		var chars int64
+		for i := range string(data) {
+			if chars == n {
+				cut = int64(i)
+				break
+			}
+			chars++
+		}
+	}
+	if cut >= int64(len(data)) {
+		return
+	}
+	a.Fragments = []LobFragment{{Offset: 1, Data: data[:cut]}}
 }
 
 // usableOffset reports whether the fragment's 1-based offset can be positioned
@@ -86,6 +116,17 @@ func (a *LobAccumulator) Assemble() any {
 		return nil
 	}
 
+	result := a.assembleBytes()
+	switch {
+	case a.IsBinary:
+		return result
+	default:
+		// CLOB and NCLOB: Oracle delivers data as plain string literals in LOB_WRITE SQL.
+		return string(result)
+	}
+}
+
+func (a *LobAccumulator) assembleBytes() []byte {
 	var totalLen int64
 	for _, f := range a.Fragments {
 		if !f.usableOffset() {
@@ -112,25 +153,26 @@ func (a *LobAccumulator) Assemble() any {
 		start := f.Offset - 1 // convert 1-based offset to 0-based
 		copy(result[start:], f.Data)
 	}
-
-	switch {
-	case a.IsBinary:
-		return result
-	default:
-		// CLOB and NCLOB: Oracle delivers data as plain string literals in LOB_WRITE SQL.
-		return string(result)
-	}
+	return result
 }
 
 // TxnLOBState tracks LOB accumulation state for a single in-flight transaction.
+// Accumulators are kept in creation order, one per SELECT_LOB_LOCATOR, and
+// Active is the one receiving LOB_WRITE/LOB_TRIM fragments.
 type TxnLOBState struct {
-	ActiveKey    *LobKey
-	Accumulators map[LobKey]*LobAccumulator
+	Active       *LobAccumulator
+	Accumulators []*LobAccumulator
 }
 
 // NewTxnLOBState creates a new TxnLOBState.
 func NewTxnLOBState() *TxnLOBState {
-	return &TxnLOBState{Accumulators: make(map[LobKey]*LobAccumulator)}
+	return new(TxnLOBState)
+}
+
+// Add appends acc and makes it the active accumulator.
+func (s *TxnLOBState) Add(acc *LobAccumulator) {
+	s.Accumulators = append(s.Accumulators, acc)
+	s.Active = acc
 }
 
 // MergeLOBsIntoDMLEvents matches each LOB accumulator to its corresponding DML
@@ -147,6 +189,12 @@ func NewTxnLOBState() *TxnLOBState {
 // Oracle SecureFile out-of-row LOBs may emit only SELECT_LOB_LOCATOR + LOB_WRITE +
 // LOB_TRIM with no DML UPDATE. In that case all three passes find nothing and the
 // accumulator is returned as unmerged so the caller can synthesize a synthetic UPDATE.
+//
+// Each accumulator is one SELECT_LOB_LOCATOR and is matched, in creation order,
+// only against the events buffered when its locator arrived (see
+// LobAccumulator.EventLimit), never to an event that already received the same
+// column. When a transaction writes one row's LOB in several statements, each
+// statement's value therefore lands on its own UPDATE.
 //
 // When one UPDATE rewrites a LOB and changes a non-LOB column, the locator's
 // WHERE clause reflects the post-update row, so Pass 2 also matches UPDATE events
@@ -165,6 +213,14 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 
 	var unmerged []*LobAccumulator
 
+	// Events that already received a given column, so that two writes of the same
+	// LOB land on two different events.
+	type eventColumn struct {
+		ev  *DMLEvent
+		col string
+	}
+	assigned := make(map[eventColumn]struct{})
+
 	for _, acc := range state.Accumulators {
 		assembled := acc.Assemble()
 		if assembled == nil {
@@ -174,11 +230,20 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 
 		merged := false
 
+		// Only events logged before the accumulator's locator can own its LOB.
+		scope := events
+		if acc.EventLimit > 0 && acc.EventLimit < len(events) {
+			scope = events[:acc.EventLimit]
+		}
+		free := func(ev *DMLEvent) bool {
+			_, taken := assigned[eventColumn{ev, acc.Column}]
+			return !taken
+		}
+
 		// Pass 1: prefer an INSERT event with matching PK so that Oracle's
 		// LOB-initialisation UPDATE does not shadow the original INSERT.
-		for i := range events {
-			ev := events[i]
-			if ev.Operation != OpInsert {
+		for _, ev := range scope {
+			if ev.Operation != OpInsert || !free(ev) {
 				continue
 			}
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
@@ -186,6 +251,7 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 			}
 			if pkMatches(ev.Data, acc.PKValues) {
 				ev.Data[acc.Column] = assembled
+				assigned[eventColumn{ev, acc.Column}] = struct{}{}
 				merged = true
 				logDebugf("LOB merge: set %s.%s.%s into INSERT (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
 				break
@@ -203,14 +269,15 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// SELECT_LOB_LOCATOR WHERE clause from the row's values after the update,
 		// so a locator key may match neither Data nor OldValues alone. UPDATEs are
 		// therefore also compared against their after-image (see pkMatchesAfterImage).
-		for i := len(events) - 1; i >= 0; i-- {
-			ev := events[i]
-			if ev.Schema != acc.Schema || ev.Table != acc.Table {
+		for i := len(scope) - 1; i >= 0; i-- {
+			ev := scope[i]
+			if ev.Schema != acc.Schema || ev.Table != acc.Table || !free(ev) {
 				continue
 			}
 			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) ||
 				(ev.Operation == OpUpdate && pkMatchesAfterImage(ev, acc.PKValues)) {
 				ev.Data[acc.Column] = assembled
+				assigned[eventColumn{ev, acc.Column}] = struct{}{}
 				merged = true
 				logDebugf("LOB merge: set %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
 				break
@@ -227,15 +294,15 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// for this table; if multiple exist, rows cannot be distinguished and the
 		// accumulator is left unmerged so the caller synthesizes a separate UPDATE.
 		var candidates []*DMLEvent
-		for i := range events {
-			ev := events[i]
-			if ev.Schema == acc.Schema && ev.Table == acc.Table {
+		for _, ev := range scope {
+			if ev.Schema == acc.Schema && ev.Table == acc.Table && free(ev) {
 				candidates = append(candidates, ev)
 			}
 		}
 		switch len(candidates) {
 		case 1:
 			candidates[0].Data[acc.Column] = assembled
+			assigned[eventColumn{candidates[0], acc.Column}] = struct{}{}
 			merged = true
 			logDebugf("LOB merge: set %s.%s.%s via schema/table fallback (fragments=%d)", acc.Schema, acc.Table, acc.Column, len(acc.Fragments))
 		case 0:

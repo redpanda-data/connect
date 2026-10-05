@@ -194,10 +194,9 @@ func TestPkMatches(t *testing.T) {
 // the wrong row.
 func TestMergeLOBsEmptyPKNoMisroute(t *testing.T) {
 	state := NewTxnLOBState()
-	key := LobKey{Schema: "S", Table: "T", Column: "DOC"}
 	acc := &LobAccumulator{Schema: "S", Table: "T", Column: "DOC", IsBinary: false, PKValues: map[string]any{}}
 	acc.AddFragment(1, []byte("hello"))
-	state.Accumulators[key] = acc
+	state.Add(acc)
 
 	events := []*DMLEvent{
 		{Operation: OpInsert, Schema: "S", Table: "T", Data: map[string]any{"ID": "1"}},
@@ -220,10 +219,9 @@ func TestMergeLOBsEmptyPKNoMisroute(t *testing.T) {
 // still merges correctly when there is exactly one row for the table.
 func TestMergeLOBsEmptyPKSingleCandidate(t *testing.T) {
 	state := NewTxnLOBState()
-	key := LobKey{Schema: "S", Table: "T", Column: "DOC"}
 	acc := &LobAccumulator{Schema: "S", Table: "T", Column: "DOC", IsBinary: false, PKValues: map[string]any{}}
 	acc.AddFragment(1, []byte("hello"))
-	state.Accumulators[key] = acc
+	state.Add(acc)
 
 	events := []*DMLEvent{
 		{Operation: OpInsert, Schema: "S", Table: "T", Data: map[string]any{"ID": "1"}},
@@ -237,7 +235,7 @@ func TestMergeLOBsEmptyPKSingleCandidate(t *testing.T) {
 func afterImageAcc(state *TxnLOBState, col, content string, pks map[string]any) {
 	acc := &LobAccumulator{Schema: "TESTDB", Table: "T_CKC_RUNTIME", Column: col, PKValues: pks}
 	acc.AddFragment(1, []byte(content))
-	state.Accumulators[LobKey{Schema: "TESTDB", Table: "T_CKC_RUNTIME", Column: col, PKString: FormatPKString(pks)}] = acc
+	state.Add(acc)
 }
 
 func afterImageUpdate(id, oldNum, newNum string) *DMLEvent {
@@ -297,5 +295,176 @@ func TestMergeLOBsUpdateAfterImage(t *testing.T) {
 		require.Len(t, unmerged, 1)
 		assert.NotContains(t, x.Data, "CKC_BLOB")
 		assert.NotContains(t, y.Data, "CKC_BLOB")
+	})
+}
+
+func lobAcc(col string, isBinary bool, limit int, pks map[string]any, writes ...string) *LobAccumulator {
+	acc := &LobAccumulator{Schema: "S", Table: "T", Column: col, IsBinary: isBinary, PKValues: pks, EventLimit: limit}
+	for _, w := range writes {
+		acc.AddFragment(1, []byte(w))
+	}
+	return acc
+}
+
+func lobUpdate(id, name string) *DMLEvent {
+	return &DMLEvent{
+		Operation: OpUpdate, Schema: "S", Table: "T",
+		Data:      map[string]any{"NAME": name},
+		OldValues: map[string]any{"ID": id, "NAME": name},
+	}
+}
+
+func TestMergeLOBsSameRowWrittenTwice(t *testing.T) {
+	pk := map[string]any{"ID": "1"}
+
+	t.Run("longer then shorter", func(t *testing.T) {
+		state := NewTxnLOBState()
+		first := lobAcc("DOC", false, 1, pk, "aaaaaaaaaa")
+		second := lobAcc("DOC", false, 2, pk, "bbb")
+		state.Add(first)
+		state.Add(second)
+		ev1, ev2 := lobUpdate("1", "x"), lobUpdate("1", "x")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev1, ev2}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, "aaaaaaaaaa", ev1.Data["DOC"])
+		assert.Equal(t, "bbb", ev2.Data["DOC"])
+	})
+
+	t.Run("shorter then longer", func(t *testing.T) {
+		state := NewTxnLOBState()
+		state.Add(lobAcc("DOC", true, 1, pk, "aa"))
+		state.Add(lobAcc("DOC", true, 2, pk, "bbbbbbbb"))
+		ev1, ev2 := lobUpdate("1", "x"), lobUpdate("1", "x")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev1, ev2}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, []byte("aa"), ev1.Data["DOC"])
+		assert.Equal(t, []byte("bbbbbbbb"), ev2.Data["DOC"])
+	})
+
+	t.Run("second write also changes a non-LOB column", func(t *testing.T) {
+		state := NewTxnLOBState()
+		first := map[string]any{"ID": "1", "VIOLATION_NUM": "0"}
+		second := map[string]any{"ID": "1", "VIOLATION_NUM": "1"}
+		state.Add(lobAcc("DOC", false, 1, first, "one"))
+		state.Add(lobAcc("DOC", false, 2, second, "two"))
+		ev1 := &DMLEvent{
+			Operation: OpUpdate, Schema: "S", Table: "T",
+			Data: map[string]any{"VIOLATION_NUM": "0"}, OldValues: map[string]any{"ID": "1", "VIOLATION_NUM": "0"},
+		}
+		ev2 := &DMLEvent{
+			Operation: OpUpdate, Schema: "S", Table: "T",
+			Data: map[string]any{"VIOLATION_NUM": "1"}, OldValues: map[string]any{"ID": "1", "VIOLATION_NUM": "0"},
+		}
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev1, ev2}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, "one", ev1.Data["DOC"])
+		assert.Equal(t, "two", ev2.Data["DOC"])
+	})
+
+	t.Run("interleaved rows", func(t *testing.T) {
+		pkB := map[string]any{"ID": "2"}
+		a1, b1, a2, b2 := lobUpdate("1", "x"), lobUpdate("2", "x"), lobUpdate("1", "x"), lobUpdate("2", "x")
+		state := NewTxnLOBState()
+		state.Add(lobAcc("DOC", false, 1, pk, "A1-long-value"))
+		state.Add(lobAcc("DOC", false, 2, pkB, "B1"))
+		state.Add(lobAcc("DOC", false, 3, pk, "A2"))
+		state.Add(lobAcc("DOC", false, 4, pkB, "B2-long-value"))
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{a1, b1, a2, b2}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, "A1-long-value", a1.Data["DOC"])
+		assert.Equal(t, "B1", b1.Data["DOC"])
+		assert.Equal(t, "A2", a2.Data["DOC"])
+		assert.Equal(t, "B2-long-value", b2.Data["DOC"])
+	})
+
+	t.Run("second locator without its own update is synthesized not stolen", func(t *testing.T) {
+		state := NewTxnLOBState()
+		state.Add(lobAcc("DOC", false, 1, pk, "first"))
+		state.Add(lobAcc("DOC", false, 1, pk, "second"))
+		ev := lobUpdate("1", "x")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev}, nil)
+		assert.Equal(t, "first", ev.Data["DOC"])
+		require.Len(t, unmerged, 1)
+		assert.Equal(t, "second", unmerged[0].Assemble())
+	})
+
+	t.Run("events after the locator are out of scope", func(t *testing.T) {
+		state := NewTxnLOBState()
+		state.Add(lobAcc("DOC", false, 1, pk, "first"))
+		early, late := lobUpdate("1", "x"), lobUpdate("1", "x")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{early, late}, nil)
+		assert.Empty(t, unmerged)
+		assert.Equal(t, "first", early.Data["DOC"])
+		assert.NotContains(t, late.Data, "DOC")
+	})
+
+	t.Run("unbounded accumulator keeps most recent match", func(t *testing.T) {
+		state := NewTxnLOBState()
+		state.Add(lobAcc("DOC", false, 0, pk, "replayed"))
+		ev1, ev2 := lobUpdate("1", "x"), lobUpdate("1", "x")
+
+		unmerged := MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev1, ev2}, nil)
+		assert.Empty(t, unmerged)
+		assert.NotContains(t, ev1.Data, "DOC")
+		assert.Equal(t, "replayed", ev2.Data["DOC"])
+	})
+
+	t.Run("single write still merges", func(t *testing.T) {
+		state := NewTxnLOBState()
+		state.Add(lobAcc("DOC", false, 1, pk, "only"))
+		ev := lobUpdate("1", "x")
+
+		assert.Empty(t, MergeLOBsIntoDMLEvents(state, []*DMLEvent{ev}, nil))
+		assert.Equal(t, "only", ev.Data["DOC"])
+	})
+}
+
+func TestLobAccumulatorTrim(t *testing.T) {
+	t.Run("truncates a binary value", func(t *testing.T) {
+		acc := lobAcc("DOC", true, 0, nil, "0123456789")
+		acc.Trim(4)
+		assert.Equal(t, []byte("0123"), acc.Assemble())
+	})
+
+	t.Run("counts characters for text", func(t *testing.T) {
+		acc := lobAcc("DOC", false, 0, nil, "héllo wörld")
+		acc.Trim(5)
+		assert.Equal(t, "héllo", acc.Assemble())
+	})
+
+	t.Run("overlapping writes then trim", func(t *testing.T) {
+		acc := lobAcc("DOC", true, 0, nil, "AAAAAAAA")
+		acc.AddFragment(1, []byte("BB"))
+		acc.Trim(5)
+		assert.Equal(t, []byte("BBAAA"), acc.Assemble())
+	})
+
+	t.Run("longer than written leaves value as is", func(t *testing.T) {
+		acc := lobAcc("DOC", false, 0, nil, "abc")
+		acc.Trim(100)
+		assert.Equal(t, "abc", acc.Assemble())
+	})
+
+	t.Run("zero and empty are no-ops", func(t *testing.T) {
+		acc := lobAcc("DOC", false, 0, nil, "abc")
+		acc.Trim(0)
+		assert.Equal(t, "abc", acc.Assemble())
+
+		empty := lobAcc("DOC", false, 0, nil)
+		empty.Trim(5)
+		assert.Nil(t, empty.Assemble())
+	})
+
+	t.Run("writes after a trim are kept", func(t *testing.T) {
+		acc := lobAcc("DOC", false, 0, nil, "abcdef")
+		acc.Trim(2)
+		acc.AddFragment(3, []byte("XYZ"))
+		assert.Equal(t, "abXYZ", acc.Assemble())
 	})
 }

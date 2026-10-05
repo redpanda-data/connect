@@ -433,23 +433,17 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
 		lobType := lm.lobColTypes[strings.ToUpper(colKey)] // "CLOB", "BLOB", "NCLOB", or "" if unknown
 
+		// Every locator starts a new accumulator: a transaction can write the same
+		// row's LOB in several statements, each of which must keep its own bytes.
 		state := lm.getOrCreateLOBState(redoEvent.TransactionID)
-		key := sqlredo.LobKey{
-			Schema:   info.Schema,
-			Table:    info.Table,
-			Column:   info.Column,
-			PKString: sqlredo.FormatPKString(info.PKValues),
-		}
-		if _, exists := state.Accumulators[key]; !exists {
-			state.Accumulators[key] = &sqlredo.LobAccumulator{
-				Schema:   info.Schema,
-				Table:    info.Table,
-				Column:   info.Column,
-				PKValues: info.PKValues,
-				IsBinary: lobType == "BLOB",
-			}
-		}
-		state.ActiveKey = &key
+		state.Add(&sqlredo.LobAccumulator{
+			Schema:     info.Schema,
+			Table:      info.Table,
+			Column:     info.Column,
+			PKValues:   info.PKValues,
+			IsBinary:   lobType == "BLOB",
+			EventLimit: lm.bufferedEventCount(ctx, redoEvent.TransactionID),
+		})
 
 	case sqlredo.OpLobTrim:
 		if !lm.cfg.LOBEnabled {
@@ -462,61 +456,44 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		//   SELECT_LOB_LOCATOR. In this case LOB_TRIM itself must establish the accumulator.
 		//
 		// Form B — dbms_lob.trim(loc_b, N)
-		//   Emitted when a SELECT_LOB_LOCATOR has already established the active key.
-		//   No schema/table/column info is present. The accumulator is left untouched
-		//   regardless of N — see the inline comment below for the rationale.
+		//   Emitted when a SELECT_LOB_LOCATOR has already established the active
+		//   accumulator. No schema/table/column info is present. The value
+		//   accumulated so far is truncated to N, so a SecureFile rewrite shorter than
+		//   the previous write does not keep a tail of the earlier bytes.
 		//
 		//   When N>0 and no fragments have been accumulated, a warning is emitted because
 		//   Oracle intends to keep the first N bytes/chars of the pre-existing LOB, which
-		//   we do not hold. In the common SecureFile full-rewrite path LOB_WRITE(s) precede
-		//   LOB_TRIM and the assembled length equals N, so no data is lost in practice.
+		//   we do not hold.
 		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
 			if info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String); err == nil {
 				// Form A: establish (or reset) the accumulator for this LOB column.
 				colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
 				lobType := lm.lobColTypes[strings.ToUpper(colKey)]
 				state := lm.getOrCreateLOBState(redoEvent.TransactionID)
-				key := sqlredo.LobKey{
-					Schema:   info.Schema,
-					Table:    info.Table,
-					Column:   info.Column,
-					PKString: sqlredo.FormatPKString(info.PKValues),
-				}
-				state.Accumulators[key] = &sqlredo.LobAccumulator{
-					Schema:   info.Schema,
-					Table:    info.Table,
-					Column:   info.Column,
-					PKValues: info.PKValues,
-					IsBinary: lobType == "BLOB",
-				}
-				state.ActiveKey = &key
+				state.Add(&sqlredo.LobAccumulator{
+					Schema:     info.Schema,
+					Table:      info.Table,
+					Column:     info.Column,
+					PKValues:   info.PKValues,
+					IsBinary:   lobType == "BLOB",
+					EventLimit: lm.bufferedEventCount(ctx, redoEvent.TransactionID),
+				})
 				return nil
 			}
 		}
-		// Form B: LOB_TRIM carries no schema/table/column info — the active key was
-		// already established by SELECT_LOB_LOCATOR. Oracle may emit LOB_TRIM before
-		// LOB_WRITE (BASICFILE "clear then write") or after (SecureFile "write then
-		// finalize"). In both cases the accumulator should be left untouched:
-		//   - Before LOB_WRITE: accumulator is empty anyway, so there is nothing to clear.
-		//   - After LOB_WRITE:  fragments are already accumulated; clearing them would
-		//     destroy the data before commit.
+		// Form B: the accumulator was established by SELECT_LOB_LOCATOR. LOB_TRIM(0)
+		// before LOB_WRITE (BASICFILE "clear then write") finds nothing to clear and
+		// is ignored; LOB_TRIM(N) after LOB_WRITE (SecureFile) truncates to N.
 		state, exists := lm.lobStates[redoEvent.TransactionID]
-		if !exists || state.ActiveKey == nil {
+		if !exists || state.Active == nil {
 			return nil
 		}
 		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
 			if trimLen, err := sqlredo.ParseLobTrim(redoEvent.SQLRedo.String); err == nil && trimLen > 0 {
-				// Warn only for the blatant case: N>0 with no fragments at all, meaning
-				// the existing LOB prefix is preserved but we have nothing to emit.
-				// Two adjacent cases (N < total written bytes, or N > total written bytes
-				// with M>0) also produce an assembled value that does not exactly match N,
-				// but Assemble() is not truncated to N here. This is an intentional
-				// tradeoff: SecureFile full-rewrite UPDATEs (the common path) always write
-				// all bytes then trim to the exact final length, so assembled==N in
-				// practice. Partial-update patterns are not supported by this path.
-				if acc := state.Accumulators[*state.ActiveKey]; acc != nil && len(acc.Fragments) == 0 {
+				if len(state.Active.Fragments) == 0 {
 					lm.log.Warnf("LOB_TRIM to non-zero length %d with no prior LOB_WRITE (scn=%d, txn=%s): assembled value may be incomplete", trimLen, redoEvent.SCN, redoEvent.TransactionID)
 				}
+				state.Active.Trim(trimLen)
 			}
 		}
 
@@ -525,7 +502,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return nil
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
-		if !exists || state.ActiveKey == nil {
+		if !exists || state.Active == nil {
 			if !lm.inferLOBLocator(ctx, redoEvent) {
 				// INSERT may arrive later in the same LogMiner batch (BASICFILE
 				// DISABLE STORAGE IN ROW ordering). Defer and replay after DML.
@@ -535,11 +512,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 			state = lm.lobStates[redoEvent.TransactionID]
 		}
-		acc := state.Accumulators[*state.ActiveKey]
-		if acc == nil {
-			lm.log.Warnf("LOB_WRITE has active key but no accumulator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
-			return nil
-		}
+		acc := state.Active
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
 			return nil
 		}
@@ -795,12 +768,12 @@ func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.T
 	lm.log.Debugf("replayDeferredLOBWrites: replaying %d LOB_WRITE(s) for txn %s", len(pending), txnID)
 	// Clear before replaying so re-buffering during the loop appends to a fresh slice.
 	delete(lm.pendingLOBWrites, txnID)
-	// Clear ActiveKey so inferLOBLocator is invoked for the first deferred write.
-	// The prior SELECT_LOB_LOCATOR may have left ActiveKey pointing at a SecureFile
+	// Clear Active so inferLOBLocator is invoked for the first deferred write.
+	// The prior SELECT_LOB_LOCATOR may have left Active pointing at a SecureFile
 	// column; without this reset, deferred LOB_WRITEs would land on that column
 	// instead of the unclaimed BASICFILE out-of-row column.
 	if state, ok := lm.lobStates[txnID]; ok {
-		state.ActiveKey = nil
+		state.Active = nil
 	}
 	for _, ev := range pending {
 		if err := lm.processRedoEvent(ctx, ev); err != nil {
@@ -811,6 +784,20 @@ func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.T
 		lm.log.Warnf("replayDeferredLOBWrites: %d LOB_WRITE(s) re-deferred after replay for txn %s — inferLOBLocator still failing", reDeferred, txnID)
 	}
 	return nil
+}
+
+// bufferedEventCount returns how many DML events the transaction cache holds
+// for txnID, which is the index the next DML event will have in txn.Events.
+// Read from the cache rather than counted locally so that it stays correct with
+// an external cache or a transaction recreated after a restart. On error it
+// returns 0, leaving the accumulator unbounded rather than wrongly bounded.
+func (lm *LogMiner) bufferedEventCount(ctx context.Context, txnID sqlredo.TransactionID) int {
+	n, err := lm.txnCache.EventCount(ctx, txnID)
+	if err != nil {
+		lm.log.Warnf("Failed to count buffered events for transaction %s, LOB will not be bound to preceding events: %v", txnID, err)
+		return 0
+	}
+	return n
 }
 
 func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
@@ -875,17 +862,21 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 	// claimed by SELECT_LOB_LOCATOR.
 	var (
 		claimedCols           = make(map[string]struct{})
-		emptyClaimedKeys      = make(map[string]sqlredo.LobKey)
+		emptyClaimed          = make(map[string]*sqlredo.LobAccumulator)
 		claimedFragmentCounts = make(map[string]int)
 	)
 	if existingState := lm.lobStates[event.TransactionID]; existingState != nil {
-		for k, acc := range existingState.Accumulators {
-			if k.Schema == schema && k.Table == table {
-				claimedCols[k.Column] = struct{}{}
-				claimedFragmentCounts[k.Column] = len(acc.Fragments)
-				if len(acc.Fragments) == 0 {
-					emptyClaimedKeys[k.Column] = k
-				}
+		for _, acc := range existingState.Accumulators {
+			if acc.Schema != schema || acc.Table != table {
+				continue
+			}
+			// With several accumulators per column the latest one decides.
+			claimedCols[acc.Column] = struct{}{}
+			claimedFragmentCounts[acc.Column] = len(acc.Fragments)
+			if len(acc.Fragments) == 0 {
+				emptyClaimed[acc.Column] = acc
+			} else {
+				delete(emptyClaimed, acc.Column)
 			}
 		}
 	}
@@ -894,11 +885,11 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 		for c, n := range claimedFragmentCounts {
 			claimed = append(claimed, fmt.Sprintf("%s(%d)", c, n))
 		}
-		empty := make([]string, 0, len(emptyClaimedKeys))
-		for c := range emptyClaimedKeys {
+		empty := make([]string, 0, len(emptyClaimed))
+		for c := range emptyClaimed {
 			empty = append(empty, c)
 		}
-		lm.log.Debugf("inferLOBLocator: claimedCols=%v emptyClaimedKeys=%v (txn=%s, scn=%d, table=%s.%s)",
+		lm.log.Debugf("inferLOBLocator: claimedCols=%v emptyClaimed=%v (txn=%s, scn=%d, table=%s.%s)",
 			claimed, empty, event.TransactionID, event.SCN, schema, table)
 	}
 
@@ -928,7 +919,6 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			continue
 		}
 
-		pkString := sqlredo.FormatPKString(pkValues)
 		{
 			evDataCols := make([]string, 0, len(ev.Data))
 			for c := range ev.Data {
@@ -954,9 +944,9 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			// after INSERT but the LOB_WRITE events arrived before INSERT and are
 			// sitting in the deferred queue. Route them to the existing accumulator.
 			if _, claimed := claimedCols[col]; claimed {
-				if existingKey, hasEmptyAcc := emptyClaimedKeys[col]; hasEmptyAcc {
+				if existingAcc, hasEmptyAcc := emptyClaimed[col]; hasEmptyAcc {
 					state := lm.getOrCreateLOBState(event.TransactionID)
-					state.ActiveKey = &existingKey
+					state.Active = existingAcc
 					lm.log.Debugf("Inferred LOB locator for %s.%s.%s from empty SELECT_LOB_LOCATOR accumulator (txn=%s)",
 						schema, table, col, event.TransactionID)
 					return true
@@ -984,30 +974,16 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			lm.log.Debugf("inferLOBLocator: CANDIDATE %s.%s.%s present=%v val=%T (txn=%s)",
 				schema, table, col, present, val, event.TransactionID)
 
-			key := sqlredo.LobKey{
-				Schema:   schema,
-				Table:    table,
-				Column:   col,
-				PKString: pkString,
-			}
-
 			// Defer state creation until we have a match to avoid leaking
 			// empty TxnLOBState entries when inference fails.
 			state := lm.getOrCreateLOBState(event.TransactionID)
-			if _, exists := state.Accumulators[key]; exists {
-				lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — accumulator already exists for pkString=%q (txn=%s)",
-					schema, table, col, pkString, event.TransactionID)
-				continue
-			}
-
-			state.Accumulators[key] = &sqlredo.LobAccumulator{
+			state.Add(&sqlredo.LobAccumulator{
 				Schema:   schema,
 				Table:    table,
 				Column:   col,
 				PKValues: pkValues,
 				IsBinary: lobType == "BLOB",
-			}
-			state.ActiveKey = &key
+			})
 
 			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from %s (txn=%s)",
 				schema, table, col, ev.Operation, event.TransactionID)

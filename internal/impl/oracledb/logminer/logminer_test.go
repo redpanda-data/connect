@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -549,6 +550,51 @@ func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent
 }
 
 func (*publisherStub) Close() {}
+
+// TestSecurefileLOBWrittenTwiceInOneTransaction verifies that each UPDATE of a
+// row whose out-of-row LOB is written by two statements carries only the bytes
+// written by its own statement.
+func TestSecurefileLOBWrittenTwiceInOneTransaction(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+
+	var scn uint64 = 100
+	emit := func(op sqlredo.Operation, redo string) {
+		scn++
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           scn,
+			Operation:     op,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: redo, Valid: redo != ""},
+		}))
+	}
+	statement := func(id, name, doc string) {
+		emit(sqlredo.OpUpdate, `update "TESTDB"."T" set "NAME" = '`+name+`' where "ID" = '`+id+`' and "NAME" = 'n'`)
+		emit(sqlredo.OpSelectLobLocator, `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '`+id+`' and "NAME" = '`+name+`';`)
+		emit(sqlredo.OpLobWrite, fmt.Sprintf(" buf_c := '%s';\n  dbms_lob.write(loc_c, %d, 1, buf_c);", doc, len(doc)))
+		emit(sqlredo.OpLobTrim, fmt.Sprintf("dbms_lob.trim(loc_c, %d);", len(doc)))
+	}
+
+	emit(sqlredo.OpStart, "")
+	statement("1", "a", "a-long-first-write")
+	statement("2", "b", "b1")
+	statement("1", "c", "a2")
+	statement("2", "d", "b-long-second-write")
+	emit(sqlredo.OpCommit, "")
+
+	require.Len(t, pub.messages, 4)
+	want := []string{"a-long-first-write", "b1", "a2", "b-long-second-write"}
+	for i, msg := range pub.messages {
+		data, ok := msg.Data.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, want[i], data["DOC"], "message %d", i)
+	}
+}
 
 func TestConnectCacheResourceEventCountReadsOnlyMetadata(t *testing.T) {
 	res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
