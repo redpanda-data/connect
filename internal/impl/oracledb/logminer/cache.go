@@ -35,8 +35,12 @@ type TransactionCache interface {
 	// START, COMMIT and ROLLBACK rows for all transactions, also for tables that
 	// we do not monitor. A long transaction on such a table has no DML events,
 	// and it must not hold the checkpoint back. LogMiner.lowWatermarkSCN also
-	// counts the transactions that have only LOB events.
+	// holds back the checkpoint for the transactions that have only LOB events.
 	LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64
+	// TransactionStartSCN returns the start SCN recorded for an open
+	// transaction. ok is false if the transaction is not in the cache, which
+	// includes discarded transactions.
+	TransactionStartSCN(ctx context.Context, txnID sqlredo.TransactionID) (scn uint64, ok bool, err error)
 }
 
 // Transaction buffers events until commit
@@ -153,6 +157,15 @@ func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uin
 		}
 	}
 	return lowestOpenSCN
+}
+
+// TransactionStartSCN returns the start SCN of an open transaction.
+func (tc *InMemoryCache) TransactionStartSCN(_ context.Context, txnID sqlredo.TransactionID) (scn uint64, ok bool, err error) {
+	txn, exists := tc.transactions[txnID]
+	if !exists {
+		return 0, false, nil
+	}
+	return txn.SCN, true, nil
 }
 
 // RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.
