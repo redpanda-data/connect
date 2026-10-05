@@ -60,7 +60,7 @@ Supports querying the following Jira resources:
 - Project types
 - Projects
 
-The processor authenticates using basic authentication with username and API token. Input messages should contain valid Jira queries in JSON format.`).
+Set `+"`base_url`"+` to the URL of your Jira instance, for example `+"`https://your-domain.atlassian.net`"+`. The processor authenticates using basic authentication with username and API token. Input messages should contain valid Jira queries in JSON format.`).
 		Example(
 			"Minimal configuration",
 			"Basic Jira processor setup with required fields only",

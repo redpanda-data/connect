@@ -92,6 +92,8 @@ func chatProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor sends the contents of user prompts to the OpenAI API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+ocpFieldUserPrompt+"`"+` configuration field to customize it.
 
+The model can also call external tools that you define in the `+"`"+ocpFieldTools+"`"+` field, and uses their results as supplementary context when it generates a response.
+
 To learn more about chat completion, see the https://platform.openai.com/docs/guides/chat-completions[OpenAI API documentation^].`).
 		Version("4.32.0").
 		Fields(

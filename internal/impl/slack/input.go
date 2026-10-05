@@ -33,7 +33,13 @@ func inputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.51.0").
 		Summary("Connects to Slack using Socket Mode and receives events, interactions, and slash commands.").
-		Description(`This input connects to Slack using https://api.slack.com/apis/socket-mode[Socket Mode^]. Each message emitted from this input has a `+"`type`"+` metadata field that contains the event type: `+"`events_api`"+`, `+"`interactive`"+`, or `+"`slash_commands`"+`.`).
+		Description(`This input connects to Slack using https://api.slack.com/apis/socket-mode[Socket Mode^].
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- `+"`type`"+`: The Socket Mode event type: `+"`events_api`"+`, `+"`interactive`"+`, or `+"`slash_commands`"+`.`).
 		Fields(
 			service.NewStringField(iFieldAppToken).Description("The app-level token to use to authenticate and connect to Slack.").LintRule(`
         root = if !this.has_prefix("xapp-") { [ "field must start with xapp-" ] }
