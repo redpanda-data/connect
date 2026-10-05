@@ -71,7 +71,7 @@ Ideally this cache should be persisted across restarts.
 				Example("100MB").
 				Example("50mib"),
 			service.NewStringField("cache").
-				Description("The cache resource that you must configure to store the ZedToken (ID) of the last message processed. The input uses the stored ZedToken in subsequent requests to backfill unread messages. The ZedToken is stored in the cache within the `ACK` function of the message. This means that a ZedToken is only stored when a message is successfully routed through all processors and outputs in the data pipeline.").
+				Description("The cache resource that stores the ZedToken (ID) of the last message the input processed. When the input starts, it resumes the watch from the stored ZedToken, so it backfills updates it hasn't read yet. The input stores the ZedToken when each message is acknowledged, whether or not the message reached its outputs, so a message that fails isn't read again after a restart.").
 				ShortDescription("Cache resource for unread message backfills, storing the ID of the last message received."),
 			service.NewStringField("cache_key").
 				Description("The key identifier to use when storing the ZedToken (ID) of the last message received.").
