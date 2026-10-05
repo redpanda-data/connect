@@ -23,6 +23,11 @@ type TransactionCache interface {
 	StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64) error
 	AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) error
 	GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error)
+	// EventCount returns the number of events buffered for txnID, which is the
+	// index the next event will have in Transaction.Events. It returns 0 for
+	// unknown or discarded transactions and, unlike GetTransaction, never loads
+	// the events themselves.
+	EventCount(ctx context.Context, txnID sqlredo.TransactionID) (int, error)
 	CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
 	RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
 	// LowWatermarkSCN returns the lowest start SCN among all currently open
@@ -122,6 +127,16 @@ func (tc *InMemoryCache) AddEvent(_ context.Context, txnID sqlredo.TransactionID
 // Returns (nil, nil) if the transaction doesn't exist.
 func (tc *InMemoryCache) GetTransaction(_ context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
 	return tc.transactions[txnID], nil
+}
+
+// EventCount returns the number of events buffered for the transaction, or 0 if
+// it does not exist or was discarded.
+func (tc *InMemoryCache) EventCount(_ context.Context, txnID sqlredo.TransactionID) (int, error) {
+	txn, exists := tc.transactions[txnID]
+	if !exists {
+		return 0, nil
+	}
+	return len(txn.Events), nil
 }
 
 // CommitTransaction removes the committed transaction from the cache.

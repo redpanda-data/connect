@@ -217,6 +217,20 @@ func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo
 	return &Transaction{ID: m.ID, SCN: m.SCN, Events: events}, nil
 }
 
+// EventCount returns the number of events buffered for the transaction by
+// reading only its metadata key, never the events. Returns 0 if the transaction
+// is not found or was discarded.
+func (c *ConnectCacheResource) EventCount(ctx context.Context, txnID sqlredo.TransactionID) (int, error) {
+	m, err := c.readMetadata(ctx, txnID)
+	if err != nil {
+		return 0, fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
+	}
+	if m == nil {
+		return 0, nil
+	}
+	return m.EventCount, nil
+}
+
 // CommitTransaction removes the committed transaction from the cache.
 func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) error {
 	delete(c.discarded, txnID)

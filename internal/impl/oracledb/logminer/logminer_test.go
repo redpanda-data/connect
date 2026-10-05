@@ -11,6 +11,7 @@ package logminer
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"testing"
 
@@ -548,3 +549,36 @@ func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent
 }
 
 func (*publisherStub) Close() {}
+
+func TestConnectCacheResourceEventCountReadsOnlyMetadata(t *testing.T) {
+	res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+	cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc"}
+	cache := NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	ctx := t.Context()
+
+	n, err := cache.EventCount(ctx, "txA")
+	require.NoError(t, err)
+	assert.Zero(t, n, "unknown transaction")
+
+	require.NoError(t, cache.StartTransaction(ctx, "txA", 1))
+	const events = 3
+	for range events {
+		require.NoError(t, cache.AddEvent(ctx, "txA", 1, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+	}
+
+	// Remove every event key so that any event read would fail.
+	var delErr error
+	require.NoError(t, res.AccessCache(ctx, "txn_cache", func(c service.Cache) {
+		for i := range events {
+			delErr = errors.Join(delErr, c.Delete(ctx, cache.toEventKey("txA", i)))
+		}
+	}))
+	require.NoError(t, delErr)
+
+	_, err = cache.GetTransaction(ctx, "txA")
+	require.Error(t, err, "GetTransaction must need the event keys")
+
+	n, err = cache.EventCount(ctx, "txA")
+	require.NoError(t, err)
+	assert.Equal(t, events, n)
+}
