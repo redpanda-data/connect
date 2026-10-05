@@ -41,6 +41,7 @@ func watchInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services", "SpiceDB").
+		Version("4.39.0").
 		Summary(`Consume messages from the Watch API from SpiceDB.`).
 		Description(`
 The SpiceDB input allows you to consume messages from the Watch API of a SpiceDB instance.
@@ -78,6 +79,22 @@ Ideally this cache should be persisted across restarts.
 				Default("authzed.com/spicedb/watch/last_zed_token").
 				Advanced(),
 			service.NewTLSToggledField("tls"),
+		).
+		Example(
+			"Store the ZedToken in Redis",
+			"Consumes updates from the Watch API and stores the ZedToken of the last acknowledged update in a Redis cache, so that the input resumes from that point after a restart.",
+			`
+input:
+  spicedb_watch:
+    endpoint: grpc.authzed.com:443
+    bearer_token: "${SPICEDB_TOKEN}"
+    cache: spicedb_cache
+
+cache_resources:
+  - label: spicedb_cache
+    redis:
+      url: redis://localhost:6379
+`,
 		)
 }
 

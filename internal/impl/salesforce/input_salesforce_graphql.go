@@ -34,6 +34,7 @@ func init() {
 
 func salesforceGraphQLInputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
+		Version("4.90.3").
 		Categories("Services").
 		Summary("Executes a Salesforce GraphQL (UIAPI) query once and emits a message for each record.").
 		Description(`Executes a GraphQL query against the Salesforce UIAPI (` + "`POST /services/data/{api_version}/graphql`" + `), walks the response tree, and emits one message per record. When records are exhausted the input shuts down, letting the pipeline terminate gracefully (or the next input in a xref:components:inputs/sequence.adoc[sequence] to take over).

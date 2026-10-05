@@ -24,6 +24,7 @@ func redpandaCommonInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Deprecated().
 		Categories("Services").
+		Version("4.39.0").
 		Summary("Consumes data from a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
 		Fields(
 			slices.Concat(
@@ -35,7 +36,7 @@ func redpandaCommonInputConfig() *service.ConfigSpec {
 				},
 			)...,
 		).
-		Description(kafka.RedpandaInputDescription(`
+		Description("Use the xref:components:inputs/redpanda.adoc[`redpanda` input] instead. When you omit its connection fields, the `redpanda` input connects using the same top-level `redpanda` config block.\n" + kafka.RedpandaInputDescription(`
 output:
   fallback:
     - redpanda_common:

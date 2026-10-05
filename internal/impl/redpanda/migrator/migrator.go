@@ -71,7 +71,38 @@ adjust the following fields to increase buffer sizes and batch processing:
 - ` + "`max_yield_batch_bytes: 1MB`" + `
 
 These settings allow the consumer to buffer more data per partition and yield larger batches,
-reducing overhead and improving throughput at the cost of higher memory usage.`).
+reducing overhead and improving throughput at the cost of higher memory usage.
+
+== Delivery guarantees
+
+This input commits consumer group offsets only after the paired output acknowledges the writes, so it provides the same at-least-once delivery and per-partition ordering as the ` + "xref:components:inputs/redpanda.adoc[`redpanda` input]" + `.
+
+When a pipeline contains more than one migrator pair, each input is paired with the output that has the same ` + "`label`" + `. The labels must match exactly.
+
+== Source cluster permissions
+
+When the source cluster enforces ACLs, the source principal needs the topic ` + "`READ`" + ` and ` + "`DESCRIBE_CONFIGS`" + ` operations, in addition to the consumer group and cluster permissions that the migration uses. A ` + "`READ`" + ` ACL implies ` + "`DESCRIBE`" + ` but not ` + "`DESCRIBE_CONFIGS`" + `, so without ` + "`DESCRIBE_CONFIGS`" + ` the input consumes records but the paired output fails to create topics with a ` + "`TOPIC_AUTHORIZATION_FAILED`" + ` error.
+
+== Metrics
+
+When a consumer group is set, this input emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic. The metric records the number of produced messages that the consumer group has not yet read from each topic partition.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```text" + `
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- kafka_lag
+- kafka_timestamp_ms
+- kafka_timestamp_unix
+- kafka_tombstone_message
+- All record headers
+` + "```" + `
+`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzConsumerFields()...).

@@ -29,6 +29,7 @@ const (
 
 func usersInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.52.0").
 		Summary("Returns the full profile of all users in your Slack organization using the users.list API method. You can filter the returned users by team ID.").
 		Description(`This input reads users with the https://api.slack.com/methods/users.list[`+"`users.list`"+`^] Slack API method and emits each user profile as a separate message. To return only the users of one team, set `+"`team_id`"+`.`).
 		Fields(
