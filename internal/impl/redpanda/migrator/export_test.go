@@ -92,6 +92,12 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 	}
 }
 
+// SetMaxParallelHTTPRequests overrides the number of sync workers set by
+// NewSchemaRegistryMigratorForTesting.
+func (m *schemaRegistryMigrator) SetMaxParallelHTTPRequests(n int) {
+	m.conf.MaxParallelHTTPRequests = n
+}
+
 func (m *schemaRegistryMigrator) DfsSubjectSchemasFunc(
 	ctx context.Context,
 	client *sr.Client,

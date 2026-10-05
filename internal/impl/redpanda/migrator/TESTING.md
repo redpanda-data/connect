@@ -276,6 +276,37 @@ Verifies that with `interval: 0s` the subjects that failed the initial sync are 
   - The loop stops once nothing is left to retry
   - The subject added after the initial sync is not migrated
 
+### `TestIntegrationSchemaRegistryMigratorSyncFailedVersionDoesNotBlockEarlierReference`
+
+Verifies that a failed later version of a subject does not block an earlier version that another subject references, nor the referrer.
+- Registers three versions of a subject at source, the third incompatible, and a second subject that references v2
+- Pre-registers v1 at destination under the default `BACKWARD` compatibility, so only v3 is rejected
+- Runs for both `versions: latest` and `versions: all`, with `translate_ids: true` and a single worker, 8 syncs each to cover both subject orders
+- Validates:
+  - Sync reports only v3 as failed
+  - The referenced v2 and the referrer are synced, and their records translate
+  - Records encoded with v3 are rejected
+
+### `TestIntegrationSchemaRegistryMigratorSyncSubjectDeletedAfterListing`
+
+Verifies that a subject deleted at the source after it was listed fails only that subject.
+- Registers two subjects at source, behind a proxy that returns 404 when one of them is fetched
+- Syncs with `versions: latest` and `translate_ids: true`
+- Validates:
+  - Sync completes and reports only the deleted subject as failed
+  - The other subject is synced
+
+### `TestIntegrationSchemaRegistryMigratorSyncLoopSingleRetryLoop`
+
+Verifies that with `interval: 0s` only one retry loop runs, as `SyncLoop` is started on every output connect.
+- Registers a subject at source that the destination rejects, and runs an initial sync that partially fails
+- Starts the sync loop twice
+- Relaxes the destination subject compatibility to `NONE`, then repeats with a second failing subject after the loop stops
+- Validates:
+  - One call returns immediately while the other keeps retrying
+  - The running loop stops once the subject syncs
+  - A later call starts a new loop after the previous one stopped
+
 ## Schema Registry Fan-out Test (`migrator_schema_registry_fanout_integration_test.go`)
 
 ### `TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout`

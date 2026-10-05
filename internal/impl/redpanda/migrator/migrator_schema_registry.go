@@ -394,6 +394,12 @@ type schemaRegistryMigrator struct {
 	knownSchemas  map[int]schemaInfo                // source schema ID -> destination schema info
 	failedSchemas map[int]error                     // source schema ID -> last sync error, until synced
 	failedRoots   map[string]struct{}               // root subjects with a failure in the last sync
+	loopRunning   bool                              // a SyncLoop is running
+
+	// syncMu serializes syncs. The initial sync of an output reconnect may
+	// otherwise overlap the sync loop, and on serverless registries one sync
+	// can restore a subject's mode while another still imports into it.
+	syncMu sync.Mutex
 
 	// Backoff bounds for retrying failed subjects when interval is 0s.
 	retryMinBackoff time.Duration
@@ -452,6 +458,8 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 			for _, s := range subs {
 				schema, err := client.SchemaByVersion(ctx, s, latestVersion)
 				if err != nil {
+					// Keep the subject so the caller can tell which one failed.
+					schema = sr.SubjectSchema{Subject: s}
 					err = fmt.Errorf("get latest schema for subject %q: %w", s, err)
 				}
 				if !yield(schema, err) {
@@ -543,7 +551,10 @@ func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
 			item.SubjectSchema, item.fetched = ss, true
 		}
 		if !item.expanded {
-			// Add previous versions if VersionsAll is enabled
+			// Add previous versions if VersionsAll is enabled. Only versions
+			// below this one: later versions are reached from their subject's
+			// own root, and enqueuing them here would process them before this
+			// one.
 			if m.conf.Versions == VersionsAll && item.Version > 1 {
 				vers, err := client.SubjectVersions(ctx, item.Subject)
 				if err != nil {
@@ -554,7 +565,9 @@ func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
 					return b - a
 				})
 				for _, v := range vers {
-					enqueue(item.Subject, v)
+					if v < item.Version {
+						enqueue(item.Subject, v)
+					}
 				}
 			}
 			// Add references
@@ -580,16 +593,30 @@ func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
 // SyncLoop runs the schema registry sync in a loop at the configured interval
 // until ctx is done. If interval is <= 0, the loop is not started, and only
 // the subjects that failed the initial sync are retried until they sync.
+//
+// SyncLoop is called on every output connect. While a loop is running, further
+// calls return immediately.
 func (m *schemaRegistryMigrator) SyncLoop(ctx context.Context) {
 	if !m.enabled() {
 		m.log.Info("Schema migration: schema registry sync disabled")
 		return
 	}
+
+	m.mu.Lock()
+	running := m.loopRunning
+	m.loopRunning = true
+	m.mu.Unlock()
+	if running {
+		m.log.Debug("Schema migration: schema registry sync loop already running")
+		return
+	}
+
 	if m.conf.Interval <= 0 {
 		m.log.Info("Schema migration: schema registry sync disabled (interval <= 0)")
 		m.retryFailed(ctx)
 		return
 	}
+	defer m.stopLoop()
 
 	m.log.Infof("Schema migration: starting schema registry sync loop every %s", m.conf.Interval)
 
@@ -615,19 +642,26 @@ func (m *schemaRegistryMigrator) SyncLoop(ctx context.Context) {
 // with translate_ids its records would block the output indefinitely. Only
 // the failed roots are synced, so subjects added at the source after the
 // initial sync are still not migrated.
+//
+// retryFailed ends the running loop on return. It checks for failed roots and
+// ends the loop under the same lock, so failures recorded by a sync that
+// finishes concurrently are left to a new loop rather than lost.
 func (m *schemaRegistryMigrator) retryFailed(ctx context.Context) {
 	backoff := m.retryMinBackoff
 	for {
-		m.mu.RLock()
+		m.mu.Lock()
 		roots := maps.Clone(m.failedRoots)
-		m.mu.RUnlock()
 		if len(roots) == 0 {
+			m.loopRunning = false
+			m.mu.Unlock()
 			return
 		}
+		m.mu.Unlock()
 
 		m.log.Infof("Schema migration: retrying %d failed subjects in %s", len(roots), backoff)
 		select {
 		case <-ctx.Done():
+			m.stopLoop()
 			return
 		case <-time.After(backoff):
 		}
@@ -638,6 +672,12 @@ func (m *schemaRegistryMigrator) retryFailed(ctx context.Context) {
 		}
 		backoff = min(2*backoff, m.retryMaxBackoff)
 	}
+}
+
+func (m *schemaRegistryMigrator) stopLoop() {
+	m.mu.Lock()
+	m.loopRunning = false
+	m.mu.Unlock()
 }
 
 // Sync syncs the source schema registry with the destination schema registry.
@@ -664,6 +704,9 @@ func (m *schemaRegistryMigrator) sync(ctx context.Context, roots map[string]stru
 		m.log.Info("Schema migration: schema registry sync disabled")
 		return nil
 	}
+
+	m.syncMu.Lock()
+	defer m.syncMu.Unlock()
 
 	m.log.Info("Schema migration: syncing schema registry")
 
@@ -701,31 +744,11 @@ func (m *schemaRegistryMigrator) sync(ctx context.Context, roots map[string]stru
 	workCh := make(chan sr.SubjectSchema, m.conf.MaxParallelHTTPRequests)
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Producer: send root subjects to channel
-	g.Go(func() error {
-		defer close(workCh)
-		for ss, err := range m.listSubjectSchemas(ctx, m.src, VersionsLatest, loggingFilter) { // Always use latest for DFS roots
-			if err != nil {
-				return fmt.Errorf("list subject schemas: %w", err)
-			}
-			if _, ok := roots[ss.Subject]; roots != nil && !ok {
-				continue
-			}
-			select {
-			case workCh <- ss:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-		return nil
-	})
-
-	// Workers: process subjects with DFS traversal
 	var (
 		total       atomic.Int64
 		failMu      sync.Mutex
 		failed      = map[schemaSubjectVersion]error{}
-		failedSubj  = map[string]struct{}{}
+		failedVer   = map[string]int{} // subject -> lowest version that failed
 		failedRoots = map[string]struct{}{}
 	)
 	// A subject that the registry rejects (e.g. an incompatible evolution) is
@@ -739,7 +762,9 @@ func (m *schemaRegistryMigrator) sync(ctx context.Context, roots map[string]stru
 		failMu.Lock()
 		_, dup := failed[key]
 		failed[key] = err
-		failedSubj[s.Subject] = struct{}{}
+		if v, ok := failedVer[s.Subject]; s.Version > 0 && (!ok || s.Version < v) {
+			failedVer[s.Subject] = s.Version
+		}
 		failedRoots[root.Subject] = struct{}{}
 		failMu.Unlock()
 		if s.ID != 0 {
@@ -774,18 +799,46 @@ func (m *schemaRegistryMigrator) sync(ctx context.Context, roots map[string]stru
 		}
 		return sr.SchemaReference{}, false
 	}
+
+	// Producer: send root subjects to channel
+	g.Go(func() error {
+		defer close(workCh)
+		for ss, err := range m.listSubjectSchemas(ctx, m.src, VersionsLatest, loggingFilter) { // Always use latest for DFS roots
+			if _, ok := roots[ss.Subject]; roots != nil && !ok && ss.Subject != "" {
+				continue
+			}
+			if err != nil {
+				// A subject removed from the source after it was listed
+				// fails only that subject.
+				if ss.Subject != "" && ctx.Err() == nil && isSubjectError(err) {
+					recordFailure(ss, ss, err)
+					continue
+				}
+				return fmt.Errorf("list subject schemas: %w", err)
+			}
+			select {
+			case workCh <- ss:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	})
+
+	// Workers: process subjects with DFS traversal
 	for range m.conf.MaxParallelHTTPRequests {
 		g.Go(func() error {
 			for ss := range workCh {
 				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss, filter, func(s sr.SubjectSchema) error {
 					// Versions are visited in ascending order. Registering a later
 					// version after an earlier one failed would shift destination
-					// version numbers, so the rest of the subject waits for the
-					// failed version to be retried.
+					// version numbers, so the later versions of the subject wait
+					// for the failed version to be retried. Earlier versions are
+					// not affected, e.g. one referenced by another subject.
 					failMu.Lock()
-					_, skip := failedSubj[s.Subject]
+					v, ok := failedVer[s.Subject]
 					failMu.Unlock()
-					if skip {
+					if ok && s.Version > v {
 						recordFailure(ss, s, fmt.Errorf("skip subject schema %s version %d: earlier version not synced", s.Subject, s.Version))
 						return nil
 					}

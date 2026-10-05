@@ -17,6 +17,10 @@ package migrator_test
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -1568,4 +1572,242 @@ func TestIntegrationSchemaRegistryMigratorSyncLoopRetriesFailedAtZeroInterval(t 
 	t.Log("And: the subject added after the initial sync is not migrated")
 	_, err = dst.SubjectVersions(ctx, lateSubj)
 	require.Error(t, err)
+}
+
+// A failed later version of a subject must not block an earlier version of it
+// that another subject references, nor the referrer. Subjects are shuffled on
+// every sync, so each case runs several syncs to cover both orders. A single
+// worker keeps the order within a sync deterministic.
+func TestIntegrationSchemaRegistryMigratorSyncFailedVersionDoesNotBlockEarlierReference(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		baseSubj = "base-value"
+		baseV1   = `{"type":"record","name":"Base","namespace":"com.example","fields":[{"name":"a","type":"string"}]}`
+		baseV2   = `{"type":"record","name":"Base","namespace":"com.example","fields":[{"name":"a","type":"string"},{"name":"b","type":"string","default":""}]}`
+		baseV3   = `{"type":"record","name":"Base","namespace":"com.example","fields":[{"name":"a","type":"int"}]}`
+		userSubj = "user-value"
+		userV1   = `{"type":"record","name":"User","namespace":"com.example","fields":[{"name":"base","type":"com.example.Base"}]}`
+		runs     = 8
+	)
+
+	for _, versions := range []migrator.Versions{migrator.VersionsLatest, migrator.VersionsAll} {
+		t.Run(versions.String(), func(t *testing.T) {
+			t.Log("Given: source and destination Schema Registry")
+			src, dst := startSchemaRegistrySourceAndDestination(t)
+
+			t.Log("And: a subject whose latest version is incompatible, and a subject referencing an earlier version")
+			set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+			require.NoError(t, set[0].Err)
+			var baseSS []sr.SubjectSchema
+			for _, s := range []string{baseV1, baseV2, baseV3} {
+				ss, err := src.CreateSchema(t.Context(), baseSubj, sr.Schema{Schema: s})
+				require.NoError(t, err)
+				baseSS = append(baseSS, ss)
+			}
+			userSS, err := src.CreateSchema(t.Context(), userSubj, sr.Schema{
+				Schema:     userV1,
+				References: []sr.SchemaReference{{Name: "com.example.Base", Subject: baseSubj, Version: 2}},
+			})
+			require.NoError(t, err)
+
+			t.Log("And: destination holds the first version under BACKWARD compatibility, so only the latest version is rejected")
+			_, err = dst.CreateSchema(t.Context(), baseSubj, sr.Schema{Schema: baseV1})
+			require.NoError(t, err)
+
+			conf := migrator.SchemaRegistryMigratorConfig{
+				Enabled:      true,
+				Versions:     versions,
+				TranslateIDs: true,
+			}
+
+			ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout*runs)
+			defer cancel()
+
+			for i := range runs {
+				t.Logf("When: migrator is run (run %d)", i+1)
+				m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+				m.SetMaxParallelHTTPRequests(1)
+				err := m.Sync(ctx)
+
+				t.Log("Then: only the incompatible version fails")
+				var pErr *migrator.PartialSyncError
+				require.ErrorAs(t, err, &pErr)
+				require.Len(t, pErr.Failed, 1, "failures: %v", pErr.Failed)
+				assert.Contains(t, pErr.Failed[0].Error(), fmt.Sprintf("%s version 3", baseSubj))
+
+				t.Log("And: the referenced version and the referrer are synced")
+				_, err = m.DestinationSchemaID(baseSS[1].ID)
+				require.NoError(t, err)
+				_, err = m.DestinationSchemaID(userSS.ID)
+				require.NoError(t, err)
+				_, err = m.DestinationSchemaID(baseSS[2].ID)
+				require.Error(t, err)
+			}
+		})
+	}
+}
+
+// A subject deleted at the source between listing subjects and fetching its
+// latest version fails only that subject, not the whole sync.
+func TestIntegrationSchemaRegistryMigratorSyncSubjectDeletedAfterListing(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		okSubj   = "ok-value"
+		goneSubj = "gone-value"
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	srcCluster, dstCluster := startRedpandaSourceAndDestination(t)
+	dst, err := sr.NewClient(sr.URLs(dstCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+	direct, err := sr.NewClient(sr.URLs(srcCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+
+	t.Log("And: two subjects at source")
+	okSS, err := direct.CreateSchema(t.Context(), okSubj, sr.Schema{Schema: `{"type":"string"}`})
+	require.NoError(t, err)
+	_, err = direct.CreateSchema(t.Context(), goneSubj, sr.Schema{Schema: `{"type":"int"}`})
+	require.NoError(t, err)
+
+	t.Log("And: one subject is listed but returns 404 when fetched, as if deleted after listing")
+	srcURL, err := url.Parse(srcCluster.SchemaRegistryURL)
+	require.NoError(t, err)
+	proxy := httputil.NewSingleHostReverseProxy(srcURL)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/subjects/"+goneSubj+"/versions") {
+			w.Header().Set("Content-Type", "application/vnd.schemaregistry.v1+json")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, `{"error_code":40401,"message":"Subject '%s' not found."}`, goneSubj)
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	src, err := sr.NewClient(sr.URLs(srv.URL))
+	require.NoError(t, err)
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsLatest,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	err = m.Sync(ctx)
+
+	t.Log("Then: the sync completes with only the deleted subject failed")
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, err, &pErr)
+	require.Len(t, pErr.Failed, 1)
+	assert.Contains(t, pErr.Failed[0].Error(), goneSubj)
+
+	t.Log("And: the other subject is synced")
+	_, err = m.DestinationSchemaID(okSS.ID)
+	require.NoError(t, err)
+}
+
+// SyncLoop is started on every output connect. With interval 0s, only one
+// retry loop may run at a time, and once it stops a later call starts a new
+// one.
+func TestIntegrationSchemaRegistryMigratorSyncLoopSingleRetryLoop(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		badV1 = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
+		badV2 = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"int"}]}`
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+
+	// addIncompatible creates subj at source with an evolution that the
+	// destination rejects until its compatibility is relaxed.
+	addIncompatible := func(ctx context.Context, subj string) {
+		_, err := src.CreateSchema(ctx, subj, sr.Schema{Schema: badV1})
+		require.NoError(t, err)
+		_, err = src.CreateSchema(ctx, subj, sr.Schema{Schema: badV2})
+		require.NoError(t, err)
+		_, err = dst.CreateSchema(ctx, subj, sr.Schema{Schema: badV1})
+		require.NoError(t, err)
+	}
+	relax := func(ctx context.Context, subj string) {
+		set := dst.SetCompatibility(ctx, sr.SetCompatibility{Level: sr.CompatNone}, subj)
+		require.NoError(t, set[0].Err)
+	}
+	startLoop := func(ctx context.Context, m interface{ SyncLoop(context.Context) }) <-chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			m.SyncLoop(ctx)
+		}()
+		return done
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	t.Log("And: a subject that fails the initial sync")
+	addIncompatible(ctx, "bad1-value")
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsAll,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, m.Sync(ctx), &pErr)
+
+	t.Log("When: the sync loop is started twice with interval 0s, as on an output reconnect")
+	done1 := startLoop(ctx, m)
+	done2 := startLoop(ctx, m)
+
+	t.Log("Then: one call returns immediately and the other keeps retrying")
+	var running <-chan struct{}
+	select {
+	case <-done1:
+		running = done2
+	case <-done2:
+		running = done1
+	case <-time.After(5 * time.Second):
+		t.Fatal("both sync loops are running")
+	}
+	select {
+	case <-running:
+		t.Fatal("sync loop stopped while a subject is failing")
+	case <-time.After(time.Second):
+	}
+
+	t.Log("And: the running loop stops once the subject syncs")
+	relax(ctx, "bad1-value")
+	select {
+	case <-running:
+	case <-time.After(30 * time.Second):
+		t.Fatal("sync loop did not stop")
+	}
+
+	t.Log("When: a later sync fails and the loop is started again")
+	addIncompatible(ctx, "bad2-value")
+	require.ErrorAs(t, m.Sync(ctx), &pErr)
+	done3 := startLoop(ctx, m)
+
+	t.Log("Then: a new loop runs and retries until the subject syncs")
+	select {
+	case <-done3:
+		t.Fatal("sync loop did not start after the previous one stopped")
+	case <-time.After(time.Second):
+	}
+	relax(ctx, "bad2-value")
+	select {
+	case <-done3:
+	case <-time.After(30 * time.Second):
+		t.Fatal("sync loop did not stop")
+	}
 }
