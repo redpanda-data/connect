@@ -173,11 +173,11 @@ func newer(version string, than [3]int) bool {
 }
 
 var (
-	fieldHeading    = regexp.MustCompile("^=== `([^`]+)`\\s*$")
-	mapKeySegment   = regexp.MustCompile(`\.?<[^>]+>`)
-	fieldsPartial   = regexp.MustCompile(`^docs/modules/components/partials/fields/([a-z_-]+)/([^/]+)\.adoc$`)
-	examplePartial  = regexp.MustCompile(`^docs/modules/components/examples/common/([a-z_-]+)/([^/]+)\.yaml$`)
-	bloblangPartial = regexp.MustCompile(`^docs/modules/components/partials/bloblang-(function|method)s/([^/]+)\.adoc$`)
+	releasedFieldHeading = regexp.MustCompile("^=== `([^`]+)`\\s*$")
+	mapKeySegment        = regexp.MustCompile(`\.?<[^>]+>`)
+	fieldsPartial        = regexp.MustCompile(`^docs/modules/components/partials/fields/([a-z_-]+)/([^/]+)\.adoc$`)
+	examplePartial       = regexp.MustCompile(`^docs/modules/components/examples/common/([a-z_-]+)/([^/]+)\.yaml$`)
+	bloblangPartial      = regexp.MustCompile(`^docs/modules/components/partials/bloblang-(function|method)s/([^/]+)\.adoc$`)
 )
 
 // releasedSpecs reads the components, fields, and Bloblang functions and
@@ -200,7 +200,7 @@ func releasedSpecs(t *testing.T, tag string) map[string]bool {
 			comp := pageTypeDir(m[1]) + "/" + m[2]
 			released[comp] = true
 			for line := range strings.SplitSeq(contents[f], "\n") {
-				if h := fieldHeading.FindStringSubmatch(line); h != nil {
+				if h := releasedFieldHeading.FindStringSubmatch(line); h != nil {
 					released[comp+":"+headingPath(h[1])] = true
 				}
 			}
