@@ -41,10 +41,10 @@ This input adds the following metadata fields to each message:
 
 - `+"`type`"+`: The Socket Mode event type: `+"`events_api`"+`, `+"`interactive`"+`, or `+"`slash_commands`"+`.`).
 		Fields(
-			service.NewStringField(iFieldAppToken).Description("The app-level token to use to authenticate and connect to Slack.").LintRule(`
+			service.NewStringField(iFieldAppToken).Description("The app-level token, which starts with `xapp-`. The input uses it to open the Socket Mode connection, so it needs the https://api.slack.com/scopes/connections:write[`connections:write` scope^].").LintRule(`
         root = if !this.has_prefix("xapp-") { [ "field must start with xapp-" ] }
       `),
-			service.NewStringField(iFieldBotToken).Description("Your Slack bot user's OAuth token, which must have the https://api.slack.com/scopes/connections:write[`connections.write` scope^] to access your Slack app's https://api.slack.com/methods/apps.connections.open[Socket Mode WebSocket URL^].").LintRule(`
+			service.NewStringField(iFieldBotToken).Description("The OAuth token of your Slack bot user, which starts with `xoxb-`.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
 			service.NewAutoRetryNacksToggleField(),
