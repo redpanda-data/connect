@@ -431,6 +431,49 @@ func TestIntegrationMCPServerAuthz_DenyAll(t *testing.T) {
 	}
 }
 
+func TestIntegrationMCPServerAuthz_PerTool(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const testOrgID = "test-org"
+	const testEmail = "test@example.com"
+
+	t.Log("Given: a policy granting tools/call on test-processor only")
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
+	server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/per_tool.yaml")
+
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   testEmail,
+		OrgID:   testOrgID,
+	}
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
+
+	session, cleanup := createMCPClient(t, server.URL(), token)
+	defer cleanup()
+
+	t.Log("When: the client lists tools")
+	toolsResult, err := session.ListTools(t.Context(), &mcp.ListToolsParams{})
+	require.NoError(t, err)
+
+	t.Log("Then: only the tool it may call is listed")
+	require.Len(t, toolsResult.Tools, 1)
+	assert.Equal(t, "test-processor", toolsResult.Tools[0].Name)
+
+	t.Log("And: calling that tool succeeds")
+	_, err = session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "test-processor",
+		Arguments: json.RawMessage(`{"value":"{\"foo\":\"bar\"}"}`),
+	})
+	require.NoError(t, err)
+
+	t.Log("And: calling any other tool is denied")
+	_, err = session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "test-output",
+		Arguments: json.RawMessage(`{"messages":[{"value":"hello"}]}`),
+	})
+	require.ErrorContains(t, err, "permission denied")
+}
+
 func TestIntegrationMCPServerAuthz_PolicyReload(t *testing.T) {
 	integration.CheckSkip(t)
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -37,6 +38,12 @@ const (
 	permissionToolsCall              authz.PermissionName = "dataplane_mcpserver_tools_call"
 	permissionLoggingSetLevel        authz.PermissionName = "dataplane_mcpserver_logging_set_level"
 )
+
+// toolResourceType is the resource type of tools within an MCP server, so a
+// tool's resource name is <server>/tools/<tool name>.
+const toolResourceType authz.ResourceType = "tools"
+
+var errPermissionDenied = errors.New("permission denied")
 
 var allPermissions = []authz.PermissionName{
 	permissionInitialize,
@@ -74,7 +81,7 @@ func NewAuthorizer(name authz.ResourceName, file string, logger *slog.Logger) (*
 	if err != nil {
 		return nil, err
 	}
-	return &Authorizer{policy: policy}, nil
+	return &Authorizer{policy: policy, logger: logger}, nil
 }
 
 // NewAuthorizerFromEndpoint returns an MCP server authorizer which streams
@@ -87,24 +94,77 @@ func NewAuthorizerFromEndpoint(name authz.ResourceName, endpoint string, logger 
 	if err != nil {
 		return nil, err
 	}
-	return &Authorizer{policy: policy}, nil
+	return &Authorizer{policy: policy, logger: logger}, nil
 }
 
 // Authorizer provides middleware for enforcing authorization policies on MCP method calls.
 type Authorizer struct {
 	policy *gateway.FileWatchingAuthzResourcePolicy
+	logger *slog.Logger
 }
 
 // Middleware returns an MCP method handler that enforces authorization checks before invoking the next handler.
+//
+// Tool calls are authorized against the called tool as a sub-resource of the server
+// (<server>/tools/<name>), so a policy can grant access to individual tools,
+// and tools/list results only include the tools the principal may call.
+// Bindings on the server itself apply to all of its tools.
 func (a *Authorizer) Middleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
+		perm := methodToPerm[method]
 		principal, ok := gateway.ValidatedPrincipalIDFromContext(ctx)
-		enforcer := a.policy.Authorizer(methodToPerm[method])
-		if !ok || !enforcer.Check(principal) {
-			return nil, errors.New("permission denied")
+		if !ok {
+			a.logDenied(method, principal, perm, "", "unauthenticated")
+			return nil, errPermissionDenied
 		}
-		return next(ctx, method, req)
+
+		enforcer := a.policy.Authorizer(perm)
+		var toolName string
+		if method == "tools/call" {
+			if toolName = calledToolName(req); toolName == "" {
+				a.logDenied(method, principal, perm, toolName, "empty_tool_name")
+				return nil, errPermissionDenied
+			}
+			enforcer = a.policy.SubResourceAuthorizer(toolResourceType, authz.ResourceID(toolName), perm)
+		}
+		if !enforcer.Check(principal) {
+			a.logDenied(method, principal, perm, toolName, "forbidden")
+			return nil, errPermissionDenied
+		}
+
+		result, err = next(ctx, method, req)
+		if list, isList := result.(*mcp.ListToolsResult); isList && err == nil {
+			list.Tools = slices.DeleteFunc(list.Tools, func(t *mcp.Tool) bool {
+				return !a.policy.SubResourceAuthorizer(toolResourceType, authz.ResourceID(t.Name), permissionToolsCall).Check(principal)
+			})
+		}
+		return result, err
 	}
+}
+
+// logDenied records a policy decision to deny a request. Methods without a mapped permission,
+// such as client notifications, are always denied and aren't policy decisions, so they aren't logged.
+func (a *Authorizer) logDenied(method string, principal authz.PrincipalID, perm authz.PermissionName, toolName, reason string) {
+	if perm == "" {
+		return
+	}
+	attrs := []any{
+		"method", method,
+		"principal", string(principal),
+		"permission", string(perm),
+		"reason", reason,
+	}
+	if toolName != "" {
+		attrs = append(attrs, "resource_type", string(toolResourceType), "resource_id", toolName)
+	}
+	a.logger.Warn("Authorization denied", attrs...)
+}
+
+func calledToolName(req mcp.Request) string {
+	if params, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok {
+		return params.Name
+	}
+	return ""
 }
 
 // Close closes the resource policy and stops watching the policy file.
