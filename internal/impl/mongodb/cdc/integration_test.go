@@ -10,6 +10,8 @@ package cdc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -298,72 +300,202 @@ func (o *outputHelper) Schemas(t *testing.T) []schema.Common {
 	return schemas
 }
 
-type setupOption = func(client *mongo.Client) error
-
-func enablePreAndPostDocuments() setupOption {
-	return func(client *mongo.Client) error {
-		r := client.Database("admin").RunCommand(
-			context.Background(),
-			bson.M{
-				"setClusterParameter": bson.M{
-					"changeStreamOptions": bson.M{
-						"preAndPostImages": bson.M{"expireAfterSeconds": 120},
-					},
-				},
-			},
-		)
-		return r.Err()
-	}
+// sharedMongo starts and remembers one package-wide MongoDB single-node
+// replica set, either with authentication or without. Each boot waits for the
+// replica set to elect a primary, so booting once per process rather than once
+// per test keeps the package well within its test timeout budget.
+//
+// The cluster runs with MongoDB defaults. A test that needs a different
+// cluster-wide setting must add another shared container rather than change
+// this one at runtime: the container is shared by every test in the package,
+// so a runtime change would leak into all of them. Per-collection settings,
+// such as changeStreamPreAndPostImages, stay a per-test decision.
+type sharedMongo struct {
+	once      sync.Once
+	uri       string
+	err       error
+	container *mongocontainer.MongoDBContainer
 }
 
-// startMongoContainer boots a single node replica set with root credentials and
-// returns a direct-connection URI plus a client that has already been pinged
-// successfully. Tests that need control over the pieces setup hides - the
-// checkpoint cache directory, the logger - build their own stream on top of this.
+var (
+	sharedMongoAuth   sharedMongo
+	sharedMongoNoAuth sharedMongo
+)
+
+// start boots the shared container on first use and returns its
+// directConnection URI. Callers get a fresh client per test from
+// startMongoContainer or startMongoContainerWithoutAuth; this method only
+// establishes the shared container and readiness.
+func (s *sharedMongo) start(customizers []testcontainers.ContainerCustomizer) (string, error) {
+	s.once.Do(func() {
+		ctx := context.Background() // not t.Context(): container outlives individual tests
+		container, err := mongocontainer.Run(ctx, "mongo:7", customizers...)
+		// Run can return a live container together with an error, for example
+		// when the wait strategy times out. Remember it before the error check
+		// so that terminate() still removes it.
+		s.container = container
+		if err != nil {
+			s.err = err
+			return
+		}
+
+		connStr, err := container.ConnectionString(ctx)
+		if err != nil {
+			s.err = err
+			return
+		}
+		u, err := url.Parse(connStr)
+		if err != nil {
+			s.err = err
+			return
+		}
+		// Force a directConnection because we don't have the proper networking
+		// setup for a proper replica set cluster.
+		query := u.Query()
+		query.Add("directConnection", "true")
+		u.RawQuery = query.Encode()
+		uri := u.String()
+
+		mongoClient, err := mongo.Connect(options.Client().
+			SetConnectTimeout(5 * time.Second).
+			SetTimeout(10 * time.Second).
+			SetServerSelectionTimeout(10 * time.Second).
+			ApplyURI(uri).
+			SetDirect(true))
+		if err != nil {
+			s.err = err
+			return
+		}
+		defer func() { _ = mongoClient.Disconnect(ctx) }()
+
+		// The replica set can take a moment after container readiness before it
+		// accepts client connections through the mapped port, so retry the ping. A
+		// ping succeeds as soon as the server answers, which is before the single
+		// node has elected itself primary, so callers would race the election and
+		// get `(NotWritablePrimary) not primary` from their first write. Ask the
+		// server directly whether it is writable before declaring readiness.
+		deadline := time.Now().Add(60 * time.Second)
+		for {
+			ready, readyErr := func() (bool, error) {
+				if err := mongoClient.Ping(ctx, nil); err != nil {
+					return false, err
+				}
+				hello, err := mongoClient.Database("admin").RunCommand(ctx, bson.M{"hello": 1}).Raw()
+				if err != nil {
+					return false, err
+				}
+				writable, err := hello.LookupErr("isWritablePrimary")
+				if err != nil {
+					return false, fmt.Errorf("hello reply carried no isWritablePrimary field: %w", err)
+				}
+				isPrimary, ok := writable.BooleanOK()
+				if !ok {
+					return false, fmt.Errorf("isWritablePrimary was not a boolean: %v", writable)
+				}
+				return isPrimary, nil
+			}()
+			if ready {
+				break
+			}
+			if time.Now().After(deadline) {
+				if readyErr != nil {
+					s.err = fmt.Errorf("replica set never became ready: %w", readyErr)
+				} else {
+					s.err = errors.New("replica set never elected a primary")
+				}
+				return
+			}
+			time.Sleep(time.Second)
+		}
+		s.uri = uri
+	})
+	return s.uri, s.err
+}
+
+// terminate stops the shared container, if one was started. It is called from
+// TestMain once every test in the package has finished.
+func (s *sharedMongo) terminate() error {
+	if s.container == nil {
+		return nil
+	}
+	return s.container.Terminate(context.Background())
+}
+
+// testDatabaseName derives a MongoDB database name from the running test's
+// name, so every test on the shared containers gets its own database and
+// collections keep their plain names ("foo", and so on) inside it. See
+// databaseNameForTest for the rules.
+func testDatabaseName(t *testing.T) string {
+	t.Helper()
+	return databaseNameForTest(t.Name())
+}
+
+// databaseNameForTest turns a test name into a valid MongoDB database name.
+//
+// Subtest names carry characters MongoDB does not allow in a database name
+// (slashes from t.Run nesting, spaces, and the like), so every character
+// outside [A-Za-z0-9_] is replaced with an underscore. MongoDB also caps
+// database names at 63 bytes, so a long or deeply nested test name is
+// truncated and given a short hash of the full name, keeping two long names
+// that share a truncated prefix from colliding.
+func databaseNameForTest(testName string) string {
+	name := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
+			return r
+		}
+		return '_'
+	}, testName)
+	const maxLen = 63
+	if len(name) <= maxLen {
+		return name
+	}
+	sum := sha256.Sum256([]byte(testName))
+	suffix := "_" + hex.EncodeToString(sum[:])[:8]
+	return name[:maxLen-len(suffix)] + suffix
+}
+
+// startMongoContainer returns a direct-connection URI plus a client that has
+// already been pinged successfully, both pointing at the package-wide shared
+// replica set that authenticates with root credentials. The container is
+// started once per process and shared by every caller; use testDatabaseName(t)
+// to give each test its own database on it. Tests that need control over the
+// pieces setup hides - the checkpoint cache directory, the logger - build
+// their own stream on top of this.
 //
 // Callers are responsible for integration.CheckSkip.
-func startMongoContainer(t *testing.T, opts ...setupOption) (string, *mongo.Client) {
+func startMongoContainer(t *testing.T) (string, *mongo.Client) {
 	t.Helper()
-	return runMongoContainer(t, []testcontainers.ContainerCustomizer{
+	return sharedMongoClient(t, &sharedMongoAuth, []testcontainers.ContainerCustomizer{
 		mongocontainer.WithUsername("mongoadmin"),
 		mongocontainer.WithPassword("secret"),
 		mongocontainer.WithReplicaSet("rs0"),
-	}, opts...)
-}
-
-// startMongoContainerWithoutAuth boots the same single node replica set with
-// authentication disabled, so its URI carries no userinfo. That is what the
-// credential-refresh tests need: they stub the credential builder to return no
-// credential at all, and a MONGODB-AWS credential could not authenticate against
-// a test container anyway.
-func startMongoContainerWithoutAuth(t *testing.T, opts ...setupOption) (string, *mongo.Client) {
-	t.Helper()
-	return runMongoContainer(t, []testcontainers.ContainerCustomizer{
-		mongocontainer.WithReplicaSet("rs0"),
-	}, opts...)
-}
-
-func runMongoContainer(t *testing.T, customizers []testcontainers.ContainerCustomizer, opts ...setupOption) (string, *mongo.Client) {
-	t.Helper()
-	container, err := mongocontainer.Run(t.Context(), "mongo:7", customizers...)
-	t.Cleanup(func() {
-		// t.Context() is already cancelled when cleanup runs
-		if err := container.Terminate(context.Background()); err != nil {
-			t.Fatal("unable to shutdown container", err)
-		}
 	})
+}
+
+// startMongoContainerWithoutAuth returns a direct-connection URI plus a client
+// against the package-wide shared replica set that has authentication
+// disabled, so its URI carries no userinfo. That is what the credential-refresh
+// tests need: they stub the credential builder to return no credential at all,
+// and a MONGODB-AWS credential could not authenticate against a test container
+// anyway. The container is started once per process and shared by every caller;
+// use testDatabaseName(t) to give each test its own database on it.
+func startMongoContainerWithoutAuth(t *testing.T) (string, *mongo.Client) {
+	t.Helper()
+	return sharedMongoClient(t, &sharedMongoNoAuth, []testcontainers.ContainerCustomizer{
+		mongocontainer.WithReplicaSet("rs0"),
+	})
+}
+
+// sharedMongoClient starts s on first use (see sharedMongo.start) and then
+// returns that shared container's URI together with a client dedicated to the
+// calling test. The client is connected fresh per call so tests running in
+// parallel do not share one *mongo.Client, and it is disconnected in
+// t.Cleanup.
+func sharedMongoClient(t *testing.T, s *sharedMongo, customizers []testcontainers.ContainerCustomizer) (string, *mongo.Client) {
+	t.Helper()
+	uri, err := s.start(customizers)
 	require.NoError(t, err)
-	connStr, err := container.ConnectionString(t.Context())
-	require.NoError(t, err)
-	url, err := url.Parse(connStr)
-	require.NoError(t, err)
-	// Force a directConnection because we don't have the proper networking setup for a
-	// proper replica set cluster.
-	query := url.Query()
-	query.Add("directConnection", "true")
-	url.RawQuery = query.Encode()
-	uri := url.String()
-	t.Log(uri)
+
 	mongoClient, err := mongo.Connect(options.Client().
 		SetConnectTimeout(5 * time.Second).
 		SetTimeout(10 * time.Second).
@@ -371,43 +503,24 @@ func runMongoContainer(t *testing.T, customizers []testcontainers.ContainerCusto
 		ApplyURI(uri).
 		SetDirect(true))
 	require.NoError(t, err)
-	// The replica set can take a moment after container readiness before it
-	// accepts client connections through the mapped port, so retry the ping. A
-	// ping succeeds as soon as the server answers, which is before the single
-	// node has elected itself primary, so callers would race the election and
-	// get `(NotWritablePrimary) not primary` from their first write. Ask the
-	// server directly whether it is writable before declaring readiness.
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		if !assert.NoError(c, mongoClient.Ping(t.Context(), nil)) {
-			return
-		}
-		hello, err := mongoClient.Database("admin").RunCommand(t.Context(), bson.M{"hello": 1}).Raw()
-		if !assert.NoError(c, err) {
-			return
-		}
-		writable, err := hello.LookupErr("isWritablePrimary")
-		if !assert.NoError(c, err, "hello reply carried no isWritablePrimary field: %v", hello) {
-			return
-		}
-		isPrimary, ok := writable.BooleanOK()
-		assert.True(c, ok, "isWritablePrimary was not a boolean: %v", writable)
-		assert.True(c, isPrimary, "the replica set has not elected a primary yet")
-	}, 60*time.Second, time.Second)
-	for _, opt := range opts {
-		require.NoError(t, opt(mongoClient))
-	}
+	t.Cleanup(func() {
+		// t.Context() is already cancelled when cleanup runs.
+		require.NoError(t, mongoClient.Disconnect(context.Background()))
+	})
+	require.NoError(t, mongoClient.Ping(t.Context(), nil))
 	return uri, mongoClient
 }
 
-func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *databaseHelper, *outputHelper) {
+func setup(t *testing.T, template string) (*streamHelper, *databaseHelper, *outputHelper) {
 	integration.CheckSkip(t)
 	t.Helper()
-	uri, mongoClient := startMongoContainer(t, opts...)
-	d := &databaseHelper{mongoClient.Database("test")}
+	uri, mongoClient := startMongoContainer(t)
+	dbName := testDatabaseName(t)
+	d := &databaseHelper{mongoClient.Database(dbName)}
 	template = strings.NewReplacer(
 		"$USERNAME", "mongoadmin",
 		"$PASSWORD", "secret",
-		"$DATABASE", "test",
+		"$DATABASE", dbName,
 		"$CACHE", "filecache",
 		"$URI", uri,
 	).Replace(template)
@@ -423,6 +536,7 @@ file:
 }
 
 func TestIntegrationMongoCDC(t *testing.T) {
+	t.Parallel()
 	runTest := func(t *testing.T, mode string) {
 		r := strings.NewReplacer("$MODE", mode)
 		stream, db, output := setup(t, r.Replace(`
@@ -433,7 +547,7 @@ mongodb_cdc:
   document_mode: $MODE
   collections:
     - 'foo'
-`), enablePreAndPostDocuments())
+`))
 		db.CreateCollection(
 			t,
 			"foo",
@@ -486,6 +600,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCWithSnapshot(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 read_until:
   idle_timeout: 1s
@@ -533,6 +648,7 @@ read_until:
 }
 
 func TestIntegrationMongoCDCWithParallelSnapshot(t *testing.T) {
+	t.Parallel()
 	runTest := func(t *testing.T, autoBuckets bool) {
 		stream, db, output := setup(t, `
 read_until:
@@ -588,6 +704,7 @@ read_until:
 }
 
 func TestIntegrationMongoCDCResumeStream(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -624,6 +741,7 @@ mongodb_cdc:
 // dropped these writes would leave nothing to resume from, and the resume would
 // silently become a re-read.
 func TestIntegrationMongoCDCResumeStreamWithoutFlusher(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -664,6 +782,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCResumeWithSnapshot(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -692,6 +811,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCRelaxedMarshalling(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -714,6 +834,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCFilteredStream(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -740,6 +861,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCMultipleCollections(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -795,6 +917,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoPartialUpdates(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -890,6 +1013,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoResumeAfterSnapshotWithoutChanges(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -916,6 +1040,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoIssue3425(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -1075,9 +1200,11 @@ func (l *logCapture) matching(sub string) []string {
 // goroutine so the flusher is fully stopped before a waiting Connect resumes.
 // The recovery path still crosses one reconnect, so the ordering stays exercised.
 func TestIntegrationMongoCDCUnresumableCheckpointToken(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
-	db := &databaseHelper{mongoClient.Database("test")}
+	dbName := testDatabaseName(t)
+	db := &databaseHelper{mongoClient.Database(dbName)}
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
@@ -1106,7 +1233,7 @@ func TestIntegrationMongoCDCUnresumableCheckpointToken(t *testing.T) {
 	require.NoError(t, builder.AddInputYAML(`
 mongodb_cdc:
   url: '`+uri+`'
-  database: 'test'
+  database: '`+dbName+`'
   checkpoint_cache: 'filecache'
   stream_snapshot: true
   json_marshal_mode: relaxed
@@ -1201,6 +1328,7 @@ file:
 // "DEADBEEF" is not decodable as a keystring, so the server rejects the resume
 // rather than accepting an early position and replaying the oplog.
 func TestIntegrationMongoCDCUnresumablePositionWithoutSnapshot(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
 
@@ -1248,7 +1376,7 @@ file:
 
 	t.Run("the default refuses to skip the gap", func(t *testing.T) {
 		// No on_unresumable_position at all, so the default is what is under test.
-		db, output, logs, stream, checkpointFile := run(t, "faildb", "")
+		db, output, logs, stream, checkpointFile := run(t, testDatabaseName(t), "")
 		wait := stream.RunAsync(t)
 		t.Cleanup(wait)
 
@@ -1281,7 +1409,8 @@ file:
 	})
 
 	t.Run("reset opts into skipping the gap", func(t *testing.T) {
-		_, output, logs, stream, checkpointFile := run(t, "resetdb", "reset")
+		dbName := testDatabaseName(t)
+		_, output, logs, stream, checkpointFile := run(t, dbName, "reset")
 		wait := stream.RunAsync(t)
 		t.Cleanup(wait)
 
@@ -1297,7 +1426,7 @@ file:
 		id := 0
 		require.Eventually(t, func() bool {
 			id++
-			if _, err := mongoClient.Database("resetdb").Collection("foo").
+			if _, err := mongoClient.Database(dbName).Collection("foo").
 				InsertOne(t.Context(), bson.M{"_id": id, "data": "hello"}); err != nil {
 				return false
 			}
@@ -1344,9 +1473,11 @@ file:
 // position, the checkpoint would be cleared and the snapshot re-run, and doc 1
 // would be delivered a second time.
 func TestIntegrationMongoCDCCollectionDropAndRename(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
-	db := &databaseHelper{mongoClient.Database("test")}
+	dbName := testDatabaseName(t)
+	db := &databaseHelper{mongoClient.Database(dbName)}
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "one"})
 
@@ -1354,7 +1485,7 @@ func TestIntegrationMongoCDCCollectionDropAndRename(t *testing.T) {
 	require.NoError(t, builder.AddInputYAML(`
 mongodb_cdc:
   url: '`+uri+`'
-  database: 'test'
+  database: '`+dbName+`'
   checkpoint_cache: 'filecache'
   stream_snapshot: true
   json_marshal_mode: relaxed
@@ -1397,15 +1528,15 @@ file:
 	// again. The write must arrive on the same stream. (A drop emits one `drop`
 	// event, not a delete per document, so it adds nothing to the delivered
 	// count - the skipped event types never reach the output.)
-	require.NoError(t, mongoClient.Database("test").Collection("foo").Drop(t.Context()))
+	require.NoError(t, mongoClient.Database(dbName).Collection("foo").Drop(t.Context()))
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 3, "data": "three"})
 	awaitCount(3, "the insert after the collection was dropped and recreated never arrived")
 
 	// Phase 4: rename the watched collection away, recreate it, and write again.
 	res := mongoClient.Database("admin").RunCommand(t.Context(), bson.D{
-		{Key: "renameCollection", Value: "test.foo"},
-		{Key: "to", Value: "test.renamed"},
+		{Key: "renameCollection", Value: dbName + ".foo"},
+		{Key: "to", Value: dbName + ".renamed"},
 	})
 	require.NoError(t, res.Err())
 	db.CreateCollection(t, "foo")
@@ -1441,9 +1572,11 @@ file:
 // starts over, which for a snapshot-enabled config means the snapshot runs and
 // both seeded documents arrive.
 func TestIntegrationMongoCDCCorruptCheckpoint(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
-	db := &databaseHelper{mongoClient.Database("test")}
+	dbName := testDatabaseName(t)
+	db := &databaseHelper{mongoClient.Database(dbName)}
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
@@ -1459,7 +1592,7 @@ func TestIntegrationMongoCDCCorruptCheckpoint(t *testing.T) {
 	require.NoError(t, builder.AddInputYAML(`
 mongodb_cdc:
   url: '`+uri+`'
-  database: 'test'
+  database: '`+dbName+`'
   checkpoint_cache: 'filecache'
   stream_snapshot: true
   json_marshal_mode: relaxed
@@ -1514,9 +1647,11 @@ file:
 // input must refuse — keeping the corrupt entry for inspection and failing on
 // every reconnect instead of quietly starting over from the oplog end.
 func TestIntegrationMongoCDCCorruptCheckpointWithoutSnapshot(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainer(t)
-	db := &databaseHelper{mongoClient.Database("test")}
+	dbName := testDatabaseName(t)
+	db := &databaseHelper{mongoClient.Database(dbName)}
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 
@@ -1529,7 +1664,7 @@ func TestIntegrationMongoCDCCorruptCheckpointWithoutSnapshot(t *testing.T) {
 	require.NoError(t, builder.AddInputYAML(`
 mongodb_cdc:
   url: '`+uri+`'
-  database: 'test'
+  database: '`+dbName+`'
   checkpoint_cache: 'filecache'
   stream_snapshot: false
   json_marshal_mode: relaxed
@@ -1673,6 +1808,7 @@ mongodb_cdc:
 // ---------------------------------------------------------------------------
 
 func TestIntegrationMongoCDCSchemaOnInsert(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -1708,6 +1844,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCSnapshotSchema(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 read_until:
   idle_timeout: 3s
@@ -1740,6 +1877,7 @@ read_until:
 }
 
 func TestIntegrationMongoCDCSchemaChange(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 read_until:
   idle_timeout: 3s
@@ -1778,6 +1916,7 @@ read_until:
 }
 
 func TestIntegrationMongoCDCSchemaOrdering(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 read_until:
   idle_timeout: 3s
@@ -1815,6 +1954,7 @@ read_until:
 }
 
 func TestIntegrationMongoCDCMultiCollectionSchema(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -1863,6 +2003,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCDeleteUsesCache(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -1894,6 +2035,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCSchemaValidator(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -1949,6 +2091,7 @@ mongodb_cdc:
 }
 
 func TestIntegrationMongoCDCPartialUpdateSchema(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
@@ -1997,6 +2140,7 @@ mongodb_cdc:
 // slot - and the committed resume token must advance past the dropped events
 // so a restart does not replay them.
 func TestIntegrationMongoCDCNackedStreamBatchDropsByContract(t *testing.T) {
+	t.Parallel()
 	stream, db, output := setup(t, `
 mongodb_cdc:
   url: '$URI'
