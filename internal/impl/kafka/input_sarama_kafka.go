@@ -63,8 +63,6 @@ func saramaAddressesField(name string) *service.ConfigField {
 		)
 }
 
-// saramaTargetVersionField returns the Kafka protocol version field shared by
-// the Sarama based Kafka input and output.
 // saramaClientIDField returns the client_id field of the Sarama-based kafka
 // input and output.
 func saramaClientIDField(name string) *service.ConfigField {
@@ -72,6 +70,8 @@ func saramaClientIDField(name string) *service.ConfigField {
 		Description("The client ID sent to brokers with every request, which lets brokers attribute requests to this client in their logs, metrics, and client quotas.")
 }
 
+// saramaTargetVersionField returns the Kafka protocol version field shared by
+// the Sarama based Kafka input and output.
 func saramaTargetVersionField(name string) *service.ConfigField {
 	return service.NewStringField(name).
 		Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").

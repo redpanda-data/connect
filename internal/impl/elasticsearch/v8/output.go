@@ -43,19 +43,19 @@ import (
 )
 
 const (
-	esFieldURLs            = "urls"
-	esFieldID              = "id"
-	esFieldAction          = "action"
-	esFieldIndex           = "index"
-	esFieldPipeline        = "pipeline"
-	esFieldRouting         = "routing"
-	esFieldRetryOnConflict = "retry_on_conflict"
+	esFieldURLs            = esoutput.FieldURLs
+	esFieldID              = esoutput.FieldID
+	esFieldAction          = esoutput.FieldAction
+	esFieldIndex           = esoutput.FieldIndex
+	esFieldPipeline        = esoutput.FieldPipeline
+	esFieldRouting         = esoutput.FieldRouting
+	esFieldRetryOnConflict = esoutput.FieldRetryOnConflict
 	esFieldTLS             = "tls"
-	esFieldAuth            = "basic_auth"
-	esFieldAuthEnabled     = "enabled"
-	esFieldAuthUsername    = "username"
-	esFieldAuthPassword    = "password"
-	esFieldAPIKey          = "api_key"
+	esFieldAuth            = esoutput.FieldBasicAuth
+	esFieldAuthEnabled     = esoutput.FieldBasicAuthEnabled
+	esFieldAuthUsername    = esoutput.FieldBasicAuthUsername
+	esFieldAuthPassword    = esoutput.FieldBasicAuthPassword
+	esFieldAPIKey          = esoutput.FieldAPIKey
 	esFieldBatching        = "batching"
 )
 

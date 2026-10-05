@@ -35,17 +35,17 @@ import (
 )
 
 const (
-	esoFieldURLs                = "urls"
-	esoFieldID                  = "id"
+	esoFieldURLs                = esoutput.FieldURLs
+	esoFieldID                  = esoutput.FieldID
 	esoFieldAction              = "action"
-	esoFieldIndex               = "index"
-	esoFieldPipeline            = "pipeline"
-	esoFieldRouting             = "routing"
+	esoFieldIndex               = esoutput.FieldIndex
+	esoFieldPipeline            = esoutput.FieldPipeline
+	esoFieldRouting             = esoutput.FieldRouting
 	esoFieldTLS                 = "tls"
-	esoFieldAuth                = "basic_auth"
-	esoFieldAuthEnabled         = "enabled"
-	esoFieldAuthUsername        = "username"
-	esoFieldAuthPassword        = "password"
+	esoFieldAuth                = esoutput.FieldBasicAuth
+	esoFieldAuthEnabled         = esoutput.FieldBasicAuthEnabled
+	esoFieldAuthUsername        = esoutput.FieldBasicAuthUsername
+	esoFieldAuthPassword        = esoutput.FieldBasicAuthPassword
 	esoFieldBatching            = "batching"
 	esoFieldAWS                 = "aws"
 	esoFieldCompressRequestBody = "compress_request_body"
