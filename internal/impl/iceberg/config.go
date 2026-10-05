@@ -215,7 +215,7 @@ func icebergOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.80.0").
+		Version("4.82.0").
 		Summary("Writes data to Apache Iceberg tables using the REST catalog API.").
 		Description(`
 This output supports:
@@ -309,7 +309,11 @@ array:list
 						Optional().
 						Secret(),
 					service.NewObjectField(ioFieldCatalogAuthSigV4,
-						append(config.SessionFields(),
+						// region shipped with the output in 4.82.0, and the other
+						// session fields in 4.84.0.
+						append(config.SessionFieldsWithVersions(map[string]string{
+							"endpoint": "4.84.0", "tcp": "4.84.0", "credentials": "4.84.0",
+						}),
 							service.NewStringField(ioFieldSigV4Service).
 								Description("AWS service name for SigV4 signing.").
 								Advanced().

@@ -50,7 +50,7 @@ const (
 func cloudWatchLogsInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Version("4.81.0").
+		Version("4.82.0").
 		Categories("Services", "AWS").
 		Summary("Consumes log events from AWS CloudWatch Logs.").
 		Description(`

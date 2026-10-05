@@ -32,18 +32,29 @@ import (
 var semver = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
 
 // TestNewSpecsHaveVersions fails when a component, field, Bloblang function,
-// or Bloblang method that isn't in the previous release has no version, or
-// when any version isn't a plain x.y.z release number. The version is
-// published as "Introduced in version ..." in the reference docs.
+// or Bloblang method has a version that isn't a release it could have shipped
+// in, or when one that isn't in the previous release has no version. The
+// version is published as "Introduced in version ..." in the reference docs.
 //
-// The previous release is the highest vX.Y.Z tag reachable from HEAD, and its
-// contents are read from the reference partials generated into that tag, which
-// CI keeps in step with the code. A new field inside a new component or a new
-// object field is covered by its parent's version. Deprecated and hidden specs
-// are skipped.
+// The previous release is the highest vX.Y.Z tag reachable from HEAD. Every
+// version must be a plain x.y.z release number with a major version of at
+// least 1, and no later than the next minor release after the previous one.
+//
+// The contents of the previous release are read from the reference partials
+// generated into its tag, which CI keeps in step with the code. A new field
+// inside a new component or a new object field is covered by its parent's
+// version. Deprecated and hidden specs don't need a version. Releases from
+// before the partials existed have no reliable record of what they shipped,
+// so for them only the version numbers themselves are checked.
+//
+// CI runs this test with and without the x_benthos_extra build tag, so the
+// components that only build with it are checked too.
 func TestNewSpecsHaveVersions(t *testing.T) {
 	tag, prev := previousRelease(t)
 	released := releasedSpecs(t, tag)
+	if released == nil {
+		t.Logf("%s has no generated reference partials, so only version numbers are checked; the check for unversioned new specs starts with the first release that has them", tag)
+	}
 
 	raw, err := schema.Standard("", "").MarshalJSONV0()
 	if err != nil {
@@ -59,44 +70,50 @@ func TestNewSpecsHaveVersions(t *testing.T) {
 	}
 }
 
-// versionProblems lists the specs in full that aren't in released (the specs
-// documented in tag, which is version prev) and have no valid version.
+// versionProblems lists the specs in full whose version isn't valid for a
+// codebase whose previous release is tag (version prev). A version is valid
+// when it's a release number from 1.0.0 up to the next minor release after
+// prev. When released (the specs documented in tag) is non-nil, a spec that
+// isn't in it must also have a version, and that version must be later than
+// prev.
 func versionProblems(full *fullSchema, released map[string]bool, tag string, prev [3]int) []string {
-	next := fmt.Sprintf("%d.%d.0", prev[0], prev[1]+1)
+	next := [3]int{prev[0], prev[1] + 1, 0}
+	nextStr := fmt.Sprintf("%d.%d.%d", next[0], next[1], next[2])
 	var problems []string
-	check := func(what, version string, isNew, skip bool) {
+	check := func(what, version string, isNew, exempt bool) {
+		isNew = isNew && released != nil && !exempt
+		v, ok := parseVersion(version)
 		switch {
-		case skip:
-		case version != "" && !semver.MatchString(version):
-			problems = append(problems, fmt.Sprintf("%s: version %q must be a release number such as %q", what, version, next))
+		case version != "" && !ok:
+			problems = append(problems, fmt.Sprintf("%s: version %q must be a release number such as %q", what, version, nextStr))
+		case version != "" && v[0] == 0:
+			problems = append(problems, fmt.Sprintf("%s: version %q isn't a release; set the release it first shipped in", what, version))
+		case version != "" && newer(version, next):
+			problems = append(problems, fmt.Sprintf("%s: version %q is later than %s, the next release after %s", what, version, nextStr, tag))
 		case version != "" && isNew && !newer(version, prev):
 			problems = append(problems, fmt.Sprintf("%s: is not in %s, so its version %q must be later than that release", what, tag, version))
 		case version == "" && isNew:
-			problems = append(problems, fmt.Sprintf("%s: is not in %s, so it needs .Version(%q) (the release it first ships in)", what, tag, next))
+			problems = append(problems, fmt.Sprintf("%s: is not in %s, so it needs .Version(%q) (the release it first ships in)", what, tag, nextStr))
 		}
 	}
 
-	var walk func(comp, prefix string, fields []fieldSpec, parentNew bool)
-	walk = func(comp, prefix string, fields []fieldSpec, parentNew bool) {
+	var walk func(comp, prefix string, fields []fieldSpec, parentNew, exempt bool)
+	walk = func(comp, prefix string, fields []fieldSpec, parentNew, exempt bool) {
 		for _, f := range fields {
 			p := prefix + f.Name
-			if f.IsDeprecated {
-				continue
-			}
+			fExempt := exempt || f.IsDeprecated
 			isNew := !parentNew && !released[comp+":"+p]
-			check(comp+" field "+p, f.Version, isNew, false)
-			walk(comp, p+".", f.Children, parentNew || isNew)
+			check(comp+" field "+p, f.Version, isNew, fExempt)
+			walk(comp, p+".", f.Children, parentNew || isNew, fExempt)
 		}
 	}
 	for _, g := range full.Groups {
 		for _, c := range g.Components {
 			comp := pageTypeDir(g.Key) + "/" + c.Name
 			isNew := !released[comp]
-			if c.Status == "deprecated" {
-				continue
-			}
-			check(comp, c.Version, isNew, false)
-			walk(comp, "", c.Config.Children, isNew)
+			exempt := c.Status == "deprecated"
+			check(comp, c.Version, isNew, exempt)
+			walk(comp, "", c.Config.Children, isNew, exempt)
 		}
 	}
 	for _, f := range full.BloblangFunctions {
@@ -164,9 +181,8 @@ var (
 )
 
 // releasedSpecs reads the components, fields, and Bloblang functions and
-// methods whose reference partials were generated into tag. Releases from
-// before the partials existed have no reliable record, so the test is skipped
-// for them.
+// methods whose reference partials were generated into tag. It returns nil for
+// releases from before the partials existed, which have no reliable record.
 func releasedSpecs(t *testing.T, tag string) map[string]bool {
 	t.Helper()
 	out, err := exec.Command("git", "ls-tree", "-r", "--full-tree", "--name-only", tag, "--", "docs/modules/components").Output()
@@ -197,7 +213,7 @@ func releasedSpecs(t *testing.T, tag string) map[string]bool {
 		}
 	}
 	if len(released) == 0 {
-		t.Skipf("%s has no generated reference partials, so there is no record of what it shipped; the check starts with the first release that has them", tag)
+		return nil
 	}
 	return released
 }
@@ -258,6 +274,8 @@ func TestVersionProblems(t *testing.T) {
 				{Name: "gone", IsDeprecated: true},
 				{Name: "obj", Version: "4.112.0", Children: []fieldSpec{{Name: "inner"}}},
 				{Name: "bad", Version: "v4.2.0"},
+				{Name: "zero", Version: "0.0.1"},
+				{Name: "future", Version: "4.200.0"},
 			}}},
 			{Name: "brand_new", Version: "4.112.0", Config: fieldSpec{Children: []fieldSpec{{Name: "f"}}}},
 			{Name: "brand_new_unversioned"},
@@ -267,13 +285,15 @@ func TestVersionProblems(t *testing.T) {
 		BloblangMethods:   []bloblangSpec{{Name: "new_method", Version: "4.112.0"}},
 	}
 	released := map[string]bool{
-		"inputs/old": true, "inputs/old:kept": true, "inputs/old:bad": true, "function:old_fn": true,
+		"inputs/old": true, "inputs/old:kept": true, "inputs/old:bad": true, "inputs/old:zero": true, "inputs/old:future": true, "function:old_fn": true,
 	}
 	got := versionProblems(full, released, "v4.111.0", [3]int{4, 111, 0})
 	want := []string{
 		`inputs/old field added: is not in v4.111.0, so it needs .Version("4.112.0") (the release it first ships in)`,
 		`inputs/old field added_stale: is not in v4.111.0, so its version "4.100.0" must be later than that release`,
 		`inputs/old field bad: version "v4.2.0" must be a release number such as "4.112.0"`,
+		`inputs/old field zero: version "0.0.1" isn't a release; set the release it first shipped in`,
+		`inputs/old field future: version "4.200.0" is later than 4.112.0, the next release after v4.111.0`,
 		`inputs/brand_new_unversioned: is not in v4.111.0, so it needs .Version("4.112.0") (the release it first ships in)`,
 		`Bloblang function new_fn: is not in v4.111.0, so it needs .Version("4.112.0") (the release it first ships in)`,
 	}

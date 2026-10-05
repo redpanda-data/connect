@@ -15,14 +15,43 @@
 package config
 
 import (
+	"slices"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
+
+// sessionFieldNames are the names of the fields that SessionFields returns, in
+// order.
+var sessionFieldNames = []string{"region", "endpoint", "tcp", "credentials"}
 
 // SessionFields defines a re-usable set of config fields for an AWS session
 // that is compatible with the public service APIs and avoids importing the full
 // AWS dependencies.
 func SessionFields() []*service.ConfigField {
+	return SessionFieldsWithVersions(nil)
+}
+
+// SessionFieldsWithVersions is SessionFields for a component that gained some
+// of the session fields after its first release. versions maps a field name
+// (region, endpoint, tcp or credentials) to the release it first shipped in
+// for that component. It panics on any other name.
+func SessionFieldsWithVersions(versions map[string]string) []*service.ConfigField {
+	fields := sessionFields()
+	if len(fields) != len(sessionFieldNames) {
+		panic("aws session field names are out of step with the fields")
+	}
+	for name, version := range versions {
+		i := slices.Index(sessionFieldNames, name)
+		if i < 0 {
+			panic("unknown aws session field: " + name)
+		}
+		fields[i] = fields[i].Version(version)
+	}
+	return fields
+}
+
+func sessionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField("region").
 			Description("The AWS region in which your resources are hosted.").
@@ -32,7 +61,9 @@ func SessionFields() []*service.ConfigField {
 			Description("A custom endpoint URL for AWS API requests. Use this to connect to AWS-compatible services or local testing environments instead of the standard AWS endpoints.").
 			Optional().
 			Advanced(),
-		netutil.DialerConfigSpec(),
+		// tcp joined the session fields, and so every component that used them,
+		// in 4.69.0.
+		netutil.DialerConfigSpec().Version("4.69.0"),
 		service.NewObjectField("credentials",
 			service.NewStringField("profile").
 				Description("The profile from `~/.aws/credentials` to use.").

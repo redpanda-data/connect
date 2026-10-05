@@ -55,7 +55,7 @@ func init() {
 var msSQLServerStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
-	Version("0.0.1").
+	Version("4.66.1").
 	Summary("Enables Change Data Capture by consuming from Microsoft SQL Server's change tables.").
 	Description(`Streams changes from a Microsoft SQL Server database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.

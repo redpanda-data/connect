@@ -199,7 +199,9 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 					Default(0).
 					Advanced(),
 			},
-				config.SessionFields()...,
+				config.SessionFieldsWithVersions(map[string]string{
+					"region": "4.53.0", "endpoint": "4.53.0", "credentials": "4.53.0",
+				})...,
 			)...,
 		).
 			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.").

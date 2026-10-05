@@ -80,7 +80,7 @@ output:
       period: 1s
 `,
 		).
-		Fields(clientFields()...).
+		Fields(clientFields("")...).
 		Fields(
 			service.NewStringField(coFieldQuery).
 				Description("A query to execute for each message."),

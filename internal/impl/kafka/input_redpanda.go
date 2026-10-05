@@ -109,7 +109,7 @@ func redpandaInputConfigFields() []*service.ConfigField {
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
-			service.NewExtractTracingSpanMappingField(),
+			service.NewExtractTracingSpanMappingField().Version("4.85.0"),
 		},
 	)
 }

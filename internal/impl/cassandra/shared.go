@@ -48,7 +48,14 @@ const (
 	cFieldReconnectInterval                       = "reconnect_interval"
 )
 
-func clientFields() []*service.ConfigField {
+// clientFields returns the connection fields shared by the cassandra input and
+// output. tlsVersion is the release in which a component gained the tls field,
+// or empty when the component has had it from the start.
+func clientFields(tlsVersion string) []*service.ConfigField {
+	tls := service.NewTLSToggledField(cFieldTLS).Advanced()
+	if tlsVersion != "" {
+		tls = tls.Version(tlsVersion)
+	}
 	return []*service.ConfigField{
 		service.NewStringListField(cFieldAddresses).
 			Description("A list of Cassandra nodes to connect to. Multiple comma separated addresses can be specified on a single line.").
@@ -57,7 +64,7 @@ func clientFields() []*service.ConfigField {
 				[]string{"foo:9042", "bar:9042"},
 				[]string{"foo:9042,bar:9042"},
 			),
-		service.NewTLSToggledField(cFieldTLS).Advanced(),
+		tls,
 		service.NewObjectField(cFieldPassAuth,
 			service.NewBoolField(cFieldPassAuthEnabled).
 				Description("Whether to use password authentication").

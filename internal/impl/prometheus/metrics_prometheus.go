@@ -70,7 +70,7 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 				Default(false),
 			service.NewBoolField(pmFieldHistogramTimingSecondsSuffix).
 				Description("Whether to rewrite a `_ns` timing metric name suffix to `_seconds` when `use_histogram_timing` is `true` (for example `processor_latency_ns` becomes `processor_latency_seconds`), reflecting that histogram timings are recorded in seconds. This also keeps the histogram series distinct from the summary series emitted when `use_histogram_timing` is `false`, which avoids Prometheus remote-write \"multiple metric kinds\" rejections when a fleet mixes the setting. Enabling this renames existing histogram timing series, so dashboards and alerts that query the `_ns` names must be updated. Has no effect when `use_histogram_timing` is `false`.").
-				Version("4.112.0").
+				Version("4.111.1").
 				Advanced().
 				Default(false),
 			service.NewFloatListField(pmFieldHistogramBuckets).

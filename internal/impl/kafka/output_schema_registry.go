@@ -54,7 +54,7 @@ const (
 func schemaRegistryOutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Version("4.32.2").
+		Version("4.33.0").
 		Categories("Integration").
 		Summary(`Publishes schemas to a schema registry.`).
 		Description("This output uses the https://github.com/twmb/franz-go/tree/master/pkg/sr[Franz Kafka Schema Registry client^].\n\n"+service.OutputPerformanceDocs(true, false)).

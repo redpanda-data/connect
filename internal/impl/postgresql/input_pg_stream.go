@@ -91,26 +91,12 @@ func newPostgresCDCConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.40.0").
+		Version("4.43.0").
 		Summary(`Streams changes from a PostgreSQL database using logical replication.`).
 		Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
 
 This input was renamed from ` + "`pg_stream`" + ` to ` + "`postgres_cdc`" + ` in version 4.43.0. The ` + "`pg_stream`" + ` name still works, but it's deprecated.
-
-== Requirements
-
-The source database must have logical replication enabled, which means its ` + "`wal_level`" + ` setting must be ` + "`logical`" + `. The database must also accept replication connections from the host that runs Redpanda Connect, for example through a ` + "`replication`" + ` entry in ` + "`pg_hba.conf`" + `.
-
-== Snapshot and streaming modes
-
-When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `, and then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
-
-When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
-
-== Data types
-
-Column values keep their PostgreSQL types where an equivalent exists. ` + "`BOOL`" + ` columns become booleans, integer and floating-point columns become numbers, ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, and ` + "`TIMESTAMPTZ`" + ` columns become timestamps, ` + "`BYTEA`" + ` columns become byte arrays, and ` + "`JSON`" + ` and ` + "`JSONB`" + ` columns become structured values. ` + "`NUMERIC`" + ` and ` + "`DECIMAL`" + ` columns become strings to preserve their precision, as do ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, and ` + "`TIMETZ`" + ` columns.
 
 == Metadata
 
@@ -568,8 +554,9 @@ func validateSimpleString(s string) error {
 
 func init() {
 	service.MustRegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
-	// Legacy naming
-	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
+	// Legacy name, which shipped first in 4.40.0 and was renamed to
+	// postgres_cdc in 4.43.0.
+	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Version("4.40.0").Deprecated(), newPgStreamInput)
 }
 
 type pgStreamInput struct {
