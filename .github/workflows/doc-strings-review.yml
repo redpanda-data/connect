@@ -50,10 +50,15 @@ jobs:
     if: >-
       !github.event.pull_request.draft &&
       github.event.pull_request.head.repo.full_name == github.repository
-    # v5.51.0 (2026-09-29). The reusable workflow resolves the doc-tools CLI
-    # version from its own ref, so this SHA pins the review logic and the CLI
-    # together and a bump moves both.
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@423184868cc6189cb10cfb7a754a96725dc1aabf # v5.51.0
+    # v5.52.0 (2026-10-05): the connect surface covers helper constructors,
+    # cross-file constants, Bloblang, ShortDescription, and rpk connect
+    # help. The review reads a pre-saved diff, so PRs over 300 files no
+    # longer fail on gh pr diff, and the doc-impact dispatch sends the PR's
+    # base and default branch.
+    # The reusable workflow resolves the doc-tools CLI version from its own
+    # ref, so this SHA pins the review logic and the CLI together and a bump
+    # moves both.
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@269d2901d12be258c311107256d45bc494774b4d # v5.52.0
     permissions:
       contents: read
       pull-requests: write
