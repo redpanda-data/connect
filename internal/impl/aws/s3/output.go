@@ -199,7 +199,7 @@ output:
       Timestamp: ${!meta("Timestamp")}
 `+"```"+`
 
-=== Credentials
+== Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
 
@@ -236,10 +236,27 @@ output:
       processors:
         - archive:
             format: json_array
+`+"```"+`
+
+== S3-compatible storage
+
+The `+"`endpoint`"+` and `+"`force_path_style_urls`"+` fields let you connect to S3-compatible storage services, such as Cloudflare R2, MinIO, or DigitalOcean Spaces. For example, to upload to Cloudflare R2, set `+"`endpoint`"+` to your account's R2 endpoint URL, set `+"`region`"+` to `+"`auto`"+`, and enable `+"`force_path_style_urls`"+`:
+
+`+"```yaml"+`
+output:
+  aws_s3:
+    bucket: r2-bucket
+    path: ${!uuid_v4()}.json
+    endpoint: https://<account-id>.r2.cloudflarestorage.com
+    force_path_style_urls: true
+    region: auto
+    credentials:
+      id: <r2-access-key-id>
+      secret: <r2-secret-access-key>
 `+"```"+``+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(s3oFieldBucket).
-				Description("The bucket to upload messages to."),
+				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN."),
 			service.NewInterpolatedStringField(s3oFieldPath).
 				Description("The path of each message to upload.").
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`).

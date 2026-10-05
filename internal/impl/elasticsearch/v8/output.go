@@ -139,9 +139,12 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 func elasticsearchConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
+		Version("4.47.0").
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(`
+This output uses the https://github.com/elastic/go-elasticsearch[go-elasticsearch/v8^] client library. For the breaking changes from earlier versions, see https://www.elastic.co/guide/en/elasticsearch/reference/current/migrating-8.0.html#breaking_80_rest_api_changes[Elastic's Migrating to 8.0 guide^].
+
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(esFieldURLs).

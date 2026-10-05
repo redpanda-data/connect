@@ -166,7 +166,7 @@ What gets synchronised:
 - Consumer Groups
   - Periodic syncing
   - Group selection via include/exclude regex
-  - Only groups in `+"`Empty`"+` state are migrated (active groups are skipped)
+  - Groups in every state except `+"`Dead`"+` are migrated by default. Set `+"`consumer_groups.only_empty`"+` to `+"`true`"+` to migrate only groups in the `+"`Empty`"+` state
   - Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`
   - No rewind guarantee: destination offsets are never moved backwards
   - Commit performed in parallel with per-group metrics
@@ -174,19 +174,20 @@ What gets synchronised:
 
 How it runs:
 
-- Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
+- Topics: the first write triggers a sync of all consumed topics, and any other topic is created when its first record arrives. A background loop also syncs topics every `+"`sync_topic_interval`"+` (default `+"`5m`"+`), which creates destination topics for source topics that have no current data, for example after retention cleanup. Set `+"`sync_topic_interval`"+` to `+"`0s`"+` to disable the periodic sync.
 - Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
 - Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
 
 Guarantees:
 
-- Topics are created with the intended partitioning and configured replication factor. Existing topics are respected; partition mismatches are logged and consumer group migration for mismatched topics is skipped.
+- Topics are created with the intended partitioning and configured replication factor. Existing destination topics are never re-created. If an existing destination topic has fewer partitions than its source topic, partitions are added to match. Consumer group migration skips topics whose partition counts still differ.
 - Consumer group offsets are never rewound. Only translated forward positions are committed.
 - ACL replication excludes `+"`ALLOW WRITE`"+` operations and downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+` to avoid unsafe grants.
 
 Limitations and requirements:
 
 - Destination Schema Registry must be in `+"`READWRITE`"+` or `+"`IMPORT`"+` mode.
+- When the destination cluster enforces ACLs, the destination principal needs permission to create topics, add partitions, describe topic configurations, and produce records. Consumer group migration also needs permission to commit the groups' offsets, and `+"`sync_topic_acls`"+` also needs permission to create ACLs.
 - Offset translation is best-effort: if the previous-offset timestamp cannot be read, or no destination offset exists after the timestamp, that partition is skipped.
 - Consumer group migration requires identical partition counts for source and destination topics.
 

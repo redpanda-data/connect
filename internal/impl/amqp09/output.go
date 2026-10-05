@@ -34,7 +34,7 @@ func amqp09OutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Stable().
-		Summary(`Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by various message brokers, including RabbitMQ.Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various message brokers, including RabbitMQ.`).
+		Summary(`Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by various message brokers, including RabbitMQ.`).
 		Description(`The metadata from each message are delivered as headers.
 
 It's possible for this output type to create the target exchange by setting `+"`exchange_declare.enabled` to `true`"+`, if the exchange already exists then the declaration passively verifies that the settings match.
