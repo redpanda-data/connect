@@ -113,7 +113,6 @@ func clientFields(tlsVersion string) []*service.ConfigField {
 			ShortDescription("Host selection policy, strongly recommended in deployments spanning multiple data centres.").
 			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
 			Example(map[string]any{"local_dc": "dc-east", "local_rack": "rack1"}).
-			Version("4.61.0").
 			Advanced(),
 		service.NewDurationField(cFieldReconnectInterval).
 			Description("The interval at which Redpanda Connect attempts to reconnect to Cassandra nodes that are marked as DOWN. This setting helps maintain connectivity in unstable network conditions or during node maintenance. Use Go duration format such as `30s`, `1m`, or `5m`. Setting this too low may create unnecessary connection attempts, while setting it too high may delay recovery from network issues.").Version("4.66.0").

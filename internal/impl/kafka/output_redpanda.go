@@ -37,7 +37,7 @@ func redpandaOutputConfig() *service.ConfigSpec {
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
-`).Version("4.39.0").
+`).
 		Fields(redpandaOutputConfigFields()...).
 		LintRule(FranzWriterConfigLints()).
 		Example("Simple Common Output", "Data is generated and written to a topic `bar`, targeting the cluster configured within the `redpanda` block at the bottom. This lets you configure TLS and SASL once and share them across multiple inputs and outputs.", `

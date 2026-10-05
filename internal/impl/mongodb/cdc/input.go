@@ -235,7 +235,7 @@ Schema metadata is discovered using a two-tier strategy:
 *Fields with null values, unknown BSON types, or mixed-type arrays* are mapped to the `+"`Any`"+` schema type. The `+"`parquet_encode`"+` processor does not support `+"`Any`"+` and will error if it encounters one. Add an upstream processor (for example, `+"`mapping`"+`) to convert or remove these fields before `+"`parquet_encode`"+`.
 
 *Schema stability:* MongoDB collections may contain documents with varying field sets. When this occurs, the schema updates on each structural change, which can cause frequent schema version bumps in schema registries with compatibility modes. For schema registry targets, configuring a `+"`$jsonSchema`"+` validator on the collection is strongly recommended.
-    `).Version("4.48.0").
+    `).
 		Fields(
 			service.NewStringField(fieldClientURL).
 				Description("The URL of the target MongoDB server.").

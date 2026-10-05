@@ -106,7 +106,7 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 == Prerequisites
 
 Each ` + "`/data/...`" + ` topic requires Change Data Capture to be enabled for the corresponding sObject (Setup → Change Data Capture). Each ` + "`/event/...`" + ` topic requires the corresponding Platform Event to exist in Salesforce; standard events may require Event Monitoring licenses or specific permissions.
-`).Version("4.90.3")
+`)
 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringListField(sfciFieldTopics).

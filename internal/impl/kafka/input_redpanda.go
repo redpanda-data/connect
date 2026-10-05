@@ -82,7 +82,6 @@ func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.39.0").
 		Stable().
-		Version("4.39.0").
 		Categories("Services").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(RedpandaInputDescription(`
