@@ -273,19 +273,24 @@ func (c *ConnectCacheResource) LowWatermarkSCN(excludeTxnID sqlredo.TransactionI
 	return lowestOpenSCN
 }
 
-// TransactionStartSCN returns the start SCN of an open transaction.
-func (c *ConnectCacheResource) TransactionStartSCN(ctx context.Context, txnID sqlredo.TransactionID) (scn uint64, ok bool, err error) {
+// IncludeInLowWatermark starts tracking the start SCN of an open transaction
+// so that LowWatermarkSCN counts it even without DML events.
+func (c *ConnectCacheResource) IncludeInLowWatermark(ctx context.Context, txnID sqlredo.TransactionID) error {
 	if _, discarded := c.discarded[txnID]; discarded {
-		return 0, false, nil
+		return nil
+	}
+	if _, tracked := c.startSCNs[txnID]; tracked {
+		return nil
 	}
 	m, err := c.readMetadata(ctx, txnID)
 	if err != nil {
-		return 0, false, fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
+		return fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
 	}
 	if m == nil {
-		return 0, false, nil
+		return nil
 	}
-	return m.SCN, true, nil
+	c.startSCNs[txnID] = m.SCN
+	return nil
 }
 
 func (c *ConnectCacheResource) toMetaKey(txnID sqlredo.TransactionID) string {

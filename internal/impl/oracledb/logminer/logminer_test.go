@@ -535,41 +535,42 @@ func TestLowWatermarkSCN(t *testing.T) {
 		excludeTxnID sqlredo.TransactionID
 		// dmlTxns gives the start SCN of each open transaction. Each one has one DML event.
 		dmlTxns map[sqlredo.TransactionID]uint64
-		// lobStartSCNs gives the SCN that the checkpoint must stay below for each LOB transaction.
-		lobStartSCNs map[sqlredo.TransactionID]uint64
-		want         uint64
+		// lobTxns gives the start SCN of each open transaction that has no DML events
+		// and is marked with IncludeInLowWatermark.
+		lobTxns map[sqlredo.TransactionID]uint64
+		want    uint64
 	}{
 		{
 			name: "no open state",
 			want: math.MaxUint64,
 		},
 		{
-			name:         "lowest of DML and LOB transactions",
-			dmlTxns:      map[sqlredo.TransactionID]uint64{"txB": 900},
-			lobStartSCNs: map[sqlredo.TransactionID]uint64{"txC": 800, "txD": 850},
-			want:         800,
+			name:    "lowest of DML and LOB transactions",
+			dmlTxns: map[sqlredo.TransactionID]uint64{"txB": 900},
+			lobTxns: map[sqlredo.TransactionID]uint64{"txC": 800, "txD": 850},
+			want:    800,
 		},
 		{
 			name:         "committing transaction is excluded",
 			excludeTxnID: "txA",
 			dmlTxns:      map[sqlredo.TransactionID]uint64{"txA": 700},
-			lobStartSCNs: map[sqlredo.TransactionID]uint64{"txA": 710, "txB": 900},
+			lobTxns:      map[sqlredo.TransactionID]uint64{"txA": 710, "txB": 900},
 			want:         900,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
-			lm := newLogMiner(&publisherStub{}, cache)
 			for txnID, scn := range tt.dmlTxns {
 				require.NoError(t, cache.StartTransaction(t.Context(), txnID, scn))
 				require.NoError(t, cache.AddEvent(t.Context(), txnID, scn, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 			}
-			for txnID, scn := range tt.lobStartSCNs {
-				lm.lobStartSCNs[txnID] = scn
+			for txnID, scn := range tt.lobTxns {
+				require.NoError(t, cache.StartTransaction(t.Context(), txnID, scn))
+				require.NoError(t, cache.IncludeInLowWatermark(t.Context(), txnID))
 			}
 
-			assert.Equal(t, tt.want, lm.lowWatermarkSCN(tt.excludeTxnID))
+			assert.Equal(t, tt.want, cache.LowWatermarkSCN(tt.excludeTxnID))
 		})
 	}
 }
@@ -675,10 +676,10 @@ func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
 	}
 }
 
-// TestLOBStartSCNRemovedOnRollbackAndCommit verifies that ending a LOB
-// transaction by rollback or commit removes its lobStartSCNs entry, so it no
-// longer holds back the checkpoint.
-func TestLOBStartSCNRemovedOnRollbackAndCommit(t *testing.T) {
+// TestLOBTransactionReleasesCheckpointOnEnd verifies that a transaction held by
+// IncludeInLowWatermark no longer holds back the checkpoint after it commits or
+// rolls back.
+func TestLOBTransactionReleasesCheckpointOnEnd(t *testing.T) {
 	for _, end := range []sqlredo.Operation{sqlredo.OpRollback, sqlredo.OpCommit} {
 		t.Run(end.String(), func(t *testing.T) {
 			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
@@ -697,31 +698,14 @@ func TestLOBStartSCNRemovedOnRollbackAndCommit(t *testing.T) {
 				TableName:     sql.NullString{String: "T", Valid: true},
 				SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
 			}))
-			require.Equal(t, uint64(100), lm.lowWatermarkSCN(""), "txB must hold the checkpoint")
+			require.Equal(t, uint64(100), cache.LowWatermarkSCN(""), "txB must hold the checkpoint")
 
 			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 				SCN: 120, Operation: end, TransactionID: "txB",
 			}))
-			assert.NotContains(t, lm.lobStartSCNs, sqlredo.TransactionID("txB"))
-			assert.Equal(t, uint64(math.MaxUint64), lm.lowWatermarkSCN(""))
+			assert.Equal(t, uint64(math.MaxUint64), cache.LowWatermarkSCN(""))
 		})
 	}
-}
-
-// TestInMemoryCacheTransactionStartSCN verifies the lookup of the start SCN.
-func TestInMemoryCacheTransactionStartSCN(t *testing.T) {
-	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
-	require.NoError(t, cache.StartTransaction(t.Context(), "txA", 100))
-
-	scn, ok, err := cache.TransactionStartSCN(t.Context(), "txA")
-	require.NoError(t, err)
-	assert.True(t, ok)
-	assert.Equal(t, uint64(100), scn)
-
-	scn, ok, err = cache.TransactionStartSCN(t.Context(), "missing")
-	require.NoError(t, err)
-	assert.False(t, ok)
-	assert.Zero(t, scn)
 }
 
 // TestLOBOnlyTransactionWithoutStartIsPublished verifies that a transaction with
@@ -770,7 +754,6 @@ func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMi
 		cfg:              NewDefaultConfig(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
-		lobStartSCNs:     make(map[sqlredo.TransactionID]uint64),
 	}
 }
 
@@ -782,3 +765,120 @@ func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent
 }
 
 func (*publisherStub) Close() {}
+
+// TestIncludeInLowWatermark verifies IncludeInLowWatermark on each transaction
+// cache implementation. A discarded transaction is one that exceeded the max
+// event buffer of 1.
+func TestIncludeInLowWatermark(t *testing.T) {
+	ctx := t.Context()
+	dml := &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}
+
+	caches := map[string]func(t *testing.T, maxEvents int) TransactionCache{
+		"in memory": func(t *testing.T, maxEvents int) TransactionCache {
+			return NewInMemoryCache(maxEvents, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+		"connect cache resource": func(t *testing.T, maxEvents int) TransactionCache {
+			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: maxEvents}
+			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+	}
+
+	tests := []struct {
+		name         string
+		maxEvents    int
+		excludeTxnID sqlredo.TransactionID
+		setup        func(t *testing.T, c TransactionCache)
+		want         uint64
+	}{
+		{
+			name: "marked transaction without events is counted at its start SCN",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+			},
+			want: 100,
+		},
+		{
+			name: "unmarked transaction without events is not counted",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name: "marking is idempotent",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+			},
+			want: 100,
+		},
+		{
+			name: "a later event does not change the start SCN",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.AddEvent(ctx, "txA", 150, dml))
+			},
+			want: 100,
+		},
+		{
+			name: "marking a missing transaction does nothing",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "missing"))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name:      "marking a discarded transaction does nothing",
+			maxEvents: 1,
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, dml))
+				require.NoError(t, c.AddEvent(ctx, "txA", 102, dml))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name:         "excluded transaction is not counted",
+			excludeTxnID: "txA",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.StartTransaction(ctx, "txB", 200))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txB"))
+			},
+			want: 200,
+		},
+		{
+			name: "committed transaction is no longer counted",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.CommitTransaction(ctx, "txA"))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name: "rolled back transaction is no longer counted",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.RollbackTransaction(ctx, "txA"))
+			},
+			want: math.MaxUint64,
+		},
+	}
+	for cacheName, newCache := range caches {
+		for _, test := range tests {
+			t.Run(cacheName+"/"+test.name, func(t *testing.T) {
+				c := newCache(t, test.maxEvents)
+				test.setup(t, c)
+				assert.Equal(t, test.want, c.LowWatermarkSCN(test.excludeTxnID))
+			})
+		}
+	}
+}

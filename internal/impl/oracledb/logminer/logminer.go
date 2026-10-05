@@ -67,10 +67,6 @@ type LogMiner struct {
 	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
 	// replayed after the INSERT is buffered so inferLOBLocator can find it.
 	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
-	// lobStartSCNs holds, for each open transaction with LOB events, the SCN
-	// that the commit checkpoint must stay below. It is the START SCN of the
-	// transaction, or the first LOB event SCN when the START is unknown.
-	lobStartSCNs map[sqlredo.TransactionID]uint64
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -127,7 +123,6 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		dmlParser:        sqlredo.NewParser(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
-		lobStartSCNs:     make(map[sqlredo.TransactionID]uint64),
 		windowSize:       cfg.SCNWindowSize,
 		redoVolume:       newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 	}
@@ -407,16 +402,10 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
 			return fmt.Errorf("starting transaction %s on LOB event: %w", redoEvent.TransactionID, err)
 		}
-		if _, exists := lm.lobStartSCNs[redoEvent.TransactionID]; !exists {
-			startSCN, found, err := lm.txnCache.TransactionStartSCN(ctx, redoEvent.TransactionID)
-			if err != nil {
-				return fmt.Errorf("getting start SCN of transaction %s: %w", redoEvent.TransactionID, err)
-			}
-			if found {
-				lm.lobStartSCNs[redoEvent.TransactionID] = min(startSCN, redoEvent.SCN)
-			} else {
-				lm.lobStartSCNs[redoEvent.TransactionID] = redoEvent.SCN
-			}
+		// Hold the checkpoint below the START of this transaction. If the START
+		// was not mined, StartTransaction used this event SCN as the start SCN.
+		if err := lm.txnCache.IncludeInLowWatermark(ctx, redoEvent.TransactionID); err != nil {
+			return fmt.Errorf("holding checkpoint for transaction %s on LOB event: %w", redoEvent.TransactionID, err)
 		}
 	}
 
@@ -597,7 +586,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			// checkpoint past their oldest event SCN - 1. Doing so would cause their
 			// already-seen events to be skipped on restart (the query resumes
 			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
-			if lowestOpenSCN := lm.lowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
 				if lowestOpenSCN-1 < safeCheckpointSCN {
 					safeCheckpointSCN = lowestOpenSCN - 1
 				}
@@ -724,7 +713,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// lobStates and are never freed.
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
-			delete(lm.lobStartSCNs, redoEvent.TransactionID)
 			if pending := lm.pendingLOBWrites[redoEvent.TransactionID]; len(pending) > 0 {
 				for _, p := range pending {
 					lm.log.Warnf("Dropping deferred LOB_WRITE on commit: txn=%s scn=%d schema=%s table=%s sql=%.200s",
@@ -738,7 +726,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// Discard all buffered events for this transaction
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
-			delete(lm.lobStartSCNs, redoEvent.TransactionID)
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
@@ -845,24 +832,6 @@ func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.T
 		lm.log.Warnf("replayDeferredLOBWrites: %d LOB_WRITE(s) re-deferred after replay for txn %s — inferLOBLocator still failing", reDeferred, txnID)
 	}
 	return nil
-}
-
-// lowWatermarkSCN returns the lowest SCN the commit checkpoint must stay below,
-// ignoring excludeTxnID, or math.MaxUint64 if no transaction is open.
-//
-// The transaction cache tracks only transactions with DML events, so this also
-// includes transactions with only LOB events (e.g. a SecureFile out-of-row
-// update) at their START SCN. LogMiner may not rebuild a transaction's LOB
-// operations if the session starts after its START, so staying below the first
-// LOB event is not enough.
-func (lm *LogMiner) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
-	lowest := lm.txnCache.LowWatermarkSCN(excludeTxnID)
-	for txnID, scn := range lm.lobStartSCNs {
-		if txnID != excludeTxnID {
-			lowest = min(lowest, scn)
-		}
-	}
-	return lowest
 }
 
 func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
