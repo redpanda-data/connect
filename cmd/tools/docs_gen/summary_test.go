@@ -37,7 +37,6 @@ var summaryExceptions = map[string]string{
 	"inputs/cockroachdb_changefeed": "a connect spec with a Summary to fix",
 	"inputs/slack":                  "a connect spec with a Summary to fix",
 	"inputs/slack_users":            "a connect spec with a Summary to fix",
-	"outputs/cypher":                "a connect spec with a Summary to fix",
 	"outputs/slack_post":            "a connect spec with a Summary to fix",
 	"outputs/slack_reaction":        "a connect spec with a Summary to fix",
 	"processors/redis":              "a connect spec with a Summary to fix",
