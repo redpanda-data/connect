@@ -102,7 +102,7 @@ func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("0.0.1").
+		Version("4.65.0").
 		Summary("Streams change data capture (CDC) events from a TigerBeetle cluster.").
 		Description(`Listens to a TigerBeetle cluster and creates a message for each change.
 
