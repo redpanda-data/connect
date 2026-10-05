@@ -29,10 +29,7 @@ import (
 // today. The benthos ones can't be fixed in this repository. The test fails
 // when an entry no longer breaks the rule, so the list only shrinks: fixing a
 // Summary means removing its entry.
-var summaryExceptions = map[string]string{
-	"inputs/inproc":  "defined in benthos",
-	"outputs/inproc": "defined in benthos",
-}
+var summaryExceptions = map[string]string{}
 
 // summaryProblem returns why a Summary can't become a clean :description:
 // attribute and catalog summary, or "" when it can. A Summary must be one
