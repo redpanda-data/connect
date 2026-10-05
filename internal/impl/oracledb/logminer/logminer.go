@@ -190,7 +190,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		if caughtUp {
 			wait = lm.cfg.MiningBackoffInterval
 			if !lm.caughtUpLogged {
-				lm.log.Debugf("Caught up with redo logs, backing off for %s...", wait)
+				lm.log.Infof("Caught up with redo logs, backing off for %s...", wait)
 			}
 		}
 		lm.caughtUpLogged = caughtUp
