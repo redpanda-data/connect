@@ -32,15 +32,6 @@ import (
 var summaryExceptions = map[string]string{
 	"inputs/inproc":  "defined in benthos",
 	"outputs/inproc": "defined in benthos",
-
-	"caches/aws_dynamodb":           "a connect spec with a Summary to fix",
-	"inputs/cockroachdb_changefeed": "a connect spec with a Summary to fix",
-	"inputs/slack":                  "a connect spec with a Summary to fix",
-	"inputs/slack_users":            "a connect spec with a Summary to fix",
-	"outputs/slack_post":            "a connect spec with a Summary to fix",
-	"outputs/slack_reaction":        "a connect spec with a Summary to fix",
-	"processors/redis":              "a connect spec with a Summary to fix",
-	"processors/slack_thread":       "a connect spec with a Summary to fix",
 }
 
 // summaryProblem returns why a Summary can't become a clean :description:
