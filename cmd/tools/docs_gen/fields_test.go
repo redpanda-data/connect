@@ -138,3 +138,23 @@ func TestWithInterpolationNotice(t *testing.T) {
 	assert.Equal(t, "The path.\n\n"+interpolationNotice, withInterpolationNotice("The path."))
 	assert.Equal(t, interpolationNotice, withInterpolationNotice(interpolationNotice))
 }
+
+func TestFieldPathsForListsAndListRoots(t *testing.T) {
+	assert.Equal(t, "batches[][]", fieldName(fieldSpec{Name: "batches", Kind: "2darray"}))
+	assert.Equal(t, "items[]", fieldName(fieldSpec{Name: "items", Kind: "array"}))
+	assert.Equal(t, "plain", fieldName(fieldSpec{Name: "plain", Kind: "scalar"}))
+
+	tests := fieldSpec{Name: "tests", Kind: "array", Children: []fieldSpec{
+		{Name: "name", Kind: "scalar", Type: "string"},
+		{Name: "input_batches", Kind: "2darray", Type: "object", Children: []fieldSpec{
+			{Name: "content", Kind: "scalar", Type: "string"},
+		}},
+	}}
+	out := renderFields(tests.Children, configObjectPrefix(tests))
+	assert.Contains(t, out, "=== `tests[].name`")
+	assert.Contains(t, out, "=== `tests[].input_batches[][]`")
+	assert.Contains(t, out, "=== `tests[].input_batches[][].content`")
+
+	redpanda := fieldSpec{Name: "redpanda", Kind: "scalar", Children: []fieldSpec{{Name: "acks", Kind: "scalar", Type: "string"}}}
+	assert.Contains(t, renderFields(redpanda.Children, configObjectPrefix(redpanda)), "=== `acks`")
+}

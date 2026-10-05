@@ -36,10 +36,16 @@ var (
 	interpolationPhrase = regexp.MustCompile(`(?i)interpolation functions`)
 )
 
-// fieldName is the field's name with [] appended for array fields.
+// fieldName is the field's name with [] appended for array fields, and [][]
+// for arrays of arrays.
 func fieldName(f fieldSpec) string {
-	if f.Kind == "array" && !strings.HasSuffix(f.Name, "[]") {
+	switch {
+	case strings.HasSuffix(f.Name, "[]"):
+		return f.Name
+	case f.Kind == "array":
 		return f.Name + "[]"
+	case f.Kind == "2darray":
+		return f.Name + "[][]"
 	}
 	return f.Name
 }
@@ -479,10 +485,21 @@ func (w *writer) configObjects(raw []byte) {
 	}
 	for _, f := range objects {
 		w.write(filepath.Join("partials/fields/config", f.Name+".adoc"),
-			generatedBanner+"\n\n== Fields\n\n"+renderFields(f.Children, "")+"\n")
+			generatedBanner+"\n\n== Fields\n\n"+renderFields(f.Children, configObjectPrefix(f))+"\n")
 		w.write(filepath.Join("examples/common/config", f.Name+".yaml"), buildTopLevelConfigYAML(f, false))
 		w.write(filepath.Join("examples/advanced/config", f.Name+".yaml"), buildTopLevelConfigYAML(f, true))
 	}
+}
+
+// configObjectPrefix is the path prefix for the fields of a top-level config
+// object. An object such as redpanda documents its fields by their own names,
+// but a list such as tests is a list of objects, so its fields are documented
+// as tests[].<field>.
+func configObjectPrefix(f fieldSpec) string {
+	if f.Kind == "array" || f.Kind == "2darray" {
+		return fieldName(f)
+	}
+	return ""
 }
 
 // topLevelConfigObjects returns the top-level config fields of a schema that
