@@ -773,11 +773,11 @@ func TestIncludeInLowWatermark(t *testing.T) {
 	ctx := t.Context()
 	dml := &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}
 
-	caches := map[string]func(t *testing.T, maxEvents int) TransactionCache{
-		"in memory": func(t *testing.T, maxEvents int) TransactionCache {
+	caches := map[string]func(maxEvents int) TransactionCache{
+		"in memory": func(maxEvents int) TransactionCache {
 			return NewInMemoryCache(maxEvents, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		},
-		"connect cache resource": func(t *testing.T, maxEvents int) TransactionCache {
+		"connect cache resource": func(maxEvents int) TransactionCache {
 			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
 			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: maxEvents}
 			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
@@ -875,7 +875,7 @@ func TestIncludeInLowWatermark(t *testing.T) {
 	for cacheName, newCache := range caches {
 		for _, test := range tests {
 			t.Run(cacheName+"/"+test.name, func(t *testing.T) {
-				c := newCache(t, test.maxEvents)
+				c := newCache(test.maxEvents)
 				test.setup(t, c)
 				assert.Equal(t, test.want, c.LowWatermarkSCN(test.excludeTxnID))
 			})
