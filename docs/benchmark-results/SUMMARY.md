@@ -26,7 +26,7 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-09-25
+Last refreshed: 2026-10-06
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
@@ -41,8 +41,15 @@ Last refreshed: 2026-09-25
 | postgres / orders-cdc-tune |         4 |           87 |       — | —                  | 2026-09-25  |
 | postgres / orders-snapshot |         4 |          116 |       — | —                  | 2026-09-25  |
 | s3 / orders-live      |         8 |           55 |       — | —                  | 2026-09-24  |
+| s3 / orders-live-confluent |         4 |           67 |       — | —                  | 2026-10-02  |
+| s3 / orders-live-confluent-connect-tune |         8 |           67 |       — | —                  | 2026-10-03  |
+| s3 / orders-live-confluent-connect-tune2 |         8 |           84 |       — | —                  | 2026-10-05  |
+| s3 / orders-live-confluent-fastfeed |         8 |          443 |       — | 236,153 msg/s (+61%) | 2026-10-05  |
+| s3 / orders-live-confluent-pipeline-encode |         4 |          347 |       — | —                  | 2026-10-05  |
+| s3 / orders-live-confluent-smoke |         1 |           31 |       — | —                  | 2026-10-02  |
 | s3 / orders-live-diag |         1 |           13 |       — | —                  | 2026-09-21  |
 | s3 / orders-live-diag2 |         — |            — |       — | —                  | 2026-09-21  |
+| s3 / orders-live-pipeline-gzip |         8 |          248 |       — | —                  | 2026-10-06  |
 | s3 / orders-live-smoke |         — |            — |       — | —                  | 2026-09-05  |
 | s3 / orders-sink      |         — |            — |       — | —                  | 2026-09-05  |
 | s3 / orders-sink-diag |         1 |           32 |       — | —                  | 2026-09-03  |

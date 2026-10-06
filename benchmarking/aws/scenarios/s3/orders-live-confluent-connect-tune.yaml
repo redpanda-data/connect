@@ -1,0 +1,213 @@
+name: s3-orders-live-confluent-connect-tune
+description: |
+  Connect-only tuning A/B for orders-live-confluent.yaml. That sweep showed
+  Connect's Protobuf -> zstd Parquet -> S3 pipeline plateau at ~60K rows/s from
+  4 to 8 vCPU (2026-10-02T18-33-58Z.json) while the 300K rows/s feed was never
+  the limit. Leading hypothesis: flow control, not CPU. checkpoint_limit 200000
+  with 100000-row batches allows only ~2 unacked batches (one encoding +
+  uploading, one filling), so throughput ~= 100K rows / (encode + upload),
+  independent of vCPU. Every arm runs at 8 vCPU against the same live feed.
+  Run with engines=connect.
+
+direction: sink
+connector: s3
+stack: s3
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+  load_gen:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  seeder: json-orders
+  format: protobuf
+
+kafka_connect:
+  spec: s3_confluent
+  # Diagnostics only, not part of the customer's connector config: log every
+  # tolerated converter/put error so the end-of-window scan (and a human) can
+  # see them. With errors.tolerance=all and logging off, failures leave no
+  # trace at all. Costs nothing when nothing fails.
+  config:
+    errors.log.enable: "true"
+    errors.log.include.messages: "false"
+  # Worker config derived from the customer's Confluent-docker env vars
+  # (CONNECT_FOO_BAR -> foo.bar). Written to a PER-POINT copy of
+  # worker.properties; the cloud-init file other scenarios use is untouched.
+  worker_properties:
+    # key/value converter worker defaults (connector overrides both). The
+    # customer sets no schemas.enable at worker level, so none here.
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+
+    # consumer.* worker-level (applies to the worker's own admin/consumer
+    # clients; the sink tasks' consumers take consumer.override.* from the
+    # connector config via connector.client.config.override.policy=All).
+    consumer.fetch.max.bytes: 2097152
+    consumer.fetch.max.wait.ms: 1000
+    consumer.max.partition.fetch.bytes: 2097152
+    consumer.max.poll.records: 10000
+    consumer.receive.buffer.bytes: 16777216
+    consumer.partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor,org.apache.kafka.clients.consumer.StickyAssignor,org.apache.kafka.clients.consumer.RoundRobinAssignor
+
+    # consumer.override.* and admin.override.* at WORKER level: most likely
+    # no-ops (override.* is a connector-config concept), kept for fidelity
+    # with the customer's environment.
+    consumer.override.fetch.max.bytes: 2097152
+    consumer.override.fetch.max.wait.ms: 100
+    consumer.override.max.partition.fetch.bytes: 2097152
+    consumer.override.max.poll.records: 10000
+    consumer.override.partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor,org.apache.kafka.clients.consumer.StickyAssignor,org.apache.kafka.clients.consumer.RoundRobinAssignor
+    consumer.override.receive.buffer.bytes: 16777216
+    admin.override.fetch.max.bytes: 2097152
+    admin.override.fetch.max.wait.ms: 1000
+    admin.override.max.partition.fetch.bytes: 2097152
+    admin.override.max.poll.records: 10000
+    admin.override.receive.buffer.bytes: 16777216
+
+    # Bare client properties (as the customer sets them at worker level).
+    fetch.max.bytes: 2097152
+    fetch.max.wait.ms: 1000
+    max.partition.fetch.bytes: 2097152
+    max.poll.records: 10000
+    receive.buffer.bytes: 16777216
+
+    # Connect framework / group management.
+    connect.protocol: sessioned
+    connector.client.config.override.policy: All
+    connections.max.idle.ms: 30000
+    metadata.max.age.ms: 900000
+    offset.flush.interval.ms: 15000
+    offset.flush.timeout.ms: 90000
+    # offset/status storage partitions only apply when Connect CREATES those
+    # topics. The bench's cloud-init-started systemd worker creates
+    # _kc_offsets/_kc_status (with default partition counts) before any
+    # per-point JVM runs, and the topics persist for the whole session, so
+    # these two are effectively no-ops here. Kept for fidelity.
+    offset.storage.partitions: 168
+    status.storage.partitions: 168
+    rebalance.timeout.ms: 60000
+    request.timeout.ms: 60000
+    session.timeout.ms: 10000
+    scheduled.rebalance.max.delay.ms: 5000
+    task.shutdown.graceful.timeout.ms: 30000
+    worker.sync.timeout.ms: 15000
+    worker.unsync.backoff.ms: 30000
+
+    # NOT carried over from the customer's worker env, on purpose:
+    #   bootstrap servers / SASL / security: the bench cluster is plaintext.
+    #   group.id and the config/offset/status topic names: bench-scoped.
+    #   rest.* and the REST auth extension: bench polls localhost:8083.
+    #   internal.key/value.converter: removed in Kafka 3.x.
+    #   master.eligibility: not an Apache Kafka property.
+    #   JMX / prometheus agent, config providers, opensearch / schema creds.
+    #   log4j WARN level: INFO is kept so the KC log stays diagnosable.
+  # JVM flags: the customer's -server -XX:+UseG1GC IHOP=45 etc. Their
+  # ParallelGCThreads / ConcGCThreads / G1HeapRegionSize / MaxGCPauseMillis /
+  # heap are templated and unknown, so those stay JVM defaults; heap is the
+  # bench's per-vCPU sizing (go_mem_limit_per_vcpu).
+  jvm_performance_opts: "-server -XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=45 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
+  env:
+    AWS_RETRY_MODE: adaptive
+    AWS_MAX_ATTEMPTS: 10
+
+# Connect side: decode Protobuf via the Schema Registry, write zstd Parquet.
+#
+# schema_registry_decode keeps the decoded message in structured form
+# (serialize_to_json: false), skipping a JSON serialise/parse round trip, and
+# emit_default_values: true so proto3 zero values (id 0, amount 0.0) still
+# produce a column value instead of a missing field.
+#
+# Batching: 100,000 rows (~120 MB of raw rows, comparable Parquet object)
+# or 30 s. KC cuts 2M-row / 2 min files; matching that would put ~2.4 GB in
+# memory per Connect batch for no throughput benefit, so Connect uses
+# smaller, still large, objects. The object-size difference is a documented
+# behavioural difference between the two configs. unordered_processing
+# checkpoint_limit must exceed batching.count (see orders-live.yaml), so it
+# is 2x the count.
+pipeline:
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 200000
+  processors:
+    - schema_registry_decode:
+        url: ${REDPANDA_SCHEMA_REGISTRY_URL}
+        protobuf:
+          emit_default_values: true
+          serialize_to_json: false
+  output:
+    aws_s3:
+      path: '${!uuid_v4()}.parquet'
+      content_type: application/vnd.apache.parquet
+      max_in_flight: 16
+      batching:
+        count: 100000
+        period: 30s
+        processors:
+          - parquet_encode:
+              default_compression: zstd
+              schema:
+                - name: id
+                  type: INT64
+                - name: ts
+                  type: UTF8
+                - name: region
+                  type: UTF8
+                - name: amount
+                  type: DOUBLE
+                - name: status
+                  type: UTF8
+                - name: payload
+                  type: UTF8
+
+workload:
+  write_rate_per_sec: 300000
+  # Connect-only: no Kafka Connect cold-start stall to trim, so the floor.
+  duration: 15m
+  warmup: 2m
+
+matrix:
+  go_mem_limit_per_vcpu: 3
+  cpu_points: [8]
+  arms:
+    # Baseline: exactly the orders-live-confluent recipe.
+    - id: a0-base
+    # Lift the flow-control cap: ~10 unacked 100K batches instead of ~2.
+    - id: ck1m
+      pipeline:
+        input_options:
+          unordered_processing:
+            checkpoint_limit: 1000000
+    # Same, plus oversubscribed GOMAXPROCS in case cores idle on S3 I/O.
+    - id: ck1m-gmp16
+      gomaxprocs: 16
+      pipeline:
+        input_options:
+          unordered_processing:
+            checkpoint_limit: 1000000
+    # Same cap, smaller batches + more uploads in flight: shorter serial
+    # encode units in the output batcher, more overlap with S3 PUTs.
+    - id: ck1m-b50k-mif32
+      pipeline:
+        input_options:
+          unordered_processing:
+            checkpoint_limit: 1000000
+        output:
+          aws_s3:
+            max_in_flight: 32
+            batching:
+              count: 50000
+    # Same cap, bigger batches: fewer, larger PUTs (closer to KC's files).
+    - id: ck1m-b200k
+      pipeline:
+        input_options:
+          unordered_processing:
+            checkpoint_limit: 1000000
+        output:
+          aws_s3:
+            batching:
+              count: 200000
