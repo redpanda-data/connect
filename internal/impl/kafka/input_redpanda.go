@@ -102,7 +102,9 @@ When using a consumer group, the strategies this client supports for assigning p
 - ` + "`cooperative-sticky`" + `: Balances the total partition count per member while moving as few partitions as possible, and rebalances incrementally so that members keep consuming unaffected partitions. It does not balance partitions of each topic individually.
 - ` + "`sticky`" + `: The same assignment as ` + "`cooperative-sticky`" + `, using the eager protocol.
 - ` + "`range`" + `: Divides the partitions of each topic evenly across the members subscribed to it. Remainder partitions go to the first members by sort order, so when consuming many topics the earlier members can own more partitions overall.
-- ` + "`roundrobin`" + `: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.`).
+- ` + "`roundrobin`" + `: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.
+
+To change strategies on a running group, first roll out a list with the old strategy followed by the new one, then a list with only the new one. Members that share no strategy with the group are rejected. Switching from ` + "`cooperative-sticky`" + ` to an eager strategy revokes all partitions once, which can cause records to be reprocessed from the last committed offsets.`).
 				ShortDescription("The strategies used to assign partitions to consumer group members, in order of preference.").
 				Example([]string{"range"}).
 				Example([]string{"cooperative-sticky", "roundrobin"}).
