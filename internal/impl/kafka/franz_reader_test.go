@@ -109,3 +109,88 @@ regexp_topics_exclude:
 		})
 	}
 }
+
+func TestFranzConsumerDetailsPartitionAssignment(t *testing.T) {
+	tests := []struct {
+		name          string
+		config        string
+		wantProtocols []string
+		wantErr       string
+	}{
+		{
+			name:          "default",
+			config:        `topics: [ foo ]`,
+			wantProtocols: []string{"cooperative-sticky"},
+		},
+		{
+			name: "range",
+			config: `
+topics: [ foo ]
+partition_assignment_strategy: [ range ]
+`,
+			wantProtocols: []string{"range"},
+		},
+		{
+			name: "migration_list",
+			config: `
+topics: [ foo ]
+partition_assignment_strategy: [ cooperative-sticky, roundrobin ]
+`,
+			wantProtocols: []string{"cooperative-sticky", "roundrobin"},
+		},
+		{
+			name: "all_supported",
+			config: `
+topics: [ foo ]
+partition_assignment_strategy: [ sticky, range, roundrobin, cooperative-sticky ]
+`,
+			wantProtocols: []string{"sticky", "range", "roundrobin", "cooperative-sticky"},
+		},
+		{
+			name: "empty",
+			config: `
+topics: [ foo ]
+partition_assignment_strategy: []
+`,
+			wantErr: "must list at least one strategy",
+		},
+		{
+			name: "unknown",
+			config: `
+topics: [ foo ]
+partition_assignment_strategy: [ cooperative_sticky ]
+`,
+			wantErr: `unsupported strategy "cooperative_sticky"`,
+		},
+		{
+			name: "duplicate",
+			config: `
+topics: [ foo ]
+partition_assignment_strategy: [ range, range ]
+`,
+			wantErr: `lists strategy "range" more than once`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := service.NewConfigSpec().Fields(FranzConsumerFields()...)
+
+			pConf, err := spec.ParseYAML(tc.config, service.NewEnvironment())
+			require.NoError(t, err)
+
+			got, err := FranzConsumerDetailsFromConfig(pConf)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+
+			protocols := make([]string, 0, len(got.GroupBalancers))
+			for _, b := range got.GroupBalancers {
+				protocols = append(protocols, b.ProtocolName())
+			}
+			assert.Equal(t, tc.wantProtocols, protocols)
+		})
+	}
+}
