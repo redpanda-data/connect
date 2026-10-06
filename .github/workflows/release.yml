@@ -216,16 +216,26 @@ jobs:
           git checkout -B "${BRANCH}"
           git add -A
           git commit -m "chore: update bundle dependencies for ${{ github.ref_name }}"
+
+          # On a re-run the branch already exists; fetch it so --force-with-lease
+          # has a tracking ref to compare against.
+          git fetch --depth=1 origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" || true
           git push --force-with-lease origin "HEAD:refs/heads/${BRANCH}"
 
-          PR_URL=$(gh pr create \
-            --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
-            --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
-
-          gh pr merge --auto --rebase "${PR_URL}"
+          PR_URL=$(gh pr list --head "${BRANCH}" --state open --json url --jq '.[0].url // empty')
+          if [ -z "${PR_URL}" ]; then
+            PR_URL=$(gh pr create \
+              --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
+              --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
+          fi
 
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":package: Update Bundles PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+
+          if ! gh pr merge --auto --rebase "${PR_URL}"; then
+            echo "::warning::Auto-merge unavailable; merge ${PR_URL} manually"
+            echo ":warning: Auto-merge could not be enabled; merge [${PR_URL##*/}](${PR_URL}) manually." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   update-downstream:
     runs-on: ubuntu-latest
