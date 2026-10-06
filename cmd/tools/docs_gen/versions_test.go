@@ -15,16 +15,23 @@
 package main
 
 import (
-	"bufio"
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/connect/v4/public/schema"
 )
@@ -40,11 +47,11 @@ var semver = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
 // version must be a plain x.y.z release number with a major version of at
 // least 1, and no later than the next minor release after the previous one.
 //
-// The contents of the previous release are read from the reference partials
-// generated into its tag, which CI keeps in step with the code. A new field
+// The contents of the previous release are read from the reference docs that
+// its release workflow attached to the GitHub release. A new field
 // inside a new component or a new object field is covered by its parent's
 // version. Deprecated and hidden specs don't need a version. Releases from
-// before the partials existed have no reliable record of what they shipped,
+// before that asset existed have no reliable record of what they shipped,
 // so for them only the version numbers themselves are checked.
 //
 // CI runs this test with and without the x_benthos_extra build tag, so the
@@ -53,7 +60,7 @@ func TestNewSpecsHaveVersions(t *testing.T) {
 	tag, prev := previousRelease(t)
 	released := releasedSpecs(t, tag)
 	if released == nil {
-		t.Logf("%s has no generated reference partials, so only version numbers are checked; the check for unversioned new specs starts with the first release that has them", tag)
+		t.Logf("%s has no reference docs asset, so only version numbers are checked; the check for unversioned new specs starts with the first release that has one", tag)
 	}
 
 	raw, err := schema.Standard("", "").MarshalJSONV0()
@@ -175,31 +182,30 @@ func newer(version string, than [3]int) bool {
 var (
 	releasedFieldHeading = regexp.MustCompile("^=== `([^`]+)`\\s*$")
 	mapKeySegment        = regexp.MustCompile(`\.?<[^>]+>`)
-	fieldsPartial        = regexp.MustCompile(`^docs/modules/components/partials/fields/([a-z_-]+)/([^/]+)\.adoc$`)
-	examplePartial       = regexp.MustCompile(`^docs/modules/components/examples/common/([a-z_-]+)/([^/]+)\.yaml$`)
-	bloblangPartial      = regexp.MustCompile(`^docs/modules/components/partials/bloblang-(function|method)s/([^/]+)\.adoc$`)
+	fieldsPartial        = regexp.MustCompile(`^modules/components/partials/fields/([a-z_-]+)/([^/]+)\.adoc$`)
+	examplePartial       = regexp.MustCompile(`^modules/components/examples/common/([a-z_-]+)/([^/]+)\.yaml$`)
+	bloblangPartial      = regexp.MustCompile(`^modules/components/partials/bloblang-(function|method)s/([^/]+)\.adoc$`)
 )
 
+// releaseDocsURL is where each release attaches its generated reference docs.
+// See docs/README.md. Tests replace it to serve a local archive.
+var releaseDocsURL = "https://github.com/redpanda-data/connect/releases/download/%s/redpanda-connect-docs.tar.gz"
+
 // releasedSpecs reads the components, fields, and Bloblang functions and
-// methods whose reference partials were generated into tag. It returns nil for
-// releases from before the partials existed, which have no reliable record.
+// methods whose reference partials were attached to the release tag. It
+// returns nil for releases from before the asset existed, which have no
+// reliable record.
 func releasedSpecs(t *testing.T, tag string) map[string]bool {
 	t.Helper()
-	out, err := exec.Command("git", "ls-tree", "-r", "--full-tree", "--name-only", tag, "--", "docs/modules/components").Output()
-	if err != nil {
-		t.Fatalf("listing docs in %s: %v", tag, err)
-	}
-	files := strings.Fields(string(out))
-	contents := readBlobs(t, tag, files)
-
+	files := releaseDocs(t, tag)
 	released := map[string]bool{}
-	for _, f := range files {
+	for f, contents := range files {
 		switch {
 		case fieldsPartial.MatchString(f):
 			m := fieldsPartial.FindStringSubmatch(f)
 			comp := pageTypeDir(m[1]) + "/" + m[2]
 			released[comp] = true
-			for line := range strings.SplitSeq(contents[f], "\n") {
+			for line := range strings.SplitSeq(contents, "\n") {
 				if h := releasedFieldHeading.FindStringSubmatch(line); h != nil {
 					released[comp+":"+headingPath(h[1])] = true
 				}
@@ -225,42 +231,51 @@ func headingPath(h string) string {
 	return strings.TrimPrefix(h, ".")
 }
 
-// readBlobs reads the .adoc files at tag with a single git cat-file process.
-func readBlobs(t *testing.T, tag string, files []string) map[string]string {
+// releaseDocs downloads the reference docs asset of tag and returns its .adoc
+// and .yaml files by path. It returns nil when the release has no asset. Outside
+// CI, a download that fails for network reasons skips the test.
+func releaseDocs(t *testing.T, tag string) map[string]string {
 	t.Helper()
-	var want []string
-	var in bytes.Buffer
-	for _, f := range files {
-		if strings.HasSuffix(f, ".adoc") {
-			want = append(want, f)
-			in.WriteString(tag + ":" + f + "\n")
-		}
-	}
-	cmd := exec.Command("git", "cat-file", "--batch")
-	cmd.Stdin = &in
-	out, err := cmd.Output()
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Get(fmt.Sprintf(releaseDocsURL, tag))
 	if err != nil {
-		t.Fatalf("reading docs in %s: %v", tag, err)
+		if os.Getenv("CI") != "" {
+			t.Fatalf("downloading the %s reference docs: %v", tag, err)
+		}
+		t.Skipf("downloading the %s reference docs: %v", tag, err)
 	}
-	r := bufio.NewReader(bytes.NewReader(out))
-	contents := map[string]string{}
-	for _, f := range want {
-		header, err := r.ReadString('\n')
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("downloading the %s reference docs: %s", tag, resp.Status)
+	}
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the %s reference docs: %v", tag, err)
+	}
+	tr := tar.NewReader(gz)
+	files := map[string]string{}
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("reading the %s reference docs: %v", tag, err)
 		}
-		parts := strings.Fields(header)
-		if len(parts) != 3 {
-			t.Fatalf("reading %s: %q", f, header)
+		name := strings.TrimPrefix(h.Name, "./")
+		if h.Typeflag != tar.TypeReg || (!strings.HasSuffix(name, ".adoc") && !strings.HasSuffix(name, ".yaml")) {
+			continue
 		}
-		size, _ := strconv.Atoi(parts[2])
-		buf := make([]byte, size+1)
-		if _, err := io.ReadFull(r, buf); err != nil {
-			t.Fatal(err)
+		b, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatalf("reading %s from the %s reference docs: %v", name, tag, err)
 		}
-		contents[f] = string(buf[:size])
+		files[name] = string(b)
 	}
-	return contents
+	return files
 }
 
 func TestVersionProblems(t *testing.T) {
@@ -314,4 +329,42 @@ func TestHeadingPath(t *testing.T) {
 			t.Errorf("headingPath(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+func TestReleasedSpecsFromAsset(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for name, body := range map[string]string{
+		"modules/components/partials/fields/inputs/kafka_franz.adoc":  "=== `seed_brokers`\n\nBrokers.\n\n=== `tls.enabled`\n",
+		"modules/components/examples/common/outputs/drop.yaml":        "output:\n  drop: {}\n",
+		"modules/components/partials/bloblang-methods/uppercase.adoc": "Uppercases.\n",
+	} {
+		require.NoError(t, tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg}))
+		_, err := tw.Write([]byte(body))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tw.Close())
+	require.NoError(t, gz.Close())
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1.0.0" {
+			_, _ = w.Write(buf.Bytes())
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	orig := releaseDocsURL
+	releaseDocsURL = srv.URL + "/%s"
+	defer func() { releaseDocsURL = orig }()
+
+	assert.Equal(t, map[string]bool{
+		"inputs/kafka_franz":              true,
+		"inputs/kafka_franz:seed_brokers": true,
+		"inputs/kafka_franz:tls.enabled":  true,
+		"outputs/drop":                    true,
+		"method:uppercase":                true,
+	}, releasedSpecs(t, "v1.0.0"))
+	assert.Nil(t, releasedSpecs(t, "v0.9.0"), "a release without the asset has no record")
 }
