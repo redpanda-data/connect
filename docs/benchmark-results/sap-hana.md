@@ -10,6 +10,7 @@ See [`internal/impl/saphana/bench/`](../../internal/impl/saphana/bench/) for con
 
 Full scan of `BENCH_ORDERS`: 2,000,000 rows × ~300 B (BIGINT, INTEGER × 3, DECIMAL, NVARCHAR(20), NVARCHAR(200), TIMESTAMP).
 Pipeline: `sap_hana` input (bulk mode) → `kafka_franz` output. `max_in_flight=10`.
+Note: these numbers were measured with the `kafka_franz` output before its deprecation in #4908; the bench configs now use the `redpanda` output with the same settings.
 Varying `fetch_size`, `batching.count`, and `GOMAXPROCS`.
 
 ### msg/sec
@@ -67,6 +68,7 @@ Same dataset: 2,000,000 rows × ~300 B via `io.confluent.connect.jdbc.JdbcSource
 
 Concurrent load + capture: 500,000 rows inserted via 10 parallel workers while the connector polls for new rows.
 Pipeline: `sap_hana` input (incrementing mode, `incrementing_column=ID`) → `kafka_franz` output. `max_in_flight=10`, `batching.count=1000`.
+Note: these numbers were measured with the `kafka_franz` output before its deprecation in #4908; the bench configs now use the `redpanda` output with the same settings.
 Varying `fetch_size`, `GOMAXPROCS`, and `poll_interval`.
 
 ### msg/sec
@@ -132,6 +134,7 @@ Varying `poll.interval.ms` and `batch.max.rows`.
 
 Full scan via user-supplied SQL: 2,000,000 rows × ~300 B (BIGINT, INTEGER × 3, DECIMAL, NVARCHAR(20), NVARCHAR(200), TIMESTAMP).
 Pipeline: `sap_hana` input (query mode) → `kafka_franz` output. `max_in_flight=10`.
+Note: these numbers were measured with the `kafka_franz` output before its deprecation in #4908; the bench configs now use the `redpanda` output with the same settings.
 Query: `SELECT * FROM "SCHEMA"."BENCH_ORDERS_QUERY"`. Varying `fetch_size` and `GOMAXPROCS`.
 
 ### msg/sec

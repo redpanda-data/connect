@@ -14,7 +14,7 @@ output:
     - benchmark:
         interval: 1s
         count_bytes: true
-  kafka_franz:
+  redpanda:
     seed_brokers:
       - localhost:9092
     topic: ${KAFKA_TOPIC:rpcns-hana-bench-orders-inc}
