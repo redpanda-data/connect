@@ -93,7 +93,7 @@ task build:clean                  # Clean build artifacts
 task docs                         # Generate documentation and validate examples
 ```
 
-Generated reference docs land in `docs/modules/`, which the docs site merges with rp-connect-docs. Never edit them by hand. Regenerate with `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`, as CI does; see `docs/README.md`.
+`task docs` writes the generated reference docs to `docs/modules/`, which is gitignored. Each release attaches them to the GitHub release, and the docs site reads them from there. To change what the docs say, edit the spec in Go; see `docs/README.md`.
 
 ### Running Locally
 ```bash

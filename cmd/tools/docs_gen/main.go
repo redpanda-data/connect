@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// docs_gen writes the generated reference content under docs/modules. The
-// docs site merges that directory with the pages in rp-connect-docs; see
-// docs/README.md.
+// docs_gen writes the generated reference content under docs/modules, which
+// is gitignored. Each release attaches it to the GitHub release as
+// redpanda-connect-docs.tar.gz, and the docs site merges it with the pages in
+// rp-connect-docs; see docs/README.md.
 package main
 
 import (
