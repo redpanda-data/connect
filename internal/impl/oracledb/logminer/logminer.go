@@ -402,6 +402,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
 			return fmt.Errorf("starting transaction %s on LOB event: %w", redoEvent.TransactionID, err)
 		}
+		// Hold the checkpoint below the START of this transaction. If the START
+		// was not mined, StartTransaction used this event SCN as the start SCN.
+		if err := lm.txnCache.IncludeInLowWatermark(ctx, redoEvent.TransactionID); err != nil {
+			return fmt.Errorf("holding checkpoint for transaction %s on LOB event: %w", redoEvent.TransactionID, err)
+		}
 	}
 
 	switch redoEvent.Operation {
@@ -449,7 +454,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
 		lobType := lm.lobColTypes[strings.ToUpper(colKey)] // "CLOB", "BLOB", "NCLOB", or "" if unknown
 
-		state := lm.getOrCreateLOBState(redoEvent.TransactionID, redoEvent.SCN)
+		state := lm.getOrCreateLOBState(redoEvent.TransactionID)
 		key := sqlredo.LobKey{
 			Schema:   info.Schema,
 			Table:    info.Table,
@@ -491,7 +496,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				// Form A: establish (or reset) the accumulator for this LOB column.
 				colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
 				lobType := lm.lobColTypes[strings.ToUpper(colKey)]
-				state := lm.getOrCreateLOBState(redoEvent.TransactionID, redoEvent.SCN)
+				state := lm.getOrCreateLOBState(redoEvent.TransactionID)
 				key := sqlredo.LobKey{
 					Schema:   info.Schema,
 					Table:    info.Table,
@@ -581,7 +586,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			// checkpoint past their oldest event SCN - 1. Doing so would cause their
 			// already-seen events to be skipped on restart (the query resumes
 			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
-			if lowestOpenSCN := lm.lowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
 				if lowestOpenSCN-1 < safeCheckpointSCN {
 					safeCheckpointSCN = lowestOpenSCN - 1
 				}
@@ -829,36 +834,12 @@ func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.T
 	return nil
 }
 
-// lowWatermarkSCN returns the lowest SCN of the events in memory for open
-// transactions. It ignores excludeTxnID. It returns math.MaxUint64 if there is
-// no such event. The commit checkpoint stays below this SCN.
-//
-// The transaction cache counts only transactions with DML events. But some
-// transactions have only LOB events. Examples are a SecureFile out-of-row LOB
-// update and a LOB_WRITE that arrives before its INSERT. At commit, these LOB
-// events become DML events, so they must also hold the checkpoint back.
-func (lm *LogMiner) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
-	lowest := lm.txnCache.LowWatermarkSCN(excludeTxnID)
-	for txnID, state := range lm.lobStates {
-		if txnID != excludeTxnID {
-			lowest = min(lowest, state.FirstSCN)
-		}
-	}
-	for txnID, pending := range lm.pendingLOBWrites {
-		if txnID != excludeTxnID && len(pending) > 0 {
-			lowest = min(lowest, pending[0].SCN)
-		}
-	}
-	return lowest
-}
-
-func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID, scn uint64) *sqlredo.TxnLOBState {
+func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
 	if state, ok := lm.lobStates[txnID]; ok {
 		return state
 	}
 
 	s := sqlredo.NewTxnLOBState()
-	s.FirstSCN = scn
 	lm.lobStates[txnID] = s
 	return s
 }
@@ -995,7 +976,7 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			// sitting in the deferred queue. Route them to the existing accumulator.
 			if _, claimed := claimedCols[col]; claimed {
 				if existingKey, hasEmptyAcc := emptyClaimedKeys[col]; hasEmptyAcc {
-					state := lm.getOrCreateLOBState(event.TransactionID, event.SCN)
+					state := lm.getOrCreateLOBState(event.TransactionID)
 					state.ActiveKey = &existingKey
 					lm.log.Debugf("Inferred LOB locator for %s.%s.%s from empty SELECT_LOB_LOCATOR accumulator (txn=%s)",
 						schema, table, col, event.TransactionID)
@@ -1033,7 +1014,7 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 
 			// Defer state creation until we have a match to avoid leaking
 			// empty TxnLOBState entries when inference fails.
-			state := lm.getOrCreateLOBState(event.TransactionID, event.SCN)
+			state := lm.getOrCreateLOBState(event.TransactionID)
 			if _, exists := state.Accumulators[key]; exists {
 				lm.log.Debugf("inferLOBLocator: skip %s.%s.%s — accumulator already exists for pkString=%q (txn=%s)",
 					schema, table, col, pkString, event.TransactionID)
