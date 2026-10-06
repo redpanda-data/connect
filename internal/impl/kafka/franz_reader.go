@@ -65,7 +65,6 @@ const (
 	kfrFieldRebalanceTimeout       = "rebalance_timeout"
 	kfrFieldHeartbeatInterval      = "heartbeat_interval"
 	kfrFieldTransactionIsolation   = "transaction_isolation_level"
-	kfrFieldPartitionAssignment    = "partition_assignment_strategy"
 )
 
 // TransactionIsolationLevel is a type that represents the transaction isolation level when reading from kafka.
@@ -188,23 +187,6 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			ShortDescription("How long a consumer group member waits between heartbeats to Kafka.").
 			Default("3s").
 			Advanced(),
-		service.NewStringListField(kfrFieldPartitionAssignment).
-			Description(`
-When using a consumer group, the strategies this client supports for assigning partitions to group members, in order of preference. The broker selects a strategy that every member supports, based on the order of preference of each member. This is the equivalent to the Java partition.assignment.strategy setting. Supported values:
-
-- ` + "`cooperative-sticky`" + `: Balances the total partition count per member while moving as few partitions as possible, and rebalances incrementally so that members keep consuming unaffected partitions. It does not balance partitions of each topic individually.
-- ` + "`sticky`" + `: The same assignment as ` + "`cooperative-sticky`" + `, using the eager protocol.
-- ` + "`range`" + `: Divides the partitions of each topic evenly across the members subscribed to it. Remainder partitions go to the first members by sort order, so when consuming many topics the earlier members can own more partitions overall.
-- ` + "`roundrobin`" + `: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.
-
-All strategies other than ` + "`cooperative-sticky`" + ` use the eager protocol, which revokes every partition from every member on each rebalance. The default differs from the Java client, which defaults to ` + "`range`" + ` followed by ` + "`cooperative-sticky`" + `, and from librdkafka, which defaults to ` + "`range`" + ` followed by ` + "`roundrobin`" + `.
-
-Every member of a group must share at least one strategy, otherwise the broker rejects members that join with ` + "`INCONSISTENT_GROUP_PROTOCOL`" + `. To change strategies on a running group, roll out a configuration that lists both the old and the new strategy, with the old one first, then roll out a configuration with only the new strategy. Moving from ` + "`cooperative-sticky`" + ` to an eager strategy revokes all partitions once the group switches, which can cause records to be reprocessed from the last committed offsets.`).
-			ShortDescription("The strategies used to assign partitions to consumer group members, in order of preference.").
-			Example([]string{"range"}).
-			Example([]string{"cooperative-sticky", "roundrobin"}).
-			Default([]any{"cooperative-sticky"}).
-			Advanced(),
 		service.NewBoolField(kfrFieldStartFromOldest).
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			ShortDescription("Consume from the oldest available offset rather than the latest. Applied when the consumer group is new.").
@@ -265,7 +247,6 @@ type FranzConsumerDetails struct {
 	FetchMaxBytes          int32
 	FetchMaxPartitionBytes int32
 	FetchMaxWait           time.Duration
-	GroupBalancers         []kgo.GroupBalancer
 }
 
 // FranzConsumerDetailsFromConfig returns a summary of kafka consumer
@@ -385,43 +366,7 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		return nil, err
 	}
 
-	strategyNames, err := conf.FieldStringList(kfrFieldPartitionAssignment)
-	if err != nil {
-		return nil, err
-	}
-	if d.GroupBalancers, err = parsePartitionAssignment(strategyNames); err != nil {
-		return nil, err
-	}
-
 	return &d, nil
-}
-
-func parsePartitionAssignment(names []string) ([]kgo.GroupBalancer, error) {
-	if len(names) == 0 {
-		return nil, fmt.Errorf("field %v must list at least one strategy", kfrFieldPartitionAssignment)
-	}
-	seen := map[string]struct{}{}
-	balancers := make([]kgo.GroupBalancer, 0, len(names))
-	for _, name := range names {
-		if _, exists := seen[name]; exists {
-			return nil, fmt.Errorf("field %v lists strategy %q more than once", kfrFieldPartitionAssignment, name)
-		}
-		seen[name] = struct{}{}
-
-		switch name {
-		case "cooperative-sticky":
-			balancers = append(balancers, kgo.CooperativeStickyBalancer())
-		case "sticky":
-			balancers = append(balancers, kgo.StickyBalancer())
-		case "range":
-			balancers = append(balancers, kgo.RangeBalancer())
-		case "roundrobin":
-			balancers = append(balancers, kgo.RoundRobinBalancer())
-		default:
-			return nil, fmt.Errorf("field %v contains unsupported strategy %q, expected one of: cooperative-sticky, sticky, range, roundrobin", kfrFieldPartitionAssignment, name)
-		}
-	}
-	return balancers, nil
 }
 
 // FranzOpts returns a slice of franz-go opts that establish a consumer
@@ -440,10 +385,6 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 		kgo.RebalanceTimeout(d.RebalanceTimeout),
 		kgo.HeartbeatInterval(d.HeartbeatInterval),
 		kgo.FetchIsolationLevel(d.IsolationLevel),
-	}
-
-	if len(d.GroupBalancers) > 0 {
-		opts = append(opts, kgo.Balancers(d.GroupBalancers...))
 	}
 
 	if d.RegexPattern {

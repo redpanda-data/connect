@@ -84,8 +84,6 @@ input:
     rebalance_timeout: 45s
     session_timeout: 1m
     heartbeat_interval: 3s
-    partition_assignment_strategy:
-      - cooperative-sticky
     start_offset: earliest
     fetch_max_bytes: 50MiB
     fetch_max_wait: 5s
@@ -106,6 +104,8 @@ input:
         period: ""
         check: ""
         processors: [] # No default (optional)
+    partition_assignment_strategy:
+      - cooperative-sticky
     auto_replay_nacks: true
     timely_nacks_maximum_wait: "" # No default (optional)
     extract_tracing_map: root = @ # No default (optional)
@@ -798,35 +798,6 @@ When using a consumer group, `heartbeat_interval` sets how long a group member g
 
 *Default*: `"3s"`
 
-=== `partition_assignment_strategy`
-
-When using a consumer group, the strategies this client supports for assigning partitions to group members, in order of preference. The broker selects a strategy that every member supports, based on the order of preference of each member. This is the equivalent to the Java partition.assignment.strategy setting. Supported values:
-
-- `cooperative-sticky`: Balances the total partition count per member while moving as few partitions as possible, and rebalances incrementally so that members keep consuming unaffected partitions. It does not balance partitions of each topic individually.
-- `sticky`: The same assignment as `cooperative-sticky`, using the eager protocol.
-- `range`: Divides the partitions of each topic evenly across the members subscribed to it. Remainder partitions go to the first members by sort order, so when consuming many topics the earlier members can own more partitions overall.
-- `roundrobin`: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.
-
-All strategies other than `cooperative-sticky` use the eager protocol, which revokes every partition from every member on each rebalance. The default differs from the Java client, which defaults to `range` followed by `cooperative-sticky`, and from librdkafka, which defaults to `range` followed by `roundrobin`.
-
-Every member of a group must share at least one strategy, otherwise the broker rejects members that join with `INCONSISTENT_GROUP_PROTOCOL`. To change strategies on a running group, roll out a configuration that lists both the old and the new strategy, with the old one first, then roll out a configuration with only the new strategy. Moving from `cooperative-sticky` to an eager strategy revokes all partitions once the group switches, which can cause records to be reprocessed from the last committed offsets.
-
-
-*Type*: `array`
-
-*Default*: `["cooperative-sticky"]`
-
-```yml
-# Examples
-
-partition_assignment_strategy:
-  - range
-
-partition_assignment_strategy:
-  - cooperative-sticky
-  - roundrobin
-```
-
 === `start_offset`
 
 Sets the offset to start consuming from, or if OffsetOutOfRange is seen while fetching, to restart consuming from.
@@ -1073,6 +1044,35 @@ processors:
 processors:
   - archive:
       format: json_array
+```
+
+=== `partition_assignment_strategy`
+
+When using a consumer group, the strategies this client supports for assigning partitions to group members, in order of preference. The broker selects a strategy that every member supports, based on the order of preference of each member. This is the equivalent to the Java partition.assignment.strategy setting. Supported values:
+
+- `cooperative-sticky`: Balances the total partition count per member while moving as few partitions as possible, and rebalances incrementally so that members keep consuming unaffected partitions. It does not balance partitions of each topic individually.
+- `sticky`: The same assignment as `cooperative-sticky`, using the eager protocol.
+- `range`: Divides the partitions of each topic evenly across the members subscribed to it. Remainder partitions go to the first members by sort order, so when consuming many topics the earlier members can own more partitions overall.
+- `roundrobin`: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.
+
+All strategies other than `cooperative-sticky` use the eager protocol, which revokes every partition from every member on each rebalance. The default differs from the Java client, which defaults to `range` followed by `cooperative-sticky`, and from librdkafka, which defaults to `range` followed by `roundrobin`.
+
+Every member of a group must share at least one strategy, otherwise the broker rejects members that join with `INCONSISTENT_GROUP_PROTOCOL`. To change strategies on a running group, roll out a configuration that lists both the old and the new strategy, with the old one first, then roll out a configuration with only the new strategy. Moving from `cooperative-sticky` to an eager strategy revokes all partitions once the group switches, which can cause records to be reprocessed from the last committed offsets.
+
+
+*Type*: `array`
+
+*Default*: `["cooperative-sticky"]`
+
+```yml
+# Examples
+
+partition_assignment_strategy:
+  - range
+
+partition_assignment_strategy:
+  - cooperative-sticky
+  - roundrobin
 ```
 
 === `auto_replay_nacks`

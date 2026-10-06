@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- redpanda: Added partition_assignment_strategy option to the franz-go based consumer inputs (redpanda, redpanda_migrator, ockam_kafka, kafka_franz, redpanda_common) to select the consumer group partition assignment strategy (cooperative-sticky, sticky, range or roundrobin), enabling even per-topic partition distribution for groups that consume multiple topics. The default remains cooperative-sticky. ([@alextreichler](https://github.com/alextreichler), [#4923](https://github.com/redpanda-data/connect/pull/4923))
+- redpanda: Added partition_assignment_strategy option to the redpanda input to select the consumer group partition assignment strategy (cooperative-sticky, sticky, range or roundrobin), enabling even per-topic partition distribution for groups that consume multiple topics. The default remains cooperative-sticky. ([@alextreichler](https://github.com/alextreichler), [#4923](https://github.com/redpanda-data/connect/pull/4923))
 
 ## 4.112.0 - 2026-10-02
 
