@@ -21,6 +21,94 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestOnMissingObjectConfigParsing exercises the full parse path for the
+// sqs.on_missing_object field: the default value, the two valid values, and
+// the runtime safety guard in s3iConfigFromParsed that forbids combining
+// on_missing_object: nack with delete_objects: true.
+func TestOnMissingObjectConfigParsing(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		expectedValue string
+		expectErr     bool
+		errContains   string
+	}{
+		{
+			name: "field omitted uses drop default",
+			yaml: `
+bucket: foo
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+sqs:
+  url: http://example.com/queue
+`,
+			expectedValue: s3iSQSOnMissingObjectDrop,
+		},
+		{
+			name: "explicit drop",
+			yaml: `
+bucket: foo
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+sqs:
+  url: http://example.com/queue
+  on_missing_object: drop
+`,
+			expectedValue: s3iSQSOnMissingObjectDrop,
+		},
+		{
+			name: "explicit nack",
+			yaml: `
+bucket: foo
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+sqs:
+  url: http://example.com/queue
+  on_missing_object: nack
+`,
+			expectedValue: s3iSQSOnMissingObjectNack,
+		},
+		{
+			name: "nack with delete_objects is rejected",
+			yaml: `
+bucket: foo
+region: eu-west-1
+delete_objects: true
+credentials:
+  id: xxxxx
+  secret: xxxxx
+sqs:
+  url: http://example.com/queue
+  on_missing_object: nack
+`,
+			expectErr:   true,
+			errContains: "cannot be combined with",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := s3InputSpec().ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			conf, err := s3iConfigFromParsed(parsed)
+			if tt.expectErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedValue, conf.SQS.OnMissingObject)
+		})
+	}
+}
+
 func TestParseObjectPathsSNSEnvelope(t *testing.T) {
 	tests := []struct {
 		name            string
