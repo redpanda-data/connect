@@ -27,12 +27,14 @@ func main() {
 		partitions := fs.Int("partitions", 16, "topic partition count")
 		keySpace := fs.Int64("key-space", 0, "cap the id space so ids repeat (id = i %% key-space) for keyed upsert benches; 0 keeps ids unique")
 		keyOrder := fs.String("key-order", "sequential", "arrival order of recurring ids when key-space is set: sequential (contiguous runs) or scattered (coprime-stride walk)")
+		format := fs.String("format", formatJSON, "value encoding: json or protobuf (Confluent wire format, needs --schema-registry-url)")
+		registryURL := fs.String("schema-registry-url", "", "Schema Registry base URL; the Order schema is registered under <topic>-value with --format=protobuf")
 		_ = fs.Parse(os.Args[2:])
 		if *keyOrder != "sequential" && *keyOrder != "scattered" {
 			fmt.Fprintf(os.Stderr, "seed: --key-order must be sequential or scattered (got %q)\n", *keyOrder)
 			os.Exit(2)
 		}
-		if err := seed(context.Background(), *topic, *rows, *rowSize, *partitions, *keySpace, *keyOrder); err != nil {
+		if err := seed(context.Background(), *topic, *rows, *rowSize, *partitions, *keySpace, *keyOrder, *format, *registryURL); err != nil {
 			fmt.Fprintln(os.Stderr, "seed:", err)
 			os.Exit(1)
 		}
@@ -42,8 +44,10 @@ func main() {
 		rate := fs.Int("rate", 5000, "writes per second total")
 		rowSize := fs.Int("row-size", 1200, "approximate record size in bytes")
 		dur := fs.Duration("duration", 15*time.Minute, "total duration")
+		format := fs.String("format", formatJSON, "value encoding: json or protobuf (Confluent wire format, needs --schema-registry-url)")
+		registryURL := fs.String("schema-registry-url", "", "Schema Registry base URL; the Order schema is registered under <topic>-value with --format=protobuf")
 		_ = fs.Parse(os.Args[2:])
-		if err := workload(context.Background(), *topic, *rate, *rowSize, *dur); err != nil {
+		if err := workload(context.Background(), *topic, *rate, *rowSize, *dur, *format, *registryURL); err != nil {
 			fmt.Fprintln(os.Stderr, "workload:", err)
 			os.Exit(1)
 		}

@@ -1,0 +1,86 @@
+set -euo pipefail
+echo "starting kc bench: 4 vCPU, 80 GiB heap, warmup 600s, window 900s"
+echo "[kc] waiting for cloud-init (plugin downloads) to finish..."
+sudo cloud-init status --wait >/dev/null 2>&1 || true
+echo "[kc] cloud-init done"
+KC_LOG=/tmp/kc-4.log
+: > "$KC_LOG"
+trap 'rc=$?; kill -TERM ${PID:-} ${RP_SCRAPER:-} ${HEARTBEAT:-} 2>/dev/null || true; aws s3 cp "$KC_LOG" "s3://b/runs/sess/kc-4.log" --only-show-errors 2>/dev/null || true; exit $rc' EXIT
+sudo systemctl stop kafka-connect || true
+sudo pkill -f connect-distributed 2>/dev/null || true
+for i in $(seq 1 60); do
+  sudo ss -ltn 2>/dev/null | grep -q ':8083 ' || break
+  echo "[kc] waiting for port 8083 to free before spawn (${i}s)..."
+  sudo systemctl stop kafka-connect >/dev/null 2>&1 || true
+  sudo pkill -f connect-distributed 2>/dev/null || true
+  sleep 1
+done
+taskset -c 2-5 env KAFKA_HEAP_OPTS=-Xmx20g /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &
+PID=$!
+RP=/tmp/x
+RP_SCRAPER=$!
+for i in $(seq 1 180); do
+  if curl -fsS http://localhost:8083/ >/dev/null 2>&1; then echo "[kc] worker REST API up after ${i}s"; break; fi
+  if ! kill -0 "$PID" 2>/dev/null; then echo "[kc] JVM died before REST API came up; see kc-log on S3"; exit 1; fi
+  sleep 1
+done
+echo "[kc] clearing any stale connectors left over from prior sweep points..."
+for c in $(curl -fsS http://localhost:8083/connectors 2>/dev/null | jq -r '.[]' 2>/dev/null); do
+  echo "[kc] deleting stale connector: $c"
+  curl -fsS -X DELETE "http://localhost:8083/connectors/$c" 2>/dev/null || true
+done
+for i in $(seq 1 30); do
+  REMAINING=$(curl -fsS http://localhost:8083/connectors 2>/dev/null | jq -r 'length' 2>/dev/null || echo "0")
+  if [ "$REMAINING" = "0" ] || [ -z "$REMAINING" ]; then echo "[kc] no stale connectors remain"; break; fi
+  echo "[kc] waiting for $REMAINING stale connector(s) to clear (${i}s)..."
+  sleep 1
+done
+cat > /tmp/kc-cfg-4.json <<'KCCFG'
+{"connector.class":"x","tasks.max":"4"}
+KCCFG
+CLASS=$(sed -n 's/.*"connector.class"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/kc-cfg-4.json | head -1)
+echo "[kc] waiting for connector class $CLASS to register..."
+for i in $(seq 1 60); do
+  if curl -s localhost:8083/connector-plugins | grep -q "$CLASS"; then
+    echo "[kc] connector class registered after $((i*2))s"
+    break
+  fi
+  sleep 2
+done
+HTTP_CODE=$(curl -sS -o /tmp/kc-submit-resp.json -w '%{http_code}' -X PUT -H 'Content-Type: application/json' --data-binary @/tmp/kc-cfg-4.json http://localhost:8083/connectors/bench_s3_v4/config)
+if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+  echo "[kc] connector submit failed with HTTP $HTTP_CODE; worker response:"
+  cat /tmp/kc-submit-resp.json
+  echo
+  exit 1
+fi
+echo "[kc] connector submitted (HTTP $HTTP_CODE)"
+for i in $(seq 1 60); do
+  STATE=$(curl -fsS http://localhost:8083/connectors/bench_s3_v4/status | jq -r '.tasks[0].state // "unknown"' 2>/dev/null || echo "unknown")
+  if [ "$STATE" = "RUNNING" ]; then break; fi
+  if [ "$STATE" = "FAILED" ]; then echo "task FAILED before warmup; aborting"; exit 1; fi
+  sleep 1
+done
+(
+  while kill -0 "$PID" 2>/dev/null; do
+    sleep 60
+    LATEST="$(tail -n 1 "$KC_LOG" 2>/dev/null | tr -d '\n' || true)"
+    echo "[kc-heartbeat] ${LATEST:-no output yet}"
+  done
+) &
+HEARTBEAT=$!
+sleep 1500
+curl -fsS -X DELETE http://localhost:8083/connectors/bench_s3_v4 || true
+kill -TERM "$PID" 2>/dev/null || true
+wait "$PID" 2>/dev/null || true
+kill "$HEARTBEAT" 2>/dev/null || true
+kill "$RP_SCRAPER" 2>/dev/null || true
+echo "kc bench point complete"
+aws s3 cp "$KC_LOG" "s3://b/runs/sess/kc-4.log" >/dev/null
+aws s3 cp x y
+echo "kc log uploaded"
+for i in $(seq 1 60); do
+  sudo ss -ltn 2>/dev/null | grep -q ':8083 ' || break
+  sleep 1
+done
+sudo systemctl start kafka-connect || true

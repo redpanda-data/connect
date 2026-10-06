@@ -112,6 +112,28 @@ runcmd:
   - tar -xf /tmp/s3-sink.tar -C /opt/kafka-connect/plugins/
   - rm -f /tmp/s3-sink.tar
 
+  # Confluent S3 Sink connector (Confluent Community License) and the Confluent
+  # Protobuf converter, installed ALONGSIDE Aiven (not replacing it) for the
+  # customer-config comparison in s3/orders-live-confluent*.yaml; see
+  # kcConnectorSpecs["s3_confluent"]. Both are Confluent Hub zips that unpack to
+  # confluentinc-<name>-<version>/{lib,doc,...}, which plugin.path scans as one
+  # isolated plugin each. The connector ships class
+  # io.confluent.connect.s3.S3SinkConnector; the converter class is
+  # io.confluent.connect.protobuf.ProtobufConverter.
+  #
+  # Protobuf converter version: 7.8.11, the Confluent Platform 7.8 line, which
+  # is built against Apache Kafka 3.8 (this worker runs Kafka 3.8.0). Latest on
+  # the Hub is 8.3.2 (Java 17 bytecode, built against a newer Kafka than 3.8);
+  # it was deliberately not used because Kafka-API compatibility with a 3.8
+  # worker could not be verified offline. If a run wants 8.3.2 swap the version
+  # in both URL segments below (verified HTTP 200).
+  - curl -sSL -o /tmp/confluent-s3.zip https://hub-downloads.confluent.io/api/plugins/confluentinc/kafka-connect-s3/versions/12.1.13/confluentinc-kafka-connect-s3-12.1.13.zip
+  - unzip -q /tmp/confluent-s3.zip -d /opt/kafka-connect/plugins/
+  - rm -f /tmp/confluent-s3.zip
+  - curl -sSL -o /tmp/confluent-protobuf-converter.zip https://hub-downloads.confluent.io/api/plugins/confluentinc/kafka-connect-protobuf-converter/versions/7.8.11/confluentinc-kafka-connect-protobuf-converter-7.8.11.zip
+  - unzip -q /tmp/confluent-protobuf-converter.zip -d /opt/kafka-connect/plugins/
+  - rm -f /tmp/confluent-protobuf-converter.zip
+
   # Enable + start the worker. systemd retries on failure if Redpanda isn't yet
   # reachable (which is fine — the bench start waits for the runner anyway).
   - systemctl daemon-reload

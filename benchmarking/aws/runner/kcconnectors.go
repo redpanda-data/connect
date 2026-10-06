@@ -37,6 +37,11 @@ type kcConnectorSpec struct {
 	PropsTemplate   string
 	Direction       kcDirection
 	RequiredPlugins []string
+	// ScanWorkerLog makes the bench script scan the worker log and connector
+	// status for errors at the end of the window and print ###WARN lines. For
+	// connectors configured with errors.tolerance=all, where a failing
+	// converter would otherwise be invisible.
+	ScanWorkerLog bool
 }
 
 // kcConnectorSpecs is the registry of KC counterparts keyed by the Redpanda
@@ -330,6 +335,109 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"s3-sink-connector-for-apache-kafka*"},
 	},
+	// s3_confluent is the Confluent S3 Sink connector driven by a customer's
+	// real connector config, for the "same work, customer-shaped" comparison in
+	// scenarios/s3/orders-live-confluent*.yaml. Selected with
+	// `kafka_connect.spec: s3_confluent` on a connector: s3 scenario (the
+	// default spec for connector: s3 stays the Aiven entry above, so every
+	// existing scenario is untouched). The sinkSpec machinery (reset, sidecar,
+	// consumer-group discovery by the deterministic bench_s3_v<n> name) is
+	// shared: Confluent's framework group is connect-<connector name>, which
+	// the sidecar's substring match on bench_s3_v<n> still finds.
+	//
+	// The property block below is the customer's connector config VERBATIM
+	// (same keys, same values, same order) except for these deliberate edits:
+	//
+	// SUBSTITUTED (the value is bench-specific, the key is the customer's):
+	//   s3.bucket.name   -> {{.Bucket}}  the bench results bucket
+	//   s3.region        -> {{.Region}}  the bench region
+	//   topics           -> {{.Topic}}   the bench source topic
+	//   topics.dir       -> {{.TopicsDir}} "raw/<session topic>/kafka_connect".
+	//                       The connector writes
+	//                       <topics.dir>/<topic>/<path.format>/<file>.parquet,
+	//                       so everything lands under s3Prefix(n,
+	//                       "kafka_connect"), the prefix the sidecar sums and
+	//                       the reset script wipes. The customer's own value is
+	//                       not known; topics.dir was not in the supplied
+	//                       config, so this key is ADDED (it is the only
+	//                       addition), and without it objects would land under
+	//                       the connector default "topics/" outside every
+	//                       prefix the bench measures.
+	//   tasks.max        -> "__TASKS_MAX__" sentinel, patched by matrix.go to
+	//                       the sweep point's vCPU count. The customer runs
+	//                       1500 tasks across a fleet; the bench scales tasks
+	//                       with cores exactly as the Aiven spec does.
+	//   value.converter.schema.registry.url -> {{.SchemaRegistryURL}} the
+	//                       bench cluster's built-in Schema Registry.
+	//
+	// DROPPED (not present below):
+	//   name                          set by the REST path (PUT
+	//                                 /connectors/<name>/config)
+	//   value.converter.basic.auth.*  the bench Schema Registry has no auth
+	//   the customer's bucket/region  replaced by the substitutions above
+	//
+	// NOT ADDED on purpose: offset.flush.interval.ms / __FLUSH_INTERVAL_MS__.
+	// That is a worker property (the customer sets it at worker level, 15000),
+	// so it is applied through kafka_connect.worker_properties in the
+	// scenario, and matrix.go's second sentinel patch is a no-op for this
+	// spec. No AWS credentials are set: the default provider chain resolves
+	// to the runner's instance profile.
+	//
+	// errors.tolerance=all is the customer's setting and is kept. It means a
+	// broken converter (bad schema, SR unreachable) does NOT fail the task:
+	// records are skipped silently while the consumer offsets still advance.
+	// The consumer-group offset metric (total_records / msg_per_sec) would then
+	// look like healthy progress with zero S3 bytes. Guards: S3 bytes
+	// (total_files_size_bytes / MB/s) is the primary throughput signal for this
+	// scenario, matrix.go warns when bytes-per-record is implausibly low, and
+	// the KC bench script prints a ###WARN for non-RUNNING tasks and for error
+	// lines in the worker log (the scenario enables errors.log.enable through
+	// kafka_connect.config so tolerated errors reach that log at all).
+	"s3_confluent": {
+		Class:     "io.confluent.connect.s3.S3SinkConnector",
+		Direction: kcSink,
+		PropsTemplate: `{
+  "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+  "consumer.override.auto.offset.reset": "latest",
+  "consumer.override.fetch.max.bytes": "104857600",
+  "consumer.override.fetch.max.wait.ms": "500",
+  "consumer.override.fetch.min.bytes": "1048576",
+  "consumer.override.max.partition.fetch.bytes": "104857600",
+  "consumer.override.max.poll.records": "15000",
+  "consumer.override.receive.buffer.bytes": "104857600",
+  "errors.retry.delay.max.ms": "60000",
+  "errors.retry.timeout": "600000",
+  "errors.tolerance": "all",
+  "filename.offset.zero.pad.width": "20",
+  "flush.size": "2000000",
+  "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",
+  "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
+  "locale": "en-US",
+  "parquet.codec": "zstd",
+  "partition.duration.ms": "3600000",
+  "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",
+  "path.format": "'dt'=YYYY'-'MM'-'dd/'hr'=HH'/us-east-1'",
+  "rotate.schedule.interval.ms": "120000",
+  "s3.bucket.name": "{{.Bucket}}",
+  "s3.elastic.buffer.enable": "true",
+  "s3.elastic.buffer.init.capacity": "26214400",
+  "s3.part.retries": "14",
+  "s3.part.size": "104857600",
+  "s3.region": "{{.Region}}",
+  "s3.retry.backoff.ms": "1000",
+  "schema.compatibility": "BACKWARD",
+  "storage.class": "io.confluent.connect.s3.storage.S3Storage",
+  "tasks.max": "__TASKS_MAX__",
+  "timestamp.extractor": "Record",
+  "timezone": "UTC",
+  "topics": "{{.Topic}}",
+  "topics.dir": "{{.TopicsDir}}",
+  "value.converter": "io.confluent.connect.protobuf.ProtobufConverter",
+  "value.converter.schema.registry.url": "{{.SchemaRegistryURL}}"
+}`,
+		RequiredPlugins: []string{"confluentinc-kafka-connect-s3*", "confluentinc-kafka-connect-protobuf-converter*"},
+		ScanWorkerLog:   true,
+	},
 }
 
 func kcConnectorSpecFor(connector string) (kcConnectorSpec, bool) {
@@ -370,6 +478,13 @@ type kcRenderInputs struct {
 	// iceberg sink (Region/Topic/ConsumerGroup above are shared).
 	Bucket string
 	Prefix string
+	// TopicsDir is Prefix without its trailing slash, for connectors whose
+	// output-directory property rejects or doubles a trailing delimiter
+	// (Confluent S3's topics.dir). Sink (s3_confluent) only.
+	TopicsDir string
+	// SchemaRegistryURL is the cluster's built-in Schema Registry base URL.
+	// Sink (s3_confluent) only.
+	SchemaRegistryURL string
 }
 
 // renderKCConfig produces the JSON config map ready to POST to the KC REST
@@ -377,24 +492,28 @@ type kcRenderInputs struct {
 // inputs, then merges any per-scenario `kafka_connect.config` overrides on
 // top.
 func renderKCConfig(s *Scenario, in kcRenderInputs) (map[string]any, error) {
-	spec, ok := kcConnectorSpecFor(s.Connector)
+	specKey := kcSpecKey(s)
+	spec, ok := kcConnectorSpecFor(specKey)
 	if !ok {
+		if specKey != s.Connector {
+			return nil, fmt.Errorf("kafka_connect.spec %q has no kcConnectorSpec registered", specKey)
+		}
 		return nil, fmt.Errorf("no kcConnectorSpec registered for connector %q", s.Connector)
 	}
 
 	tmpl, err := template.New("kc").Parse(spec.PropsTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("parse template for %q: %w", s.Connector, err)
+		return nil, fmt.Errorf("parse template for %q: %w", specKey, err)
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, in); err != nil {
-		return nil, fmt.Errorf("render template for %q: %w", s.Connector, err)
+		return nil, fmt.Errorf("render template for %q: %w", specKey, err)
 	}
 
 	var cfg map[string]any
 	dec := json.NewDecoder(strings.NewReader(buf.String()))
 	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("decode rendered JSON for %q: %w; body:\n%s", s.Connector, err, buf.String())
+		return nil, fmt.Errorf("decode rendered JSON for %q: %w; body:\n%s", specKey, err, buf.String())
 	}
 
 	// Shallow-merge scenario's `kafka_connect.config` over the base.

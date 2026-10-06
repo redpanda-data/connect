@@ -21,6 +21,10 @@ type sweepPoint struct {
 	ArmID      string
 	GOMAXPROCS int
 	Streams    int
+	// GOGC mirrors Arm.GOGC (0 unset, -1 off).
+	GOGC int
+	// OutputFanout mirrors Arm.OutputFanout.
+	OutputFanout int
 	// FanIn mirrors Arm.FanIn: renderPointConfigs renders this point as one
 	// pipeline subscribed to all of dataset.topics' topics instead of the
 	// per-Streams rendering below. false for every arm-less scenario and for
@@ -63,12 +67,14 @@ func buildSweepPlan(s *Scenario) []sweepPoint {
 				streams = 1
 			}
 			pts = append(pts, sweepPoint{
-				VCPU:       n,
-				ArmID:      a.ID,
-				GOMAXPROCS: gmp,
-				Streams:    streams,
-				FanIn:      a.FanIn,
-				Pipeline:   mergePipeline(s.Pipeline, a.Pipeline),
+				VCPU:         n,
+				ArmID:        a.ID,
+				GOMAXPROCS:   gmp,
+				Streams:      streams,
+				GOGC:         a.GOGC,
+				OutputFanout: a.OutputFanout,
+				FanIn:        a.FanIn,
+				Pipeline:     mergePipeline(s.Pipeline, a.Pipeline),
 			})
 		}
 	}

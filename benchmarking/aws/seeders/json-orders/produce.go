@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -107,7 +106,8 @@ func buildRecord(pool *payloadPool, rng *rand.Rand, id, varySeed int64, padLen i
 	}
 }
 
-// seed produces `rows` flat JSON records (~rowSize bytes each) into `topic`.
+// seed produces `rows` flat records (JSON, or Confluent-framed Protobuf with
+// format=protobuf, see encode.go) (~rowSize bytes each) into `topic`.
 // Brokers come from REDPANDA_BROKERS (comma-separated host:port).
 //
 // keySpace > 0 caps the id space so ids cycle (id = i % keySpace), giving
@@ -122,7 +122,7 @@ func buildRecord(pool *payloadPool, rng *rand.Rand, id, varySeed int64, padLen i
 // the space by a stride coprime to keySpace — still a permutation, so every
 // id is hit exactly once per cycle, but consecutive rows carry far-apart ids
 // and a batch's keys spray across all files (the realistic CDC worst case).
-func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int, keySpace int64, keyOrder string) error {
+func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int, keySpace int64, keyOrder string, format, registryURL string) error {
 	brokers := os.Getenv("REDPANDA_BROKERS")
 	if brokers == "" {
 		return fmt.Errorf("REDPANDA_BROKERS env var is required")
@@ -179,7 +179,11 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 	}
 	log.Printf("json-orders: topic %q ready (%d partitions); producing %d records", topic, partitions, rows)
 
-	padLen := rowPadLen(rowSize)
+	enc, err := newRecordEncoder(ctx, format, registryURL, topic)
+	if err != nil {
+		return err
+	}
+	padLen := enc.PadLen(rowSize)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	pool := newPayloadPool(rng)
 
@@ -212,7 +216,7 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 			}
 		}
 		rec := buildRecord(pool, rng, id, i, padLen)
-		val, err := json.Marshal(rec)
+		val, err := enc.Encode(rec)
 		if err != nil {
 			return err
 		}
@@ -258,7 +262,7 @@ func gcd(a, b int64) int64 {
 // RTT per tick well below realistic target rates). Workers exit cleanly when
 // ctx is cancelled or dur elapses; ctx.Canceled/DeadlineExceeded are treated
 // as expected shutdown, not failures.
-func workload(ctx context.Context, topic string, rate, rowSize int, dur time.Duration) error {
+func workload(ctx context.Context, topic string, rate, rowSize int, dur time.Duration, format, registryURL string) error {
 	brokers := os.Getenv("REDPANDA_BROKERS")
 	if brokers == "" {
 		return fmt.Errorf("REDPANDA_BROKERS env var is required")
@@ -275,7 +279,11 @@ func workload(ctx context.Context, topic string, rate, rowSize int, dur time.Dur
 	}
 	defer cl.Close()
 
-	padLen := rowPadLen(rowSize)
+	enc, err := newRecordEncoder(ctx, format, registryURL, topic)
+	if err != nil {
+		return err
+	}
+	padLen := enc.PadLen(rowSize)
 	pool := newPayloadPool(rand.New(rand.NewSource(time.Now().UnixNano())))
 
 	const workers = 16
@@ -317,7 +325,7 @@ func workload(ctx context.Context, topic string, rate, rowSize int, dur time.Dur
 					for n := 0; n < perWorkerPer100ms; n++ {
 						seq := atomic.AddInt64(&recordSeq, 1) - 1
 						rec := buildRecord(pool, rng, seq, seq, padLen)
-						val, err := json.Marshal(rec)
+						val, err := enc.Encode(rec)
 						if err != nil {
 							errCh <- err
 							return

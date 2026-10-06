@@ -35,6 +35,18 @@ resource "aws_security_group_rule" "broker_admin_ingress" {
   description              = "Admin/metrics from client SG"
 }
 
+# Schema Registry (built-in, :8081) from allowed clients
+resource "aws_security_group_rule" "broker_schema_registry_ingress" {
+  count                    = length(var.allowed_client_sgs)
+  type                     = "ingress"
+  from_port                = 8081
+  to_port                  = 8081
+  protocol                 = "tcp"
+  source_security_group_id = var.allowed_client_sgs[count.index]
+  security_group_id        = aws_security_group.broker.id
+  description              = "Schema Registry from client SG"
+}
+
 # Broker-to-broker RPC (raft)
 resource "aws_security_group_rule" "broker_rpc_self" {
   type                     = "ingress"

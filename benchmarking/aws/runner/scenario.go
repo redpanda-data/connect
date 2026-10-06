@@ -35,6 +35,10 @@ const (
 	// union and ~2002 tablegen invocations per reset, all against real AWS
 	// spend. 8 is generous headroom over the plan's own 2-stream arm B.
 	maxArmStreams = 8
+	// minArmGOGC is the lowest legal Arm.GOGC; -1 means GOGC=off.
+	minArmGOGC = -1
+	// maxArmOutputFanout bounds Arm.OutputFanout.
+	maxArmOutputFanout = 16
 	// maxDatasetTopics bounds DatasetSpec.Topics. Each topic adds one seeder
 	// invocation, one Iceberg table, and (in streams mode) one consumer
 	// group — 16 mirrors the generous headroom maxArmStreams already gives
@@ -90,17 +94,21 @@ const (
 )
 
 type Scenario struct {
-	Name        string         `yaml:"name"`
-	Description string         `yaml:"description"`
-	Connector   string         `yaml:"connector"`
-	Direction   Direction      `yaml:"direction,omitempty"`
-	Stack       string         `yaml:"stack"`
-	Infra       InfraSpec      `yaml:"infra"`
-	Dataset     DatasetSpec    `yaml:"dataset"`
-	Workload    *WorkloadSpec  `yaml:"workload,omitempty"`
-	Pipeline    map[string]any `yaml:"pipeline"`
-	Matrix      MatrixSpec     `yaml:"matrix"`
-	Reset       []ResetStep    `yaml:"reset"`
+	// outputFanout is set only on the per-point armScenario copy made by
+	// renderPointConfigs; renderers wrap the decorated output in a
+	// round_robin broker when > 1.
+	outputFanout int
+	Name         string         `yaml:"name"`
+	Description  string         `yaml:"description"`
+	Connector    string         `yaml:"connector"`
+	Direction    Direction      `yaml:"direction,omitempty"`
+	Stack        string         `yaml:"stack"`
+	Infra        InfraSpec      `yaml:"infra"`
+	Dataset      DatasetSpec    `yaml:"dataset"`
+	Workload     *WorkloadSpec  `yaml:"workload,omitempty"`
+	Pipeline     map[string]any `yaml:"pipeline"`
+	Matrix       MatrixSpec     `yaml:"matrix"`
+	Reset        []ResetStep    `yaml:"reset"`
 	// KafkaConnect is an optional override map applied on top of the
 	// kcConnectorSpec registry entry's PropsTemplate at render time. The
 	// fields here are shallow-merged into the resulting KC connector config
@@ -139,11 +147,16 @@ type LoadGenSpec struct {
 }
 
 type DatasetSpec struct {
-	InitialRows       int64    `yaml:"initial_rows"`
-	RowSizeBytes      int      `yaml:"row_size_bytes"`
-	Tables            []string `yaml:"tables"`
-	Seeder            string   `yaml:"seeder"`
-	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
+	InitialRows  int64    `yaml:"initial_rows"`
+	RowSizeBytes int      `yaml:"row_size_bytes"`
+	Tables       []string `yaml:"tables"`
+	Seeder       string   `yaml:"seeder"`
+	// Format is the seeder's value encoding: "" or "json" (every existing
+	// scenario) or "protobuf" (Confluent wire format registered in the
+	// cluster's Schema Registry, json-orders only). RowSizeBytes then means
+	// the encoded size on the wire.
+	Format            string `yaml:"format,omitempty"`
+	ExpectedPeakMBSec int    `yaml:"expected_peak_mb_s,omitempty"`
 	// Topics splits InitialRows evenly across N pre-seeded source topics
 	// instead of one. 0 (absent) and 1 both mean single-topic, which keeps
 	// every existing scenario byte-identical: same topic name, same table
@@ -211,6 +224,16 @@ type Arm struct {
 	ID         string `yaml:"id"`
 	GOMAXPROCS int    `yaml:"gomaxprocs,omitempty"`
 	Streams    int    `yaml:"streams,omitempty"`
+	// GOGC sets the Connect process's GOGC env var. 0 leaves it unset (Go
+	// default 100), -1 renders GOGC=off (GOMEMLIMIT is then the only GC
+	// trigger), >0 renders GOGC=<n>. Sink-agnostic, Connect-only.
+	GOGC int `yaml:"gogc,omitempty"`
+	// OutputFanout > 1 wraps the decorated sink output in a round_robin
+	// broker of N deep copies, so each copy owns its batching policy and
+	// batching.processors (N parallel batcher/encoder goroutines). Sink-only,
+	// Connect-only. The unordered_processing checkpoint_limit must exceed
+	// OutputFanout x batching.count.
+	OutputFanout int `yaml:"output_fanout,omitempty"`
 	// FanIn true renders this arm as ONE pipeline subscribed to all of
 	// dataset.topics' N topics, routing each record to its topic-derived
 	// Iceberg table via an interpolated `table` field (see fanInTableExpr in
@@ -433,6 +456,9 @@ func (s *Scenario) Validate() error {
 				if a.FanIn {
 					return fmt.Errorf("matrix.arms[%d].fan_in is only supported for direction: sink (got %q); fan-in renders a redpanda input into a table-bearing output", i, s.Direction)
 				}
+				if a.OutputFanout > 1 {
+					return fmt.Errorf("matrix.arms[%d].output_fanout is only supported for direction: sink (got %q)", i, s.Direction)
+				}
 				if a.Streams > 1 {
 					return fmt.Errorf("matrix.arms[%d].streams must be <= 1 for direction: %q (got %d); multi-stream rendering derives per-topic names and sink tables", i, s.Direction, a.Streams)
 				}
@@ -463,6 +489,15 @@ func (s *Scenario) Validate() error {
 			if a.Streams > maxArmStreams {
 				return fmt.Errorf("matrix.arms[%d].streams must be <= %d (got %d); each stream adds a rendered config, an Iceberg table, and a retried tablegen pre-create per engine at every between-points reset", i, maxArmStreams, a.Streams)
 			}
+			if a.GOGC < minArmGOGC {
+				return fmt.Errorf("matrix.arms[%d].gogc must be >= %d (got %d); -1 means GOGC=off, 0 means unset", i, minArmGOGC, a.GOGC)
+			}
+			if a.OutputFanout < 0 {
+				return fmt.Errorf("matrix.arms[%d].output_fanout must be non-negative (got %d); 0 means use the default", i, a.OutputFanout)
+			}
+			if a.OutputFanout > maxArmOutputFanout {
+				return fmt.Errorf("matrix.arms[%d].output_fanout must be <= %d (got %d); each copy adds a batcher, an encoder and its in-flight uploads", i, maxArmOutputFanout, a.OutputFanout)
+			}
 			if a.FanIn && s.Dataset.Topics <= 1 {
 				return fmt.Errorf("matrix.arms[%d].fan_in requires dataset.topics > 1 (got %d); fanning a single topic in is meaningless", i, s.Dataset.Topics)
 			}
@@ -470,6 +505,18 @@ func (s *Scenario) Validate() error {
 				return fmt.Errorf("matrix.arms[%d].fan_in is mutually exclusive with streams > 1 (got streams: %d); fan-in is a single pipeline", i, a.Streams)
 			}
 		}
+	}
+
+	switch s.Dataset.Format {
+	case "", "json", "protobuf":
+	default:
+		return fmt.Errorf("dataset.format must be \"json\" or \"protobuf\" (got %q)", s.Dataset.Format)
+	}
+	if s.Dataset.Format == "protobuf" && s.Dataset.Seeder != "json-orders" {
+		return fmt.Errorf("dataset.format: protobuf is only implemented by the json-orders seeder (got %q)", s.Dataset.Seeder)
+	}
+	if err := validateKafkaConnect(s); err != nil {
+		return err
 	}
 
 	if s.Dataset.KeySpace < 0 {

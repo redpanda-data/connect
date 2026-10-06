@@ -331,6 +331,16 @@ func runBench(opts benchOpts) (errOut error) {
 		Topics:                   s.Dataset.Topics,
 		Outs:                     sharedOuts,
 		Direction:                s.Direction,
+		RowSizeBytes:             s.Dataset.RowSizeBytes,
+		LogDir:                   filepath.Join(opts.repoRoot, "benchmarking/aws/results", s.Stack, strings.TrimPrefix(s.Name, s.Stack+"-"), "logs-"+sessionID),
+	}
+	kcWorker, err := kcWorkerOverridesFor(s)
+	if err != nil {
+		return err
+	}
+	mr.KCWorker = kcWorker
+	if spec, ok := kcConnectorSpecFor(kcSpecKey(s)); ok {
+		mr.KCScanWorkerLog = spec.ScanWorkerLog
 	}
 	// Reset must cover the union of every arm's tables (planMaxStreams), not
 	// just this scenario's own Streams, so one precomputed reset script serves
@@ -388,6 +398,8 @@ func runBench(opts benchOpts) (errOut error) {
 			Arm:          p.ArmID,
 			GOMAXPROCS:   p.GOMAXPROCS,
 			Streams:      p.Streams,
+			GOGC:         p.GOGC,
+			OutputFanout: p.OutputFanout,
 		})
 	}
 	var connectPts, kcPts []PointResult
@@ -677,6 +689,26 @@ func rootSections(s *Scenario) map[string]any {
 	return cfg
 }
 
+// applyOutputFanout wraps an already-decorated output component map in a
+// round_robin broker of n deep copies, so each copy owns its own batching
+// policy and batching.processors and the encodes run in parallel. Copies keep
+// the decorated path (engine prefix + the scenario's uuid_v4 template), so
+// object keys stay unique and still land under the metric sidecar's prefix.
+// n <= 1 returns output unchanged.
+func applyOutputFanout(output map[string]any, n int) map[string]any {
+	if n <= 1 {
+		return output
+	}
+	outputs := make([]any, 0, n)
+	for i := 0; i < n; i++ {
+		outputs = append(outputs, deepCopyValue(output))
+	}
+	return map[string]any{"broker": map[string]any{
+		"pattern": "round_robin",
+		"outputs": outputs,
+	}}
+}
+
 // renderPipelineConfig renders the single-config shape: rootSections plus
 // input/output/buffer, exactly as the pre-arms renderer produced. Used both
 // for arm-less scenarios and for single-stream arms.
@@ -685,6 +717,7 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	if err != nil {
 		return "", fmt.Errorf("render pipeline: %w", err)
 	}
+	output = applyOutputFanout(output, s.outputFanout)
 	cfg := rootSections(s)
 	cfg["input"] = input
 	cfg["output"] = output
@@ -791,6 +824,7 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 	if p.Pipeline != nil {
 		armScenario.Pipeline = p.Pipeline
 	}
+	armScenario.outputFanout = p.OutputFanout
 
 	if p.FanIn {
 		path, err := renderFanInConfig(&armScenario, outs, topo, names)
@@ -851,6 +885,7 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 		if err != nil {
 			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
 		}
+		output = applyOutputFanout(output, armScenario.outputFanout)
 		cfg := map[string]any{"input": input, "output": output}
 		if buf, ok := armScenario.Pipeline["buffer"]; ok {
 			cfg["buffer"] = buf

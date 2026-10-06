@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,6 +78,19 @@ type MatrixRunner struct {
 	// Connect's rolling-stats log (samples); sink benches use the metric
 	// series in brokerSeries (e.g. Iceberg committed bytes).
 	Direction Direction
+	// KCWorker customises the Kafka Connect worker (per-point worker
+	// properties, JVM flags, env). Zero for scenarios that don't.
+	KCWorker kcWorkerOverrides
+	// KCScanWorkerLog turns on the end-of-window connector/worker-log error
+	// scan in the KC bench script.
+	KCScanWorkerLog bool
+	// RowSizeBytes is dataset.row_size_bytes; used for the advisory
+	// stored-bytes-per-record check on sink points.
+	RowSizeBytes int
+	// LogDir, when set, receives a copy of each point's engine logs
+	// (kc-<vcpu>.log, sweep-<key>.log). The results bucket is destroyed at
+	// teardown, so without a local copy the KC worker log is lost with it.
+	LogDir string
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -100,7 +114,11 @@ type SweepPoint struct {
 	// single-config run, >1 for a streams-mode arm. Carried through so a
 	// result JSON is re-analysable without inferring it from the arm-id
 	// naming convention (e.g. "b-2pipe-gmp4").
-	Streams      int
+	Streams int
+	// GOGC is the GOGC env value applied to Connect: 0 unset, -1 off.
+	GOGC int
+	// OutputFanout is the arm's output_fanout (0/1 = none).
+	OutputFanout int
 	Engine       string
 	Samples      []Sample
 	Summary      Summary
@@ -200,6 +218,7 @@ func (m *MatrixRunner) Run(
 					VCPU:                     n,
 					GOMAXPROCS:               pt.GOMAXPROCS,
 					Streams:                  pt.Streams,
+					GOGC:                     pt.GOGC,
 					Key:                      key,
 					MemLimitGiB:              memLimitPerVCPU * n,
 					WarmupSec:                int(warmup.Seconds()),
@@ -246,6 +265,8 @@ func (m *MatrixRunner) Run(
 					DurationSec:              int(duration.Seconds()),
 					ConnectorName:            vcpuConnectorName,
 					ConnectorConfigJSON:      configJSON,
+					Worker:                   m.KCWorker,
+					ScanWorkerLog:            m.KCScanWorkerLog,
 					Bucket:                   m.Bucket,
 					SessionID:                m.SessionID,
 					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
@@ -292,6 +313,7 @@ func (m *MatrixRunner) Run(
 				samples = parseAndTrim(raw, warmup)
 			}
 			promPts := m.fetchProm(ctx, key)
+			m.saveEngineLogs(ctx, engine, n, key, rawLog)
 
 			// Broker-side: each engine scrapes /public_metrics during its
 			// own window and uploads to a per-engine filename, so we fetch
@@ -317,6 +339,11 @@ func (m *MatrixRunner) Run(
 			// rolling-stats line, so the log-derived view can be recomputed
 			// from any result file.
 			summary := SummariseTopicPoints(brokerSeries)
+			if m.Direction == DirectionSink && m.Names.Connector == "s3" {
+				if w := lowBytesPerRecordWarning(engine, brokerSeries, m.RowSizeBytes); w != "" {
+					fmt.Fprintf(stdout, "[bench] %s\n", w)
+				}
+			}
 
 			// Anomaly detection deliberately keeps using the LOG-derived median.
 			// It judges the Connect log's internal consistency — how far
@@ -331,6 +358,8 @@ func (m *MatrixRunner) Run(
 				ArmID:        pt.ArmID,
 				GOMAXPROCS:   pt.GOMAXPROCS,
 				Streams:      pt.Streams,
+				GOGC:         pt.GOGC,
+				OutputFanout: pt.OutputFanout,
 				Engine:       engine,
 				Samples:      samples,
 				Summary:      summary,
@@ -400,6 +429,52 @@ func (m *MatrixRunner) fetchLog(ctx context.Context, key string) ([]byte, error)
 	}
 	defer body.Close()
 	return io.ReadAll(body)
+}
+
+// saveEngineLogs copies the point's engine logs from the results bucket into
+// LogDir, best-effort: a missing log never fails a point that otherwise
+// produced results. The Connect log was already fetched for parsing, so it is
+// written from memory; the KC worker log is fetched here.
+func (m *MatrixRunner) saveEngineLogs(ctx context.Context, engine string, vcpu int, key string, connectLog []byte) {
+	if m.LogDir == "" {
+		return
+	}
+	if err := os.MkdirAll(m.LogDir, 0o755); err != nil {
+		fmt.Fprintf(stdout, "[bench] create log dir %s (non-fatal): %v\n", m.LogDir, err)
+		return
+	}
+	switch engine {
+	case "connect":
+		if len(connectLog) == 0 {
+			return
+		}
+		name := filepath.Join(m.LogDir, fmt.Sprintf("sweep-%s.log", key))
+		if err := os.WriteFile(name, connectLog, 0o644); err != nil {
+			fmt.Fprintf(stdout, "[bench] save %s (non-fatal): %v\n", name, err)
+		}
+	case "kafka_connect":
+		if m.LogFetcher == nil {
+			return
+		}
+		body, err := m.LogFetcher.Fetch(ctx, m.Bucket, fmt.Sprintf("runs/%s/kc-%d.log", m.SessionID, vcpu))
+		if err != nil {
+			fmt.Fprintf(stdout, "[bench] fetch kc log (non-fatal): %v\n", err)
+			return
+		}
+		defer body.Close()
+		name := filepath.Join(m.LogDir, fmt.Sprintf("kc-%d.log", vcpu))
+		f, err := os.Create(name)
+		if err != nil {
+			fmt.Fprintf(stdout, "[bench] save %s (non-fatal): %v\n", name, err)
+			return
+		}
+		defer f.Close()
+		if _, err := io.Copy(f, body); err != nil {
+			fmt.Fprintf(stdout, "[bench] save %s (non-fatal): %v\n", name, err)
+			return
+		}
+		fmt.Fprintf(stdout, "[bench] kc worker log saved: %s\n", name)
+	}
 }
 
 // fetchProm downloads the per-point Prometheus dump uploaded by the bench
@@ -501,7 +576,10 @@ type benchScriptArgs struct {
 	GOMAXPROCS int
 	// Streams > 1 launches `redpanda-connect streams -o <RootConfigPath>
 	// <StreamsDir>` instead of `run <ConfigPath>`.
-	Streams        int
+	Streams int
+	// GOGC > 0 sets GOGC=<n>, -1 sets GOGC=off, 0 leaves it unset so the
+	// launch line stays byte-identical to the pre-GOGC form.
+	GOGC           int
 	RootConfigPath string
 	StreamsDir     string
 	// Key names this point's artifacts. Empty means the bare vCPU count.
@@ -525,6 +603,17 @@ func (a benchScriptArgs) gomaxprocs() int {
 		return a.GOMAXPROCS
 	}
 	return a.VCPU
+}
+
+// gogcEnv is the env assignment (with leading space) for the launch line.
+func (a benchScriptArgs) gogcEnv() string {
+	switch {
+	case a.GOGC > 0:
+		return fmt.Sprintf(" GOGC=%d", a.GOGC)
+	case a.GOGC < 0:
+		return " GOGC=off"
+	}
+	return ""
 }
 
 // launchCmd is the engine invocation: streams mode when the point runs more
@@ -565,8 +654,8 @@ func renderBenchScript(a benchScriptArgs) string {
 		// The core pin follows VCPU while GOMAXPROCS is independent: an arm can
 		// oversubscribe the runtime on a fixed core allocation. GOMEMLIMIT is
 		// vCPU-derived by the caller, so it is constant across an A/B's arms.
-		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
-			cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.launchCmd()),
+		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB%s REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
+			cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.gogcEnv(), a.launchCmd()),
 		`PID=$!`,
 		// Heartbeat: every 60s, echo the latest rolling-stats line so the
 		// operator can see throughput live. Bounded output (~17 lines per

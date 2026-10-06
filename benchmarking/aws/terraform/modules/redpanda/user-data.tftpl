@@ -13,11 +13,9 @@ runcmd:
     mount /dev/nvme1n1 /var/lib/redpanda/data
     echo "/dev/nvme1n1 /var/lib/redpanda/data xfs defaults,noatime 0 0" >> /etc/fstab
 
-    # Install Redpanda from the Cloudsmith-backed dl.redpanda.com host.
-    # NOTE: the legacy "packages.redpanda.com" hostname no longer resolves;
-    # Redpanda migrated their package distribution to Cloudsmith and the
-    # public dl.redpanda.com CNAME is the supported install path.
-    curl --retry 5 --retry-delay 3 --retry-all-errors -sSL https://dl.redpanda.com/public/redpanda/setup.rpm.sh | bash
+    # Install Redpanda from the linux.pkg.redpanda.com package repository.
+    # (dl.redpanda.com / Cloudsmith now 404s — see main's ec029356d.)
+    curl --retry 5 --retry-delay 3 --retry-all-errors -sSL https://linux.pkg.redpanda.com/setup-redpanda.rpm.sh | bash
     dnf install -y redpanda
 
     # Ensure the redpanda user owns the data dir.
@@ -54,9 +52,18 @@ runcmd:
       advertised_rpc_api:
         address: ${split(":", advertised_rpc)[0]}
         port: 33145
-    # pandaproxy + schema_registry omitted — the bench only uses the Kafka API
-    # (Connect via the redpanda output, KC via worker.properties). Leaving them
-    # disabled saves a handful of MB of broker memory per node.
+      # pandaproxy (HTTP proxy) stays disabled. The built-in Schema Registry
+      # is enabled on every broker (:8081) so scenarios that produce
+      # Schema-Registry-framed data (e.g. s3/orders-live-confluent*.yaml's
+      # Protobuf values) have one to register against and decode from. It is
+      # only a listener plus the _schemas topic, so scenarios that never
+      # touch it pay nothing. Clients reach it via the redpanda_schema_registry_url
+      # output (broker 0); the SG opens 8081 to the runner + load-gen only.
+    schema_registry:
+      schema_registry_api:
+        - address: ${self_ip}
+          port: 8081
+      schema_registry_replication_factor: 3
     RP
     chown redpanda:redpanda /etc/redpanda/redpanda.yaml
 

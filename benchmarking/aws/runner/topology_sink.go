@@ -82,6 +82,7 @@ func (sinkTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames
 	if s.Dataset.KeyOrder != "" {
 		keySpaceFlag += fmt.Sprintf(" --key-order=%s", s.Dataset.KeyOrder)
 	}
+	keySpaceFlag += seederFormatFlags(s, outs)
 	if s.Dataset.Topics <= 1 {
 		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s seed \\\n  --topic=%s --rows=%d --row-size=%d%s\n",
 			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Dataset.InitialRows, s.Dataset.RowSizeBytes, keySpaceFlag)
@@ -125,11 +126,12 @@ func (sinkTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchN
 	brokers := outs["redpanda_broker_endpoints"]
 	totalSec := int((s.Workload.Warmup + s.Workload.Duration).Seconds())
 
+	formatFlags := seederFormatFlags(s, outs)
 	var sb strings.Builder
 	sb.WriteString("set -euo pipefail\n")
 	if s.Dataset.Topics <= 1 {
-		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s workload \\\n  --topic=%s --rate=%d --row-size=%d --duration=%ds\n",
-			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Workload.WriteRatePerSec, s.Dataset.RowSizeBytes, totalSec)
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s workload \\\n  --topic=%s --rate=%d --row-size=%d --duration=%ds%s\n",
+			brokers, s.Dataset.Seeder, n.SourceTopic(), s.Workload.WriteRatePerSec, s.Dataset.RowSizeBytes, totalSec, formatFlags)
 		return sb.String(), nil
 	}
 
@@ -140,8 +142,8 @@ func (sinkTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchN
 	ratePerTopic := s.Workload.WriteRatePerSec / s.Dataset.Topics
 	scoped := n.WithTopics(s.Dataset.Topics)
 	for i := 0; i < s.Dataset.Topics; i++ {
-		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s workload \\\n  --topic=%s --rate=%d --row-size=%d --duration=%ds &\n",
-			brokers, s.Dataset.Seeder, scoped.WithTopic(i).SourceTopic(), ratePerTopic, s.Dataset.RowSizeBytes, totalSec)
+		fmt.Fprintf(&sb, "REDPANDA_BROKERS=%q /opt/bench/%s workload \\\n  --topic=%s --rate=%d --row-size=%d --duration=%ds%s &\n",
+			brokers, s.Dataset.Seeder, scoped.WithTopic(i).SourceTopic(), ratePerTopic, s.Dataset.RowSizeBytes, totalSec, formatFlags)
 	}
 	sb.WriteString("wait\n")
 	return sb.String(), nil
@@ -189,3 +191,18 @@ func (sinkTopology) KCConfig(s *Scenario, outs map[string]string, n BenchNames) 
 	}
 	return res, true, nil
 }
+
+// seederFormatFlags is the json-orders flag suffix selecting the Protobuf
+// value encoding. Empty for JSON (the default), which keeps every existing
+// scenario's seed and workload scripts byte-identical.
+func seederFormatFlags(s *Scenario, outs map[string]string) string {
+	if s.Dataset.Format != "protobuf" {
+		return ""
+	}
+	return fmt.Sprintf(" --format=protobuf --schema-registry-url=%q", outs[schemaRegistryURLOutput])
+}
+
+// schemaRegistryURLOutput is the shared stack's Terraform output carrying the
+// brokers' built-in Schema Registry base URL (referenced in pipeline configs
+// as ${REDPANDA_SCHEMA_REGISTRY_URL}).
+const schemaRegistryURLOutput = "redpanda_schema_registry_url"

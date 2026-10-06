@@ -525,6 +525,10 @@ func s3KCConfig(s *Scenario, outs map[string]string, n BenchNames) (KCRenderResu
 		Prefix:        s3Prefix(n, "kafka_connect"),
 		Topic:         n.SourceTopic(),
 		ConsumerGroup: n.ConsumerGroup("kafka_connect"),
+		// Only the s3_confluent spec reads these two (Confluent's topics.dir
+		// rejects a trailing slash; its converter needs the registry).
+		TopicsDir:         strings.TrimSuffix(s3Prefix(n, "kafka_connect"), "/"),
+		SchemaRegistryURL: outs[schemaRegistryURLOutput],
 	}
 	cfg, err := renderKCConfig(s, in)
 	if err != nil {

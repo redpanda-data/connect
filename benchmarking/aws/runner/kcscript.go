@@ -35,6 +35,13 @@ type kcBenchScriptArgs struct {
 	// to S3. Both come from Topology.MetricSidecar.
 	ScrapeSetup  string
 	ScrapeUpload string
+	// Worker customises the Kafka Connect worker for this point (per-point
+	// worker.properties copy, JVM performance flags, environment). The zero
+	// value renders the historical script unchanged.
+	Worker kcWorkerOverrides
+	// ScanWorkerLog adds the end-of-window connector-status and worker-log
+	// error scan (kcConnectorSpec.ScanWorkerLog).
+	ScanWorkerLog bool
 }
 
 // renderKCBenchScript produces the shell script executed on the runner EC2
@@ -75,9 +82,16 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 	if kcHeapGiB > kcHeapCeilingGiB {
 		kcHeapGiB = kcHeapCeilingGiB
 	}
-	// Escape single quotes inside the JSON body for the heredoc.
-	cfgJSON := strings.ReplaceAll(a.ConnectorConfigJSON, "'", `'"'"'`)
+	// The body goes into a QUOTED heredoc (<<'KCCFG'), which the shell takes
+	// literally: no escaping is needed, and escaping single quotes here would
+	// corrupt them into '"'"' inside the JSON (breaking values such as the
+	// Confluent TimeBasedPartitioner path.format).
+	cfgJSON := a.ConnectorConfigJSON
 
+	workerProps := "/opt/kafka-connect/worker.properties"
+	if len(a.Worker.Props) > 0 {
+		workerProps = fmt.Sprintf("/tmp/kc-worker-%d.properties", a.VCPU)
+	}
 	lines := []string{
 		`set -euo pipefail`,
 		fmt.Sprintf(`echo "starting kc bench: %d vCPU, %d GiB heap, warmup %ds, window %ds"`,
@@ -128,18 +142,30 @@ echo "[kc] cloud-init done"`,
   sudo pkill -f connect-distributed 2>/dev/null || true
   sleep 1
 done`,
-		// Spawn the JVM directly. Equivalent to the systemd unit's ExecStart
-		// but with vCPU + heap pinned for this sweep point.
-		//
-		// NOTE: Connect's bench script uses `chrt --fifo 50` for jitter
-		// reduction, but it deadlocks the JVM under single-core taskset
-		// (verified on 2026-05-28): JVM internal threads stall under
-		// SCHED_FIFO when all bound to one core. Plan 3 will revisit
-		// scheduler parity between the two engines.
-		fmt.Sprintf(`taskset -c 2-%d env KAFKA_HEAP_OPTS=-Xmx%dg /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &`,
-			cpusetHi, kcHeapGiB),
-		`PID=$!`,
 	}
+	if len(a.Worker.Props) > 0 {
+		lines = append(lines, renderKCWorkerPropsCopy(a.VCPU, a.Worker.Props))
+	}
+	envArgs := fmt.Sprintf("KAFKA_HEAP_OPTS=-Xmx%dg", kcHeapGiB)
+	if a.Worker.JVMPerfOpts != "" {
+		envArgs += " " + shellSingleQuote("KAFKA_JVM_PERFORMANCE_OPTS="+a.Worker.JVMPerfOpts)
+	}
+	for _, kv := range a.Worker.Env {
+		envArgs += " " + shellSingleQuote(kv.Key+"="+kv.Value)
+	}
+	// Spawn the JVM directly. Equivalent to the systemd unit's ExecStart
+	// but with vCPU + heap pinned for this sweep point.
+	//
+	// NOTE: Connect's bench script uses `chrt --fifo 50` for jitter
+	// reduction, but it deadlocks the JVM under single-core taskset
+	// (verified on 2026-05-28): JVM internal threads stall under
+	// SCHED_FIFO when all bound to one core. Plan 3 will revisit
+	// scheduler parity between the two engines.
+	lines = append(lines,
+		fmt.Sprintf(`taskset -c 2-%d env %s /opt/kafka/bin/connect-distributed.sh %s >"$KC_LOG" 2>&1 &`,
+			cpusetHi, envArgs, workerProps),
+		`PID=$!`,
+	)
 	// Broker-side scrape: the sidecar is computed by Topology.MetricSidecar
 	// and passed in via ScrapeSetup. It defines $RP and ends with
 	// RP_SCRAPER=$!, written to a per-engine file so the runner can attribute
@@ -227,6 +253,11 @@ done`, a.ConnectorName),
 ) &`,
 		`HEARTBEAT=$!`,
 		fmt.Sprintf(`sleep %d`, totalSec),
+	)
+	if a.ScanWorkerLog {
+		lines = append(lines, renderKCWorkerLogScan(a.ConnectorName))
+	}
+	lines = append(lines,
 		// Tear down the connector + the JVM.
 		fmt.Sprintf(`curl -fsS -X DELETE http://localhost:8083/connectors/%s || true`, a.ConnectorName),
 		`kill -TERM "$PID" 2>/dev/null || true`,
@@ -260,4 +291,46 @@ done`,
 		`sudo systemctl start kafka-connect || true`,
 	)
 	return strings.Join(lines, "\n")
+}
+
+// renderKCWorkerPropsCopy writes the per-point worker.properties: the
+// cloud-init file with every overridden key removed, followed by the
+// overrides. Properties.load keeps the LAST duplicate anyway; dropping the
+// originals as well keeps the file unambiguous for a human reading it. The
+// cloud-init file itself (used by the systemd unit between points) is never
+// modified, so scenarios without overrides are unaffected.
+func renderKCWorkerPropsCopy(vcpu int, props []kcKV) string {
+	var sb strings.Builder
+	over := fmt.Sprintf("/tmp/kc-worker-overrides-%d.properties", vcpu)
+	dst := fmt.Sprintf("/tmp/kc-worker-%d.properties", vcpu)
+	fmt.Fprintf(&sb, "cat > %s <<'KCWORKER'\n", over)
+	for _, kv := range props {
+		fmt.Fprintf(&sb, "%s=%s\n", kv.Key, kv.Value)
+	}
+	sb.WriteString("KCWORKER\n")
+	fmt.Fprintf(&sb, "awk -F= 'NR==FNR{o[$1]=1;next} !($1 in o)' %s /opt/kafka-connect/worker.properties > %s\n", over, dst)
+	fmt.Fprintf(&sb, "cat %s >> %s\n", over, dst)
+	fmt.Fprintf(&sb, `echo "[kc] worker.properties: %d override(s) applied on top of the cloud-init file (%s)"`, len(props), dst)
+	return sb.String()
+}
+
+// renderKCWorkerLogScan prints ###WARN lines (stdout, so they reach the SSM
+// stream the operator reads) when the connector or any task is not RUNNING at
+// the end of the window, or when the worker log contains error lines. It
+// never fails the script: the S3 byte count and the sidecar's consumer-group
+// offsets stay the measurement, this only explains a suspicious one.
+func renderKCWorkerLogScan(connector string) string {
+	return fmt.Sprintf(`echo "[kc] end-of-window diagnostics..."
+KC_STATUS=$(curl -fsS http://localhost:8083/connectors/%[1]s/status 2>/dev/null || echo '{}')
+KC_NOT_RUNNING=$(echo "$KC_STATUS" | jq -r '[.connector.state, (.tasks[]?.state)] | map(select(. != "RUNNING")) | length' 2>/dev/null || echo "unknown")
+if [ "$KC_NOT_RUNNING" != "0" ]; then
+  echo "###WARN kc connector/task state not all RUNNING at end of window (non-RUNNING count: $KC_NOT_RUNNING): $(echo "$KC_STATUS" | jq -c '{connector: .connector.state, tasks: [.tasks[]? | {id, state}]}' 2>/dev/null || echo "$KC_STATUS")"
+fi
+KC_TOLERATED=$(grep -c 'Error encountered in task' "$KC_LOG" 2>/dev/null || true)
+KC_ERRORS=$(grep -cE ' ERROR |Exception' "$KC_LOG" 2>/dev/null || true)
+echo "[kc] worker log: ${KC_TOLERATED:-0} tolerated-error lines, ${KC_ERRORS:-0} ERROR/Exception lines"
+if [ "${KC_TOLERATED:-0}" -gt 0 ] || [ "${KC_ERRORS:-0}" -gt 0 ]; then
+  echo "###WARN kc worker log has errors (errors.tolerance=all can silently skip records while consumer offsets still advance; trust S3 bytes, not offsets). Most frequent:"
+  { grep -E 'Error encountered in task| ERROR |Exception' "$KC_LOG" | cut -c1-240 | sed -E 's/^\[[^]]*\] //' | sort | uniq -c | sort -rn | head -5; } 2>/dev/null || true
+fi`, connector)
 }

@@ -76,6 +76,10 @@ type PointResult struct {
 	// the final whole-branch review for why this was chosen over keeping
 	// arm-less rows byte-identical to pre-arms JSON.
 	Streams int `json:"streams,omitempty"`
+	// GOGC is the arm's GOGC override (-1 = off); omitted when unset.
+	GOGC int `json:"gogc,omitempty"`
+	// OutputFanout is the arm's output_fanout; omitted when unset.
+	OutputFanout int `json:"output_fanout,omitempty"`
 
 	// BrokerSeries is the broker-side throughput attributed to this engine
 	// at this vCPU point. For Connect, it's a cross-check against the
