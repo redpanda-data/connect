@@ -34,6 +34,27 @@ published as a new link rather than an update. Anyone holding the old bookmark n
 one above. The artifact's `<title>` tag names it, not the publish `title` parameter, so
 rename by editing the tag.
 
+## 2026-10-06 data refresh — S3 curve re-measured with the pipeline-parallel recipe
+
+- **`redpanda` → `s3` curve is now 110.8 / 226.1 / 360.1 / 359.0 MB/s** at 1/2/4/8 vCPU
+  (was 45.5 / 63.9 / 75.7 / 80.6), from `s3/orders-live-pipeline-gzip/2026-10-06T00-02-07Z.json`
+  (SHA `7d6e84c3f`). Same 300K rows/s JSON feed and infra as the 2026-09-23 run; same unit
+  rule (records consumed x 1200 B, not compressed S3 bytes).
+- **Why it moved:** the old recipe ran archive + gzip inside `aws_s3` `batching.processors`,
+  which executes on the output's single batcher goroutine, so one instance plateaued near
+  80 MB/s whatever the core count. The new recipe forms batches at the input
+  (`unordered_processing.batching` 25,000 / 2 s, `checkpoint_limit` 2,000,000) and runs
+  archive + gzip in `pipeline.processors`, so every pipeline thread compresses its own batch.
+  The pipeline note states the recipe on every answer, because the old shape still caps low.
+- **The 4 and 8 vCPU points are floors.** Both drained the entire ~360 MB/s feed (8 vCPU used
+  about half its cores). The ceiling entry now says the limit is the benchmark feed, not
+  Connect, so a refusal above ~360 MB/s reads as "unmeasured", never as a Connect limit.
+- **Peak heap rose to 3,234 MB** (was 1,010): the larger `checkpoint_limit` keeps more
+  records in flight. Memory sizing for this pipeline should use the new figure.
+- A Protobuf → Parquet variant of the same recipe (`s3/orders-live-confluent-pipeline-encode`)
+  measured 82K / 161K / 295K rows/s at 1/2/4 vCPU; it is not a separate entry because the
+  page keys entries by input/output pair.
+
 ## 2026-09-24 data refresh — S3 sink added
 
 - **`redpanda` → `s3` (aws_s3 output) added**, from the live-stream sweep

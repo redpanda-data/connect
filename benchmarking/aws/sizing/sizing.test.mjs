@@ -281,12 +281,12 @@ test('data snapshot: curves, provenance, heap, bench event sizes and tax flags a
     s3_sink: {
       input: 'redpanda',
       output: 's3',
-      curve: [45.5, 63.9, 75.7, 80.6],
+      curve: [110.8, 226.1, 360.1, 359.0],
       benchedEventBytes: 1200,
-      peakHeapMB: 1010,
-      runPath: 's3/orders-live/2026-09-23T21-46-03Z.json',
-      runDate: '2026-09-23',
-      runSha: '125eb74c8',
+      peakHeapMB: 3234,
+      runPath: 's3/orders-live-pipeline-gzip/2026-10-06T00-02-07Z.json',
+      runDate: '2026-10-06',
+      runSha: '7d6e84c3f',
       curveUnit: 'MB',
       hasCeiling: true,
       sourceKind: 'sink',
@@ -684,33 +684,37 @@ test('acceptance: redpanda → snowflake sizes at 2 cores for 40k/s of 1200 B ev
 })
 
 test('acceptance: redpanda → S3 sizes off consumed records, not compressed S3 bytes', () => {
-  // 50 MB/s + 20% headroom = 60, cleared by the 63.9 MB/s point at 2 vCPU. Sizing off
-  // this run's compressed mean_mb_s (44.1 at 2 vCPU) would have failed the same target
-  // and pushed the answer to 4 cores, over-provisioning by a full point.
+  // 100 MB/s + 20% headroom = 120, cleared by the 226.1 MB/s point at 2 vCPU. Sizing off
+  // this run's compressed mean_mb_s (76.1 at 1 vCPU, 155.7 at 2) would land on the same
+  // core count here, but under-reads the input the curve is stated in by ~0.69x — a
+  // target between the two axes would be sized wrong.
   const r = core.sizeFor({
-    connector: 's3_sink', eventsPerSec: 41_667, eventBytes: 1200,
+    connector: 's3_sink', eventsPerSec: 83_334, eventBytes: 1200,
     tax: 'passthrough', headroomPct: 20,
   })
   assert.equal(r.status, 'ok')
   assert.equal(r.cores, 2)
-  assert.equal(r.measuredRate, 63.9)
+  assert.equal(r.measuredRate, 226.1)
   assert.equal(r.unit, 'MB')
   // The gzip note must ride along, so nobody sizes S3 storage off an input-volume curve.
   assert.ok(r.warnings.some((w) => /gzip-compressed/.test(w)), 'gzip storage caveat missing')
+  // So must the recipe: the old output-batching shape caps far lower.
+  assert.ok(r.warnings.some((w) => /pipeline\.processors/.test(w)), 'pipeline-parallel recipe note missing')
 })
 
-test('S3 refusals blame the sink write path, not an under-fed pipeline', () => {
+test('S3 refusals say the ceiling is the feed, not Connect', () => {
+  // 400K events/s x 1200 B = 480 MB/s, above every measured point (360.1 at 4 vCPU).
   const r = core.sizeFor({
-    connector: 's3_sink', eventsPerSec: 200_000, eventBytes: 1200,
+    connector: 's3_sink', eventsPerSec: 400_000, eventBytes: 1200,
     tax: 'passthrough', headroomPct: 0,
   })
   assert.equal(r.status, 'ceiling')
-  assert.equal(r.measuredCeilingRate, 80.6)
-  assert.match(r.ceiling.reason, /write path/)
-  // The producer ran ~4.5x the sink's draw, so the refusal must say the pipeline was
-  // never starved — otherwise a reader could dismiss the ceiling as a rig artifact.
-  assert.match(r.ceiling.reason, /never starved/)
-  assert.match(r.ceiling.fix, /max_in_flight/)
+  assert.equal(r.measuredCeilingRate, 360.1)
+  // The top points drained the whole producer, so the refusal must call them a floor —
+  // otherwise a reader would quote ~360 MB/s as a Connect limit, which it is not.
+  assert.match(r.ceiling.reason, /floor/)
+  assert.match(r.ceiling.reason, /not Connect/)
+  assert.match(r.ceiling.fix, /unmeasured/)
 })
 
 test('snowflake refusals blame the commit path and not cores', () => {

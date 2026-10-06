@@ -253,30 +253,38 @@ export const CONNECTORS = {
     input: 'redpanda', output: 's3',
     label: 'S3 sink (aws_s3 output)',
     // CURVE UNIT NOTE, read before changing these numbers. This run's own
-    // `mean_mb_s` is GZIP-COMPRESSED S3-written bytes (31.3 / 44.1 / 52.1 / 55.5),
+    // `mean_mb_s` is GZIP-COMPRESSED S3-written bytes (76.1 / 155.7 / 247.8 / 247.7),
     // which is the storage-cost axis, not the sizing axis. The curve below is the
     // records the pipeline actually consumed (mean_msg_s x 1200 B), because that is
     // what a customer's stated input volume means and what benchedEventBytes anchors
     // the events/sec view to. Storing the compressed figure against a 1200 B event
     // size would make the two linked views disagree by the compression ratio and
     // over-provision a stated input volume by ~45%.
-    curve: { 1: 45.5, 2: 63.9, 4: 75.7, 8: 80.6 },
+    //
+    // 2026-10-06 refresh: the 2026-09-23 curve (45.5 / 63.9 / 75.7 / 80.6) measured the
+    // old recipe, which ran archive + gzip inside aws_s3 batching.processors on the
+    // output's single batcher goroutine and plateaued there. This curve is the
+    // pipeline-parallel recipe (input batching + archive/gzip in pipeline.processors).
+    // The 4 and 8 vCPU points drained the whole 300K rows/s feed, so they are floors.
+    curve: { 1: 110.8, 2: 226.1, 4: 360.1, 8: 359.0 },
     benchedEventBytes: 1200,
-    peakHeapMB: 1010,
-    run: { path: 's3/orders-live/2026-09-23T21-46-03Z.json', date: '2026-09-23', sha: '125eb74c8' },
+    peakHeapMB: 3234,
+    run: { path: 's3/orders-live-pipeline-gzip/2026-10-06T00-02-07Z.json', date: '2026-10-06', sha: '7d6e84c3f' },
     curveUnit: 'MB',
     ceiling: {
-      reason: 'the sink\'s own S3 write path, not the feed — the producer sustained ~360 MB/s throughout, roughly 4.5x what the sink drew at 8 vCPU, so the pipeline was never starved',
-      fix: 'Cores past 8 buy little: the curve gains only ~6% from 4 to 8 vCPU. The untested levers are batching size/period and max_in_flight on the aws_s3 output.',
+      reason: 'the benchmark feed, not Connect: at 4 and 8 vCPU the sink drained the entire ~360 MB/s producer, using about half its cores at 8 vCPU, so the top of the curve is a floor',
+      fix: 'Above ~360 MB/s per instance is unmeasured, not a known Connect limit. Split the load across instances, or measure with a faster feed before quoting more.',
     },
     sourceKind: 'sink',
     confidence: 'high',
     pipelineNote:
-      'These figures require the benchmarked recipe: unordered_processing with a ' +
-      'checkpoint_limit above the batch count, and an aws_s3 output batching 20,000 ' +
-      'records or 5 s with archive + gzip. Objects land gzip-compressed, so S3-written ' +
-      'bytes run about 0.69x the input volume this curve is stated in — size storage ' +
-      'from that, not from this curve.',
+      'These figures require the pipeline-parallel recipe: unordered_processing with ' +
+      'batching (25,000 records or 2 s) and a checkpoint_limit of 2,000,000, archive + ' +
+      'gzip in pipeline.processors (not in aws_s3 batching.processors), and an aws_s3 ' +
+      'output with no batching and max_in_flight 64. Encoding inside the output\'s ' +
+      'batching instead caps a single instance near 80 MB/s at any core count. Objects ' +
+      'land gzip-compressed, so S3-written bytes run about 0.69x the input volume this ' +
+      'curve is stated in — size storage from that, not from this curve.',
   },
   oracle_to_sqlserver: {
     input: 'oracledb_cdc', output: 'sqlserver_insert',
