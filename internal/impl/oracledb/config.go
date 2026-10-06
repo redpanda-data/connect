@@ -28,7 +28,11 @@ const (
 	walletPasswordKey = "WALLET PASSWORD"
 	sslKey            = "SSL"
 	prefetchRowsKey   = "PREFETCH_ROWS"
+	readTimeoutKey    = "TIMEOUT"
 )
+
+// readTimeoutKeys are the names go-ora accepts for its per-read socket timeout.
+var readTimeoutKeys = []string{readTimeoutKey, "READ TIMEOUT", "SOCKET TIMEOUT"}
 
 // buildConnectionString parses connStr (oracle://user:password@host:port/service) supporting
 // overriding of of connectio parameters.
@@ -136,6 +140,45 @@ func parsePrefetchRowsConfig(conf *service.ParsedConfig, overrides map[string]st
 	log.Debugf("Using %s value of %d from configuration", prefetchRowsKey, prefetchRows)
 
 	overrides[prefetchRowsKey] = strconv.Itoa(prefetchRows)
+	return nil
+}
+
+// parseReadTimeoutConfig constructs a query-param override for go-ora's TIMEOUT
+// setting, which bounds each read from the database's socket. Without it go-ora waits
+// indefinitely, so a database that stops responding without closing the connection
+// leaves the input hung while it still reports as connected. A read timeout query
+// parameter already present in connection_string takes precedence, so no override is
+// added.
+func parseReadTimeoutConfig(conf *service.ParsedConfig, overrides map[string]string, log *service.Logger) error {
+	readTimeout, err := conf.FieldInt(ociFieldReadTimeout)
+	if err != nil {
+		return err
+	}
+	if readTimeout < 0 {
+		return fmt.Errorf("%s must be greater than or equal to 0, got %d", ociFieldReadTimeout, readTimeout)
+	}
+
+	connStr, err := conf.FieldString(ociFieldConnectionString)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(connStr)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", ociFieldConnectionString, err)
+	}
+	for key, vals := range u.Query() {
+		for _, name := range readTimeoutKeys {
+			// go-ora matches option names case-insensitively.
+			if strings.EqualFold(key, name) {
+				log.Debugf("Using %s value of %s from %s; %s configuration is ignored", key, vals[0], ociFieldConnectionString, ociFieldReadTimeout)
+				return nil
+			}
+		}
+	}
+
+	log.Debugf("Using %s value of %d from configuration", readTimeoutKey, readTimeout)
+
+	overrides[readTimeoutKey] = strconv.Itoa(readTimeout)
 	return nil
 }
 
