@@ -44,4 +44,8 @@ const (
 	OperationReplace Operation = "replace"
 	// OperationUpsert Upsert operation.
 	OperationUpsert Operation = "upsert"
+	// OperationIncrement Increment operation.
+	OperationIncrement Operation = "increment"
+	// OperationDecrement Decrement operation.
+	OperationDecrement Operation = "decrement"
 )
