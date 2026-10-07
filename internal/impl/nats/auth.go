@@ -57,7 +57,7 @@ which is configured to use this authentication scheme.
 The ` + "`user_credentials_file`" + ` field should point to a file containing both the private key and the JWT and can be
 generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 
-Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
+Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + ` field can contain
 the plain text NKey Seed.
 
 https://docs.nats.io/using-nats/developer/connecting/creds[More details^].

@@ -140,7 +140,7 @@ func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 			Description("Write mode: `realtime` (sObject Collections API) or `bulk` (Bulk API 2.0).").
 			Default(sinkModeRealtime),
 		service.NewBoolField(sfsTMFieldAllOrNone).
-			Description("Real-time only: rolls back the entire batch if any record fails.").
+			Description("Real-time only: rolls back every record in a request if any record in it fails. Real-time writes send at most 200 records per request, so a larger batch can be partly committed.").
 			Default(false),
 	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an sObject and write settings.")
 

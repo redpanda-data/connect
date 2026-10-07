@@ -88,6 +88,8 @@ input:
   spicedb_watch:
     endpoint: grpc.authzed.com:443
     bearer_token: "${SPICEDB_TOKEN}"
+    tls:
+      enabled: true
     cache: spicedb_cache
 
 cache_resources:

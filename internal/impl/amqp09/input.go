@@ -79,6 +79,8 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewStringMapField(queueDeclareArgumentsField).
 				Description(`Arguments for server-specific implementations of the queue (optional). You can use arguments to configure additional parameters for queue types that require them. For more information about available arguments, see the https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362[RabbitMQ Client Library^].
 
+NOTE: This input sends every argument value as a string. RabbitMQ requires `+"`"+`x-max-length`+"`"+`, `+"`"+`x-max-length-bytes`+"`"+`, `+"`"+`x-message-ttl`+"`"+`, `+"`"+`x-expires`+"`"+`, `+"`"+`x-consumer-timeout`+"`"+`, and `+"`"+`x-stream-max-segment-size-bytes`+"`"+` to be integers, and `+"`"+`x-single-active-consumer`+"`"+` to be a boolean, so declaring a queue with any of them fails. Only string arguments, such as `+"`"+`x-queue-type`+"`"+`, `+"`"+`x-overflow`+"`"+`, and `+"`"+`x-max-age`+"`"+`, work.
+
 [cols="1,2,2"]
 |===
 | Argument | Description | Accepted values
@@ -117,7 +119,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 
 | `+"`"+`x-queue-version`+"`"+`
 | The version of the classic queue to use.
-| Options: `+"`"+`1`+"`"+` or `+"`"+`2`+"`"+`.
+| Options: `+"`"+`2`+"`"+`. RabbitMQ 4.3.0 and later accept only `+"`"+`2`+"`"+`, and earlier versions also accept `+"`"+`1`+"`"+`.
 
 | `+"`"+`x-consumer-timeout`+"`"+`
 | The duration (in milliseconds) that a consumer can remain idle before it is automatically canceled.
@@ -132,9 +134,8 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Advanced().
 				Optional().
 				Example(map[string]any{
-					"x-queue-type":       "quorum",
-					"x-max-length":       1000,
-					"x-max-length-bytes": 4096,
+					"x-queue-type": "quorum",
+					"x-overflow":   "reject-publish",
 				}),
 		).
 			Description(`Declares the target queue (`+"`"+`queue`+"`"+`) to make sure a queue with the specified name exists and is configured correctly. If the queue does not exist, it is created. If the queue already exists, the declaration verifies that the fields specified in this object match its properties.`).
