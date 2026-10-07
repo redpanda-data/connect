@@ -12,10 +12,18 @@ jobs:
     env:
       CGO_ENABLED: 1
     steps:
-      - name: Free disk space
+      # The test build failed with "no space left on device" in January 2026 (#3906).
+      # In October 2026 the runner starts with 86 to 92 GiB free and the job uses 11 to 14 GiB at peak (#4927).
+      # The 40 GiB limit covers the job, the restored Go cache, and its archive during restore.
+      # If free space is low, delete the directories with the fewest files per GiB: rm time follows the file count.
+      # Do not delete /usr/local/lib/android: it has ~311k files and takes 70 s to 280 s to delete.
+      - name: Free disk space if low
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
-          sudo docker image prune --all --force
+          df -h /
+          if [ "$(df -BG --output=avail / | tail -1 | tr -dc 0-9)" -lt 40 ]; then
+            sudo rm -rf /usr/share/swift /usr/local/share/powershell /usr/local/.ghcup /usr/share/dotnet
+            df -h /
+          fi
 
       - name: Checkout code
         uses: actions/checkout@v6
