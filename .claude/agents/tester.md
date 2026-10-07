@@ -544,6 +544,11 @@ assert.Eventually(t, func() bool {
 }, 30*time.Second, 100*time.Millisecond)
 ```
 
+## Parallel Tests
+
+If the other integration tests in the package call `t.Parallel()`, a new or changed test calls it too.
+If it cannot run in parallel, put `// Not parallel: <reason>` in place of the call.
+
 ## Parallel Subtests
 
 Setup before subtests, subtests only read:

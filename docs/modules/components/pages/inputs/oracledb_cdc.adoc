@@ -42,6 +42,7 @@ input:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
+    prefetch_rows: 500
     snapshot_mode: "" # No default (optional)
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -86,6 +87,7 @@ input:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
+    prefetch_rows: 500
     snapshot_mode: "" # No default (optional)
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -93,6 +95,9 @@ input:
       scn_window_size: 20000
       min_scn_window_size: 1000
       max_scn_window_size: 100000
+      window_strategy: scn_window
+      redo_volume_min: 2
+      redo_volume_growth_max: 4
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -134,7 +139,7 @@ This input adds the following metadata fields to each message:
 - scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in `USN.SLOT.SEQ` format, identifying the transaction that produced the change. Not present on snapshot (`read`) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
-- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from `V$LOGMNR_CONTENTS.TIMESTAMP` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (`read`) messages, this reflects Oracle's `SYSTIMESTAMP` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from `V$LOGMNR_CONTENTS.TIMESTAMP` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (`read`) messages, this reflects Oracle's `SYSTIMESTAMP` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - username: The Oracle database username of the session that performed the DML, sourced from `V$LOGMNR_CONTENTS.USERNAME`. Not present on snapshot (`read`) messages, nor on change messages where Oracle reports a NULL or empty username.
 - schema: The table schema, for use with schema-aware downstream processors such as `schema_registry_encode`. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
@@ -144,13 +149,13 @@ When using the default Oracle based cache, the Connect user requires permission 
 
 == Performance
 
-Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each `include` a disjoint set of tables — every pipeline gets its own LogMiner reader.
+Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each `include` a disjoint set of tables: every pipeline gets its own LogMiner reader.
 
-Large transactions and driver fetch size: the Oracle driver fetches 25 rows per network round trip by default, which can make large committed transactions appear minutes late while the database, network and connector all look idle — each round trip costs a full network exchange, and a large transaction requires thousands of them. Raise the fetch size with the `PREFETCH_ROWS` query parameter on `connection_string`, for example `?PREFETCH_ROWS=1000`.
+Large transactions and driver fetch size: left to itself, the Oracle driver sizes each fetch to roughly 128 KiB based on the declared maximum width of the selected columns, so wide columns such as LogMiner's redo SQL yield only a handful of rows per network round trip. This can make large committed transactions appear minutes late while the database, network and connector all look idle: each round trip costs a full network exchange, and a large transaction requires thousands of them. The connector therefore fetches `prefetch_rows` rows per round trip (500 by default); raise it for large transactions over high-latency links. A `PREFETCH_ROWS` query parameter in `connection_string` takes precedence over the field.
 
 Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
 
-A flashback or point-in-time recovery on the source database followed by `OPEN RESETLOGS` permanently invalidates any checkpoint taken before that event: the checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above and surfaces as ORA-01291; increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN — with the default Oracle-based checkpoint cache the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it, and it must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart; to avoid that gap, clear the checkpoint and set `snapshot_mode` to `snapshot_and_stream` together — setting `snapshot_mode` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
+A flashback or point-in-time recovery on the source database followed by `OPEN RESETLOGS` permanently invalidates any checkpoint taken before that event: the checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above and surfaces as ORA-01291; increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN: with the default Oracle-based checkpoint cache the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it, and it must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart; to avoid that gap, clear the checkpoint and set `snapshot_mode` to `snapshot_and_stream` together: setting `snapshot_mode` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
 		
 
 == Fields
@@ -197,6 +202,15 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
+
+=== `prefetch_rows`
+
+The number of rows fetched per network round-trip, for both snapshot and streaming reads. Higher values mean fewer round-trips but more memory per fetch, for each table snapshotted in parallel. A `PREFETCH_ROWS` query parameter in `connection_string` takes precedence.
+
+
+*Type*: `int`
+
+*Default*: `500`
 
 === `snapshot_mode`
 
@@ -250,7 +264,7 @@ The SCN range to mine per cycle. Each cycle reads changes between the current SC
 
 === `logminer.min_scn_window_size`
 
-The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `window_strategy`. Set to 0 to disable.
 
 
 *Type*: `int`
@@ -265,6 +279,41 @@ The maximum SCN range that can be mined in a single cycle. The window starts at 
 *Type*: `int`
 
 *Default*: `100000`
+
+=== `logminer.window_strategy`
+
+Controls how the SCN range mined per cycle is sized:
+
+- `scn_window` (default): Grows and shrinks a fixed SCN increment (`scn_window_size`) based on its backlog, bounded by `min_scn_window_size` and `max_scn_window_size`.
+- `redo_volume`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `redo_volume_min` and `redo_volume_growth_max`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB) - since `scn_window` would otherwise burn cycles growing its window over mostly-empty ranges, while `redo_volume` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `redo_volume`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.
+
+
+*Type*: `string`
+
+*Default*: `"scn_window"`
+
+Options:
+`scn_window`
+, `redo_volume`
+.
+
+=== `logminer.redo_volume_min`
+
+Whilst not exact, this value represents the minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `window_strategy` is `redo_volume`.
+
+
+*Type*: `int`
+
+*Default*: `2`
+
+=== `logminer.redo_volume_growth_max`
+
+The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `redo_volume_min` and grows automatically whenever something prevents the mining window from advancing - for example a long-running transaction holding it in place, or a redo log being recycled mid-query - up to this limit. Only applies when `window_strategy` is `redo_volume`.
+
+
+*Type*: `int`
+
+*Default*: `4`
 
 === `logminer.backoff_interval`
 
@@ -365,7 +414,7 @@ max_session_age: 20m
 
 === `snapshot_filters`
 
-A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
+A map of fully-qualified table names (for example, SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
 
 Each query must project every column of the table's primary key - all of them, for a composite key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.
 
@@ -419,7 +468,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 === `checkpoint_cache_table_name`
 
-The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `pdb_name` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.
+The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `pdb_name` is set and this field is left at its default value, the table name is automatically derived per PDB (for example, `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.
 
 
 *Type*: `string`

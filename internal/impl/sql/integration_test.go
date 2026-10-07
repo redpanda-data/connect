@@ -466,10 +466,15 @@ processors:
 	"baz": "and this"
 }`, i, i)))
 		}
-		require.NoError(t, inFn(t.Context(), insertBatch))
+		// Bound each step. If the database stops, the stream retries without end, and the test must fail fast.
+		writeCtx, writeDone := context.WithTimeout(t.Context(), 30*time.Second)
+		defer writeDone()
+		require.NoError(t, inFn(writeCtx, insertBatch))
 		require.NoError(t, streamIn.StopWithin(15*time.Second))
 
-		require.NoError(t, streamOut.Run(t.Context()))
+		readCtx, readDone := context.WithTimeout(t.Context(), 30*time.Second)
+		defer readDone()
+		require.NoError(t, streamOut.Run(readCtx))
 
 		assert.Equal(t, []string{
 			"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",
@@ -587,10 +592,15 @@ processors:
 	"baz": "and this"
 }`, i, i)))
 		}
-		require.NoError(t, inFn(t.Context(), insertBatch))
+		// Bound each step. If the database stops, the stream retries without end, and the test must fail fast.
+		writeCtx, writeDone := context.WithTimeout(t.Context(), 30*time.Second)
+		defer writeDone()
+		require.NoError(t, inFn(writeCtx, insertBatch))
 		require.NoError(t, streamIn.StopWithin(15*time.Second))
 
-		require.NoError(t, streamOut.Run(t.Context()))
+		readCtx, readDone := context.WithTimeout(t.Context(), 30*time.Second)
+		defer readDone()
+		require.NoError(t, streamOut.Run(readCtx))
 
 		assert.Equal(t, []string{
 			"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",

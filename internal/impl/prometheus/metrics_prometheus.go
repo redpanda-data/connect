@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,20 +33,21 @@ import (
 )
 
 const (
-	pmFieldUseHistogramTiming          = "use_histogram_timing"
-	pmFieldHistogramBuckets            = "histogram_buckets"
-	pmFieldSummaryQuantilesObj         = "summary_quantiles_objectives"
-	pmFieldSummaryQuantilesObjQuantile = "quantile"
-	pmFieldSummaryQuantilesObjError    = "error"
-	pmFieldAddProcessMetrics           = "add_process_metrics"
-	pmFieldAddGoMetrics                = "add_go_metrics"
-	pmFieldPushURL                     = "push_url"
-	pmFieldPushBasicAuth               = "push_basic_auth"
-	pmFieldPushBasicAuthUsername       = "username"
-	pmFieldPushBasicAuthPassword       = "password"
-	pmFieldPushInterval                = "push_interval"
-	pmFieldPushJobName                 = "push_job_name"
-	pmFieldFileOutputPath              = "file_output_path"
+	pmFieldUseHistogramTiming           = "use_histogram_timing"
+	pmFieldHistogramTimingSecondsSuffix = "histogram_timing_seconds_suffix"
+	pmFieldHistogramBuckets             = "histogram_buckets"
+	pmFieldSummaryQuantilesObj          = "summary_quantiles_objectives"
+	pmFieldSummaryQuantilesObjQuantile  = "quantile"
+	pmFieldSummaryQuantilesObjError     = "error"
+	pmFieldAddProcessMetrics            = "add_process_metrics"
+	pmFieldAddGoMetrics                 = "add_go_metrics"
+	pmFieldPushURL                      = "push_url"
+	pmFieldPushBasicAuth                = "push_basic_auth"
+	pmFieldPushBasicAuthUsername        = "username"
+	pmFieldPushBasicAuthPassword        = "password"
+	pmFieldPushInterval                 = "push_interval"
+	pmFieldPushJobName                  = "push_job_name"
+	pmFieldFileOutputPath               = "file_output_path"
 )
 
 func configSpec() *service.ConfigSpec {
@@ -64,6 +66,11 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 			service.NewBoolField(pmFieldUseHistogramTiming).
 				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").
 				Version("3.63.0").
+				Advanced().
+				Default(false),
+			service.NewBoolField(pmFieldHistogramTimingSecondsSuffix).
+				Description("Whether to rewrite a `_ns` timing metric name suffix to `_seconds` when `use_histogram_timing` is `true` (for example `processor_latency_ns` becomes `processor_latency_seconds`), reflecting that histogram timings are recorded in seconds. This also keeps the histogram series distinct from the summary series emitted when `use_histogram_timing` is `false`, which avoids Prometheus remote-write \"multiple metric kinds\" rejections when a fleet mixes the setting. Enabling this renames existing histogram timing series, so dashboards and alerts that query the `_ns` names must be updated. Has no effect when `use_histogram_timing` is `false`.").
+				Version("4.112.0").
 				Advanced().
 				Default(false),
 			service.NewFloatListField(pmFieldHistogramBuckets).
@@ -248,9 +255,10 @@ type metrics struct {
 
 	fileOutputPath string
 
-	useHistogramTiming bool
-	histogramBuckets   []float64
-	summaryQuantiles   map[float64]float64
+	useHistogramTiming           bool
+	histogramTimingSecondsSuffix bool
+	histogramBuckets             []float64
+	summaryQuantiles             map[float64]float64
 
 	pusher *push.Pusher
 	reg    *prometheus.Registry
@@ -292,6 +300,9 @@ func fromParsed(conf *service.ParsedConfig, log *service.Logger) (p *metrics, er
 	}
 
 	if p.useHistogramTiming, err = conf.FieldBool(pmFieldUseHistogramTiming); err != nil {
+		return
+	}
+	if p.histogramTimingSecondsSuffix, err = conf.FieldBool(pmFieldHistogramTimingSecondsSuffix); err != nil {
 		return
 	}
 
@@ -450,7 +461,26 @@ func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
+// histogramTimerName adjusts a timing metric name for histogram mode. Histogram
+// timings are recorded in seconds (see promTimingHistVec), so a `_ns` suffix is
+// rewritten to `_seconds` to reflect the actual unit. This also gives the
+// histogram a distinct series name from the summary variant (`_ns`) emitted by
+// nodes with use_histogram_timing disabled, which prevents remote-write targets
+// (e.g. Vector/Mimir) from rejecting a batch with "multiple metric kinds given"
+// when a fleet mixes the setting. See INC-1095. Only applied when
+// histogram_timing_seconds_suffix is enabled, as it renames existing series.
+func histogramTimerName(path string) string {
+	if base, ok := strings.CutSuffix(path, "_ns"); ok {
+		return base + "_seconds"
+	}
+	return path
+}
+
 func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+	if p.histogramTimingSecondsSuffix {
+		path = histogramTimerName(path)
+	}
+
 	var pv *promTimingHistVec
 
 	p.mut.Lock()

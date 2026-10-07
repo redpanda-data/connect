@@ -158,7 +158,7 @@ Use the `batching` fields to configure an optional xref:configuration:batching.a
 
 === `streams`
 
-One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.
+One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name. For example `foo:0` would consume the shard `0` of the stream `foo`.
 
 
 *Type*: `array`
@@ -388,7 +388,7 @@ The maximum gap between the in flight sequence versus the latest acknowledged se
 
 === `poll_period`
 
-An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.
+An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so a value such as `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.
 
 
 *Type*: `string`

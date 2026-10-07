@@ -5,6 +5,11 @@ name: PR Soak Comparison
 # each on ONE set of infrastructure (matrix.arms with per-arm binaries),
 # and posts a sticky before/after comment on the PR.
 #
+# What the PR sees, in order:
+#   1. An eyes reaction on the /soak comment, once the gate passes.
+#   2. A sticky "Soak running" comment, once both binaries are built.
+#   3. The same comment overwritten with the verdict, when the soak ends.
+#
 # Security model (mirrors /integration): issue_comment workflows execute
 # the DEFAULT branch's copy of this file, so a PR cannot edit the workflow
 # that grants it credentials; only commenters with write access get past
@@ -30,6 +35,7 @@ concurrency:
 permissions:
   id-token: write
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -59,6 +65,14 @@ jobs:
           APPROVED_HEAD=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" --jq '.head.sha')
           echo "approved_head=${APPROVED_HEAD}" >> "$GITHUB_OUTPUT"
           echo "authorized head: ${APPROVED_HEAD}"
+
+      - name: Acknowledge the /soak comment
+        # Runs only after the gate passed, so a rejected commenter gets no
+        # reaction. The run itself gives no PR-visible signal for 1h+.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" -f content=eyes >/dev/null
 
       - name: Parse scenario from comment
         id: parse
@@ -125,6 +139,30 @@ jobs:
           # built above ("the only variable being the binary").
           git checkout --detach "${BASE_SHA}"
 
+      - name: Compose "Soak running" comment
+        # Runs only if the gate, the head pin, and the build passed. The
+        # final step overwrites this comment with the verdict.
+        shell: bash
+        env:
+          SCENARIO: ${{ steps.parse.outputs.scenario }}
+        run: |
+          {
+            echo "## Soak running"
+            echo "Scenario \`$SCENARIO\`. The comparison lands here when the run ends (about 1h)."
+            echo ""
+            echo "_base: \`${{ steps.build.outputs.base_sha }}\` · pr: \`${{ steps.build.outputs.pr_sha }}\` · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+          } > "$RUNNER_TEMP/comment.md"
+
+      - name: Post "Soak running" comment
+        # Sticky: the action finds the bot's own comment with this header and
+        # updates it, or creates one. It is fetched by the runner, not read
+        # from the workspace, so it is also safe in the always() step below.
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: rpcn-soak-comparison
+          number: ${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/comment.md
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
@@ -154,21 +192,17 @@ jobs:
             extra_flags="--binary base=$RUNNER_TEMP/rc-base --binary pr=$RUNNER_TEMP/rc-pr" \
             2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
 
-      - name: Post comparison comment
+      - name: Compose comparison comment
         # Gated on the permission check AND the head pin: a bare always()
         # would run even after either failed, letting an unauthorized /soak —
         # or an authorized one whose PR head moved after authorization —
         # overwrite a genuine earlier comparison with a spurious "failed"
         # sticky comment.
         if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          MARKER="<!-- rpcn-soak-comparison -->"
           BODY_FILE="$RUNNER_TEMP/comment.md"
           {
-            echo "$MARKER"
             # Anchor the markers to line start (^...$). Only the trusted runner
             # prints them bare at column 0; every line the PR binary produces
             # is streamed with a "[bench]/[reset]/[load]" prefix or emitted as
@@ -188,22 +222,15 @@ jobs:
             echo ""
             echo "_base: \`${{ steps.build.outputs.base_sha }}\` · pr: \`${{ steps.build.outputs.pr_sha }}\` · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
           } > "$BODY_FILE"
-          # Sticky: update the existing marker comment if present, else create.
-          # awk, not `head -1`: head closes the pipe after one line, and on a
-          # multi-page comment list gh is still writing when that happens —
-          # SIGPIPE (141), which pipefail turns into a step failure exactly
-          # when the marker comment exists on a busy PR. Same fix as the
-          # nightly change gate.
-          # Filter on author too: without it, anyone can pre-plant a comment
-          # starting with the marker (GitHub returns oldest-first, awk NR==1
-          # picks it), capturing the sticky comparison into an attacker-owned
-          # comment they retain edit rights over.
-          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate --jq ".[] | select((.body | startswith(\"$MARKER\")) and .user.login == \"github-actions[bot]\") | .id" | awk 'NR==1')
-          if [ -n "$EXISTING" ]; then
-            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXISTING" -F body=@"$BODY_FILE" >/dev/null
-          else
-            gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" -F body=@"$BODY_FILE" >/dev/null
-          fi
+
+      - name: Post comparison comment
+        # Same gate as above. Overwrites the early "Soak running" comment.
+        if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: rpcn-soak-comparison
+          number: ${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/comment.md
 
       - name: Verify teardown actually completed
         if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'

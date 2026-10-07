@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,6 +91,8 @@ output:
 		Field(service.NewStringField("password").Secret().Optional().Description("The password. Required if you are sending message to Timeplus Enterprise (self-hosted) or timeplusd")).
 		Field(service.NewOutputMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching"))
+
+	service.MustRegisterBatchOutput("timeplus", outputConfigSpec, newTimeplusOutput)
 }
 
 type timeplus struct {

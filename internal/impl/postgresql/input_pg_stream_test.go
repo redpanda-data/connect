@@ -13,8 +13,8 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/stretchr/testify/require"
 
@@ -98,6 +98,126 @@ signal_table_name: rpcn_signal_table
 			}
 		})
 	}
+}
+
+func TestNewPgStreamInputIncSnapshotHeartbeat(t *testing.T) {
+	env := service.NewEnvironment()
+	spec := newPostgresCDCConfig()
+
+	const base = `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+signal_table_name: dbz_signal
+tables:
+  - events
+`
+
+	const pastHeartbeatCheck = "checkpoint_cache is required"
+
+	tests := []struct {
+		name        string
+		conf        string
+		errContains string
+	}{
+		{
+			name: "both snapshot modes enabled",
+			conf: base + `
+stream_snapshot: true
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "mutually exclusive",
+		},
+		{
+			name: "blocking snapshot alone",
+			conf: base + `
+stream_snapshot: true
+`,
+		},
+		{
+			name: "incremental snapshot enabled with no signal table",
+			conf: `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+heartbeat_interval: 5s
+tables:
+  - events
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "signal_table_name is not set",
+		},
+		{
+			name: "incremental snapshot enabled with heartbeats disabled",
+			conf: base + `
+heartbeat_interval: 0s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "heartbeat_interval is disabled",
+		},
+		{
+			name: "incremental snapshot enabled with a heartbeat interval",
+			conf: base + `
+heartbeat_interval: 5s
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: pastHeartbeatCheck,
+		},
+		{
+			name: "incremental snapshot enabled at the default heartbeat interval",
+			conf: base + `
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: pastHeartbeatCheck,
+		},
+		{
+			name: "heartbeats disabled with incremental snapshot disabled",
+			conf: base + `
+heartbeat_interval: 0s
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(test.conf, env)
+			require.NoError(t, err)
+
+			mgr := service.MockResources()
+			license.InjectTestService(mgr)
+
+			_, err = newPgStreamInput(pConf, mgr)
+			if test.errContains != "" {
+				require.ErrorContains(t, err, test.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIncSnapshotHeartbeatIntervalRejectsZero(t *testing.T) {
+	// The snapshot cannot advance without commits to compare against.
+	pConf, err := newPostgresCDCConfig().ParseYAML(`
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+incremental_snapshot:
+  enabled: true
+  heartbeat_interval: 0s
+`, service.NewEnvironment())
+	require.NoError(t, err)
+
+	_, err = parseIncrementalSnapshotCfg(pConf, time.Hour, "dbz_signal", false)
+	require.ErrorContains(t, err, "incremental_snapshot.heartbeat_interval must be > 0")
 }
 
 // TestResolveBatchingPolicy pins how the batching policy and
@@ -270,19 +390,18 @@ func TestFlushBatcherPublishesRowsWhenProcessorsFail(t *testing.T) {
 		logger:  service.MockResources().Logger(),
 		stopSig: shutdown.NewSignaller(),
 	}
-	cp := checkpoint.NewCapped[*string](10)
+	cp := newCheckpointTracker(10, &p.checkpointSeq)
 
-	var pending pendingRows
+	st := &flushState{}
 	for _, lsn := range []string{"0/1", "0/2"} {
 		msg := service.NewMessage([]byte(`{}`))
 		msg.MetaSet("lsn", lsn)
-		pending.msgs = append(pending.msgs, msg)
-		pending.ackLSN = &lsn
+		st.pending.add(msg, &lsn)
 		batcher.Add(msg)
 	}
 
-	require.True(t, p.flushBatcher(t.Context(), nil, cp, batcher, &pending), "the stream keeps running")
-	require.Equal(t, pendingRows{}, pending, "the mirror is cleared with the batcher")
+	require.True(t, p.flushBatcher(t.Context(), nil, cp, batcher, st), "the stream keeps running")
+	require.Equal(t, pendingRows{}, st.pending, "the mirror is cleared with the batcher")
 	require.False(t, p.stopSig.IsSoftStopSignalled())
 
 	select {
@@ -307,15 +426,15 @@ func TestFlushBatcherCleanShutdownIsSilent(t *testing.T) {
 		logger:  service.MockResources().Logger(),
 		stopSig: shutdown.NewSignaller(),
 	}
-	cp := checkpoint.NewCapped[*string](10)
+	cp := newCheckpointTracker(10, &p.checkpointSeq)
 
 	msg := service.NewMessage([]byte(`{}`))
-	pending := pendingRows{msgs: service.MessageBatch{msg}}
+	st := &flushState{pending: pendingRows{msgs: service.MessageBatch{msg}}}
 	batcher.Add(msg)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	require.False(t, p.flushBatcher(ctx, nil, cp, batcher, &pending))
+	require.False(t, p.flushBatcher(ctx, nil, cp, batcher, st))
 	require.False(t, p.stopSig.IsSoftStopSignalled(), "shutdown was already in progress")
 }
 
@@ -370,11 +489,11 @@ func newCountBatcher(t *testing.T, count int) *service.Batcher {
 // make Postgres replay the transaction on restart.
 func TestFlushBatchAcksTheStampNotTheRowLSN(t *testing.T) {
 	p := newTestInput(t, 1)
-	cp := checkpoint.NewCapped[*string](10)
+	cp := newCheckpointTracker(10, &p.checkpointSeq)
 	acker := &ackRecorder{}
 
 	msg, stamp := streamRow("0/10", "0/15")
-	require.NoError(t, p.flushBatch(t.Context(), acker, cp, service.MessageBatch{msg}, stamp))
+	require.NoError(t, p.flushBatch(t.Context(), acker, cp, service.MessageBatch{msg}, stamp, nil, false))
 
 	got := <-p.msgChan
 	require.NoError(t, got.ackFn(t.Context(), nil))
@@ -393,24 +512,23 @@ func TestFlushBatcherAcksTheLastRowAddedUnderABatchingPolicy(t *testing.T) {
 		batchCount      = 10000
 	)
 	p := newTestInput(t, 4)
-	cp := checkpoint.NewCapped[*string](checkpointLimit)
+	cp := newCheckpointTracker(checkpointLimit, &p.checkpointSeq)
 	acker := &ackRecorder{}
 	batcher := newCountBatcher(t, batchCount)
 
 	// One-row transactions: row at i*10, commit at i*10+5. Each is stamped
 	// with its commit, as the reader does at a commit-triggered flush.
 	next := pglogicalstream.LSN(10)
-	var pending pendingRows
+	st := &flushState{}
 	add := func() (flushed bool) {
 		rowLSN, commitLSN := next, next+5
 		next += 10
 		msg, stamp := streamRow(rowLSN.String(), commitLSN.String())
-		pending.msgs = append(pending.msgs, msg)
-		pending.ackLSN = stamp
+		st.pending.add(msg, stamp)
 		if !batcher.Add(msg) {
 			return false
 		}
-		require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, &pending))
+		require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, st))
 		return true
 	}
 
@@ -444,18 +562,17 @@ func TestFlushBatcherAcksTheLastRowAddedUnderABatchingPolicy(t *testing.T) {
 // Postgres; it only counts towards the snapshot ack barrier.
 func TestFlushBatcherAcksSnapshotBatchesAsSnapshot(t *testing.T) {
 	p := newTestInput(t, 1)
-	cp := checkpoint.NewCapped[*string](10)
+	cp := newCheckpointTracker(10, &p.checkpointSeq)
 	acker := &ackRecorder{}
 	batcher := newCountBatcher(t, 2)
 
-	var pending pendingRows
+	st := &flushState{}
 	for range 2 {
 		msg := service.NewMessage([]byte(`{}`))
-		pending.msgs = append(pending.msgs, msg)
-		pending.ackLSN = nil
+		st.pending.add(msg, nil)
 		batcher.Add(msg)
 	}
-	require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, &pending))
+	require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, st))
 
 	got := <-p.msgChan
 	require.NoError(t, got.ackFn(t.Context(), nil))

@@ -455,6 +455,8 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 				Schema:        item.iter.table.Schema,
 				Data:          cur.columns,
 				LSN:           cur.startLSN,
+				SeqVal:        cur.seqVal,
+				CommandID:     cur.commandID,
 				CheckpointLSN: boundary.Observe(cur.startLSN),
 				Operation:     cur.operation.String(),
 				ColumnNames:   item.iter.userColNames,

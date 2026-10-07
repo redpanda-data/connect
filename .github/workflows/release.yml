@@ -41,7 +41,6 @@ jobs:
         uses: aws-actions/aws-secretsmanager-get-secrets@v3
         with:
           secret-ids: |
-            ,sdlc/prod/github/cloudsmith
             ,sdlc/prod/github/dockerhub
             ,sdlc/prod/github/rpm_signing_key
           parse-json-secrets: true
@@ -78,10 +77,6 @@ jobs:
       - name: Release Notes
         run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
       - name: Authenticate to GCP
         if: ${{ github.event_name == 'push' }}
         uses: google-github-actions/auth@v3
@@ -96,9 +91,6 @@ jobs:
       - name: Exclude GCP credentials from git state
         if: ${{ github.event_name == 'push' }}
         run: echo 'gha-creds-*.json' >> .git/info/exclude
-
-      - name: Install cloudsmith CLI (for publishing Linux packages)
-        run: pip install cloudsmith-cli
 
       - name: Login to Docker Hub
         uses: docker/login-action@v4
@@ -136,7 +128,6 @@ jobs:
           args: release --release-notes=./release_notes.md --timeout 120m --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
       - name: Upload rpk connect plugin to S3
         if: ${{ github.event_name == 'push' && (matrix.variant == 'connect' || matrix.variant == 'connect-fips') }}
@@ -165,7 +156,6 @@ jobs:
           args: release --timeout 120m --snapshot --skip archive,nfpm --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
       - name: GoReleaser Edge push docker
         if: ${{ github.event_name == 'schedule' && (matrix.variant == 'connect' || matrix.variant == 'connect-ai' || matrix.variant == 'connect-cloud') }}
@@ -226,16 +216,26 @@ jobs:
           git checkout -B "${BRANCH}"
           git add -A
           git commit -m "chore: update bundle dependencies for ${{ github.ref_name }}"
+
+          # On a re-run the branch already exists; fetch it so --force-with-lease
+          # has a tracking ref to compare against.
+          git fetch --depth=1 origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" || true
           git push --force-with-lease origin "HEAD:refs/heads/${BRANCH}"
 
-          PR_URL=$(gh pr create \
-            --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
-            --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
-
-          gh pr merge --auto --rebase "${PR_URL}"
+          PR_URL=$(gh pr list --head "${BRANCH}" --state open --json url --jq '.[0].url // empty')
+          if [ -z "${PR_URL}" ]; then
+            PR_URL=$(gh pr create \
+              --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
+              --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
+          fi
 
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":package: Update Bundles PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+
+          if ! gh pr merge --auto --rebase "${PR_URL}"; then
+            echo "::warning::Auto-merge unavailable; merge ${PR_URL} manually"
+            echo ":warning: Auto-merge could not be enabled; merge [${PR_URL##*/}](${PR_URL}) manually." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   update-downstream:
     runs-on: ubuntu-latest
@@ -246,6 +246,7 @@ jobs:
       contents: read
     outputs:
       helm_pr_url: ${{ steps.helm.outputs.url }}
+      operator_pr_url: ${{ steps.operator.outputs.url }}
     steps:
       - uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
@@ -315,6 +316,69 @@ jobs:
 
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":helm: Update Helm Chart PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+      - name: Update operator default image and create PR
+        id: operator
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BRANCH="auto/bump-connect"
+
+          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/redpanda-data/redpanda-operator.git" redpanda-operator
+          cd redpanda-operator
+
+          CONST="operator/api/redpanda/v1alpha2/pipeline_types.go"
+          CURRENT=$(sed -nE 's|.*PipelineDefaultImage *= *".*connect:([0-9]+\.[0-9]+\.[0-9]+)".*|\1|p' "$CONST")
+          if [ -z "$CURRENT" ]; then
+            echo "::error::PipelineDefaultImage not found in $CONST"
+            exit 1
+          fi
+          # A patch release on an older line must not downgrade the default.
+          if [ "$(printf '%s\n' "$CURRENT" "$VERSION" | sort -V | tail -n1)" = "$CURRENT" ]; then
+            echo "Operator default Connect image is already $CURRENT, skipping"
+            exit 0
+          fi
+
+          sed -Ei "s|connect:[0-9]+\.[0-9]+\.[0-9]+|connect:${VERSION}|g" \
+            "$CONST" \
+            operator/chart/values.yaml \
+            operator/internal/controller/pipeline/README.md \
+            operator/internal/controller/pipeline/testdata/controller-tests.golden.txtar
+          sed -Ei "/redpandadata\/connect\$/,/tag:/ s|tag: \"[0-9]+\.[0-9]+\.[0-9]+\"|tag: \"${VERSION}\"|" \
+            operator/chart/values.yaml
+
+          printf 'project: operator\nkind: Changed\nbody: Bumped the default Redpanda Connect image for `Pipeline` resources to %s.\ntime: %s\n' \
+            "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > ".changes/unreleased/operator-Changed-$(date -u +%Y%m%d-%H%M%S).yaml"
+
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -A
+          git commit -m "operator: bump default Connect image to $VERSION"
+          git push -f origin "$BRANCH"
+
+          TITLE="operator: bump default Connect image to $VERSION"
+          BODY=$(printf 'Automated bump of `PipelineDefaultImage` (the default Redpanda Connect image for `Pipeline` resources) from `connect:%s` to `connect:%s`.\n' \
+            "$CURRENT" "$VERSION")
+
+          EXISTING_PR=$(gh pr list --repo redpanda-data/redpanda-operator --head "$BRANCH" --json number,url -q '.[0]')
+          if [ -n "$EXISTING_PR" ]; then
+            PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
+            PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
+            gh pr edit "$PR_NUMBER" --repo redpanda-data/redpanda-operator \
+              --title "$TITLE" \
+              --body "$BODY"
+          else
+            PR_URL=$(gh pr create --repo redpanda-data/redpanda-operator \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --base main \
+              --head "$BRANCH")
+          fi
+
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          echo ":gear: Update Operator PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
   notify-slack:
     runs-on: ubuntu-latest
@@ -331,6 +395,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
           HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
+          OPERATOR_PR: ${{ needs.update-downstream.outputs.operator_pr_url }}
           GORELEASER_RESULT: ${{ needs.goreleaser.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
@@ -343,6 +408,9 @@ jobs:
           fi
           if [ -n "$HELM_PR" ]; then
             LINKS="${LINKS}:helm: <${HELM_PR}|Helm Chart PR>  "
+          fi
+          if [ -n "$OPERATOR_PR" ]; then
+            LINKS="${LINKS}:gear: <${OPERATOR_PR}|Operator PR>  "
           fi
           if [ "$GORELEASER_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: goreleaser failed  "

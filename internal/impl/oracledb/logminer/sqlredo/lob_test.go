@@ -25,6 +25,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 		pkValues          map[string]any
 		events            []*DMLEvent
 		expectedDataPerEv []map[string]any
+		expectedMerged    bool
 	}{
 		{
 			name:   "nil pkValues merges into all inserts for schema.table",
@@ -39,6 +40,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 				{"ID": "1", "RESUME": "hello"},
 				{"ID": "2", "RESUME": "hello"},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "pkValues matches first row only first insert updated",
@@ -53,6 +55,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 				{"ID": "1", "RESUME": "row1 content"},
 				{"ID": "2", "RESUME": nil},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "pkValues matches second row only second insert updated",
@@ -67,6 +70,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 				{"ID": "1", "RESUME": nil},
 				{"ID": "2", "RESUME": "row2 content"},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "empty byte slice is EMPTY_CLOB placeholder and is skipped",
@@ -79,6 +83,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			expectedDataPerEv: []map[string]any{
 				{"ID": "1", "RESUME": "assembled data"},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "different schema is not modified",
@@ -91,6 +96,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			expectedDataPerEv: []map[string]any{
 				{"ID": "1", "RESUME": nil},
 			},
+			expectedMerged: false,
 		},
 		{
 			name:   "different table is not modified",
@@ -103,12 +109,27 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			expectedDataPerEv: []map[string]any{
 				{"ID": "1", "RESUME": nil},
 			},
+			expectedMerged: false,
+		},
+		{
+			name:   "pkValues with no matching INSERT reports unmerged",
+			schema: "HR", table: "EMPLOYEES",
+			lobData:  map[string]any{"RESUME": "orphaned content"},
+			pkValues: map[string]any{"ID": "999"},
+			events: []*DMLEvent{
+				{Schema: "HR", Table: "EMPLOYEES", Operation: OpInsert, Data: map[string]any{"ID": "1", "RESUME": nil}},
+			},
+			expectedDataPerEv: []map[string]any{
+				{"ID": "1", "RESUME": nil},
+			},
+			expectedMerged: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			MergeInlineLOBValues(tt.lobData, tt.schema, tt.table, tt.pkValues, tt.events, nil)
+			merged := MergeInlineLOBValues(tt.lobData, tt.schema, tt.table, tt.pkValues, tt.events, nil)
+			assert.Equal(t, tt.expectedMerged, merged)
 			for i, ev := range tt.events {
 				assert.Equal(t, tt.expectedDataPerEv[i], ev.Data, "event[%d]", i)
 			}

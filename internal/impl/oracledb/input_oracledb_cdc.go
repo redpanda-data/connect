@@ -36,6 +36,7 @@ const (
 	ociFieldConnectionString          = "connection_string"
 	ociFieldWalletPath                = "wallet_path"
 	ociFieldWalletPassword            = "wallet_password"
+	ociFieldPrefetchRows              = "prefetch_rows"
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -64,6 +65,9 @@ const (
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
 	ociFieldMaxSessionAge        = "max_session_age"
+	ociFieldWindowStrategy       = "window_strategy"
+	ociFieldRedoVolumeMin        = "redo_volume_min"
+	ociFieldRedoVolumeGrowthMax  = "redo_volume_growth_max"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -90,7 +94,7 @@ This input adds the following metadata fields to each message:
 - scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
-- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - username: The Oracle database username of the session that performed the DML, sourced from ` + "`V$LOGMNR_CONTENTS.USERNAME`" + `. Not present on snapshot (` + "`read`" + `) messages, nor on change messages where Oracle reports a NULL or empty username.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
@@ -100,13 +104,13 @@ When using the default Oracle based cache, the Connect user requires permission 
 
 == Performance
 
-Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables — every pipeline gets its own LogMiner reader.
+Streaming throughput is bounded by the LogMiner session, not by CPU: each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables: every pipeline gets its own LogMiner reader.
 
-Large transactions and driver fetch size: the Oracle driver fetches 25 rows per network round trip by default, which can make large committed transactions appear minutes late while the database, network and connector all look idle — each round trip costs a full network exchange, and a large transaction requires thousands of them. Raise the fetch size with the ` + "`PREFETCH_ROWS`" + ` query parameter on ` + "`" + ociFieldConnectionString + "`" + `, for example ` + "`?PREFETCH_ROWS=1000`" + `.
+Large transactions and driver fetch size: left to itself, the Oracle driver sizes each fetch to roughly 128 KiB based on the declared maximum width of the selected columns, so wide columns such as LogMiner's redo SQL yield only a handful of rows per network round trip. This can make large committed transactions appear minutes late while the database, network and connector all look idle: each round trip costs a full network exchange, and a large transaction requires thousands of them. The connector therefore fetches ` + "`" + ociFieldPrefetchRows + "`" + ` rows per round trip (500 by default); raise it for large transactions over high-latency links. A ` + "`PREFETCH_ROWS`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + ` takes precedence over the field.
 
 Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
 
-A flashback or point-in-time recovery on the source database followed by ` + "`OPEN RESETLOGS`" + ` permanently invalidates any checkpoint taken before that event: the checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above and surfaces as ORA-01291; increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN — with the default Oracle-based checkpoint cache the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it, and it must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart; to avoid that gap, clear the checkpoint and set ` + "`" + ociFieldSnapshotMode + "`" + ` to ` + "`snapshot_and_stream`" + ` together — setting ` + "`" + ociFieldSnapshotMode + "`" + ` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
+A flashback or point-in-time recovery on the source database followed by ` + "`OPEN RESETLOGS`" + ` permanently invalidates any checkpoint taken before that event: the checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above and surfaces as ORA-01291; increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN: with the default Oracle-based checkpoint cache the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it, and it must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart; to avoid that gap, clear the checkpoint and set ` + "`" + ociFieldSnapshotMode + "`" + ` to ` + "`snapshot_and_stream`" + ` together: setting ` + "`" + ociFieldSnapshotMode + "`" + ` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
@@ -125,6 +129,12 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
 		ShortDescription("Password for the ewallet.p12 wallet file. Not needed when the wallet directory holds cwallet.sso.").
 		Optional(),
+	).
+	Field(service.NewIntField(ociFieldPrefetchRows).
+		Description("The number of rows fetched per network round-trip, for both snapshot and streaming reads. Higher values mean fewer round-trips but more memory per fetch, for each table snapshotted in parallel. A `PREFETCH_ROWS` query parameter in `connection_string` takes precedence.").
+		ShortDescription("Rows fetched per network round-trip from Oracle; raising this can reduce round-trip-bound read latency for wide rows at the cost of increased memory.").
+		Default(500).
+		LintRule(`root = if this <= 0 { [ "` + ociFieldPrefetchRows + ` must be greater than 0" ] }`),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
@@ -155,12 +165,30 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Description(`The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + `+ociFieldSCNWindowSize+`. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.`).
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewIntField(ociFieldMinSCNWindowSize).
-			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. This gate applies regardless of `"+ociFieldWindowStrategy+"`. Set to 0 to disable.").
 			ShortDescription("The minimum SCN gap required before a new LogMiner session is started.").
 			Default(logminer.DefaultMinSCNWindowSize),
 		service.NewIntField(ociFieldMaxSCNWindowSize).
 			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
 			Default(logminer.DefaultMaxSCNWindowSize),
+		service.NewStringEnumField(ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow), string(logminer.WindowStrategyRedoVolume)).
+			Description(`Controls how the SCN range mined per cycle is sized:
+
+- `+"`"+string(logminer.WindowStrategySCNWindow)+"` (default): Grows and shrinks a fixed SCN increment (`"+ociFieldSCNWindowSize+"`) based on its backlog, bounded by `"+ociFieldMinSCNWindowSize+"` and `"+ociFieldMaxSCNWindowSize+"`"+`.
+- `+"`"+string(logminer.WindowStrategyRedoVolume)+"`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `"+ociFieldRedoVolumeMin+"` and `"+ociFieldRedoVolumeGrowthMax+"`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB) - since `"+string(logminer.WindowStrategySCNWindow)+"` would otherwise burn cycles growing its window over mostly-empty ranges, while `"+string(logminer.WindowStrategyRedoVolume)+"` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `"+string(logminer.WindowStrategyRedoVolume)+"`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.").
+			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed redo-volume budget.").
+			Default(string(logminer.WindowStrategySCNWindow)).
+			Advanced(),
+		service.NewIntField(ociFieldRedoVolumeMin).
+			Description("Whilst not exact, this value represents the minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The minimum redo volume, in multiples of the online redo log size, mined per cycle per redo thread, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
+			Default(logminer.DefaultRedoVolumeMin).
+			Advanced(),
+		service.NewIntField(ociFieldRedoVolumeGrowthMax).
+			Description("The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `"+ociFieldRedoVolumeMin+"` and grows automatically whenever something prevents the mining window from advancing - for example a long-running transaction holding it in place, or a redo log being recycled mid-query - up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			ShortDescription("The maximum redo volume the per-thread budget grows to, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
+			Default(logminer.DefaultRedoVolumeGrowthMax).
+			Advanced(),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			ShortDescription("Interval between checks for new changes once all data is processed.").
@@ -205,7 +233,7 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringMapField(ociFieldSnapshotFilters).
-		Description(`A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
+		Description(`A map of fully-qualified table names (for example, SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.
 
 Each query must project every column of the table's primary key - all of them, for a composite key - even if it otherwise selects only a subset of columns. Snapshotting pages through a table's rows by filtering and sorting on its full primary key, against the query's own result set - if any primary key column isn't projected, this fails part-way through the snapshot, once the first batch of rows has been read.`).
 		ShortDescription("A map of fully-qualified table names to SELECT queries, overriding the default snapshot query per table.").
@@ -229,7 +257,7 @@ Each query must project every column of the table's primary key - all of them, f
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
+		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (for example, `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
@@ -417,6 +445,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	overrides := make(map[string]string)
 	if err := parseWalletConfig(conf, overrides); err != nil {
 		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
+	}
+	if err := parsePrefetchRowsConfig(conf, overrides, logger); err != nil {
+		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldPrefetchRows, err)
 	}
 
 	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {
@@ -941,24 +972,73 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 	if conf.Contains(ociFieldLogMiner) {
 		lmConf := conf.Namespace(ociFieldLogMiner)
 		cfg = logminer.NewDefaultConfig()
-		if cfg.SCNWindowSize, err = lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
+
+		if strategy, err := lmConf.FieldString(ociFieldWindowStrategy); err != nil {
 			return nil, err
+		} else {
+			cfg.WindowStrategy = logminer.WindowStrategy(strategy)
 		}
-		if cfg.SCNWindowSize <= 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
+
+		// redo_volume or scn_window
+		switch cfg.WindowStrategy {
+		case logminer.WindowStrategyRedoVolume:
+			if cfg.RedoVolumeMin, err = lmConf.FieldInt(ociFieldRedoVolumeMin); err != nil {
+				return nil, err
+			} else if cfg.RedoVolumeMin <= 0 {
+				return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
+			}
+			if cfg.RedoVolumeGrowthMax, err = lmConf.FieldInt(ociFieldRedoVolumeGrowthMax); err != nil {
+				return nil, err
+			} else if cfg.RedoVolumeGrowthMax < cfg.RedoVolumeMin {
+				return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, ociFieldRedoVolumeMin, cfg.RedoVolumeMin)
+			} else if cfg.RedoVolumeGrowthMax < logminer.MinRedoVolumeGrowthCeiling {
+				return nil, fmt.Errorf("logminer.%s (%d) must be at least %d, since 1 can never grow past a single reselected file, permanently stalling progress", ociFieldRedoVolumeGrowthMax, cfg.RedoVolumeGrowthMax, logminer.MinRedoVolumeGrowthCeiling)
+			}
+			// ensure scn_window configs aren't set
+			if scnWindowSize, err := lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
+				return nil, err
+			} else if scnWindowSize != logminer.DefaultSCNWindowSize {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldSCNWindowSize, ociFieldWindowStrategy, string(logminer.WindowStrategyRedoVolume))
+			}
+			if maxSCNWindowSize, err := lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
+				return nil, err
+			} else if maxSCNWindowSize != logminer.DefaultMaxSCNWindowSize {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldMaxSCNWindowSize, ociFieldWindowStrategy, string(logminer.WindowStrategyRedoVolume))
+			}
+		case logminer.WindowStrategySCNWindow:
+			if cfg.SCNWindowSize, err = lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
+				return nil, err
+			} else if cfg.SCNWindowSize <= 0 {
+				return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
+			}
+			if cfg.MaxSCNWindowSize, err = lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
+				return nil, err
+			} else if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
+				return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
+			}
+			// ensure redo_volume configs aren't set
+			if redoVolumeMin, err := lmConf.FieldInt(ociFieldRedoVolumeMin); err != nil {
+				return nil, err
+			} else if redoVolumeMin != logminer.DefaultRedoVolumeMin {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldRedoVolumeMin, ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow))
+			}
+			if redoVolumeGrowthMax, err := lmConf.FieldInt(ociFieldRedoVolumeGrowthMax); err != nil {
+				return nil, err
+			} else if redoVolumeGrowthMax != logminer.DefaultRedoVolumeGrowthMax {
+				return nil, fmt.Errorf("logminer.%s has no effect when logminer.%s is %q", ociFieldRedoVolumeGrowthMax, ociFieldWindowStrategy, string(logminer.WindowStrategySCNWindow))
+			}
+		default:
+			return nil, fmt.Errorf("logminer.%s unrecognized strategy", ociFieldWindowStrategy)
 		}
+
+		// Applies regardless of window_strategy - it gates whether a mining
+		// cycle starts at all, before either strategy sizes the window.
 		if cfg.MinSCNWindowSize, err = lmConf.FieldInt(ociFieldMinSCNWindowSize); err != nil {
 			return nil, err
-		}
-		if cfg.MinSCNWindowSize < 0 {
+		} else if cfg.MinSCNWindowSize < 0 {
 			return nil, fmt.Errorf("logminer.%s must be 0 or greater, got %d", ociFieldMinSCNWindowSize, cfg.MinSCNWindowSize)
 		}
-		if cfg.MaxSCNWindowSize, err = lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
-			return nil, err
-		}
-		if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
-			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
-		}
+
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err
 		}

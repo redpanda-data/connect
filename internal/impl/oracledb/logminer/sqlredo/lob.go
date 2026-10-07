@@ -245,13 +245,17 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 }
 
 // MergeInlineLOBValues merges LOB column values from an inline-LOB-only UPDATE into the
-// matching INSERT event for the same row. The pkValues parameter (sourced from the WHERE
-// clause of the LOB-init UPDATE) is used to identify the correct INSERT event.
-// When pkValues is empty, all INSERT events for schema.table are updated as a fallback.
+// matching INSERT event for the same row, reporting whether a matching INSERT was found.
+// The pkValues parameter (sourced from the WHERE clause of the LOB-init UPDATE) is used
+// to identify the correct INSERT event. When pkValues is empty, all INSERT events for
+// schema.table are updated as a fallback.
 //
 // This handles Oracle's behaviour of omitting LOB columns from INSERT SQL_REDO and
-// instead emitting a separate UPDATE whose SET clause carries the actual LOB data.
-func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues map[string]any, events []*DMLEvent, log *service.Logger) {
+// instead emitting a separate UPDATE whose SET clause carries the actual LOB data. The
+// caller must check the return value: a false result means the LOB-only UPDATE is still
+// the only place this row's LOB data lives, and must not be suppressed as "already merged".
+func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues map[string]any, events []*DMLEvent, log *service.Logger) bool {
+	merged := false
 	for _, ev := range events {
 		if ev.Operation != OpInsert {
 			continue
@@ -272,10 +276,12 @@ func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues
 			}
 			ev.Data[col] = val
 		}
+		merged = true
 		if log != nil {
 			log.Debugf("inline LOB merge: set %d LOB columns into INSERT for %s.%s (pks=%v)", len(lobData), schema, table, pkValues)
 		}
 	}
+	return merged
 }
 
 // pkMatches returns true when every key in pkValues is present in data and the

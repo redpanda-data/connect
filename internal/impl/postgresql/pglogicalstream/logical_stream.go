@@ -27,6 +27,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 const decodingPlugin = "pgoutput"
@@ -38,9 +39,9 @@ type Stream struct {
 
 	shutSig *shutdown.Signaller
 
-	ackedLSNMu sync.Mutex
 	// The LSN acked by the stream, we may not have acked this to postgres yet (ack, ack, ack)
-	ackedLSN LSN
+	ackedLSN   LSN
+	ackedLSNMu sync.Mutex
 
 	standbyMessageTimeout time.Duration
 	messages              chan []StreamMessage
@@ -65,7 +66,12 @@ type Stream struct {
 	// streamMaxRows caps the rows the streaming reader accumulates before
 	// handing a batch to the consumer. Defaults to streamBatchMaxRows; named
 	// to avoid clashing with that constant.
-	streamMaxRows int
+	streamMaxRows      int
+	pgVersion          int
+	signalTable        *incrementalsnapshot.TableID
+	incSnapshot        incrementalSnapshot
+	snapshotSchema     string
+	IsBlockingSnapshot bool
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -152,11 +158,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	})
 
 	if config.HeartbeatInterval > 0 {
-		stream.heartbeat, err = newHeartbeat(
-			config,
-			"redpanda_connect_"+stream.slotName,
-			`{"type":"heartbeat"}`,
-		)
+		interval := effectiveHeartbeatInterval(config.HeartbeatInterval, config.IncrementalSnapshotCfg())
+		prefix := "redpanda_connect_" + stream.slotName
+		stream.heartbeat, err = newHeartbeat(config, interval, prefix, `{"type":"heartbeat"}`, stream.incSnapshot.backfilling.Load)
 		if err != nil {
 			return nil, err
 		}
@@ -168,8 +172,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		})
 	}
 
-	var version int
-	if version, err = getPostgresVersion(config); err != nil {
+	if stream.pgVersion, err = getPostgresVersion(config); err != nil {
 		return nil, err
 	}
 
@@ -179,7 +182,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
 	}
 
-	if version > 14 {
+	// The incremental snapshot advances only on a
+	// decoded COMMIT, which on a quiet table only the heartbeat produces.
+	// PostgreSQL 13 has no "messages" option and refuses the slot. From
+	// PostgreSQL 15 an empty transaction is dropped, so without the decoded
+	// message no BEGIN or COMMIT arrives. Earlier versions still send the
+	// empty transaction, and its BEGIN carries a real xid.
+	if stream.pgVersion > 14 {
 		pluginArguments = append(pluginArguments, "messages 'true'")
 	}
 
@@ -197,7 +206,15 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if len(tables) > 0 {
 			tablesForPublication = append(slices.Clone(tables), signalTable)
 		}
+
+		// Unquoted, to compare against a decoded row.
+		signalTableID, err := normalizeTableID(schema, config.SignalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("resolving signal table: %w", err)
+		}
+		stream.signalTable = &signalTableID
 	}
+	stream.snapshotSchema = config.DBSchema
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
 	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
@@ -207,6 +224,19 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	cleanups = append(cleanups, func() {
 		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).
 	})
+
+	if err := stream.setupIncrementalSnapshot(ctx, config); err != nil {
+		return nil, fmt.Errorf("setting up incremental snapshot: %w", err)
+	}
+	if stream.incSnapshot.conn != nil {
+		cleanups = append(cleanups, func() {
+			if stream != nil && stream.incSnapshot.conn != nil {
+				if err := stream.incSnapshot.conn.Close(); err != nil {
+					config.Logger.Warnf("unable to properly cleanup incremental snapshot connection on stream creation failure: %s", err)
+				}
+			}
+		})
+	}
 
 	query, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
 	if err != nil {
@@ -239,6 +269,15 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			}
 		}
 		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
+		if stream.incSnapshot.coordinator != nil {
+			if err := stream.incSnapshot.coordinator.Start(ctx); err != nil {
+				return nil, fmt.Errorf("starting incremental snapshot: %w", err)
+			}
+			// Start plans the first chunk, so it decides whether the
+			// heartbeat owes transaction ids before the first tick.
+			stream.incSnapshot.backfilling.Store(!stream.incSnapshot.coordinator.Idle())
+			stream.logger.Debugf("Incremental snapshot: coordinator started")
+		}
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
 			return nil, err
 		}
@@ -254,6 +293,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
+		stream.IsBlockingSnapshot = true
 		// A crash between snapshot completion and slot promotion leaves <slot>_tmp
 		// behind, owned by the dead session. We only get here when no permanent
 		// slot exists, so any leftover _tmp slot is necessarily stale - drop it
@@ -354,6 +394,16 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		stream.ackedLSNMu.Lock()
 		stream.ackedLSN = startLSN
 		stream.ackedLSNMu.Unlock()
+		if stream.incSnapshot.coordinator != nil {
+			if err := stream.incSnapshot.coordinator.Start(ctx); err != nil {
+				stream.errors <- fmt.Errorf("starting incremental snapshot: %w", err)
+				return
+			}
+			// Start plans the first chunk, so it decides whether the
+			// heartbeat owes transaction ids before the first tick.
+			stream.incSnapshot.backfilling.Store(!stream.incSnapshot.coordinator.Idle())
+			stream.logger.Debugf("Incremental snapshot: coordinator started")
+		}
 		if err := stream.startLr(ctx, startLSN); err != nil {
 			stream.errors <- fmt.Errorf("starting logical replication: %w", err)
 			return
@@ -448,6 +498,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		lastEmittedAckLSN    = currentLSN
 		lastEmittedCommitLSN = currentLSN
 		currentTxnCommitTime time.Time
+		currentTxnXid        uint32
 		// Decoded rows are accumulated here and handed to the consumer at commit
 		// boundaries or when a cap is hit, instead of one row per channel send.
 		batch = newStreamBatch(s.streamMaxRows, streamBatchMaxBytes, currentLSN)
@@ -579,7 +630,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
-			message, result, err := s.processChange(msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
+			message, result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime, &currentTxnXid)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
@@ -628,7 +679,14 @@ const (
 
 // processChange decodes one XLogData payload into at most one StreamMessage.
 // It does not send; the caller batches emitted messages (see streamMessages).
-func (s *Stream) processChange(msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (*StreamMessage, processChangeResult, error) {
+//
+// A commit also drives the incremental snapshot, which sends whatever chunk
+// it releases on the messages channel from here, so those rows precede the
+// committed transaction's own rows, which the caller flushes afterwards. The
+// consumer therefore tracks the snapshot state before the commit position,
+// which is the safe order: the state can never be persisted as progress past
+// a commit that was not confirmed first.
+func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time, currentTxnXid *uint32) (*StreamMessage, processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
 		return nil, changeResultNoMessage, err
@@ -641,11 +699,16 @@ func (s *Stream) processChange(msgLSN LSN, xld XLogData, relations map[uint32]*R
 		delete(schemaCache, rel.RelationID)
 	}
 
-	// capture transaction commit time for insert, update and delete events
+	// capture transaction commit time and xid for insert, update and delete events
 	if begin, ok := logicalMsg.(*BeginMessage); ok {
 		*currentTxnCommitTime = begin.CommitTime
+		*currentTxnXid = begin.Xid
 	} else if _, ok := logicalMsg.(*CommitMessage); ok {
+		if err := s.advanceIncrementalSnapshot(ctx, *currentTxnXid); err != nil {
+			return nil, changeResultNoMessage, err
+		}
 		*currentTxnCommitTime = time.Time{}
+		*currentTxnXid = 0
 	}
 
 	// parse changes inside the transaction
@@ -691,6 +754,16 @@ func (s *Stream) processChange(msgLSN LSN, xld XLogData, relations map[uint32]*R
 			schemaCache[relID] = schema
 			message.ColumnSchema = schema
 		}
+	}
+
+	// A rejected signal is logged there and does not reach here: this row is
+	// not acknowledged yet, so failing redelivers it.
+	if err := s.dispatchSnapshotSignal(ctx, message); err != nil {
+		return nil, changeResultNoMessage, fmt.Errorf("dispatching snapshot signal: %w", err)
+	}
+
+	if err := s.deduplicateStreamedRow(ctx, message); err != nil {
+		return nil, changeResultNoMessage, err
 	}
 
 	message.CommitTime = *currentTxnCommitTime
@@ -915,9 +988,54 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
-	/// Query to get all primary key columns in their correct order
-	q, err := sanitize.SQLQuery(`
+// undedupableTablesQuery lists the partitioned parents in a schema when the
+// publication does not republish their changes under the parent's name. It
+// returns nothing when the publication does, since there is then nothing a
+// backfill could not deduplicate.
+func undedupableTablesQuery(schema, publication string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT c.relname
+        FROM   pg_class c
+        JOIN   pg_namespace n ON n.oid = c.relnamespace
+        WHERE  c.relkind = 'p'
+        AND    n.nspname = $1
+        AND    NOT COALESCE((SELECT p.pubviaroot FROM pg_publication p WHERE p.pubname = $2), false)
+        ORDER BY c.relname;
+    `, schema, publication)
+}
+
+// toastFidelityQuery reports whether a table replicates full old tuples, and
+// whether it has any column large enough to be stored out of line.
+func toastFidelityQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT c.relreplident = 'f',
+               EXISTS (SELECT 1
+                       FROM   pg_attribute a
+                       WHERE  a.attrelid = c.oid
+                       AND    a.attnum > 0
+                       AND    NOT a.attisdropped
+                       AND    a.attstorage IN ('x', 'e'))
+        FROM   pg_class c
+        WHERE  c.oid = $1::regclass;
+    `, table)
+}
+
+// partitionDedupQuery reports whether a table is a partitioned parent, and
+// whether the publication republishes its partitions' changes under the
+// parent's name.
+func partitionDedupQuery(table, publication string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT c.relkind = 'p',
+               COALESCE((SELECT p.pubviaroot FROM pg_publication p WHERE p.pubname = $2), false)
+        FROM   pg_class c
+        WHERE  c.oid = $1::regclass;
+    `, table, publication)
+}
+
+// primaryKeyColumnsQuery returns the query used to resolve table's primary
+// key columns, in index order.
+func primaryKeyColumnsQuery(table string) (string, error) {
+	return sanitize.SQLQuery(`
         SELECT a.attname
         FROM   pg_index i
         JOIN   pg_attribute a ON a.attrelid = i.indrelid
@@ -925,7 +1043,18 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]str
         WHERE  i.indrelid = $1::regclass
         AND    i.indisprimary
         ORDER BY array_position(i.indkey, a.attnum);
-    `, table.String())
+    `, table)
+}
+
+// getPrimaryKeyColumn resolves table's primary key columns over s.pgConn.
+// Only safe to call before logical replication starts (COPY BOTH mode) --
+// s.pgConn is the dedicated replication protocol connection from that point
+// on, and issuing a plain Exec on it concurrently corrupts/deadlocks the
+// stream. Callers that may run once streaming has started (e.g. incremental
+// snapshot's PK resolution) must instead use resolveIncrementalPKColumns,
+// which queries over s.incSnapshot.conn.
+func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
+	q, err := primaryKeyColumnsQuery(table.String())
 	if err != nil {
 		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
@@ -957,13 +1086,24 @@ func (s *Stream) Stop(ctx context.Context) error {
 	stopNowCtx, done := s.shutSig.HardStopCtx(ctx)
 	defer done()
 	wg.Go(func() error {
-		// Wait for streamMessages to finish using pgConn before closing it,
-		// otherwise we race on pgconn internal state (lock field, write buffer).
+		// Wait for streamMessages to finish using pgConn (and, if incremental
+		// snapshotting is enabled, incSnapshot.conn) before closing them,
+		// otherwise we race on pgconn internal state (lock field, write buffer)
+		// or on a connection that's mid-query.
 		select {
 		case <-s.shutSig.HasStoppedChan():
 		case <-stopNowCtx.Done():
 		}
-		return s.pgConn.Close(stopNowCtx)
+		var errs []error
+		if err := s.pgConn.Close(stopNowCtx); err != nil {
+			errs = append(errs, err)
+		}
+		if s.incSnapshot.conn != nil {
+			if err := s.incSnapshot.conn.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
 	})
 	wg.Go(func() error {
 		return s.monitor.Stop()

@@ -334,7 +334,7 @@ Buf Schema Registry configuration. Either this field or `import_paths` must be p
 
 === `bsr[].module`
 
-Module to fetch from a Buf Schema Registry e.g. 'buf.build/exampleco/mymodule'.
+Module to fetch from a Buf Schema Registry, for example, 'buf.build/exampleco/mymodule'.
 
 
 *Type*: `string`

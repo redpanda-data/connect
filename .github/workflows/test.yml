@@ -158,32 +158,3 @@ jobs:
           out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.deb 1.0.0)
           echo "$out"
           echo "$out" | grep -q "artifacts apt upload redpanda-apt"
-
-  test-push-to-cloudsmith:
-    runs-on: ubuntu-latest
-    env:
-      CLOUDSMITH_API_KEY: thisisatest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Mock cloudsmith cli
-        run: |
-          echo '#!/bin/bash' >cloudsmith
-          echo "echo \$@" >>cloudsmith
-          chmod +x cloudsmith
-          mv cloudsmith /usr/local/bin/
-
-      - name: Test GA
-        run: |
-          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0 \
-            | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
-          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0 \
-            | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
-
-      - name: Test RC
-        run: |
-          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0-rc1 \
-            | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
-          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0-rc1 \
-            | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1

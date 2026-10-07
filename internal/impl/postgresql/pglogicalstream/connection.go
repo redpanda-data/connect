@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"database/sql"
 	"fmt"
+	"maps"
 	"regexp"
 	"strconv"
 
@@ -21,12 +22,20 @@ import (
 var re = regexp.MustCompile(`^(\d+)`)
 
 func openPgConnectionFromConfig(cfg *Config) (*sql.DB, error) {
+	return openPgConnectionWithParams(cfg, nil)
+}
+
+// openPgConnectionWithParams opens a connection whose sessions start with
+// params applied. They go in the startup packet, so every connection the
+// pool opens carries them.
+func openPgConnectionWithParams(cfg *Config, params map[string]string) (*sql.DB, error) {
 	parsedCfg, err := pgxpool.ParseConfig(cfg.DBRawDSN)
 	if err != nil {
 		return nil, err
 	}
 	parsedCfg.ConnConfig.Password = cfg.DBConfig.Password
 	parsedCfg.ConnConfig.TLSConfig = cfg.TLSConfig
+	maps.Copy(parsedCfg.ConnConfig.RuntimeParams, params)
 	return stdlib.OpenDB(*parsedCfg.ConnConfig), nil
 }
 

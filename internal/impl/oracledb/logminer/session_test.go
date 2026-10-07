@@ -82,13 +82,14 @@ func TestSessionManager(t *testing.T) {
 			cfg:          cfg,
 			sessionMgr:   NewSessionManager(cfg, logger),
 			logCollector: NewLogFileCollector(),
+			redoVolume:   newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 			log:          logger,
 		}
 
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.True(t, lm.sessionMgr.IsActive())
 		require.Equal(t, 1, fc.count("ADD_LOGFILE"), "first call has no prior session, so it must add log files")
 		require.Equal(t, 0, fc.count("END_LOGMNR"), "first call has no prior session, so there is nothing to end")
@@ -97,7 +98,7 @@ func TestSessionManager(t *testing.T) {
 		// underlying log files - the only thing that can trigger a restart here is age.
 		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300, nil))
 
 		assert.Equal(t, 1, fc.count("END_LOGMNR"),
 			"a stale session must be explicitly ended even though the log file set is unchanged")
@@ -138,7 +139,7 @@ func TestSessionManager(t *testing.T) {
 
 		lm.sessionMgr.sessionOpened = time.Now().Add(-time.Hour)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 300, 400))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 300, 400, nil))
 		assert.Equal(t, 2, fc.prepareCount("START_LOGMNR"),
 			"START_LOGMNR must be re-prepared after Close() rather than reusing the closed statement")
 		assert.Equal(t, 2, fc.prepareCount("END_LOGMNR"),
@@ -164,7 +165,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.True(t, lm.sessionMgr.IsActive())
 
 		// Database is caught up with what we've already mined, and the session
@@ -216,7 +217,7 @@ func TestSessionManager(t *testing.T) {
 				files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 				conn, fc := newFakeSQLConn(t, files)
 
-				require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+				require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 				require.True(t, lm.sessionMgr.IsActive())
 
 				lm.currentSCN = 200
@@ -249,7 +250,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.True(t, lm.sessionMgr.IsActive())
 
 		// Database has advanced past currentSCN, but by less than MinSCNWindowSize,
@@ -281,7 +282,7 @@ func TestSessionManager(t *testing.T) {
 		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1000, Sequence: 1, Type: "ONLINE", Thread: 1}}
 		conn, fc := newFakeSQLConn(t, files)
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 100, 200, nil))
 		require.Equal(t, 1, fc.count("ADD_LOGFILE"))
 
 		// Artificially age the session far beyond any sane max_session_age value,
@@ -290,7 +291,7 @@ func TestSessionManager(t *testing.T) {
 		lm.sessionMgr.sessionOpened = time.Now().Add(-24 * time.Hour)
 		staleOpened := lm.sessionMgr.sessionOpened
 
-		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300))
+		require.NoError(t, lm.prepareLogsAndStartSession(t.Context(), conn, 200, 300, nil))
 
 		assert.Equal(t, 0, fc.count("END_LOGMNR"),
 			"session must not be ended when MaxSessionAge is disabled (0)")
@@ -390,6 +391,34 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 		"a second Close() must not attempt to close the already-closed CURRENT_SCN statement again")
 }
 
+func TestReadChangesReturnsOnCancelDuringBackoff(t *testing.T) {
+	logger := service.NewLoggerFromSlog(slog.Default())
+	cfg := NewDefaultConfig()
+	cfg.MiningBackoffInterval = time.Minute
+
+	db, fc := newFakeSQLDB(t, nil)
+	// The database SCN is equal to the start SCN, so each mining cycle is caught up and the loop backs off.
+	fc.currentSCN = 100
+	lm := NewMiner(db, nil, &publisherStub{}, cfg, nil, service.MockResources().Metrics(), logger)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- lm.ReadChanges(ctx, 100) }()
+
+	require.Eventually(t, func() bool {
+		return fc.queryCount("SELECT CURRENT_SCN FROM V$DATABASE") >= 1
+	}, 5*time.Second, 10*time.Millisecond, "the first mining cycle did not run")
+
+	cancel()
+	select {
+	case err := <-errCh:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadChanges did not return after the context was cancelled during the backoff")
+	}
+}
+
 // --- fake database/sql driver used to exercise SessionManager/LogMiner
 // session logic without a real Oracle connection. Only the subset of
 // database/sql/driver behaviour exercised by prepareLogsAndStartSession
@@ -398,7 +427,7 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 
 var fakeDriverSeq atomic.Int64
 
-func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
+func newFakeSQLDB(t *testing.T, files []*LogFile) (*sql.DB, *fakeConn) {
 	t.Helper()
 
 	fc := &fakeConn{logFiles: files}
@@ -409,6 +438,13 @@ func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
+	return db, fc
+}
+
+func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
+	t.Helper()
+
+	db, fc := newFakeSQLDB(t, files)
 	conn, err := db.Conn(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -564,14 +600,14 @@ func (*fakeContentRows) Close() error { return nil }
 func (*fakeContentRows) Next([]driver.Value) error { return io.EOF }
 
 // fakeRows implements driver.Rows over the LogFileCollector.GetLogsBySCNRange
-// column set: FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD.
+// column set: FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS, BYTES.
 type fakeRows struct {
 	files []*LogFile
 	idx   int
 }
 
 func (*fakeRows) Columns() []string {
-	return []string{"FILE_NAME", "FIRST_CHANGE", "NEXT_CHANGE", "SEQ", "TYPE", "THREAD"}
+	return []string{"FILE_NAME", "FIRST_CHANGE", "NEXT_CHANGE", "SEQ", "TYPE", "THREAD", "STATUS", "BYTES"}
 }
 
 func (*fakeRows) Close() error { return nil }
@@ -587,6 +623,8 @@ func (r *fakeRows) Next(dest []driver.Value) error {
 	dest[3] = f.Sequence
 	dest[4] = f.Type
 	dest[5] = int64(f.Thread)
+	dest[6] = f.Status
+	dest[7] = int64(f.SizeBytes)
 	r.idx++
 	return nil
 }

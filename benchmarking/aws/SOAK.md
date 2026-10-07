@@ -16,7 +16,7 @@ files named below.
 | Dashboards + alarms | `terraform/persistent/` (`main.tf` `soak_scenarios` var, `alarms.tf`) | one dashboard + three alarms (stall / rss-slope / backlog) per scenario → SNS `redpanda-connect-bench-soak-alerts` |
 | Archive + baseline | `redpanda-connect-bench-soak-archive` bucket | result.json + raw artifacts per run; `soak-index/` feeds the rolling-baseline comparator (advisory < 3 runs, then fails the job on throughput < 85% / RSS > 130% of baseline) |
 | Nightly workflow | `.github/workflows/soak_nightly.yml` | 08:10 UTC cron over the rotation matrix (postgres, mysql; serialized, arms only from the default branch) + manual dispatch; OIDC creds (4h), license from Secrets Manager, teardown verified against AWS |
-| PR comparison | `.github/workflows/soak_pr.yml` | `/soak` comment (write-access gated) → base-vs-PR binaries, same infra, sticky comparison comment |
+| PR comparison | `.github/workflows/soak_pr.yml` | `/soak` comment (write-access gated) → eyes reaction, base-vs-PR binaries, same infra, sticky comment posted early ("Soak running") then overwritten with the comparison |
 
 ## Adding a connector to the rotation
 

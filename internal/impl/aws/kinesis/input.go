@@ -173,7 +173,7 @@ It's possible to configure Redpanda Connect to create the DynamoDB table require
 Use the `+"`batching`"+` fields to configure an optional xref:configuration:batching.adoc#batch-policy[batching policy]. Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
 `).Fields(
 		service.NewStringListField(kiFieldStreams).
-			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").
+			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name. For example `foo:0` would consume the shard `0` of the stream `foo`.").
 			ShortDescription("One or more Kinesis data streams to consume from, by name or full ARN. Shards are balanced across consumers automatically.").
 			Examples([]any{"foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"}),
 		service.NewObjectField(kiFieldDynamoDB,
@@ -209,7 +209,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			ShortDescription("Maximum gap between the in-flight sequence and the latest acknowledged sequence.").
 			Default(1024),
 		service.NewDurationField(kiFieldPollPeriod).
-			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
+			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so a value such as `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
 			ShortDescription("Minimum period between record polls of a shard, for staying under the shared Kinesis read limit.").
 			Default("0s").
 			Version("4.109.0").

@@ -9,9 +9,11 @@
 package oracledb
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 
+	"github.com/sijms/go-ora/v2/configurations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -223,6 +225,317 @@ logminer: {}
 			got, err := parseSnapshotMode(conf)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParsePrefetchRowsConfig(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`
+	t.Run("unset defaults to 500", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML, nil)
+		require.NoError(t, err)
+
+		overrides := map[string]string{}
+		require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+		assert.Equal(t, map[string]string{"PREFETCH_ROWS": "500"}, overrides)
+	})
+
+	t.Run("set value becomes a PREFETCH_ROWS override", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML+"prefetch_rows: 5000\n", nil)
+		require.NoError(t, err)
+
+		overrides := map[string]string{}
+		require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+		assert.Equal(t, map[string]string{"PREFETCH_ROWS": "5000"}, overrides)
+	})
+
+	t.Run("non-positive values are rejected", func(t *testing.T) {
+		for _, tt := range []struct {
+			name  string
+			value int
+		}{
+			{"zero", 0},
+			{"negative", -1},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				conf, err := oracleDBStreamConfigSpec.ParseYAML(
+					fmt.Sprintf(minimalOracleCDCYAML+"prefetch_rows: %d\n", tt.value), nil)
+				require.NoError(t, err)
+
+				overrides := map[string]string{}
+				err = parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+				assert.Error(t, err)
+				assert.Empty(t, overrides)
+			})
+		}
+	})
+
+	t.Run("connection_string PREFETCH_ROWS takes precedence", func(t *testing.T) {
+		for _, tt := range []struct {
+			name         string
+			prefetchRows string
+		}{
+			{"over the default", ""},
+			{"over the field", "prefetch_rows: 5000\n"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				for _, key := range []string{"PREFETCH_ROWS", "prefetch_rows"} {
+					conf, err := oracleDBStreamConfigSpec.ParseYAML(`connection_string: "oracle://user:pass@host:1521/svc?`+key+`=100"
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`+tt.prefetchRows, nil)
+					require.NoError(t, err)
+
+					connStr, err := conf.FieldString(ociFieldConnectionString)
+					require.NoError(t, err)
+
+					overrides := map[string]string{}
+					require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+					assert.Empty(t, overrides, "no override must be added when connection_string sets %s", key)
+
+					built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
+					require.NoError(t, err)
+
+					parsed, err := url.Parse(built)
+					require.NoError(t, err)
+					assert.Equal(t, "100", parsed.Query().Get(key))
+				}
+			})
+		}
+	})
+
+	// go-ora upper-cases option names, so a PREFETCH_ROWS in connection_string
+	// applies whatever its case. Parsing the built URL with go-ora checks the
+	// value the driver will actually use.
+	t.Run("connection_string PREFETCH_ROWS is matched case-insensitively", func(t *testing.T) {
+		for _, key := range []string{"PREFETCH_ROWS", "prefetch_rows", "Prefetch_Rows"} {
+			t.Run(key, func(t *testing.T) {
+				conf, err := oracleDBStreamConfigSpec.ParseYAML(`connection_string: "oracle://user:pass@host:1521/svc?`+key+`=100"
+include:
+  - SCHEMA.TABLE
+logminer: {}
+prefetch_rows: 5000
+`, nil)
+				require.NoError(t, err)
+
+				connStr, err := conf.FieldString(ociFieldConnectionString)
+				require.NoError(t, err)
+
+				overrides := map[string]string{}
+				require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+
+				built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
+				require.NoError(t, err)
+
+				driverConf, err := configurations.ParseConfig(built)
+				require.NoError(t, err)
+				assert.Equal(t, 100, driverConf.PrefetchRows,
+					"the driver must use the connection_string value, not prefetch_rows")
+			})
+		}
+	})
+}
+
+func TestPrefetchRowsConfigLinting(t *testing.T) {
+	const minimalOracleCDCYAML = `
+oracledb_cdc:
+  connection_string: oracle://user:pass@host:1521/svc
+  include:
+    - SCHEMA.TABLE
+  logminer: {}
+`
+	linter := service.NewEnvironment().NewComponentConfigLinter()
+
+	tests := []struct {
+		name    string
+		conf    string
+		lintErr string
+	}{
+		{
+			name:    "unset",
+			conf:    minimalOracleCDCYAML,
+			lintErr: "",
+		},
+		{
+			name:    "positive value",
+			conf:    minimalOracleCDCYAML + "  prefetch_rows: 1000\n",
+			lintErr: "",
+		},
+		{
+			name:    "zero",
+			conf:    minimalOracleCDCYAML + "  prefetch_rows: 0\n",
+			lintErr: "(7,1) prefetch_rows must be greater than 0",
+		},
+		{
+			name:    "negative",
+			conf:    minimalOracleCDCYAML + "  prefetch_rows: -1\n",
+			lintErr: "(7,1) prefetch_rows must be greater than 0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lints, err := linter.LintInputYAML([]byte(tt.conf))
+			require.NoError(t, err)
+			if tt.lintErr != "" {
+				require.Len(t, lints, 1)
+				assert.Equal(t, tt.lintErr, lints[0].Error())
+			} else {
+				assert.Empty(t, lints)
+			}
+		})
+	}
+}
+
+func TestParseLogMinerConfigWindowStrategyCrossFields(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer:
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr string
+	}{
+		{
+			name: "redo_volume with scn_window fields left unset does not false-positive",
+			yaml: minimalOracleCDCYAML + `  window_strategy: redo_volume
+  redo_volume_min: 2
+  redo_volume_growth_max: 4
+`,
+		},
+		{
+			name: "scn_window with redo_volume fields left unset does not false-positive",
+			yaml: minimalOracleCDCYAML + `  window_strategy: scn_window
+  scn_window_size: 20000
+  max_scn_window_size: 100000
+`,
+		},
+		{
+			name:    "redo_volume with scn_window_size overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: redo_volume\n  scn_window_size: 5000\n",
+			wantErr: "scn_window_size has no effect when logminer.window_strategy is \"redo_volume\"",
+		},
+		{
+			name:    "redo_volume with max_scn_window_size overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: redo_volume\n  max_scn_window_size: 200000\n",
+			wantErr: "max_scn_window_size has no effect when logminer.window_strategy is \"redo_volume\"",
+		},
+		{
+			name:    "window_strategy left unset (defaults to scn_window) with redo_volume_min overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  redo_volume_min: 99\n",
+			wantErr: "redo_volume_min has no effect when logminer.window_strategy is \"scn_window\"",
+		},
+		{
+			name:    "scn_window with redo_volume_growth_max overridden is rejected",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: scn_window\n  redo_volume_growth_max: 8\n",
+			wantErr: "redo_volume_growth_max has no effect when logminer.window_strategy is \"scn_window\"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			_, err = parseLogMinerConfig(conf)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestParseLogMinerConfigMinSCNWindowSize(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer:
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		want    int
+		wantErr string
+	}{
+		{
+			name: "honored under scn_window (the default strategy)",
+			yaml: minimalOracleCDCYAML + "  min_scn_window_size: 500\n",
+			want: 500,
+		},
+		{
+			name: "honored under redo_volume too, not just scn_window",
+			yaml: minimalOracleCDCYAML + "  window_strategy: redo_volume\n  min_scn_window_size: 500\n",
+			want: 500,
+		},
+		{
+			name:    "negative value rejected regardless of strategy",
+			yaml:    minimalOracleCDCYAML + "  window_strategy: redo_volume\n  min_scn_window_size: -1\n",
+			wantErr: "min_scn_window_size must be 0 or greater",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseLogMinerConfig(conf)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, cfg.MinSCNWindowSize)
+		})
+	}
+}
+
+func TestParseLogMinerConfigRedoVolumeGrowthMax(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer:
+  window_strategy: redo_volume
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr string
+	}{
+		{
+			name:    "min 1, growth_max 1 is rejected: it can never grow past a single reselected file",
+			yaml:    minimalOracleCDCYAML + "  redo_volume_min: 1\n  redo_volume_growth_max: 1\n",
+			wantErr: "must be at least 2",
+		},
+		{
+			name: "min 1, growth_max 2 is accepted",
+			yaml: minimalOracleCDCYAML + "  redo_volume_min: 1\n  redo_volume_growth_max: 2\n",
+		},
+		{
+			name: "min 2, growth_max 4 (the defaults) is accepted",
+			yaml: minimalOracleCDCYAML + "  redo_volume_min: 2\n  redo_volume_growth_max: 4\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(tt.yaml, nil)
+			require.NoError(t, err)
+
+			_, err = parseLogMinerConfig(conf)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }
