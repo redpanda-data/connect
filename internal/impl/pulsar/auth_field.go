@@ -31,7 +31,7 @@ func tlsField() *service.ConfigField {
 			ShortDescription("An optional path to a root certificate authority file, often a `.pem` file containing a certificate chain.").
 			Default("").
 			Example("./root_cas.pem")).
-		Description("Specify the path to a custom CA certificate to trust the broker TLS service.").Version("4.11.0")
+		Description("Specify the path to a custom CA certificate to trust the broker TLS service.").Version("4.2.0")
 }
 
 func authField() *service.ConfigField {

@@ -77,7 +77,7 @@ tasks:
       - go run -tags "{{.TAGS}}" ./cmd/tools/plugins_csv_fmt
       # Lints every generated Common and Advanced snippet against the schema.
       # With TAGS=x_benthos_extra this covers the cgo components too.
-      - go test -tags "{{.TAGS}}" -run 'TestSnippetsLint|TestSnippetLintCatchesBadShapes|TestRenderedValuesRoundTrip|TestTopLevelConfigObjects|TestPlatformsFromBuilds' ./cmd/tools/docs_gen
+      - go test -tags "{{.TAGS}}" -run 'TestSnippetsLint|TestSnippetLintCatchesBadShapes|TestRenderedValuesRoundTrip|TestTopLevelConfigObjects|TestPlatformsFromBuilds|TestNewSpecsHaveVersions' ./cmd/tools/docs_gen
       - '{{.TARGET_DIR}}/redpanda-connect lint --deprecated "./config/examples/*.yaml"'
       - '{{.TARGET_DIR}}/redpanda-connect template lint "./config/template_examples/*.yaml"'
 

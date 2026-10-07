@@ -18,6 +18,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -246,6 +247,7 @@ func releaseDocs(t *testing.T, tag string) map[string]string {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
+		checkMissingAsset(t, tag)
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -367,4 +369,72 @@ func TestReleasedSpecsFromAsset(t *testing.T) {
 		"method:uppercase":                true,
 	}, releasedSpecs(t, "v1.0.0"))
 	assert.Nil(t, releasedSpecs(t, "v0.9.0"), "a release without the asset has no record")
+}
+
+// releaseAPIURL is the GitHub API endpoint for one release. Tests replace it.
+var releaseAPIURL = "https://api.github.com/repos/redpanda-data/connect/releases/tags/%s"
+
+// checkMissingAsset fails under CI when tag has no docs asset but the release
+// before it does: the docs-asset job for tag failed or was skipped, and
+// without the asset this test can't find unversioned new specs. A release
+// published in the last two hours may still be uploading, so it only skips.
+func checkMissingAsset(t *testing.T, tag string) {
+	t.Helper()
+	if os.Getenv("CI") == "" {
+		return
+	}
+	older := olderRelease(t, tag)
+	if older == "" {
+		return
+	}
+	client := &http.Client{Timeout: time.Minute}
+	resp, err := client.Head(fmt.Sprintf(releaseDocsURL, older))
+	if err != nil {
+		t.Logf("checking the %s reference docs: %v", older, err)
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return // older releases have no asset either, so nothing is missing
+	}
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf(releaseAPIURL, tag), nil)
+	require.NoError(t, err)
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	var release struct {
+		PublishedAt time.Time `json:"published_at"`
+	}
+	if resp, err := client.Do(req); err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&release) == nil && time.Since(release.PublishedAt) < 2*time.Hour {
+			t.Skipf("%s was published at %s and its docs asset may still be uploading", tag, release.PublishedAt.Format(time.RFC3339))
+		}
+	}
+	t.Fatalf("%s has no redpanda-connect-docs.tar.gz asset, but %s does: the release workflow's docs-asset job for %s failed or was skipped. Rerun it, or run the release workflow with docs_tag=%s.", tag, older, tag, tag)
+}
+
+// olderRelease returns the highest stable vX.Y.Z tag reachable from HEAD that
+// is older than tag, or "" when there is none.
+func olderRelease(t *testing.T, tag string) string {
+	t.Helper()
+	out, err := exec.Command("git", "tag", "--merged", "HEAD", "--list", "v*").Output()
+	if err != nil {
+		return ""
+	}
+	limit, ok := parseVersion(strings.TrimPrefix(tag, "v"))
+	if !ok {
+		return ""
+	}
+	best, bestV := "", [3]int{-1}
+	for cand := range strings.FieldsSeq(string(out)) {
+		v, ok := parseVersion(strings.TrimPrefix(cand, "v"))
+		if !ok || !newer(fmt.Sprintf("%d.%d.%d", limit[0], limit[1], limit[2]), v) {
+			continue
+		}
+		if newer(fmt.Sprintf("%d.%d.%d", v[0], v[1], v[2]), bestV) {
+			best, bestV = cand, v
+		}
+	}
+	return best
 }
