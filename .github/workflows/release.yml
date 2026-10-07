@@ -7,9 +7,15 @@ on:
   schedule:
     - cron: '0 2 * * *' # run at 2 AM UTC
   workflow_dispatch:
+    inputs:
+      docs_tag:
+        description: 'Regenerate and attach the reference docs asset for this existing release tag (for example v4.113.0), and skip the snapshot build'
+        required: false
+        default: ''
 
 jobs:
   goreleaser:
+    if: github.event_name != 'workflow_dispatch' || inputs.docs_tag == ''
     runs-on: ubuntu-latest-32
     permissions:
       id-token: write
@@ -180,14 +186,25 @@ jobs:
           ignore-unfixed: true
           exit-code: 1
 
+  # Attaches the generated reference docs to the release. On a tag push it runs
+  # after goreleaser publishes the release. To regenerate the asset for an
+  # existing release, run this workflow with the docs_tag input.
   docs-asset:
     runs-on: ubuntu-latest
     needs: goreleaser
-    if: github.event_name == 'push'
+    if: >-
+      !cancelled() && (
+        (github.event_name == 'push' && needs.goreleaser.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.docs_tag != '')
+      )
     permissions:
       contents: write
+    env:
+      DOCS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.DOCS_TAG }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
@@ -202,7 +219,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tar -C docs -czf redpanda-connect-docs.tar.gz modules
-          gh release upload "${GITHUB_REF_NAME}" redpanda-connect-docs.tar.gz --clobber
+          gh release upload "${DOCS_TAG}" redpanda-connect-docs.tar.gz --clobber
 
   update-bundles:
     runs-on: ubuntu-latest
