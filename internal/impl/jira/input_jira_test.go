@@ -1146,13 +1146,14 @@ func TestCursor_PersistedAfterEachAckedPage(t *testing.T) {
 		case "/rest/api/3/search/jql":
 			jql := r.URL.Query().Get("jql")
 			if r.URL.Query().Get("nextPageToken") == "" && strings.Contains(jql, "updated >=") {
-				// Both issues are older than the cursor or already seen, so
-				// an empty page stands in for Jira's reply.
+				// Jira returns only PROJ-2: `updated >=` includes the
+				// boundary minute, and PROJ-1 is older. The seen set drops
+				// PROJ-2, so the input emits nothing.
 				select {
 				case repollJQL <- jql:
 				default:
 				}
-				_, _ = w.Write([]byte(`{"issues":[]}`))
+				_, _ = w.Write([]byte(`{"issues":[{"id":"2","key":"PROJ-2","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:05:00.000+0000"}}]}`))
 				return
 			}
 			if r.URL.Query().Get("nextPageToken") == "page2" {
