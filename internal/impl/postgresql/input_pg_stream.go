@@ -197,7 +197,7 @@ Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" +
 			ShortDescription("Number of tables to snapshot in parallel.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
-			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See `" + fieldSignalTableName + "`.").Version("4.46.0").
+			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See <<" + fieldSignalTableName + ",`" + fieldSignalTableName + "`>>.").Version("4.46.0").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
