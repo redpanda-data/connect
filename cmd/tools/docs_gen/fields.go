@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -75,6 +76,16 @@ func fieldDisplayType(f fieldSpec) string {
 // renderFields renders the `=== field` sections for a list of fields and,
 // recursively, their children.
 func renderFields(fields []fieldSpec, prefix string) string {
+	return renderFieldsSince(fields, prefix, "")
+}
+
+// renderFieldsSince renders fields whose nearest versioned ancestor (the
+// component, or a parent field) was introduced in version since. A field's
+// "Requires version" line is only shown when its version is later than that,
+// since the ancestor's requirement already covers it. Shared field
+// constructors carry the version history of the field in general, which can
+// be older than the component that uses them.
+func renderFieldsSince(fields []fieldSpec, prefix, since string) string {
 	var out strings.Builder
 	for _, f := range sortFieldsByName(fields) {
 		if f.IsDeprecated || f.Name == "" {
@@ -103,8 +114,10 @@ func renderFields(fields []fieldSpec, prefix string) string {
 		if f.IsSecret {
 			b.WriteString("include::connect:components:partial$secret_warning.adoc[]\n\n")
 		}
-		if f.Version != "" {
+		childSince := since
+		if f.Version != "" && versionLater(f.Version, since) {
 			b.WriteString("ifndef::env-cloud[]\nRequires version " + f.Version + " or later.\nendif::[]\n\n")
+			childSince = f.Version
 		}
 		b.WriteString("*Type*: `" + fieldDisplayType(f) + "`\n\n")
 
@@ -122,6 +135,11 @@ func renderFields(fields []fieldSpec, prefix string) string {
 		if len(f.Options) > 0 {
 			opts := make([]string, len(f.Options))
 			for i, o := range f.Options {
+				// An empty option would render as two backticks, which
+				// AsciiDoc prints literally.
+				if o == "" {
+					o = `""`
+				}
 				opts[i] = "`" + o + "`"
 			}
 			b.WriteString("*Options*: " + strings.Join(opts, ", ") + "\n\n")
@@ -130,7 +148,7 @@ func renderFields(fields []fieldSpec, prefix string) string {
 			b.WriteString(renderFieldExamples(f))
 		}
 		if len(f.Children) > 0 {
-			b.WriteString(renderFields(f.Children, path))
+			b.WriteString(renderFieldsSince(f.Children, path, childSince))
 		}
 		out.WriteString(b.String())
 	}
@@ -534,4 +552,36 @@ func topLevelConfigObjects(raw []byte) ([]fieldSpec, error) {
 
 func buildTopLevelConfigYAML(f fieldSpec, includeAdvanced bool) string {
 	return strings.Join(configNamed(f.Name, f, 0, includeAdvanced), "\n") + "\n"
+}
+
+// versionLater reports whether version a is later than b. Either one that
+// isn't an x.y.z number counts as unknown, so a is shown.
+func versionLater(a, b string) bool {
+	pa, okA := parseXYZ(a)
+	pb, okB := parseXYZ(b)
+	if !okA || !okB {
+		return true
+	}
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] > pb[i]
+		}
+	}
+	return false
+}
+
+func parseXYZ(v string) ([3]int, bool) {
+	var out [3]int
+	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	if len(parts) != 3 {
+		return out, false
+	}
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return out, false
+		}
+		out[i] = n
+	}
+	return out, true
 }

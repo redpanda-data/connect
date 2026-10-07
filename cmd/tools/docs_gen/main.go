@@ -45,6 +45,8 @@ const (
 
 const (
 	emptyMetadataPartial    = bannerPrefix + " The component description has no Metadata section, so this partial is empty.\n"
+	emptyFieldsPartial      = bannerPrefix + " The component has no config fields, so this partial is empty.\n"
+	emptyExamplesPartial    = bannerPrefix + " The component has no examples, so this partial is empty.\n"
 	emptyDescriptionPartial = bannerPrefix + " The component has no summary or description, so this partial is empty.\n" +
 		"\n// tag::meta[]\n// end::meta[]\n\n// tag::body[]\n// end::body[]\n\n// tag::footnotes[]\n// end::footnotes[]\n"
 )
@@ -123,6 +125,9 @@ func main() {
 	}
 	for _, m := range visibleBloblang(full.BloblangMethods) {
 		w.write(filepath.Join("partials/bloblang-methods", m.Name+".adoc"), renderBloblangSpec(withCategoryText(m), "method"))
+		for category, v := range categoryVariants(m) {
+			w.write(filepath.Join("partials/bloblang-methods", categoryVariantName(m.Name, category)+".adoc"), renderBloblangSpec(v, "method"))
+		}
 	}
 	// The Cloud build only allows pure Bloblang, so its schema decides which
 	// functions and methods the Cloud docs list.
@@ -177,17 +182,22 @@ func (w *writer) component(key string, c componentSpec) {
 	typeDir := pageTypeDir(key)
 	file := c.Name + ".adoc"
 
+	// Every partial is always written, empty when the component has no such
+	// content, so a page that includes it keeps building after upstream
+	// removes the component's last field, example, Metadata section, or
+	// description.
 	if len(c.Config.Children) > 0 {
 		w.write(filepath.Join("partials/fields", key, file),
-			generatedBanner+"\n\n== Fields\n\n"+renderFields(c.Config.Children, "")+"\n")
+			generatedBanner+"\n\n== Fields\n\n"+renderFieldsSince(c.Config.Children, "", c.Version)+"\n")
+	} else {
+		w.write(filepath.Join("partials/fields", key, file), emptyFieldsPartial)
 	}
 	if examples := renderComponentExamples(c.Examples); strings.TrimSpace(examples) != "" {
 		w.write(filepath.Join("partials/examples", key, file),
 			generatedBanner+"\n\n== Examples\n\n"+examples+"\n")
+	} else {
+		w.write(filepath.Join("partials/examples", key, file), emptyExamplesPartial)
 	}
-	// The metadata and description partials are always written, empty when
-	// the component has no such content, so a page that includes them keeps
-	// building after upstream removes a Metadata section or a description.
 	if md := protectCodeSpans(normalizeMetadata(extractMetadata(c.Description))); md != "" {
 		w.write(filepath.Join("partials/metadata", typeDir, file), metadataBanner+"\n\n"+md+"\n")
 	} else {

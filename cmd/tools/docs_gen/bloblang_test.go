@@ -312,3 +312,30 @@ func TestTemplateFieldsCoverTheTemplateSchema(t *testing.T) {
 		assert.Contains(t, string(b), heading)
 	}
 }
+
+func TestCategoryVariantsRenderEachCategorysText(t *testing.T) {
+	str := bloblangExample{Mapping: `root = this.length()`, Results: [][2]string{{`"foo"`, `3`}}}
+	arr := bloblangExample{Mapping: `root = this.length()`, Results: [][2]string{{`[1,2]`, `2`}}}
+	spec := bloblangSpec{
+		Name:     "length",
+		Examples: []bloblangExample{str, arr},
+		Categories: []bloblangCategory{
+			{Category: "String Manipulation", Description: "Returns the character count of a string.", Examples: []bloblangExample{str}},
+			{Category: "Object & Array Manipulation", Description: "Returns the number of items in an array or object.", Examples: []bloblangExample{arr}},
+		},
+	}
+	variants := categoryVariants(spec)
+	require.Len(t, variants, 2)
+	assert.Equal(t, "Returns the character count of a string.", variants["String Manipulation"].Description)
+	assert.Equal(t, []bloblangExample{arr}, variants["Object & Array Manipulation"].Examples)
+	assert.Equal(t, "length-object_array_manipulation", categoryVariantName("length", "Object & Array Manipulation"))
+
+	list := renderMethodsList([]bloblangSpec{spec}, map[string]bool{"length": true})
+	assert.Contains(t, list, "partial$bloblang-methods/length-string_manipulation.adoc[")
+	assert.Contains(t, list, "partial$bloblang-methods/length-object_array_manipulation.adoc[")
+	assert.NotContains(t, list, "partial$bloblang-methods/length.adoc[", "each category includes its own variant")
+
+	same := bloblangSpec{Name: "upper", Categories: []bloblangCategory{{Category: "String Manipulation", Description: "Upper."}}}
+	assert.Nil(t, categoryVariants(same), "a method with one text needs no variants")
+	assert.Contains(t, renderMethodsList([]bloblangSpec{same}, map[string]bool{"upper": true}), "partial$bloblang-methods/upper.adoc[")
+}

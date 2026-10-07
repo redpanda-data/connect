@@ -103,6 +103,48 @@ func withCategoryText(spec bloblangSpec) bloblangSpec {
 	return spec
 }
 
+// categoryVariants returns, for a method whose categories describe it
+// differently, one spec per category with that category's own description
+// and examples, keyed by category. It returns nil when the categories share
+// one text, so the method's single partial serves every category.
+func categoryVariants(spec bloblangSpec) map[string]bloblangSpec {
+	texts := map[string]bool{}
+	for _, c := range spec.Categories {
+		if c.Category == "" {
+			continue
+		}
+		texts[fmt.Sprintf("%q %v", strings.TrimSpace(c.Description), c.Examples)] = true
+	}
+	if len(texts) < 2 {
+		return nil
+	}
+	variants := map[string]bloblangSpec{}
+	for _, c := range spec.Categories {
+		if c.Category == "" {
+			continue
+		}
+		v := spec
+		if d := strings.TrimSpace(c.Description); d != "" {
+			v.Description = d
+		}
+		if len(c.Examples) > 0 {
+			v.Examples = c.Examples
+		}
+		variants[c.Category] = v
+	}
+	return variants
+}
+
+// categoryVariantName is the partial name of a method's variant for a
+// category, such as length-string_manipulation. Method names have no hyphens,
+// so a variant can't collide with a method.
+func categoryVariantName(method, category string) string {
+	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(category), "_"), "_")
+	return method + "-" + slug
+}
+
+var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
+
 func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	var b strings.Builder
 	b.WriteString(generatedBanner + "\n\n= " + htmlEscaper.Replace(spec.Name) + "\n")
@@ -226,9 +268,11 @@ var defaultCollator = collate.New(language.Und)
 // Methods that the Redpanda Cloud build doesn't allow are wrapped as in
 // renderFunctionsList.
 func renderMethodsList(specs []bloblangSpec, inCloud map[string]bool) string {
-	byCategory := map[string][]string{}
+	type entry struct{ name, partial string }
+	byCategory := map[string][]entry{}
 	var categories []string
 	for _, s := range visibleBloblang(specs) {
+		variants := categoryVariants(s)
 		for _, c := range s.Categories {
 			if c.Category == "" {
 				continue
@@ -236,7 +280,11 @@ func renderMethodsList(specs []bloblangSpec, inCloud map[string]bool) string {
 			if _, ok := byCategory[c.Category]; !ok {
 				categories = append(categories, c.Category)
 			}
-			byCategory[c.Category] = append(byCategory[c.Category], s.Name)
+			partial := s.Name
+			if _, ok := variants[c.Category]; ok {
+				partial = categoryVariantName(s.Name, c.Category)
+			}
+			byCategory[c.Category] = append(byCategory[c.Category], entry{s.Name, partial})
 		}
 	}
 	rank := func(c string) int {
@@ -259,13 +307,13 @@ func renderMethodsList(specs []bloblangSpec, inCloud map[string]bool) string {
 	b.WriteString(generatedBanner + "\n")
 	for _, c := range categories {
 		methods := byCategory[c]
-		sort.Strings(methods)
+		sort.Slice(methods, func(i, j int) bool { return methods[i].name < methods[j].name })
 		var section strings.Builder
 		section.WriteString("\n== " + toSentenceCase(c) + "\n")
 		anyInCloud := false
 		for _, m := range methods {
-			anyInCloud = anyInCloud || inCloud[m]
-			section.WriteString(selfManagedOnly("include::connect:components:partial$bloblang-methods/"+m+".adoc[leveloffset=+2]\n", inCloud[m]))
+			anyInCloud = anyInCloud || inCloud[m.name]
+			section.WriteString(selfManagedOnly("include::connect:components:partial$bloblang-methods/"+m.partial+".adoc[leveloffset=+2]\n", inCloud[m.name]))
 		}
 		if anyInCloud {
 			b.WriteString(section.String())

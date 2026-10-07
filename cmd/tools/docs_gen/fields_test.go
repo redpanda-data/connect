@@ -158,3 +158,27 @@ func TestFieldPathsForListsAndListRoots(t *testing.T) {
 	redpanda := fieldSpec{Name: "redpanda", Kind: "scalar", Children: []fieldSpec{{Name: "acks", Kind: "scalar", Type: "string"}}}
 	assert.Contains(t, renderFields(redpanda.Children, configObjectPrefix(redpanda)), "=== `acks`")
 }
+
+func TestFieldVersionsShowOnlyWhenNewerThanTheParent(t *testing.T) {
+	fields := []fieldSpec{
+		{Name: "oauth2", Type: "object", Version: "4.74.0", Children: []fieldSpec{
+			{Name: "scopes", Type: "string", Version: "3.45.0"},
+			{Name: "audience", Type: "string", Version: "4.80.0"},
+		}},
+		{Name: "old", Type: "string", Version: "4.10.0"},
+	}
+	out := renderFieldsSince(fields, "", "4.78.0")
+	assert.NotContains(t, out, "Requires version 3.45.0", "a child older than its parent")
+	assert.NotContains(t, out, "Requires version 4.74.0", "a field older than the component")
+	assert.NotContains(t, out, "Requires version 4.10.0")
+	assert.Contains(t, out, "Requires version 4.80.0", "a field newer than the component")
+	assert.True(t, versionLater("4.10.0", "4.9.3"))
+	assert.False(t, versionLater("4.9.3", "4.10.0"))
+	assert.True(t, versionLater("4.1.0", ""), "no ancestor version shows the field version")
+}
+
+func TestEmptyEnumOptionRendersAsQuotedEmptyString(t *testing.T) {
+	out := renderFields([]fieldSpec{{Name: "level", Type: "string", Options: []string{"INFO", ""}}}, "")
+	assert.Contains(t, out, "*Options*: `INFO`, `\"\"`")
+	assert.NotContains(t, out, ", ``")
+}
