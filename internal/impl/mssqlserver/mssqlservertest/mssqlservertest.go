@@ -233,7 +233,7 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 // cdcJobsMu makes the calls that change the CDC jobs in msdb run one at a time.
 //
 // The CDC jobs are the capture and cleanup SQL Server Agent jobs of each CDC database. openAndEnableCDC adds them, and
-// DROP DATABASE in dropDatabase removes them. When parallel tests on the shared container add jobs at the same time
+// DROP DATABASE in createDatabase removes them. When parallel tests on the shared container add jobs at the same time
 // for different databases, msdb.dbo.sp_add_job deadlocks (error 1205) and the call fails. SQL Server also runs these
 // calls one at a time internally, so parallel calls are not faster.
 var cdcJobsMu sync.Mutex
@@ -312,38 +312,13 @@ func testDatabaseName(t *testing.T) string {
 	return name[:maxLen-len(suffix)] + suffix
 }
 
-// dropDatabase drops the test database, so that its CDC capture job stops and does not load the shared container.
-// It disconnects all open sessions first. Errors are only logged, because the container is removed at the end anyway.
-func dropDatabase(t *testing.T, ctr *tcmssql.MSSQLServerContainer, dbName string) {
-	ctx := context.Background()
-	connStr, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
-	if err != nil {
-		t.Logf("drop database %q: %v", dbName, err)
-		return
-	}
-	db, err := sql.Open("mssql", connStr)
-	if err != nil {
-		t.Logf("drop database %q: %v", dbName, err)
-		return
-	}
-	defer db.Close()
-	q := fmt.Sprintf("ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [%s];", dbName, dbName)
-	cdcJobsMu.Lock()
-	defer cdcJobsMu.Unlock()
-	if _, err := db.ExecContext(ctx, q); err != nil {
-		t.Logf("drop database %q: %v", dbName, err)
-	}
-}
-
 // SetupTestWithMicrosoftSQLServerVersion creates a database for the test on the shared Microsoft SQL Server container,
 // enables CDC on it, and returns its connection string and a TestDB wrapper.
-// The database is dropped when the test completes.
 func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 
 	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
-	t.Cleanup(func() { dropDatabase(t, ctr, dbName) })
 
 	db, connectionString, err := openAndEnableCDC(t.Context(), ctr, dbName)
 	require.NoError(t, err)
@@ -365,8 +340,12 @@ func startMSSQLServerContainer(ctx context.Context) (*tcmssql.MSSQLServerContain
 	)
 }
 
-// createDatabase waits until the master database accepts connections, then creates dbName if it does not exist.
+// createDatabase waits until the master database accepts connections, then creates dbName.
 // An empty dbName only waits.
+//
+// Tests do not drop their database when they complete: dropping a CDC database takes about 3.5s under cdcJobsMu,
+// and the container is removed at the end of the package. A database with the same name exists only when the test
+// runs again in the same process (go test -count=N). createDatabase drops it first, so the test starts empty.
 func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) error {
 	masterConn, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
 	if err != nil {
@@ -390,12 +369,21 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 		if dbName == "" {
 			return true
 		}
-		query := fmt.Sprintf(`
-			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'%s')
-			BEGIN
-				CREATE DATABASE [%s];
-			END;`, dbName, dbName)
-		if _, openErr = masterDB.ExecContext(ctx, query); openErr != nil {
+		var exists bool
+		if openErr = masterDB.QueryRowContext(ctx, "SELECT CASE WHEN DB_ID(?) IS NULL THEN 0 ELSE 1 END", dbName).Scan(&exists); openErr != nil {
+			lastErr = openErr
+			return false
+		}
+		if exists {
+			cdcJobsMu.Lock()
+			_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf("ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [%s];", dbName, dbName))
+			cdcJobsMu.Unlock()
+			if openErr != nil {
+				lastErr = openErr
+				return false
+			}
+		}
+		if _, openErr = masterDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE [%s];", dbName)); openErr != nil {
 			lastErr = openErr
 			return false
 		}
@@ -498,13 +486,11 @@ func eventually(ctx context.Context, timeout, tick time.Duration, fn func() bool
 // MustSetupTestWithMicrosoftSQLServerVersion creates a database for the test on the shared Microsoft SQL Server
 // container, and returns its connection string and a raw sql.DB connected to it.
 // Unlike SetupTestWithMicrosoftSQLServerVersion, this does not enable CDC.
-// The database is dropped when the test completes.
 func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 
 	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
-	t.Cleanup(func() { dropDatabase(t, ctr, dbName) })
 
 	connectionString, err := ctr.ConnectionString(t.Context(), "database="+dbName, "encrypt=disable")
 	require.NoError(t, err)
