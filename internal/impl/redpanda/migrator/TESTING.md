@@ -307,6 +307,52 @@ Verifies that with `interval: 0s` only one retry loop runs, as `SyncLoop` is sta
   - The running loop stops once the subject syncs
   - A later call starts a new loop after the previous one stopped
 
+### `TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureKeepsMapping`
+
+Verifies that a registered schema keeps its ID mapping when syncing its subject compatibility fails.
+- Registers a subject with an explicit `FULL` compatibility at source
+- Puts a proxy in front of the destination that rejects setting the subject compatibility with 422
+- Syncs with `versions: latest` and `translate_ids: true`
+- Validates:
+  - Sync reports only the compatibility sync as failed
+  - Records encoded with the schema translate to its destination ID
+
+### `TestIntegrationSchemaRegistryMigratorSyncVersionsGoneDuringTraversal`
+
+Verifies that a subject whose versions disappear at the source during its traversal fails only that root.
+- Registers a subject with two versions and another subject at source, behind a proxy that returns 404 when the versions of the first are listed
+- Syncs with `versions: all` and `translate_ids: true`
+- Validates:
+  - Sync completes and reports only that root as failed, and it is the only root to retry
+  - The other subject is synced
+
+### `TestIntegrationSchemaRegistryMigratorSyncPrunesFailureDeletedAtSource`
+
+Verifies that a failed schema stops being rejected once the source no longer has it.
+- Registers two incompatible versions of a subject at source, and pre-registers only v1 at destination under the default `BACKWARD` compatibility
+- Syncs with `versions: all` and `translate_ids: true`, then soft-deletes v2 at source and syncs again
+- Validates:
+  - Records encoded with v2 are rejected after the first sync
+  - After the second sync, v2's ID is handled as an unknown ID and no subject is left to retry
+
+### `TestIntegrationSchemaRegistryMigratorSyncKeepsFailureStillAtSource`
+
+Verifies that a failed schema that no sync visits any more stays rejected while the source still has it.
+- Registers a subject whose v1 the destination rejects, and a second subject that references v1
+- Syncs with `versions: latest` and `translate_ids: true`, then deletes the referrer at source and syncs again
+- Validates:
+  - Records encoded with the referenced v1 are still rejected
+  - Records encoded with the deleted referrer are no longer rejected
+
+### `TestIntegrationSchemaRegistryMigratorSyncRetryKeepsOtherFailedRoots`
+
+Verifies that a retry of some failed roots keeps the failed roots outside it.
+- Registers two subjects that the destination rejects, and runs a full sync that fails both
+- Retries one subject, then relaxes its destination compatibility and retries it again
+- Validates:
+  - Both subjects are still to retry after the first retry
+  - Only the other subject is left to retry once the retried one syncs
+
 ## Schema Registry Fan-out Test (`migrator_schema_registry_fanout_integration_test.go`)
 
 ### `TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout`

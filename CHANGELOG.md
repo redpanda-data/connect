@@ -3,12 +3,6 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
-
-### Fixed
-
-- redpanda_migrator: A schema subject rejected by the destination registry no longer fails the output connect and blocks all topic migration; failed subjects are logged and retried. ([@rjustice-rp](https://github.com/rjustice-rp), [#4895](https://github.com/redpanda-data/connect/pull/4895))
-
 ## 4.112.0 - 2026-10-02
 
 ### Added

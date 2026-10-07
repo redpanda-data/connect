@@ -505,8 +505,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			metrics:       newSchemaRegistryMetrics(mgr.Metrics()),
 			log:           log,
 			knownSubjects: make(map[schemaSubjectVersion]struct{}),
-			knownSchemas:  make(map[int]schemaInfo),
-			failedSchemas: make(map[int]error),
+			schemas:       make(map[int]schemaState),
 
 			retryMinBackoff: 10 * time.Second,
 			retryMaxBackoff: 5 * time.Minute,

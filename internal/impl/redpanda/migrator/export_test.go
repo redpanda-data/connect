@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -84,8 +86,7 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 			Level: slog.LevelDebug,
 		}))),
 		knownSubjects: make(map[schemaSubjectVersion]struct{}),
-		knownSchemas:  make(map[int]schemaInfo),
-		failedSchemas: make(map[int]error),
+		schemas:       make(map[int]schemaState),
 
 		retryMinBackoff: 100 * time.Millisecond,
 		retryMaxBackoff: time.Second,
@@ -96,6 +97,22 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 // NewSchemaRegistryMigratorForTesting.
 func (m *schemaRegistryMigrator) SetMaxParallelHTTPRequests(n int) {
 	m.conf.MaxParallelHTTPRequests = n
+}
+
+// SyncRoots syncs only the given root subjects, as the retry loop does.
+func (m *schemaRegistryMigrator) SyncRoots(ctx context.Context, subjects ...string) error {
+	roots := make(map[string]struct{}, len(subjects))
+	for _, s := range subjects {
+		roots[s] = struct{}{}
+	}
+	return m.sync(ctx, roots)
+}
+
+// FailedRoots returns the root subjects that the retry loop would retry.
+func (m *schemaRegistryMigrator) FailedRoots() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return slices.Sorted(maps.Keys(m.failedRoots))
 }
 
 func (m *schemaRegistryMigrator) DfsSubjectSchemasFunc(
