@@ -307,7 +307,7 @@ a JSON object with a ` + "`message`" + ` key, whose value is written to the conn
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ` + "```" + `
 
-**` + "`" + replication.SnapshotSignalType + "`" + `** — backfills the named tables incrementally, alongside streaming. Requires
+**` + "`" + replication.SnapshotSignalType + "`" + `**: backfills the named tables incrementally, alongside streaming. Requires
 ` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotEnabled + "`" + `. The ` + "`data`" + ` column must contain a JSON object
 with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema`" + `, excluding the schema itself:
 
@@ -318,19 +318,19 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('` + replication.S
 Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
 an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
-by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
+by. A table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
 may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
 survive neither that nor the checkpoint.
 
-**Partitioned Tables**
+**Partitioned tables**
 
 Partitioned tables are not yet supported in incremental snapshotting unless their publication sets
 ` + "`publish_via_partition_root = true`" + `. PostgreSQL otherwise publishes their changes under the
 individual partitions' names while the snapshot backfill reads the parent, so updates to
 already-read snapshot rows cannot be detected.
 
-A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
-connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
+A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all (for
+example, because the connection resets), the stream restarts and the signal is read again, so the request is not lost.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
@@ -340,7 +340,7 @@ logged, so a repeated signal does not re-read it. To read one again, point
 
 Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
 omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
-under the default replica identity there is nothing in the message to recover it from — so
+under the default replica identity there is nothing in the message to recover it from, so
 ` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
 buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
 placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
@@ -352,7 +352,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
-				Description("Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `"+replication.SnapshotSignalType+"` row into `"+fieldSignalTableName+"` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.\n\nThe following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.").
+				Description("Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `"+replication.SnapshotSignalType+"` row into `"+fieldSignalTableName+"` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or, whatever the key type, when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.\n\nThe following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.").
 				ShortDescription("Backfill signalled tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
@@ -367,7 +367,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 				ShortDescription("How long the backfill waits before retrying a chunk read that failed transiently, such as from a lock conflict.").
 				Default(incsnapshot.DefaultIncSnapshotRetryCooldown.String()),
 			service.NewStringField(fieldIncSnapshotCheckpointCache).
-				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
+				Description("A xref:components:caches/about.adoc[cache resource] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).

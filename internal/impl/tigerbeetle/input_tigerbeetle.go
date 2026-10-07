@@ -152,13 +152,13 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				 		[ "field '`+fieldAddresses+`' must contain at least one address" ]
 					}`),
 			service.NewStringField(fieldProgressCache).
-				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] "+
+				Description("A xref:components:caches/about.adoc[cache resource] "+
 					"used to track progress by storing the last acknowledged timestamp.\n"+
 					"This allows Redpanda Connect to resume from the latest delivered event "+
 					"upon restart.").
 				ShortDescription("Cache resource tracking progress by storing the last acknowledged timestamp."),
 			service.NewStringField(fieldRateLimit).
-				Description("An optional https://docs.redpanda.com/redpanda-connect/components/rate_limits/about/[rate limit^] "+
+				Description("An optional xref:components:rate_limits/about.adoc[rate limit] "+
 					"to throttle the number of **requests** made to TigerBeetle.").
 				ShortDescription("An optional rate limit resource to throttle requests made to TigerBeetle.").
 				Default(""),
