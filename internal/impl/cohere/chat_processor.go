@@ -169,7 +169,7 @@ Redpanda recommends adding a value for this field or `+"`"+`temperature`+"`"+`, 
 			service.NewStringListField(ccpFieldStop).
 				Optional().
 				Advanced().
-				Description("Specify up to four sequences to stop the API from generating further tokens."),
+				Description("Specify up to five sequences to stop the API from generating further tokens."),
 			service.NewIntField(ccpFieldMaxToolCalls).Description("The maximum number of tool calls the model can perform.").Default(10),
 			service.NewObjectListField(
 				ccpFieldTools,
