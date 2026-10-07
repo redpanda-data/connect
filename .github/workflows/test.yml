@@ -74,10 +74,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+      # Use a separate cache key. With the default key (root go.sum), this job saves first, and test and
+      # golangci-lint then restore a cache without the root module's build output.
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: 'benchmarking/aws/go.mod'
+          cache-dependency-path: 'benchmarking/aws/**/go.sum'
 
       - name: Deps
         run: |
