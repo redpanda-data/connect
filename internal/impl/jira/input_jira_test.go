@@ -1128,16 +1128,35 @@ jira:
 // last acked page instead of the beginning of the backfill. The write and the
 // next fetch happen on the same goroutine, so observing the cache from the
 // page-2 handler is deterministic.
+//
+// After page 2 the input polls again at once. The mock must apply the cursor
+// predicate to that poll, as Jira does. If it serves page 1 again, PROJ-1 is
+// emitted again (it was pruned from the seen set), the input requests page 2
+// again, and that request overwrites the page-1 checkpoint captured here.
 func TestCursor_PersistedAfterEachAckedPage(t *testing.T) {
 	mock := newMockJiraServer(t)
 	cacheDir := t.TempDir()
 	var midRunCursor atomic.Value
+	var page2Calls atomic.Int32
+	repollJQL := make(chan string, 1)
 	mock.handler = func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
 			_, _ = w.Write([]byte(`{}`))
 		case "/rest/api/3/search/jql":
+			jql := r.URL.Query().Get("jql")
+			if r.URL.Query().Get("nextPageToken") == "" && strings.Contains(jql, "updated >=") {
+				// Both issues are older than the cursor or already seen, so
+				// an empty page stands in for Jira's reply.
+				select {
+				case repollJQL <- jql:
+				default:
+				}
+				_, _ = w.Write([]byte(`{"issues":[]}`))
+				return
+			}
 			if r.URL.Query().Get("nextPageToken") == "page2" {
+				page2Calls.Add(1)
 				var content strings.Builder
 				entries, _ := os.ReadDir(cacheDir)
 				for _, e := range entries {
@@ -1192,9 +1211,19 @@ jira:
 			t.Fatalf("only got %v", keys)
 		}
 	}
+	// Wait for the poll after page 2, so the assertions below see the state
+	// after the full run and not a state that a late request can change.
+	var jql string
+	select {
+	case jql = <-repollJQL:
+	case <-ctx.Done():
+		t.Fatal("no poll after page 2")
+	}
 	require.NoError(t, s.StopWithin(2*time.Second))
 
 	assert.Equal(t, []string{"PROJ-1", "PROJ-2"}, keys)
+	assert.Contains(t, jql, `updated >= "2026-06-01 10:05"`, "poll after page 2 must use page 2's max updated")
+	assert.Equal(t, int32(1), page2Calls.Load(), "page 2 must be requested once")
 	cur, _ := midRunCursor.Load().(string)
 	require.NotEmpty(t, cur, "cursor must be on disk before the page-2 request is issued")
 	assert.Contains(t, cur, "2026-06-01T10:00:00Z", "mid-run checkpoint must carry page 1's max updated")
