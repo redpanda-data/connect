@@ -397,6 +397,33 @@ credentials:
 // the default configuration fails to negotiate and that explicitly opting in
 // to the algorithm succeeds.
 func TestSSHAlgorithmsHandshake(t *testing.T) {
+	// loopbackConnPair returns both ends of a loopback TCP connection. net.Pipe is
+	// unsuitable for SSH handshakes because it is unbuffered and both peers send
+	// their version banner before reading.
+	loopbackConnPair := func(t *testing.T) (client, server net.Conn) {
+		t.Helper()
+
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer l.Close()
+
+		accepted := make(chan net.Conn, 1)
+		go func() {
+			c, err := l.Accept()
+			if err != nil {
+				close(accepted)
+				return
+			}
+			accepted <- c
+		}()
+
+		client, err = net.Dial("tcp", l.Addr().String())
+		require.NoError(t, err)
+		server, ok := <-accepted
+		require.True(t, ok, "accepting loopback connection")
+		return client, server
+	}
+
 	spec := service.NewConfigSpec().Fields(connectionFields()...)
 	env := service.NewEnvironment()
 
@@ -476,31 +503,4 @@ credentials:
 `, kex)))
 		})
 	}
-}
-
-// loopbackConnPair returns both ends of a loopback TCP connection. net.Pipe is
-// unsuitable for SSH handshakes because it is unbuffered and both peers send
-// their version banner before reading.
-func loopbackConnPair(t *testing.T) (client, server net.Conn) {
-	t.Helper()
-
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer l.Close()
-
-	accepted := make(chan net.Conn, 1)
-	go func() {
-		c, err := l.Accept()
-		if err != nil {
-			close(accepted)
-			return
-		}
-		accepted <- c
-	}()
-
-	client, err = net.Dial("tcp", l.Addr().String())
-	require.NoError(t, err)
-	server, ok := <-accepted
-	require.True(t, ok, "accepting loopback connection")
-	return client, server
 }
