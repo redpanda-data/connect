@@ -54,7 +54,7 @@ func processorSpec() *service.ConfigSpec {
 			service.NewInterpolatedStringField(qpFieldCollectionName).
 				Description("The name of the Qdrant collection you want to query."),
 			service.NewBloblangField(qpFieldVectorMapping).
-				Description("A mapping to extract search vectors from the returned document.").
+				Description("A mapping that extracts the search vector from the input message. The processor uses this vector to query the collection.").
 				Example(`root = [1.2, 0.5, 0.76]`).
 				Example(`root = this.vector`).
 				Example(`root = [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]`).
