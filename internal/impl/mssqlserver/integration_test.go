@@ -357,6 +357,7 @@ file:
 
 func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -372,8 +373,7 @@ func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 		db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 	}
 
-	// wait for changes to propagate to change tables
-	time.Sleep(5 * time.Second)
+	db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 	var (
 		outBatches   []string
@@ -438,6 +438,7 @@ microsoft_sql_server_cdc:
 // snapshot must re-run on restart. See CON-504.
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAckBarrier(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.barrier", "CREATE TABLE dbo.barrier (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -557,6 +558,7 @@ microsoft_sql_server_cdc:
 // fully-published transaction boundary. See CON-504.
 func TestIntegration_MicrosoftSQLServerCDC_TransactionSplitAcrossBatches(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.splittx", "CREATE TABLE dbo.splittx (id INT IDENTITY(1,1) PRIMARY KEY, val INT NOT NULL);"))
@@ -668,6 +670,7 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create table
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -755,6 +758,7 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create table
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -828,6 +832,7 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	q := `
@@ -1082,6 +1087,7 @@ microsoft_sql_server_cdc:
 // change rows share one commit LSN.
 func TestIntegration_MicrosoftSQLServerCDC_MessageMetadata(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.schema_meta_test", `
