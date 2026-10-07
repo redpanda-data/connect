@@ -35,9 +35,11 @@ func (w Watermark) OpensAt(xid uint32) bool {
 }
 
 // ClosesAt reports whether xid follows every transaction in flight here:
-// anything above Xmax started later.
+// Xmax is the first id not yet assigned, so anything at or above it started
+// later. Including Xmax matters on a quiet database, where the next heartbeat
+// is assigned exactly Xmax and would otherwise wait for the one after.
 func (w Watermark) ClosesAt(xid uint32) bool {
-	return normalizeXID(xid, w.Xmax) > w.Xmax
+	return normalizeXID(xid, w.Xmax) >= w.Xmax
 }
 
 // Quiesced reports whether nothing was in flight: equal bounds leave no id
