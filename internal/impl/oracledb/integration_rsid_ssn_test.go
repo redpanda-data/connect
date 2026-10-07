@@ -10,7 +10,6 @@ package oracledb_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,7 +22,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange verifies that row changes
@@ -36,6 +34,7 @@ import (
 // not break what (rs_id, ssn) already told apart.
 func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	const createTableSQL = "CREATE TABLE %s (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"
@@ -57,7 +56,7 @@ func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 	}{
 		{
 			name:        "single-row INSERTs",
-			table:       "testdb.rsid_insert",
+			table:       db.Schema + ".rsid_insert",
 			initialRows: 0,
 			dml: func(table string) {
 				for range rows {
@@ -68,14 +67,14 @@ func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 		},
 		{
 			name:        "bulk UPDATE",
-			table:       "testdb.rsid_update",
+			table:       db.Schema + ".rsid_update",
 			initialRows: rows,
 			dml:         func(table string) { db.MustExec("UPDATE " + table + " SET val = 2") },
 			wantChanges: rows,
 		},
 		{
 			name:        "bulk DELETE",
-			table:       "testdb.rsid_delete",
+			table:       db.Schema + ".rsid_delete",
 			initialRows: rows,
 			dml:         func(table string) { db.MustExec("DELETE FROM " + table) },
 			wantChanges: rows,
@@ -94,9 +93,33 @@ func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 		totalChanges += tc.wantChanges
 	}
 
-	// snapshot_mode is none, so the stream only reports DML issued after this point.
+	// snapshot_mode is none, so the stream only reports DML issued after the
+	// input starts streaming. StartPipelineAndWaitForStreaming returns only then.
 	// The buffer holds every expected message so a failed subtest cannot block the stream.
-	msgChan := startTestCDCStream(t, connStr, totalChanges, includes...)
+	msgChan := make(chan *service.Message, totalChanges)
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + strings.Join(includes, `", "`) + `"]
+  batching:
+    count: 1`
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, func(ctx context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			select {
+			case msgChan <- msg:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	})
+	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,50 +130,6 @@ func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
 				"every row change must have a distinct (rs_id, ssn, row_seq) triple: %d row changes, %d distinct triples", len(msgs), len(groups))
 		})
 	}
-}
-
-func startTestCDCStream(t *testing.T, connStr string, buffer int, tableIncludes ...string) <-chan *service.Message {
-	t.Helper()
-	msgChan := make(chan *service.Message, buffer)
-	cfg := `
-oracledb_cdc:
-  connection_string: ` + connStr + `
-  snapshot_mode: none
-  logminer:
-    scn_window_size: 20000
-    min_scn_window_size: 0
-    backoff_interval: 1s
-  include: ["` + strings.Join(tableIncludes, `", "`) + `"]
-  batching:
-    count: 1`
-
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(ctx context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			select {
-			case msgChan <- msg:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-		return nil
-	}))
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	t.Cleanup(func() { require.NoError(t, stream.StopWithin(10*time.Second)) })
-	time.Sleep(10 * time.Second) // wait for miner to start before DML
-
-	return msgChan
 }
 
 // collectN waits for n messages and fails the test if they do not all arrive in time.
