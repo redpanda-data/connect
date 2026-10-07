@@ -16,6 +16,9 @@ package main
 
 import (
 	"encoding/json"
+	"go/token"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -132,12 +135,13 @@ func TestRenderCatalog(t *testing.T) {
 	assert.Contains(t, out, `"categories": []`, "empty lists stay arrays, not null")
 }
 
-// TestPlatformsFromBuilds runs the real standard build and checks the
-// components that build constraints are known to gate. It needs a Go
-// toolchain and compiles Redpanda Connect, so -short skips it.
+// TestPlatformsFromBuilds lists the real standard and docs_gen builds with go
+// list and checks the components that build constraints are known to gate.
+// It needs a Go toolchain, so -short skips it. The docs task runs it with
+// x_benthos_extra, where it checks the exact cgo-only list.
 func TestPlatformsFromBuilds(t *testing.T) {
 	if testing.Short() {
-		t.Skip("compiles a CGO_ENABLED=0 build")
+		t.Skip("runs go list on the real builds")
 	}
 	raw, err := marshalSchema(schema.Standard("", "").MarshalJSONV0())
 	require.NoError(t, err)
@@ -153,4 +157,40 @@ func TestPlatformsFromBuilds(t *testing.T) {
 	if builtWithAllComponents {
 		assert.Equal(t, []string{"inputs/tigerbeetle_cdc", "inputs/zmq4", "outputs/zmq4", "processors/ffi"}, plat.cgoOnlyKeys())
 	}
+}
+
+func TestFileRegistrations(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, src string) string {
+		p := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(p, []byte("package x\n\n"+src), 0o644))
+		return p
+	}
+	literal := write("a.go", `func init() { service.MustRegisterBatchInput("zmq4", nil, nil) }`)
+	constant := write("b.go", `const outName = "zmq4"
+
+func init() { service.MustRegisterBatchOutput(outName, nil, nil) }`)
+	template := write("c.go", `func init() { service.MustRegisterTemplateYAML(string(tmpl)) }`)
+	helper := write("d.go", `func init() { registerAll() }`)
+	importsOnly := write("e.go", `import _ "example.com/x"`)
+	files := map[string]bool{literal: true, constant: true, template: true, helper: true, importsOnly: true}
+	fset := token.NewFileSet()
+
+	got, err := fileRegistrations(literal, files, fset)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"inputs/zmq4"}, got)
+
+	got, err = fileRegistrations(constant, files, fset)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"outputs/zmq4"}, got)
+
+	_, err = fileRegistrations(template, files, fset)
+	require.ErrorContains(t, err, "MustRegisterTemplateYAML", "a kind docs_gen can't read is an error, not a gap")
+
+	_, err = fileRegistrations(helper, files, fset)
+	require.ErrorContains(t, err, "init function", "an init that registers nothing visible is an error")
+
+	got, err = fileRegistrations(importsOnly, files, fset)
+	require.NoError(t, err)
+	assert.Empty(t, got, "a file that only imports components registers nothing itself")
 }

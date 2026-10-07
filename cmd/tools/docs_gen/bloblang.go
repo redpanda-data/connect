@@ -67,8 +67,6 @@ func renderBloblangExample(ex bloblangExample) string {
 	return leadIn + "[,bloblang]\n----\n" + strings.TrimFunc(code.String(), jsIsSpace) + "\n----\n"
 }
 
-// renderBloblangSpec renders the reference partial for one function or
-// method. kind is "function" or "method".
 // withCategoryText returns a method spec that uses the text its categories
 // give it, as the benthos docs did: the first category description replaces
 // the method description. The examples are those of every category, followed
@@ -145,6 +143,8 @@ func categoryVariantName(method, category string) string {
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
+// renderBloblangSpec renders the reference partial for one function or
+// method. kind is "function" or "method".
 func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	var b strings.Builder
 	b.WriteString(generatedBanner + "\n\n= " + htmlEscaper.Replace(spec.Name) + "\n")

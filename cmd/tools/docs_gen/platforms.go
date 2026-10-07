@@ -123,6 +123,11 @@ var registerGroups = map[string]string{
 // docs_gen build registers in Go files a standard build (no cgo, no tags)
 // doesn't compile. It reads each name from the service.MustRegister... call
 // in those files, resolving a constant name within its package.
+//
+// Anything it can't read is an error rather than a silent gap: a register
+// call of a kind it doesn't know (such as a template, whose name is in its
+// YAML), or an init function in such a file that registers nothing it can
+// see (such as one that calls a register helper in a shared file).
 func cgoOnlyComponents() (map[string]bool, error) {
 	env, flags := docsGenBuildEnv()
 	full, err := buildFiles(env, flags...)
@@ -133,45 +138,86 @@ func cgoOnlyComponents() (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Only this module and benthos register components. Other dependencies
+	// can also have files that only cgo builds compile, such as a macOS
+	// keychain backend.
+	modDirs, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/redpanda-data/connect/v4", "github.com/redpanda-data/benthos/v4").Output()
+	if err != nil {
+		return nil, fmt.Errorf("finding the module directories: %w", err)
+	}
+	var mods []string
+	for d := range strings.FieldsSeq(string(modDirs)) {
+		mods = append(mods, d+string(filepath.Separator))
+	}
+	inModule := func(path string) bool {
+		for _, m := range mods {
+			if strings.HasPrefix(path, m) {
+				return true
+			}
+		}
+		return false
+	}
 	keys := map[string]bool{}
 	fset := token.NewFileSet()
 	for path := range full {
-		if standard[path] {
+		if standard[path] || !inModule(path) {
 			continue
 		}
-		f, err := parser.ParseFile(fset, path, nil, 0)
+		found, err := fileRegistrations(path, full, fset)
 		if err != nil {
 			return nil, err
 		}
-		var walkErr error
-		ast.Inspect(f, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok || len(call.Args) == 0 || walkErr != nil {
-				return true
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "service" {
-				return true
-			}
-			kind := strings.TrimPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register")
-			group, ok := registerGroups[kind]
-			if !ok || !strings.Contains(sel.Sel.Name, "Register") {
-				return true
-			}
-			name, err := registeredName(call.Args[0], filepath.Dir(path), full, fset)
-			if err != nil {
-				walkErr = fmt.Errorf("%v: %w", fset.Position(call.Pos()), err)
-				return false
-			}
-			keys[componentKey(group, name)] = true
-			return true
-		})
-		if walkErr != nil {
-			return nil, walkErr
+		for _, k := range found {
+			keys[k] = true
 		}
+	}
+	return keys, nil
+}
+
+// fileRegistrations returns the components, as componentKey values, that the
+// file at path registers, or an error when it registers something it can't
+// read. files is the docs_gen build's file set, for resolving constants.
+func fileRegistrations(path string, files map[string]bool, fset *token.FileSet) ([]string, error) {
+	f, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	var walkErr error
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 || walkErr != nil {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "service" {
+			return true
+		}
+		if !strings.HasPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register") {
+			return true
+		}
+		kind := strings.TrimPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register")
+		group, ok := registerGroups[kind]
+		if !ok {
+			walkErr = fmt.Errorf("%v: service.%v registers a component that only cgo builds have, but docs_gen can't read its name; add the kind to registerGroups", fset.Position(call.Pos()), sel.Sel.Name)
+			return false
+		}
+		name, err := registeredName(call.Args[0], filepath.Dir(path), files, fset)
+		if err != nil {
+			walkErr = fmt.Errorf("%v: %w", fset.Position(call.Pos()), err)
+			return false
+		}
+		keys = append(keys, componentKey(group, name))
+		return true
+	})
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	if len(keys) == 0 && hasInit(f) {
+		return nil, fmt.Errorf("%v: this file only cgo builds compile has an init function, but docs_gen finds no component registration in it; register the component in this file, or teach cgoOnlyComponents where it is", path)
 	}
 	return keys, nil
 }
@@ -474,4 +520,14 @@ func renderCgoOnlyList(full *fullSchema, plat platformSet) string {
 	}
 	sort.Strings(items)
 	return availabilityBanner + "\n\n" + strings.Join(items, "\n") + "\n"
+}
+
+// hasInit reports whether f declares an init function.
+func hasInit(f *ast.File) bool {
+	for _, d := range f.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.Name == "init" {
+			return true
+		}
+	}
+	return false
 }
