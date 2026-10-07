@@ -8,11 +8,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        free_disk: [sync, none, background]
+        os: [ubuntu-24.04, ubuntu-26.04]
+        free_disk: [sync, none]
     env:
       CGO_ENABLED: 1
     steps:
@@ -22,6 +23,7 @@ jobs:
           df -h / /mnt || true
           docker system df
           echo "nproc=$(nproc)"
+          lsblk -o NAME,SIZE,TYPE,MOUNTPOINT || true
           nohup bash -c 'while true; do echo "$(date +%s) $(df -B1 --output=used,avail / | tail -1)" >> /tmp/disk-samples.txt; sleep 2; done' >/dev/null 2>&1 &
 
       - name: Size of target directories
@@ -30,6 +32,7 @@ jobs:
           for d in /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell; do
             s=$(date +%s.%N); sz=$(sudo du -sh "$d" 2>/dev/null | cut -f1); e=$(date +%s.%N)
             echo "du $d size=${sz:-absent} time=$(echo "$e - $s" | bc)s"
+            if [ -e "$d" ]; then echo "files $d count=$(sudo find "$d" | wc -l)"; fi
           done
 
       - name: Free disk space (sync, timed)
