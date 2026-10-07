@@ -26,12 +26,12 @@ To preview your changes in a docs build, point the docs build at your generated 
 
 ## What lives where
 
-| Content | Repo | Owner |
-|---|---|---|
-| Field reference, examples, metadata, and descriptions (`modules/components/partials/`) | connect | Generated from specs |
-| Common and Advanced config snippets (`modules/components/examples/`) | connect | Generated from specs |
-| Bloblang function and method reference (`modules/components/partials/bloblang-*`) | connect | Generated from specs |
-| Component pages, guides, cookbooks, navigation, and the component catalog | rp-connect-docs | Docs team |
+| Content                                                                                | Repo            | Owner                |
+|----------------------------------------------------------------------------------------|-----------------|----------------------|
+| Field reference, examples, metadata, and descriptions (`modules/components/partials/`) | connect         | Generated from specs |
+| Common and Advanced config snippets (`modules/components/examples/`)                   | connect         | Generated from specs |
+| Bloblang function and method reference (`modules/components/partials/bloblang-*`)      | connect         | Generated from specs |
+| Component pages, guides, cookbooks, navigation, and the component catalog              | rp-connect-docs | Docs team            |
 
 Each component page in rp-connect-docs is written by hand and includes the generated partials. Keeping the reference data in the specs means it changes in the same pull request as the code it describes. Keeping the pages in rp-connect-docs lets writers add context, such as prerequisites, tutorials, and Redpanda Cloud notes, without editing Go.
 

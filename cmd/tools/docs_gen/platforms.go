@@ -147,9 +147,9 @@ func (p platformSet) get(group, name string) componentPlatform {
 // that no Redpanda Cloud pipeline can use. Links to anything else, including
 // pages that aren't components, are left to the Cloud docs build to check.
 func (p platformSet) cloudExcluded(typeDir, name string) bool {
-	group := typeDir
-	if typeDir == "rate_limits" {
-		group = "rate-limits"
+	group, ok := keyByTypeDir[typeDir]
+	if !ok {
+		return false
 	}
 	k := componentKey(group, name)
 	return p.documented[k] && !p.byKey[k].inCloud()
@@ -177,14 +177,6 @@ func marshalSchema(raw []byte, err error) (*fullSchema, error) {
 		return nil, err
 	}
 	return parseFullSchema(raw)
-}
-
-// pluginTypes maps a schema key to the type name that internal/plugins/info.csv
-// uses.
-var pluginTypes = map[string]plugins.TypeName{
-	"buffers": plugins.TypeBuffer, "caches": plugins.TypeCache, "inputs": plugins.TypeInput,
-	"outputs": plugins.TypeOutput, "processors": plugins.TypeProcessor, "rate-limits": plugins.TypeRateLimit,
-	"metrics": plugins.TypeMetric, "tracers": plugins.TypeTracer, "scanners": plugins.TypeScanner,
 }
 
 type catalogEntry struct {

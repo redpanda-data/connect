@@ -26,6 +26,8 @@ import (
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
+
+	"github.com/redpanda-data/connect/v4/internal/plugins"
 )
 
 // The types below mirror the JSON produced by ConfigSchema.MarshalJSONV0 (the
@@ -123,9 +125,51 @@ type fullSchema struct {
 	BloblangMethods   []bloblangSpec
 }
 
-var componentKeys = []string{
-	"buffers", "caches", "inputs", "outputs", "processors",
-	"rate-limits", "metrics", "tracers", "scanners",
+// componentKinds lists the component types the docs cover. Every per-type
+// list and lookup in this package is built from it, so adding a type here is
+// the only change a new type needs.
+var componentKinds = []struct {
+	key      string           // schema group key, such as "rate-limits"
+	typeDir  string           // directory of the pages and partials, such as "rate_limits"
+	config   string           // config type name, such as "rate_limit"
+	plugin   plugins.TypeName // type name in internal/plugins/info.csv
+	hasLabel bool             // takes a `label` field, as in benthos docs.ReservedFieldsByType
+}{
+	{"buffers", "buffers", "buffer", plugins.TypeBuffer, false},
+	{"caches", "caches", "cache", plugins.TypeCache, true},
+	{"inputs", "inputs", "input", plugins.TypeInput, true},
+	{"outputs", "outputs", "output", plugins.TypeOutput, true},
+	{"processors", "processors", "processor", plugins.TypeProcessor, true},
+	{"rate-limits", "rate_limits", "rate_limit", plugins.TypeRateLimit, true},
+	{"metrics", "metrics", "metrics", plugins.TypeMetric, false},
+	{"tracers", "tracers", "tracer", plugins.TypeTracer, false},
+	{"scanners", "scanners", "scanner", plugins.TypeScanner, false},
+}
+
+var (
+	componentKeys  []string                        // schema group keys, in componentKinds order
+	typeDirByKey   = map[string]string{}           // schema group key to page directory
+	keyByTypeDir   = map[string]string{}           // page directory to schema group key
+	pluginTypes    = map[string]plugins.TypeName{} // schema group key to info.csv type
+	typesWithLabel = map[string]bool{}             // config types that take a `label` field
+	componentTypes = map[string]bool{}             // config types whose value is a component config
+	componentXref  *regexp.Regexp                  // xrefs to component pages
+)
+
+func init() {
+	var dirs []string
+	for _, k := range componentKinds {
+		componentKeys = append(componentKeys, k.key)
+		typeDirByKey[k.key] = k.typeDir
+		keyByTypeDir[k.typeDir] = k.key
+		pluginTypes[k.key] = k.plugin
+		componentTypes[k.config] = true
+		if k.hasLabel {
+			typesWithLabel[k.config] = true
+		}
+		dirs = append(dirs, regexp.QuoteMeta(k.typeDir))
+	}
+	componentXref = regexp.MustCompile(`xref:(?:components:)?(` + strings.Join(dirs, "|") + `)/([a-z0-9_]+)\.adoc(?:#[^\[\s]*)?\[([^\]]*)\]`)
 }
 
 func parseFullSchema(raw []byte) (*fullSchema, error) {
@@ -167,8 +211,8 @@ func decodeValue(raw json.RawMessage) any {
 // pageTypeDir maps a schema key to the directory component pages live in,
 // which is also where the description and metadata partials are written.
 func pageTypeDir(key string) string {
-	if key == "rate-limits" {
-		return "rate_limits"
+	if d, ok := typeDirByKey[key]; ok {
+		return d
 	}
 	return key
 }

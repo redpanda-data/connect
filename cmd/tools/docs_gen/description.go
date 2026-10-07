@@ -409,8 +409,6 @@ func metaSummary(summary string) string {
 	return strings.TrimFunc(first, jsIsSpace)
 }
 
-var componentXref = regexp.MustCompile(`xref:(?:components:)?(inputs|outputs|processors|caches|rate_limits|buffers|metrics|tracers|scanners)/([a-z0-9_]+)\.adoc(?:#[^\[\s]*)?\[([^\]]*)\]`)
-
 // cloudGuardXrefs keeps links to components that Redpanda Cloud doesn't
 // include out of the Cloud docs, which include the same partials. Each
 // paragraph with such a link renders as is outside Cloud, and in Cloud with

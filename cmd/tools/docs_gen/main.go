@@ -66,11 +66,6 @@ var generatedDirs = []string{
 	"examples/advanced",
 }
 
-var pageTypeDirs = map[string]bool{
-	"inputs": true, "outputs": true, "processors": true, "caches": true, "rate_limits": true,
-	"buffers": true, "metrics": true, "scanners": true, "tracers": true,
-}
-
 func main() {
 	root := "./docs/modules/components"
 	flag.StringVar(&root, "dir", root, "The components module directory to write docs to")
@@ -90,41 +85,38 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("finding the components that only cgo builds include: %w", err))
 	}
-	if builtWithAllComponents && len(plat.cgoOnlyKeys()) == 0 {
-		// x_benthos_extra exists to add components, so a full build that finds
-		// none means the standard build didn't run the way it should.
-		panic("found no cgo-only components in a build with x_benthos_extra; check that componentlist runs with CGO_ENABLED=0 and no build tags")
-	}
 	fmt.Printf("Components that only cgo builds include: %v\n", strings.Join(plat.cgoOnlyKeys(), ", "))
 
-	// Only a build with every component can tell which files are stale. Two
-	// build constraints add components: x_benthos_extra adds zmq4 (which also
-	// needs cgo and libzmq) and ffi (pure Go), and cgo adds tigerbeetle_cdc. A
-	// tagged build can't compile without cgo, so builtWithAllComponents also
-	// implies cgo. A partial build would delete the docs of the missing
-	// components, so it keeps existing files instead.
+	// Only a build with every component can tell which files are stale, and
+	// only it can write the component catalog and the cgo-only list. Two build
+	// constraints add components: x_benthos_extra adds zmq4 (which also needs
+	// cgo and libzmq) and ffi (pure Go), and cgo adds tigerbeetle_cdc. A tagged
+	// build can't compile without cgo, so builtWithAllComponents also implies
+	// cgo. A partial build would delete the docs of the missing components, so
+	// it keeps existing files instead.
+	w := writer{root: root, platforms: plat}
 	if builtWithAllComponents {
+		// x_benthos_extra exists to add components, so a full build that finds
+		// none means the standard build didn't run the way it should.
+		if len(plat.cgoOnlyKeys()) == 0 {
+			panic("found no cgo-only components in a build with x_benthos_extra; check that componentlist runs with CGO_ENABLED=0 and no build tags")
+		}
 		for _, d := range generatedDirs {
 			if err := os.RemoveAll(filepath.Join(root, d)); err != nil {
 				panic(err)
 			}
 		}
+		w.platformFiles(full)
 	} else {
-		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping existing files, so docs for removed components are not pruned. CI runs `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`.")
+		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping existing files, so docs for removed components are not pruned, and keeping the existing component catalog and cgo-only list, which need every component. CI runs `CGO_ENABLED=1 TAGS=x_benthos_extra task docs`.")
 	}
 
-	w := writer{root: root, platforms: plat}
 	for _, g := range full.Groups {
 		for _, c := range g.Components {
 			if c.Name != "" {
 				w.component(g.Key, c)
 			}
 		}
-	}
-	if builtWithAllComponents {
-		w.platformFiles(full)
-	} else {
-		fmt.Fprintln(os.Stderr, "Built without x_benthos_extra: keeping the existing component catalog and cgo-only list, which need every component.")
 	}
 	for _, f := range visibleBloblang(full.BloblangFunctions) {
 		w.write(filepath.Join("partials/bloblang-functions", f.Name+".adoc"), renderBloblangSpec(f, "function"))
@@ -183,9 +175,6 @@ func (w *writer) component(key string, c componentSpec) {
 	if len(c.Config.Children) > 0 {
 		w.write(filepath.Join("partials/fields", key, file),
 			generatedBanner+"\n\n== Fields\n\n"+renderFields(c.Config.Children, "")+"\n")
-	}
-	if !pageTypeDirs[typeDir] {
-		return
 	}
 	if examples := renderComponentExamples(c.Examples); strings.TrimSpace(examples) != "" {
 		w.write(filepath.Join("partials/examples", key, file),

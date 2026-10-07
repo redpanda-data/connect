@@ -245,8 +245,10 @@ func quoteListScalar(item any) string {
 	return s
 }
 
+// doubleQuote renders s as a YAML double-quoted scalar. A JSON string is one,
+// and jsonStringify also escapes control characters.
 func doubleQuote(s string) string {
-	return `"` + strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`) + `"`
+	return jsonStringify(s)
 }
 
 // renderYAMLList renders a list whose items include objects.
@@ -278,7 +280,7 @@ func quoteSpecialScalar(s string) string {
 		return yamlQuotedString(s, "    ", false)
 	}
 	if s == "*" || yamlSpecialNQ.MatchString(s) {
-		return `"` + s + `"`
+		return doubleQuote(s)
 	}
 	return s
 }
@@ -303,12 +305,12 @@ func jsIsSpace(r rune) bool {
 }
 
 // The Common and Advanced config snippets.
-
-// typesWithLabel are the component types that take a `label` field, as in
-// benthos docs.ReservedFieldsByType.
-var typesWithLabel = map[string]bool{
-	"input": true, "output": true, "processor": true, "cache": true, "rate_limit": true,
-}
+//
+// Benthos renders these snippets too (ConfigView.TemplateData). They are built
+// here, together with yaml.go, to reproduce the formatting of the docs
+// pipeline this generator replaces, so pages don't reflow during the
+// migration. Once rp-connect-docs reads the generated docs, switch to the
+// benthos snippets: https://github.com/redpanda-data/connect/issues/4924
 
 // snippets writes the Common and Advanced config snippets for a component.
 // The group key only decides the directory. Each snippet nests the config
@@ -341,13 +343,6 @@ func buildConfigYAML(root, name string, conf fieldSpec, includeAdvanced bool) st
 	}
 	lines = append(lines, configNamed(name, conf, 2, includeAdvanced)...)
 	return strings.Join(lines, "\n") + "\n"
-}
-
-// componentTypes are config types whose value is itself a component config,
-// such as reject_errored, which wraps an output.
-var componentTypes = map[string]bool{
-	"input": true, "output": true, "processor": true, "cache": true, "rate_limit": true,
-	"buffer": true, "metrics": true, "tracer": true, "scanner": true,
 }
 
 // buildValueConfigYAML renders the config snippet for a component whose config
