@@ -25,9 +25,14 @@ import (
 
 // RedpandaInputDescription returns the description shared by the Redpanda
 // inputs that consume with the franz-go readers. The fallbackExample is a YAML
-// config that routes failed deliveries to a DLQ topic, and batchTuningFields
-// names the config fields that tune batch sizes.
-func RedpandaInputDescription(fallbackExample, batchTuningFields string) string {
+// config that routes failed deliveries to a DLQ topic, batchTuningFields names
+// the config fields that tune batch sizes, and orderingNote, when not empty,
+// is a paragraph added to the Ordering section for an input whose ordering
+// can be turned off.
+func RedpandaInputDescription(fallbackExample, batchTuningFields, orderingNote string) string {
+	if orderingNote != "" {
+		orderingNote += "\n\n"
+	}
 	return `
 When a consumer group is specified this input consumes one or more topics, and partitions automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified, topics can either be consumed in their entirety or with explicit partitions.
 
@@ -39,7 +44,7 @@ When using consumer groups, the offsets of "delivered" records are committed aut
 
 To preserve ordering of topic partitions, records consumed from each partition are processed and delivered in the order that they are received, and only one batch of records of a given partition is ever processed at a time. This means that parallel processing can only occur when multiple topic partitions are being consumed, but ensures that data is processed in a sequential order as determined from the source partition.
 
-However, one way in which the order of records can be mixed is when delivery errors occur and error handling mechanisms kick in. Redpanda Connect always leans towards at least once delivery unless instructed otherwise, and this includes reattempting delivery of data when the ordering of that data can no longer be guaranteed.
+` + orderingNote + `However, one way in which the order of records can be mixed is when delivery errors occur and error handling mechanisms kick in. Redpanda Connect always leans towards at least once delivery unless instructed otherwise, and this includes reattempting delivery of data when the ordering of that data can no longer be guaranteed.
 
 For example, a batch of records may have been sent to an output broker and only a subset of records were delivered. In this case Redpanda Connect by default reattempts to deliver the records that failed, even though these failed records may have come before records that were previously delivered successfully.
 
@@ -89,7 +94,7 @@ output:
           redpanda:
             seed_brokers: [ localhost:9092 ]
             topic: foo_dlq
-`, "`fetch_max_bytes`, `fetch_max_partition_bytes`, and `max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled")).
+`, "`fetch_max_bytes`, `fetch_max_partition_bytes`, and `max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled", "If `unordered_processing.enabled` is `true`, this does not apply. Messages of the same partition are processed in parallel, up to `unordered_processing.checkpoint_limit`, and can be delivered out of order.")).
 		Fields(redpandaInputConfigFields()...).
 		LintRule(FranzConsumerFieldLintRules)
 }

@@ -37,7 +37,7 @@ const (
 	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
 	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
 
-	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas, it is expanded into multiple addresses."
+	kfcFieldSeedBrokersDescription = "A list of broker addresses used to establish connections. If an item of the list contains commas, it is expanded into multiple addresses."
 )
 
 // FranzConnectionOptionalFields returns a slice of connection fields but
@@ -80,7 +80,7 @@ This field is roughly equivalent to Apache Kafka's ` + "`" + `request.timeout.ms
 			Default("10s").
 			Advanced(),
 		service.NewDurationField(kfcFieldConnIdleTimeout).
-			Description("The approximate maximum duration that connections can remain idle before they are automatically closed. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+			Description("The approximate amount of time that connections can remain idle before they are closed. In the worst case, a connection can stay idle for up to twice this value. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
 			Default("20s").
 			Advanced(),
 		netutil.DialerConfigSpec(),
