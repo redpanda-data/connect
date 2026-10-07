@@ -34,6 +34,7 @@ import (
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Run("With Default SQL Server Cache", func(t *testing.T) {
 		t.Parallel()
