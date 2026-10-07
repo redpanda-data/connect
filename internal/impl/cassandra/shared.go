@@ -122,13 +122,13 @@ func clientFields(tlsVersion string) []*service.ConfigField {
 				Description("The maximum number of retry attempts.").
 				LintRule(`root = if this < 1 { "reconnection.max_retries must be greater than or equal to 1" }`),
 			service.NewDurationField(cFieldExponentialReconnectionInitialInterval).
-				Description("The period to wait before the first reconnection attempt to a node marked as DOWN. Each later attempt doubles the previous wait, with random jitter of up to half this value, until `max_interval` is reached.").
+				Description("The base wait between the retries the driver makes within one connection attempt. The first wait is a random duration up to this value, and each later wait doubles, with random jitter of plus or minus half this value, until `max_interval` is reached.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.initial_interval must be a positive duration"}`),
 			service.NewDurationField(cFieldExponentialReconnectionMaxInterval).
-				Description("The longest wait between reconnection attempts to a node marked as DOWN.").
+				Description("The longest wait between the retries within one connection attempt.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.max_interval must be a positive duration"}`),
 		).
-			Description("Configure exponential backoff for reconnection attempts to DOWN nodes. When enabled, this replaces the driver's default constant reconnection policy with an exponential backoff strategy that gradually increases the delay between reconnection attempts. This reduces connection storm scenarios during widespread outages while ensuring eventual recovery.").Version("4.66.0").
+			Description("Exponential backoff for the retries the driver makes within one connection attempt to a host. It applies on the initial connection and on each `reconnect_interval` attempt to a node marked as DOWN, and replaces the driver's default of 3 retries 1s apart.").Version("4.66.0").
 			Optional().
 			Advanced(),
 	}
