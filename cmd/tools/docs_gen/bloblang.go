@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -68,6 +69,40 @@ func renderBloblangExample(ex bloblangExample) string {
 
 // renderBloblangSpec renders the reference partial for one function or
 // method. kind is "function" or "method".
+// withCategoryText returns a method spec that uses the text its categories
+// give it, as the benthos docs did: the first category description replaces
+// the method description. The examples are those of every category, followed
+// by any method example that no category repeats, so none are lost when a
+// method is in several categories.
+func withCategoryText(spec bloblangSpec) bloblangSpec {
+	var examples []bloblangExample
+	seen := map[string]bool{}
+	add := func(ex bloblangExample) {
+		key := fmt.Sprintf("%q %q %q", ex.Summary, ex.Mapping, ex.Results)
+		if !seen[key] {
+			seen[key] = true
+			examples = append(examples, ex)
+		}
+	}
+	description := ""
+	for _, c := range spec.Categories {
+		if description == "" {
+			description = strings.TrimSpace(c.Description)
+		}
+		for _, ex := range c.Examples {
+			add(ex)
+		}
+	}
+	for _, ex := range spec.Examples {
+		add(ex)
+	}
+	if description != "" {
+		spec.Description = description
+	}
+	spec.Examples = examples
+	return spec
+}
+
 func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	var b strings.Builder
 	b.WriteString(generatedBanner + "\n\n= " + htmlEscaper.Replace(spec.Name) + "\n")

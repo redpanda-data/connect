@@ -486,6 +486,22 @@ func (w *writer) configObjects(raw []byte) {
 	}
 }
 
+// templateFields writes the fields of a template file, for the templating
+// page. A template file is a config of its own, so its fields are the
+// top-level fields of the template schema.
+func (w *writer) templateFields(raw []byte) {
+	var doc struct {
+		Config []fieldSpec `json:"config"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		panic(err)
+	}
+	if len(doc.Config) == 0 {
+		panic("the template schema has no fields")
+	}
+	w.write("partials/fields/config/templates.adoc", generatedBanner+"\n\n== Fields\n\n"+renderFields(doc.Config, "")+"\n")
+}
+
 // configObjectPrefix is the path prefix for the fields of a top-level config
 // object. An object such as redpanda documents its fields by their own names,
 // but a list such as tests is a list of objects, so its fields are documented

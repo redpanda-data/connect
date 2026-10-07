@@ -94,8 +94,12 @@ type bloblangExample struct {
 	Results [][2]string `json:"results"`
 }
 
+// bloblangCategory is a benthos MethodCatSpec. A method can describe itself
+// differently in each category, with examples for that category.
 type bloblangCategory struct {
-	Category string `json:"Category"`
+	Category    string            `json:"Category"`
+	Description string            `json:"Description"`
+	Examples    []bloblangExample `json:"Examples"`
 }
 
 type bloblangSpec struct {

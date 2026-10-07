@@ -122,7 +122,7 @@ func main() {
 		w.write(filepath.Join("partials/bloblang-functions", f.Name+".adoc"), renderBloblangSpec(f, "function"))
 	}
 	for _, m := range visibleBloblang(full.BloblangMethods) {
-		w.write(filepath.Join("partials/bloblang-methods", m.Name+".adoc"), renderBloblangSpec(m, "method"))
+		w.write(filepath.Join("partials/bloblang-methods", m.Name+".adoc"), renderBloblangSpec(withCategoryText(m), "method"))
 	}
 	// The Cloud build only allows pure Bloblang, so its schema decides which
 	// functions and methods the Cloud docs list.
@@ -137,6 +137,11 @@ func main() {
 	w.write("partials/bloblang/functions.adoc", renderFunctionsList(full.BloblangFunctions, bloblangNames(cloud.BloblangFunctions)))
 	w.write("partials/bloblang/methods.adoc", renderMethodsList(full.BloblangMethods, bloblangNames(cloud.BloblangMethods)))
 	w.configObjects(raw)
+	templateRaw, err := schema.Standard("", "").Environment().TemplateSchema("", "").MarshalJSONV0()
+	if err != nil {
+		panic(err)
+	}
+	w.templateFields(templateRaw)
 
 	fmt.Printf("Wrote %v files to %v\n", w.count, root)
 }

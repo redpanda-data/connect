@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -29,6 +30,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/public/schema"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
@@ -275,4 +278,37 @@ func TestBloblangListsLeaveOutHiddenSpecs(t *testing.T) {
 	cat := []bloblangCategory{{Category: "General"}}
 	methods := []bloblangSpec{{Name: "apply", Categories: cat}, {Name: "secret", Status: "hidden", Categories: cat}}
 	assert.NotContains(t, renderMethodsList(methods, all), "secret.adoc")
+}
+
+func TestWithCategoryText(t *testing.T) {
+	base := bloblangExample{Mapping: `root = this.contains("foo")`, Results: [][2]string{{`"foo bar"`, `true`}}}
+	cat := bloblangExample{Mapping: `root = this.contains(1)`, Results: [][2]string{{`[1,2]`, `true`}}}
+	spec := bloblangSpec{
+		Name:        "contains",
+		Description: "Short.",
+		Examples:    []bloblangExample{base, cat},
+		Categories: []bloblangCategory{
+			{Category: "Object & Array Manipulation", Description: "  The category text.  ", Examples: []bloblangExample{cat}},
+			{Category: "String Manipulation", Description: "Other category text."},
+		},
+	}
+	got := withCategoryText(spec)
+	assert.Equal(t, "The category text.", got.Description, "the first category description replaces the method description")
+	assert.Equal(t, []bloblangExample{cat, base}, got.Examples, "category examples come first, and no method example is lost or repeated")
+
+	plain := bloblangSpec{Name: "x", Description: "Kept.", Examples: []bloblangExample{base}, Categories: []bloblangCategory{{Category: "General"}}}
+	assert.Equal(t, plain, withCategoryText(plain), "a method whose categories have no text is unchanged")
+}
+
+func TestTemplateFieldsCoverTheTemplateSchema(t *testing.T) {
+	raw, err := schema.Standard("", "").Environment().TemplateSchema("", "").MarshalJSONV0()
+	require.NoError(t, err)
+	dir := t.TempDir()
+	w := writer{root: dir}
+	w.templateFields(raw)
+	b, err := os.ReadFile(filepath.Join(dir, "partials/fields/config/templates.adoc"))
+	require.NoError(t, err)
+	for _, heading := range []string{"=== `name`", "=== `mapping`", "=== `fields[].name`", "=== `tests[].expected`"} {
+		assert.Contains(t, string(b), heading)
+	}
 }
