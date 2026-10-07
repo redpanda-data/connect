@@ -101,7 +101,7 @@ func main() {
 		// x_benthos_extra exists to add components, so a full build that finds
 		// none means the standard build didn't run the way it should.
 		if len(plat.cgoOnlyKeys()) == 0 {
-			panic("found no cgo-only components in a build with x_benthos_extra; check that componentlist runs with CGO_ENABLED=0 and no build tags")
+			panic("found no cgo-only components in a build with x_benthos_extra; check that go list can list the standard build")
 		}
 		for _, d := range generatedDirs {
 			if err := os.RemoveAll(filepath.Join(root, d)); err != nil {

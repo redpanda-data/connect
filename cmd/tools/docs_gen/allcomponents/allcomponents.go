@@ -13,8 +13,8 @@
 // limitations under the License.
 
 // Package allcomponents imports every component that the reference docs
-// cover. docs_gen and componentlist both import it, so the two programs
-// register the same components and differ only in their build constraints.
+// cover. docs_gen imports it, and compares the Go files a standard build of it
+// compiles with its own build's files to find the cgo-only components.
 package allcomponents
 
 import (

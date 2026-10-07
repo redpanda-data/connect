@@ -19,19 +19,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/redpanda-data/connect/v4/internal/plugins"
 	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
-// componentListPkg prints the standard schema of whatever build runs it. It
-// imports the same components as docs_gen, so the only difference between
-// its output and the docs_gen schema comes from build constraints.
-const componentListPkg = "github.com/redpanda-data/connect/v4/cmd/tools/docs_gen/componentlist"
+// allComponentsPkg imports every component docs_gen documents. Comparing the
+// Go files a standard build of it compiles with the files the docs_gen build
+// compiles shows which components only cgo and x_benthos_extra builds have.
+const allComponentsPkg = "github.com/redpanda-data/connect/v4/cmd/tools/docs_gen/allcomponents"
 
 // standardBuildEnv returns env with cgo disabled and any -tags flag removed
 // from GOFLAGS, which is how .goreleaser/connect.yaml builds the standard
@@ -60,18 +65,162 @@ func standardBuildEnv(env []string) []string {
 	return append(out, "CGO_ENABLED=0")
 }
 
-// standardBuildSchema compiles and runs componentlist without cgo or build
-// tags, and returns the schema it prints.
-func standardBuildSchema() (*fullSchema, error) {
-	cmd := exec.Command("go", "run", componentListPkg)
-	cmd.Env = standardBuildEnv(os.Environ())
+// buildFiles returns the Go files, by path, that a build of allcomponents
+// compiles with env and the given go flags. go list reads build constraints
+// without compiling, so this takes about a second.
+func buildFiles(env []string, flags ...string) (map[string]bool, error) {
+	args := append([]string{"list", "-deps", "-f", "{{.Dir}}{{range .GoFiles}}|{{.}}{{end}}{{range .CgoFiles}}|{{.}}{{end}}"}, flags...)
+	cmd := exec.Command("go", append(args, allComponentsPkg)...)
+	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("running `CGO_ENABLED=0 go run %v`: %w\n%s", componentListPkg, err, stderr.String())
+		return nil, fmt.Errorf("running `go %v`: %w\n%s", strings.Join(cmd.Args[1:], " "), err, stderr.String())
 	}
-	return parseFullSchema(out)
+	files := map[string]bool{}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		dir, names, _ := strings.Cut(line, "|")
+		for name := range strings.SplitSeq(names, "|") {
+			if name != "" {
+				files[filepath.Join(dir, name)] = true
+			}
+		}
+	}
+	return files, nil
+}
+
+// docsGenBuildEnv returns the environment and flags of the build docs_gen
+// itself runs as. The x_benthos_extra tag can't be read from the environment,
+// so builtWithAllComponents supplies it, and it implies cgo.
+func docsGenBuildEnv() ([]string, []string) {
+	env := os.Environ()
+	if !builtWithAllComponents {
+		return env, nil
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "CGO_ENABLED=") {
+			out = append(out, kv)
+		}
+	}
+	return append(out, "CGO_ENABLED=1"), []string{"-tags=x_benthos_extra"}
+}
+
+// registerGroups maps a benthos service.MustRegister... or Register...
+// function, without its prefix, to the schema group of what it registers.
+var registerGroups = map[string]string{
+	"Input": "inputs", "BatchInput": "inputs",
+	"Output": "outputs", "BatchOutput": "outputs",
+	"Processor": "processors", "BatchProcessor": "processors",
+	"Cache": "caches", "RateLimit": "rate-limits",
+	"Buffer": "buffers", "BatchBuffer": "buffers",
+	"MetricsExporter": "metrics", "OtelTracerProvider": "tracers",
+	"BatchScannerCreator": "scanners",
+}
+
+// cgoOnlyComponents returns the components, as componentKey values, that the
+// docs_gen build registers in Go files a standard build (no cgo, no tags)
+// doesn't compile. It reads each name from the service.MustRegister... call
+// in those files, resolving a constant name within its package.
+func cgoOnlyComponents() (map[string]bool, error) {
+	env, flags := docsGenBuildEnv()
+	full, err := buildFiles(env, flags...)
+	if err != nil {
+		return nil, err
+	}
+	standard, err := buildFiles(standardBuildEnv(os.Environ()))
+	if err != nil {
+		return nil, err
+	}
+	keys := map[string]bool{}
+	fset := token.NewFileSet()
+	for path := range full {
+		if standard[path] {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		var walkErr error
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 || walkErr != nil {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "service" {
+				return true
+			}
+			kind := strings.TrimPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register")
+			group, ok := registerGroups[kind]
+			if !ok || !strings.Contains(sel.Sel.Name, "Register") {
+				return true
+			}
+			name, err := registeredName(call.Args[0], filepath.Dir(path), full, fset)
+			if err != nil {
+				walkErr = fmt.Errorf("%v: %w", fset.Position(call.Pos()), err)
+				return false
+			}
+			keys[componentKey(group, name)] = true
+			return true
+		})
+		if walkErr != nil {
+			return nil, walkErr
+		}
+	}
+	return keys, nil
+}
+
+// registeredName returns the component name a register call passes: a string
+// literal, or a string constant declared in the same package.
+func registeredName(arg ast.Expr, dir string, files map[string]bool, fset *token.FileSet) (string, error) {
+	switch a := arg.(type) {
+	case *ast.BasicLit:
+		if a.Kind == token.STRING {
+			return strconv.Unquote(a.Value)
+		}
+	case *ast.Ident:
+		for path := range files {
+			if filepath.Dir(path) != dir {
+				continue
+			}
+			f, err := parser.ParseFile(fset, path, nil, 0)
+			if err != nil {
+				return "", err
+			}
+			if obj := f.Scope.Lookup(a.Name); obj != nil && obj.Kind == ast.Con {
+				if vs, ok := obj.Decl.(*ast.ValueSpec); ok {
+					for i, n := range vs.Names {
+						if n.Name == a.Name && i < len(vs.Values) {
+							return registeredName(vs.Values[i], dir, files, fset)
+						}
+					}
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("can't read the component name from %T", arg)
+}
+
+// withoutComponents returns a copy of s without the given components, which
+// is the schema a standard build has.
+func withoutComponents(s *fullSchema, keys map[string]bool) *fullSchema {
+	out := &fullSchema{BloblangFunctions: s.BloblangFunctions, BloblangMethods: s.BloblangMethods}
+	for _, g := range s.Groups {
+		ng := componentGroup{Key: g.Key}
+		for _, c := range g.Components {
+			if !keys[componentKey(g.Key, c.Name)] {
+				ng.Components = append(ng.Components, c)
+			}
+		}
+		out.Groups = append(out.Groups, ng)
+	}
+	return out
 }
 
 func componentKey(group, name string) string { return group + "/" + name }
@@ -157,10 +306,22 @@ func (p platformSet) cloudExcluded(typeDir, name string) bool {
 
 // loadPlatforms computes the platform set for the docs_gen schema.
 func loadPlatforms(full *fullSchema) (platformSet, error) {
-	standard, err := standardBuildSchema()
+	cgoOnly, err := cgoOnlyComponents()
 	if err != nil {
-		return platformSet{}, err
+		return platformSet{}, fmt.Errorf("finding cgo-only components: %w", err)
 	}
+	fullNames := componentNames(full)
+	var unknown []string
+	for k := range cgoOnly {
+		if !fullNames[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return platformSet{}, fmt.Errorf("found registrations for components the docs_gen build doesn't have: %v", strings.Join(unknown, ", "))
+	}
+	standard := withoutComponents(full, cgoOnly)
 	cloud, err := marshalSchema(schema.Cloud("", "").MarshalJSONV0())
 	if err != nil {
 		return platformSet{}, fmt.Errorf("cloud schema: %w", err)
