@@ -62,7 +62,10 @@ jobs:
         uses: ./.github/actions/setup-task
 
       - name: Docs
-        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "task docs changed tracked files, such as internal/plugins/info.csv. Run 'CGO_ENABLED=1 TAGS=x_benthos_extra task docs' and commit the result (see docs/README.md)."; exit 1; }
+        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs
+
+      - name: Check that task docs left tracked files unchanged
+        run: test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "task docs changed tracked files, such as internal/plugins/info.csv. Run 'CGO_ENABLED=1 TAGS=x_benthos_extra task docs' and commit the result (see docs/README.md)."; git status --short >&2; exit 1; }
 
   golangci-lint:
     runs-on: ubuntu-latest

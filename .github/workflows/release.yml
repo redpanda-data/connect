@@ -212,6 +212,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
       - name: Generate the reference docs
         run: CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen
+      # Releases from before the generator wrote partials produce full pages
+      # instead. Their asset must stay missing, so the docs build falls back
+      # to a release that has real partials.
+      - name: Check the layout of the generated docs
+        run: |
+          set -euo pipefail
+          c=docs/modules/components
+          if [ -d "$c/pages" ]; then
+            echo "::error::$DOCS_TAG predates the generated partials (docs_gen wrote $c/pages), so it gets no docs asset."
+            exit 1
+          fi
+          for d in partials/fields partials/descriptions partials/availability examples/common examples/advanced; do
+            if [ -z "$(find "$c/$d" -type f -name '*.*' 2>/dev/null | head -1)" ]; then
+              echo "::error::The generated docs have no files in $c/$d."
+              exit 1
+            fi
+          done
       # The docs site reads the reference partials and examples from this
       # asset, so it always matches a released version. See docs/README.md.
       - name: Attach the reference docs to the release
@@ -359,7 +376,7 @@ jobs:
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, update-bundles, update-downstream]
+    needs: [goreleaser, docs-asset, update-bundles, update-downstream]
     # always() is required because update-bundles/update-downstream may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
@@ -373,6 +390,7 @@ jobs:
           BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
           HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
           GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          DOCS_ASSET_RESULT: ${{ needs.docs-asset.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
         run: |
@@ -387,6 +405,9 @@ jobs:
           fi
           if [ "$GORELEASER_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: goreleaser failed  "
+          fi
+          if [ "$DOCS_ASSET_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: docs-asset failed (rerun it, or run the release workflow with docs_tag)  "
           fi
           if [ "$BUNDLES_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-bundles failed  "
