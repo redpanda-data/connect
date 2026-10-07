@@ -44,7 +44,7 @@ output:
         output:
           redpanda_common:
             topic: foo_dlq
-`, "`fetch_max_bytes`, `fetch_max_partition_bytes`, and `max_yield_batch_bytes`")).
+`, "`fetch_max_bytes`, `fetch_max_partition_bytes`, and `max_yield_batch_bytes`", "")).
 		LintRule(kafka.FranzConsumerFieldLintRules)
 }
 

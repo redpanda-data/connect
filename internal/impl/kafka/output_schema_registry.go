@@ -97,8 +97,8 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 			Default(false).
 			Advanced(),
 		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced().Version("4.61.0"),
-		service.NewBoolField(sroFieldRemoveMetadata).Description("Removes metadata fields from schema output. Use this to produce leaner schema definitions for downstream consumers or when metadata is not required.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldRemoveRuleSet).Description("Removes rule set definitions from schema output. Useful for simplifying schemas when rule sets are not required by consumers or applications.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldRemoveMetadata).Description("Remove the `metadata` property from each schema before it is registered on the destination schema registry.").Default(true).Advanced().Version("4.61.0"),
+		service.NewBoolField(sroFieldRemoveRuleSet).Description("Remove the `ruleSet` property from each schema before it is registered on the destination schema registry.").Default(true).Advanced().Version("4.61.0"),
 		service.NewStringField(sroFieldInputResource).
 			Description("The label of the xref:components:inputs/schema_registry.adoc[`schema_registry` input] from which to read source schemas.").
 			Default(sriResourceDefaultLabel).

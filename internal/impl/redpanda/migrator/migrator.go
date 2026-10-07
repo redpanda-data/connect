@@ -301,9 +301,9 @@ output:
 		Field(service.NewStringField(rmoFieldOffsetHeader).
 			Description(`The name of a message header to add to migrated records. This header contains the source offset, enabling exact consumer group offset translation during migration.
 
-If this field is empty, no offset header is added and exact offset translation is disabled. Consumer groups are still migrated using timestamp-based positioning, which works well for most cases but may be imprecise for empty consumer groups when multiple records share the same timestamp (timestamps have millisecond resolution).
+If this field is empty, no offset header is added and exact offset translation is disabled. Consumer groups are still migrated using timestamp-based positioning, which works well for most cases but may be imprecise for consumer groups in the ` + "`Empty`" + ` state when multiple records share the same timestamp (timestamps have millisecond resolution).
 
-Set this field to enable precise offset translation, especially when migrating consumer groups that are caught up or have minimal lag.
+Exact offset translation only applies to consumer groups in the ` + "`Empty`" + ` state, which have no active members. Other groups always use timestamp-based positioning. The default value enables exact offset translation.
 
 This header is only added when consumer group migration is enabled.`).
 			ShortDescription("Header added to migrated records carrying the source offset. Leave empty to disable exact offset translation.").

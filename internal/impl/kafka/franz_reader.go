@@ -176,12 +176,12 @@ Finally, add another colon after the partition to set an explicit offset to cons
 			Default("").
 			Advanced(),
 		service.NewStringField(kfrFieldInstanceID).
-			Description("When you specify a `consumer_group`, assign a unique value to `instance_id` to define the group's static membership, which can prevent unnecessary rebalances during reconnections.\n\nWhen you assign an instance ID, the client does not automatically leave the consumer group when it disconnects. To remove the client, you must use an external admin command on behalf of the instance ID.").
+			Description("When you specify a `consumer_group`, set `instance_id` to define the group's static membership, which can prevent unnecessary rebalances during reconnections. The value must be unique per consumer within the group.\n\nWhen you assign an instance ID, the client does not leave the consumer group when it closes. To remove the client from the group, you must use an external admin command on behalf of the instance ID.").
 			ShortDescription("Static consumer group membership ID, which prevents rebalances on reconnect. The client does not leave the group on close.").
 			Default("").
 			Advanced(),
 		service.NewDurationField(kfrFieldRebalanceTimeout).
-			Description("When you specify a `consumer_group`, `rebalance_timeout` sets a time limit for all consumer group members to complete their work and commit offsets after a rebalance has begun. The timeout excludes the time taken to detect a failed or late heartbeat, which indicates a rebalance is required. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+			Description("When you specify a `consumer_group`, `rebalance_timeout` sets how long consumer group members can take to complete their work and commit offsets after a rebalance has begun. The time that a member takes to detect the rebalance (from a heartbeat) counts against this timeout. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
 			ShortDescription("How long consumer group members may take to complete work and commit offsets during a rebalance.").
 			Default("45s").
 			Advanced(),
@@ -191,7 +191,7 @@ Finally, add another colon after the partition to set an explicit offset to cons
 			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfrFieldHeartbeatInterval).
-			Description("When you specify a `consumer_group`, `heartbeat_interval` sets how frequently a consumer group member should send heartbeats to Apache Kafka. Apache Kafka uses heartbeats to make sure that a group member's session is active.\n\nYou must set `heartbeat_interval` to less than one-third of `session_timeout`.\n\nThis field is equivalent to the Java `heartbeat.interval.ms` setting and accepts Go duration format strings such as `10s` or `2m`.").
+			Description("When you specify a `consumer_group`, `heartbeat_interval` sets how frequently a consumer group member should send heartbeats to Apache Kafka. Apache Kafka uses heartbeats to make sure that a group member's session is active.\n\nThis value must be lower than `session_timeout`, and should be no higher than one-third of `session_timeout`.\n\nThis field is equivalent to the Java `heartbeat.interval.ms` setting and accepts Go duration format strings such as `10s` or `2m`.").
 			ShortDescription("How long a consumer group member waits between heartbeats to Kafka.").
 			Default("3s").
 			Advanced(),
