@@ -242,7 +242,7 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 // msdb.dbo.sp_add_job deadlocks (error 1205) and the call fails.
 var cdcJobsMu sync.Mutex
 
-// State of the container that all tests in one test binary share. Only sharedContainer writes it.
+// State of the container that all tests in one test package share. Only sharedContainer writes it.
 var (
 	// sharedOnce makes sure that only the first sharedContainer call starts the container.
 	sharedOnce sync.Once
@@ -254,9 +254,12 @@ var (
 	sharedErr error
 )
 
-// sharedContainer returns the Microsoft SQL Server container that all tests in the test binary share.
+// sharedContainer returns the Microsoft SQL Server container that all tests in the test package share.
 // The first call starts it. Tests isolate their state in their own database (see testDatabaseName).
 // Call TerminateSharedContainer from TestMain to stop it.
+//
+// Go runs each test package as its own process, so mssqlserver and mssqlserver/replication each start one container.
+// We do not share it across packages: no package could own its lifetime, and replication starts it for a single test.
 func sharedContainer(t *testing.T) *tcmssql.MSSQLServerContainer {
 	t.Helper()
 	sharedOnce.Do(func() {
