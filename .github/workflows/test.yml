@@ -33,11 +33,36 @@ jobs:
       - name: Deps
         run: task deps && git diff HEAD -- go.mod go.sum && git diff-index HEAD --exit-code
 
-      - name: Docs
-        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "task docs changed tracked files, such as internal/plugins/info.csv. Run 'CGO_ENABLED=1 TAGS=x_benthos_extra task docs' and commit the result (see docs/README.md)."; exit 1; }
-
       - name: Test
         run: task test
+
+  # Generates the reference docs with every component and lints every config
+  # snippet. A job of its own, so it runs alongside the unit tests.
+  docs:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+
+      - name: Install Task
+        uses: ./.github/actions/setup-task
+
+      - name: Docs
+        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "task docs changed tracked files, such as internal/plugins/info.csv. Run 'CGO_ENABLED=1 TAGS=x_benthos_extra task docs' and commit the result (see docs/README.md)."; exit 1; }
 
   golangci-lint:
     runs-on: ubuntu-latest
