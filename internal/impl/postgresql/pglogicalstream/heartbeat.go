@@ -34,7 +34,7 @@ type heartbeat struct {
 	// - Transactional (true): Allocates a 32-bit XID and emits BEGIN/COMMIT frames.
 	//   Required during incremental snapshotting because the DBLog watermark
 	//   algorithm closes chunk windows only upon observing a commit where
-	//   xid > high.Xmax. On quiet tables without write traffic, synthetic commits
+	//   xid >= high.Xmax. On quiet tables without write traffic, synthetic commits
 	//   from this message serve as the clock ticks that advance the snapshot.
 	//
 	// Because continuously burning XIDs risks transaction ID exhaustion and

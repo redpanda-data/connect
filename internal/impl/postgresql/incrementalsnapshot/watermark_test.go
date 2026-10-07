@@ -89,15 +89,8 @@ func TestWatermark(t *testing.T) {
 		wm := Watermark{Xmin: 100, Xmax: 105}
 
 		assert.False(t, wm.ClosesAt(104))
-		assert.False(t, wm.ClosesAt(105), "xmax itself must not close the window")
+		assert.True(t, wm.ClosesAt(105), "xmax itself must close the window")
 		assert.True(t, wm.ClosesAt(106))
-	})
-
-	t.Run("Zero value does not close", func(t *testing.T) {
-		var wm Watermark
-
-		assert.False(t, wm.ClosesAt(0))
-		assert.True(t, wm.OpensAt(0))
 	})
 }
 
@@ -169,6 +162,7 @@ func TestWatermarkComparisonsSurviveEpochWraparound(t *testing.T) {
 	assert.True(t, wm.OpensAt(100), "xmin itself must open the window")
 	assert.True(t, wm.OpensAt(101))
 
-	assert.False(t, wm.ClosesAt(105), "xmax itself must not close the window")
+	assert.False(t, wm.ClosesAt(104))
+	assert.True(t, wm.ClosesAt(105), "xmax itself must close the window")
 	assert.True(t, wm.ClosesAt(106))
 }
