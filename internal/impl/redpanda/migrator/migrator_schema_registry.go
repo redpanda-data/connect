@@ -830,7 +830,7 @@ func (m *schemaRegistryMigrator) sync(ctx context.Context, roots map[string]stru
 					m.setSchemaSynced(s, info)
 
 					if err := m.syncSubjectCompatibility(gctx, s.Subject); err != nil {
-						return run.fail(gctx, ss, s, fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err))
+						return run.failCompat(gctx, ss, s, fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err))
 					}
 
 					m.mu.Lock()
@@ -877,6 +877,7 @@ type syncRun struct {
 	failed map[schemaSubjectVersion]error // failed or skipped subject versions; dedups logs, gates referrers
 	minVer map[string]int                 // subject -> lowest failed version; later versions wait for it
 	ids    map[int]struct{}               // source schema IDs that failed or were skipped
+	compat map[string]error               // subjects whose compatibility level failed to sync; dedups logs
 	roots  map[string]struct{}            // roots with a failure; reconciled into m.failedRoots by finish
 }
 
@@ -887,6 +888,7 @@ func newSyncRun(m *schemaRegistryMigrator, scope map[string]struct{}) *syncRun {
 		failed: map[schemaSubjectVersion]error{},
 		minVer: map[string]int{},
 		ids:    map[int]struct{}{},
+		compat: map[string]error{},
 		roots:  map[string]struct{}{},
 	}
 }
@@ -938,13 +940,39 @@ func (r *syncRun) fail(ctx context.Context, root, s sr.SubjectSchema, err error)
 	return nil
 }
 
+// failCompat is fail for a compatibility level that could not be synced after
+// s was registered. Only root is recorded, to be retried: s is registered, so
+// its records translate, and neither its later versions nor its referrers wait
+// for it. s is not added to knownSubjects, so the retry syncs the level again.
+func (r *syncRun) failCompat(ctx context.Context, root, s sr.SubjectSchema, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if !isSubjectError(err) {
+		return err
+	}
+	r.mu.Lock()
+	_, dup := r.compat[s.Subject]
+	r.compat[s.Subject] = err
+	r.roots[root.Subject] = struct{}{}
+	r.mu.Unlock()
+
+	if !dup {
+		r.m.log.Errorf("Schema migration: %v", err)
+	}
+	return nil
+}
+
 // skip reports whether s must wait for a later sync, and if so records the
 // skip under root.
 //
-// Versions are visited in ascending order. Registering a later version after
-// an earlier one failed would shift destination version numbers, so the later
-// versions of a subject wait for the failed version. Earlier versions are not
-// affected, e.g. one referenced by another subject.
+// With versions: all, versions are visited in ascending order. Registering a
+// later version after an earlier one failed would shift destination version
+// numbers, so the later versions of a subject wait for the failed version.
+// Earlier versions are not affected, e.g. one referenced by another subject.
+// With versions: latest, destination version numbers do not follow the source
+// anyway, so a failed version, reached through a referrer, does not hold back
+// the latest one.
 //
 // A schema must not be registered without its references, which are visited
 // before it: the destination either rejects it or, if the referenced version
@@ -965,7 +993,7 @@ func (r *syncRun) skip(root, s sr.SubjectSchema) bool {
 	r.mu.Unlock()
 
 	switch {
-	case verFailed && s.Version > v:
+	case verFailed && r.m.conf.Versions == VersionsAll && s.Version > v:
 		r.record(root, s, fmt.Errorf("skip subject schema %s version %d: earlier version not synced", s.Subject, s.Version))
 	case refFailed:
 		r.record(root, s, fmt.Errorf("skip subject schema %s version %d: reference %s version %d not synced", s.Subject, s.Version, ref.Subject, ref.Version))
@@ -1019,9 +1047,12 @@ func (r *syncRun) finish(ctx context.Context) error {
 
 	r.prune(ctx, stale)
 
-	if len(r.failed) > 0 {
+	if len(r.failed) > 0 || len(r.compat) > 0 {
 		pErr := &partialSyncError{Synced: int(r.total.Load())}
 		for _, err := range r.failed {
+			pErr.Failed = append(pErr.Failed, err)
+		}
+		for _, err := range r.compat {
 			pErr.Failed = append(pErr.Failed, err)
 		}
 		return pErr

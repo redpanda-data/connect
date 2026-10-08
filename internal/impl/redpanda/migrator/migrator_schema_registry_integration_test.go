@@ -1648,6 +1648,80 @@ func TestIntegrationSchemaRegistryMigratorSyncFailedVersionDoesNotBlockEarlierRe
 	}
 }
 
+// With versions: latest, the latest version of a subject syncs even when an
+// older version, reached through a referrer, fails first. The source delays
+// the latest-version fetch of the base subject, so that the referrer's
+// traversal fails base v1 before the base root is processed whenever the
+// referrer is listed first.
+func TestIntegrationSchemaRegistryMigratorSyncLatestNotBlockedByReferencedVersion(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		baseSubj = "base-value"
+		baseV1   = `{"type":"record","name":"Base","namespace":"com.example","fields":[{"name":"a","type":"int"}]}`
+		baseV2   = `{"type":"record","name":"Base","namespace":"com.example","fields":[{"name":"a","type":"string"},{"name":"b","type":"string","default":""}]}`
+		baseDst  = `{"type":"record","name":"Base","namespace":"com.example","fields":[{"name":"a","type":"string"}]}`
+		userSubj = "user-value"
+		userV1   = `{"type":"record","name":"User","namespace":"com.example","fields":[{"name":"base","type":"com.example.Base"}]}`
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	srcCluster, dstCluster := startRedpandaSourceAndDestination(t)
+	direct, err := sr.NewClient(sr.URLs(srcCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+	dst, err := sr.NewClient(sr.URLs(dstCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+
+	t.Log("And: a subject whose old version the destination rejects, and a subject referencing that version")
+	set := direct.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	_, err = direct.CreateSchema(t.Context(), baseSubj, sr.Schema{Schema: baseV1})
+	require.NoError(t, err)
+	_, err = direct.CreateSchema(t.Context(), baseSubj, sr.Schema{Schema: baseV2})
+	require.NoError(t, err)
+	_, err = direct.CreateSchema(t.Context(), userSubj, sr.Schema{
+		Schema:     userV1,
+		References: []sr.SchemaReference{{Name: "com.example.Base", Subject: baseSubj, Version: 1}},
+	})
+	require.NoError(t, err)
+	_, err = dst.CreateSchema(t.Context(), baseSubj, sr.Schema{Schema: baseDst})
+	require.NoError(t, err)
+
+	t.Log("And: the source is slow to return the latest version of the base subject")
+	src := newProxiedSchemaRegistryClient(t, srcCluster.SchemaRegistryURL, func(_ http.ResponseWriter, r *http.Request) bool {
+		p := "/subjects/" + baseSubj + "/versions/"
+		if r.Method == http.MethodGet && (r.URL.Path == p+"latest" || r.URL.Path == p+"-1") {
+			time.Sleep(2 * time.Second)
+		}
+		return false
+	})
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsLatest,
+		TranslateIDs: true,
+	}
+
+	// Subjects are shuffled on each sync. Eight fresh migrators make it
+	// likely that both subject orders run.
+	for i := range 8 {
+		t.Logf("When: migrator is run, attempt %d", i+1)
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+		ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+		var pErr *migrator.PartialSyncError
+		require.ErrorAs(t, m.Sync(ctx), &pErr)
+		cancel()
+
+		t.Log("Then: only base v1 fails and the referrer is skipped, base v2 syncs")
+		require.Len(t, pErr.Failed, 2, "failures: %v", pErr.Failed)
+	}
+
+	t.Log("And: base v2 is registered at the destination")
+	vers, err := dst.SubjectVersions(t.Context(), baseSubj)
+	require.NoError(t, err)
+	assert.Len(t, vers, 2)
+}
+
 // A subject deleted at the source between listing subjects and fetching its
 // latest version fails only that subject, not the whole sync.
 func TestIntegrationSchemaRegistryMigratorSyncSubjectDeletedAfterListing(t *testing.T) {
@@ -1883,6 +1957,76 @@ func TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureKeepsMapping(t
 	id, err := m.DestinationSchemaID(ss.ID)
 	require.NoError(t, err)
 	assert.Equal(t, dstSS.ID, id)
+}
+
+// A compatibility failure on a registered version does not block the later
+// versions of the subject, or the subjects that reference it.
+func TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureDoesNotBlockLaterVersions(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		subj    = "compat-value"
+		v1      = `{"type":"record","name":"R","namespace":"com.example","fields":[{"name":"a","type":"string"}]}`
+		v2      = `{"type":"record","name":"R","namespace":"com.example","fields":[{"name":"a","type":"string"},{"name":"b","type":"string","default":""}]}`
+		refSubj = "referrer-value"
+		refV1   = `{"type":"record","name":"U","namespace":"com.example","fields":[{"name":"r","type":"com.example.R"}]}`
+	)
+
+	t.Log("Given: source and destination Schema Registry")
+	srcCluster, dstCluster := startRedpandaSourceAndDestination(t)
+	src, err := sr.NewClient(sr.URLs(srcCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+	direct, err := sr.NewClient(sr.URLs(dstCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+
+	t.Log("And: a subject with two versions and an explicit compatibility level, and a subject that references v1")
+	_, err = src.CreateSchema(t.Context(), subj, sr.Schema{Schema: v1})
+	require.NoError(t, err)
+	ss2, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: v2})
+	require.NoError(t, err)
+	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatFull}, subj)
+	require.NoError(t, set[0].Err)
+	refSS, err := src.CreateSchema(t.Context(), refSubj, sr.Schema{
+		Schema:     refV1,
+		References: []sr.SchemaReference{{Name: "com.example.R", Subject: subj, Version: 1}},
+	})
+	require.NoError(t, err)
+
+	t.Log("And: the destination rejects setting the subject compatibility")
+	dst := newProxiedSchemaRegistryClient(t, dstCluster.SchemaRegistryURL, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodPut && r.URL.Path == "/config/"+subj {
+			writeSchemaRegistryError(w, http.StatusUnprocessableEntity, 42203, "Invalid compatibility level")
+			return true
+		}
+		return false
+	})
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsAll,
+		TranslateIDs: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+
+	t.Log("When: migrator is run")
+	var pErr *migrator.PartialSyncError
+	require.ErrorAs(t, m.Sync(ctx), &pErr)
+
+	t.Log("Then: both versions are registered at the destination and v2 translates")
+	vers, err := direct.SubjectVersions(ctx, subj)
+	require.NoError(t, err)
+	assert.Len(t, vers, 2)
+	_, err = m.DestinationSchemaID(ss2.ID)
+	assert.NoError(t, err)
+
+	t.Log("And: the referrer is registered at the destination and translates")
+	_, err = direct.SchemaByVersion(ctx, refSubj, -1)
+	assert.NoError(t, err)
+	_, err = m.DestinationSchemaID(refSS.ID)
+	assert.NoError(t, err)
 }
 
 // A subject whose versions disappear at the source during its traversal fails
