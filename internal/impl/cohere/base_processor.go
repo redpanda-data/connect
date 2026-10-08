@@ -37,9 +37,9 @@ func baseConfigFieldsWithModels(modelExamples ...any) []*service.ConfigField {
 			Default("https://api.cohere.com"),
 		service.NewStringField(cpFieldAPIKey).
 			Secret().
-			Description("The API key for the Cohere API."),
+			Description("Your API key for the Cohere API."),
 		service.NewStringField(cpFieldModel).
-			Description("The name of the Cohere model to use.").
+			Description("The name of the Cohere model you want to use.").
 			Examples(modelExamples...),
 	}
 }
