@@ -45,15 +45,25 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
-			service.NewStringListField(iFieldHosts).
-				Description("A list of target host addresses to connect to.").
-				Example("localhost:9000"),
-			service.NewStringField(iFieldUser).
-				Description("A user ID to connect as.").
-				Default(""),
+			hostsField(iFieldHosts),
+			userField(iFieldUser),
 			service.NewStringField(iFieldDirectory).
 				Description("The directory to consume from."),
 		)
+}
+
+// hostsField and userField are the connection fields shared by the hdfs input
+// and output.
+func hostsField(name string) *service.ConfigField {
+	return service.NewStringListField(name).
+		Description("A list of target host addresses to connect to.").
+		Example("localhost:9000")
+}
+
+func userField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("A user ID to connect as.").
+		Default("")
 }
 
 func init() {

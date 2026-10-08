@@ -93,14 +93,11 @@ Operational notes:
 - Do not stop the CDC capture job (` + "`cdc.<database>_capture`" + `): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
-		Description("The connection string of the Microsoft SQL Server database to connect to.").
+		Description("The connection string for the Microsoft SQL Server database. Use the format `sqlserver://username:password@host/instance?param1=value&param2=value`. For Windows Authentication, use `sqlserver://host/instance?trusted_connection=yes`. Include additional parameters like `TrustServerCertificate=true` for self-signed certificates or `encrypt=disable` to disable encryption.").
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("If set to true, the connector will query all the existing data as a part of snapshot process. " +
-			"If set to false, no snapshot is taken and on first run streaming begins from the start of each table's existing change table: " +
-			"every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not just changes from the current LSN onward. " +
-			"To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty.").
+		Description("Whether to stream a snapshot of all existing data before streaming CDC changes. When set to `true`, the connector first queries all existing table data, then switches to streaming incremental changes from the change tables. When set to `false`, no snapshot is taken and, on first run, streaming begins from the start of each table's existing change table: every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not only changes from the current LSN onward. To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty.").
 		ShortDescription("Snapshot existing data first. Otherwise streaming replays everything retained in the change tables.").
 		Example(true).
 		Default(false),
@@ -109,20 +106,20 @@ Operational notes:
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
 		Default(1)).
 	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+		Description("The maximum number of rows to stream in a single batch during the initial snapshot phase. Larger batch sizes can improve throughput for initial data loads but may increase memory usage. This setting only applies when `stream_snapshot` is enabled.").
 		Default(1000),
 	).
 	Field(service.NewStringListField(fieldTablesInclude).
-		Description("Regular expressions for tables to include.").
+		Description("Regular expressions for tables to include in CDC streaming. Specify table names using the format `schema.table` (such as `dbo.orders`, `sales.customers`). Each pattern is treated as a regular expression, allowing wildcards and pattern matching. All specified tables must have CDC enabled in SQL Server.").
 		Example("dbo.products"),
 	).
 	Field(service.NewStringListField(fieldTablesExclude).
-		Description("Regular expressions for tables to exclude.").
+		Description("Regular expressions for tables to exclude from CDC streaming. Use this to filter out specific tables from the include patterns. Table names should follow the `schema.table` format. Exclude patterns are applied after include patterns, allowing you to include broad patterns while excluding specific tables.").
 		Example("dbo.privatetable").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table. If not set the default Microsoft SQL Server based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
+		Description("A xref:components:caches/about.adoc[cache resource] to store the current Log Sequence Number (LSN) position. The cache stores the highest LSN that has been successfully delivered downstream, which allows Redpanda Connect to resume from the last processed position after a restart, rather than consume the entire state of the change table. If not set, the default Microsoft SQL Server based cache is used. See `" + fieldCheckpointCacheTableName + "` for more information.").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
@@ -132,7 +129,7 @@ Operational notes:
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheConnectionString).
-		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, the checkpoint cache table is created on this remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").
+		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, this creates the checkpoint cache table on the remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").
 		Example("sqlserver://username:password@remotehost/instance?param1=value&param2=value").
 		Optional(),
 	).
@@ -142,15 +139,12 @@ Operational notes:
 		Optional(),
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
-		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		Description("The maximum number of messages that can be processed concurrently before applying back pressure. Higher values enable more parallel processing and batching at the output level, but increase memory usage. To preserve at-least-once delivery guarantees, a given Log Sequence Number (LSN) is only acknowledged after all messages under that offset are delivered.").
 		ShortDescription("The maximum number of messages that can be processed at a given time.").
 		Default(1024),
 	).
 	Field(service.NewDurationField(fieldStreamBackoffInterval).
-		Description("The interval to wait before checking for new changes after a pass over the change tables completes. " +
-			"Each pass drains changes up to the maximum LSN observed as the pass began, then sleeps for this interval while SQL Server's capture job continues to publish. " +
-			"For low traffic tables increasing this value reduces query load on the server. " +
-			"On high traffic tables it directly reduces throughput, because the input sits idle for the full interval between passes; consider lowering it towards `500ms`, which matches the default poll interval of comparable CDC systems.").
+		Description("The interval to wait before checking for new changes after a pass over the change tables completes. Each pass drains changes up to the maximum LSN observed as the pass began, then waits for this interval while SQL Server's capture job continues to publish changes. For low-traffic tables, increasing this value reduces query load on the server. For high-traffic tables, a longer interval directly reduces throughput, because the input sits idle for the full interval between passes. Consider lowering it towards `500ms`, which matches the default poll interval of comparable CDC systems. Use Go duration format such as `500ms`, `5s`, or `1m`.").
 		ShortDescription("Interval between passes over the change tables. On busy tables lower values increase throughput.").
 		Default("5s").
 		Example("500ms").Example("5s").Example("1m"),

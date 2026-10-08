@@ -377,7 +377,7 @@ func init() {
 }
 
 func dorisStreamLoadDescription() string {
-	return `Each output batch is encoded into a single Doris Stream Load request. The sink first contacts FE and follows the Stream Load redirect to BE before uploading the batch body. The batch is only acknowledged when Doris reports success.` + service.OutputPerformanceDocs(true, true)
+	return `Each output batch is encoded into a single Doris Stream Load request. The output first contacts a Doris frontend (FE) node and follows the Stream Load redirect to BE (a backend node) before uploading the batch body. A batch is only acknowledged when Doris reports success.` + service.OutputPerformanceDocs(true, true)
 }
 
 func dorisStreamLoadConfigFromParsed(conf *service.ParsedConfig) (c dorisStreamLoadConfig, err error) {

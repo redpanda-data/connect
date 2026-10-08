@@ -72,7 +72,7 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
 	Version("4.45.0").
-	Summary("Enables MySQL streaming for RedPanda Connect.").
+	Summary("Enables MySQL streaming for Redpanda Connect.").
 	Description(`
 == Metadata
 
@@ -91,20 +91,20 @@ This input adds the following metadata fields to each message:
 			Description("The type of MySQL database to connect to.").
 			Default(gomysql.MySQLFlavor),
 		service.NewStringField(fieldMySQLDSN).
-			Description("The DSN of the MySQL database to connect to.").
+			Description("The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`.").
 			Example("user:password@tcp(localhost:3306)/database"),
 		service.NewStringListField(fieldMySQLTables).
-			Description("A list of tables to stream from the database.").
+			Description("A list of the database table names to stream changes from. Specify each table name as a separate item.").
 			Example([]string{"table1", "table2"}).
 			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 		service.NewStringField(fieldCheckpointCache).
-			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.").
+			Description("A xref:components:caches/about.adoc[cache resource] to store the binlog position of the most recent data update delivered by Redpanda Connect. After a restart, Redpanda Connect can continue processing changes from this last known position, avoiding the need to reprocess all table updates.").
 			ShortDescription("Cache resource storing the last delivered BinLog position, so restarts resume instead of re-reading the table."),
 		service.NewStringField(fieldCheckpointKey).
-			Description("The key to use to store the snapshot position in `"+fieldCheckpointCache+"`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+			Description("The key identifier used to store the binlog position in `"+fieldCheckpointCache+"`. If you have multiple `mysql_cdc` inputs sharing the same cache, you can provide an alternative key.").
 			Default("mysql_binlog_position"),
 		service.NewIntField(fieldSnapshotMaxBatchSize).
-			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+			Description("The maximum number of table rows to fetch in each batch when taking a snapshot. This option is only available when `stream_snapshot` is set to `true`.").
 			Default(1000),
 		service.NewIntField(fieldMaxReconnectAttempts).
 			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
@@ -112,7 +112,7 @@ This input adds the following metadata fields to each message:
 			Advanced().
 			Default(10),
 		service.NewBoolField(fieldStreamSnapshot).
-			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position.").
+			Description("When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key. When set to `false`, the input starts streaming from the current binlog position.").
 			ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current binlog position."),
 		service.NewIntField(fieldMaxParallelSnapshotTables).
 			Description("Specifies the number of tables that will be snapshotted in parallel.").
@@ -120,7 +120,7 @@ This input adds the following metadata fields to each message:
 			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Description("The maximum number of messages that this input can process at a given time. Increasing this limit enables parallel processing, and batching at the output level. To preserve at-least-once guarantees, any given binlog position is not acknowledged until all messages under that offset are delivered.").
 			ShortDescription("The maximum number of messages that can be processed at a given time.").
 			Default(1024),
 		service.NewTLSField("tls").

@@ -41,7 +41,7 @@ performed for each message and the message contents are replaced with the result
 
 	return spec.
 		Field(service.NewInterpolatedStringField("command").
-			Description("The command to execute.").
+			Description(`The command to execute.`).
 			Version("4.3.0").
 			Example("scard").
 			Example("incrby").
@@ -67,14 +67,7 @@ performed for each message and the message contents are replaced with the result
 			Description("A key to use for the target operator.").
 			Deprecated().
 			Optional()).
-		Field(service.NewIntField("retries").
-			Description("The maximum number of retries before abandoning a request.").
-			Default(3).
-			Advanced()).
-		Field(service.NewDurationField("retry_period").
-			Description("The time to wait before consecutive retry attempts.").
-			Default("500ms").
-			Advanced()).
+		Fields(retryFields()...).
 		LintRule(`root = match {
   this.exists("operator") == this.exists("command") => [ "one of 'operator' (old style) or 'command' (new style) fields must be specified" ]
   this.exists("args_mapping") && this.exists("operator") => [ "field args_mapping is invalid with an operator set" ],
@@ -123,6 +116,21 @@ pipeline:
               args_mapping: 'root = [ this.name, this.friends_visited ]'
         result_map: 'root.total = this'
 `)
+}
+
+// retryFields returns the retry fields shared by the redis and redis_script
+// processors.
+func retryFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewIntField("retries").
+			Description("The maximum number of retries before abandoning a request.").
+			Default(3).
+			Advanced(),
+		service.NewDurationField("retry_period").
+			Description("The time to wait before consecutive retry attempts.").
+			Default("500ms").
+			Advanced(),
+	}
 }
 
 func init() {

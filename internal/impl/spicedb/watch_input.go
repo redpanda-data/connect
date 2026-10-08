@@ -57,24 +57,24 @@ Ideally this cache should be persisted across restarts.
 `).
 		Fields(
 			service.NewURLField("endpoint").
-				Description("The SpiceDB endpoint.").
+				Description("The endpoint of your SpiceDB instance.").
 				Example("grpc.authzed.com:443"),
 			service.NewStringField("bearer_token").
-				Description("The SpiceDB Bearer token used to authenticate against the SpiceDB instance.").
+				Description("The SpiceDB bearer token to use to authenticate with your SpiceDB instance.").
 				Default("").
 				Example("t_your_token_here_1234567deadbeef").
 				Secret(),
 			service.NewStringField("max_receive_message_bytes").
-				Description("Maximum message size in bytes the SpiceDB client can receive.").
+				Description("The maximum message size (in bytes) this input can receive. If a message exceeds this limit, an `rpc error` is written to the Redpanda Connect logs.").
 				Advanced().
 				Default("4MB").
 				Example("100MB").
 				Example("50mib"),
 			service.NewStringField("cache").
-				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests.").
+				Description("The cache resource that stores the ZedToken (ID) of the last message the input processed. When the input starts, it resumes the watch from the stored ZedToken, so it backfills updates it hasn't read yet. The input stores the ZedToken when each message is acknowledged, whether or not the message reached its outputs, so a message that fails isn't read again after a restart.").
 				ShortDescription("Cache resource for unread message backfills, storing the ID of the last message received."),
 			service.NewStringField("cache_key").
-				Description("The key identifier used when storing the ID of the last message received.").
+				Description("The key identifier to use when storing the ZedToken (ID) of the last message received.").
 				Default("authzed.com/spicedb/watch/last_zed_token").
 				Advanced(),
 			service.NewTLSToggledField("tls"),

@@ -160,36 +160,121 @@ type rawQueryStatement struct {
 
 func rawQueryField() *service.ConfigField {
 	return service.NewStringField("query").
-		Description("The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:" + `
+		Description(`The query to execute.
 
-| Driver | Placeholder Style |
-|---|---|
-` + "| `clickhouse` | Dollar sign |" + `
-` + "| `mysql` | Question mark |" + `
-` + "| `postgres` | Dollar sign |" + `
-` + "| `pgx` | Dollar sign |" + `
-` + "| `mssql` | Question mark |" + `
-` + "| `sqlite` | Question mark |" + `
-` + "| `oracle` | Colon |" + `
-` + "| `snowflake` | Question mark |" + `
-` + "| `trino` | Question mark |" + `
-` + "| `gocosmos` | Colon |" + `
-`).
+You must include the correct placeholders for the specified database driver. Some drivers use question marks (` + "`" + `?` + "`" + `), whereas others expect incrementing dollar signs (` + "`" + `$1` + "`" + `, ` + "`" + `$2` + "`" + `, and so on) or colons (` + "`" + `:1` + "`" + `, ` + "`" + `:2` + "`" + `, and so on). The following table shows the placeholder style for each driver:
+
+|===
+| Driver | Placeholder style
+
+| ` + "`" + `clickhouse` + "`" + `
+| Dollar sign (` + "`" + `$` + "`" + `)
+
+| ` + "`" + `gocosmos` + "`" + `
+| Colon (` + "`" + `:` + "`" + `)
+
+| ` + "`" + `mssql` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `mysql` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `oracle` + "`" + `
+| Colon (` + "`" + `:` + "`" + `)
+
+| ` + "`" + `pgx` + "`" + `
+| Dollar sign (` + "`" + `$` + "`" + `)
+
+| ` + "`" + `postgres` + "`" + `
+| Dollar sign (` + "`" + `$` + "`" + `)
+
+| ` + "`" + `snowflake` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `spanner` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `sqlite` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `trino` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+|===`).
 		ShortDescription("The query to execute. Placeholder style depends on the driver.")
 }
 
 func rawQueryArgsMappingField() *service.ConfigField {
 	return service.NewBloblangField("args_mapping").
-		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that includes the same number of values in an array as the placeholder arguments in the `query` field.").
 		ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
 		Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 		Example(`root = [ meta("user.id") ]`).
 		Optional()
 }
 
+// queryFailureDescription is the component description shared by the SQL
+// processors, which leave a message unchanged when its query fails.
+const queryFailureDescription = "If the query fails to execute, the message remains unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods]."
+
+func unsafeDynamicQueryField() *service.ConfigField {
+	return service.NewBoolField("unsafe_dynamic_query").
+		Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Make sure your queries are defended against injection attacks.").
+		ShortDescription("Enable interpolation functions in the query. Take care to defend against injection attacks.").
+		Advanced().
+		Default(false)
+}
+
+// batchMaxInFlightField is the max_in_flight field of the sql and sql_insert
+// outputs, which bounds how many WriteBatch calls run at once.
+func batchMaxInFlightField() *service.ConfigField {
+	return service.NewIntField("max_in_flight").
+		Description("The maximum number of message batches to write in parallel.").
+		Default(64)
+}
+
+// selectWhereField is the where field of the sql_select input and processor.
+func selectWhereField() *service.ConfigField {
+	return service.NewStringField("where").
+		Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Always use question marks for placeholders. They are converted to dollar syntax (`$1`) when the `postgres`, `pgx`, or `clickhouse` driver is used, and to colon syntax (`:1`) when the `oracle` or `gocosmos` driver is used.").
+		ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
+		Optional()
+}
+
+// insertFields returns the table and query-building fields shared by the
+// sql_insert output and processor.
+func insertFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewStringField("table").
+			Description("The table to insert to.").
+			Example("foo"),
+		service.NewStringListField("columns").
+			Description("A list of columns to insert.").
+			Example([]string{"foo", "bar", "baz"}),
+		service.NewBloblangField("args_mapping").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
+			ShortDescription("A Bloblang mapping evaluating to an array of values matching the number of columns specified.").
+			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
+			Example(`root = [ meta("user.id") ]`),
+		service.NewStringField("prefix").
+			Description("An optional prefix to prepend to the insert query (before INSERT).").
+			Optional().
+			Advanced(),
+		service.NewStringField("suffix").
+			Description("An optional suffix to append to the insert query.").
+			Optional().
+			Advanced().
+			Example("ON CONFLICT (name) DO NOTHING"),
+		service.NewStringListField("options").
+			Description("A list of keyword options to add before the INTO clause of the query.").
+			Optional().
+			Advanced().
+			Example([]string{"DELAYED", "IGNORE"}),
+	}
+}
+
 func rawQueryWhenField() *service.ConfigField {
 	return service.NewBloblangField("when").
-		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether this query should be executed. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is the one that executes. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").
 		ShortDescription("An optional Bloblang mapping evaluated per message to decide whether this query runs. Must return a boolean.").
 		Example(`root = meta("kafka_tombstone_message") == "true"`).
 		Example(`root = this.operation == "delete"`).
