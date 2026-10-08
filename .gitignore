@@ -20,3 +20,5 @@ test_output.txt
 benchmark_results.json
 # Enterprise license files must never reach the (public) repo.
 *.license
+# Generated reference docs. Releases attach them as redpanda-connect-docs.tar.gz.
+/docs/modules/

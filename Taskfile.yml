@@ -72,12 +72,13 @@ tasks:
     desc: Generate docs
     deps:
       - build:redpanda-connect
-    vars:
-      WEBSITE_DIR: ./docs/modules
     cmds:
       - go run -tags "{{.TAGS}}" ./cmd/tools/docs_gen
       - go run -tags "{{.TAGS}}" ./cmd/tools/plugins_csv_fmt
-      - '{{.TARGET_DIR}}/redpanda-connect lint --deprecated "./config/examples/*.yaml" "{{.WEBSITE_DIR}}/**/*.md"'
+      # Lints every generated Common and Advanced snippet against the schema.
+      # With TAGS=x_benthos_extra this covers the cgo components too.
+      - go test -tags "{{.TAGS}}" -run 'TestSnippetsLint|TestSnippetLintCatchesBadShapes|TestRenderedValuesRoundTrip|TestTopLevelConfigObjects|TestPlatformsFromBuilds' ./cmd/tools/docs_gen
+      - '{{.TARGET_DIR}}/redpanda-connect lint --deprecated "./config/examples/*.yaml"'
       - '{{.TARGET_DIR}}/redpanda-connect template lint "./config/template_examples/*.yaml"'
 
   bundles:
