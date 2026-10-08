@@ -17,6 +17,7 @@ package mcp_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/common-go/authz"
 
@@ -40,7 +42,7 @@ const (
 	authzTestPrincipal authz.PrincipalID  = "User:alice@example.com"
 )
 
-var authzTestTools = []string{"read_orders", "read_users", "write_orders"}
+var authzTestTools = []string{"read_orders", "read_users", "write_orders", "read_and_delete_orders"}
 
 // newTestAuthorizer creates an authorizer whose policy lets the test principal
 // connect and list tools on the server, plus a tools/call binding on each of
@@ -116,9 +118,11 @@ func TestAuthorizerPerToolAccess(t *testing.T) {
 			allowed:    []string{"read_orders"},
 		},
 		{
+			// The wildcard also grants read_and_delete_orders: a tool added later
+			// widens the binding without the policy changing.
 			name:       "wildcard tool binding grants matching tools",
 			callScopes: []string{"/tools/read_*"},
-			allowed:    []string{"read_orders", "read_users"},
+			allowed:    []string{"read_orders", "read_users", "read_and_delete_orders"},
 		},
 		{
 			name:    "no tools/call binding grants nothing",
@@ -157,15 +161,28 @@ func TestAuthorizerPerToolAccess(t *testing.T) {
 func TestAuthorizerLogsDenials(t *testing.T) {
 	auth, logs := newTestAuthorizer(t, "/tools/read_orders")
 	handler := authzTestHandler(auth)
-	ctx := gateway.ContextWithValidatedPrincipalID(t.Context(), authzTestPrincipal)
 
-	_, err := handler(ctx, "tools/call", callToolRequest("write_orders"))
+	wantTraceID, err := trace.TraceIDFromHex("0af7651916cd43dd8448eb211c80319c")
+	require.NoError(t, err)
+	spanID, err := trace.SpanIDFromHex("b7ad6b7169203331")
+	require.NoError(t, err)
+	ctx := trace.ContextWithRemoteSpanContext(
+		gateway.ContextWithValidatedPrincipalID(t.Context(), authzTestPrincipal),
+		trace.NewSpanContext(trace.SpanContextConfig{TraceID: wantTraceID, SpanID: spanID, TraceFlags: trace.FlagsSampled}),
+	)
+
+	_, err = handler(ctx, "tools/call", &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+		Name:      "write_orders",
+		Arguments: json.RawMessage(`{"customer_email":"jane@example.com"}`),
+	}})
 	require.ErrorContains(t, err, "permission denied")
 	assert.Contains(t, logs.String(), `msg="Authorization denied"`)
 	assert.Contains(t, logs.String(), "principal=User:alice@example.com")
 	assert.Contains(t, logs.String(), "permission=dataplane_mcpserver_tools_call")
 	assert.Contains(t, logs.String(), "resource_type=tools resource_id=write_orders")
 	assert.Contains(t, logs.String(), "reason=forbidden")
+	assert.Contains(t, logs.String(), "trace_id="+wantTraceID.String())
+	assert.NotContains(t, logs.String(), "jane@example.com", "tool arguments must not be logged")
 
 	logs.Reset()
 	_, err = handler(ctx, "tools/call", callToolRequest(""))

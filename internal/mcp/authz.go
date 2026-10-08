@@ -21,6 +21,7 @@ import (
 	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
@@ -108,13 +109,15 @@ type Authorizer struct {
 // Tool calls are authorized against the called tool as a sub-resource of the server
 // (<server>/tools/<name>), so a policy can grant access to individual tools,
 // and tools/list results only include the tools the principal may call.
-// Bindings on the server itself apply to all of its tools.
+// Bindings on the server itself apply to all of its tools. A wildcard binding such as
+// <server>/tools/read_* also covers matching tools added later, so what it grants can
+// widen without the policy changing.
 func (a *Authorizer) Middleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
 		perm := methodToPerm[method]
 		principal, ok := gateway.ValidatedPrincipalIDFromContext(ctx)
 		if !ok {
-			a.logDenied(method, principal, perm, "", "unauthenticated")
+			a.logDenied(ctx, method, principal, perm, "", "unauthenticated")
 			return nil, errPermissionDenied
 		}
 
@@ -122,13 +125,13 @@ func (a *Authorizer) Middleware(next mcp.MethodHandler) mcp.MethodHandler {
 		var toolName string
 		if method == "tools/call" {
 			if toolName = calledToolName(req); toolName == "" {
-				a.logDenied(method, principal, perm, toolName, "empty_tool_name")
+				a.logDenied(ctx, method, principal, perm, toolName, "empty_tool_name")
 				return nil, errPermissionDenied
 			}
 			enforcer = a.policy.SubResourceAuthorizer(toolResourceType, authz.ResourceID(toolName), perm)
 		}
 		if !enforcer.Check(principal) {
-			a.logDenied(method, principal, perm, toolName, "forbidden")
+			a.logDenied(ctx, method, principal, perm, toolName, "forbidden")
 			return nil, errPermissionDenied
 		}
 
@@ -144,7 +147,9 @@ func (a *Authorizer) Middleware(next mcp.MethodHandler) mcp.MethodHandler {
 
 // logDenied records a policy decision to deny a request. Methods without a mapped permission,
 // such as client notifications, are always denied and aren't policy decisions, so they aren't logged.
-func (a *Authorizer) logDenied(method string, principal authz.PrincipalID, perm authz.PermissionName, toolName, reason string) {
+// Tool arguments are never logged, since they can carry customer data or secrets; the trace ID of
+// the incoming request, when present, links the denial to its trace instead.
+func (a *Authorizer) logDenied(ctx context.Context, method string, principal authz.PrincipalID, perm authz.PermissionName, toolName, reason string) {
 	if perm == "" {
 		return
 	}
@@ -156,6 +161,9 @@ func (a *Authorizer) logDenied(method string, principal authz.PrincipalID, perm 
 	}
 	if toolName != "" {
 		attrs = append(attrs, "resource_type", string(toolResourceType), "resource_id", toolName)
+	}
+	if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.HasTraceID() {
+		attrs = append(attrs, "trace_id", spanCtx.TraceID().String())
 	}
 	a.logger.Warn("Authorization denied", attrs...)
 }
