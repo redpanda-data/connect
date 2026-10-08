@@ -72,8 +72,28 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
 	Version("4.45.0").
-	Summary("Enables MySQL streaming for Redpanda Connect.").
+	Summary("Streams data changes from a MySQL or MariaDB database, using the binary log to capture data updates.").
 	Description(`
+This input is built on the https://github.com/go-mysql-org/go-mysql?tab=readme-ov-file#replication[`+"`go-mysql` canal library"+`^] but uses a custom approach for streaming historical data.
+
+== Snapshot and streaming modes
+
+When `+"`stream_snapshot`"+` is `+"`true`"+` and `+"`checkpoint_cache`"+` holds no binlog position, this input takes a snapshot before it streams changes:
+
+. It runs `+"`FLUSH TABLES ... WITH READ LOCK`"+` on the selected tables, which blocks writes to them.
+. It opens one `+"`START TRANSACTION WITH CONSISTENT SNAPSHOT`"+` transaction for each snapshot worker, so that every worker reads the same state of the database.
+. It reads the current binlog position and then runs `+"`UNLOCK TABLES`"+` to release the lock.
+. It reads each table in primary key order within those transactions.
+. It streams changes from the binlog position that it read in step 3, which covers the changes made while the snapshot was read.
+
+The binlog position is stored in `+"`checkpoint_cache`"+` only after the snapshot is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start.
+
+When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the current binlog position. In both modes, a restart resumes streaming from the binlog position stored in `+"`checkpoint_cache`"+`.
+
+== Data types
+
+Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns.
+
 == Metadata
 
 This input adds the following metadata fields to each message:

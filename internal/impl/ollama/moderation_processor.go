@@ -38,7 +38,7 @@ func init() {
 func ollamaModerationProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Generates responses to messages in a chat conversation, using the Ollama API.").
+		Summary("Checks whether responses from a large language model (LLM) are safe, using the Ollama API.").
 		Description(`This processor checks LLM response safety using either `+"`llama-guard3`"+` or `+"`shieldgemma`"+`. If you want to check if a given prompt is safe, then that can be done with the `+"`ollama_chat`"+` processor - this processor is for response classification only.
 
 By default, the processor starts and runs a locally installed Ollama server. Alternatively, to use an already running Ollama server, add your server details to the `+"`"+bopFieldServerAddress+"`"+` field. You can https://ollama.com/download[download and install Ollama from the Ollama website^].

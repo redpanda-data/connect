@@ -50,8 +50,10 @@ func schemaRegistryInputSpec() *service.ConfigSpec {
 		Stable().
 		Version("4.32.2").
 		Categories("Integration").
-		Summary(`Reads schemas from SchemaRegistry.`).
+		Summary(`Reads schemas from a schema registry.`).
 		Description(`
+You can use this input to extract and back up schemas during a data migration. This input uses the https://github.com/twmb/franz-go/tree/master/pkg/sr[Franz Kafka Schema Registry client^].
+
 == Metadata
 
 This input adds the following metadata fields to each message:

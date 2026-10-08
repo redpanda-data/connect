@@ -81,8 +81,7 @@ var oracleDBStreamConfigSpec = service.NewConfigSpec().
 	Categories("Services").
 	Version("4.83.0").
 	Summary("Enables Change Data Capture by consuming from OracleDB.").
-	Description(`Streams changes from an Oracle database for Change Data Capture (CDC).
-Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+	Description(`Streams changes from an Oracle database for Change Data Capture (CDC). Use the ` + "`" + ociFieldSnapshotMode + "`" + ` field to control whether existing data is captured in an initial snapshot before streaming changes.
 
 == Metadata
 
@@ -93,14 +92,14 @@ This input adds the following metadata fields to each message:
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
 - scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
-- source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
+- source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time. Not present on snapshot (` + "`read`" + `) messages.
 - commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - username: The Oracle database username of the session that performed the DML, sourced from ` + "`V$LOGMNR_CONTENTS.USERNAME`" + `. Not present on snapshot (` + "`read`" + `) messages, nor on change messages where Oracle reports a NULL or empty username.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
 
-When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 
 == Performance
 
@@ -175,17 +174,17 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Description(`Controls how the SCN range mined per cycle is sized:
 
 - `+"`"+string(logminer.WindowStrategySCNWindow)+"` (default): Grows and shrinks a fixed SCN increment (`"+ociFieldSCNWindowSize+"`) based on its backlog, bounded by `"+ociFieldMinSCNWindowSize+"` and `"+ociFieldMaxSCNWindowSize+"`"+`.
-- `+"`"+string(logminer.WindowStrategyRedoVolume)+"`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `"+ociFieldRedoVolumeMin+"` and `"+ociFieldRedoVolumeGrowthMax+"`), independent of raw SCN movement. This can be helpful when a databases's SCN can advance without matching real transaction volume - for example a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB) - since `"+string(logminer.WindowStrategySCNWindow)+"` would otherwise burn cycles growing its window over mostly-empty ranges, while `"+string(logminer.WindowStrategyRedoVolume)+"` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `"+string(logminer.WindowStrategyRedoVolume)+"`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.").
+- `+"`"+string(logminer.WindowStrategyRedoVolume)+"`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `"+ociFieldRedoVolumeMin+"` and `"+ociFieldRedoVolumeGrowthMax+"`), independent of raw SCN movement. This can be helpful when a database's SCN can advance without matching real transaction volume (for example, a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB)), since `"+string(logminer.WindowStrategySCNWindow)+"` would otherwise burn cycles growing its window over mostly-empty ranges, while `"+string(logminer.WindowStrategyRedoVolume)+"` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), `"+string(logminer.WindowStrategyRedoVolume)+"`'s budget applies per open thread, so volume mined per cycle scales with the number of open threads.").
 			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed redo-volume budget.").
 			Default(string(logminer.WindowStrategySCNWindow)).
 			Advanced(),
 		service.NewIntField(ociFieldRedoVolumeMin).
-			Description("Whilst not exact, this value represents the minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			Description("The approximate minimum number of redo logs to read per redo thread in each mining cycle. Consider increasing this value if redo logs are small and rotate frequently, decreasing if redo logs are very large. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
 			ShortDescription("The minimum redo volume, in multiples of the online redo log size, mined per cycle per redo thread, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
 			Default(logminer.DefaultRedoVolumeMin).
 			Advanced(),
 		service.NewIntField(ociFieldRedoVolumeGrowthMax).
-			Description("The ceiling the per-thread redo-volume budget can grow to, applied independently to each open redo thread (enabling the total volume mined per cycle to scale with thread count on RAC (Real Application Clusters) configurations). The budget starts at `"+ociFieldRedoVolumeMin+"` and grows automatically whenever something prevents the mining window from advancing - for example a long-running transaction holding it in place, or a redo log being recycled mid-query - up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
+			Description("The ceiling the per-thread redo-volume budget can grow to. The ceiling applies independently to each open redo thread, so on Real Application Clusters (RAC) configurations the total volume mined per cycle scales with the number of threads. The budget starts at `"+ociFieldRedoVolumeMin+"` and grows automatically whenever something prevents the mining window from advancing, such as a long-running transaction holding it in place or a redo log being recycled mid-query, up to this limit. Only applies when `"+ociFieldWindowStrategy+"` is `"+string(logminer.WindowStrategyRedoVolume)+"`.").
 			ShortDescription("The maximum redo volume the per-thread budget grows to, under the "+string(logminer.WindowStrategyRedoVolume)+" window strategy.").
 			Default(logminer.DefaultRedoVolumeGrowthMax).
 			Advanced(),

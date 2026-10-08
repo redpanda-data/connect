@@ -29,21 +29,15 @@ func natsOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary("Publish to an NATS subject.").
+		Summary("Publishes to a NATS subject.").
 		Description(`This output will interpolate functions within the subject field, you can find a list of functions xref:configuration:interpolation.adoc#bloblang-queries[here].
 
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
-			Description("The subject to publish to.").
+			Description(`The subject to publish to.`).
 			Example("foo.bar.baz")).
-		Field(service.NewInterpolatedStringMapField("headers").
-			Description("Explicit message headers to add to messages.").
-			Default(map[string]any{}).
-			Example(map[string]any{
-				"Content-Type": "application/json",
-				"Timestamp":    `${!meta("Timestamp")}`,
-			})).
+		Field(headersField()).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).

@@ -89,10 +89,26 @@ func newPostgresCDCConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.39.0").
+		Version("4.40.0").
 		Summary(`Streams changes from a PostgreSQL database using logical replication.`).
 		Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+
+This input was renamed from ` + "`pg_stream`" + ` to ` + "`postgres_cdc`" + ` in version 4.43.0. The ` + "`pg_stream`" + ` name still works, but it's deprecated.
+
+== Requirements
+
+The source database must have logical replication enabled, which means its ` + "`wal_level`" + ` setting must be ` + "`logical`" + `. The database must also accept replication connections from the host that runs Redpanda Connect, for example through a ` + "`replication`" + ` entry in ` + "`pg_hba.conf`" + `.
+
+== Snapshot and streaming modes
+
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `, and then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
+
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
+
+== Data types
+
+Column values keep their PostgreSQL types where an equivalent exists. ` + "`BOOL`" + ` columns become booleans, integer and floating-point columns become numbers, ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, and ` + "`TIMESTAMPTZ`" + ` columns become timestamps, ` + "`BYTEA`" + ` columns become byte arrays, and ` + "`JSON`" + ` and ` + "`JSONB`" + ` columns become structured values. ` + "`NUMERIC`" + ` and ` + "`DECIMAL`" + ` columns become strings to preserve their precision, as do ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, and ` + "`TIMETZ`" + ` columns.
 
 == Metadata
 
@@ -107,6 +123,13 @@ This input adds the following metadata fields to each message:
 == Unserializable rows
 
 A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+
+== Metrics
+
+This input emits the following metrics:
+
+- ` + "`postgres_snapshot_progress`" + `: A gauge, labeled by ` + "`table`" + `, that reports the estimated fraction of each table's rows read so far in the initial snapshot. The value is 1 when the table's snapshot completes. The total row count comes from the PostgreSQL planner's row estimate, so the value is approximate until then.
+- ` + "`postgres_replication_lag_bytes`" + `: A gauge that reports how far, in bytes, the replication slot's restart position lags behind the current position of the source database's write-ahead log (WAL).
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.").
@@ -157,7 +180,9 @@ If the pipeline is restarted and ` + "`" + `stream_snapshot` + "`" + ` is enable
 		Field(service.NewStringField(fieldSlotName).
 			Description(`The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.`).
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.
+
+Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" + ` to the names of the replication slots it creates. To keep using a replication slot that an earlier version created, add the ` + "`rs_`" + ` prefix to this field yourself.`).
 			ShortDescription("The name of the PostgreSQL logical replication slot to use. The input creates the slot if it does not exist.").
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
@@ -282,7 +307,7 @@ a JSON object with a ` + "`message`" + ` key, whose value is written to the conn
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
 ` + "```" + `
 
-**` + "`" + replication.SnapshotSignalType + "`" + `** — backfills the named tables incrementally, alongside streaming. Requires
+**` + "`" + replication.SnapshotSignalType + "`" + `**: backfills the named tables incrementally, alongside streaming. Requires
 ` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotEnabled + "`" + `. The ` + "`data`" + ` column must contain a JSON object
 with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema`" + `, excluding the schema itself:
 
@@ -293,19 +318,19 @@ INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('` + replication.S
 Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
 an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
-by — a table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
+by. A table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
 may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
 survive neither that nor the checkpoint.
 
-**Partitioned Tables**
+**Partitioned tables**
 
 Partitioned tables are not yet supported in incremental snapshotting unless their publication sets
 ` + "`publish_via_partition_root = true`" + `. PostgreSQL otherwise publishes their changes under the
 individual partitions' names while the snapshot backfill reads the parent, so updates to
 already-read snapshot rows cannot be detected.
 
-A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all - a
-connection reset, say - the stream restarts and the signal is read again, so the request is not lost.
+A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all (for
+example, because the connection resets), the stream restarts and the signal is read again, so the request is not lost.
 
 Each table joins the back of the backfill queue. A table this run already covers is skipped and
 logged, so a repeated signal does not re-read it. To read one again, point
@@ -315,7 +340,7 @@ logged, so a repeated signal does not re-read it. To read one again, point
 
 Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
 omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
-under the default replica identity there is nothing in the message to recover it from — so
+under the default replica identity there is nothing in the message to recover it from, so
 ` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
 buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
 placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
@@ -327,7 +352,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 		// incremental snapshot config
 		Field(service.NewObjectField(fieldIncSnapshot,
 			service.NewBoolField(fieldIncSnapshotEnabled).
-				Description("Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `"+replication.SnapshotSignalType+"` row into `"+fieldSignalTableName+"` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or -- whatever the key type -- when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.\n\nThe following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.").
+				Description("Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `"+replication.SnapshotSignalType+"` row into `"+fieldSignalTableName+"` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or, whatever the key type, when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.\n\nThe following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.").
 				ShortDescription("Backfill signalled tables in chunks, alongside replication streaming.").
 				Default(incsnapshot.DefaultIncSnapshotEnabled),
 			service.NewIntField(fieldIncrementalSnapshotChunkSize).
@@ -342,7 +367,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 				ShortDescription("How long the backfill waits before retrying a chunk read that failed transiently, such as from a lock conflict.").
 				Default(incsnapshot.DefaultIncSnapshotRetryCooldown.String()),
 			service.NewStringField(fieldIncSnapshotCheckpointCache).
-				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
+				Description("A xref:components:caches/about.adoc[cache resource] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).

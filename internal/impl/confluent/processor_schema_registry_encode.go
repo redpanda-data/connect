@@ -56,6 +56,8 @@ func schemaRegistryEncoderConfig() *service.ConfigSpec {
 		Description(`
 Encodes messages automatically from schemas obtained from a https://docs.confluent.io/platform/current/schema-registry/index.html[Confluent Schema Registry service^] by polling the service for the latest schema version for target subjects.
 
+This processor uses the https://github.com/twmb/franz-go/tree/master/pkg/sr[Franz Kafka Schema Registry client^].
+
 Alternatively, when ` + "`schema_metadata`" + ` is set, the processor reads a schema in benthos common schema format from message metadata (as produced by CDC inputs such as ` + "`postgresql`" + `, ` + "`mysql_cdc`" + `, and ` + "`microsoft_sql_server_cdc`" + `), converts it to the target ` + "`format`" + ` (Avro or JSON Schema), registers it with the schema registry, and encodes the message. This is useful when the schema is not pre-registered in the registry and instead travels with the data.
 
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
@@ -90,7 +92,7 @@ When a target subject presents a protobuf schema that contains multiple messages
 We will be considering alternative approaches in future so please https://redpanda.com/slack[get in touch^] with thoughts and feedback.
 `).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
-		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
+		Field(service.NewInterpolatedStringField("subject").Description(`The schema subject to derive schemas from.`).
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
 		Field(service.NewStringField("refresh_period").

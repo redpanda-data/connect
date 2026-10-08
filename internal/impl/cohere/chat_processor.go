@@ -84,6 +84,8 @@ func chatProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor sends the contents of user prompts to the Cohere API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+ccpFieldUserPrompt+"`"+` configuration field to customize it.
 
+The model can also call external tools that you define in the `+"`"+ccpFieldTools+"`"+` field, and uses their results as supplementary context when it generates a response.
+
 To learn more about chat completion, see the https://docs.cohere.com/docs/chat-api[Cohere API documentation^].`).
 		Version("4.37.0").
 		Fields(

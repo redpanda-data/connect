@@ -58,7 +58,7 @@ Polls CloudWatch Log Groups for log events. Supports filtering by log streams, C
 
 Each log event becomes a separate message with metadata including the log group name, log stream name, timestamp, and ingestion time.
 
-IMPORTANT: This input tracks its position in memory only. If the process restarts, it resumes from the configured `+"`start_time`"+` (or the beginning if not set). For exactly-once processing, configure an appropriate `+"`start_time`"+` or implement idempotent downstream processing.
+IMPORTANT: This input tracks its position in memory only. If the process restarts, it resumes from `+"`start_time`"+`. With an RFC3339 `+"`start_time`"+`, or with none set, it can emit events it already delivered again (at-least-once). With `+"`start_time: now`"+`, it skips the events written while the pipeline was down. Make downstream processing idempotent or deduplicate the events.
 
 == Credentials
 

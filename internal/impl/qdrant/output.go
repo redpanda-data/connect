@@ -40,7 +40,7 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.33.0").
 		Categories("AI").
-		Summary("Adds items to a https://qdrant.tech/[Qdrant^] collection").
+		Summary("Adds items to a https://qdrant.tech/[Qdrant^] collection.").
 		Description(service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewOutputMaxInFlightField(),

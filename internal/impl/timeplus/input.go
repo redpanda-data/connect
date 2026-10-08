@@ -33,7 +33,7 @@ var inputConfigSpec *service.ConfigSpec
 func init() {
 	inputConfigSpec = service.NewConfigSpec().
 		Categories("Services").
-		Summary("Executes a query on Timeplus Enterprise and creates a message from each row received").
+		Summary("Executes a query on Timeplus Enterprise and creates a message from each row received.").
 		Description(`
 This input can execute a query on Timeplus Enterprise Cloud, Timeplus Enterprise (self-hosted) or Timeplusd. A structured message will be created
 from each row received.

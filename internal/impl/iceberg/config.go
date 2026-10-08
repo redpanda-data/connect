@@ -181,7 +181,7 @@ const rowOperationDocs = "\n" +
 	"* *Partitioned tables:* supported, with no requirement that the partition columns be a subset of `identifier_fields`. A `copy-on-write` `upsert` can even move a key from one partition to another.\n" +
 	"* *Table format:* version 1 or version 2, with no forced upgrade.\n" +
 	"\n" +
-	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a touched key: a batch of K keys spread across a table of N data files rewrites at worst one file per key, so roughly K/N of the table while K is below N and the whole table once K reaches N, and less than that when several keys share a file. Touching even a single key in a file rewrites that whole file, so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
+	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a row for a touched key, so the cost of a batch depends on how many files its keys' rows are spread across, not on how many keys it touches: keys that cluster into a few files rewrite only those files, and even one key can rewrite many files if its rows (for example, duplicates from `insert`) are spread across them. Touching even a single key in a file rewrites that whole file, so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
 	"\n" +
 	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
 	"\n" +
@@ -216,9 +216,9 @@ func icebergOutputConfig() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Version("4.80.0").
-		Summary("Write data to Apache Iceberg tables via REST catalog.").
+		Summary("Writes data to Apache Iceberg tables using the REST catalog API.").
 		Description(`
-Write streaming data to Apache Iceberg tables using the REST catalog API. This output supports:
+This output supports:
 
 * Multiple storage backends (S3, GCS, Azure)
 * Automatic table creation with schema detection

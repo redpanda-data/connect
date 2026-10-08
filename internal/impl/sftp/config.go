@@ -43,22 +43,22 @@ const (
 func connectionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(sFieldAddress).
-			Description("The address of the server to connect to."),
+			Description("The address (hostname or IP address) of the SFTP server to connect to."),
 		service.NewDurationField(sFieldConnectionTimeout).
 			Description("The connection timeout to use when connecting to the target server.").
 			Default("30s").
 			Advanced(),
 		service.NewObjectField(sFieldCredentials,
 			[]*service.ConfigField{
-				service.NewStringField(sFieldCredentialsUsername).Description("The username to authenticate with the SFTP server.").Default(""),
-				service.NewStringField(sFieldCredentialsPassword).Description("The password for the specified username to connect to the SFTP server.").Secret().Default(""),
+				service.NewStringField(sFieldCredentialsUsername).Description("The username required to authenticate with the SFTP server.").Default(""),
+				service.NewStringField(sFieldCredentialsPassword).Description("The password to use for authentication. Used together with `username` for basic authentication or with encrypted private keys for secure access.").Secret().Default(""),
 				service.NewStringField(sFieldCredentialsHostPublicKeyFile).Description("The path to the SFTP server's public key file, used for host key verification.").Optional(),
 				service.NewStringField(sFieldCredentialsHostPublicKey).Description("The raw contents of the SFTP server's public key, used for host key verification.").Optional(),
-				service.NewStringField(sFieldCredentialsPrivateKeyFile).Description("The path to the private key file, used for authenticating the username.").Optional(),
-				service.NewStringField(sFieldCredentialsPrivateKey).Description("The raw contents of the private key, used for authenticating the username.").Optional().Secret(),
-				service.NewStringField(sFieldCredentialsPrivateKeyPass).Description("Optional passphrase for decrypting the private key, if it's encrypted.").Secret().Default(""),
+				service.NewStringField(sFieldCredentialsPrivateKeyFile).Description("The path to a private key file used to authenticate with the SFTP server. You can also provide a private key using the `private_key` field.").Optional(),
+				service.NewStringField(sFieldCredentialsPrivateKey).Description("The raw contents of the private key used to authenticate with the SFTP server. This field provides an alternative to `private_key_file`.").Optional().Secret(),
+				service.NewStringField(sFieldCredentialsPrivateKeyPass).Description("An optional passphrase for decrypting the private key, if it is encrypted.").Secret().Default(""),
 			}...,
-		).Description("The credentials to use to log into the target server.").
+		).Description("The credentials required to log in to the SFTP server. This can include a username and password, or a private key for secure access.").
 			LintRule(`
 root = match {
   this.exists("host_public_key") && this.exists("host_public_key_file") => "both host_public_key and host_public_key_file can't be set simultaneously"

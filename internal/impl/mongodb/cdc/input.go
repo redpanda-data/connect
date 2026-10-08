@@ -190,14 +190,21 @@ func isUnresumableTokenError(err error) bool {
 
 func spec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.48.0").
 		Summary(`Streams changes from a MongoDB replica set.`).
-		Description(`Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
+		Description(`Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[change streams^]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
 If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. After `+strconv.Itoa(maxConsecutiveUnresumableRecoveries-1)+` such recoveries in a row without the change stream ever advancing in between - which usually means the snapshot is taking longer than the oplog window - the next failure keeps the checkpoint and the input fails on every reconnect with an actionable error instead of re-snapshotting forever; after addressing the cause, restart the pipeline (or delete the checkpoint cache entry) to resume recovery.
 
 With `+"`stream_snapshot`"+` disabled there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it fails with an error on every reconnect and preserves the checkpoint, and skipping the gap has to be opted into with `+"`on_unresumable_position: reset`"+`.
 
-By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
+By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[MongoDB documentation^].
+
+== Snapshot and streaming modes
+
+When `+"`stream_snapshot`"+` is `+"`true`"+` and `+"`checkpoint_cache`"+` holds no stream position, this input records the current change stream position, reads all documents in the selected collections using `+"`snapshot_parallelism`"+` connections, and then streams the changes made since the recorded position. Snapshot progress is not checkpointed, so if the pipeline restarts before the snapshot completes, the snapshot runs again from the start. Once the snapshot completes and is acknowledged, its position is stored in `+"`checkpoint_cache`"+`, so later restarts resume the stream without another snapshot.
+
+When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the latest position in the oplog. In both modes, a restart resumes streaming from the position stored in `+"`checkpoint_cache`"+`.
 
 == Scaling
 
@@ -297,8 +304,8 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				Default(false).
 				Advanced(),
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{
-				"update_lookup":       "In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[^MongoDB documentation] for more information.",
-				"pre_and_post_images": "Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].",
+				"update_lookup":       "In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[MongoDB documentation^] for more information.",
+				"pre_and_post_images": "Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[MongoDB documentation^].",
 				"partial_update": `In this mode update operations only have a description of the update operation, which follows the following schema:
       {
         "_id": <document_id>,

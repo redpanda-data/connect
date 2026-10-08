@@ -119,3 +119,27 @@ func saslFieldSpec() *service.ConfigField {
 			Secret(),
 	).Description("Enables SASL authentication.").Advanced().Optional()
 }
+
+// urlFieldSpec returns the deprecated url field shared by the input and output.
+func urlFieldSpec() *service.ConfigField {
+	return service.NewURLField(urlField).
+		Description("A URL to connect to.").
+		Example("amqp://localhost:5672/").
+		Example("amqps://guest:guest@localhost:5672/").
+		Deprecated().
+		Optional()
+}
+
+// urlsFieldSpec returns the urls field shared by the input and output.
+func urlsFieldSpec() *service.ConfigField {
+	return service.NewURLListField(urlsField).
+		Description(`A list of URLs to connect to. Each URL in the list is tried in order until a connection is established, and that URL is then used until the connection is closed.
+
+If an item in the list contains commas, it is split into multiple URLs.`).
+		ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
+		Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
+		Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
+		Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
+		Optional().
+		Version("4.23.0")
+}

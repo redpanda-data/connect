@@ -24,7 +24,8 @@ import (
 
 func otlpTracerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
+		Summary("Sends tracing events to one or more OpenTelemetry Collector endpoints.").
+		Description(`Exports tracing events to one or more https://opentelemetry.io/docs/collector/[OpenTelemetry Collector^] endpoints over HTTP or gRPC.`).
 		Fields(
 			service.NewStringField(otFieldService).
 				Default("benthos").

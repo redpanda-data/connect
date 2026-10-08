@@ -54,13 +54,13 @@ func migratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.67.0").
-		Summary("Kafka consumer for migration pipelines. All migration logic is handled by the redpanda_migrator output.").
+		Summary("Consumes records from a source Kafka or Redpanda cluster for the redpanda_migrator output to migrate.").
 		Description(`
 The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream.
 It does not perform topic/schema/group synchronisation.
 All migration features and coordination live in the paired ` + "`redpanda_migrator`" + ` output.
 
-**IMPORTANT:** This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
+IMPORTANT: This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
 Each pipeline must have both input and output components configured.
 For capabilities, guarantees, scheduling, and examples, see the output documentation.
 
@@ -71,7 +71,35 @@ adjust the following fields to increase buffer sizes and batch processing:
 - ` + "`max_yield_batch_bytes: 1MB`" + `
 
 These settings allow the consumer to buffer more data per partition and yield larger batches,
-reducing overhead and improving throughput at the cost of higher memory usage.`).
+reducing overhead and improving throughput at the cost of higher memory usage.
+
+== Delivery guarantees
+
+This input commits consumer group offsets only after the paired output acknowledges the writes, so it provides the same at-least-once delivery and per-partition ordering as the ` + "xref:components:inputs/redpanda.adoc[`redpanda` input]" + `.
+
+When a pipeline contains more than one migrator pair, each input is paired with the output that has the same ` + "`label`" + `. The labels must match exactly.
+
+== Source cluster permissions
+
+When the source cluster enforces ACLs, the source principal needs the topic ` + "`READ`" + ` and ` + "`DESCRIBE_CONFIGS`" + ` operations, in addition to the consumer group and cluster permissions that the migration uses. A ` + "`READ`" + ` ACL implies ` + "`DESCRIBE`" + ` but not ` + "`DESCRIBE_CONFIGS`" + `, so without ` + "`DESCRIBE_CONFIGS`" + ` the input consumes records but the paired output fails to create topics with a ` + "`TOPIC_AUTHORIZATION_FAILED`" + ` error.
+
+== Metrics
+
+When a consumer group is set, this input emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic. The metric records the number of produced messages that the consumer group has not yet read from each topic partition.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- ` + "`kafka_key`" + `
+- ` + "`kafka_topic`" + `
+- ` + "`kafka_partition`" + `
+- ` + "`kafka_offset`" + `
+- ` + "`kafka_lag`" + `: Set only when ` + "`consumer_group`" + ` is set.
+- ` + "`kafka_timestamp_ms`" + `
+- ` + "`kafka_timestamp_unix`" + `
+- ` + "`kafka_tombstone_message`" + `
+- All record headers`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzConsumerFields()...).
@@ -87,12 +115,12 @@ func migratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.67.0").
-		Summary("A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.").
+		Summary("Migrates topics, records, schemas, consumer group offsets, and topic ACLs from a source Kafka or Redpanda cluster to a destination cluster.").
 		Description(`
 The `+"`redpanda_migrator`"+` output performs all migration work.
 It coordinates topics, schema registry, and consumer groups to migrate data from a source Kafka/Redpanda cluster to a destination cluster.
 
-**IMPORTANT:** This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline.
+IMPORTANT: This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline.
 Each pipeline must have both input and output components configured.
 
 **Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline,
@@ -135,7 +163,7 @@ What gets synchronised:
 - Consumer Groups
   - Periodic syncing
   - Group selection via include/exclude regex
-  - Only groups in `+"`Empty`"+` state are migrated (active groups are skipped)
+  - Groups in every state except `+"`Dead`"+` are migrated by default. Set `+"`consumer_groups.only_empty`"+` to `+"`true`"+` to migrate only groups in the `+"`Empty`"+` state
   - Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`
   - No rewind guarantee: destination offsets are never moved backwards
   - Commit performed in parallel with per-group metrics
@@ -143,19 +171,20 @@ What gets synchronised:
 
 How it runs:
 
-- Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
+- Topics: the first write triggers a sync of all consumed topics, and any other topic is created when its first record arrives. A background loop also syncs topics every `+"`sync_topic_interval`"+` (default `+"`5m`"+`), which creates destination topics for source topics that have no current data, for example after retention cleanup. Set `+"`sync_topic_interval`"+` to `+"`0s`"+` to disable the periodic sync.
 - Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
 - Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
 
 Guarantees:
 
-- Topics are created with the intended partitioning and configured replication factor. Existing topics are respected; partition mismatches are logged and consumer group migration for mismatched topics is skipped.
+- Topics are created with the intended partitioning and configured replication factor. Existing destination topics are never re-created. If an existing destination topic has fewer partitions than its source topic, partitions are added to match. Consumer group migration skips topics whose partition counts still differ.
 - Consumer group offsets are never rewound. Only translated forward positions are committed.
 - ACL replication excludes `+"`ALLOW WRITE`"+` operations and downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+` to avoid unsafe grants.
 
 Limitations and requirements:
 
 - Destination Schema Registry must be in `+"`READWRITE`"+` or `+"`IMPORT`"+` mode.
+- When the destination cluster enforces ACLs, the destination principal needs permission to create topics, add partitions, describe topic configurations, and produce records. Consumer group migration also needs permission to commit the groups' offsets, and `+"`sync_topic_acls`"+` also needs permission to create ACLs.
 - Offset translation is best-effort: if the previous-offset timestamp cannot be read, or no destination offset exists after the timestamp, that partition is skipped.
 - Consumer group migration requires identical partition counts for source and destination topics.
 

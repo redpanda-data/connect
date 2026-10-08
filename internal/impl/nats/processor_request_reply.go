@@ -29,7 +29,7 @@ func natsRequestReplyConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.27.0").
-		Summary("Sends a message to a NATS subject and expects a reply, from a NATS subscriber acting as a responder, back.").
+		Summary("Sends a message to a NATS subject and expects a reply back from a NATS subscriber acting as a responder.").
 		Description(`
 == Metadata
 
@@ -50,7 +50,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
-			Description("A subject to write to.").
+			Description(`A subject to write to.`).
 			Example("foo.bar.baz").
 			Example(`${! meta("kafka_topic") }`).
 			Example(`foo.${! json("meta.type") }`)).
@@ -59,13 +59,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			Optional().
 			Advanced().
 			Example("_INBOX_joe")).
-		Field(service.NewInterpolatedStringMapField("headers").
-			Description("Explicit message headers to add to messages.").
-			Default(map[string]any{}).
-			Example(map[string]any{
-				"Content-Type": "application/json",
-				"Timestamp":    `${!meta("Timestamp")}`,
-			})).
+		Field(headersField()).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).

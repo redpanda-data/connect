@@ -58,7 +58,7 @@ Records are processed and delivered from each partition in batches as received f
 
 == Metrics
 
-Emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
+When a consumer group is set, this input emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic. The metric records the number of produced messages that the consumer group has not yet read from each topic partition.
 
 == Metadata
 
@@ -81,6 +81,7 @@ This input adds the following metadata fields to each message:
 func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
+		Version("4.39.0").
 		Categories("Services").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(RedpandaInputDescription(`

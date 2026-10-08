@@ -78,9 +78,9 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.39.0").
-		Summary("Ingest data into Snowflake using Snowpipe Streaming.").
+		Summary("Ingests data into Snowflake using the Snowpipe Streaming classic architecture.").
 		Description(`
-Ingest data into Snowflake using Snowpipe Streaming.
+For more information, see the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-overview[Snowpipe Streaming classic architecture^] documentation. This output doesn't work with the Snowpipe Streaming high-performance architecture.
 
 [%header,format=dsv]
 |===
@@ -100,10 +100,26 @@ For TIMESTAMP, TIME and DATE columns, you can parse different string formats usi
 Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
 
 There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.
+
+== Schema handling
+
+Each message becomes one row in the target table. The keys of a message object are matched to the table's column names, and each value must match its column's data type, otherwise the write fails with an error. When `+"`schema_evolution.enabled`"+` is `+"`false`"+`, keys that don't match a column are ignored, and columns that a message doesn't set are written as `+"`null`"+`. A message that doesn't set a `+"`NOT NULL`"+` column fails. When `+"`schema_evolution.enabled`"+` is `+"`true`"+`, a key that doesn't match a column adds a column with a data type derived from the value, unless the value is `+"`null`"+` and `+"`schema_evolution.ignore_nulls`"+` is `+"`true`"+` (the default). A missing value for a `+"`NOT NULL`"+` column drops that constraint.
 `+service.OutputPerformanceDocs(true, true)+`
 
 It is recommended that each batches results in at least 16MiB of compressed output being written to Snowflake.
 You can monitor the output batch size using the `+"`snowflake_compressed_output_size_bytes`"+` metric.
+
+== Metrics
+
+This output emits the following metrics:
+
+- `+"`snowflake_compressed_output_size_bytes`"+` (counter): The number of bytes of compressed output uploaded to Snowflake.
+- `+"`snowflake_convert_latency_ns`"+` (timer): The time taken to convert messages into Snowflake column data types.
+- `+"`snowflake_serialize_latency_ns`"+` (timer): The time taken to serialize the converted columnar data into a file for upload.
+- `+"`snowflake_build_output_latency_ns`"+` (timer): The time taken to build the file that is uploaded to Snowflake, which includes the convert and serialize time.
+- `+"`snowflake_upload_latency_ns`"+` (timer): The time taken to upload the file to Snowflake.
+- `+"`snowflake_register_latency_ns`"+` (timer): The time taken to register the uploaded file with Snowflake.
+- `+"`snowflake_commit_latency_ns`"+` (timer): The time taken to commit the uploaded data to the target table.
 `).
 		Fields(
 			service.NewStringField(ssoFieldAccount).

@@ -189,7 +189,40 @@ For the CSV format when the field ` + "`csv.header`" + ` is specified a header r
 
 === Parquet
 
-For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` processor and each message that is sent to the output must be a full parquet message.
+For parquet, the data can be encoded using the ` + "xref:components:processors/parquet_encode.adoc[`parquet_encode`]" + ` processor and each message that is sent to the output must be a full parquet message. For example:
+
+` + "```yaml" + `
+input:
+  generate:
+    mapping: |
+      root = {
+        "foo": random_int(),
+        "bar": uuid_v4(),
+        "time": now(),
+      }
+    interval: 0
+    count: 1000
+    batch_size: 1000
+
+pipeline:
+  processors:
+    - parquet_encode:
+        schema:
+          - name: foo
+            type: INT64
+          - name: bar
+            type: UTF8
+          - name: time
+            type: UTF8
+        default_compression: zstd
+
+output:
+  gcp_bigquery:
+    project: "${PROJECT}"
+    dataset: "my_bq_dataset"
+    table: "redpanda_connect_ingest"
+    format: PARQUET
+` + "```" + `
 
 ` + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("project").Description("Specify the project ID of the dataset to insert data into. If not set, the project ID is inferred from the project linked to the service account or read from the `GOOGLE_CLOUD_PROJECT` environment variable.").
