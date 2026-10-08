@@ -27,8 +27,8 @@ import (
 
 func redisRatelimitConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Summary(`A token bucket rate limit backed by Redis, shared across all Redpanda Connect instances that use the same Redis instance.`).
-		Description(`This rate limit uses a token bucket algorithm to limit the number of requests to a given ` + "`count`" + ` within a given ` + "`interval`" + `. The rate limit is shared across all instances of Redpanda Connect that use the same Redis instance, which must all have a consistent ` + "`count`" + ` and ` + "`interval`" + `.`).
+		Summary(`A fixed-window rate limit backed by Redis, shared by every Redpanda Connect instance that uses the same Redis instance and key.`).
+		Description(`This rate limit counts requests in Redis under ` + "`key`" + ` and allows up to ` + "`count`" + ` of them in each ` + "`interval`" + `. The window starts with its first request and resets when ` + "`interval`" + ` has passed. Every Redpanda Connect instance that uses the same Redis instance and ` + "`key`" + ` shares the limit, so they must all set the same ` + "`count`" + ` and ` + "`interval`" + `.`).
 		Version("4.12.0")
 
 	for _, f := range clientFields() {
@@ -36,7 +36,7 @@ func redisRatelimitConfig() *service.ConfigSpec {
 	}
 
 	spec.Field(service.NewIntField("count").
-		Description("The maximum number of requests allowed in each `interval`. Requests are counted in Redis under `key`, so every Redpanda Connect instance that uses the same key shares this limit. The value must be greater than zero.").
+		Description("The maximum number of requests allowed in each `interval`. Requests are counted in Redis under `key`, so every Redpanda Connect instance that uses the same Redis instance and the same `key` shares this limit. The value must be greater than zero.").
 		Default(1000).LintRule(`root = if this <= 0 { [ "count must be larger than zero" ] }`)).
 		Field(service.NewDurationField("interval").
 			Description("The time window to limit requests by.").

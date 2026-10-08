@@ -119,16 +119,16 @@ func clientFields(tlsVersion string) []*service.ConfigField {
 			Default("60s"),
 		service.NewObjectField(cFieldExponentialReconnectionPolicy,
 			service.NewIntField(cFieldExponentialReconnectionPolicyMaxRetries).
-				Description("The maximum number of retry attempts.").
+				Description("The maximum number of connection attempts each time the driver connects to a host.").
 				LintRule(`root = if this < 1 { "reconnection.max_retries must be greater than or equal to 1" }`),
 			service.NewDurationField(cFieldExponentialReconnectionInitialInterval).
-				Description("The base wait between the retries the driver makes within one connection attempt. The first wait is a random duration up to this value, and each later wait doubles, with random jitter of plus or minus half this value, until `max_interval` is reached.").
+				Description("The base wait between the connection attempts the driver makes each time it connects to a host. The first wait is a random duration up to this value, and each later wait doubles, with random jitter of plus or minus half this value, until `max_interval` is reached.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.initial_interval must be a positive duration"}`),
 			service.NewDurationField(cFieldExponentialReconnectionMaxInterval).
-				Description("The longest wait between the retries within one connection attempt.").
+				Description("The longest wait between the connection attempts each time the driver connects to a host.").
 				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.max_interval must be a positive duration"}`),
 		).
-			Description("Exponential backoff for the retries the driver makes within one connection attempt to a host. It applies on the initial connection and on each `reconnect_interval` attempt to a node marked as DOWN, and replaces the driver's default of 3 retries 1s apart.").Version("4.66.0").
+			Description("Exponential backoff between the connection attempts that the driver makes each time it connects to a host. It applies on the initial connection and on each `reconnect_interval` attempt to a node marked as DOWN, and replaces the driver's default of 3 attempts 1s apart.").Version("4.66.0").
 			Optional().
 			Advanced(),
 	}
