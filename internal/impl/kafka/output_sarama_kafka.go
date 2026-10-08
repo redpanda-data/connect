@@ -30,6 +30,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -95,8 +97,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			SaramaSASLField(),
 			service.NewInterpolatedStringField(oskFieldTopic).
 				Description(`The topic to publish messages to.`),
-			service.NewStringField(oskFieldClientID).
-				Description("An identifier for the client connection.").
+			saramaClientIDField(oskFieldClientID).
 				Advanced().Default("benthos"),
 			saramaTargetVersionField(oskFieldTargetVersion),
 			service.NewStringField(oskFieldRackID).
@@ -133,7 +134,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Example(map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).
 				Optional(),
 			service.NewMetadataExcludeFilterField(oskFieldMetadata).
-				Description("Specify criteria for which metadata values are sent with messages as headers."),
+				Description("Specify which metadata values are added to each record as Kafka headers. Headers are only sent when `target_version` is `0.11.0` or later."),
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
@@ -156,13 +157,13 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().Default(false),
 			service.NewBatchPolicyField(oskFieldBatching),
 			service.NewIntField(oskFieldMaxRetries).
-				Description("The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").
+				Description(retries.MaxRetriesDescription).
 				Advanced().Default(0),
 			service.NewBackOffField(oskFieldBackoff, true, &backoff.ExponentialBackOff{
 				InitialInterval: time.Second * 3,
 				MaxInterval:     time.Second * 10,
 				MaxElapsedTime:  time.Second * 30,
-			}).Description("Control time intervals between retry attempts.").Advanced(),
+			}).Description("The exponential backoff between attempts to resend messages that failed to send.").Advanced(),
 			service.NewInterpolatedStringField(oskFieldTimestamp).
 				Description(kafkaOutputTimestampDescription).
 				Example(`${! timestamp_unix() }`).

@@ -191,6 +191,26 @@ func bqSelectWhereField() *service.ConfigField {
 		Optional()
 }
 
+func bqSelectArgsMappingField() *service.ConfigField {
+	return service.NewBloblangField("args_mapping").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values for the `?` placeholders in the `where` field, in order. Each value is sent to BigQuery as a positional query parameter.").
+		ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
+		Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
+		Optional()
+}
+
+func bqSelectPrefixField() *service.ConfigField {
+	return service.NewStringField("prefix").
+		Description("Optional GoogleSQL text to add before the `SELECT` keyword of the generated query, for example a `WITH` clause.").
+		Optional()
+}
+
+func bqSelectSuffixField() *service.ConfigField {
+	return service.NewStringField("suffix").
+		Description("Optional GoogleSQL text to append after the generated query, for example `GROUP BY`, `ORDER BY`, or `LIMIT` clauses.").
+		Optional()
+}
+
 // bqJobLabelsField returns the job_labels field for a component that runs
 // BigQuery jobs of the given kind, such as "query" or "load".
 func bqJobLabelsField(jobKind string) *service.ConfigField {

@@ -46,8 +46,7 @@ func outputConfigSpec() *service.ConfigSpec {
 		Summary(`Send messages over a Nanomsg socket.`).
 		Description(`Currently only PUSH and PUB sockets are supported.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewURLListField(noFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),
+			urlsField(),
 			service.NewBoolField(noFieldBind).
 				Description("Whether the URLs listed should be bind (otherwise they are connected to).").
 				Default(false),

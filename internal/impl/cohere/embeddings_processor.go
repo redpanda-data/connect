@@ -23,6 +23,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -57,8 +59,7 @@ To learn more about vector embeddings, see the https://docs.cohere.com/docs/embe
 			)...,
 		).
 		Fields(
-			service.NewBloblangField(oepFieldTextMapping).
-				Description("The text you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.").
+			llm.EmbeddingTextMappingField(oepFieldTextMapping).
 				Optional(),
 			service.NewStringAnnotatedEnumField(oepFieldInputType, map[string]string{
 				"search_document": "Used for embeddings stored in a vector database for search use-cases.",

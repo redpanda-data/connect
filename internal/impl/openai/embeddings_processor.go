@@ -22,6 +22,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -54,8 +56,7 @@ To learn more about vector embeddings, see the https://platform.openai.com/docs/
 			)...,
 		).
 		Fields(
-			service.NewBloblangField(oepFieldTextMapping).
-				Description("The text you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.").
+			llm.EmbeddingTextMappingField(oepFieldTextMapping).
 				Optional(),
 			service.NewIntField(oepFieldDims).
 				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").

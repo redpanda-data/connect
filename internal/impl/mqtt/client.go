@@ -57,7 +57,7 @@ If an item in the list contains commas, it is expanded into multiple URLs.`).
 			ShortDescription("URLs to connect to, as scheme://host:port where scheme is tcp, ssl or ws.").
 			Example([]string{"tcp://localhost:1883"}),
 		service.NewStringField(msFieldClientClientID).
-			Description("An identifier for the client connection.").
+			Description("The client identifier sent to the MQTT broker when connecting, which the broker uses to identify the client session. Use `dynamic_client_id_suffix` to give each run of the pipeline a unique identifier.").
 			Default(""),
 		service.NewStringAnnotatedEnumField(msFieldClientDynClientIDSuffix, map[string]string{
 			"nanoid": "append a nanoid of length 21 characters",

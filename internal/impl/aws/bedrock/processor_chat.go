@@ -27,6 +27,7 @@ import (
 
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -55,12 +56,10 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 			Examples("amazon.titan-text-express-v1", "anthropic.claude-3-5-sonnet-20240620-v1:0", "cohere.command-text-v14", "meta.llama3-1-70b-instruct-v1:0", "mistral.mistral-large-2402-v1:0").
 			Description("The model ID to use. For a full list, see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].").
 			ShortDescription("The model ID to use.")).
-		Field(service.NewStringField(bedcpFieldUserPrompt).
-			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+		Field(llm.PromptField(bedcpFieldUserPrompt).
 			Optional()).
-		Field(service.NewStringField(bedcpFieldSystemPrompt).
-			Optional().
-			Description("The system prompt to submit to the AWS Bedrock LLM.")).
+		Field(llm.SystemPromptField(bedcpFieldSystemPrompt).
+			Optional()).
 		Field(service.NewIntField(bedcpFieldMaxTokens).
 			Optional().
 			Description("The maximum number of tokens to allow in the generated response.").

@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -83,7 +84,7 @@ output:
 
 func schemaRegistryOutputConfigFields() []*service.ConfigField {
 	return append([]*service.ConfigField{
-		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
+		service.NewStringField(sroFieldURL).Description(schemaregistry.URLFieldDescription),
 		service.NewInterpolatedStringField(sroFieldSubject).Description(`The subject name.`),
 		service.NewInterpolatedStringField(sroFieldSubjectCompatibilityLevel).
 			Description("The compatibility level for the subject. Can be one of `BACKWARD`, `BACKWARD_TRANSITIVE`, `FORWARD`, `FORWARD_TRANSITIVE`, `FULL`, `FULL_TRANSITIVE`, `NONE`.").

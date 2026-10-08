@@ -101,17 +101,9 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(bqSelectWhereField()).
 		Field(bqJobLabelsField("query")).
-		Field(service.NewBloblangField("args_mapping").
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
-			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
-			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
-			Optional()).
-		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the select query (before SELECT).").
-			Optional()).
-		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the select query.").
-			Optional()).
+		Field(bqSelectArgsMappingField()).
+		Field(bqSelectPrefixField()).
+		Field(bqSelectSuffixField()).
 		Example("Word count",
 			`
 Given a stream of English terms, enrich the messages with the word count from Shakespeare's public works:`,

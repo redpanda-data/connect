@@ -31,6 +31,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/llm"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -105,11 +107,9 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 			)...,
 		).
 		Fields(
-			service.NewInterpolatedStringField(ocpFieldUserPrompt).
-				Description("The user prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+			llm.PromptField(ocpFieldUserPrompt).
 				Optional(),
-			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
-				Description("The system prompt to submit along with the user prompt.").
+			llm.SystemPromptField(ocpFieldSystemPrompt).
 				Optional(),
 			service.NewBloblangField(ocpFieldHistory).
 				Description(`Include messages from a prior conversation. You must use a Bloblang query to create an array of objects in the form of `+"`"+`[{"role": "user", "content": "<text>"}, {"role":"assistant", "content":"<text>"}]`+"`"+` where:
@@ -157,7 +157,7 @@ If you choose the `+"`"+`json_schema`+"`"+` option, you must also configure a `+
 				ocpFieldSchemaRegistry,
 				slices.Concat(
 					[]*service.ConfigField{
-						service.NewURLField(ocpFieldSchemaRegistryURL).Description("The base URL of the schema registry service."),
+						service.NewURLField(ocpFieldSchemaRegistryURL).Description(schemaregistry.URLFieldDescription),
 						service.NewStringField(ocpFieldSchemaRegistryNamePrefix).
 							Default("schema_registry_id_").
 							Description("A prefix to add to the schema registry name. To form the complete schema registry name, the schema ID is appended as a suffix."),
@@ -206,20 +206,7 @@ Redpanda recommends adding a value for this field or `+"`"+`temperature`+"`"+`, 
 				Description("Specify up to four stop sequences to use. When the model encounters a stop pattern, it stops generating text and returns the final response."),
 			service.NewObjectListField(
 				ocpFieldTools,
-				service.NewStringField(ocpToolFieldName).Description("The name of this tool."),
-				service.NewStringField(ocpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
-				service.NewObjectField(
-					ocpToolFieldParams,
-					service.NewStringListField(ocpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
-					service.NewObjectMapField(
-						ocpToolParamFieldProps,
-						service.NewStringField(ocpToolParamPropFieldType).Description("The type of this parameter."),
-						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
-						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
-					).Description("The properties for the processor's input data"),
-				).Description("The parameters the LLM needs to provide to invoke this tool.").
-					Default([]any{}),
-				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+				llm.ToolFields(llm.ToolParametersField().Default([]any{}))...,
 			).Description(`External tools the model can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified model can choose when to invoke them to help answer a prompt.
 
 NOTE: If you don't want to use external tools, enter an empty array `+"`"+`tools: []`+"`"+`.`).

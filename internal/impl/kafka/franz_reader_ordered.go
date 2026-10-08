@@ -39,6 +39,13 @@ const (
 	kroFieldMaxYieldBatchBytes    = "max_yield_batch_bytes"
 )
 
+// commitPeriodField returns the commit_period field of the Kafka inputs that
+// commit consumer group offsets on a timer.
+func commitPeriodField(name string) *service.ConfigField {
+	return service.NewDurationField(name).
+		Description("The period of time between each commit of the current partition offsets to the consumer group. Offsets are always committed during shutdown.")
+}
+
 // franzConsumerGroupField returns the consumer group field shared by the
 // ordered and unordered franz-go readers.
 func franzConsumerGroupField(name string) *service.ConfigField {
@@ -67,8 +74,7 @@ func franzTopicLagRefreshPeriodField(name string) *service.ConfigField {
 func FranzReaderOrderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		franzConsumerGroupField(kroFieldConsumerGroup),
-		service.NewDurationField(kroFieldCommitPeriod).
-			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+		commitPeriodField(kroFieldCommitPeriod).
 			Default("5s").
 			Advanced(),
 		service.NewStringField(kroFieldPartitionBuffer).

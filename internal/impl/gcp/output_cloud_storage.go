@@ -156,10 +156,10 @@ output:
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringField(csoFieldContentType).
-				Description("The content type to set for each object.").
+				Description("The MIME type stored in the `contentType` metadata of each Cloud Storage object, which is returned as the `Content-Type` header when the object is downloaded.").
 				Default("application/octet-stream"),
 			service.NewInterpolatedStringField(csoFieldContentEncoding).
-				Description("An optional content encoding to set for each object.").
+				Description("An optional value for the `contentEncoding` metadata of each Cloud Storage object, such as `gzip` for objects that are stored compressed.").
 				Default("").
 				Advanced(),
 			service.NewInterpolatedStringEnumField(csoFieldCollisionMode, "overwrite", "append", "error-if-exists", "ignore").
@@ -173,7 +173,7 @@ output:
 				Advanced().
 				Default(16*1024*1024), // googleapi.DefaultUploadChunkSize
 			service.NewDurationField(csoFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("The maximum period to wait for a message batch to be written to Cloud Storage, including any collision checks and appends. When the timeout is reached, the write is abandoned and reattempted.").
 				Example("1s").
 				Example("500ms").
 				Default("3s"),

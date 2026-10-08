@@ -30,6 +30,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 const (
@@ -151,9 +152,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Optional().
 		Version("4.99.0"),
 	).
-	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
-		Default(1)).
+	Field(cdcreplication.MaxParallelSnapshotTablesField()).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
 		Description("The maximum number of rows fetched per query when taking a snapshot of a table with a `" + ociFieldSnapshotFilters + "` entry configured. Tables without one are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
 		Default(1000),

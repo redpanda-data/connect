@@ -49,8 +49,7 @@ func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		franzConsumerGroupField(kruFieldConsumerGroup),
 		franzCheckpointLimitField(kruFieldCheckpointLimit).Advanced(),
-		service.NewDurationField(kruFieldCommitPeriod).
-			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+		commitPeriodField(kruFieldCommitPeriod).
 			Default("5s").
 			Advanced(),
 		service.NewBoolField(kruFieldMultiHeader).

@@ -33,6 +33,9 @@ const (
 	fieldTLS     = "tls"
 )
 
+// URLFieldDescription is the description of a Schema Registry base URL field.
+const URLFieldDescription = "The base URL of the schema registry service."
+
 // ConfigFields returns the standard Schema Registry configuration fields.
 // These fields can be embedded in any component that needs Schema Registry integration.
 func ConfigFields() []*service.ConfigField {
