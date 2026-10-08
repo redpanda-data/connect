@@ -324,8 +324,8 @@ output:
 			"Ingesting data exactly once from Redpanda",
 			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
 
-NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for
-channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
+NOTE: If attempting to do exactly-once it's important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for
+`+"`channel_name`"+` and `+"`offset_token`"+` first. Removing the `+"`offset_token`"+` is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
   redpanda:
