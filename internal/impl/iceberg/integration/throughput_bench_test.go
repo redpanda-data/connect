@@ -72,7 +72,7 @@ func TestWriteThroughput(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const namespace = "bench"
 	infra.CreateNamespace(t, namespace)
