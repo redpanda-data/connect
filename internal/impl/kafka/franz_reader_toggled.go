@@ -28,6 +28,16 @@ const (
 	krtFieldUnorderedBatching        = "batching"
 )
 
+// franzCheckpointLimitField returns the checkpoint limit field shared by the
+// unordered franz-go reader and the unordered processing mode of the toggled
+// reader.
+func franzCheckpointLimitField(name string) *service.ConfigField {
+	return service.NewIntField(name).
+		Description("The maximum number of messages that are processed in parallel inside the same partition before back pressure is applied.\n\nWhen a message with a specific offset is delivered to the output, the offset is only committed when all messages of previous offsets have also been delivered. This behavior ensures at-least-once delivery guarantees. However, in the event of crashes or server faults, it also increases the likelihood of duplicates. To decrease this risk, reduce the `checkpoint_limit` value.").
+		ShortDescription("How many messages of the same partition may be processed in parallel before back pressure is applied.").
+		Default(1024)
+}
+
 // FranzReaderToggledConfigFields returns config fields for customising the
 // behaviour of kafka reader with a toggle between ordered and unordered
 // processing.
@@ -38,15 +48,12 @@ func FranzReaderToggledConfigFields() []*service.ConfigField {
 			service.NewBoolField(krtFieldUnorderedEnabled).
 				Description("Whether to enable the unordered processing of messages from a given partition.").
 				Default(false),
-			service.NewIntField(krtFieldUnorderedCheckpointLimit).
-				Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
-				ShortDescription("How many messages of the same partition may be processed in parallel before back pressure is applied.").
-				Default(1024),
+			franzCheckpointLimitField(krtFieldUnorderedCheckpointLimit),
 			service.NewBatchPolicyField(krtFieldUnorderedBatching).
-				Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+				Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance and useful for windowed processing, and doing so preserves the ordering of topic partitions.").
 				ShortDescription("Batching policy applied per topic partition, grouping messages before they are flushed for processing."),
 		).
-			Description("Configures partition consumers to allow parallel and therefore unordered processing of messages of any given partition. This allows for better utilization of processing threads and asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the checkpoint_limit field.").
+			Description("Allows consumers to process messages of any given partition in parallel, which may result in unordered processing. This option enables asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the `checkpoint_limit` field.").
 			ShortDescription("Allow parallel, and therefore unordered, processing of messages within a single partition.").
 			Advanced(),
 	)
