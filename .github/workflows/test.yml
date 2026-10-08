@@ -81,6 +81,76 @@ jobs:
       - name: Check that task docs left tracked files unchanged
         run: test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "task docs changed tracked files, such as internal/plugins/info.csv. Run 'CGO_ENABLED=1 TAGS=x_benthos_extra task docs' and commit the result (see docs/README.md)."; git status --short >&2; exit 1; }
 
+      # The docs check below builds the docs site with this tree.
+      - name: Upload the generated docs
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-docs-head
+          path: docs/modules
+          retention-days: 7
+
+  # The same tree at the PR's merge base, so the docs check can list the
+  # published pages this PR changes. Generated here rather than taken from a
+  # main build: main may have moved on since the PR branched.
+  docs-base:
+    if: >-
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check out the merge base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git checkout --quiet "$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+      - name: Generate the reference docs
+        run: go run -tags x_benthos_extra ./cmd/tools/docs_gen
+      - name: Upload the generated docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-docs-base
+          path: docs/modules
+          retention-days: 7
+
+  # Builds the Connect docs with this PR's generated tree and checks the
+  # result: Antora errors, broken anchors, and unconverted markup on the
+  # pages the PR changes block. When the PR changes a published page, it
+  # comments with the changed pages and a preview link, and asks the docs
+  # team to review. See docs/README.md.
+  docs-check:
+    needs: [docs, docs-base]
+    if: >-
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
+      pull-requests: write
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@817a5381ebf4f978941ad79d5c15139599d9a2e8
+    with:
+      docs_artifact: connect-docs-head
+      base_docs_artifact: connect-docs-base
+      aws_region: ${{ vars.RP_AWS_CRED_REGION }}
+      aws_role_name_prefix: ${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}
+    secrets:
+      aws_cred_account_id: ${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}
+
   golangci-lint:
     runs-on: ubuntu-latest
     env:

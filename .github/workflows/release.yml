@@ -189,7 +189,7 @@ jobs:
   # Attaches the generated reference docs to the release. On a tag push it runs
   # after goreleaser publishes the release. To regenerate the asset for an
   # existing release, run this workflow with the docs_tag input.
-  docs-asset:
+  docs-generate:
     runs-on: ubuntu-latest
     needs: goreleaser
     if: >-
@@ -198,7 +198,7 @@ jobs:
         (github.event_name == 'workflow_dispatch' && inputs.docs_tag != '')
       )
     permissions:
-      contents: write
+      contents: read
     env:
       DOCS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_tag || github.ref_name }}
     steps:
@@ -229,13 +229,56 @@ jobs:
               exit 1
             fi
           done
+      - name: Upload the generated docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-docs-release
+          path: docs/modules
+          retention-days: 30
+
+  # The docs site publishes the asset of the latest release, so a release
+  # whose generated docs break the docs build must not get one: the site
+  # then keeps the previous release's asset. Rerun this job, or the release
+  # workflow with docs_tag, after fixing the docs.
+  docs-check:
+    needs: docs-generate
+    if: ${{ !cancelled() && needs.docs-generate.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
+      pull-requests: write
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@817a5381ebf4f978941ad79d5c15139599d9a2e8
+    with:
+      docs_artifact: connect-docs-release
+      aws_region: ${{ vars.RP_AWS_CRED_REGION }}
+      aws_role_name_prefix: ${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}
+    secrets:
+      aws_cred_account_id: ${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}
+
+  docs-asset:
+    runs-on: ubuntu-latest
+    needs: [docs-generate, docs-check]
+    if: ${{ !cancelled() && needs.docs-check.result == 'success' }}
+    permissions:
+      contents: write
+    env:
+      DOCS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_tag || github.ref_name }}
+    steps:
+      - name: Download the generated docs
+        uses: actions/download-artifact@v4
+        with:
+          name: connect-docs-release
+          path: modules
       # The docs site reads the reference partials and examples from this
       # asset, so it always matches a released version. See docs/README.md.
       - name: Attach the reference docs to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          tar -C docs -czf redpanda-connect-docs.tar.gz modules
+          set -euo pipefail
+          tar -czf redpanda-connect-docs.tar.gz modules
           gh release upload "${DOCS_TAG}" redpanda-connect-docs.tar.gz --clobber
 
   update-bundles:
@@ -440,7 +483,7 @@ jobs:
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, docs-asset, update-bundles, update-downstream]
+    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream]
     # always() is required because update-bundles/update-downstream may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
@@ -455,6 +498,8 @@ jobs:
           HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
           OPERATOR_PR: ${{ needs.update-downstream.outputs.operator_pr_url }}
           GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          DOCS_GENERATE_RESULT: ${{ needs.docs-generate.result }}
+          DOCS_CHECK_RESULT: ${{ needs.docs-check.result }}
           DOCS_ASSET_RESULT: ${{ needs.docs-asset.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
@@ -474,8 +519,11 @@ jobs:
           if [ "$GORELEASER_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: goreleaser failed  "
           fi
-          if [ "$DOCS_ASSET_RESULT" = "failure" ]; then
+          if [ "$DOCS_GENERATE_RESULT" = "failure" ] || [ "$DOCS_ASSET_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: docs-asset failed (rerun it, or run the release workflow with docs_tag)  "
+          fi
+          if [ "$DOCS_CHECK_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: docs-check failed, so this release has no docs asset and the docs site keeps the previous one (fix the docs, then run the release workflow with docs_tag)  "
           fi
           if [ "$BUNDLES_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-bundles failed  "
