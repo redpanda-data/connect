@@ -60,19 +60,14 @@ pipeline:
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
 			service.NewStringField("credentials_json").
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description(credentialsJSONDescription).
 				Default("").
 				Secret(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
-			service.NewStringField("endpoint").
-				Default("").
-				Example("us-central1-pubsub.googleapis.com:443").
-				Example("us-west3-pubsub.googleapis.com:443").
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].").
-				ShortDescription("Optional endpoint overriding the default pubsub.googleapis.com:443, for region-specific endpoints."),
+			pubsubEndpointField("endpoint"),
 			service.NewInterpolatedStringField("ordering_key").
 				Optional().
-				Description("The ordering key to use for publishing messages.").
+				Description(`The ordering key to use for publishing messages.`).
 				Advanced(),
 			service.NewIntField("max_in_flight").Default(64).Description("The maximum number of messages to have in flight at a given time. Increasing this may improve throughput."),
 			service.NewIntField("count_threshold").

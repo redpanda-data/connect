@@ -178,7 +178,7 @@ output:
 				Example("500ms").
 				Default("3s"),
 			service.NewInterpolatedStringField(csoFieldCredentialsJSON).
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description(credentialsJSONDescription).
 				Default("").
 				Secret(),
 			service.NewOutputMaxInFlightField().
@@ -246,6 +246,10 @@ func (g *gcpCloudStorageOutput) Connect(context.Context) error {
 	}
 	return nil
 }
+
+// credentialsJSONDescription describes the credentials_json field shared by
+// the GCP inputs, outputs and processors in this package.
+const credentialsJSONDescription = "The Google Service Account credentials in JSON format (optional). Provide the contents of the credentials file as plain JSON, not Base64-encoded. Use this field to authenticate with Google Cloud services. If this field is empty, the component uses https://cloud.google.com/docs/authentication/application-default-credentials[Application Default Credentials^]. For more information about creating service account credentials, see https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google's service account documentation^]."
 
 func getClientOptionWithCredential(credentialsJSON string, opt []option.ClientOption) ([]option.ClientOption, error) {
 	if len(credentialsJSON) > 0 {

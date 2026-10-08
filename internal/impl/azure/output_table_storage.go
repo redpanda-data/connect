@@ -123,18 +123,18 @@ properties:
 `+"```"+``+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewInterpolatedStringField(tsoFieldTableName).
-				Description("The table to store messages into.").
+				Description(`The table to store messages into.`).
 				Example(`${! meta("kafka_topic") }`).Example(`${! json("table") }`),
 			service.NewInterpolatedStringField(tsoFieldPartitionKey).
-				Description("The partition key.").
+				Description(`The partition key.`).
 				Example(`${! json("date") }`).
 				Default(""),
 			service.NewInterpolatedStringField(tsoFieldRowKey).
-				Description("The row key.").
+				Description(`The row key.`).
 				Example(`${! json("device")}-${!uuid_v4() }`).
 				Default(""),
 			service.NewInterpolatedStringMapField(tsoFieldProperties).
-				Description("A map of properties to store into the table.").
+				Description(`A map of properties to store into the table.`).
 				Default(map[string]any{}),
 			service.NewInterpolatedStringEnumField(tsoFieldInsertType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`).
 				Description("Type of insert operation. Valid options are `INSERT`, `INSERT_MERGE` and `INSERT_REPLACE`").
@@ -143,14 +143,14 @@ properties:
 				Advanced().Deprecated().
 				Default(""),
 			service.NewInterpolatedStringEnumField(tsoFieldTransactionType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE`, `DELETE`).
-				Description("Type of transaction operation.").
+				Description(`Type of transaction operation.`).
 				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
 				Advanced().
 				Default("INSERT"),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of parallel message batches to have in flight at any given time."),
 			service.NewDurationField(tsoFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("This field has no effect. The output parses the value but does not apply it to write requests.").
 				Advanced().Default("5s"),
 			service.NewBatchPolicyField(tsoFieldBatching),
 		)
