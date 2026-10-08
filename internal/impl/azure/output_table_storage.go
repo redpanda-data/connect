@@ -143,7 +143,7 @@ properties:
 				Advanced().Deprecated().
 				Default(""),
 			service.NewInterpolatedStringEnumField(tsoFieldTransactionType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE`, `DELETE`).
-				Description(`Type of transaction operation.`).
+				Description(`Type of transaction operation.`).Version("4.10.0").
 				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
 				Advanced().
 				Default("INSERT"),

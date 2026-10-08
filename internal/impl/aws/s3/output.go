@@ -308,7 +308,7 @@ output:
 			service.NewStringEnumField(s3oFieldChecksumAlgorithm,
 				"CRC32", "CRC32C", "SHA1", "SHA256",
 			).
-				Description("The algorithm used to create the checksum for each object, which Amazon S3 uses to validate the object during upload.").
+				Description("The algorithm used to create the checksum for each object, which Amazon S3 uses to validate the object during upload.").Version("4.38.0").
 				Default("").
 				Advanced(),
 			service.NewStringField(s3oFieldServerSideEncryption).
@@ -339,7 +339,7 @@ output:
 						}
 					}
 				})...).
-				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").
+				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").Version("4.56.0").
 				ShortDescription("The object canned ACL value. Leave empty for buckets that have ACLs disabled.").
 				Default("").
 				Advanced(),

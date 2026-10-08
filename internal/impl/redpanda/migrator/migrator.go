@@ -292,7 +292,7 @@ output:
 			Example("1  # For single-node clusters").
 			Optional()).
 		Field(service.NewDurationField(rmoFieldSyncTopicInterval).
-			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").
+			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").Version("4.82.0").
 			ShortDescription("How often to synchronise topics from source to destination. Set to 0s to disable periodic syncing.").
 			Example("0s     # Disable periodic sync").
 			Example("1m     # Sync every minute").
@@ -311,7 +311,7 @@ output:
 		Field(service.NewInterpolatedStringMapField(rmoFieldHeaders).
 			Description("Custom headers to add to migrated records, keyed by header name with interpolated string values. " +
 				"Useful for injecting metadata such as processing timestamps or latency measurements that should surface as header values on the destination cluster. " +
-				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").
+				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").Version("4.102.0").
 			Example(map[string]any{
 				"x-migration-processed-at": "${! timestamp_unix_milli() }",
 				"x-migration-latency-ms":   "${! timestamp_unix_milli() - meta(\"kafka_timestamp_ms\") }",
@@ -324,7 +324,7 @@ output:
 				"A record that already carries the header keeps its existing value. " +
 				"A record whose header value is the destination cluster's ID is skipped, so it is not sent back to the cluster it came from. " +
 				"A record whose header value is empty or equal to the source cluster's ID causes an error. " +
-				"If empty, no provenance header is added and no provenance checks run.").
+				"If empty, no provenance header is added and no provenance checks run.").Version("4.69.0").
 			Default(DefaultProvenanceHeader).
 			Advanced()).
 		Field(service.NewStringField(rmoFieldOffsetHeader).
@@ -334,7 +334,7 @@ If this field is empty, no offset header is added and exact offset translation i
 
 Exact offset translation only applies to consumer groups in the ` + "`Empty`" + ` state, which have no active members. Other groups always use timestamp-based positioning. The default value enables exact offset translation.
 
-This header is only added when consumer group migration is enabled.`).
+This header is only added when consumer group migration is enabled.`).Version("4.71.0").
 			ShortDescription("Header added to migrated records carrying the source offset. Leave empty to disable exact offset translation.").
 			Default(DefaultOffsetHeader).
 			Advanced()).

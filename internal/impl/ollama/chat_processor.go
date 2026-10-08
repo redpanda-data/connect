@@ -94,81 +94,81 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Optional().
 				Example(`root = this.image.decode("base64") # decode base64 encoded image`),
 			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
-				Description("The format of the response the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
+				Description("The format of the response the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").Version("4.34.0").
 				Default("text"),
 			service.NewIntField(ocpFieldMaxTokens).
 				Optional().
-				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost.").
+				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost.").Version("4.34.0").
 				ShortDescription("The maximum number of tokens to predict and output."),
 			service.NewIntField(ocpFieldTemp).
 				Optional().
-				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively.").
+				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively.").Version("4.34.0").
 				LintRule(`root = if this > 2 || this < 0 { [ "field must be between 0.0 and 2.0" ] }`),
 			service.NewIntField(ocpFieldNumKeep).
 				Optional().
 				Advanced().
-				Description("Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt.").
+				Description("Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt.").Version("4.34.0").
 				ShortDescription("Tokens from the initial prompt to retain when the model resets its context. Use -1 to keep all."),
 			service.NewIntField(ocpFieldSeed).
 				Optional().
 				Advanced().
-				Description("Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.").
+				Description("Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.").Version("4.34.0").
 				ShortDescription("The random number seed for generation. A fixed seed makes the same prompt produce the same text.").
 				Example(42),
 			service.NewIntField(ocpFieldTopK).
 				Optional().
 				Advanced().
-				Description("Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative.").
+				Description("Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative.").Version("4.34.0").
 				ShortDescription("Reduces the probability of nonsense. Higher values give more diverse answers."),
 			service.NewFloatField(ocpFieldTopP).
 				Optional().
 				Advanced().
-				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.").
+				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.").Version("4.34.0").
 				ShortDescription("Works with top_k. Higher values give more diverse text, lower values more focused text.").
 				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0.0 and 1.0" ] }`),
 			service.NewFloatField(ocpFieldRepeatPenalty).
 				Optional().
 				Advanced().
-				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`).
+				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`).Version("4.34.0").
 				ShortDescription("How strongly to penalise repetition. Higher values penalise more strongly.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldPresencePenalty).
 				Optional().
 				Advanced().
-				Description("A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `presence_penalty` model option. Positive values penalize every token that has already appeared in the text, regardless of how often, which makes the model more likely to move on to new topics. A value of `0` is not sent, so the server's default applies.").
+				Description("A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `presence_penalty` model option. Positive values penalize every token that has already appeared in the text, regardless of how often, which makes the model more likely to move on to new topics. A value of `0` is not sent, so the server's default applies.").Version("4.34.0").
 				ShortDescription("Between -2.0 and 2.0. Positive values penalise tokens that already appear, encouraging new topics.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
-				Description("A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `frequency_penalty` model option. Positive values penalize each token in proportion to how often it has already appeared in the text, which makes the model less likely to repeat the same line verbatim. A value of `0` is not sent, so the server's default applies.").
+				Description("A number between `-2.0` and `2.0` that the processor sends to the Ollama server as the `frequency_penalty` model option. Positive values penalize each token in proportion to how often it has already appeared in the text, which makes the model less likely to repeat the same line verbatim. A value of `0` is not sent, so the server's default applies.").Version("4.34.0").
 				ShortDescription("Between -2.0 and 2.0. Positive values penalise tokens by how often they already appear, reducing verbatim repetition.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewStringListField(ocpFieldStop).
 				Optional().
 				Advanced().
-				Description(`Sets the stop sequences to use. When this pattern is encountered, the LLM stops generating text and returns the final response.`).
+				Description(`Sets the stop sequences to use. When this pattern is encountered, the LLM stops generating text and returns the final response.`).Version("4.34.0").
 				ShortDescription("Stop sequences. When one is encountered the LLM stops generating and returns its response."),
 			service.NewBoolField(ocpFieldEmitPromptMetadata).
 				Default(false).
-				Description(`Set to `+"`"+`true`+"`"+` to save the prompt value to a metadata field (`+"`"+`@prompt`+"`"+`) on the corresponding output message. If you use the `+"`"+`system_prompt`+"`"+` field, its value is also saved to an `+"`"+`@system_prompt`+"`"+` metadata field on each output message.`).
+				Description(`Set to `+"`"+`true`+"`"+` to save the prompt value to a metadata field (`+"`"+`@prompt`+"`"+`) on the corresponding output message. If you use the `+"`"+`system_prompt`+"`"+` field, its value is also saved to an `+"`"+`@system_prompt`+"`"+` metadata field on each output message.`).Version("4.42.0").
 				ShortDescription("Save the prompt as @prompt metadata on the output message, and system_prompt as @system_prompt."),
 			service.NewBloblangField(ocpFieldHistory).
 				Optional().
 				Description(`Include historical messages in a chat request. You must use a Bloblang query to create an array of objects in the form of `+"`"+`[{"role": "", "content":""}]`+"`"+` where:
 
 - `+"`"+`role`+"`"+` is the sender of the original messages, either `+"`"+`system`+"`"+`, `+"`"+`user`+"`"+`, `+"`"+`assistant`+"`"+`, or `+"`"+`tool`+"`"+`.
-- `+"`"+`content`+"`"+` is the text of the original messages.`).
+- `+"`"+`content`+"`"+` is the text of the original messages.`).Version("4.51.0").
 				ShortDescription("Historical messages to include in the chat request, as an array of role and content objects."),
 			service.NewIntField(ocpFieldMaxToolCalls).
 				Default(3).
 				Advanced().
-				Description(`The maximum number of sequential calls you can make to external tools to retrieve additional information to answer a prompt.`).
+				Description(`The maximum number of sequential calls you can make to external tools to retrieve additional information to answer a prompt.`).Version("4.45.0").
 				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
 			service.NewObjectListField(
 				ocpFieldTool,
 				llm.ToolFields(llm.ToolParametersField())...,
-			).Description("The external tools the LLM can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified LLM can choose when to invoke them to help answer a prompt.").
+			).Description("The external tools the LLM can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified LLM can choose when to invoke them to help answer a prompt.").Version("4.45.0").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").
 				Default([]any{}),
 		).Fields(commonFields()...).

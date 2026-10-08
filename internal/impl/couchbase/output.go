@@ -35,7 +35,7 @@ func outputConfig() *service.ConfigSpec {
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewInterpolatedStringField("id").Description(`The document ID to use.`).Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("The document content to update. When inserting, replacing, or upserting documents, you must set a `content` value.").Optional()).
-		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Optional().Advanced()).
+		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Version("4.73.0").Optional().Advanced()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
 			string(client.OperationInsert):  "insert a new document.",
 			string(client.OperationRemove):  "delete a document.",

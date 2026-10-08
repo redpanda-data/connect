@@ -105,6 +105,7 @@ type bloblangCategory struct {
 type bloblangSpec struct {
 	Name        string `json:"name"`
 	Status      string `json:"status"`
+	Version     string `json:"version"`
 	Description string `json:"description"`
 	Params      *struct {
 		Named    []bloblangParam `json:"named"`

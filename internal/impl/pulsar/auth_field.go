@@ -31,7 +31,7 @@ func tlsField() *service.ConfigField {
 			ShortDescription("An optional path to a root certificate authority file, often a `.pem` file containing a certificate chain.").
 			Default("").
 			Example("./root_cas.pem")).
-		Description("Specify the path to a custom CA certificate to trust the broker TLS service.")
+		Description("Specify the path to a custom CA certificate to trust the broker TLS service.").Version("4.2.0")
 }
 
 func authField() *service.ConfigField {
@@ -47,7 +47,7 @@ func authField() *service.ConfigField {
 				Description("OAuth2 issuer URL.").
 				Default(""),
 			service.NewURLField("scope").
-				Description("OAuth2 scope to request.").
+				Description("OAuth2 scope to request.").Version("4.29.0").
 				Default(""),
 			service.NewStringField("private_key_file").
 				Description("The path to a file containing a private key.").

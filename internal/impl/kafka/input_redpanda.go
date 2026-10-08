@@ -80,8 +80,8 @@ This input adds the following metadata fields to each message:
 
 func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Stable().
 		Version("4.39.0").
+		Stable().
 		Categories("Services").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(RedpandaInputDescription(`
@@ -108,7 +108,7 @@ func redpandaInputConfigFields() []*service.ConfigField {
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
-			service.NewExtractTracingSpanMappingField(),
+			service.NewExtractTracingSpanMappingField().Version("4.85.0"),
 		},
 	)
 }

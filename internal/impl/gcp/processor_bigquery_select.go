@@ -96,7 +96,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.").
 		Field(bqSelectProjectField()).
-		Field(service.NewStringField("credentials_json").Description(credentialsJSONDescription).Secret().Default("")).
+		Field(service.NewStringField("credentials_json").Description(credentialsJSONDescription).Version("4.33.0").Secret().Default("")).
 		Field(bqSelectTableField()).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(bqSelectWhereField()).

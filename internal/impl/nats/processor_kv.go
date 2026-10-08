@@ -66,7 +66,7 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.12.0").
+		Version("4.13.0").
 		Summary("Performs operations on a NATS key-value bucket.").
 		Description(`
 == KV operations
@@ -120,7 +120,7 @@ This processor adds the following metadata fields to each message, depending on 
 				Optional().
 				Advanced(),
 			service.NewDurationField(kvpFieldTimeout).
-				Description("The maximum period to wait on an operation before aborting and returning an error.").
+				Description("The maximum period to wait on an operation before aborting and returning an error.").Version("4.27.0").
 				Advanced().Default("5s"),
 		}...)...).
 		LintRule(`root = match {

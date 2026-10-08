@@ -73,7 +73,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Description("The maximum number of pending messages to consume at any given time.").
 				Default(100),
 			service.NewIntField(niFieldMaxAttempts).
-				Description("The maximum number of attempts to successfully consume a messages.").
+				Description("The maximum number of attempts to successfully consume a messages.").Version("4.11.0").
 				Default(5),
 		)
 }

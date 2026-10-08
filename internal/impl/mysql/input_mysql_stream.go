@@ -111,7 +111,7 @@ This input adds the following metadata fields to each message:
 			gomysql.MySQLFlavor:   "MySQL flavored databases.",
 			gomysql.MariaDBFlavor: "MariaDB flavored databases.",
 		}).
-			Description("The type of MySQL database to connect to.").
+			Description("The type of MySQL database to connect to.").Version("4.48.0").
 			Default(gomysql.MySQLFlavor),
 		service.NewStringField(fieldMySQLDSN).
 			Description("The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`.").
@@ -130,7 +130,7 @@ This input adds the following metadata fields to each message:
 			Description("The maximum number of table rows to fetch in each batch when taking a snapshot. This option is only available when `stream_snapshot` is set to `true`.").
 			Default(1000),
 		service.NewIntField(fieldMaxReconnectAttempts).
-			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
+			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").Version("4.72.0").
 			ShortDescription("Attempts the MySQL driver makes to re-establish a broken connection. Zero or less means infinite.").
 			Advanced().
 			Default(10),
@@ -138,13 +138,13 @@ This input adds the following metadata fields to each message:
 			Description("When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key. When set to `false`, the input starts streaming from the current binlog position.").
 			ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current binlog position."),
 		service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Specifies the number of tables that will be snapshotted in parallel.").
+			Description("Specifies the number of tables that will be snapshotted in parallel.").Version("4.90.0").
 			Default(1).
 			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
 		cdcreplication.CheckpointLimitField("binlog position"),
 		service.NewTLSField("tls").
-			Description("Custom TLS settings for the MySQL connection. When `enabled` is `true`, these settings replace any `tls` parameter in the `dsn`, and the server name is set to the host from the DSN.").
+			Description("Custom TLS settings for the MySQL connection. When `enabled` is `true`, these settings replace any `tls` parameter in the `dsn`, and the server name is set to the host from the DSN.").Version("4.72.0").
 			Optional(),
 		service.NewObjectField(fieldAWSIAMAuth, slices.Concat([]*service.ConfigField{
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
@@ -154,7 +154,7 @@ This input adds the following metadata fields to each message:
 			service.NewStringField("endpoint").
 				Description("The MySQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com)."),
 		}, awsconfig.IAMAuthStaticCredentialFields(), awsconfig.IAMAuthRoleFields(false))...).
-			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").Version("4.72.0").
 			ShortDescription("AWS IAM authentication configuration for MySQL instances.").
 			Advanced().
 			Optional(),

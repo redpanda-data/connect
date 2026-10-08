@@ -108,7 +108,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Version("3.60.0").
 				Optional(),
 			service.NewInterpolatedStringField(snsoFieldSubject).
-				Description("An optional subject to set for messages.").
+				Description("An optional subject to set for messages.").Version("4.81.0").
 				Optional(),
 			service.NewOutputMaxInFlightField(),
 			service.NewMetadataExcludeFilterField(snsoFieldMetadata).

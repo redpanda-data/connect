@@ -44,12 +44,12 @@ Reads from the cache require scanning the entire topic partition. If you expect 
 Because only the latest values are needed, configure compaction for topics used as caches so that reads are less expensive when topics are rescanned. See xref:streaming:manage:cluster-maintenance/compaction-settings.adoc[].
 
 The cache does not have any time-to-live (TTL) mechanism. Use the Kafka topic retention policies to manage TTL.
-`).
+`).Version("4.55.0").
 		Fields(FranzConnectionFields()...).
 		Fields(
 			service.NewStringField(rcFieldTopic).Description("The topic to store data in."),
 			service.NewBoolField(rcFieldAllowAutoTopicCreation).
-				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").Version("4.59.0").
 				Default(true).
 				Advanced(),
 		)

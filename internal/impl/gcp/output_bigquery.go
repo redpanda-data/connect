@@ -227,7 +227,7 @@ output:
 ` + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("project").Description("Specify the project ID of the dataset to insert data into. If not set, the project ID is inferred from the project linked to the service account or read from the `GOOGLE_CLOUD_PROJECT` environment variable.").
 			ShortDescription("The project ID of the dataset to insert into. Inferred from credentials or GOOGLE_CLOUD_PROJECT if unset.").Default("")).
-		Field(service.NewStringField("job_project").Description("Specify the project ID in which jobs are executed. If not set, the `project` value is used.").Default("")).
+		Field(service.NewStringField("job_project").Description("Specify the project ID in which jobs are executed. If not set, the `project` value is used.").Version("4.35.0").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
 		Field(service.NewStringField("table").Description("The table to insert messages into.")).
 		Field(service.NewStringEnumField("format", string(bigquery.JSON), string(bigquery.CSV), string(bigquery.Parquet)).
@@ -272,10 +272,10 @@ CAUTION: This field delegates schema detection to the GCP BigQuery service. For 
 			ShortDescription("Automatically infer options and schema for CSV and JSON sources.").
 			Advanced().
 			Default(false)).
-		Field(bqJobLabelsField("load")).
+		Field(bqJobLabelsField("load").Version("4.1.0")).
 		Field(service.NewStringField("credentials_json").Description(`Sets the https://developers.google.com/workspace/guides/create-credentials#create_credentials_for_a_service_account[Google Service Account Credentials JSON^] (optional).
 
-WARNING: When using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] to populate this field, wrap the function in single quotes, not double quotes. For example, use ` + "`" + `'${secrets.GCP_CREDENTIALS_JSON}'` + "`" + ` instead of ` + "`" + `"${secrets.GCP_CREDENTIALS_JSON}"` + "`" + `. Double quotes cause JSON parsing errors because the credentials already contain JSON content.`).Secret().Default("")).
+WARNING: When using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] to populate this field, wrap the function in single quotes, not double quotes. For example, use ` + "`" + `'${secrets.GCP_CREDENTIALS_JSON}'` + "`" + ` instead of ` + "`" + `"${secrets.GCP_CREDENTIALS_JSON}"` + "`" + `. Double quotes cause JSON parsing errors because the credentials already contain JSON content.`).Version("4.33.0").Secret().Default("")).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as the header for each batch of messages. If not specified, the first line of each message is used as the header.").

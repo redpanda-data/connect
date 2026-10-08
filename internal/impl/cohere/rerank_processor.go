@@ -53,7 +53,7 @@ To learn more about reranking, see the https://docs.cohere.com/docs/rerank-2[Coh
 The output of this processor is an array of objects, each containing a "document" field with the original document content, a "relevance_score" field indicating how relevant it is to the query, and an index field that refers to the document's position within the input documents array. The objects are ordered by their relevance score (highest first).
 
 		`).
-		Version("4.37.0").
+		Version("4.53.0").
 		Fields(
 			baseConfigFieldsWithModels(
 				"rerank-v3.5",

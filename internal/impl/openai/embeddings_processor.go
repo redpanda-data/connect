@@ -59,7 +59,7 @@ To learn more about vector embeddings, see the https://platform.openai.com/docs/
 			llm.EmbeddingTextMappingField(oepFieldTextMapping).
 				Optional(),
 			service.NewIntField(oepFieldDims).
-				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").
+				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").Version("4.34.0").
 				ShortDescription("The number of dimensions for output embeddings. Only supported in text-embedding-3 and later.").
 				Optional(),
 		).

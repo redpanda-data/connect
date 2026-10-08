@@ -288,7 +288,7 @@ func insertFields() []*service.ConfigField {
 			Advanced().
 			Example("ON CONFLICT (name) DO NOTHING"),
 		service.NewStringListField("options").
-			Description("A list of keyword options to add before the INTO clause of the query.").
+			Description("A list of keyword options to add before the INTO clause of the query.").Version("4.40.0").
 			Optional().
 			Advanced().
 			Example([]string{"DELAYED", "IGNORE"}),
@@ -297,7 +297,7 @@ func insertFields() []*service.ConfigField {
 
 func rawQueryWhenField() *service.ConfigField {
 	return service.NewBloblangField("when").
-		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").Version("4.87.0").
 		ShortDescription("An optional Bloblang mapping evaluated per message to decide whether this query runs. Must return a boolean.").
 		Example(`root = meta("kafka_tombstone_message") == "true"`).
 		Example(`root = this.operation == "delete"`).

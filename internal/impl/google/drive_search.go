@@ -47,7 +47,7 @@ This processor searches for files in Google Drive using the provided query.
 
 Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[Google Drive File^]
 
-`+authDescription("https://www.googleapis.com/auth/drive.readonly")).
+`+authDescription("https://www.googleapis.com/auth/drive.readonly")).Version("4.53.0").
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveSearchFieldQuery).
@@ -65,7 +65,7 @@ Search results are emitted as message batch, where each message is a https://dev
 				Description("The maximum number of search results to return.").
 				Default(64),
 			service.NewBoolField(driveSearchFieldSupportSharedDrives).
-				Description("Whether or not to include shared drives in the result.").
+				Description("Whether or not to include shared drives in the result.").Version("4.80.1").
 				Default(false),
 		).
 		Example("Search & download files from Google Drive", "This examples downloads all the files from Google Drive that are returned in the query", `

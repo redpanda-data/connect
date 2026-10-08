@@ -34,7 +34,7 @@ func natsKVOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.12.0").
+		Version("4.13.0").
 		Summary("Puts messages in a NATS key-value bucket.").
 		Description(`
 The field ` + "`key`" + ` supports

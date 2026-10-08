@@ -28,7 +28,7 @@ func init() {
 
 	parquetParseSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Parses Apache Parquet binary data into an array of objects. Parquet is a columnar storage format optimized for analytics, commonly used with big data systems like Apache Spark, Hive, and cloud data warehouses. Each row in the Parquet file becomes an object in the output array.").
+		Description("Parses Apache Parquet binary data into an array of objects. Parquet is a columnar storage format optimized for analytics, commonly used with big data systems like Apache Spark, Hive, and cloud data warehouses. Each row in the Parquet file becomes an object in the output array.").Version("4.4.0").
 		Param(bloblang.NewBoolParam("byte_array_as_string").
 			Description("Deprecated: This parameter is no longer used.").Default(false)).
 		ExampleNotTested("Parse Parquet file data into structured objects",

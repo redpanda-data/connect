@@ -204,21 +204,21 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 `).
 		Fields(
 			service.NewStringListField(dciFieldTables).
-				Description("List of table names to stream from. For single table mode, provide one table. For multi-table mode, provide multiple tables.").
+				Description("List of table names to stream from. For single table mode, provide one table. For multi-table mode, provide multiple tables.").Version("4.83.0").
 				ShortDescription("Table names to stream from. Provide one for single-table mode, or several for multi-table.").
 				Default([]any{}),
 			service.NewStringEnumField(dciFieldTableDiscoveryMode, "single", "tag", "includelist").
-				Description("`single`: Streams from tables specified in the `tables` list. `tag`: Auto-discovers tables by tags (ignores the `tables` field). `includelist`: Streams from tables in the `tables` list. Use `single` instead; `includelist` is kept for backward compatibility.").
+				Description("`single`: Streams from tables specified in the `tables` list. `tag`: Auto-discovers tables by tags (ignores the `tables` field). `includelist`: Streams from tables in the `tables` list. Use `single` instead; `includelist` is kept for backward compatibility.").Version("4.83.0").
 				ShortDescription("How tables are discovered: single, tag, or includelist.").
 				Default("single").
 				Advanced(),
 			service.NewStringField(dciFieldTableTagFilter).
-				Description("Multi-tag filter in the format `key1:v1,v2;key2:v3,v4`. Matches tables where (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.").
+				Description("Multi-tag filter in the format `key1:v1,v2;key2:v3,v4`. Matches tables where (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4). Required when `table_discovery_mode` is `tag`.").Version("4.83.0").
 				ShortDescription("Multi-tag filter such as key1:v1,v2;key2:v3. Required when table_discovery_mode is tag.").
 				Default("").
 				Advanced(),
 			service.NewDurationField(dciFieldTableDiscoveryInterval).
-				Description("Interval for rescanning and discovering new tables when using `tag` or `includelist` mode. Set to 0 to disable periodic rescanning.").
+				Description("Interval for rescanning and discovering new tables when using `tag` or `includelist` mode. Set to 0 to disable periodic rescanning.").Version("4.83.0").
 				ShortDescription("How often to rescan for new tables in tag or includelist mode. Set to 0 to disable.").
 				Default("5m").
 				Advanced(),
@@ -226,9 +226,8 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.").
 				Default("redpanda_dynamodb_checkpoints"),
 			service.NewStringField(dciFieldCheckpointNamespace).
-				Description("Isolates this pipeline's checkpoints within a shared `checkpoint_table` by prefixing the namespace to the checkpoint key. Use this so that multiple pipelines reading the same stream can share one checkpoint table without overwriting each other's positions, for example per-developer or per-environment test pipelines. Leave empty (the default) to keep the original checkpoint keys unchanged. A namespace isolates readers but does not coordinate them: pipelines that share the same namespace still collide. Changing or removing the namespace changes the checkpoint key. If no checkpoints exist yet under the new key, the pipeline starts from `start_from`. Switching back to a previously used namespace resumes from that namespace's last checkpoints. The value cannot contain a `#` character.").
+				Description("Isolates this pipeline's checkpoints within a shared `checkpoint_table` by prefixing the namespace to the checkpoint key. Use this so that multiple pipelines reading the same stream can share one checkpoint table without overwriting each other's positions, for example per-developer or per-environment test pipelines. Leave empty (the default) to keep the original checkpoint keys unchanged. A namespace isolates readers but does not coordinate them: pipelines that share the same namespace still collide. Changing or removing the namespace changes the checkpoint key. If no checkpoints exist yet under the new key, the pipeline starts from `start_from`. Switching back to a previously used namespace resumes from that namespace's last checkpoints. The value cannot contain a `#` character.").Version("4.101.0").
 				ShortDescription("Namespace for checkpoints, letting independent pipelines share one checkpoint table without overwriting each other.").
-				Version("4.101.0").
 				Default(""),
 			service.NewBoolField(dciFieldGlobalTable).
 				Description("Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added by calling `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key). Enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.").
@@ -264,39 +263,39 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Maximum number of shards to track simultaneously. Prevents memory issues with extremely large tables.").
 				Default(10000).
 				Advanced(),
-			service.NewAutoRetryNacksToggleField(),
+			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes.").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes.").Version("4.82.0").
 				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
-				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with.").
+				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with.").Version("4.82.0").
 				ShortDescription("Number of parallel scan segments, from 1 to 10. Higher parallelism scans faster but uses more RCUs.").
 				Default(1).
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBatchSize).
-				Description("Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.").
+				Description("Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.").Version("4.82.0").
 				ShortDescription("Records per scan request during snapshot, up to 1000.").
 				Default(100).
 				LintRule(`root = if this < 1 || this > 1000 { ["snapshot_batch_size must be between 1 and 1000"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotThrottle).
-				Description("Minimum time between scan requests per segment. Use this to limit Read Capacity Unit (RCU) consumption during snapshot.").
+				Description("Minimum time between scan requests per segment. Use this to limit Read Capacity Unit (RCU) consumption during snapshot.").Version("4.82.0").
 				Default("100ms").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering CDC events.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
-				Description("Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").
+				Description("Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").Version("4.82.0").
 				ShortDescription("Maximum CDC events buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),

@@ -54,11 +54,11 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBoolField("send_ack").
-			Description("Whether an automatic acknowledgment is sent as a reply to each message. When enabled, these replies are sent only when data has been delivered to all outputs.").
+			Description("Whether an automatic acknowledgment is sent as a reply to each message. When enabled, these replies are sent only when data has been delivered to all outputs.").Version("4.33.0").
 			ShortDescription("Send ACKs in reply to each message, once the data has been delivered to all outputs.").
 			Default(true)).
 		Field(service.NewDurationField("nak_delay").
-			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
+			Description("An optional delay duration on redelivering a message when negatively acknowledged.").Version("4.16.0").
 			Example("1m").
 			Advanced().
 			Optional()).

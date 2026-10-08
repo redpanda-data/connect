@@ -92,7 +92,7 @@ func RetryOnConflictField() *service.ConfigField {
 // APIKeyField returns the Elasticsearch `api_key` field.
 func APIKeyField() *service.ConfigField {
 	return service.NewStringField(FieldAPIKey).
-		Description("An API key to authenticate with. If set, it supersedes basic authentication.").
+		Description("An API key to authenticate with. If set, it supersedes basic authentication.").Version("4.96.2").
 		Default("").Secret()
 }
 

@@ -85,19 +85,19 @@ func commonFields() []*service.ConfigField {
 				Advanced().
 				Description("Map the model into memory. Set to `true` to load only the necessary parts of the model into memory. This setting is only supported on Unix systems.").
 				ShortDescription("Map the model into memory, loading only the parts needed. Unix systems only."),
-		).Optional().Description(`Options for the model runner that are used when the model is first loaded into memory.`),
+		).Optional().Description(`Options for the model runner that are used when the model is first loaded into memory.`).Version("4.34.0"),
 		service.NewStringField(bopFieldServerAddress).
 			Description("The address of the Ollama server to use. Leave this field blank and the processor starts and runs a local Ollama server, or specify the address of your own local or remote server.").
 			ShortDescription("The address of the Ollama server. Leave blank to start and run a local server.").
 			Example("http://127.0.0.1:11434").
 			Optional(),
 		service.NewStringField(bopFieldCacheDirectory).
-			Description("If `" + bopFieldServerAddress + "` is not set, download the Ollama binary to this directory and use it as a model cache.").
+			Description("If `" + bopFieldServerAddress + "` is not set, download the Ollama binary to this directory and use it as a model cache.").Version("4.34.0").
 			Example("/opt/cache/connect/ollama").
 			Advanced().
 			Optional(),
 		service.NewStringField(bopFieldDownloadURL).
-			Description("If `" + bopFieldServerAddress + "` is not set, download the Ollama binary from this URL. The default value is the official Ollama GitHub release for this platform.").
+			Description("If `" + bopFieldServerAddress + "` is not set, download the Ollama binary from this URL. The default value is the official Ollama GitHub release for this platform.").Version("4.34.0").
 			Advanced().
 			Optional(),
 	}

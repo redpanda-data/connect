@@ -115,7 +115,7 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 				Description(`Include messages from a prior conversation. You must use a Bloblang query to create an array of objects in the form of `+"`"+`[{"role": "user", "content": "<text>"}, {"role":"assistant", "content":"<text>"}]`+"`"+` where:
 
 - `+"`"+`role`+"`"+` is the sender of the original messages, either `+"`"+`system`+"`"+`, `+"`"+`user`+"`"+`, or `+"`"+`assistant`+"`"+`.
-- `+"`"+`content`+"`"+` is the text of the original messages.`).
+- `+"`"+`content`+"`"+` is the text of the original messages.`).Version("4.51.0").
 				ShortDescription("The history of the prior conversation, as an array of role and content objects.").
 				Optional(),
 			service.NewBloblangField(ocpFieldImage).
@@ -125,7 +125,7 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 				Optional(),
 			service.NewIntField(ocpFieldMaxTokens).
 				Optional().
-				Description("The maximum number of tokens to generate for chat completion."),
+				Description("The maximum number of tokens to generate for chat completion.").Version("4.34.0"),
 			service.NewFloatField(ocpFieldTemp).
 				Optional().
 				Description(`Choose a sampling temperature between `+"`"+`0`+"`"+` and `+"`"+`2`+"`"+`:
@@ -133,17 +133,17 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 * Higher values, such as `+"`"+`0.8`+"`"+` make the output more random.
 * Lower values, such as `+"`"+`0.2`+"`"+` make the output more focused and deterministic.
 
-Redpanda recommends adding a value for this field or `+"`"+`top_p`+"`"+`, but not both.`).
+Redpanda recommends adding a value for this field or `+"`"+`top_p`+"`"+`, but not both.`).Version("4.34.0").
 				ShortDescription("Sampling temperature between 0 and 2. Higher values make output more random, lower more deterministic.").
 				LintRule(`root = if this > 2 || this < 0 { [ "field must be between 0 and 2" ] }`),
 			service.NewInterpolatedStringField(ocpFieldUser).
 				Optional().
-				Description("A unique identifier that represents the end-user generating the prompt. This value can help OpenAI monitor and detect https://openai.com/policies/usage-policies/[platform abuse^]."),
+				Description("A unique identifier that represents the end-user generating the prompt. This value can help OpenAI monitor and detect https://openai.com/policies/usage-policies/[platform abuse^].").Version("4.34.0"),
 			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json", "json_schema").
 				Default("text").
 				Description(`Specify the output format of the configured `+"`"+`model`+"`"+`.
 
-If you choose the `+"`"+`json_schema`+"`"+` option, you must also configure a `+"`"+`json_schema`+"`"+` or `+"`"+`schema_registry`+"`"+`.`).
+If you choose the `+"`"+`json_schema`+"`"+` option, you must also configure a `+"`"+`json_schema`+"`"+` or `+"`"+`schema_registry`+"`"+`.`).Version("4.35.0").
 				ShortDescription("The model's output format. json_schema additionally requires json_schema or schema_registry."),
 			service.NewObjectField(ocpFieldJSONSchema,
 				service.NewStringField(ocpFieldJSONSchemaName).Description("The name of the JSON schema to use."),
@@ -151,7 +151,7 @@ If you choose the `+"`"+`json_schema`+"`"+` option, you must also configure a `+
 				service.NewStringField(ocpFieldJSONSchemaSchema).Description("The JSON schema for the model to use when generating the output."),
 			).
 				Optional().
-				Description("The JSON schema used by the model when generating responses in `json_schema` format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].").
+				Description("The JSON schema used by the model when generating responses in `json_schema` format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].").Version("4.35.0").
 				ShortDescription("The JSON schema to use when responding in json_schema format."),
 			service.NewObjectField(
 				ocpFieldSchemaRegistry,
@@ -171,7 +171,7 @@ If you choose the `+"`"+`json_schema`+"`"+` option, you must also configure a `+
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,
 			).
-				Description("The schema registry to dynamically load schemas for model responses in `json_schema` format. Schemas must be in JSON format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].").
+				Description("The schema registry to dynamically load schemas for model responses in `json_schema` format. Schemas must be in JSON format. To learn more about supported JSON schema features, see the https://platform.openai.com/docs/guides/structured-outputs#supported-schemas[OpenAI documentation^].").Version("4.35.0").
 				ShortDescription("Schema registry to load schemas from when responding in json_schema format. Schemas must be JSON.").
 				Optional().
 				Advanced(),
@@ -180,36 +180,36 @@ If you choose the `+"`"+`json_schema`+"`"+` option, you must also configure a `+
 				Advanced().
 				Description(`An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `+"`"+`top_p`+"`"+` probability mass. For example, a `+"`"+`top_p`+"`"+` of `+"`"+`0.1`+"`"+` means only the tokens comprising the top 10% probability mass are sampled.
 
-Redpanda recommends adding a value for this field or `+"`"+`temperature`+"`"+`, but not both.`).
+Redpanda recommends adding a value for this field or `+"`"+`temperature`+"`"+`, but not both.`).Version("4.34.0").
 				ShortDescription("Nucleus sampling: the model considers only tokens making up the top_p probability mass.").
 				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
 			service.NewFloatField(ocpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
-				Description("Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.").
+				Description("Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.").Version("4.34.0").
 				ShortDescription("Between -2.0 and 2.0. Positive values penalise frequent tokens, reducing verbatim repetition.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
 			service.NewFloatField(ocpFieldPresencePenalty).
 				Optional().
 				Advanced().
-				Description("Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.").
+				Description("Specify a number between `-2.0` and `2.0`. Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.").Version("4.34.0").
 				ShortDescription("Between -2.0 and 2.0. Positive values encourage the model to raise new topics.").
 				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
 			service.NewIntField(ocpFieldSeed).
 				Advanced().
 				Optional().
-				Description("When set to a specific number, the model makes a best effort to generate consistent responses for requests that use the same prompt, seed, and parameters. Determinism is not guaranteed.").
+				Description("When set to a specific number, the model makes a best effort to generate consistent responses for requests that use the same prompt, seed, and parameters. Determinism is not guaranteed.").Version("4.34.0").
 				ShortDescription("Sample deterministically on a best-effort basis, so repeated requests with the same seed match."),
 			service.NewStringListField(ocpFieldStop).
 				Optional().
 				Advanced().
-				Description("Specify up to four stop sequences to use. When the model encounters a stop pattern, it stops generating text and returns the final response."),
+				Description("Specify up to four stop sequences to use. When the model encounters a stop pattern, it stops generating text and returns the final response.").Version("4.34.0"),
 			service.NewObjectListField(
 				ocpFieldTools,
 				llm.ToolFields(llm.ToolParametersField().Default([]any{}))...,
 			).Description(`External tools the model can invoke, such as functions, APIs, or web browsing. You can build subpipelines of processors that include definitions of these tools, and the specified model can choose when to invoke them to help answer a prompt.
 
-NOTE: If you don't want to use external tools, enter an empty array `+"`"+`tools: []`+"`"+`.`).
+NOTE: If you don't want to use external tools, enter an empty array `+"`"+`tools: []`+"`"+`.`).Version("4.50.0").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions."),
 		).LintRule(`
       root = match {

@@ -38,7 +38,7 @@ const (
 // inputs.
 func inputEncodingField() *service.ConfigField {
 	return service.NewStringEnumField(fieldEncoding, "protobuf", "json").
-		Description("The encoding format for messages in each batch, either `protobuf` or `json`.").
+		Description("The encoding format for messages in each batch, either `protobuf` or `json`.").Version("4.79.0").
 		Default(string(EncodingJSON))
 }
 
@@ -54,7 +54,7 @@ func inputRateLimitField() *service.ConfigField {
 // and gRPC inputs.
 func inputSchemaRegistryField() *service.ConfigField {
 	return service.NewObjectField(schemaRegistryField, schemaRegistryConfigFields()...).
-		Description("Optional Schema Registry configuration. When set, the input registers the OTLP schemas for each signal type and prepends the Schema Registry wire format header to each message.").
+		Description("Optional Schema Registry configuration. When set, the input registers the OTLP schemas for each signal type and prepends the Schema Registry wire format header to each message.").Version("4.79.0").
 		Optional().
 		Advanced()
 }

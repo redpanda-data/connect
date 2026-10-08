@@ -154,7 +154,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					" `pending_stream` allocates a per-batch pending stream that commits atomically,"+
 					" providing exactly-once semantics within a single committed batch."+
 					" `upsert` writes UPSERT-only rows to a BigQuery CDC-enabled table; the target table must have a PRIMARY KEY."+
-					" `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.").
+					" `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.").Version("4.94.0").
 				ShortDescription("How the output writes to BigQuery: default_stream, pending_stream, upsert or upsert_delete.").
 				Default("default_stream").
 				Advanced(),
@@ -162,14 +162,14 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 				Description("Bloblang expression resolving to the `_CHANGE_TYPE` pseudo-column value for each row."+
 					" Must resolve to `UPSERT` or `DELETE` (case-insensitive)."+
 					" Required when `write_mode` is `upsert` or `upsert_delete`."+
-					" Example: `${! metadata(\"operation\") }`.").
+					" Example: `${! metadata(\"operation\") }`.").Version("4.96.0").
 				ShortDescription("Bloblang expression resolving to _CHANGE_TYPE. Must resolve to UPSERT or DELETE.").
 				Optional(),
 			service.NewInterpolatedStringField(bqwaFieldChangeSequenceNumber).
 				Description("Optional Bloblang expression resolving to the `_CHANGE_SEQUENCE_NUMBER` pseudo-column value."+
 					" Format: 1 to 4 sections of 1 to 16 hexadecimal characters each, separated by `/`."+
 					" Example: `${! metadata(\"scn\") }` or `${! \"0/0/0/0\" }`."+
-					" When unset, BigQuery resolves ordering by arrival time.").
+					" When unset, BigQuery resolves ordering by arrival time.").Version("4.96.0").
 				ShortDescription("Bloblang expression resolving to the _CHANGE_SEQUENCE_NUMBER pseudo-column value.").
 				Optional(),
 			service.NewStringListField(bqwaFieldPrimaryKeys).
@@ -177,13 +177,13 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					" Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`."+
 					" A pre-existing table must already declare its PRIMARY KEY: this field cannot add one;"+
 					" when both are set they must match exactly (same columns, same order)."+
-					" Up to 16 columns; composite keys are supported in the same order they are listed.").
+					" Up to 16 columns; composite keys are supported in the same order they are listed.").Version("4.96.0").
 				ShortDescription("Primary-key column names. Required when auto_create_table is true and write_mode is upsert or upsert_delete.").
 				Optional(),
 			service.NewBoolField(bqwaFieldAutoCreateTable).
 				Description("If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`."+
 					" AlreadyExists errors from concurrent creators are treated as success."+
-					" When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.").
+					" When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.").Version("4.94.0").
 				ShortDescription("Create the target table if it does not exist, using the configured schema, partitioning and clustering.").
 				Default(false).
 				Advanced(),
@@ -200,7 +200,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					Description("For RECORD columns, the list of nested fields. Same shape as the top-level schema list.").
 					Optional(),
 			).
-				Description("Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.").
+				Description("Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.").Version("4.94.0").
 				ShortDescription("Column definitions used by auto_create_table. Required when it is true.").
 				Default([]any{}).
 				Advanced(),
@@ -225,13 +225,13 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					Default(false),
 			).
 				Description("Optional time-partitioning settings applied during `auto_create_table`."+
-					" Setting `type` is the trigger: when omitted, the block is treated as absent.").
+					" Setting `type` is the trigger: when omitted, the block is treated as absent.").Version("4.94.0").
 				ShortDescription("Time-partitioning settings applied during auto_create_table. Setting type activates the block.").
 				Advanced().
 				Optional(),
 			service.NewStringListField(bqwaFieldClustering).
 				Description("Optional clustering columns (up to 4) applied during `auto_create_table`."+
-					" All names must appear in `schema`.").
+					" All names must appear in `schema`.").Version("4.94.0").
 				ShortDescription("Clustering columns, up to 4, applied during auto_create_table. All must appear in schema.").
 				Default([]any{}).
 				Advanced(),
@@ -269,7 +269,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 				Description("Soft cap on the number of cached streams."+
 					" When the cache exceeds this size, the least-recently-used stream is evicted."+
 					" Set to 0 for unlimited (rely on idle-timeout sweeping only)."+
-					" Relevant when the table field uses interpolation to route to many tables.").
+					" Relevant when the table field uses interpolation to route to many tables.").Version("4.93.0").
 				ShortDescription("Soft cap on cached streams, evicting least-recently-used ones beyond it. Set to 0 for unlimited.").
 				Advanced().
 				Default(1024),
@@ -278,14 +278,14 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					" Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend"+
 					" can stall every batch routing to the same table. On the auto_create_table path"+
 					" the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend"+
-					" slowness on top of the metadata fetch itself.").
+					" slowness on top of the metadata fetch itself.").Version("4.93.0").
 				ShortDescription("How long a single BigQuery table-metadata fetch may run before being aborted.").
 				Advanced().
 				Default("15s"),
 			service.NewDurationField(bqwaFieldSchemaEvolutionTimeout).
 				Description("Total time budget for a single schema evolution attempt (Metadata + Update"+
 					" across all CAS retries on HTTP 412). Bounds how long the WriteBatch retry loop can be"+
-					" starved by a wedged backend.").
+					" starved by a wedged backend.").Version("4.93.0").
 				ShortDescription("Total time budget for a single schema evolution attempt, across all retries.").
 				Advanced().
 				Default("30s"),

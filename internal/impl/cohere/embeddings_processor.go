@@ -67,7 +67,7 @@ To learn more about vector embeddings, see the https://docs.cohere.com/docs/embe
 				"classification":  "Used for embeddings passed through a text classifier.",
 				"clustering":      "Used for the embeddings run through a clustering algorithm.",
 			}).
-				Description("The type of text input passed to the model.").
+				Description("The type of text input passed to the model.").Version("4.53.0").
 				Default("search_document"),
 			service.NewIntField(oepFieldDimensions).
 				Optional().

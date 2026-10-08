@@ -57,7 +57,7 @@ func headersField() *service.ConfigField {
 // that publish NATS messages.
 func metadataField() *service.ConfigField {
 	return service.NewMetadataFilterField("metadata").
-		Description("Specify which metadata values are added to messages as NATS headers, alongside any explicit `headers`.").
+		Description("Specify which metadata values are added to messages as NATS headers, alongside any explicit `headers`.").Version("4.22.0").
 		Optional()
 }
 

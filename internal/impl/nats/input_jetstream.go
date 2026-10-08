@@ -82,7 +82,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("Indicates that the subscription should use an existing consumer.").
 			Optional()).
 		Field(service.NewBoolField("create_stream").
-			Description("Whether to automatically create the stream if it doesn't exist (requires the stream field to be set).").
+			Description("Whether to automatically create the stream if it doesn't exist (requires the stream field to be set).").Version("4.84.0").
 			Advanced().
 			Default(false)).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{

@@ -161,37 +161,37 @@ Finally, add another colon after the partition to set an explicit offset to cons
 			Default(false).
 			Deprecated(),
 		service.NewStringListField(kfrFieldRegexpTopicsInclude).
-			Description("A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval.\n\nEach pattern is a full regular expression evaluated against the complete topic name. Patterns are not anchored by default, so `logs_.*` matches `my-logs_events` and `logs_errors`. Use `^logs_.*$` to match only topics starting with `logs_`.\n\nThis field enables regex mode (replacing the deprecated `regexp_topics` boolean) and cannot be used together with explicit `topics` lists. Use `regexp_topics_exclude` to filter out specific patterns from the matched topics.\n\nExample: `regexp_topics_include: [\"events_.*\", \"logs_.*\"]` consumes from all topics starting with `events_` or `logs_`.").
+			Description("A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval.\n\nEach pattern is a full regular expression evaluated against the complete topic name. Patterns are not anchored by default, so `logs_.*` matches `my-logs_events` and `logs_errors`. Use `^logs_.*$` to match only topics starting with `logs_`.\n\nThis field enables regex mode (replacing the deprecated `regexp_topics` boolean) and cannot be used together with explicit `topics` lists. Use `regexp_topics_exclude` to filter out specific patterns from the matched topics.\n\nExample: `regexp_topics_include: [\"events_.*\", \"logs_.*\"]` consumes from all topics starting with `events_` or `logs_`.").Version("4.69.0").
 			ShortDescription("Regular expression patterns matching topics to consume from, refreshed periodically to discover new topics.").
 			Example([]string{"logs_.*", "metrics_.*"}).
 			Example([]string{"events_[0-9]+"}).
 			Optional(),
 		service.NewStringListField(kfrFieldRegexpTopicsExclude).
-			Description("A list of regular expression patterns for excluding topics when regex mode is enabled (using `regexp_topics_include` or the deprecated `regexp_topics` boolean). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.\n\nEach pattern is a full regular expression evaluated against the complete topic name. Patterns are not anchored by default, so use `^` and `$` for exact matching. Exclude patterns are applied after include patterns, providing fine-grained control over topic selection.\n\nExample: `regexp_topics_exclude: [\"^_\", \".*-temp$\", \".*-test.*\"]` excludes topics starting with underscore, ending with `-temp`, or containing `-test`.").
+			Description("A list of regular expression patterns for excluding topics when regex mode is enabled (using `regexp_topics_include` or the deprecated `regexp_topics` boolean). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.\n\nEach pattern is a full regular expression evaluated against the complete topic name. Patterns are not anchored by default, so use `^` and `$` for exact matching. Exclude patterns are applied after include patterns, providing fine-grained control over topic selection.\n\nExample: `regexp_topics_exclude: [\"^_\", \".*-temp$\", \".*-test.*\"]` excludes topics starting with underscore, ending with `-temp`, or containing `-test`.").Version("4.69.0").
 			ShortDescription("Regular expression patterns for topics to exclude when regex mode is enabled.").
 			Optional(),
 		service.NewStringField(kfrFieldRackID).
-			Description("A rack specifies where the client is physically located, and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
+			Description("A rack specifies where the client is physically located, and changes fetch requests to consume from the closest replica as opposed to the leader replica.").Version("4.21.0").
 			ShortDescription("Where the client is physically located, so fetches consume from the closest replica rather than the leader.").
 			Default("").
 			Advanced(),
 		service.NewStringField(kfrFieldInstanceID).
-			Description("When you specify a `consumer_group`, set `instance_id` to define the group's static membership, which can prevent unnecessary rebalances during reconnections. The value must be unique per consumer within the group.\n\nWhen you assign an instance ID, the client does not leave the consumer group when it closes. To remove the client from the group, you must use an external admin command on behalf of the instance ID.").
+			Description("When you specify a `consumer_group`, set `instance_id` to define the group's static membership, which can prevent unnecessary rebalances during reconnections. The value must be unique per consumer within the group.\n\nWhen you assign an instance ID, the client does not leave the consumer group when it closes. To remove the client from the group, you must use an external admin command on behalf of the instance ID.").Version("4.46.0").
 			ShortDescription("Static consumer group membership ID, which prevents rebalances on reconnect. The client does not leave the group on close.").
 			Default("").
 			Advanced(),
 		service.NewDurationField(kfrFieldRebalanceTimeout).
-			Description("When you specify a `consumer_group`, `rebalance_timeout` sets how long consumer group members can take to complete their work and commit offsets after a rebalance has begun. The time that a member takes to detect the rebalance (from a heartbeat) counts against this timeout. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+			Description("When you specify a `consumer_group`, `rebalance_timeout` sets how long consumer group members can take to complete their work and commit offsets after a rebalance has begun. The time that a member takes to detect the rebalance (from a heartbeat) counts against this timeout. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").Version("4.46.0").
 			ShortDescription("How long consumer group members may take to complete work and commit offsets during a rebalance.").
 			Default("45s").
 			Advanced(),
 		service.NewDurationField(kfrFieldSessionTimeout).
-			Description("When you specify a `consumer_group`, `session_timeout` sets the maximum interval between heartbeats sent by a consumer group member to the broker. If a broker doesn't receive a heartbeat from a group member before the timeout expires, it removes the member from the consumer group and initiates a rebalance. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+			Description("When you specify a `consumer_group`, `session_timeout` sets the maximum interval between heartbeats sent by a consumer group member to the broker. If a broker doesn't receive a heartbeat from a group member before the timeout expires, it removes the member from the consumer group and initiates a rebalance. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").Version("4.46.0").
 			ShortDescription("How long a consumer group member may go between heartbeats before the broker removes it.").
 			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfrFieldHeartbeatInterval).
-			Description("When you specify a `consumer_group`, `heartbeat_interval` sets how frequently a consumer group member should send heartbeats to Apache Kafka. Apache Kafka uses heartbeats to make sure that a group member's session is active.\n\nThis value must be lower than `session_timeout`, and should be no higher than one-third of `session_timeout`.\n\nThis field is equivalent to the Java `heartbeat.interval.ms` setting and accepts Go duration format strings such as `10s` or `2m`.").
+			Description("When you specify a `consumer_group`, `heartbeat_interval` sets how frequently a consumer group member should send heartbeats to Apache Kafka. Apache Kafka uses heartbeats to make sure that a group member's session is active.\n\nThis value must be lower than `session_timeout`, and should be no higher than one-third of `session_timeout`.\n\nThis field is equivalent to the Java `heartbeat.interval.ms` setting and accepts Go duration format strings such as `10s` or `2m`.").Version("4.46.0").
 			ShortDescription("How long a consumer group member waits between heartbeats to Kafka.").
 			Default("3s").
 			Advanced(),
@@ -205,7 +205,7 @@ Finally, add another colon after the partition to set an explicit offset to cons
 			string(startOffsetEarliest):  "Start from the earliest offset. Corresponds to Kafka's `auto.offset.reset=earliest` option.",
 			string(startOffsetLatest):    "Start from the latest offset. Corresponds to Kafka's `auto.offset.reset=latest` option.",
 			string(startOffsetCommitted): "Prevents consuming a partition in a group if the partition has no prior commits. Corresponds to Kafka's `auto.offset.reset=none` option",
-		}).Description("Specify the offset from which this input starts or restarts consuming messages. Restarts occur when the `OffsetOutOfRange` error is seen during a fetch.").
+		}).Description("Specify the offset from which this input starts or restarts consuming messages. Restarts occur when the `OffsetOutOfRange` error is seen during a fetch.").Version("4.53.0").
 			Default(string(startOffsetEarliest)).
 			Advanced(),
 		service.NewStringField(kfrFieldFetchMaxBytes).
@@ -213,22 +213,22 @@ Finally, add another colon after the partition to set an explicit offset to cons
 
 If individual records are larger than the ` + "`" + `fetch_max_bytes` + "`" + ` value, brokers still send them.
 
-This field is equivalent to the Java setting ` + "`" + `fetch.max.bytes` + "`" + `.`).
+This field is equivalent to the Java setting ` + "`" + `fetch.max.bytes` + "`" + `.`).Version("4.39.0").
 			ShortDescription("Maximum bytes a broker will try to send during a fetch. Equivalent to the Java fetch.max.bytes setting.").
 			Advanced().
 			Default("50MiB"),
 		service.NewDurationField(kfrFieldFetchMaxWait).
-			Description("The maximum period of time a broker can wait for a fetch response to reach the required minimum number of bytes (`fetch_min_bytes`). This field is equivalent to the Java setting `fetch.max.wait.ms`.").
+			Description("The maximum period of time a broker can wait for a fetch response to reach the required minimum number of bytes (`fetch_min_bytes`). This field is equivalent to the Java setting `fetch.max.wait.ms`.").Version("4.45.0").
 			ShortDescription("Maximum time a broker waits for a fetch to reach the minimum required bytes.").
 			Advanced().
 			Default("5s"),
 		service.NewStringField(kfrFieldFetchMinBytes).
-			Description("The minimum number of bytes that a broker tries to send during a fetch. This field is equivalent to the Java setting `fetch.min.bytes`.").
+			Description("The minimum number of bytes that a broker tries to send during a fetch. This field is equivalent to the Java setting `fetch.min.bytes`.").Version("4.39.0").
 			ShortDescription("Minimum bytes a broker will try to send during a fetch. Equivalent to the Java fetch.min.bytes setting.").
 			Advanced().
 			Default("1B"),
 		service.NewStringField(kfrFieldFetchMaxPartitionBytes).
-			Description("The maximum number of bytes that are consumed from a single partition in a fetch request. This field is equivalent to the Java setting `fetch.max.partition.bytes`.\n\nIf a single batch is larger than the `fetch_max_partition_bytes` value, the batch is still sent so that the client can make progress.").
+			Description("The maximum number of bytes that are consumed from a single partition in a fetch request. This field is equivalent to the Java setting `fetch.max.partition.bytes`.\n\nIf a single batch is larger than the `fetch_max_partition_bytes` value, the batch is still sent so that the client can make progress.").Version("4.39.0").
 			ShortDescription("Maximum bytes consumed for a single partition in a fetch request.").
 			Advanced().
 			Default("1MiB"),
@@ -236,7 +236,7 @@ This field is equivalent to the Java setting ` + "`" + `fetch.max.bytes` + "`" +
 			string(TransactionIsolationLevelReadUncommitted): "If set, then uncommitted records are processed.",
 			string(TransactionIsolationLevelReadCommitted):   "If set, only committed transactional records are processed.",
 		}).
-			Description("The isolation level for handling transactional messages. This setting determines how transactions are processed and affects data consistency guarantees.").
+			Description("The isolation level for handling transactional messages. This setting determines how transactions are processed and affects data consistency guarantees.").Version("4.53.0").
 			Default(string(TransactionIsolationLevelReadUncommitted)),
 	}
 }

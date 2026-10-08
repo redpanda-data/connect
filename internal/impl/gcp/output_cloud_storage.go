@@ -173,12 +173,12 @@ output:
 				Advanced().
 				Default(16*1024*1024), // googleapi.DefaultUploadChunkSize
 			service.NewDurationField(csoFieldTimeout).
-				Description("The maximum period to wait for a message batch to be written to Cloud Storage, including any collision checks and appends. When the timeout is reached, the write is abandoned and reattempted.").
+				Description("The maximum period to wait for a message batch to be written to Cloud Storage, including any collision checks and appends. When the timeout is reached, the write is abandoned and reattempted.").Version("4.17.0").
 				Example("1s").
 				Example("500ms").
 				Default("3s"),
 			service.NewInterpolatedStringField(csoFieldCredentialsJSON).
-				Description(credentialsJSONDescription).
+				Description(credentialsJSONDescription).Version("4.33.0").
 				Default("").
 				Secret(),
 			service.NewOutputMaxInFlightField().

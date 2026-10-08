@@ -40,6 +40,7 @@ const (
 
 func processorSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Version("4.54.0").
 		Categories("AI").
 		Summary("Query items within a https://qdrant.tech/[Qdrant^] collection.").
 		Fields(

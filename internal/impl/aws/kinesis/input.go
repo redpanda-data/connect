@@ -199,7 +199,9 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 					Default(0).
 					Advanced(),
 			},
-				config.SessionFields()...,
+				config.SessionFieldsWithVersions(map[string]string{
+					"region": "4.53.0", "endpoint": "4.53.0", "credentials": "4.53.0",
+				})...,
 			)...,
 		).
 			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.").
@@ -241,7 +243,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Description("The period of time between each update to the checkpoint table.").
 			Default("5s"),
 		service.NewDurationField(kiFieldStealGracePeriod).
-			Description("Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.").
+			Description("Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.").Version("4.55.0").
 			ShortDescription("How long past the next commit period to wait for a shard's current owner to store a checkpoint.").
 			Default("2s"),
 		service.NewDurationField(kiFieldRebalancePeriod).

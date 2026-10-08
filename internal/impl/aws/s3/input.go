@@ -241,15 +241,15 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Default(10).
 					Advanced(),
 				service.NewIntField(s3iSQSFieldWaitTimeSeconds).
-					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
+					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").Version("4.17.0").
 					Default(0).
 					Advanced(),
 				service.NewIntField(s3iSQSNackVisibilityTimeout).
-					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
+					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").Version("4.78.0").
 					Default(0).
 					Optional(),
 				service.NewDurationField(s3iSQSFieldZeroKeyWarnInterval).
-					Description("A message from which no target key can be extracted (for example, due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").
+					Description("A message from which no target key can be extracted (for example, due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").Version("4.103.2").
 					ShortDescription("How often to repeat the warning for a message with no extractable target key.").
 					Example("10s").
 					Example("0s").
