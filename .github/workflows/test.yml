@@ -126,23 +126,47 @@ jobs:
           path: docs/modules
           retention-days: 7
 
+  # Whether this PR changes the generated docs at all. When it doesn't, it
+  # can't change or break a published page, so docs-check is skipped.
+  docs-changed:
+    needs: [docs, docs-base]
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: connect-docs-head
+          path: head
+      - uses: actions/download-artifact@v4
+        with:
+          name: connect-docs-base
+          path: base
+      - name: Compare the generated docs with the merge base
+        id: compare
+        run: |
+          if diff -rq base head > diff.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The generated docs are identical to the merge base's, so the docs check is skipped." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "$(wc -l < diff.txt) generated files differ from the merge base."
+          fi
+
   # Builds the Connect docs with this PR's generated tree and checks the
   # result: Antora errors, broken anchors, and unconverted markup on the
   # pages the PR changes block. When the PR changes a published page, it
   # comments with the changed pages and a preview link, and asks the docs
   # team to review. See docs/README.md.
   docs-check:
-    needs: [docs, docs-base]
-    if: >-
-      github.event_name == 'pull_request' &&
-      !github.event.pull_request.draft &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    needs: [docs, docs-base, docs-changed]
+    if: needs.docs-changed.outputs.changed == 'true'
     permissions:
       contents: read
       id-token: write
       statuses: write
       pull-requests: write
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@817a5381ebf4f978941ad79d5c15139599d9a2e8
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@8ea62d7287c87cd3e3b167cd8ffebd6f6f617f28 # main after #361
     with:
       docs_artifact: connect-docs-head
       base_docs_artifact: connect-docs-base

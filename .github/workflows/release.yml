@@ -248,7 +248,7 @@ jobs:
       id-token: write
       statuses: write
       pull-requests: write
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@817a5381ebf4f978941ad79d5c15139599d9a2e8
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@8ea62d7287c87cd3e3b167cd8ffebd6f6f617f28 # main after #361
     with:
       docs_artifact: connect-docs-release
       aws_region: ${{ vars.RP_AWS_CRED_REGION }}
