@@ -194,8 +194,7 @@ For more information on how the `+"`"+`update`+"`"+` action works, see the `+"`"
 				Optional(),
 			service.NewBatchPolicyField(esFieldBatching),
 		).
-		Example("Updating Documents", "When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]", `
-# Partial document update
+		Example("Updating Documents", "When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]. This example performs a partial update with `doc`.", `
 output:
   processors:
     - mapping: |
@@ -207,8 +206,8 @@ output:
     index: foo
     id: ${! @id }
     action: update
-
-# Scripted update
+`).
+		Example("Scripted updates", "A `script` field at the top level of the request body updates the document with a script, here in the built-in Painless language.", `
 output:
   processors:
     - mapping: |
@@ -220,8 +219,8 @@ output:
     index: foo
     id: ${! @id }
     action: update
-
-# Upsert
+`).
+		Example("Updating or inserting a document", "With both `doc` and `upsert` at the top level of the request body, an `update` action updates the document if it exists and inserts the `upsert` document if it doesn't.", `
 output:
   processors:
     - mapping: |
