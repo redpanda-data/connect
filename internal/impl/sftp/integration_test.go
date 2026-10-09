@@ -275,6 +275,75 @@ codec: all-bytes
 	require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
 }
 
+func TestIntegrationSFTPLegacySSHAlgorithms(t *testing.T) {
+	integration.CheckSkip(t)
+
+	emu := runEmulator(t, withLegacyAlgorithmsOnly(ssh.InsecureKeyExchangeDHGEXSHA1, ssh.InsecureCipherAES128CBC))
+	require.NoError(t, emu.client.MkdirAll("/upload"))
+
+	connection := func(algorithms string) string {
+		return fmt.Sprintf(`
+address: %s
+credentials:
+  username: %s
+  password: %s
+  host_public_key: %s
+`, emu.address, sftpUsername, sftpPassword, emu.hostKey) + algorithms
+	}
+
+	newWriter := func(t *testing.T, algorithms string) *sftpWriter {
+		t.Helper()
+		parsed, err := sftpOutputSpec().ParseYAML(connection(algorithms)+`
+path: /upload/legacy.txt
+codec: all-bytes
+`, nil)
+		require.NoError(t, err)
+		writer, err := newWriterFromParsed(parsed, service.MockResources())
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+		return writer
+	}
+
+	t.Run("defaults fail to negotiate", func(t *testing.T) {
+		err := newWriter(t, "").Connect(t.Context())
+		require.ErrorContains(t, err, "no common algorithm for key exchange")
+	})
+
+	t.Run("key exchange alone is not enough", func(t *testing.T) {
+		err := newWriter(t, fmt.Sprintf(`
+  ssh_algorithms:
+    additional_key_exchanges: [ %s ]
+`, ssh.InsecureKeyExchangeDHGEXSHA1)).Connect(t.Context())
+		require.ErrorContains(t, err, "no common algorithm for client to server cipher")
+	})
+
+	t.Run("opted in algorithms round trip", func(t *testing.T) {
+		algorithms := fmt.Sprintf(`
+  ssh_algorithms:
+    additional_key_exchanges: [ %s ]
+    additional_ciphers: [ %s ]
+`, ssh.InsecureKeyExchangeDHGEXSHA1, ssh.InsecureCipherAES128CBC)
+
+		writer := newWriter(t, algorithms)
+		require.NoError(t, writer.Connect(t.Context()))
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("legacy-data"))))
+
+		parsed, err := sftpInputSpec().ParseYAML(connection(algorithms)+`
+paths:
+  - /upload/legacy.txt
+scanner:
+  to_the_end: {}
+`, nil)
+		require.NoError(t, err)
+		reader, err := newSFTPReaderFromParsed(parsed, service.MockResources())
+		require.NoError(t, err)
+		require.NoError(t, reader.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, reader.Close(context.Background())) })
+
+		assert.Equal(t, "legacy-data", mustReadOneFile(t, t.Context(), reader))
+	})
+}
+
 type emulator struct {
 	client  *sftp.Client
 	address string
@@ -310,17 +379,44 @@ func (e emulator) openConnections() (int, error) {
 	return len(conns), nil
 }
 
-func runEmulator(t *testing.T) emulator {
+// emulatorOptions customises the sftpgo server started by runEmulator.
+type emulatorOptions struct {
+	// env holds additional sftpgo environment configuration.
+	env map[string]string
+	// sshConfig holds the transport algorithms the emulator's own client
+	// uses, which must overlap with any algorithms restricted through env.
+	sshConfig ssh.Config
+}
+
+type emulatorOpt func(*emulatorOptions)
+
+// withLegacyAlgorithmsOnly restricts the server to the given key exchange and
+// cipher, mimicking a legacy SFTP server that offers none of the defaults.
+func withLegacyAlgorithmsOnly(kex, cipher string) emulatorOpt {
+	return func(o *emulatorOptions) {
+		o.env["SFTPGO_SFTPD__KEX_ALGORITHMS"] = kex
+		o.env["SFTPGO_SFTPD__CIPHERS"] = cipher
+		o.sshConfig.KeyExchanges = []string{kex}
+		o.sshConfig.Ciphers = []string{cipher}
+	}
+}
+
+func runEmulator(t *testing.T, opts ...emulatorOpt) emulator {
 	adminUsername := "admin"
 	adminPassword := "password"
 
+	options := emulatorOptions{env: map[string]string{
+		"SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN": "true",
+		"SFTPGO_DEFAULT_ADMIN_USERNAME":              adminUsername,
+		"SFTPGO_DEFAULT_ADMIN_PASSWORD":              adminPassword,
+	}}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	ctr, err := testcontainers.Run(t.Context(), "drakkan/sftpgo:edge-alpine-slim",
 		testcontainers.WithExposedPorts("2022/tcp", "8080/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN": "true",
-			"SFTPGO_DEFAULT_ADMIN_USERNAME":              adminUsername,
-			"SFTPGO_DEFAULT_ADMIN_PASSWORD":              adminPassword,
-		}),
+		testcontainers.WithEnv(options.env),
 		testcontainers.WithWaitStrategy(
 			wait.ForHTTP("/healthz").WithPort("8080/tcp").WithStartupTimeout(30*time.Second),
 		),
@@ -383,6 +479,7 @@ func runEmulator(t *testing.T) emulator {
 
 		var err error
 		sshClient, err = ssh.Dial("tcp", address, &ssh.ClientConfig{
+			Config:          options.sshConfig,
 			User:            sftpUsername,
 			Auth:            []ssh.AuthMethod{ssh.Password(sftpPassword)},
 			HostKeyCallback: cb,
