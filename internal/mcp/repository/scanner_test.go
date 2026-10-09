@@ -91,6 +91,48 @@ func TestScannerHappy(t *testing.T) {
 	assert.Equal(t, exp, act)
 }
 
+func TestScannerStarlarkExtensions(t *testing.T) {
+	s := repository.NewScanner(fstest.MapFS{
+		filepath.Clean("resources/a.star"): &fstest.MapFile{
+			Data: []byte(`a star`),
+		},
+		filepath.Clean("resources/b.star.py"): &fstest.MapFile{
+			Data: []byte(`b star py`),
+		},
+		filepath.Clean("resources/c.starlark"): &fstest.MapFile{
+			Data: []byte(`c starlark`),
+		},
+		filepath.Clean("resources/nested/d.star.py"): &fstest.MapFile{
+			Data: []byte(`d star py`),
+		},
+		filepath.Clean("resources/plain.py"): &fstest.MapFile{
+			Data: []byte(`IGNORE ME`),
+		},
+		filepath.Clean("resources/notstarlark"): &fstest.MapFile{
+			Data: []byte(`IGNORE ME`),
+		},
+		filepath.Clean("resources/starlark.txt"): &fstest.MapFile{
+			Data: []byte(`IGNORE ME`),
+		},
+	})
+
+	exp := map[string]string{
+		"resources/a.star/starlark":           "a star",
+		"resources/b.star.py/starlark":        "b star py",
+		"resources/c.starlark/starlark":       "c starlark",
+		"resources/nested/d.star.py/starlark": "d star py",
+	}
+	act := map[string]string{}
+
+	s.OnResourceFile(func(resourceType, filePath string, contents []byte) error {
+		act[filePath+"/"+resourceType] = string(contents)
+		return nil
+	})
+
+	require.NoError(t, s.Scan("."))
+	assert.Equal(t, exp, act)
+}
+
 func TestScannerRoot(t *testing.T) {
 	s := repository.NewScanner(fstest.MapFS{
 		filepath.Clean("foo/resources/caches/foo.yaml"): &fstest.MapFile{

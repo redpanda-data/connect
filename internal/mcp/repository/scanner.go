@@ -19,6 +19,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 )
 
 // Scanner is a mechanism for walking a repository and emitting events for each
@@ -64,11 +66,6 @@ func (s *Scanner) OnTracerFile(fn func(filePath string, contents []byte) error) 
 }
 
 func (s *Scanner) scanFnForExtensions(fn func(path string, contents []byte) error, allowedExtensions ...string) fs.WalkDirFunc {
-	allowedExtensionsMap := map[string]struct{}{}
-	for _, n := range allowedExtensions {
-		allowedExtensionsMap[n] = struct{}{}
-	}
-
 	return func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -78,7 +75,11 @@ func (s *Scanner) scanFnForExtensions(fn func(path string, contents []byte) erro
 			return nil
 		}
 
-		if _, exists := allowedExtensionsMap[filepath.Ext(path)]; !exists {
+		// Match on suffix rather than filepath.Ext, which only returns the
+		// final extension and so can never match multi-part ones like ".star.py".
+		if !slices.ContainsFunc(allowedExtensions, func(ext string) bool {
+			return strings.HasSuffix(path, ext)
+		}) {
 			return nil
 		}
 
@@ -116,7 +117,7 @@ func (s *Scanner) Scan(root string) error {
 		// Look for any starlark files in the main resources folder
 		if err := fs.WalkDir(s.fs, resourceDir, s.scanFnForExtensions(func(path string, contents []byte) error {
 			return s.onResource("starlark", path, contents)
-		}, "starlark", ".star", ".star.py")); err != nil && !os.IsNotExist(err) {
+		}, ".star", ".star.py", ".starlark")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
