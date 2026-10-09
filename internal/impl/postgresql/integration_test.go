@@ -1793,7 +1793,11 @@ postgres_cdc:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
-	go func() { _ = streamOut.Run(t.Context()) }()
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 
 	waitForActiveReplicationSlot(t, db, "test_slot_default_batching")
 
@@ -1856,7 +1860,11 @@ postgres_cdc:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
-	go func() { _ = streamOut.Run(t.Context()) }()
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 
 	waitForActiveReplicationSlot(t, db, "test_slot_batch_transactions")
 
@@ -1921,7 +1929,11 @@ postgres_cdc:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
-	go func() { _ = streamOut.Run(t.Context()) }()
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 
 	waitForActiveReplicationSlot(t, db, "test_slot_batching_count")
 
@@ -2006,7 +2018,11 @@ postgres_cdc:
 	}
 
 	run1 := build()
-	go func() { _ = run1.Run(t.Context()) }()
+	go func() {
+		if err := run1.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 	waitForActiveReplicationSlot(t, db, "test_slot_large_txn")
 
 	const rowCount = 1500
@@ -2033,7 +2049,11 @@ postgres_cdc:
 	sizes = nil
 	mut.Unlock()
 	run2 := build()
-	go func() { _ = run2.Run(t.Context()) }()
+	go func() {
+		if err := run2.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 	// The slot already exists from the first run; wait for the second run
 	// to be streaming from it.
 	waitForActiveReplicationSlot(t, db, "test_slot_large_txn")
