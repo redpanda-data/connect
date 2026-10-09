@@ -43,20 +43,20 @@ const (
 func basicAuthField() *service.ConfigField {
 	return service.NewObjectField(coFieldBasicAuth,
 		service.NewBoolField(coFieldBasicAuthEnabled).
-			Description("Whether to authenticate with the graph database using `username`, `password`, and `realm`. When `false`, the connection is made without authentication.").
+			Description("Whether to authenticate with `username`, `password`, and `realm`. When `false`, the connection is made without authentication.").
 			Default(false),
 		service.NewStringField(coFieldBasicAuthUsername).
 			Default("").
-			Description("The username of the account credentials to authenticate as. Used together with `password` for basic authentication."),
+			Description("The user that the driver authenticates as when it connects to `uri`, with `password` and, optionally, `realm`."),
 		service.NewStringField(coFieldBasicAuthPassword).
-			Description("The password to use for authentication. Used together with `username` for basic authentication.").
+			Description("The password of the user set in `username`.").
 			Default("").
 			Secret(),
 		service.NewStringField(coFieldBasicAuthRealm).
 			Advanced().
 			Default("").
 			Description("The realm or process for authentication challenges."),
-	).Description("Configure basic authentication for requests to your graph database.").
+	).Description("Basic authentication for the connection to `uri`.").
 		Optional()
 }
 
@@ -86,13 +86,13 @@ func extractAuth(conf *service.ParsedConfig) (neo4j.AuthToken, error) {
 
 func outputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Writes batches of messages to any graph database that supports the Neo4j and Bolt URI schemes, using operations written in the Cypher query language.").
-		Description("The cypher output type writes a batch of messages to any graph database that supports the Neo4j or Bolt protocols.").
+		Summary("Writes batches of messages to any database that speaks the Bolt protocol, such as Neo4j or Memgraph, using operations written in the Cypher query language.").
+		Description("The cypher output type writes a batch of messages to any database that speaks the Bolt protocol, connecting with a `neo4j://` or `bolt://` URI.").
 		Categories("Services").
 		Version("4.37.0").
 		Fields(
 			service.NewStringField(coFieldURI).
-				Description(`The connection URI for your graphing database. For more information, see https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^].`).
+				Description(`The connection URI of the database. For more information, see https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's documentation^].`).
 				ShortDescription("The connection URI to connect to.").
 				Examples(
 					"neo4j://demo.neo4jlabs.com",
@@ -103,7 +103,7 @@ func outputConfig() *service.ConfigSpec {
 					"bolt+ssc://10.0.0.43",
 				),
 			service.NewStringField(coFieldCypher).
-				Description("The cypher expression to execute against the graph database.").
+				Description("The Cypher expression to execute against the database.").
 				Examples(
 					"MERGE (p:Person {name: $name})",
 					`MATCH (o:Organization {id: $orgId})

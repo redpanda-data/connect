@@ -167,7 +167,11 @@ This output benefits from sending messages as a batch for improved performance. 
 			service.NewBatchPolicyField(ddboFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(retries.CommonRetryBackOffFields(3, "1s", "5s", "30s")...)
+		Fields(service.NewRetryBackOffFields(3, &backoff.ExponentialBackOff{
+			InitialInterval: time.Second,
+			MaxInterval:     5 * time.Second,
+			MaxElapsedTime:  30 * time.Second,
+		})...)
 }
 
 func init() {

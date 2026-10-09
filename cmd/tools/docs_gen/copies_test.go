@@ -34,11 +34,14 @@ import (
 // generated from these strings, so every copy must be one shared constant or
 // helper: a fix to one copy then reaches every component that uses it.
 //
-// It compares `.Description(...)` string literals of at least 40 characters on
-// fields with the same name, in this repo and in the public packages of
-// benthos, and reports pairs whose words are at least 90% the same. A copy of
-// benthos text can only be shared once benthos exports it, so benthos's
-// internal packages are out of scope.
+// It compares description string literals of at least 40 characters, from
+// `.Description(...)` calls and from benthos's `docs.FieldString("name",
+// "description")` style constructors, on fields with the same name. It scans
+// this repo and the `public` and `internal` packages of benthos, and reports
+// pairs whose words are at least 90% the same. Pairs where both copies are in
+// benthos are left to benthos. A copy of benthos text is shared by using what
+// benthos exports from `public/service`, because this repo cannot import
+// benthos's internal packages.
 func TestFieldDescriptionsAreNotCopied(t *testing.T) {
 	roots := []string{"../../../internal"}
 	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/redpanda-data/benthos/v4").Output()
@@ -46,7 +49,7 @@ func TestFieldDescriptionsAreNotCopied(t *testing.T) {
 		t.Fatalf("locating the benthos module: %v", err)
 	}
 	benthos := strings.TrimSpace(string(out))
-	roots = append(roots, filepath.Join(benthos, "public"))
+	roots = append(roots, filepath.Join(benthos, "public"), filepath.Join(benthos, "internal"))
 
 	var lits []descLiteral
 	for _, r := range roots {
@@ -125,20 +128,32 @@ func collectDescriptions(t *testing.T, root string) []descLiteral {
 	for p, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || len(call.Args) != 1 {
+			if !ok {
 				return true
 			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "Description" {
+			dir := filepath.Dir(p)
+			var name string
+			var desc ast.Expr
+			switch fn := calleeName(call); {
+			case fn == "Description" && len(call.Args) == 1:
+				// service.NewStringField("x").Description("...")
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+					name, desc = constructorName(sel.X, dir, consts), call.Args[0]
+				}
+			case strings.HasPrefix(fn, "Field") && len(call.Args) >= 2:
+				// docs.FieldString("x", "...") in benthos's internal docs package
+				name, desc = fieldNameArg(call.Args[0], dir, consts), call.Args[1]
+			}
+			if desc == nil {
 				return true
 			}
-			s, ok := stringValue(call.Args[0])
+			s, ok := stringValue(desc)
 			if !ok || len(strings.TrimSpace(s)) < 40 {
 				return true
 			}
 			lits = append(lits, descLiteral{
-				name:  constructorName(sel.X, filepath.Dir(p), consts),
-				pos:   fmt.Sprintf("%s:%d", p, fset.Position(call.Args[0].Pos()).Line),
+				name:  name,
+				pos:   fmt.Sprintf("%s:%d", p, fset.Position(desc.Pos()).Line),
 				words: strings.Fields(s),
 			})
 			return true
@@ -169,26 +184,46 @@ func stringValue(e ast.Expr) (string, bool) {
 	return "", false
 }
 
+// calleeName returns the name of the called function or method.
+func calleeName(call *ast.CallExpr) string {
+	switch fn := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		return fn.Sel.Name
+	case *ast.Ident:
+		return fn.Name
+	}
+	return ""
+}
+
+// fieldNameArg evaluates a field name argument: a string literal or a constant
+// declared in the same package.
+func fieldNameArg(e ast.Expr, dir string, consts map[string]string) string {
+	switch a := e.(type) {
+	case *ast.BasicLit:
+		v, _ := strconv.Unquote(a.Value)
+		return v
+	case *ast.Ident:
+		return consts[dir+"|"+a.Name]
+	}
+	return ""
+}
+
 // constructorName follows a chain such as NewStringField("x").Default(...)
-// back to the constructor and returns the field name it was given.
+// back to the constructor and returns the field name it was given. The
+// constructor may be qualified (service.NewStringField) or not, as inside the
+// benthos service package.
 func constructorName(e ast.Expr, dir string, consts map[string]string) string {
 	for {
 		call, ok := e.(*ast.CallExpr)
 		if !ok {
 			return ""
 		}
+		fn := calleeName(call)
+		if strings.HasPrefix(fn, "New") && strings.HasSuffix(fn, "Field") && len(call.Args) > 0 {
+			return fieldNameArg(call.Args[0], dir, consts)
+		}
 		sel, ok := call.Fun.(*ast.SelectorExpr)
 		if !ok {
-			return ""
-		}
-		if strings.HasPrefix(sel.Sel.Name, "New") && strings.HasSuffix(sel.Sel.Name, "Field") && len(call.Args) > 0 {
-			switch a := call.Args[0].(type) {
-			case *ast.BasicLit:
-				v, _ := strconv.Unquote(a.Value)
-				return v
-			case *ast.Ident:
-				return consts[dir+"|"+a.Name]
-			}
 			return ""
 		}
 		e = sel.X

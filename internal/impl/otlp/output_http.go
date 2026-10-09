@@ -133,9 +133,8 @@ This output supports the following authentication methods:
 				Advanced().
 				Default(""),
 			service.NewBoolField(hoFieldFollowRedirects).
-				Description("Transparently follow redirects, i.e. responses with 300-399 status codes. "+
-					"If disabled, the response message will contain the body, status, and headers from the redirect response and the processor will not make a request to the URL set in the Location header of the response.").
-				ShortDescription("Transparently follow redirects, meaning responses with 300-399 status codes.").
+				Description("Whether to follow redirects, which are responses with 300-399 status codes, from the OTLP endpoint. When disabled, the output does not request the URL in the `Location` header, and the write fails with an unexpected status error.").
+				ShortDescription("Whether to follow redirects from the OTLP endpoint.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(hoFieldDisableHTTP2).
@@ -150,7 +149,7 @@ This output supports the following authentication methods:
 			netutil.DialerConfigSpec(),
 		).
 		Fields(service.NewHTTPRequestAuthSignerFields()...).
-		Fields(oauth2.FieldSpec()).
+		Fields(service.NewOAuth2Field("oauth2")).
 		Fields(service.NewOutputMaxInFlightField())
 }
 

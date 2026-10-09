@@ -45,7 +45,7 @@ func fileOutputSpec() *service.ConfigSpec {
 		Description(`Messages can be written to different files by using xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.`).
 		Fields(
 			service.NewInterpolatedStringField(foFieldPath).
-				Description("The file to write to, if the file does not yet exist it will be created.").
+				Description("The path of the file to write to. The output creates the file and any missing parent directories. A write fails when the path contains a NUL byte. On Windows it also fails when the file name contains `<`, `>`, `:`, `\"`, `|`, `?`, `*`, or a control character, and on macOS when the file name contains `:`.").
 				Examples(
 					"/tmp/data.txt",
 					"/tmp/${! timestamp_unix() }.txt",
@@ -262,8 +262,8 @@ func (w *fileWriter) Close(_ context.Context) error {
 //   - Windows: <, >, :, ", |, ?, * and control characters 0x01–0x1F are rejected
 //     in the base file name. The drive-letter colon (C:) is not part of the base
 //     name and is therefore not rejected.
-//   - macOS/Darwin: colons are rejected in the base file name because HFS+/APFS
-//     maps ':' to '/', silently placing the file in a different directory.
+//   - macOS/Darwin: colons are rejected in the base file name. Finder shows
+//     ':' as '/', so such names are confusing to work with.
 func validateFilePath(path, goos string) error {
 	if strings.ContainsRune(path, '\x00') {
 		return fmt.Errorf(
@@ -322,8 +322,7 @@ func validateWindowsFileName(base, fullPath string) error {
 func validateDarwinFileName(base, fullPath string) error {
 	if strings.ContainsRune(base, ':') {
 		return fmt.Errorf(
-			"file name %q in path %q contains a colon which is invalid on macOS "+
-				"(HFS+/APFS maps ':' to '/', creating a file in the wrong directory)",
+			"file name %q in path %q contains a colon, which this output rejects on macOS",
 			base, fullPath,
 		)
 	}

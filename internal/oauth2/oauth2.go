@@ -43,57 +43,8 @@ type Config struct {
 	EndpointParams map[string][]string
 }
 
-// FieldSpec returns the configuration spec for OAuth2 authentication.
-func FieldSpec() *service.ConfigField {
-	return service.NewObjectField("oauth2",
-		service.NewBoolField(fieldEnabled).
-			Description("Whether to use OAuth version 2 in requests.").
-			Default(false),
-
-		service.NewStringField(fieldClientKey).
-			Description("A value used to identify the client to the token provider.").
-			Default(""),
-
-		service.NewStringField(fieldClientSecret).
-			Description("A secret used to establish ownership of the client key.").
-			Default("").Secret(),
-
-		service.NewURLField(fieldTokenURL).
-			Description("The URL of the token provider.").
-			Default(""),
-
-		service.NewStringListField(fieldScopes).
-			Description("A list of optional requested permissions.").
-			Default([]any{}).
-			Advanced(),
-
-		service.NewAnyMapField(fieldEndpointParams).
-			Description("A list of optional endpoint parameters, values should be arrays of strings.").
-			Advanced().
-			Example(map[string]any{
-				"audience": []string{"https://example.com"},
-				"resource": []string{"https://api.example.com"},
-			}).
-			Default(map[string]any{}).
-			Optional().
-			LintRule(`
-root = if this.type() == "object" {
-  this.values().map_each(ele -> if ele.type() != "array" {
-    "field must be an object containing arrays of strings, got %s (%v)".format(ele.format_json(no_indent: true), ele.type())
-  } else {
-    ele.map_each(str -> if str.type() != "string" {
-      "field values must be strings, got %s (%v)".format(str.format_json(no_indent: true), str.type())
-    } else { deleted() })
-  }).
-    flatten()
-}
-`),
-	).
-		Description("Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.").
-		Optional().Advanced()
-}
-
-// ParseConfig parses OAuth2 configuration from a parsed config.
+// ParseConfig parses OAuth2 configuration from a parsed config of a field
+// defined with service.NewOAuth2Field.
 func ParseConfig(pConf *service.ParsedConfig) (Config, error) {
 	var conf Config
 	var err error
