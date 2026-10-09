@@ -37,7 +37,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 		Fields(
 			parquetSchemaConfig().Optional(),
 			service.NewStringField("schema_metadata").
-				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").
+				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").Version("4.62.0").
 				ShortDescription("A metadata field containing a schema definition to encode with, instead of a static schema.").
 				Default(""),
 			service.NewStringEnumField("default_compression",
@@ -48,7 +48,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 			service.NewStringEnumField("default_encoding",
 				"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
 			).
-				Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.").
+				Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY`.").
 				ShortDescription("The default encoding type for fields. Best left unset unless readers lack DELTA_LENGTH_BYTE_ARRAY.").
 				Default("DELTA_LENGTH_BYTE_ARRAY").
 				Advanced().
@@ -62,9 +62,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 				Advanced().
 				Version("4.89.0"),
 		).
-		Description(`
-This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
-`).
+		Description(experimentalLibraryDescription).
 		Version("4.4.0").
 		// TODO: Add an example that demonstrates error handling
 		Example("Writing Parquet Files to AWS S3",

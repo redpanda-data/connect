@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,9 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -72,8 +75,28 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
 	Version("4.45.0").
-	Summary("Enables MySQL streaming for RedPanda Connect.").
+	Summary("Streams data changes from a MySQL or MariaDB database, using the binary log to capture data updates.").
 	Description(`
+This input is built on the https://github.com/go-mysql-org/go-mysql?tab=readme-ov-file#replication[`+"`go-mysql` canal library"+`^] but uses a custom approach for streaming historical data.
+
+== Snapshot and streaming modes
+
+When `+"`stream_snapshot`"+` is `+"`true`"+` and `+"`checkpoint_cache`"+` holds no binlog position, this input takes a snapshot before it streams changes:
+
+. It runs `+"`FLUSH TABLES ... WITH READ LOCK`"+` on the selected tables, which blocks writes to them.
+. It opens one `+"`START TRANSACTION WITH CONSISTENT SNAPSHOT`"+` transaction for each snapshot worker, so that every worker reads the same state of the database.
+. It reads the current binlog position and then runs `+"`UNLOCK TABLES`"+` to release the lock.
+. It reads each table in primary key order within those transactions.
+. It streams changes from the binlog position that it read in step 3, which covers the changes made while the snapshot was read.
+
+The binlog position is stored in `+"`checkpoint_cache`"+` only after the snapshot is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start.
+
+When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the current binlog position. In both modes, a restart resumes streaming from the binlog position stored in `+"`checkpoint_cache`"+`.
+
+== Data types
+
+Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns.
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -88,84 +111,50 @@ This input adds the following metadata fields to each message:
 			gomysql.MySQLFlavor:   "MySQL flavored databases.",
 			gomysql.MariaDBFlavor: "MariaDB flavored databases.",
 		}).
-			Description("The type of MySQL database to connect to.").
+			Description("The type of MySQL database to connect to.").Version("4.48.0").
 			Default(gomysql.MySQLFlavor),
 		service.NewStringField(fieldMySQLDSN).
-			Description("The DSN of the MySQL database to connect to.").
+			Description("The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`.").
 			Example("user:password@tcp(localhost:3306)/database"),
 		service.NewStringListField(fieldMySQLTables).
-			Description("A list of tables to stream from the database.").
+			Description("A list of the database table names to stream changes from. Specify each table name as a separate item.").
 			Example([]string{"table1", "table2"}).
 			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 		service.NewStringField(fieldCheckpointCache).
-			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.").
+			Description("A xref:components:caches/about.adoc[cache resource] to store the binlog position of the most recent data update delivered by Redpanda Connect. After a restart, Redpanda Connect can continue processing changes from this last known position, avoiding the need to reprocess all table updates.").
 			ShortDescription("Cache resource storing the last delivered BinLog position, so restarts resume instead of re-reading the table."),
 		service.NewStringField(fieldCheckpointKey).
-			Description("The key to use to store the snapshot position in `"+fieldCheckpointCache+"`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+			Description("The key identifier used to store the binlog position in `"+fieldCheckpointCache+"`. If you have multiple `mysql_cdc` inputs sharing the same cache, you can provide an alternative key.").
 			Default("mysql_binlog_position"),
 		service.NewIntField(fieldSnapshotMaxBatchSize).
-			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+			Description("The maximum number of table rows to fetch in each batch when taking a snapshot. This option is only available when `stream_snapshot` is set to `true`.").
 			Default(1000),
 		service.NewIntField(fieldMaxReconnectAttempts).
-			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
+			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").Version("4.72.0").
 			ShortDescription("Attempts the MySQL driver makes to re-establish a broken connection. Zero or less means infinite.").
 			Advanced().
 			Default(10),
 		service.NewBoolField(fieldStreamSnapshot).
-			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position.").
+			Description("When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key. When set to `false`, the input starts streaming from the current binlog position.").
 			ShortDescription("Query all existing data as a snapshot first. Otherwise streaming starts from the current binlog position."),
 		service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Specifies the number of tables that will be snapshotted in parallel.").
+			Description("Specifies the number of tables that will be snapshotted in parallel.").Version("4.90.0").
 			Default(1).
 			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
-		service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
-			ShortDescription("The maximum number of messages that can be processed at a given time.").
-			Default(1024),
+		cdcreplication.CheckpointLimitField("binlog position"),
 		service.NewTLSField("tls").
-			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+			Description("Custom TLS settings for the MySQL connection. When `enabled` is `true`, these settings replace any `tls` parameter in the `dsn`, and the server name is set to the host from the DSN.").Version("4.72.0").
 			Optional(),
-		service.NewObjectField(fieldAWSIAMAuth,
+		service.NewObjectField(fieldAWSIAMAuth, slices.Concat([]*service.ConfigField{
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
-				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `"+fieldMaxReconnectAttempts+"` is set to a low value to ensure it can refresh credentials.").
+				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `" + fieldMaxReconnectAttempts + "` is set to a low value to ensure it can refresh credentials.").
 				Default(false),
-			service.NewStringField("region").
-				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
-				Optional(),
+			awsconfig.IAMAuthRegionField("MySQL"),
 			service.NewStringField("endpoint").
 				Description("The MySQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com)."),
-			service.NewStringField("id").
-				Description("The ID of credentials to use.").
-				Optional().Advanced(),
-			service.NewStringField("secret").
-				Description("The secret for the credentials being used.").
-				Optional().Advanced().Secret(),
-			service.NewStringField("token").
-				Description("The token for the credentials being used, required when using short term credentials.").
-				Optional().Advanced(),
-			service.NewStringField("role").
-				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
-				Optional(),
-			service.NewStringField("role_external_id").
-				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
-				Optional(),
-			service.NewObjectListField("roles",
-				service.NewStringField("role").
-					Default("").
-					Description("AWS IAM role ARN to assume."),
-				service.NewStringField("role_external_id").
-					Description("Optional external ID for the role assumption.").
-					Default("").
-					Optional(),
-			).
-				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
-				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-				Optional(),
-		).
-			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+		}, awsconfig.IAMAuthStaticCredentialFields(), awsconfig.IAMAuthRoleFields(false))...).
+			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").Version("4.72.0").
 			ShortDescription("AWS IAM authentication configuration for MySQL instances.").
 			Advanced().
 			Optional(),

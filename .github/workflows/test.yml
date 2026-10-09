@@ -12,13 +12,24 @@ jobs:
     env:
       CGO_ENABLED: 1
     steps:
-      - name: Free disk space
+      # The test build failed with "no space left on device" in January 2026 (#3906).
+      # In October 2026 the runner starts with 86 to 92 GiB free and the job uses 11 to 14 GiB at peak (#4927).
+      # The 40 GiB limit covers the job, the restored Go cache, and its archive during restore.
+      # If free space is low, delete the directories with the fewest files per GiB: rm time follows the file count.
+      # Do not delete /usr/local/lib/android: it has ~311k files and takes 70 s to 280 s to delete.
+      - name: Free disk space if low
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
-          sudo docker image prune --all --force
+          df -h /
+          if [ "$(df -BG --output=avail / | tail -1 | tr -dc 0-9)" -lt 40 ]; then
+            sudo rm -rf /usr/share/swift /usr/local/share/powershell /usr/local/.ghcup /usr/share/dotnet
+            df -h /
+          fi
 
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # TestNewSpecsHaveVersions reads the previous release tag.
+          fetch-depth: 0
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -33,11 +44,42 @@ jobs:
       - name: Deps
         run: task deps && git diff HEAD -- go.mod go.sum && git diff-index HEAD --exit-code
 
-      - name: Docs
-        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'task docs'."; exit 1; }
-
       - name: Test
         run: task test
+
+  # Generates the reference docs with every component and lints every config
+  # snippet. A job of its own, so it runs alongside the unit tests.
+  docs:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          # TestNewSpecsHaveVersions reads the release tags.
+          fetch-depth: 0
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+
+      - name: Install Task
+        uses: ./.github/actions/setup-task
+
+      - name: Docs
+        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs
+
+      - name: Check that task docs left tracked files unchanged
+        run: test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "task docs changed tracked files, such as internal/plugins/info.csv. Run 'CGO_ENABLED=1 TAGS=x_benthos_extra task docs' and commit the result (see docs/README.md)."; git status --short >&2; exit 1; }
 
   golangci-lint:
     runs-on: ubuntu-latest
@@ -74,10 +116,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+      # Use a separate cache key. With the default key (root go.sum), this job saves first, and test and
+      # golangci-lint then restore a cache without the root module's build output.
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: 'benchmarking/aws/go.mod'
+          cache-dependency-path: 'benchmarking/aws/**/go.sum'
 
       - name: Deps
         run: |

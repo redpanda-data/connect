@@ -7,9 +7,15 @@ on:
   schedule:
     - cron: '0 2 * * *' # run at 2 AM UTC
   workflow_dispatch:
+    inputs:
+      docs_tag:
+        description: 'Regenerate and attach the reference docs asset for this existing release tag (for example v4.113.0), and skip the snapshot build'
+        required: false
+        default: ''
 
 jobs:
   goreleaser:
+    if: github.event_name != 'workflow_dispatch' || inputs.docs_tag == ''
     runs-on: ubuntu-latest-32
     permissions:
       id-token: write
@@ -179,6 +185,58 @@ jobs:
           format: table
           ignore-unfixed: true
           exit-code: 1
+
+  # Attaches the generated reference docs to the release. On a tag push it runs
+  # after goreleaser publishes the release. To regenerate the asset for an
+  # existing release, run this workflow with the docs_tag input.
+  docs-asset:
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    if: >-
+      !cancelled() && (
+        (github.event_name == 'push' && needs.goreleaser.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.docs_tag != '')
+      )
+    permissions:
+      contents: write
+    env:
+      DOCS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.DOCS_TAG }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+      - name: Generate the reference docs
+        run: CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen
+      # Releases from before the generator wrote partials produce full pages
+      # instead. Their asset must stay missing, so the docs build falls back
+      # to a release that has real partials.
+      - name: Check the layout of the generated docs
+        run: |
+          set -euo pipefail
+          c=docs/modules/components
+          if [ -d "$c/pages" ]; then
+            echo "::error::$DOCS_TAG predates the generated partials (docs_gen wrote $c/pages), so it gets no docs asset."
+            exit 1
+          fi
+          for d in partials/fields partials/descriptions partials/availability examples/common examples/advanced; do
+            if [ -z "$(find "$c/$d" -type f -name '*.*' 2>/dev/null | head -1)" ]; then
+              echo "::error::The generated docs have no files in $c/$d."
+              exit 1
+            fi
+          done
+      # The docs site reads the reference partials and examples from this
+      # asset, so it always matches a released version. See docs/README.md.
+      - name: Attach the reference docs to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar -C docs -czf redpanda-connect-docs.tar.gz modules
+          gh release upload "${DOCS_TAG}" redpanda-connect-docs.tar.gz --clobber
 
   update-bundles:
     runs-on: ubuntu-latest
@@ -382,7 +440,7 @@ jobs:
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, update-bundles, update-downstream]
+    needs: [goreleaser, docs-asset, update-bundles, update-downstream]
     # always() is required because update-bundles/update-downstream may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
@@ -397,6 +455,7 @@ jobs:
           HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
           OPERATOR_PR: ${{ needs.update-downstream.outputs.operator_pr_url }}
           GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          DOCS_ASSET_RESULT: ${{ needs.docs-asset.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
         run: |
@@ -414,6 +473,9 @@ jobs:
           fi
           if [ "$GORELEASER_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: goreleaser failed  "
+          fi
+          if [ "$DOCS_ASSET_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: docs-asset failed (rerun it, or run the release workflow with docs_tag)  "
           fi
           if [ "$BUNDLES_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-bundles failed  "

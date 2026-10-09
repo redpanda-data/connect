@@ -38,22 +38,24 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/esoutput"
 )
 
 const (
-	esFieldURLs            = "urls"
-	esFieldID              = "id"
-	esFieldAction          = "action"
-	esFieldIndex           = "index"
-	esFieldPipeline        = "pipeline"
-	esFieldRouting         = "routing"
-	esFieldRetryOnConflict = "retry_on_conflict"
+	esFieldURLs            = esoutput.FieldURLs
+	esFieldID              = esoutput.FieldID
+	esFieldAction          = esoutput.FieldAction
+	esFieldIndex           = esoutput.FieldIndex
+	esFieldPipeline        = esoutput.FieldPipeline
+	esFieldRouting         = esoutput.FieldRouting
+	esFieldRetryOnConflict = esoutput.FieldRetryOnConflict
 	esFieldTLS             = "tls"
-	esFieldAuth            = "basic_auth"
-	esFieldAuthEnabled     = "enabled"
-	esFieldAuthUsername    = "username"
-	esFieldAuthPassword    = "password"
-	esFieldAPIKey          = "api_key"
+	esFieldAuth            = esoutput.FieldBasicAuth
+	esFieldAuthEnabled     = esoutput.FieldBasicAuthEnabled
+	esFieldAuthUsername    = esoutput.FieldBasicAuthUsername
+	esFieldAuthPassword    = esoutput.FieldBasicAuthPassword
+	esFieldAPIKey          = esoutput.FieldAPIKey
 	esFieldBatching        = "batching"
 )
 
@@ -139,58 +141,30 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 func elasticsearchConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
+		Version("4.47.0").
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(`
+This output uses the https://github.com/elastic/go-elasticsearch[go-elasticsearch/v8^] client library. For the breaking changes from earlier versions, see https://www.elastic.co/guide/en/elasticsearch/reference/current/migrating-8.0.html#breaking_80_rest_api_changes[Elastic's Migrating to 8.0 guide^].
+
 Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringListField(esFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"http://localhost:9200"}),
-			service.NewInterpolatedStringField(esFieldIndex).
-				Description("The index to place messages."),
-			service.NewInterpolatedStringField(esFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively.").
-				ShortDescription("The action to take on the document: index, update, delete, create or upsert."),
-			service.NewInterpolatedStringField(esFieldID).
-				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
-				Example(`${!counter()}-${!timestamp_unix()}`),
-			service.NewInterpolatedStringField(esFieldPipeline).
-				Description("An optional pipeline id to preprocess incoming documents.").
-				Advanced().
-				Default(""),
-			service.NewInterpolatedStringField(esFieldRouting).
-				Description("The routing key to use for the document.").
-				Advanced().
-				Default(""),
-			service.NewIntField(esFieldRetryOnConflict).
-				Description("Specify how many times should an update operation be retried when a conflict occurs").
-				Advanced().
-				Default(0),
+			esoutput.URLsField(),
+			esoutput.IndexField("Elasticsearch"),
+			esoutput.ActionField(),
+			esoutput.IDField(),
+			esoutput.PipelineField(),
+			esoutput.RoutingField(),
+			esoutput.RetryOnConflictField(),
 			service.NewTLSToggledField(esFieldTLS),
 			service.NewOutputMaxInFlightField(),
-			service.NewStringField(esFieldAPIKey).
-				Description("An API key to authenticate with. If set, it supersedes basic authentication.").
-				Default("").Secret(),
+			esoutput.APIKeyField(),
 		).
 		Fields(
-			service.NewObjectField(esFieldAuth,
-				service.NewBoolField(esFieldAuthEnabled).
-					Description("Whether to use basic authentication in requests.").
-					Default(false),
-				service.NewStringField(esFieldAuthUsername).
-					Description("A username to authenticate as.").
-					Default(""),
-				service.NewStringField(esFieldAuthPassword).
-					Description("A password to authenticate with.").
-					Default("").Secret(),
-			).Description("Allows you to specify basic authentication.").
-				Advanced().
-				Optional(),
+			esoutput.BasicAuthField("Elasticsearch"),
 			service.NewBatchPolicyField(esFieldBatching),
 		).
-		Example("Updating Documents", "When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]", `
-# Partial document update
+		Example("Updating Documents", "When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]. This example performs a partial update with `doc`.", `
 output:
   processors:
     - mapping: |
@@ -202,8 +176,8 @@ output:
     index: foo
     id: ${! @id }
     action: update
-
-# Scripted update
+`).
+		Example("Scripted updates", "A `script` field at the top level of the request body updates the document with a script, here in the built-in Painless language.", `
 output:
   processors:
     - mapping: |
@@ -215,15 +189,15 @@ output:
     index: foo
     id: ${! @id }
     action: update
-
-# Upsert
+`).
+		Example("Updating or inserting a document", "With both `doc` and `upsert` at the top level of the request body, an `update` action updates the document if it exists and inserts the `upsert` document if it doesn't.", `
 output:
   processors:
     - mapping: |
         meta id = this.id
-        # If the product with the ID exists, its price will be updated to 100.
+        # If the product with the ID exists, its price will be updated to 50.
         # If the product does not exist, a new document with ID 1 and a price
-        # of 50 will be inserted.
+        # of 100 will be inserted.
         root.doc.product_price = 50
         root.upsert.product_price = 100
   elasticsearch_v8:

@@ -76,11 +76,11 @@ func pruneSeen(seen map[string]time.Time, cur time.Time, overlap time.Duration) 
 func newJiraInputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services").
-		Version("4.96.0").
+		Version("4.100.0").
 		Summary("Streams Jira issues, comments, or changelog entries via JQL with incremental polling.").
 		Description(`Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue ` + "`updated`" + ` timestamp, plus the set of issue versions already emitted at the boundary) is persisted via the configured cache resource after every fully-acknowledged page, so progress survives restarts (including mid-backfill), and boundary issues are not re-emitted on every poll.
 
-Authentication uses API token (email + token) basic auth. The ` + "`backoff`" + ` settings govern the adaptive backoff applied to 429 responses; retries of 502/503/504 responses use a fixed three-attempt policy.
+Set ` + "`base_url`" + ` to the URL of your Jira instance, for example ` + "`https://your-domain.atlassian.net`" + `. Authentication uses API token (email + token) basic auth. The ` + "`backoff`" + ` settings govern the adaptive backoff applied to 429 responses; retries of 502/503/504 responses use a fixed three-attempt policy.
 
 Each message body is the raw JSON of the resource. Metadata fields:
 
@@ -91,7 +91,7 @@ Each message body is the raw JSON of the resource. Metadata fields:
 - ` + "`jira_event_type`" + ` - "issue" / "comment" / "changelog"
 - ` + "`jira_self`" + ` - Jira API URL of the resource
 
-Limitations (v1): OAuth and the worklogs resource are not yet supported. For resource=comments and resource=changelog, only the first page of child resources (up to ~50 comments or ~100 changelog entries per issue update) is emitted; a WARN is logged when truncation is detected. Use a downstream Jira processor to fetch the full child set if your issues exceed this limit.`).
+Limitations (v1): OAuth and the worklogs resource are not yet supported. For resource=comments and resource=changelog, only the first page of child resources (up to ~50 comments or ~100 changelog entries per issue update) is emitted; a WARN is logged when truncation is detected. To fetch the full child set for issues that exceed this limit, query the Jira REST API directly.`).
 		Field(service.NewObjectField("auth",
 			service.NewStringField("email").
 				Description("Email or username of the Jira account."),

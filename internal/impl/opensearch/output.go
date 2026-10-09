@@ -31,20 +31,21 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/esoutput"
 )
 
 const (
-	esoFieldURLs                = "urls"
-	esoFieldID                  = "id"
+	esoFieldURLs                = esoutput.FieldURLs
+	esoFieldID                  = esoutput.FieldID
 	esoFieldAction              = "action"
-	esoFieldIndex               = "index"
-	esoFieldPipeline            = "pipeline"
-	esoFieldRouting             = "routing"
+	esoFieldIndex               = esoutput.FieldIndex
+	esoFieldPipeline            = esoutput.FieldPipeline
+	esoFieldRouting             = esoutput.FieldRouting
 	esoFieldTLS                 = "tls"
-	esoFieldAuth                = "basic_auth"
-	esoFieldAuthEnabled         = "enabled"
-	esoFieldAuthUsername        = "username"
-	esoFieldAuthPassword        = "password"
+	esoFieldAuth                = esoutput.FieldBasicAuth
+	esoFieldAuthEnabled         = esoutput.FieldBasicAuthEnabled
+	esoFieldAuthUsername        = esoutput.FieldBasicAuthUsername
+	esoFieldAuthPassword        = esoutput.FieldBasicAuthPassword
 	esoFieldBatching            = "batching"
 	esoFieldAWS                 = "aws"
 	esoFieldCompressRequestBody = "compress_request_body"
@@ -157,27 +158,16 @@ func OutputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(`
-Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
+Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).Version("4.25.0").
 		Fields(
-			service.NewStringListField(esoFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"http://localhost:9200"}),
-			service.NewInterpolatedStringField(esoFieldIndex).
-				Description("The index to place messages."),
+			esoutput.URLsField(),
+			esoutput.IndexField("OpenSearch"),
 			service.NewInterpolatedStringField(esoFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`.").
+				Description(`The action to take on the document. This field must resolve to one of the following action types: `+"`"+`index`+"`"+`, `+"`"+`update`+"`"+` or `+"`"+`delete`+"`"+`.`).
 				ShortDescription("The action to take on the document: index, update or delete."),
-			service.NewInterpolatedStringField(esoFieldID).
-				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
-				Example(`${!counter()}-${!timestamp_unix()}`),
-			service.NewInterpolatedStringField(esoFieldPipeline).
-				Description("An optional pipeline id to preprocess incoming documents.").
-				Advanced().
-				Default(""),
-			service.NewInterpolatedStringField(esoFieldRouting).
-				Description("The routing key to use for the document.").
-				Advanced().
-				Default(""),
+			esoutput.IDField(),
+			esoutput.PipelineField(),
+			esoutput.RoutingField(),
 			service.NewTLSToggledField(esoFieldTLS),
 			service.NewBoolField(esoFieldCompressRequestBody).
 				Description("Enable gzip compression of HTTP request bodies on the OpenSearch client. OpenSearch 2.x servers accept `Content-Encoding: gzip` natively; this is useful to reduce bandwidth on cross-cloud or cross-region bulk writes.").
@@ -186,19 +176,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
-			service.NewObjectField(esoFieldAuth,
-				service.NewBoolField(esoFieldAuthEnabled).
-					Description("Whether to use basic authentication in requests.").
-					Default(false),
-				service.NewStringField(esoFieldAuthUsername).
-					Description("A username to authenticate as.").
-					Default(""),
-				service.NewStringField(esoFieldAuthPassword).
-					Description("A password to authenticate with.").
-					Default("").Secret(),
-			).Description("Allows you to specify basic authentication.").
-				Advanced().
-				Optional(),
+			esoutput.BasicAuthField("OpenSearch"),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 		).

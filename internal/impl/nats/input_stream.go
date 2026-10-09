@@ -94,7 +94,7 @@ func siSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary(`Subscribe to a NATS Stream subject. Joining a queue is optional and allows multiple clients of a subject to consume using queue semantics.`).
+		Summary(`Subscribes to a NATS Stream subject. Joining a queue is optional and allows multiple clients of a subject to consume using queue semantics.`).
 		Description(`
 [CAUTION]
 .Deprecation notice

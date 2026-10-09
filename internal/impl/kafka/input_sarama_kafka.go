@@ -50,6 +50,36 @@ const (
 	iskFieldBatching                      = "batching"
 )
 
+// saramaAddressesField returns the broker addresses field shared by the
+// Sarama based Kafka input and output.
+func saramaAddressesField(name string) *service.ConfigField {
+	return service.NewStringListField(name).
+		Description("A list of broker addresses to connect to. List items that contain commas are expanded into multiple addresses.").
+		ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
+		Examples(
+			[]string{"localhost:9092"},
+			[]string{"localhost:9041,localhost:9042"},
+			[]string{"localhost:9041", "localhost:9042"},
+		)
+}
+
+// saramaClientIDField returns the client_id field of the Sarama-based kafka
+// input and output.
+func saramaClientIDField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("The client ID sent to brokers with every request, which lets brokers attribute requests to this client in their logs, metrics, and client quotas.")
+}
+
+// saramaTargetVersionField returns the Kafka protocol version field shared by
+// the Sarama based Kafka input and output.
+func saramaTargetVersionField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
+		ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
+		Examples(sarama.DefaultVersion.String(), "3.1.0").
+		Optional()
+}
+
 func iskConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Deprecated().
@@ -60,7 +90,7 @@ Offsets are managed within Kafka under the specified consumer group, and partiti
 
 The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
 
-In order to enforce ordered processing of partition messages set the `+"<checkpoint_limit,`checkpoint_limit`>> to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+In order to enforce ordered processing of partition messages set the `+"<<checkpoint_limit,`checkpoint_limit`>> to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
 
 Batching messages before processing can be enabled using the `+"<<batching,`batching`>>"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"<<checkpoint_limit,`checkpoint_limit`>>"+`, in which case the next batch will only be created upon delivery of the current one.
 
@@ -94,14 +124,7 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`).
 		Fields(
-			service.NewStringListField(iskFieldAddresses).
-				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
-				ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
-				Examples(
-					[]string{"localhost:9092"},
-					[]string{"localhost:9041,localhost:9042"},
-					[]string{"localhost:9041", "localhost:9042"},
-				),
+			saramaAddressesField(iskFieldAddresses),
 			service.NewStringListField(iskFieldTopics).
 				Description("A list of topics to consume from. Multiple comma separated topics can be listed in a single element. Partitions are automatically distributed across consumers of a topic. Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name. For example `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges. For example `foo:0-10` would consume partitions 0 through to 10 inclusive.").
 				ShortDescription("A list of topics to consume from, optionally with explicit partitions. Comma-separated topics may share one element.").
@@ -113,22 +136,17 @@ Unfortunately this error message will appear for a wide range of connection prob
 					[]string{"foo:0-5"},
 				).
 				Version("3.33.0"),
-			service.NewStringField(iskFieldTargetVersion).
-				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
-				ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
-				Examples(sarama.DefaultVersion.String(), "3.1.0").
-				Optional(),
+			saramaTargetVersionField(iskFieldTargetVersion),
 			service.NewTLSToggledField(iskFieldTLS),
 			SaramaSASLField(),
 			service.NewStringField(iskFieldConsumerGroup).
 				Description("An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions.").
 				ShortDescription("An identifier for the consumer group of the connection. Leave empty to disable stored offsets.").
 				Default(""),
-			service.NewStringField(iskFieldClientID).
-				Description("An identifier for the client connection.").
+			saramaClientIDField(iskFieldClientID).
 				Advanced().Default("benthos"),
 			service.NewStringField(iskFieldInstanceID).
-				Description("When using consumer groups, an identifier for this specific input so that it can be identified over restarts of this process. This should be unique per input.").
+				Description("When you specify a `consumer_group`, assign a unique value to `instance_id` for each input so that brokers can identify it across restarts of this process and avoid unnecessary rebalances.").Version("4.46.0").
 				ShortDescription("An identifier for this input that persists across restarts. Must be unique per input.").
 				Advanced().
 				Optional(),
@@ -136,8 +154,8 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("A rack identifier for this client.").
 				Advanced().Default(""),
 			service.NewBoolField(iskFieldStartFromOldest).
-				Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
-				ShortDescription("Consume from the oldest available offset rather than the latest. Applied when the consumer group is new.").
+				Description(startFromOldestDescription).
+				ShortDescription(startFromOldestShortDescription).
 				Advanced().Default(true),
 			service.NewIntField(iskFieldCheckpointLimit).
 				Description("The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -145,8 +163,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Version("3.33.0").Default(1024),
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
-			service.NewDurationField(iskFieldCommitPeriod).
-				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+			commitPeriodField(iskFieldCommitPeriod).
 				Advanced().Default("1s"),
 			service.NewDurationField(iskFieldMaxProcessingPeriod).
 				Description("A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization.").
@@ -169,7 +186,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("The maximum number of unprocessed messages to fetch at a given time.").
 				Advanced().Default(256),
 			service.NewBoolField(iskFieldMultiHeader).
-				Description("Decode headers into lists to allow handling of multiple values with the same key").
+				Description("Decode headers into lists to allow handling of multiple values with the same key").Version("4.10.0").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
 		)

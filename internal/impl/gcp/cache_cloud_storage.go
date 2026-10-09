@@ -30,13 +30,13 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Stable().
 		Summary(`Use a Google Cloud Storage bucket as a cache.`).
-		Description(`It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.`).
+		Description(`This cache implements the ` + "`add`" + ` operation as an existence check followed by a separate upload, so the operation is not atomic and concurrent writers can both succeed. Therefore, this cache is not suitable for deduplication.`).
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
-			Description("Optional field to explicitly set the Content-Type.").Optional()).
+			Description("Optional field to explicitly set the Content-Type.").Version("4.5.0").Optional()).
 		Field(service.NewStringField("credentials_json").
-			Description("An optional field to set Google Service Account Credentials json.").Secret().Default(""))
+			Description("An optional field to set Google Service Account Credentials json.").Version("4.33.0").Secret().Default(""))
 
 	return spec
 }

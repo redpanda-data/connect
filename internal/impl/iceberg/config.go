@@ -181,7 +181,7 @@ const rowOperationDocs = "\n" +
 	"* *Partitioned tables:* supported, with no requirement that the partition columns be a subset of `identifier_fields`. A `copy-on-write` `upsert` can even move a key from one partition to another.\n" +
 	"* *Table format:* version 1 or version 2, with no forced upgrade.\n" +
 	"\n" +
-	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a touched key: a batch of K keys spread across a table of N data files rewrites at worst one file per key, so roughly K/N of the table while K is below N and the whole table once K reaches N, and less than that when several keys share a file. Touching even a single key in a file rewrites that whole file, so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
+	"*Write amplification and throughput.* `copy-on-write` rewrites every data file that contains a row for a touched key, so the cost of a batch depends on how many files its keys' rows are spread across, not on how many keys it touches: keys that cluster into a few files rewrite only those files, and even one key can rewrite many files if its rows (for example, duplicates from `insert`) are spread across them. Touching even a single key in a file rewrites that whole file, so a one-row change to a 512 MB file rewrites all 512 MB. To keep amplification low, sort the table by the identifier key so a batch's keys cluster into as few files as possible, and use large batches. This is a batch / moderate-throughput mode, not a streaming one.\n" +
 	"\n" +
 	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
 	"\n" +
@@ -215,10 +215,10 @@ func icebergOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.80.0").
-		Summary("Write data to Apache Iceberg tables via REST catalog.").
+		Version("4.82.0").
+		Summary("Writes data to Apache Iceberg tables using the REST catalog API.").
 		Description(`
-Write streaming data to Apache Iceberg tables using the REST catalog API. This output supports:
+This output supports:
 
 * Multiple storage backends (S3, GCS, Azure)
 * Automatic table creation with schema detection
@@ -309,7 +309,11 @@ array:list
 						Optional().
 						Secret(),
 					service.NewObjectField(ioFieldCatalogAuthSigV4,
-						append(config.SessionFields(),
+						// region shipped with the output in 4.82.0, and the other
+						// session fields in 4.84.0.
+						append(config.SessionFieldsWithVersions(map[string]string{
+							"endpoint": "4.84.0", "tcp": "4.84.0", "credentials": "4.84.0",
+						}),
 							service.NewStringField(ioFieldSigV4Service).
 								Description("AWS service name for SigV4 signing.").
 								Advanced().
@@ -336,19 +340,21 @@ array:list
 				Example("production"),
 
 			service.NewInterpolatedStringField(ioFieldTable).
-				Description("The Iceberg table name. Supports interpolation functions for dynamic table names.").
+				Description("The destination Iceberg table name.").
 				Example("user_events").
 				Example(`events_${!meta("topic")}`),
 
 			service.NewBoolField(ioFieldCaseSensitiveColumns).
-				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive; set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").
+				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive; set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").Version("4.89.3").
 				ShortDescription("Whether message field names must match table column names exactly.").
 				Default(true).
 				Advanced(),
 
 			// Row-level operation mapping (insert / upsert / delete).
 			service.NewInterpolatedStringField(ioFieldRowOperation).
-				Description("The row-level operation to apply for each message: `insert` (append), `upsert` (replace rows matching `identifier_fields`, then append), or `delete` (remove rows matching `identifier_fields`). Supports interpolation so the operation can be driven by the data; for example, a change-data-capture stream's operation field. Defaults to `insert`, preserving the original append-only behaviour.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full semantics, the format-version-2 upgrade, batching behaviour, and important caveats.").
+				Description(`The row-level operation to apply for each message: `+"`"+`insert`+"`"+` (append), `+"`"+`upsert`+"`"+` (replace rows matching `+"`"+`identifier_fields`+"`"+`, then append), or `+"`"+`delete`+"`"+` (remove rows matching `+"`"+`identifier_fields`+"`"+`). Supports interpolation so the operation can be driven by the data, such as a change-data-capture stream's operation field. Defaults to `+"`"+`insert`+"`"+`, preserving the original append-only behavior.
+
+See the Row-level operations section above for the full semantics, the format-version-2 upgrade, batching behavior, and important caveats.`).Version("4.99.0").
 				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
@@ -357,7 +363,9 @@ array:list
 				Advanced(),
 
 			service.NewStringListField(ioFieldIdentifierFields).
-				Description("The columns forming the row identity (the Iceberg identifier fields / equality-delete key) used by `upsert` and `delete`. Required when `row_operation` can evaluate to `upsert` or `delete`, and must reference existing table columns of a primitive, non-floating-point type.\n\nSee the <<row-level-operations,Row-level operations>> section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.").
+				Description(`The columns forming the row identity (the Iceberg identifier fields, or equality-delete key) used by `+"`"+`upsert`+"`"+` and `+"`"+`delete`+"`"+`. Required when `+"`"+`row_operation`+"`"+` can evaluate to `+"`"+`upsert`+"`"+` or `+"`"+`delete`+"`"+`, and must reference existing table columns of a primitive, non-floating-point type.
+
+See the Row-level operations section above for the full constraints, including the temporal-type and partitioning rules and when the requirement is enforced.`).Version("4.99.0").
 				ShortDescription("Columns forming the row identity, used by upsert and delete. Required when either can be evaluated.").
 				Example([]string{"id"}).
 				Example([]string{"tenant_id", "user_id"}).
@@ -365,7 +373,7 @@ array:list
 				Advanced(),
 
 			service.NewStringEnumField(ioFieldMergeStrategy, string(mergeStrategyMOR), string(mergeStrategyCOW)).
-				Description("How `upsert` and `delete` are materialised on disk.\n\n* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines can read the result. Engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.\n* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read, including Snowflake and Databricks Unity Catalog. It works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key, so it is a batch / moderate-throughput mode. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.\n\nSee the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.").
+				Description("How `upsert` and `delete` are materialised on disk.\n\n* `merge-on-read` (the default) writes Iceberg v2 equality-delete files. Deletes are applied at read time, so writes stay cheap and streaming-friendly, but only catalog-native / Flink-world engines can read the result. Engine-backed catalogs such as Snowflake and the Databricks Unity Catalog cannot read equality deletes.\n* `copy-on-write` rewrites whole data files so the table only ever contains plain data files (no delete files), which every engine can read, including Snowflake and Databricks Unity Catalog. It works on version-1 or version-2 tables and never forces the irreversible v1->v2 upgrade. The trade-off is heavy write amplification: each mutating batch rewrites every data file that contains a touched key, so it is a batch / moderate-throughput mode. Sort the table by the identifier key and use large batches so each rewrite touches as few files as possible.\n\nSee the <<merge-strategies,Merge strategies>> section above for the full decision guide, copy-on-write support matrix (column and merge-key types, partitioning, table format), and maintenance guidance.").Version("4.105.0").
 				ShortDescription("How upsert and delete are materialised: merge-on-read (equality deletes) or copy-on-write (plain data files every engine can read).").
 				Default(string(mergeStrategyMOR)).
 				Advanced(),
@@ -465,7 +473,7 @@ array:list
 					Description("Enable automatic schema evolution. When enabled, new columns will be automatically added to the table.").
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
-					Description("A bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
+					Description("A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an Iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[Redpanda Streaming topic property^].").
 					ShortDescription("A Bloblang expression evaluated on table creation to determine the table's Iceberg partition spec.").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
@@ -476,23 +484,23 @@ array:list
 					Example("(day(my_ts_col), void(`non.nested column.with.dots`), identity(nested.column))").
 					Default("()"),
 				service.NewStringField(ioFieldSchemaEvolutionTableLoc).
-					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.").
+					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived by appending the namespace and table name to the prefix, in the form `<prefix><namespace>/<table>`.").
 					ShortDescription("A location prefix for new tables, for catalogs such as AWS Glue that require one explicitly.").
 					Example("s3://my-iceberg-bucket/").
 					Optional(),
 				service.NewStringField(ioFieldSchemaEvolutionSchemaMetadata).
-					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing; record keys are matched by case-folding and the metadata's name is what lands in the table.").
+					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing; record keys are matched by case-folding and the metadata's name is what lands in the table.").Version("4.85.0").
 					ShortDescription("A message metadata field containing a schema definition, used to determine column types instead of inferring them.").
 					Default("").
 					Optional().
 					Advanced(),
 				service.NewBloblangField(ioFieldSchemaEvolutionNewColumnTypeMapping).
-					Description("An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.").
+					Description("An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.").Version("4.85.0").
 					ShortDescription("An optional Bloblang mapping customising column types during schema evolution.").
 					Optional().
 					Advanced(),
 				service.NewBoolField(ioFieldSchemaEvolutionRequireSchemaMetadata).
-					Description("When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds; convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.").
+					Description("When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds; convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.").Version("4.94.0").
 					ShortDescription("Treat a numeric value written to a temporal column without registered schema_metadata as a hard error.").
 					Default(false).
 					Advanced(),
@@ -516,7 +524,7 @@ array:list
 					// attempt the commit at all. Require >= 1.
 					LintRule(`root = if this < 1 { [ "max_retries must be at least 1" ] }`),
 				service.NewBoolField(ioFieldCleanupOnFailure).
-					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. The same sweep reclaims the superseded files of earlier attempts when a `copy-on-write` commit succeeds on retry (each attempt re-stages fresh rewrites). This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous, since such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table. Those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").
+					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. The same sweep reclaims the superseded files of earlier attempts when a `copy-on-write` commit succeeds on retry (each attempt re-stages fresh rewrites). This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous, since such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table. Those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").Version("4.105.0").
 					ShortDescription("Remove the files a failed commit had already written, and a retried commit's superseded earlier attempts. Disabling it leaves them orphaned for table maintenance to reclaim.").
 					Default(true).
 					Advanced(),
@@ -532,10 +540,10 @@ array:list
 					Default("delta_length_byte_array"),
 				service.NewStringEnumField(ioFieldParquetCompression,
 					"uncompressed", "snappy", "gzip", "zstd").
-					Description("The compression codec for data files this output writes. **Optional on purpose**: when it is not set, the codec is taken from the table's own `write.parquet.compression-codec` property, and when that is absent too, data files are written uncompressed.\n\nSetting the table property rather than this field is usually the better choice, because the property is also honoured by the copy-on-write rewrite path (which writes its files inside the Iceberg library, out of reach of this field). The property is what gets every file in the table onto one codec, whereas this field governs only the data files this output writes itself: appends and merge-on-read data files, not copy-on-write rewrites or equality-delete files. Use this field when the property cannot be set, for example on catalogs that reject client-set table properties.\n\nIf you rely on the table property instead, use a lower-case codec name: this field accepts any casing, but the Iceberg library's own property lookup is lower-case only and silently falls back to uncompressed for anything else. A property of `ZSTD` would give you compressed appends and uncompressed copy-on-write rewrites.\n\nOnly codecs that every engine this output targets can read are offered. If the table property names something else (`lz4`, `lz4_raw`, `brotli`, `lzo`), it is reported in the log and the data files this output writes are uncompressed instead.\n\nMeasurement found no throughput penalty worth planning around, at one core or four; the size benefit though is entirely data-dependent, ranging from ~15x smaller on a repetitive record shape to ~2% on random content. Note also that the uncompressed fallback applies only when the table property is absent, and tables created through the Iceberg library carry a `zstd` property by default. See <<data-file-compression,Data file compression>> for the resolution order and the copy-on-write caveat.").
+					Description("The compression codec for data files this output writes. **Optional on purpose**: when it is not set, the codec is taken from the table's own `write.parquet.compression-codec` property, and when that is absent too, data files are written uncompressed.\n\nSetting the table property rather than this field is usually the better choice, because the property is also honoured by the copy-on-write rewrite path (which writes its files inside the Iceberg library, out of reach of this field). The property is what gets every file in the table onto one codec, whereas this field governs only the data files this output writes itself: appends and merge-on-read data files, not copy-on-write rewrites or equality-delete files. Use this field when the property cannot be set, for example on catalogs that reject client-set table properties.\n\nIf you rely on the table property instead, use a lower-case codec name: this field accepts any casing, but the Iceberg library's own property lookup is lower-case only and silently falls back to uncompressed for anything else. A property of `ZSTD` would give you compressed appends and uncompressed copy-on-write rewrites.\n\nOnly codecs that every engine this output targets can read are offered. If the table property names something else (`lz4`, `lz4_raw`, `brotli`, `lzo`), it is reported in the log and the data files this output writes are uncompressed instead.\n\nMeasurement found no throughput penalty worth planning around, at one core or four; the size benefit though is entirely data-dependent, ranging from ~15x smaller on a repetitive record shape to ~2% on random content. Note also that the uncompressed fallback applies only when the table property is absent, and tables created through the Iceberg library carry a `zstd` property by default. See <<data-file-compression,Data file compression>> for the resolution order and the copy-on-write caveat.").Version("4.109.0").
 					ShortDescription("Compression codec for written data files. Defaults to the table's write.parquet.compression-codec property, else uncompressed.").
 					Optional(),
-			).Description("Parquet writer configuration.").
+			).Description("Parquet writer configuration.").Version("4.90.3").
 				Advanced().
 				Optional(),
 

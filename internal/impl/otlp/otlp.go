@@ -28,6 +28,11 @@ const (
 	otExporterTimeout = 30 * time.Second
 )
 
+const (
+	collectorAddressDescription = "The endpoint of a collector to send events to."
+	collectorURLDescription     = "The URL of a collector to send events to. Deprecated in favor of `address`, and used only when `address` is empty."
+)
+
 type collector struct {
 	address string
 	secure  bool
@@ -37,28 +42,28 @@ func collectorListFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewObjectListField(otFieldHTTP,
 			service.NewStringField("address").
-				Description("The endpoint of a collector to send events to.").
+				Description(collectorAddressDescription).Version("4.26.0").
 				Optional().
 				Example("localhost:4318"),
 			service.NewStringField("url").
-				Description("The URL of a collector to send events to.").
+				Description(collectorURLDescription).
 				Deprecated().
 				Default("localhost:4318"),
 			service.NewBoolField("secure").
-				Description("Connect to the collector over HTTPS").
+				Description("Connect to the collector over HTTPS").Version("4.20.0").
 				Default(false),
 		).Description("A list of http collectors."),
 		service.NewObjectListField(otFieldGRPC,
 			service.NewURLField("address").
-				Description("The endpoint of a collector to send events to.").
+				Description(collectorAddressDescription).Version("4.26.0").
 				Optional().
 				Example("localhost:4317"),
 			service.NewURLField("url").
-				Description("The URL of a collector to send events to.").
+				Description(collectorURLDescription).
 				Deprecated().
 				Default("localhost:4317"),
 			service.NewBoolField("secure").
-				Description("Connect to the collector with client transport security").
+				Description("Connect to the collector with client transport security").Version("4.20.0").
 				Default(false),
 		).Description("A list of grpc collectors."),
 	}

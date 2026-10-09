@@ -27,6 +27,8 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/writecodec"
 )
 
 const (
@@ -44,17 +46,8 @@ func sftpOutputSpec() *service.ConfigSpec {
 		Fields(connectionFields()...).
 		Fields(
 			service.NewInterpolatedStringField(soFieldPath).
-				Description("The file to save the messages to on the server."),
-			service.NewStringAnnotatedEnumField(soFieldCodec, map[string]string{
-				"all-bytes": "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
-				"append":    "Append each message to the output stream without any delimiter or special encoding.",
-				"lines":     "Append each message to the output stream followed by a line break.",
-				"delim:x":   "Append each message to the output stream followed by a custom delimiter.",
-			}).
-				Description("The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.").
-				ShortDescription("How the bytes of messages are written into the output data stream.").
-				LintRule("").
-				Examples("lines", "delim:\t", "delim:foobar").
+				Description("The file to save the messages to on the SFTP server."),
+			writecodec.Field(soFieldCodec).
 				Default("all-bytes"),
 			service.NewOutputMaxInFlightField(),
 		)

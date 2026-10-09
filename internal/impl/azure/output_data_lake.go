@@ -46,10 +46,10 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 `+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(dloFieldFilesystem).
-				Description("The data lake storage filesystem name for uploading the messages to.").
+				Description("The name of the data lake storage file system you want to upload messages to.").
 				Example(`messages-${!timestamp("2006")}`),
 			service.NewInterpolatedStringField(dloFieldPath).
-				Description("The path of each message to upload within the filesystem.").
+				Description("The path (file name) of each message to upload to the data lake storage file system.").
 				Example(`${!counter()}-${!timestamp_unix_nano()}.json`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).

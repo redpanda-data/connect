@@ -44,7 +44,7 @@ func init() {
 func rerankProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Generates vector embeddings to represent input text, using the Cohere API.").
+		Summary("Reranks a list of documents by their relevance to a query, using the Cohere API.").
 		Description(`
 This processor sends document strings to the Cohere API, which reranks them based on the relevance to the query.
 
@@ -53,18 +53,21 @@ To learn more about reranking, see the https://docs.cohere.com/docs/rerank-2[Coh
 The output of this processor is an array of objects, each containing a "document" field with the original document content, a "relevance_score" field indicating how relevant it is to the query, and an index field that refers to the document's position within the input documents array. The objects are ordered by their relevance score (highest first).
 
 		`).
-		Version("4.37.0").
+		Version("4.53.0").
 		Fields(
 			baseConfigFieldsWithModels(
 				"rerank-v3.5",
 			)...,
 		).
 		Fields(
-			service.NewInterpolatedStringField(crpFieldQuery).Description("The search query"),
-			service.NewBloblangField(crpFieldDocuments).Description("A list of texts that will be compared to the query. For optimal performance Cohere recommends against sending more than 1000 documents in a single request. NOTE: structured data should be formatted as YAML for best performance.").
+			service.NewInterpolatedStringField(crpFieldQuery).Description("The search query you want to execute."),
+			service.NewBloblangField(crpFieldDocuments).Description(`A list of text strings that are compared to the specified query. For optimal performance, Cohere recommends that you:
+
+- Send fewer than 1000 documents in a single request.
+- Send structured data in YAML format.`).
 				ShortDescription("A list of texts to compare against the query. Cohere recommends no more than 1000 per request."),
-			service.NewInterpolatedStringField(crpFieldTopN).Default("0").Description("The number of documents to return, if 0 all documents are returned."),
-			service.NewIntField(crpFieldMaxTokens).Default(4096).Description("Long documents will be automatically truncated to the specified number of tokens."),
+			service.NewInterpolatedStringField(crpFieldTopN).Default("0").Description("The number of documents to return when the query is executed. If set to `0`, all documents are returned."),
+			service.NewIntField(crpFieldMaxTokens).Default(4096).Description("This processor automatically truncates long documents to the specified number of tokens."),
 		).
 		Example(
 			"Rerank some documents based on a query",

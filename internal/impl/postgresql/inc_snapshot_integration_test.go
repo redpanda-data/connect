@@ -626,6 +626,84 @@ postgres_cdc:
 		})
 	}
 
+	t.Run("QuietTable/The First Commit After A Chunk Read Releases It", func(t *testing.T) {
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+		_, err = db.Exec(`CREATE TABLE quiet_xmax (id bigint PRIMARY KEY, name text)`)
+		require.NoError(t, err)
+		const rows = 10
+		for i := 1; i <= rows; i++ {
+			_, err := db.Exec(`INSERT INTO quiet_xmax (id, name) VALUES ($1, 'pre')`, i)
+			require.NoError(t, err)
+		}
+
+		var (
+			mu    sync.Mutex
+			reads int
+		)
+
+		// One chunk covering every row, heartbeats long enough that the commit
+		// below is the only one after the chunk is read.
+		_ = runIncSnapshotStream(t, incSnapshotStream{
+			inputYAML: fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: quiet_xmax_slot
+    schema: public
+    heartbeat_interval: 60s
+    tables:
+      - quiet_xmax
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 100
+        heartbeat_interval: 60s
+        checkpoint_cache: snap_cache
+`, databaseURL),
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					if tbl, _ := msg.MetaGet("table"); tbl != "quiet_xmax" {
+						continue
+					}
+					if op, _ := msg.MetaGet("operation"); op == "read" {
+						reads++
+					}
+				}
+				return nil
+			},
+		})
+
+		signalIncrementalSnapshot(t, db, "quiet_xmax_slot", "quiet_xmax")
+		// A buffered chunk emits nothing, so there is no message to wait on;
+		// with a 60s heartbeat nothing else commits meanwhile.
+		time.Sleep(3 * time.Second)
+
+		mu.Lock()
+		require.Zero(t, reads, "the chunk was released before any commit followed its read")
+		mu.Unlock()
+
+		// Nothing has been assigned an xid since the chunk read, so this
+		// snapshot's xmax is the high watermark's, and the insert below takes it.
+		var xmax, closer uint64
+		require.NoError(t, db.QueryRow(`SELECT pg_snapshot_xmax(pg_current_snapshot())::text::bigint`).Scan(&xmax))
+		// id 999 is above the frozen max key, so it is streamed rather than
+		// backfilled.
+		require.NoError(t, db.QueryRow(
+			`INSERT INTO quiet_xmax (id, name) VALUES (999, 'closer') RETURNING pg_current_xact_id()::text::bigint`,
+		).Scan(&closer))
+		require.Equal(t, xmax, closer, "the closing commit must be assigned exactly xmax for this test to mean anything")
+
+		// Well inside the 60s heartbeat, so only the commit above can release it.
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return reads >= rows
+		}, 15*time.Second, 100*time.Millisecond,
+			"a commit at xid == xmax did not close the window; the chunk is waiting for a second commit")
+	})
+
 	t.Run("Resume", func(t *testing.T) {
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)

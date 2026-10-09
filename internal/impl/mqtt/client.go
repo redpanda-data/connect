@@ -47,11 +47,17 @@ const (
 func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLListField(msFieldClientURLs).
-			Description("A list of URLs to connect to. The format should be `scheme://host:port` where `scheme` is one of `tcp`, `ssl`, or `ws`, `host` is the ip-address (or hostname) and `port` is the port on which the broker is accepting connections. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Description(`A list of URLs to connect to. Use the format ` + "`" + `scheme://host:port` + "`" + `, where:
+
+* ` + "`" + `scheme` + "`" + ` is one of the following: ` + "`" + `tcp` + "`" + `, ` + "`" + `ssl` + "`" + `, ` + "`" + `ws` + "`" + `
+* ` + "`" + `host` + "`" + ` is the IP address or hostname
+* ` + "`" + `port` + "`" + ` is the port on which the MQTT broker accepts connections
+
+If an item in the list contains commas, it is expanded into multiple URLs.`).
 			ShortDescription("URLs to connect to, as scheme://host:port where scheme is tcp, ssl or ws.").
 			Example([]string{"tcp://localhost:1883"}),
 		service.NewStringField(msFieldClientClientID).
-			Description("An identifier for the client connection.").
+			Description("The client identifier sent to the MQTT broker when connecting, which the broker uses to identify the client session. Use `dynamic_client_id_suffix` to give each run of the pipeline a unique identifier.").
 			Default(""),
 		service.NewStringAnnotatedEnumField(msFieldClientDynClientIDSuffix, map[string]string{
 			"nanoid": "append a nanoid of length 21 characters",

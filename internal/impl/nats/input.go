@@ -29,7 +29,7 @@ func natsInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary(`Subscribe to a NATS subject.`).
+		Summary(`Subscribes to a NATS subject.`).
 		Description(`
 == Metadata
 
@@ -46,19 +46,19 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("subject").
-			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
-			ShortDescription("A subject to consume from, supporting wildcards. Either a subject or stream is required.").
+			Description(consumeSubjectDescription).
+			ShortDescription("A subject to consume from, supporting wildcards.").
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
 			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBoolField("send_ack").
-			Description("Control whether ACKS are sent as a reply to each message. When enabled, these replies are sent only once the data has been delivered to all outputs.").
+			Description("Whether an automatic acknowledgment is sent as a reply to each message. When enabled, these replies are sent only when data has been delivered to all outputs.").Version("4.33.0").
 			ShortDescription("Send ACKs in reply to each message, once the data has been delivered to all outputs.").
 			Default(true)).
 		Field(service.NewDurationField("nak_delay").
-			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
+			Description("An optional delay duration on redelivering a message when negatively acknowledged.").Version("4.16.0").
 			Example("1m").
 			Advanced().
 			Optional()).

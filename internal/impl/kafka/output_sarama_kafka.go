@@ -90,37 +90,25 @@ If you're seeing issues writing to or reading from Kafka with this component the
 
 Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringListField(oskFieldAddresses).
-				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
-				ShortDescription("A list of broker addresses to connect to. Items containing commas are expanded into multiple addresses.").
-				Examples(
-					[]string{"localhost:9092"},
-					[]string{"localhost:9041,localhost:9042"},
-					[]string{"localhost:9041", "localhost:9042"},
-				),
+			saramaAddressesField(oskFieldAddresses),
 			service.NewTLSToggledField(oskFieldTLS),
 			SaramaSASLField(),
 			service.NewInterpolatedStringField(oskFieldTopic).
-				Description("The topic to publish messages to."),
-			service.NewStringField(oskFieldClientID).
-				Description("An identifier for the client connection.").
+				Description(`The topic to publish messages to.`),
+			saramaClientIDField(oskFieldClientID).
 				Advanced().Default("benthos"),
-			service.NewStringField(oskFieldTargetVersion).
-				Description("The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers. Defaults to the oldest supported stable version.").
-				ShortDescription("The version of the Kafka protocol to use. Ideally matches the version of your brokers.").
-				Examples(sarama.DefaultVersion.String(), "3.1.0").
-				Optional(),
+			saramaTargetVersionField(oskFieldTargetVersion),
 			service.NewStringField(oskFieldRackID).
 				Description("A rack identifier for this client.").
 				Advanced().Default(""),
 			service.NewInterpolatedStringField(oskFieldKey).
-				Description("The key to publish messages with.").
+				Description(kafkaOutputKeyDescription).
 				Default(""),
 			service.NewStringEnumField(oskFieldPartitioner, "fnv1a_hash", "murmur2_hash", "random", "round_robin", "manual").
 				Description("The partitioning algorithm to use.").
 				Default("fnv1a_hash"),
 			service.NewInterpolatedStringField(oskFieldPartition).
-				Description("The manually-specified partition to publish messages to, relevant only when the field `partitioner` is set to `manual`. Must be able to parse as a 32-bit integer.").
+				Description(`The manually-specified partition to publish messages to, relevant only when the field `+"`"+`partitioner`+"`"+` is set to `+"`"+`manual`+"`"+`. Must be able to parse as a 32-bit integer.`).
 				ShortDescription("The partition to publish messages to. Only relevant when partitioner is set to manual.").
 				Advanced().Default(""),
 			service.NewObjectField(oskFieldCustomTopic,
@@ -133,7 +121,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 					Description("The replication factor to use for new topics. Leave at -1 to use the broker configured default. Must be an odd number, and less then or equal to the number of brokers.").
 					ShortDescription("Replication factor for new topics. Leave at -1 for the broker default. Must be an odd number.").
 					Default(-1),
-			).Description("If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").
+			).Description("If enabled, topics will be created with the specified number of partitions and replication factor if they do not already exist.").Version("4.23.0").
 				ShortDescription("Create topics with the specified partition count and replication factor if they do not exist.").
 				Advanced().Optional(),
 			service.NewStringEnumField(oskFieldCompression, "none", "snappy", "lz4", "gzip", "zstd").
@@ -144,11 +132,11 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Example(map[string]string{"first-static-header": "value-1", "second-static-header": "value-2"}).
 				Optional(),
 			service.NewMetadataExcludeFilterField(oskFieldMetadata).
-				Description("Specify criteria for which metadata values are sent with messages as headers."),
+				Description("Specify which metadata values are added to each record as Kafka headers. Headers are only sent when `target_version` is `0.11.0` or later."),
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").Version("4.26.0").
 				ShortDescription("Enable the idempotent write producer option. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(false).
 				Advanced(),
@@ -159,30 +147,28 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("The maximum size in bytes of messages sent to the target topic.").
 				Advanced().Default(1000000),
 			service.NewDurationField(oskFieldTimeout).
-				Description("The maximum period of time to wait for message sends before abandoning the request and retrying.").
+				Description(kafkaOutputTimeoutDescription).
 				Advanced().Default("5s"),
 			service.NewBoolField(oskFieldRetryAsBatch).
 				Description("When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").
 				ShortDescription("Retry the entire batch when any message fails to send, rather than only the failed messages.").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(oskFieldBatching),
-			service.NewIntField(oskFieldMaxRetries).
-				Description("The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").
-				Advanced().Default(0),
+			service.NewMaxRetriesField(0),
 			service.NewBackOffField(oskFieldBackoff, true, &backoff.ExponentialBackOff{
 				InitialInterval: time.Second * 3,
 				MaxInterval:     time.Second * 10,
 				MaxElapsedTime:  time.Second * 30,
-			}).Description("Control time intervals between retry attempts.").Advanced(),
+			}).Description("The exponential backoff between attempts to resend messages that failed to send.").Advanced(),
 			service.NewInterpolatedStringField(oskFieldTimestamp).
-				Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+				Description(kafkaOutputTimestampDescription).
 				Example(`${! timestamp_unix() }`).
 				Example(`${! metadata("kafka_timestamp_unix") }`).
 				Optional().
 				Advanced().
 				Deprecated(),
 			service.NewInterpolatedStringField(oskFieldTimestampMs).
-				Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+				Description(kafkaOutputTimestampMsDescription).Version("4.40.0").
 				Example(`${! timestamp_unix_milli() }`).
 				Example(`${! metadata("kafka_timestamp_ms") }`).
 				Optional().

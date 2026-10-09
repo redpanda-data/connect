@@ -57,7 +57,7 @@ which is configured to use this authentication scheme.
 The ` + "`user_credentials_file`" + ` field should point to a file containing both the private key and the JWT and can be
 generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 
-Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
+Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + ` field can contain
 the plain text NKey Seed.
 
 https://docs.nats.io/using-nats/developer/connecting/creds[More details^].
@@ -78,32 +78,32 @@ func authFieldSpec() *service.ConfigField {
 			Example("./seed.nk").
 			Optional(),
 		service.NewStringField("nkey").
-			Description("The NKey seed.").
+			Description("Your NKey seed (private key) for NATS authentication. NKeys provide cryptographic authentication without passwords.").
 			Secret().
 			Optional().
 			Version("4.38.0").
 			Example("UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"), // don't worry, this sample seed is from Nats official doc
 		service.NewStringField("user_credentials_file").
-			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
+			Description("An optional file containing user credentials which consist of a user JWT and corresponding NKey seed.").
 			Example("./user.creds").
 			Optional(),
 		service.NewStringField("user_jwt").
-			Description("An optional plain text user JWT (given along with the corresponding user NKey Seed).").
+			Description("An optional plaintext user JWT to use along with the corresponding user NKey seed.").Version("4.16.0").
 			Secret().
 			Optional(),
 		service.NewStringField("user_nkey_seed").
-			Description("An optional plain text user NKey Seed (given along with the corresponding user JWT).").
+			Description("An optional plaintext user NKey seed to use along with the corresponding user JWT.").Version("4.16.0").
 			Secret().
 			Optional(),
 		service.NewStringField("user").
-			Description("An optional plain text user name (given along with the corresponding user password).").
+			Description("An optional plain text user name (given along with the corresponding user password).").Version("4.84.0").
 			Optional(),
 		service.NewStringField("password").
-			Description("An optional plain text password (given along with the corresponding user name).").
+			Description("An optional plain text password (given along with the corresponding user name).").Version("4.84.0").
 			Secret().
 			Optional(),
 		service.NewStringField("token").
-			Description("An optional plain text token.").
+			Description("An optional plain text token.").Version("4.84.0").
 			Secret().
 			Optional(),
 	).Description("Optional configuration of NATS authentication parameters.").

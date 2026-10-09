@@ -83,9 +83,7 @@ func jaegerConfigSpec() *service.ConfigSpec {
 				Description("A map of tags to add to tracing spans.").
 				Advanced().
 				Default(map[string]any{}),
-			service.NewDurationField(jtFieldFlushInterval).
-				Description("The period of time between each flush of tracing spans.").
-				Optional(),
+			tracing.FlushIntervalField(jtFieldFlushInterval),
 		)
 }
 

@@ -97,7 +97,7 @@ func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigFie
 				Example("http://localhost:8081").
 				Example("https://schema-registry.example.com:8081"),
 			service.NewDurationField(srFieldTimeout).
-				Description("HTTP client timeout for schema registry requests.").
+				Description("HTTP client timeout for schema registry requests.").Version("4.72.0").
 				Default("5s").
 				Optional(),
 			service.NewTLSToggledField(srFieldTLS),
@@ -126,16 +126,16 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"If empty, all subjects are included (unless excluded). " +
 				"Note: the migrator consumer group is always ignored.").
 			ShortDescription("Regular expressions for schema subjects to include in migration. All subjects are included if empty.").
-			Example(`["prod-.*", "staging-.*"]`).
-			Example(`["user-.*", "order-.*"]`).
+			Example([]any{"prod-.*", "staging-.*"}).
+			Example([]any{"user-.*", "order-.*"}).
 			Optional(),
 		service.NewStringListField(srFieldExclude).
 			Description("Regular expressions for schema subjects to exclude from migration. " +
 				"Takes precedence over include patterns. " +
 				"Note: the migrator consumer group is always ignored.").
 			ShortDescription("Regular expressions for schema subjects to exclude from migration. Takes precedence over include.").
-			Example(`[".*-test", ".*-temp"]`).
-			Example(`["dev-.*", "local-.*"]`).
+			Example([]any{".*-test", ".*-temp"}).
+			Example([]any{"dev-.*", "local-.*"}).
 			Optional(),
 		service.NewInterpolatedStringField(srFieldSubject).
 			Description("Template for transforming subject names during migration. Use interpolation to rename subjects systematically.").
@@ -164,7 +164,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			ShortDescription("Error on unknown schema IDs. Only relevant when translate_ids is true.").
 			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
-			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
+			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").Version("4.80.0").
 			Default(10).
 			LintRule(`root = if this < 1 { "max_parallel_http_requests must be at least 1" }`),
 	}

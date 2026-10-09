@@ -51,6 +51,7 @@ func GlobalRedpandaFields() []*service.ConfigField {
 				Default("").
 				Example("__redpanda.connect.logs"),
 			service.NewStringEnumField(grwFieldLogsLevel, "debug", "info", "warn", "error").
+				Description("The lowest level of the process logs sent to `logs_topic`.").
 				Default("info"),
 			service.NewStringField(grwFieldStatusTopic).
 				Description("A topic to send status updates to.").

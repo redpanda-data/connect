@@ -20,6 +20,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -45,16 +47,13 @@ By default, the processor starts and runs a locally installed Ollama server. Alt
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
 		Version("4.32.0").
 		Fields(
-			service.NewStringField(bopFieldModel).
-				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
-				Examples("nomic-embed-text", "mxbai-embed-large", "snowflake-artic-embed", "all-minilm"),
-			service.NewInterpolatedStringField(oepFieldText).
-				Description("The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.").
+			modelField("nomic-embed-text", "mxbai-embed-large", "snowflake-artic-embed", "all-minilm"),
+			llm.EmbeddingTextField(oepFieldText).
 				Optional(),
 		).Fields(commonFields()...).
 		Example(
 			"Store embedding vectors in Qdrant",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/qdrant.adoc[Qdrant]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/qdrant.adoc[Qdrant].",
 			`input:
   generate:
     interval: 1s
@@ -74,7 +73,7 @@ output:
 `).
 		Example(
 			"Store embedding vectors in CyborgDB",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/cyborgdb.adoc[CyborgDB].",
 			`input:
   generate:
     interval: 1s

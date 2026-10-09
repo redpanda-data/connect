@@ -163,6 +163,10 @@ Amazon S3 sends an `+"`s3:TestEvent`"+` notification whenever a bucket's event c
 
 When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a `+"<<scanner, `scanner`>>"+` can be specified that determines how to break the input into smaller individual messages.
 
+== S3-compatible storage
+
+To consume from an S3-compatible storage service, such as MinIO or Cloudflare R2, set `+"`endpoint`"+` to the URL of the service. Many of these services also require `+"`force_path_style_urls`"+` to be `+"`true`"+`.
+
 == Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more  in xref:guides:cloud/aws.adoc[].
@@ -183,11 +187,11 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation]. Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).
 		Fields(
 			service.NewStringField(s3iFieldBucket).
-				Description("The bucket to consume from. If the field `sqs.url` is specified this field is optional.").
+				Description("The name of the bucket to consume from, such as `my-bucket`. Use the bucket name, not its ARN. If the field `sqs.url` is specified this field is optional.").
 				ShortDescription("The bucket to consume from. Optional when sqs.url is specified.").
 				Default(""),
 			service.NewStringField(s3iFieldPrefix).
-				Description("An optional path prefix, if set only objects with the prefix are consumed when walking a bucket.").
+				Description("An optional path prefix, if set only objects with the prefix are consumed when walking a bucket. This field accepts a single prefix. To consume objects under several prefixes in the same bucket, use one `aws_s3` input for each prefix in a xref:components:inputs/broker.adoc[`broker` input].").
 				Default(""),
 		).
 		Fields(config.SessionFields()...).
@@ -198,7 +202,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				Default(false).
 				Advanced(),
 			service.NewBoolField(s3iFieldDeleteObjects).
-				Description("Whether to delete downloaded objects from the bucket once they are processed.").
+				Description("Whether to delete each object from its S3 bucket after all of its messages are acknowledged successfully. Objects whose messages fail to process are left in the bucket.").
 				Default(false).
 				Advanced(),
 		).
@@ -237,15 +241,15 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Default(10).
 					Advanced(),
 				service.NewIntField(s3iSQSFieldWaitTimeSeconds).
-					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
+					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").Version("4.17.0").
 					Default(0).
 					Advanced(),
 				service.NewIntField(s3iSQSNackVisibilityTimeout).
-					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
+					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").Version("4.78.0").
 					Default(0).
 					Optional(),
 				service.NewDurationField(s3iSQSFieldZeroKeyWarnInterval).
-					Description("A message from which no target key can be extracted (for example, due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").
+					Description("A message from which no target key can be extracted (for example, due to a misconfigured `key_path`/`bucket_path`) is never deleted, so it's redelivered and re-evaluated repeatedly until the underlying issue is fixed. This field limits how often that condition is logged as a warning, to avoid flooding the logs; every occurrence is still logged at debug level. Set to `0s` to warn on every occurrence.").Version("4.103.2").
 					ShortDescription("How often to repeat the warning for a message with no extractable target key.").
 					Example("10s").
 					Example("0s").

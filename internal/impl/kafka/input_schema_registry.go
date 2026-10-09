@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -48,10 +49,12 @@ const (
 func schemaRegistryInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Version("4.32.2").
+		Version("4.33.0").
 		Categories("Integration").
-		Summary(`Reads schemas from SchemaRegistry.`).
+		Summary(`Reads schemas from a schema registry.`).
 		Description(`
+You can use this input to extract and back up schemas during a data migration. This input uses the https://github.com/twmb/franz-go/tree/master/pkg/sr[Franz Kafka Schema Registry client^].
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -79,10 +82,10 @@ input:
 
 func schemaRegistryInputConfigFields() []*service.ConfigField {
 	return append([]*service.ConfigField{
-		service.NewStringField(sriFieldURL).Description("The base URL of the schema registry service."),
+		service.NewStringField(sriFieldURL).Description(schemaregistry.URLFieldDescription),
 		service.NewBoolField(sriFieldIncludeDeleted).Description("Include deleted entities.").Default(false).Advanced(),
-		service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter. All subjects are selected when not set.").Default("").Advanced(),
-		service.NewBoolField(sriFieldFetchInOrder).Description("Fetch all schemas on connect and sort them by ID. Should be set to `true` when schema references are used.").
+		service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter, or leave this field value blank to select all subjects.").Default("").Advanced(),
+		service.NewBoolField(sriFieldFetchInOrder).Description("Indicate whether to fetch all schemas from the schema registry service and sort them by ID. Set this value to `true` if you use schemas that refer to other schemas (schema references).").
 			ShortDescription("Fetch all schemas on connect and sort them by ID. Set to true when schema references are used.").Default(true).Advanced().Version("4.37.0"),
 		service.NewTLSToggledField(sriFieldTLS),
 		service.NewAutoRetryNacksToggleField(),

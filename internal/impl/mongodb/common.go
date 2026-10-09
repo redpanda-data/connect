@@ -29,6 +29,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 // JSONMarshalMode represents the way in which BSON should be marshalled to JSON.
@@ -115,7 +117,7 @@ const awsSessionDurationDescription = "The duration of the STS session requested
 func AWSIAMAuthField(sessionDurationNotes ...string) *service.ConfigField {
 	sessionDuration := strings.Join(append([]string{awsSessionDurationDescription}, sessionDurationNotes...), " ")
 
-	return service.NewObjectField(FieldAWSIAMAuth,
+	fields := []*service.ConfigField{
 		service.NewBoolField(FieldAWSIAMAuthEnabled).
 			Description("Enable AWS IAM authentication using the driver-native `MONGODB-AWS` mechanism. The MongoDB Atlas database user must be created with the AWS IAM authentication type, and connections require TLS. When no static credentials or roles are configured, the ambient AWS credential chain (environment variables, EC2 instance profile, EKS pod role) is used and expiring credentials are refreshed automatically.").
 			ShortDescription("Enable AWS IAM authentication using the MONGODB-AWS mechanism.").
@@ -129,36 +131,11 @@ func AWSIAMAuthField(sessionDurationNotes ...string) *service.ConfigField {
 			ShortDescription("STS session duration when assuming roles. AWS requires at least 15m and caps role chaining at 1h.").
 			Default("1h").
 			Advanced(),
-		service.NewStringField(FieldAWSIAMAuthID).
-			Description("The ID of credentials to use.").
-			Optional().Advanced(),
-		service.NewStringField(FieldAWSIAMAuthSecret).
-			Description("The secret for the credentials being used.").
-			Optional().Advanced().Secret(),
-		service.NewStringField(FieldAWSIAMAuthToken).
-			Description("The token for the credentials being used, required when using short term credentials.").
-			Optional().Advanced(),
-		service.NewStringField(FieldAWSIAMAuthRole).
-			Description("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with `roles`; use the `roles` array instead when chaining multiple roles.").
-			ShortDescription("Optional AWS IAM role ARN to assume for authentication. Cannot be combined with roles.").
-			Optional(),
-		service.NewStringField(FieldAWSIAMAuthRoleExternalID).
-			Description("Optional external ID for the role assumption. Only used with the `role` field, which cannot be combined with `roles`.").
-			ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
-			Optional(),
-		service.NewObjectListField(FieldAWSIAMAuthRoles,
-			service.NewStringField(FieldAWSIAMAuthRole).
-				Default("").
-				Description("AWS IAM role ARN to assume."),
-			service.NewStringField(FieldAWSIAMAuthRoleExternalID).
-				Description("Optional external ID for the role assumption.").
-				Default("").
-				Optional(),
-		).
-			Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID. Cannot be combined with `role`.").
-			ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-			Optional(),
-	).
+	}
+	fields = append(fields, awsconfig.IAMAuthStaticCredentialFields()...)
+	fields = append(fields, awsconfig.IAMAuthRoleFields(true)...)
+
+	return service.NewObjectField(FieldAWSIAMAuth, fields...).
 		Description("AWS IAM authentication using the `MONGODB-AWS` mechanism, for example against MongoDB Atlas. When enabled, IAM credentials are used instead of a static username and password. Role-derived session credentials are resolved when the component connects and are re-resolved whenever it reconnects. The `mongodb` processor and cache establish their client once at creation and cannot refresh expiring session credentials, so `role`, `roles` and session tokens are rejected for those components; use the ambient credential chain or long-lived access keys with them. For long-running pipelines, prefer the ambient credential chain (leave keys and roles unset), which the driver refreshes automatically.").
 		ShortDescription("AWS IAM authentication configuration (MONGODB-AWS).").
 		Advanced().
@@ -335,6 +312,15 @@ func isConnPoolError(err error) bool {
 		strings.Contains(msg, "server selection error")
 }
 
+const (
+	// ClientUsernameDescription describes the username field of MongoDB
+	// components that parse their connection with ClientConfigFromParsed.
+	ClientUsernameDescription = "The username to connect to the database."
+	// ClientPasswordDescription describes the password field of MongoDB
+	// components that parse their connection with ClientConfigFromParsed.
+	ClientPasswordDescription = "The password to use for authentication. Used together with `username` for basic authentication."
+)
+
 func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLField(commonFieldClientURL).
@@ -343,14 +329,14 @@ func clientFields() []*service.ConfigField {
 		service.NewStringField(commonFieldClientDatabase).
 			Description("The name of the target MongoDB database."),
 		service.NewStringField(commonFieldClientUsername).
-			Description("The username to connect to the database.").
+			Description(ClientUsernameDescription).
 			Default(""),
 		service.NewStringField(commonFieldClientPassword).
-			Description("The password to connect to the database.").
+			Description(ClientPasswordDescription).
 			Default("").
 			Secret(),
 		service.NewURLField(commonFieldClientAppName).
-			Description("The client application name.").
+			Description("The client application name.").Version("4.32.0").
 			Default("benthos").
 			Advanced(),
 		AWSIAMAuthField(),
@@ -456,6 +442,8 @@ const (
 	commonFieldOperation = "operation"
 )
 
+const operationDescription = "The MongoDB database operation to perform."
+
 func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
 	return service.NewStringEnumField("operation",
 		string(OperationInsertOne),
@@ -465,7 +453,7 @@ func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationUpdateOne),
 		string(OperationFindOne),
 		string(OperationAggregate),
-	).Description("The mongodb operation to perform.").
+	).Description(operationDescription).
 		Default(string(defaultOperation))
 }
 
@@ -476,7 +464,7 @@ func outputOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationDeleteMany),
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
-	).Description("The mongodb operation to perform.").
+	).Description(operationDescription).
 		Default(string(defaultOperation))
 }
 
@@ -505,16 +493,16 @@ const (
 func writeConcernDocs() *service.ConfigField {
 	return service.NewObjectField(commonFieldWriteConcern,
 		service.NewStringField(commonFieldWriteConcernW).
-			Description(`W requests acknowledgement that write operations propagate to the specified number of mongodb instances. Can be the string "majority" to wait for a calculated majority of nodes to acknowledge the write operation, or an integer value specifying an minimum number of nodes to acknowledge the operation, or a string specifying the name of a custom write concern configured in the cluster.`).
+			Description(`The `+"`"+`w`+"`"+` option requests acknowledgement that write operations propagate to the specified number of MongoDB instances. Set it to `+"`"+`majority`+"`"+` to wait for a calculated majority of nodes to acknowledge the write operation, to an integer to specify the minimum number of nodes that must acknowledge the operation, or to the name of a custom write concern configured in the cluster.`).
 			ShortDescription("How many MongoDB instances must acknowledge a write. Can be majority to wait for a calculated majority.").
 			Default("majority"),
 		service.NewBoolField(commonFieldWriteConcernJ).
-			Description("J requests acknowledgement from MongoDB that write operations are written to the journal.").
+			Description("The `j` option requests acknowledgement from MongoDB that write operations are written to the journal.").
 			Default(false),
 		service.NewStringField(commonFieldWriteConcernWTimeout).
 			Description("The write concern timeout.").
 			Default(""),
-	).Description("The write concern settings for the mongo connection.")
+	).Description("The https://www.mongodb.com/docs/manual/reference/write-concern/[write concern settings^] for the MongoDB connection.")
 }
 
 func writeConcernSpecFromParsed(pConf *service.ParsedConfig) (spec *writeConcernSpec, err error) {
@@ -570,26 +558,26 @@ const (
 func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
-			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
-				"insert-one, replace-one, update-one and aggregate.").
+			Description("A Bloblang map that represents a document to store in MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The `document_map` parameter is required for the following database operations: `insert-one`, `replace-one`, `update-one`, and `aggregate`.").
 			ShortDescription("A Bloblang map producing the document to store in MongoDB, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
-			Description("A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except " +
-				"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should " +
-				"have the fields required to locate the document to delete.").
+			Description(`A Bloblang map that represents a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The ` + "`" + `filter_map` + "`" + ` parameter is required for all database operations except ` + "`" + `insert-one` + "`" + `.
+
+The ` + "`" + `filter_map` + "`" + ` is used to find documents for the specified operation. For example, for a ` + "`" + `delete-one` + "`" + ` operation, the filter map should include the fields required to locate the document for deletion.`).
 			ShortDescription("A Bloblang map producing a MongoDB filter, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldHintMap).
-			Description("A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations " +
-				"except insert-one. It is used to improve performance of finding the documents in the mongodb.").
+			Description(`A Bloblang map that represents a hint or index for a MongoDB command to use, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional, and is used with all operations except ` + "`" + `insert-one` + "`" + `.
+
+Define a ` + "`" + `hint_map` + "`" + ` to improve performance when finding documents in the MongoDB database.`).
 			ShortDescription("An optional Bloblang map producing the MongoDB command hint, as extended JSON in canonical form.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBoolField(commonFieldUpsert).
-			Description("The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
+			Description("The `upsert` parameter is optional, and only applies for `update-one` and `replace-one` operations. If the filter specified in `filter_map` matches an existing document, this operation updates or replaces the document, otherwise a new document is created.").
 			ShortDescription("Insert the document when the filter matches nothing. Applies only to update-one and replace-one.").
 			Version("3.60.0").
 			Default(false),

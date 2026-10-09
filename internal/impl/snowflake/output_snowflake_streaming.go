@@ -78,9 +78,9 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.39.0").
-		Summary("Ingest data into Snowflake using Snowpipe Streaming.").
+		Summary("Ingests data into Snowflake using the Snowpipe Streaming classic architecture.").
 		Description(`
-Ingest data into Snowflake using Snowpipe Streaming.
+For more information, see the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-overview[Snowpipe Streaming classic architecture^] documentation. This output doesn't work with the Snowpipe Streaming high-performance architecture.
 
 [%header,format=dsv]
 |===
@@ -100,34 +100,64 @@ For TIMESTAMP, TIME and DATE columns, you can parse different string formats usi
 Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
 
 There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.
+
+== Schema handling
+
+Each message becomes one row in the target table. The keys of a message object are matched to the table's column names, and each value must match its column's data type, otherwise the write fails with an error. When `+"`schema_evolution.enabled`"+` is `+"`false`"+`, keys that don't match a column are ignored, and columns that a message doesn't set are written as `+"`null`"+`. A message that doesn't set a `+"`NOT NULL`"+` column fails. When `+"`schema_evolution.enabled`"+` is `+"`true`"+`, a key that doesn't match a column adds a column with a data type derived from the value, unless the value is `+"`null`"+` and `+"`schema_evolution.ignore_nulls`"+` is `+"`true`"+` (the default). A missing value for a `+"`NOT NULL`"+` column drops that constraint.
 `+service.OutputPerformanceDocs(true, true)+`
 
 It is recommended that each batches results in at least 16MiB of compressed output being written to Snowflake.
 You can monitor the output batch size using the `+"`snowflake_compressed_output_size_bytes`"+` metric.
+
+== Metrics
+
+This output emits the following metrics:
+
+- `+"`snowflake_compressed_output_size_bytes`"+` (counter): The number of bytes of compressed output uploaded to Snowflake.
+- `+"`snowflake_convert_latency_ns`"+` (timer): The time taken to convert messages into Snowflake column data types.
+- `+"`snowflake_serialize_latency_ns`"+` (timer): The time taken to serialize the converted columnar data into a file for upload.
+- `+"`snowflake_build_output_latency_ns`"+` (timer): The time taken to build the file that is uploaded to Snowflake, which includes the convert and serialize time.
+- `+"`snowflake_upload_latency_ns`"+` (timer): The time taken to upload the file to Snowflake.
+- `+"`snowflake_register_latency_ns`"+` (timer): The time taken to register the uploaded file with Snowflake.
+- `+"`snowflake_commit_latency_ns`"+` (timer): The time taken to commit the uploaded data to the target table.
 `).
 		Fields(
 			service.NewStringField(ssoFieldAccount).
-				Description(`The Snowflake https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account name^]. Which should be formatted as `+"`<orgname>-<account_name>`"+` where `+"`<orgname>`"+` is the name of your Snowflake organization and `+"`<account_name>`"+` is the unique name of your account within your organization.
-`).
+				Description(`The https://docs.snowflake.com/en/user-guide/admin-account-identifier#account-name[Snowflake account name to use^].
+
+Use the format `+"`"+`<orgname>-<account_name>`+"`"+` where:
+
+- The `+"`"+`<orgname>`+"`"+` is the name of your Snowflake organization.
+- The `+"`"+`<account_name>`+"`"+` is the unique name of your account within your Snowflake organization.
+
+To find the correct value for this field, run the following query in Snowflake:
+
+`+"`"+``+"`"+``+"`"+`sql
+WITH HOSTLIST AS
+(SELECT * FROM TABLE(FLATTEN(INPUT => PARSE_JSON(SYSTEM$allowlist()))))
+SELECT REPLACE(VALUE:host,'.snowflakecomputing.com','') AS ACCOUNT_IDENTIFIER
+FROM HOSTLIST
+WHERE VALUE:type = 'SNOWFLAKE_DEPLOYMENT_REGIONLESS';
+`+"`"+``+"`"+``+"`"+``).
 				ShortDescription("The Snowflake account name, formatted as orgname-account_name.").Example("ORG-ACCOUNT"),
 			service.NewStringField(ssoFieldURL).
-				Description("Override the default URL used to connect to Snowflake which is https://ORG-ACCOUNT.snowflakecomputing.com").Optional().Example("https://org-account.privatelink.snowflakecomputing.com").Advanced(),
-			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user.").
+				Description("Specify a custom URL to connect to Snowflake. This parameter overrides the default URL, which is generated from the value of the `account` field: `https://<account>.snowflakecomputing.com`.").Version("4.48.0").Optional().Example("https://org-account.privatelink.snowflakecomputing.com").Advanced(),
+			service.NewStringField(ssoFieldUser).Description("Specify a user to run the Snowpipe Stream. To learn how to create a user, see the https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake documentation^].").
 				ShortDescription("The user to run the Snowpipe Stream as."),
-			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").
+			service.NewStringField(ssoFieldRole).Description("The role of the user specified in the `user` field. The user's role must have the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-configuration#authentication-and-authorization[required privileges^] to call the Snowpipe Streaming APIs. For more information about user roles, see the https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake documentation^].").
 				ShortDescription("The role for the user field. It must have the privileges required to call the Snowpipe Streaming APIs.").Example("ACCOUNTADMIN"),
-			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into.").Example("MY_DATABASE"),
-			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into.").Example("PUBLIC"),
-			service.NewInterpolatedStringField(ssoFieldTable).Description("The Snowflake table to ingest data into.").Example("MY_TABLE"),
-			service.NewStringField(ssoFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").
+			service.NewStringField(ssoFieldDB).Description("The Snowflake database you want to write data to.").Example("MY_DATABASE"),
+			service.NewStringField(ssoFieldSchema).Description("The schema of the Snowflake database you want to write data to.").Example("PUBLIC"),
+			service.NewInterpolatedStringField(ssoFieldTable).Description("The Snowflake table you want to write data to.").Example("MY_TABLE"),
+			service.NewStringField(ssoFieldKey).Description("The PEM-encoded private RSA key to use for authentication with Snowflake. You must specify a value for this field or the `private_key_file` field.").
 				ShortDescription("PEM encoded private RSA key for authenticating with Snowflake. Either this or private_key_file is required.").Optional().Secret(), /*.LintRule(`root = if !this.re_match("(?s)^-----BEGIN [A-Z ]+-----\\n[0-9A-Za-z+/=\\n]+-----END [A-Z ]+-----\\n?$") && !this.re_match("[0-9A-Za-z+/=]") { ["field private_key must be in PEM format"] }`)*/
-			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").
+			service.NewStringField(ssoFieldKeyFile).Description("A `.p8`, PEM-encoded file to load the private RSA key from. You must specify a value for this field or the `private_key` field.").
 				ShortDescription("File to load the private RSA key from, as a .p8 PEM file. Either this or private_key is required.").Optional(),
-			service.NewStringField(ssoFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
-			service.NewBloblangField(ssoFieldMapping).Description("A bloblang mapping to execute on each message.").Optional(),
-			service.NewStringField(ssoFieldInitStatement).Description(`
-Optional SQL statements to execute immediately upon the first connection. This is a useful way to initialize tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
-`).
+			service.NewStringField(ssoFieldKeyPass).Description("If the RSA key is encrypted, specify the RSA key passphrase.").Optional().Secret(),
+			service.NewBloblangField(ssoFieldMapping).Description("The xref:guides:bloblang/about.adoc[Bloblang `mapping`] to execute on each message.").Optional(),
+			service.NewStringField(ssoFieldInitStatement).Description(`Optional SQL statements to execute immediately after this output connects to Snowflake for the first time. This is a useful way to initialize tables before processing data.
+
+NOTE: Make sure your SQL statements are idempotent, so they do not cause issues when run multiple times after service restarts.`).
 				ShortDescription("Optional SQL statements to execute on the first connection, useful for initialising tables.").Optional().Example(`
 CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
 `).Example(`
@@ -135,78 +165,80 @@ ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
 ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 `),
 			service.NewObjectField(ssoFieldSchemaEvolution,
-				service.NewBoolField(ssoFieldSchemaEvolutionEnabled).Description("Whether schema evolution is enabled."),
-				service.NewBoolField(ssoFieldSchemaEvolutionIgnoreNulls).Description("If `true`, then new columns that are `null` are ignored and schema evolution is not triggered. If `false` then null columns trigger schema migrations in Snowflake. NOTE: unless you already know what type this column will be in advance, it's highly encouraged to ignore null values.").
+				service.NewBoolField(ssoFieldSchemaEvolutionEnabled).Description("Whether schema evolution is enabled. When set to `true`, the Snowflake table is automatically created based on the schema of the first message written to it, if the table does not already exist. As new fields are added to subsequent messages in the pipeline, new columns are created in the Snowflake table. Any required columns are marked as `nullable` if new messages do not include data for them."),
+				service.NewBoolField(ssoFieldSchemaEvolutionIgnoreNulls).Description(`When set to `+"`"+`true`+"`"+` and schema evolution is enabled, new columns that have `+"`"+`null`+"`"+` values _are not_ added to the Snowflake table and do not trigger schema evolution. When set to `+"`"+`false`+"`"+`, `+"`"+`null`+"`"+` columns trigger schema migrations in Snowflake. Ignoring `+"`"+`null`+"`"+` values:
+
+- Prevents unnecessary schema changes caused by placeholder or incomplete data.
+- Avoids creating table columns with incorrect data types.
+
+NOTE: Redpanda does not recommend changing the default setting (`+"`"+`true`+"`"+`) unless you know the data type of `+"`"+`null`+"`"+` columns in advance.`).Version("4.48.0").
 					ShortDescription("Ignore new columns that are null, so they do not trigger schema evolution.").Default(true).Advanced(),
 				service.NewBloblangField(ssoFieldSchemaEvolutionNewColumnTypeMapping).Description(`
 The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `+"`root`"+` variable being assigned a string with the data type for the new column in Snowflake.
 
         The input to this mapping is either the output of `+"`processors`"+` if specified, otherwise it is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`).
 					ShortDescription("The mapping from Redpanda Connect type to Snowflake column type.").Optional().Deprecated(),
-				service.NewProcessorListField(ssoFieldSchemaEvolutionProcessors).Description(`
-A series of processors to execute when new columns are added to the table. Specifying this can support running side effects when the schema evolves or enriching the message with additional data to guide the schema changes. For example, one could read the schema the message was produced with from the schema registry and use that to decide which type the new column in Snowflake should be.
+				service.NewProcessorListField(ssoFieldSchemaEvolutionProcessors).Description(`A series of processors to execute when new columns are added to the Snowflake table. You can use these processors to:
 
-        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`. The output of these series of processors should be a single message, where the contents of the message is a string indicating the column data type to use (FLOAT, VARIANT, NUMBER(38, 0), etc. An ALTER TABLE statement will then be executed on the table in Snowflake to add the column with the corresponding data type.").
+- Run side effects when the schema evolves.
+- Enrich the message with additional information to guide the schema changes.
+
+For example, a processor could read the schema from the schema registry that a message was produced with and use that schema to determine the data type of the new column in Snowflake.
+
+The input to these processors is an object with the value and name of the new column, the original message, and details of the Snowflake table the output writes to. The metadata remains the same as in the original message that triggered the schema update. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`"+`
+
+The output from the processors must be a single message that contains a string specifying the column data type to use, such as `+"`"+`FLOAT`+"`"+`, `+"`"+`VARIANT`+"`"+`, or `+"`"+`NUMBER(38, 0)`+"`"+`. The output then runs an `+"`"+`ALTER TABLE`+"`"+` statement on the Snowflake table to add the column with the corresponding data type.`).Version("4.46.0").
 					ShortDescription("Processors to execute when new columns are added to the table, for side effects or enrichment.").Optional().Advanced().Example([]map[string]any{
 					{"mapping": defaultSchemaEvolutionNewColumnMapping},
 				}),
-			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
+			).Description(`Options to control schema updates when messages are written to the Snowflake table, such as adding columns as new fields appear in messages.`).Optional(),
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").
 				ShortDescription("Maximum parallelism used when building the output for Snowflake.").Optional().Advanced().Deprecated(),
 			service.NewObjectField(ssoFieldBuildOpts,
-				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
-				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
-			).Advanced().Description("Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").
+				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallel processing to use when building the output for Snowflake.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
+				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of table rows to submit in each chunk for processing.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
+			).Advanced().Description("Options for optimizing the build of the output data that is sent to Snowflake. Monitor the `snowflake_build_output_latency_ns` metric to assess whether you need to update these options.").Version("4.40.0").
 				ShortDescription("Options to optimise the time taken to build output data sent to Snowflake."),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewStringField(ssoFieldChannelPrefix).
-				Description(`The prefix to use when creating a channel name.
-Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default if neither `+"`"+ssoFieldChannelPrefix+"` or `"+ssoFieldChannelName+` is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
+				Description(`The prefix to use when creating a channel name for connecting to a Snowflake table. Adding a `+"`"+ssoFieldChannelPrefix+"`"+` avoids the creation of duplicate channel names, which result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 
-At most `+"`max_in_flight`"+` channels will be opened.
+You can specify either the `+"`"+ssoFieldChannelPrefix+"`"+` or `+"`"+ssoFieldChannelName+"`"+`, but not both. If neither field is populated, this output creates a channel name based on a table's fully-qualified name, which results in a single stream per table.
 
-This option is mutually exclusive with `+"`"+ssoFieldChannelName+"`"+`.
+The maximum number of channels open at any time is determined by the value in the `+"`max_in_flight`"+` field.
 
-NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
+NOTE: Snowflake limits the number of streams per table to 10,000. If you need to use more than 10,000 streams, contact https://www.snowflake.com/en/support/[Snowflake support^].`).
 				Optional().
 				Advanced().
 				Example(`channel-${HOST}`),
 			service.NewInterpolatedStringField(ssoFieldChannelName).
-				Description(`The channel name to use.
-Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-Note that batches are assumed to all contain messages for the same channel, so this interpolation is only executed on the first
-message in each batch. It's recommended to batch at the input level to ensure that batches contain messages for the same channel
-if using an input that is partitioned (such as an Apache Kafka topic).
+				Description(`The channel name to use when connecting to a Snowflake table. Duplicate channel names cause errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 
-This option is mutually exclusive with `+"`"+ssoFieldChannelPrefix+"`"+`.
+Redpanda Connect assumes that a message batch contains messages for a single channel, which means that interpolation is only executed on the first message in each batch. If your pipeline uses an input that is partitioned, such as an Apache Kafka topic, batch messages at the input level to make sure all messages in a batch are written to the same channel.
 
-NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
+You can specify either the `+"`"+ssoFieldChannelName+"`"+` or `+"`"+ssoFieldChannelPrefix+"`"+`, but not both. If neither field is populated, this output creates a channel name based on a table's fully-qualified name, which results in a single stream per table.
+
+NOTE: Snowflake limits the number of streams per table to 10,000. If you need to use more than 10,000 streams, contact https://www.snowflake.com/en/support/[Snowflake support^].`).Version("4.45.0").
 				Optional().
 				Advanced().
 				Examples(`partition-${!@kafka_partition}`),
 			service.NewInterpolatedStringField(ssoFieldOffsetToken).
-				Description(`The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
-is compared to the latest token for a channel. If the offset token is less than the latest in the channel, it's assumed the message is a duplicate and
-is dropped. This means it is *very important* to have ordered delivery to the output, any out of order messages to the output will be seen as duplicates and dropped.
-Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
-output should be employed for failed messages.
+				Description(`The offset token to use for exactly-once delivery of data to a Snowflake table.
 
-Offset tokens that both parse as base-10 integers (up to 64 bits) are compared numerically, so a bare numeric token such as `+"`${!@kafka_offset}`"+` does not need padding. Any
-other token, including numbers outside of the 64-bit integer range or a numeric value combined with a prefix or separator (as in the examples below), falls back to a
-lexicographic comparison of its string representation, so if you're using one of those as an offset token, make sure to pad it so that it's lexicographically ordered in its
-string representation.
+This output assumes that messages within a batch are in increasing order by offset token. When data is sent on a channel, the offset token of each message in the batch is compared to the latest token processed by the channel. If the offset token is less than the latest token, it's assumed the message is a duplicate and is dropped. Messages must be delivered to the output in order, otherwise they are processed as duplicates and dropped.
 
-NOTE: It's assumed that messages within a batch are in increasing order by offset token.
+Retried messages can also be seen as duplicates if later messages have succeeded in the meantime, so in most cases use a dead-letter queue to process failed messages. See the `+"`"+`Ingesting data exactly once from Redpanda`+"`"+` example.
 
-For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
+If both offset tokens parse as base-10 integers (up to 64 bits), they are compared numerically, so a bare numeric token such as `+"`"+`${!@kafka_offset}`+"`"+` does not need padding. Any other token, including numbers outside of the 64-bit integer range or a numeric value combined with a prefix or separator, falls back to a lexicographic comparison of its string representation. If you use one of these tokens, pad it so that it's lexicographically ordered in its string representation.
+
+For more information about offset tokens, see the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[Snowflake documentation^].`).Version("4.45.0").
 				ShortDescription("The offset token used for exactly-once delivery, compared against the latest token for a channel.").
 				Optional().
 				Advanced().
 				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
 			service.NewDurationField(ssoFieldCommitTimeout).
-				Description(`Deprecated: use `+"`commit_backoff.max_elapsed_time`"+` instead.`).
+				Description(`The maximum duration to wait while data updates from a message batch are asynchronously committed to Snowflake. Deprecated: use `+"`"+`commit_backoff.max_elapsed_time`+"`"+` instead. If set, this field overrides `+"`"+`commit_backoff.max_elapsed_time`+"`"+`.`).
 				ShortDescription("Deprecated: use commit_backoff.max_elapsed_time instead.").
 				Default("").
 				Advanced().
@@ -225,18 +257,18 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 					Description("The factor by which the poll interval grows on each attempt.").
 					Default(2.0),
 			).
-				Description("Control how frequently Snowflake is polled to check if data has been committed.").
+				Description("Control how frequently Snowflake is polled to check if data has been committed.").Version("4.82.0").
 				Advanced(),
 			service.NewStringAnnotatedEnumField(ssoFieldMessageFormat, map[string]string{
 				"object": "Messages are an object in JSON or bloblang where the key of the object is the column name in snowflake and the value is the value for the column",
 				"array":  "Messages are an array of values where the position in the array matches up the with ordinal of the column in snowflake",
 			}).
-				Description(`The format at which to expect incoming messages from the rest of the pipeline in.`).
+				Description(`The format to expect incoming messages from the rest of the pipeline.`).Version("4.79.0").
 				Default("object").
 				Advanced().
 				Example("array"),
 			service.NewStringField(ssoFieldTimestampFormat).
-				Description("The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.").
+				Description("The format to parse string values for `TIMESTAMP`, `TIMESTAMP_LTZ` and `TIMESTAMP_NTZ` columns. Should be a layout for https://pkg.go.dev/time#Parse[time.Parse^] in Go.").Version("4.79.0").
 				ShortDescription("Format used to parse string values for TIMESTAMP columns, as a Go time.Parse layout.").
 				Default(time.RFC3339Nano).
 				Advanced(),
@@ -292,8 +324,8 @@ output:
 			"Ingesting data exactly once from Redpanda",
 			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
 
-NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for
-channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
+NOTE: If attempting to do exactly-once it's important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for
+`+"`channel_name`"+` and `+"`offset_token`"+` first. Removing the `+"`offset_token`"+` is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
   redpanda:

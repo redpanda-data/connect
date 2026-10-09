@@ -40,7 +40,7 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.33.0").
 		Categories("AI").
-		Summary("Adds items to a https://qdrant.tech/[Qdrant^] collection").
+		Summary("Adds items to a https://qdrant.tech/[Qdrant^] collection.").
 		Description(service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewOutputMaxInFlightField(),
@@ -52,9 +52,9 @@ func outputSpec() *service.ConfigSpec {
 			service.NewStringField(qoFieldAPIToken).
 				Secret().
 				Description("The Qdrant API token for authentication. Defaults to an empty string.").Default(""),
-			service.NewTLSToggledField(qoFieldUseTLS).Description("TLS(HTTPS) config to use when connecting"),
+			service.NewTLSToggledField(qoFieldUseTLS),
 			service.NewInterpolatedStringField(qoFieldCollectionName).
-				Description("The name of the collection in Qdrant."),
+				Description(`The name of the collection in Qdrant.`),
 			service.NewBloblangField(qoFieldID).
 				Description("The ID of the point to insert. Can be a UUID string or positive integer.").
 				Example(`root = "dc88c126-679f-49f5-ab85-04b77e8c2791"`).

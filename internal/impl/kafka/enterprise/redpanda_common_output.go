@@ -20,8 +20,10 @@ import (
 func redpandaCommonOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Deprecated().
+		Version("4.39.0").
 		Categories("Services").
 		Summary("Sends data to a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
+		Description("This output is deprecated as of version 4.68.0. Use the xref:components:outputs/redpanda.adoc[`redpanda` output] instead. When you omit its `seed_brokers` field, the `redpanda` output takes its connection configuration from the top-level `redpanda` block, as this output does.").
 		Fields(kafka.FranzWriterConfigFields()...).
 		Fields(
 			service.NewOutputMaxInFlightField().

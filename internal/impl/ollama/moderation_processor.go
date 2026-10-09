@@ -38,7 +38,7 @@ func init() {
 func ollamaModerationProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Generates responses to messages in a chat conversation, using the Ollama API.").
+		Summary("Checks whether responses from a large language model (LLM) are safe, using the Ollama API.").
 		Description(`This processor checks LLM response safety using either `+"`llama-guard3`"+` or `+"`shieldgemma`"+`. If you want to check if a given prompt is safe, then that can be done with the `+"`ollama_chat`"+` processor - this processor is for response classification only.
 
 By default, the processor starts and runs a locally installed Ollama server. Alternatively, to use an already running Ollama server, add your server details to the `+"`"+bopFieldServerAddress+"`"+` field. You can https://ollama.com/download[download and install Ollama from the Ollama website^].
@@ -53,10 +53,14 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The name of the Ollama LLM to use.").
 				Examples("llama-guard3", "shieldgemma"),
 			service.NewInterpolatedStringField(ompFieldUserPrompt).
-				Description("The input prompt that was used with the LLM. If using `ollama_chat` the you can use `save_prompt_metadata` to safe the prompt as metadata.").
+				Description(`The prompt you used to generate a response from an LLM.
+
+If you're using the `+"`"+`ollama_chat`+"`"+` processor, you can set the `+"`"+`save_prompt_metadata`+"`"+` field to save the contents of your prompts. You can then run them through the `+"`"+`ollama_moderation`+"`"+` processor to check the model responses for safety.
+
+You can also check the safety of your prompts. For more information, see the xref:components:processors/ollama_chat.adoc#examples[`+"`"+`ollama_chat`+"`"+` processor] documentation.`).
 				ShortDescription("The input prompt used with the LLM. With ollama_chat, save_prompt_metadata can store it as metadata."),
 			service.NewInterpolatedStringField(ompFieldAssistantResponse).
-				Description("The LLM's response to classify if it contains safe or unsafe content."),
+				Description("The LLM's response that you want to check for safety (classify as safe or unsafe content)."),
 		).Fields(commonFields()...).
 		Example(
 			"Use Llama Guard 3 classify a LLM response",

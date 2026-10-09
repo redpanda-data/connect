@@ -39,14 +39,14 @@ To use this mechanism locally, the following gcloud commands can be used:
 	gcloud auth application-default set-quota-project <project-id>
 
 Otherwise if using a service account, you can create a JSON key for the service account and set it in the `+"`"+baseFieldCredentialsJSON+"`"+` field.
-In order for a service account to access files in Google Drive either files need to be explicitly shared with the service account email, otherwise https://support.google.com/a/answer/162106[^domain wide delegation] can be used to share all files within a Google Workspace.
+In order for a service account to access files in Google Drive either files need to be explicitly shared with the service account email, otherwise https://support.google.com/a/answer/162106[domain wide delegation^] can be used to share all files within a Google Workspace.
 `, "$SCOPE", scope)
 }
 
 func commonFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(baseFieldCredentialsJSON).
-			Description("A service account credentials JSON file. If left unset then the application default credentials are used.").
+			Description("The JSON key for your service account (optional). If left empty, Application Default Credentials are used.").
 			Optional().
 			Secret(),
 	}

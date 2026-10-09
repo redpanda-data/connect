@@ -102,15 +102,15 @@ func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("0.0.1").
-		Summary("Enables TigerBeetle CDC streaming for Redpanda Connect.").
+		Version("4.65.0").
+		Summary("Streams change data capture (CDC) events from a TigerBeetle cluster.").
 		Description(`Listens to a TigerBeetle cluster and creates a message for each change.
 
 Each message is a JSON object like:
 
 `+fmt.Sprintf("```json\n%s\n```", string(jsonSampleObject))+`
 
-For more information refer to https://docs.tigerbeetle.com/operating/cdc/
+For more information, see the https://docs.tigerbeetle.com/operating/cdc/[TigerBeetle CDC documentation^].
 
 == Metadata
 
@@ -152,13 +152,13 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				 		[ "field '`+fieldAddresses+`' must contain at least one address" ]
 					}`),
 			service.NewStringField(fieldProgressCache).
-				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] "+
+				Description("A xref:components:caches/about.adoc[cache resource] "+
 					"used to track progress by storing the last acknowledged timestamp.\n"+
 					"This allows Redpanda Connect to resume from the latest delivered event "+
 					"upon restart.").
 				ShortDescription("Cache resource tracking progress by storing the last acknowledged timestamp."),
 			service.NewStringField(fieldRateLimit).
-				Description("An optional https://docs.redpanda.com/redpanda-connect/components/rate_limits/about/[rate limit^] "+
+				Description("An optional xref:components:rate_limits/about.adoc[rate limit] "+
 					"to throttle the number of **requests** made to TigerBeetle.").
 				ShortDescription("An optional rate limit resource to throttle requests made to TigerBeetle.").
 				Default(""),
@@ -190,7 +190,7 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 						[ "field '`+fieldTimestampInitial+`' must be a valid integer" ]
 					}`),
 			service.NewIntField(fieldTimeoutSeconds).
-				Description("The timeout in seconds, for querying the TigerBeetle cluster.").
+				Description("The timeout in seconds, for querying the TigerBeetle cluster.").Version("4.82.0").
 				Default(timeoutSecondsDefault).
 				LintRule(`root = if this <= 0 {
 						[ "field '`+fieldTimeoutSeconds+`' must be greater than 0" ]
