@@ -78,7 +78,7 @@ func mustDuration(s string) time.Duration {
 
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
-	Version("4.110.0").
+	Version("4.114.0").
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
