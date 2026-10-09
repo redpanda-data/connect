@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
@@ -229,5 +230,67 @@ func TestCommonToJSONSchemaBigDecimal(t *testing.T) {
 	}
 	for _, s := range []string{"1.5e2", "+1.5", "01", "", "1.2.3"} {
 		assert.False(t, re.MatchString(s), "permissive pattern should NOT match %q", s)
+	}
+}
+
+func TestCommonToJSONSchemaOptionalAllowsNull(t *testing.T) {
+	c := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "id", Type: schema.Int64},
+			{Name: "name", Type: schema.String, Optional: true},
+			{Name: "created_at", Type: schema.Timestamp, Optional: true},
+			{Name: "amount", Type: schema.Decimal, Optional: true, Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 10, Scale: 2}}},
+			{Name: "tags", Type: schema.Array, Optional: true, Children: []schema.Common{{Type: schema.String, Optional: true}}},
+			{Name: "address", Type: schema.Object, Optional: true, Children: []schema.Common{{Name: "city", Type: schema.String}}},
+			{Name: "choice", Type: schema.Union, Optional: true, Children: []schema.Common{{Type: schema.String}, {Type: schema.Int32}}},
+			{Name: "anything", Type: schema.Any, Optional: true},
+			{Name: "nothing", Type: schema.Null, Optional: true},
+		},
+	}
+	got := jsonSchemaUnmarshal(t, c)
+	props := got["properties"].(map[string]any)
+
+	assert.Equal(t, "integer", props["id"].(map[string]any)["type"])
+	assert.Equal(t, []any{"string", "null"}, props["name"].(map[string]any)["type"])
+	assert.Equal(t, []any{"string", "null"}, props["created_at"].(map[string]any)["type"])
+	assert.Equal(t, "date-time", props["created_at"].(map[string]any)["format"])
+	assert.Equal(t, []any{"string", "null"}, props["amount"].(map[string]any)["type"])
+	tags := props["tags"].(map[string]any)
+	assert.Equal(t, []any{"array", "null"}, tags["type"])
+	assert.Equal(t, []any{"string", "null"}, tags["items"].(map[string]any)["type"])
+	assert.Equal(t, []any{"object", "null"}, props["address"].(map[string]any)["type"])
+	assert.Equal(t, []any{
+		map[string]any{"oneOf": []any{map[string]any{"type": "string"}, map[string]any{"type": "integer"}}},
+		map[string]any{"type": "null"},
+	}, props["choice"].(map[string]any)["anyOf"])
+	assert.Empty(t, props["anything"])
+	assert.Equal(t, "null", props["nothing"].(map[string]any)["type"])
+
+	out, err := commonToJSONSchema(c)
+	require.NoError(t, err)
+	sch, err := gojsonschema.NewSchema(gojsonschema.NewStringLoader(out))
+	require.NoError(t, err)
+
+	for _, doc := range []string{
+		`{"id":1,"name":null,"created_at":null,"amount":null,"tags":null,"address":null,"choice":null,"anything":null,"nothing":null}`,
+		`{"id":1,"tags":["a",null]}`,
+		`{"id":1,"name":"x","created_at":"2026-10-09T00:00:00Z","amount":"12.50","tags":["a"],"address":{"city":"c"},"choice":3}`,
+	} {
+		res, err := sch.Validate(gojsonschema.NewStringLoader(doc))
+		require.NoError(t, err)
+		assert.True(t, res.Valid(), "%s: %v", doc, res.Errors())
+	}
+
+	for _, doc := range []string{
+		`{"id":null}`,
+		`{"id":1,"name":5}`,
+		`{"id":1,"amount":"12.5"}`,
+		`{"id":1,"address":{"city":null}}`,
+		`{"id":1,"choice":true}`,
+	} {
+		res, err := sch.Validate(gojsonschema.NewStringLoader(doc))
+		require.NoError(t, err)
+		assert.False(t, res.Valid(), "%s should be rejected", doc)
 	}
 }

@@ -35,7 +35,40 @@ func commonToJSONSchema(c schema.Common) (string, error) {
 	return string(b), nil
 }
 
+// commonToJSONSchemaNode converts c to a JSON Schema node. Optional nodes also
+// accept null, mirroring the ["null", T] union emitted for Avro.
 func commonToJSONSchemaNode(c schema.Common) (map[string]any, error) {
+	m, err := commonToJSONSchemaInner(c)
+	if err != nil {
+		return nil, err
+	}
+	if c.Optional {
+		return jsonSchemaNullable(m), nil
+	}
+	return m, nil
+}
+
+// jsonSchemaNullable returns a node that accepts null in addition to whatever
+// m accepts. A node with a single type gets a type array (["string", "null"]),
+// which keeps type-specific keywords such as format and pattern in place.
+// Nodes without a single type (unions) are wrapped in anyOf. Nodes that already
+// accept null (any, null) are returned unchanged.
+func jsonSchemaNullable(m map[string]any) map[string]any {
+	switch t := m["type"].(type) {
+	case string:
+		if t != "null" {
+			m["type"] = []string{t, "null"}
+		}
+		return m
+	case nil:
+		if len(m) == 0 {
+			return m
+		}
+	}
+	return map[string]any{"anyOf": []any{m, map[string]any{"type": "null"}}}
+}
+
+func commonToJSONSchemaInner(c schema.Common) (map[string]any, error) {
 	switch c.Type {
 	case schema.Object:
 		return commonToJSONSchemaObject(c)
