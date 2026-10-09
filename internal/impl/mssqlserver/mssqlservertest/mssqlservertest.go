@@ -65,9 +65,7 @@ func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string) {
 		@source_name   = '%s',
 		@role_name     = NULL;`, schema, tableName)
 
-	cdcJobsMu.Lock()
 	_, err := db.ExecContext(ctx, query)
-	cdcJobsMu.Unlock()
 	require.NoError(db.T, err)
 
 	// Wait for CDC table to be ready
@@ -194,9 +192,7 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	defer ticker.Stop()
 	deadline := time.Now().Add(2 * time.Minute)
 	for {
-		cdcJobsMu.Lock()
 		_, err := db.Exec(enableCDC)
-		cdcJobsMu.Unlock()
 		if err == nil {
 			break
 		}
@@ -236,10 +232,10 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 
 // cdcJobsMu makes the calls that change the CDC jobs in msdb run one at a time.
 //
-// The CDC jobs are the capture and cleanup SQL Server Agent jobs of each CDC database. The calls that add or remove
-// them are sp_cdc_enable_db, sp_cdc_enable_table, and DROP DATABASE.
-// When parallel tests on the shared container run sp_cdc_enable_table at the same time for different databases,
-// msdb.dbo.sp_add_job deadlocks (error 1205) and the call fails.
+// The CDC jobs are the capture and cleanup SQL Server Agent jobs of each CDC database. openAndEnableCDC adds them, and
+// DROP DATABASE in dropDatabase removes them. When parallel tests on the shared container add jobs at the same time
+// for different databases, msdb.dbo.sp_add_job deadlocks (error 1205) and the call fails. SQL Server also runs these
+// calls one at a time internally, so parallel calls are not faster.
 var cdcJobsMu sync.Mutex
 
 // State of the container that all tests in one test package share. Only sharedContainer writes it.
@@ -444,8 +440,25 @@ func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, db
 			return false
 		}
 
+		// Add the CDC jobs here, before sp_cdc_enable_table needs them. sp_cdc_enable_table adds them with
+		// @start_job = 1, which waits about 3.4s for each job to start. Adding them with @start_job = 0 and then
+		// starting the capture job takes about 1s in total. The cleanup job runs on a daily schedule, so it does not
+		// have to start. The IF guards and the "already running" check make a retry safe. The guards read
+		// msdb.dbo.sysjobs, because msdb.dbo.cdc_jobs does not exist before the first CDC job is added.
 		cdcJobsMu.Lock()
-		_, openErr = db.ExecContext(ctx, "EXEC sys.sp_cdc_enable_db;")
+		_, openErr = db.ExecContext(ctx, `
+			IF (SELECT is_cdc_enabled FROM sys.databases WHERE database_id = DB_ID()) = 0
+				EXEC sys.sp_cdc_enable_db;
+			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_capture')
+				EXEC sys.sp_cdc_add_job @job_type = N'capture', @start_job = 0;
+			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_cleanup')
+				EXEC sys.sp_cdc_add_job @job_type = N'cleanup', @start_job = 0;`)
+		if openErr == nil {
+			_, openErr = db.ExecContext(ctx, "EXEC sys.sp_cdc_start_job @job_type = N'capture';")
+			if openErr != nil && strings.Contains(openErr.Error(), "already running") {
+				openErr = nil
+			}
+		}
 		cdcJobsMu.Unlock()
 		if openErr != nil {
 			lastErr = openErr
