@@ -3,6 +3,29 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.113.0 - 2026-10-09
+
+### Added
+
+- sftp: SFTP credentials now support an advanced opt-in block to enable additional SSH key exchange algorithms, ciphers, and MACs beyond the x/crypto/ssh defaults. ([@rockdatasrl001](https://github.com/rockdatasrl001), [#4906](https://github.com/redpanda-data/connect/pull/4906))
+
+### Fixed
+
+- license: Community binary now correctly reports an enterprise license error when a user configures an enterprise component without a license service, instead of reporting an internal fault. ([@Leward](https://github.com/Leward), [#4899](https://github.com/redpanda-data/connect/pull/4899))
+- oracledb: Oracle CDC now correctly tracks and holds the commit checkpoint below the START of open LOB-only transactions to prevent data loss on restart. ([@josephwoodward](https://github.com/josephwoodward), [#4920](https://github.com/redpanda-data/connect/pull/4920))
+- timeplus: Timeplus output is now properly registered and available in all binaries after being inadvertently dropped during a refactor. ([@Jeffail](https://github.com/Jeffail), [#4907](https://github.com/redpanda-data/connect/pull/4907))
+
+### Changed
+
+- jira: Jira input and processor are now correctly licensed as enterprise components to match their runtime requirements. ([@Jeffail](https://github.com/Jeffail), [#4909](https://github.com/redpanda-data/connect/pull/4909))
+- postgres: Postgres CDC now releases snapshot chunks on the first heartbeat when idle to improve resource management. ([@josephwoodward](https://github.com/josephwoodward), [#4926](https://github.com/redpanda-data/connect/pull/4926))
+
+### Deprecated
+
+- kafka: Kafka and kafka_franz outputs are now marked as deprecated in favor of the redpanda output, matching the earlier deprecation of the corresponding inputs. ([@Jeffail](https://github.com/Jeffail), [#4908](https://github.com/redpanda-data/connect/pull/4908))
+
+
+
 ## 4.112.0 - 2026-10-02
 
 ### Added
