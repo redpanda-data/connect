@@ -80,6 +80,20 @@ End-to-end test for Confluent Platform to Redpanda Serverless migration.
   - Consumer group offsets
   - Message content and ordering
 
+### `TestIntegrationMigratorIncompatibleSubjectDoesNotBlockTopics`
+
+Regression test for CON-530: a schema subject that cannot be registered at the destination must not fail the output connect and block topic migration.
+- Creates source and destination clusters with Schema Registry enabled
+- Registers two incompatible versions of one subject at source (source compatibility set to `NONE`), plus a healthy subject
+- Pre-registers only the first version of that subject at destination, where the default `BACKWARD` compatibility rejects the second version
+- Creates a populated topic (3 messages) and an empty topic at source
+- Starts migrator with a one-shot schema sync (`interval: 0s`, `versions: all`, `translate_ids: true`)
+- Validates:
+  - Both topics are created at destination
+  - All messages are copied in order
+  - The healthy subject is registered at destination
+  - The incompatible version is not registered at destination
+
 ## Soak Test (`integration_soak_test.go`)
 
 ### `TestIntegrationMigratorSoak`
@@ -194,6 +208,150 @@ Tests migration of compatibility mode settings.
 - Syncs to destination registry
 - Validates compatibility mode is preserved
 - Tests various compatibility levels (BACKWARD, FORWARD, FULL, etc.)
+
+### `TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject`
+
+Regression test for CON-530: a subject that cannot be registered at the destination must not abort the sync of the remaining subjects.
+- Registers two incompatible versions of one subject at source (source compatibility set to `NONE`), plus 20 healthy subjects
+- Pre-registers only the first version of that subject at destination, where the default `BACKWARD` compatibility rejects the second version
+- Syncs with `versions: all` and `translate_ids: true`
+- Validates:
+  - Sync returns a partial sync error naming only the incompatible subject version
+  - Every healthy subject is registered at destination
+  - Records encoded with the failed schema are rejected rather than written with the untranslated source ID
+  - A second sync retries the failed subject and reports it failed again
+  - After relaxing the destination subject compatibility to `NONE`, a further sync succeeds and the subject is fully synced
+  - Records encoded with the schema then translate to its destination ID
+
+### `TestIntegrationSchemaRegistryMigratorSyncFailedVersionBlocksLaterVersions`
+
+Verifies a later version of a subject is not synced after an earlier version failed, which would shift destination version numbers.
+- Registers three versions of one subject at source, where v2 is incompatible with v1 and v3 is compatible with v1
+- Pre-registers only v1 at destination under the default `BACKWARD` compatibility
+- Syncs with `versions: all` and `translate_ids: true`
+- Validates:
+  - Sync reports v2 as failed and v3 as skipped
+  - Destination still holds only v1
+
+### `TestIntegrationSchemaRegistryMigratorSyncReadOnlyDestination`
+
+Verifies registry misconfiguration still fails the sync outright, so that it keeps failing the output connect.
+- Registers a subject at source
+- Sets destination registry mode to `READONLY`
+- Syncs with `versions: latest`
+- Validates:
+  - Sync fails with an error that is not a partial sync error
+  - Error reports that the destination must be in `READWRITE or IMPORT` mode
+
+### `TestIntegrationSchemaRegistryMigratorSyncFixedIDCollision`
+
+Verifies that, with fixed IDs, a schema whose source ID already holds a different schema at the destination fails the sync outright, since records copied with that ID would resolve to the wrong schema.
+- Sets source and destination registry mode to `IMPORT`
+- Registers a schema at source with ID 100, and a different schema at destination with ID 100
+- Syncs with `versions: latest` and `translate_ids: false`
+- Validates:
+  - Sync fails with an error that is not a partial sync error
+  - Error suggests enabling `translate_ids`
+
+### `TestIntegrationSchemaRegistryMigratorSyncFailedReferenceBlocksReferrer`
+
+Verifies a schema is not synced when a schema it references failed, which could otherwise bind it to a different schema at the destination.
+- Registers two incompatible versions of a subject at source, and a second subject that references v2
+- Pre-registers v1 and a different, compatible v2 of the referenced subject at destination under the default `BACKWARD` compatibility
+- Syncs with `versions: latest` and `translate_ids: true`
+- Validates:
+  - Sync reports the referenced v2 as failed and the referrer as skipped
+  - The referrer is not registered at destination
+  - Records encoded with the referrer are rejected
+
+### `TestIntegrationSchemaRegistryMigratorSyncLoopRetriesFailedAtZeroInterval`
+
+Verifies that with `interval: 0s` the subjects that failed the initial sync are retried until they sync.
+- Registers two incompatible versions of one subject at source, and pre-registers only v1 at destination under the default `BACKWARD` compatibility
+- Runs an initial sync with `versions: all` and `translate_ids: true`, which partially fails
+- Registers a new subject at source, then starts the sync loop with `interval: 0s`
+- Relaxes the destination subject compatibility to `NONE`
+- Validates:
+  - The failed subject is synced without another explicit sync, and its records translate
+  - The loop stops once nothing is left to retry
+  - The subject added after the initial sync is not migrated
+
+### `TestIntegrationSchemaRegistryMigratorSyncFailedVersionDoesNotBlockEarlierReference`
+
+Verifies that a failed later version of a subject does not block an earlier version that another subject references, nor the referrer.
+- Registers three versions of a subject at source, the third incompatible, and a second subject that references v2
+- Pre-registers v1 at destination under the default `BACKWARD` compatibility, so only v3 is rejected
+- Runs for both `versions: latest` and `versions: all`, with `translate_ids: true` and a single worker, 8 syncs each to cover both subject orders
+- Validates:
+  - Sync reports only v3 as failed
+  - The referenced v2 and the referrer are synced, and their records translate
+  - Records encoded with v3 are rejected
+
+### `TestIntegrationSchemaRegistryMigratorSyncSubjectDeletedAfterListing`
+
+Verifies that a subject deleted at the source after it was listed fails only that subject.
+- Registers two subjects at source, behind a proxy that returns 404 when one of them is fetched
+- Syncs with `versions: latest` and `translate_ids: true`
+- Validates:
+  - Sync completes and reports only the deleted subject as failed
+  - The other subject is synced
+
+### `TestIntegrationSchemaRegistryMigratorSyncLoopSingleRetryLoop`
+
+Verifies that with `interval: 0s` only one retry loop runs, as `SyncLoop` is started on every output connect.
+- Registers a subject at source that the destination rejects, and runs an initial sync that partially fails
+- Starts the sync loop twice
+- Relaxes the destination subject compatibility to `NONE`, then repeats with a second failing subject after the loop stops
+- Validates:
+  - One call returns immediately while the other keeps retrying
+  - The running loop stops once the subject syncs
+  - A later call starts a new loop after the previous one stopped
+
+### `TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureKeepsMapping`
+
+Verifies that a registered schema keeps its ID mapping when syncing its subject compatibility fails.
+- Registers a subject with an explicit `FULL` compatibility at source
+- Puts a proxy in front of the destination that rejects setting the subject compatibility with 422
+- Syncs with `versions: latest` and `translate_ids: true`
+- Validates:
+  - Sync reports only the compatibility sync as failed
+  - Records encoded with the schema translate to its destination ID
+
+### `TestIntegrationSchemaRegistryMigratorSyncVersionsGoneDuringTraversal`
+
+Verifies that a subject whose versions disappear at the source during its traversal fails only that root.
+- Registers a subject with two versions and another subject at source, behind a proxy that returns 404 when the versions of the first are listed
+- Syncs with `versions: all` and `translate_ids: true`
+- Validates:
+  - Sync completes and reports only that root as failed, and it is the only root to retry
+  - The other subject is synced
+
+### `TestIntegrationSchemaRegistryMigratorSyncPrunesFailureDeletedAtSource`
+
+Verifies that a failed schema stops being rejected once the source no longer has it.
+- Registers two incompatible versions of a subject at source, and pre-registers only v1 at destination under the default `BACKWARD` compatibility
+- Syncs with `versions: all` and `translate_ids: true`, then soft-deletes v2 at source and syncs again
+- Validates:
+  - Records encoded with v2 are rejected after the first sync
+  - After the second sync, v2's ID is handled as an unknown ID and no subject is left to retry
+
+### `TestIntegrationSchemaRegistryMigratorSyncKeepsFailureStillAtSource`
+
+Verifies that a failed schema that no sync visits any more stays rejected while the source still has it.
+- Registers a subject whose v1 the destination rejects, and a second subject that references v1
+- Syncs with `versions: latest` and `translate_ids: true`, then deletes the referrer at source and syncs again
+- Validates:
+  - Records encoded with the referenced v1 are still rejected
+  - Records encoded with the deleted referrer are no longer rejected
+
+### `TestIntegrationSchemaRegistryMigratorSyncRetryKeepsOtherFailedRoots`
+
+Verifies that a retry of some failed roots keeps the failed roots outside it.
+- Registers two subjects that the destination rejects, and runs a full sync that fails both
+- Retries one subject, then relaxes its destination compatibility and retries it again
+- Validates:
+  - Both subjects are still to retry after the first retry
+  - Only the other subject is left to retry once the retried one syncs
 
 ## Schema Registry Fan-out Test (`migrator_schema_registry_fanout_integration_test.go`)
 
