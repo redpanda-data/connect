@@ -9,11 +9,15 @@
 package sqlredo
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
+	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -301,9 +305,48 @@ func pkMatches(data map[string]any, pkValues map[string]any) bool {
 		if !ok {
 			return false
 		}
-		if fmt.Sprintf("%v", dataVal) != fmt.Sprintf("%v", pkVal) {
+		if !valuesEqual(dataVal, pkVal) {
 			return false
 		}
 	}
 	return true
+}
+
+// valuesEqual reports whether a and b format identically with %v. Common
+// same-typed values are compared directly to avoid the allocations of
+// formatting, since nearly all PK comparisons are mismatches.
+func valuesEqual(a, b any) bool {
+	switch x := a.(type) {
+	case string:
+		if y, ok := b.(string); ok {
+			return x == y
+		}
+	case int64:
+		if y, ok := b.(int64); ok {
+			return x == y
+		}
+	case json.Number:
+		if y, ok := b.(json.Number); ok {
+			return x == y
+		}
+	case []byte:
+		if y, ok := b.([]byte); ok {
+			return bytes.Equal(x, y)
+		}
+	case time.Time:
+		// Different instants in the same location always print differently,
+		// and identical values print identically. Equal instants that are not
+		// identical (e.g. a monotonic reading) fall through.
+		if y, ok := b.(time.Time); ok && x.Location() == y.Location() {
+			if !x.Equal(y) {
+				return false
+			}
+			// DeepEqual compares every field, monotonic reading included,
+			// as == would, without tripping the time-equal lint.
+			if reflect.DeepEqual(a, b) {
+				return true
+			}
+		}
+	}
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 }
