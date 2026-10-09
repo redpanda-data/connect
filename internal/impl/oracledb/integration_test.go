@@ -266,11 +266,18 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
 
 	// Insert 2000 rows across tables for initial snapshot streaming
-	want := 1000
 	for range 1000 {
 		db.MustExec("INSERT INTO " + db.Schema + ".foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
 		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
 	}
+
+	// Query the expected count. Do not assume IDs 1..1000. The identity sequence caches 20 values, and Oracle can
+	// lose that cache under shared pool pressure on the shared container. Then IDs have gaps and more than 500 rows
+	// per table match the filter.
+	var want int
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		"SELECT (SELECT COUNT(*) FROM "+db.Schema+".FOO WHERE ID > 500) + (SELECT COUNT(*) FROM "+db.Schema+".FOO2 WHERE ID > 500) FROM DUAL",
+	).Scan(&want))
 
 	var (
 		batch  oracledbtest.Batch
