@@ -1,6 +1,6 @@
 module github.com/redpanda-data/connect/v4
 
-go 1.26.6
+go 1.26.9
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
@@ -143,7 +143,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.14.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/redpanda-data/benthos/v4 v4.81.0
+	github.com/redpanda-data/benthos/v4 v4.82.0
 	github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
@@ -201,10 +201,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.starlark.net v0.0.0-20260210143700-b62fd896b91b
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.56.0
-	golang.org/x/net v0.58.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/text v0.41.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/net v0.60.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/text v0.42.0
 	google.golang.org/api v0.292.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	modernc.org/sqlite v1.53.0
@@ -544,10 +544,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
-	golang.org/x/mod v0.40.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/term v0.45.0 // indirect
+	golang.org/x/sys v0.48.0
+	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
