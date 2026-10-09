@@ -947,11 +947,11 @@ func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg service.MessageBatch, 
 			break
 		}
 		a.object = nil
+		if closeErr := object.scanner.Close(ctx); closeErr != nil {
+			a.log.Warnf("Failed to close bucket object scanner cleanly: %v", closeErr)
+		}
 		if !errors.Is(err, io.EOF) {
 			return
-		}
-		if err = object.scanner.Close(ctx); err != nil {
-			a.log.Warnf("Failed to close bucket object scanner cleanly: %v", err)
 		}
 		if object.extracted == 0 {
 			a.log.Debugf("Extracted zero messages from key %v", object.target.key)
