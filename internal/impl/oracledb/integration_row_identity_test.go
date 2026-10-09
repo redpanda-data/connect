@@ -24,7 +24,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
 )
 
-// TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange verifies that row changes
+// TestIntegrationOracleDBCDCDistinctRowIdentity verifies that row changes
 // within a transaction produce distinct (rs_id, ssn, row_seq) triples for
 // deduplication and ordering.
 //
@@ -32,7 +32,7 @@ import (
 // rows share rs_id and ssn=0. The connector numbers those rows in row_seq so
 // every change has a distinct triple. The other cases check that row_seq does
 // not break what (rs_id, ssn) already told apart.
-func TestIntegrationOracleDBCDCDistinctRSIDSSNPerRowChange(t *testing.T) {
+func TestIntegrationOracleDBCDCDistinctRowIdentity(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
