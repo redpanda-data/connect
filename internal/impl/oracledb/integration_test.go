@@ -262,14 +262,16 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	// Use explicit IDs, not an identity column. The filters below need IDs 1..1000 with no gaps, and an Oracle
+	// sequence does not guarantee that: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/CREATE-SEQUENCE.html
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
 
 	// Insert 2000 rows across tables for initial snapshot streaming
 	want := 1000
-	for range 1000 {
-		db.MustExec("INSERT INTO " + db.Schema + ".foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
-		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
+	for i := range 1000 {
+		db.MustExec("INSERT INTO "+db.Schema+".foo (id, name, excluded_col) VALUES (:1, 'foo_name', 'should_not_appear')", i+1)
+		db.MustExec("INSERT INTO "+db.Schema+".foo2 (id, name, excluded_col) VALUES (:1, 'foo2_name', 'should_not_appear')", i+1)
 	}
 
 	var (
