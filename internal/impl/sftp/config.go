@@ -75,7 +75,8 @@ func connectionFields() []*service.ConfigField {
 						Optional(),
 				).Description("Additional SSH transport algorithms to permit for compatibility with legacy SFTP servers. Configured algorithms are appended to the default algorithms, which remain preferred, and when unset the defaults are used unchanged. Algorithms the underlying SSH library classifies as insecure weaken transport security and should only be enabled when required by a known server. These settings do not affect host key verification.").
 					Advanced().
-					Optional(),
+					Optional().
+					Version("4.113.0"),
 			}...,
 		).Description("The credentials required to log in to the SFTP server. This can include a username and password, or a private key for secure access.").
 			LintRule(`
