@@ -28,7 +28,7 @@ import (
 )
 
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks").
-	Description("A database <<drivers, driver>> to use.")
+	Description("The database driver to use.")
 
 var dsnField = service.NewStringField("dsn").
 	Description(`A Data Source Name to identify the target database.
