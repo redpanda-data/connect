@@ -1,0 +1,1 @@
+{"name":"gcs","config":{"connector.class":"io.confluent.connect.gcs.GcsSinkConnector","gcs.bucket.name":"bkt","topics":"orders"}}
