@@ -150,8 +150,8 @@ func FranzProducerFields() []*service.ConfigField {
 				Default("all").
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
-				Description("Set an explicit compression type (optional). By default, the client uses `snappy` when the broker supports it, and falls back to `none` if not.").
-				ShortDescription("Explicit compression type. Defaults to snappy when the broker supports it, otherwise none.").
+				Description("The compression codec for produced record batches. If you leave this field unset, batches are compressed with `snappy`. A batch that compression does not make smaller is sent uncompressed, whichever codec you choose.").
+				ShortDescription("Compression codec for produced record batches. If unset, batches use snappy.").
 				Optional().
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
