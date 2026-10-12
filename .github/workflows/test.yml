@@ -166,7 +166,7 @@ jobs:
       id-token: write
       statuses: write
       pull-requests: write
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@fd0b19342ae3cc77b4f2d9e08b28a64be5bca616 # main after #368
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@965018a7e128979b7a02aedac073fed1f67494f7 # fix/preview-no-build, re-pin to main after merge
     with:
       docs_artifact: connect-docs-head
       base_docs_artifact: connect-docs-base
