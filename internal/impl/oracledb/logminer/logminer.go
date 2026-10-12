@@ -1106,6 +1106,12 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			readErr = rows.Err()
 		}
 	}()
+	// On an early return, stop the reader and wait until it has closed rows.
+	defer func() {
+		cancel()
+		for range batches {
+		}
+	}()
 
 	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
 	for batch := range batches {
@@ -1125,8 +1131,6 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 				if csf == 0 {
 					// Final fragment — emit the accumulated event.
 					if err := processEvent(ctx, pending); err != nil {
-						cancel()
-						drainLogMinerBatches(batches)
 						return lastSCN, fmt.Errorf("processing redo event: %w", err)
 					}
 					// The first fragment's SCN, so a retry re-reads the whole statement.
@@ -1144,8 +1148,6 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			}
 
 			if err := processEvent(ctx, event); err != nil {
-				cancel()
-				drainLogMinerBatches(batches)
 				return lastSCN, fmt.Errorf("processing redo event: %w", err)
 			}
 			lastSCN = event.SCN
@@ -1181,12 +1183,6 @@ const (
 type logMinerRow struct {
 	event *sqlredo.RedoEvent
 	csf   int64
-}
-
-// drainLogMinerBatches blocks until the reader has closed rows and exited.
-func drainLogMinerBatches(batches <-chan []logMinerRow) {
-	for range batches {
-	}
 }
 
 // readLogMinerRows scans rows into batches until the result set is exhausted,
