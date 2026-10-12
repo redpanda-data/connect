@@ -15,6 +15,7 @@
 package main
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -39,6 +40,8 @@ func summaryProblem(summary string) string {
 	switch {
 	case s == "":
 		return "is empty"
+	case slices.ContainsFunc(strings.Split(s, "\n"), isConditionalLine):
+		return "has a conditional; Summaries render as one line in catalogs and the :description: attribute"
 	case summaryHasBlocks(s):
 		return "has block content, such as a code fence, a list, or a second paragraph"
 	case strings.Contains(s, "\n"):
@@ -52,6 +55,11 @@ func TestSummaryProblem(t *testing.T) {
 	assert.NotEmpty(t, summaryProblem(""))
 	assert.NotEmpty(t, summaryProblem("Reads messages\nfrom a queue."))
 	assert.NotEmpty(t, summaryProblem("Reads rows like:\n```json\n{}\n```"))
+
+	conditional := "has a conditional; Summaries render as one line in catalogs and the :description: attribute"
+	assert.Equal(t, conditional, summaryProblem("ifndef::env-cloud[]\nReads messages from a queue.\nendif::[]"), "block form")
+	assert.Equal(t, conditional, summaryProblem("Reads messages from a queue.\n\nifndef::env-cloud[]\nSelf-managed only.\nendif::[]"), "block form after the sentence")
+	assert.Equal(t, conditional, summaryProblem("Reads messages from a queue.\nifndef::env-cloud[Self-managed only.]"), "single-line form")
 }
 
 // TestComponentSummariesAreOneLine checks every documented component's

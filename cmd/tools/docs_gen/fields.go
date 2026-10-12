@@ -128,7 +128,7 @@ func renderFieldsSince(fields []fieldSpec, prefix, since string) string {
 		if len(f.AnnotatedOptions) > 0 {
 			b.WriteString("[cols=\"1m,2a\"]\n|===\n|Option |Summary\n\n")
 			for _, o := range f.AnnotatedOptions {
-				b.WriteString("|" + o[0] + "\n|" + o[1] + "\n\n")
+				b.WriteString("|" + o[0] + "\n" + tableCell(o[1]) + "\n\n")
 			}
 			b.WriteString("|===\n\n")
 		}
@@ -153,6 +153,18 @@ func renderFieldsSince(fields []fieldSpec, prefix, since string) string {
 		out.WriteString(b.String())
 	}
 	return out.String()
+}
+
+// tableCell returns content as an AsciiDoc table cell. Content that spans
+// lines or starts with a preprocessor directive goes on the line after the
+// cell bar, so a directive sits at column 0, where Asciidoctor recognises it.
+// The column must have the a (AsciiDoc) style for such content to render as
+// blocks.
+func tableCell(content string) string {
+	if strings.Contains(content, "\n") || isConditionalLine(content) {
+		return "|\n" + content
+	}
+	return "| " + content
 }
 
 // withInterpolationNotice links interpolation functions from the description

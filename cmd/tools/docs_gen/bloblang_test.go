@@ -249,6 +249,22 @@ func TestRenderBloblangSpecParams(t *testing.T) {
 	assert.Contains(t, got, "| `path`\n| `string`\n| A path.\n", "a param with no default stays required")
 	assert.Contains(t, got, "| `extra` (optional)\n")
 
+	assert.Contains(t, got, "[cols=\"1,1,3a\"]\n|===\n| Name | Type | Description\n\n", "the description column has the a style, so block content renders")
+
+	var conditional bloblangSpec
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"name": "read_file", "status": "stable", "description": "Reads a file",
+		"params": {"named": [
+			{"name": "path", "type": "string", "description": "ifndef::env-cloud[]\nA path on the local disk, which Cloud pipelines don't have.\nendif::[]"},
+			{"name": "retries", "type": "int", "description": "How many times to retry.\nZero disables retries.", "default": 0}
+		]}
+	}`), &conditional))
+	got = renderBloblangSpec(conditional, "function")
+	assert.Contains(t, got, "| `path`\n| `string`\n|\nifndef::env-cloud[]\nA path on the local disk, which Cloud pipelines don't have.\nendif::[]\n\n",
+		"a directive starts at column 0 on the line after the cell bar")
+	assert.Contains(t, got, "| `retries` (optional)\n| `int`\n|\nHow many times to retry.\nZero disables retries. Default: `+0+`.\n\n",
+		"multi-line content starts on the line after the cell bar")
+
 	variadic := bloblangSpec{Name: "concat", Status: "stable"}
 	require.NoError(t, json.Unmarshal([]byte(`{"variadic": true}`), &variadic.Params))
 	got = renderBloblangSpec(variadic, "method")

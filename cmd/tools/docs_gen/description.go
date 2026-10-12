@@ -369,9 +369,25 @@ func flattenToAttributeValue(text string) string {
 }
 
 var (
-	summaryBlockLine = regexp.MustCompile("^(?:`{3,}|~{3,}|-{4,}$|={4,}$|\\*{4,}$|\\.{4,}$|\\s*[-*]\\s|\\s*\\d+\\.\\s)")
+	summaryBlockLine = regexp.MustCompile("^(?:`{3,}|~{3,}|-{4,}$|={4,}$|\\*{4,}$|\\.{4,}$|\\s*[-*]\\s|\\s*\\d+\\.\\s|(?:ifdef|ifndef|ifeval|endif)::)")
 	sentenceEnd      = regexp.MustCompile(`[.!?](?:\s|$)`)
+
+	// conditionalLine matches any preprocessor conditional directive, in the
+	// block form (ifndef::env-cloud[] ... endif::[]) or the single-line form
+	// (ifndef::env-cloud[text]).
+	conditionalLine = regexp.MustCompile(`^(?:ifdef|ifndef|ifeval|endif)::`)
+	// blockConditionalOpen matches the directives that open a block
+	// conditional, which runs until its endif::[]. ifdef and ifndef open one
+	// only when their brackets are empty; the single-line form, with text in
+	// the brackets, has no matching endif.
+	blockConditionalOpen = regexp.MustCompile(`^(?:ifn?def::[^\[]*\[\]|ifeval::\[.*\])\s*$`)
 )
+
+// isConditionalLine reports whether text starts with a preprocessor
+// conditional directive.
+func isConditionalLine(text string) bool {
+	return conditionalLine.MatchString(text)
+}
 
 // summaryHasBlocks reports whether a summary holds block content, such as a
 // code fence, a delimited block, a list, or a second paragraph. A summary like
@@ -414,7 +430,9 @@ func metaSummary(summary string) string {
 // paragraph with such a link renders as is outside Cloud, and in Cloud with
 // those links replaced by their text. excluded reports whether the component
 // at <typeDir>/<name> is a documented component that Cloud doesn't include.
-// Paragraphs already inside an env-cloud conditional are left alone.
+// Paragraphs inside an ifndef::env-cloud[] block never render in Cloud, so
+// they are left alone. Paragraphs inside an ifdef::env-cloud[] block render
+// only in Cloud, so their links are replaced in place.
 func cloudGuardXrefs(body string, excluded func(typeDir, name string) bool) string {
 	unlink := func(text string) (string, bool) {
 		changed := false
@@ -432,7 +450,9 @@ func cloudGuardXrefs(body string, excluded func(typeDir, name string) bool) stri
 		return out, changed
 	}
 	var out, para, cloudPara []string
-	depth := 0
+	// open holds the block conditionals enclosing the current line, outermost
+	// first. Single-line conditionals have no endif, so they aren't tracked.
+	var open []string
 	needsGuard := false
 	flush := func() {
 		if needsGuard {
@@ -456,21 +476,27 @@ func cloudGuardXrefs(body string, excluded func(typeDir, name string) bool) stri
 			flush()
 			out = append(out, text)
 			continue
-		case strings.HasPrefix(text, "ifdef::") || strings.HasPrefix(text, "ifndef::"):
+		case blockConditionalOpen.MatchString(text):
 			flush()
-			depth++
+			open = append(open, strings.TrimSpace(text))
 			out = append(out, text)
 			continue
 		case strings.HasPrefix(text, "endif::"):
 			flush()
-			if depth > 0 {
-				depth--
+			if len(open) > 0 {
+				open = open[:len(open)-1]
 			}
 			out = append(out, text)
 			continue
 		}
 		cloudText := text
-		if depth == 0 {
+		switch {
+		case slices.Contains(open, "ifndef::env-cloud[]") || strings.HasPrefix(text, "ifndef::env-cloud["):
+			// Never rendered in Cloud.
+		case slices.Contains(open, "ifdef::env-cloud[]"):
+			text, _ = unlink(text)
+			cloudText = text
+		default:
 			var changed bool
 			if cloudText, changed = unlink(text); changed {
 				needsGuard = true
