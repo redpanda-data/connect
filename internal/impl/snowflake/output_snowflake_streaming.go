@@ -82,6 +82,8 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 		Description(`
 For more information, see the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-overview[Snowpipe Streaming classic architecture^] documentation. This output doesn't work with the Snowpipe Streaming high-performance architecture.
 
+[#supported-data-formats-for-snowflake-columns]
+.Supported data formats for Snowflake columns
 [%header,format=dsv]
 |===
 Snowflake column type:Allowed format in Redpanda Connect
