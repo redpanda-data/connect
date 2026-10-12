@@ -31,11 +31,29 @@ import (
 
 const connectorListPath = "/etc/redpanda/connector_list.yaml"
 
+// docsComponentURLs are the docs site components that Connect doc strings link
+// to with component-qualified xrefs.
+var docsComponentURLs = map[string]string{
+	"streaming":           "https://docs.redpanda.com/streaming",
+	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
+	"connect":             "https://docs.redpanda.com/connect",
+}
+
+// CloudDocsOpts makes doc strings rendered as Markdown resolve for Redpanda
+// Cloud: text marked ifndef::env-cloud[] is dropped, and links go to the Cloud
+// copy of the Connect docs.
+func CloudDocsOpts() []service.CLIOptFunc {
+	return []service.CLIOptFunc{
+		service.CLIOptSetDocsAttributes("env-cloud"),
+		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/cloud-data-platform/develop/connect"),
+	}
+}
+
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
-func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
+func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, extraOpts ...service.CLIOptFunc) {
 	instanceID := xid.New().String()
 
 	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
@@ -73,7 +91,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
 
-	opts = append(opts,
+	opts := append([]service.CLIOptFunc{},
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
@@ -93,7 +111,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
+		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/connect"),
+		service.CLIOptSetDocsComponentURLs(docsComponentURLs),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return schema
 		}),
@@ -242,7 +261,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptAddCommand(pluginInit()),
 	)
 
-	exitCode, err := service.RunCLIToCode(context.Background(), opts...)
+	exitCode, err := service.RunCLIToCode(context.Background(), append(opts, extraOpts...)...)
 	if err != nil {
 		slog.New(rpMgr.SlogHandler()).With("status", exitCode, "error", err).Error("Pipeline exited with non-zero status")
 		if fbLogger != nil {
