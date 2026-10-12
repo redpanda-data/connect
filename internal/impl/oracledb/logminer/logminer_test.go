@@ -1060,7 +1060,7 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 	t.Run("ordering across batches", func(t *testing.T) {
 		// Not a multiple of the batch size; CSF pairs straddle batch boundaries.
 		total := logMinerReadBatchSize*(logMinerReadAheadBatches+3) + 1
-		lm, conn := newRowsMiner(t, &rowsDriver{total: total, csfEvery: 1})
+		lm, conn := newRowsMiner(t, &rowsSpec{total: total, csfEvery: 1})
 
 		var got []string
 		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
@@ -1078,7 +1078,7 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 	})
 
 	t.Run("process error stops reader", func(t *testing.T) {
-		d := &rowsDriver{total: 100000}
+		d := &rowsSpec{total: 100000}
 		lm, conn := newRowsMiner(t, d)
 
 		boom := errors.New("boom")
@@ -1096,7 +1096,7 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 	})
 
 	t.Run("fetch error unchanged", func(t *testing.T) {
-		d := &rowsDriver{total: 100000, failAt: logMinerReadBatchSize + 7}
+		d := &rowsSpec{total: 100000, failAt: logMinerReadBatchSize + 7}
 		lm, conn := newRowsMiner(t, d)
 
 		var n int
@@ -1111,7 +1111,7 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 	})
 
 	t.Run("context cancel", func(t *testing.T) {
-		d := &rowsDriver{total: 1 << 30}
+		d := &rowsSpec{total: 1 << 30}
 		lm, conn := newRowsMiner(t, d)
 
 		ctx, cancel := context.WithCancel(t.Context())
@@ -1125,24 +1125,17 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 	})
 }
 
-type rowsDriver struct {
+type rowsSpec struct {
 	total    int
 	csfEvery int // when > 0, rows (1,2), (3,4), ... are 2-fragment statements
 	failAt   int // Next returns errFetch after this many rows when > 0
-	closed   *atomic.Bool
+	closed   atomic.Bool
 }
 
-func newRowsMiner(t *testing.T, d *rowsDriver) (*LogMiner, *sql.Conn) {
+func newRowsMiner(t *testing.T, d *rowsSpec) (*LogMiner, *sql.Conn) {
 	t.Helper()
-	d.closed = new(atomic.Bool)
-	name := fmt.Sprintf("rowsdriver_%d", fakeDriverSeq.Add(1))
-	sql.Register(name, d)
-	db, err := sql.Open(name, "")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	conn, err := db.Conn(t.Context())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
+	conn, fc := newFakeSQLConn(t, nil)
+	fc.contentRows = func() driver.Rows { return &genRows{d: d} }
 
 	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, NewDefaultConfig(), nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 	return lm, conn
@@ -1150,28 +1143,10 @@ func newRowsMiner(t *testing.T, d *rowsDriver) (*LogMiner, *sql.Conn) {
 
 var errFetch = errors.New("fetch failed")
 
-func (d *rowsDriver) Open(string) (driver.Conn, error) { return &rowsConn{d: d}, nil }
-
-type rowsConn struct{ d *rowsDriver }
-
-func (c *rowsConn) Prepare(string) (driver.Stmt, error) { return &rowsStmt{d: c.d}, nil }
-func (*rowsConn) Close() error                          { return nil }
-func (*rowsConn) Begin() (driver.Tx, error)             { return nil, errors.New("unsupported") }
-
-type rowsStmt struct{ d *rowsDriver }
-
-func (*rowsStmt) NumInput() int                               { return -1 }
-func (*rowsStmt) Close() error                                { return nil }
-func (*rowsStmt) Exec([]driver.Value) (driver.Result, error)  { return nil, errors.New("unsupported") }
-func (s *rowsStmt) Query([]driver.Value) (driver.Rows, error) { return &genRows{d: s.d}, nil }
-
 type genRows struct {
-	d *rowsDriver
+	fakeContentRows
+	d *rowsSpec
 	n int
-}
-
-func (*genRows) Columns() []string {
-	return []string{"SCN", "SQL_REDO", "OPERATION_CODE", "TABLE_NAME", "SEG_OWNER", "TIMESTAMP", "XID", "COMMIT_SCN", "CSF", "USERNAME", "RS_ID", "SSN"}
 }
 
 func (r *genRows) Close() error { r.d.closed.Store(true); return nil }
