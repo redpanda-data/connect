@@ -1090,21 +1090,21 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN) //nolint:rowserrcheck // checked by the reader goroutine
+	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN) //nolint:rowserrcheck
 	if err != nil {
 		return lastSCN, fmt.Errorf("querying logminer: %w", err)
 	}
 
 	// The reader owns rows and closes it before closing batches, so once
 	// batches is drained or closed the cursor is released.
-	batches := make(chan []logMinerRow, logMinerReadAheadBatches)
-	var readErr error // written by the reader before close(batches)
+	var (
+		batches = make(chan []logMinerRow, logMinerReadAheadBatches)
+		readErr error
+	)
 	go func() {
 		defer close(batches)
 		defer rows.Close()
-		if readErr = lm.readLogMinerRows(ctx, rows, batches, queryStart, startSCN, endSCN); readErr == nil {
-			readErr = rows.Err()
-		}
+		readErr = lm.readLogMinerRows(ctx, rows, batches, queryStart, startSCN, endSCN)
 	}()
 	// On an early return, stop the reader and wait until it has closed rows.
 	defer func() {
@@ -1156,7 +1156,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 
 	// batches is closed, so the reader has finished writing readErr.
 	if readErr != nil {
-		return lastSCN, readErr
+		return lastSCN, fmt.Errorf("reading rows from logminer: %w", readErr)
 	}
 
 	// Flush any incomplete pending event (shouldn't happen in practice).
@@ -1186,7 +1186,7 @@ type logMinerRow struct {
 }
 
 // readLogMinerRows scans rows into batches until the result set is exhausted,
-// an error occurs or ctx is cancelled. The caller checks rows.Err. Rows scanned before an error are still
+// an error occurs or ctx is cancelled. Rows scanned before an error are still
 // sent so the consumer processes everything preceding the failure.
 func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batches chan<- []logMinerRow, queryStart time.Time, startSCN, endSCN uint64) error {
 	var (
@@ -1256,7 +1256,7 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 		lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
 		lm.log.Debugf("LogMiner query returned no rows after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
 	}
-	return nil
+	return rows.Err()
 }
 
 const (
