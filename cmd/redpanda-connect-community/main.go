@@ -16,9 +16,9 @@ package main
 
 import (
 	"context"
-	"github.com/redpanda-data/connect/v4/public/schema"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/public/schema"
 
 	_ "github.com/redpanda-data/connect/public/bundle/free/v4"
 )
