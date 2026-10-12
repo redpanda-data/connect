@@ -38,7 +38,9 @@ const (
 // to with component-qualified xrefs, such as xref:streaming:manage:x.adoc[],
 // to their base URLs.
 var DocsComponentURLs = map[string]string{
-	"streaming":           "https://docs.redpanda.com/streaming",
+	// Version-less streaming URLs redirect to the current version; link there
+	// directly.
+	"streaming":           "https://docs.redpanda.com/streaming/current",
 	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
 	"connect":             DocumentationURL,
 }
