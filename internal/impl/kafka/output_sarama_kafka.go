@@ -68,6 +68,8 @@ func OSKConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
 		Description(`
+Use the xref:components:outputs/redpanda.adoc[`+"`redpanda` output"+`] instead.
+
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
 Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].

@@ -86,6 +86,8 @@ func iskConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Connects to Kafka brokers and consumes one or more topics.`).
 		Description(`
+Use the xref:components:inputs/redpanda.adoc[`+"`redpanda` input"+`] instead.
+
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
 The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
