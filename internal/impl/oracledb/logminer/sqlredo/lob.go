@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -334,18 +333,8 @@ func valuesEqual(a, b any) bool {
 			return bytes.Equal(x, y)
 		}
 	case time.Time:
-		// Different instants in the same location always print differently,
-		// and identical values print identically. Equal instants that are not
-		// identical (e.g. a monotonic reading) fall through.
 		if y, ok := b.(time.Time); ok && x.Location() == y.Location() {
-			if !x.Equal(y) {
-				return false
-			}
-			// DeepEqual compares every field, monotonic reading included,
-			// as == would, without tripping the time-equal lint.
-			if reflect.DeepEqual(a, b) {
-				return true
-			}
+			return x == y //nolint:staticcheck // Equal ignores the monotonic reading, which %v prints
 		}
 	}
 	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
