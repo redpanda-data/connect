@@ -27,25 +27,26 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
+	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
 const connectorListPath = "/etc/redpanda/connector_list.yaml"
 
-// docsComponentURLs are the docs site components that Connect doc strings link
-// to with component-qualified xrefs.
-var docsComponentURLs = map[string]string{
-	"streaming":           "https://docs.redpanda.com/streaming",
-	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
-	"connect":             "https://docs.redpanda.com/connect",
+// DocsOpts points the CLI at the self-managed Connect docs: the help footer
+// and the links in doc strings rendered as Markdown. Which conditional text
+// readers see is not decided here but by the attributes the distribution's
+// schema declares (see public/schema).
+func DocsOpts() []service.CLIOptFunc {
+	return []service.CLIOptFunc{
+		service.CLIOptSetDocumentationURL(schema.DocumentationURL),
+		service.CLIOptSetDocsComponentURLs(schema.DocsComponentURLs),
+	}
 }
 
-// CloudDocsOpts makes doc strings rendered as Markdown resolve for Redpanda
-// Cloud: text marked ifndef::env-cloud[] is dropped, and links go to the Cloud
-// copy of the Connect docs.
+// CloudDocsOpts points the CLI at the Cloud copy of the Connect docs instead.
 func CloudDocsOpts() []service.CLIOptFunc {
 	return []service.CLIOptFunc{
-		service.CLIOptSetDocsAttributes("env-cloud"),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/cloud-data-platform/develop/connect"),
+		service.CLIOptSetDocumentationURL(schema.CloudDocumentationURL),
 	}
 }
 
@@ -91,7 +92,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
 
-	opts := append([]service.CLIOptFunc{},
+	opts := append(DocsOpts(),
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
@@ -111,8 +112,6 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/connect"),
-		service.CLIOptSetDocsComponentURLs(docsComponentURLs),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return schema
 		}),

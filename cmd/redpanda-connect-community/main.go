@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"github.com/redpanda-data/connect/v4/public/schema"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -53,6 +54,7 @@ func main() {
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
+		service.CLIOptSetDocumentationURL(schema.DocumentationURL),
+		service.CLIOptSetDocsComponentURLs(schema.DocsComponentURLs),
 	)
 }

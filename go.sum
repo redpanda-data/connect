@@ -1547,6 +1547,10 @@ github.com/redpanda-data/benthos/v4 v4.82.0 h1:1ZNrVhPQPkl6fIuT6NnF073d+nj5Ts7eL
 github.com/redpanda-data/benthos/v4 v4.82.0/go.mod h1:YsJ1iRaygMHHMNDXWE3hobDvDTF7Jco80g6HrzCLdAw=
 github.com/redpanda-data/benthos/v4 v4.82.1-0.20261012100231-d93f6a6a2fa1 h1:90zf+ho7kbkpTr7jAFW3AYGOACY9VJ8NzGtp2MaYwu8=
 github.com/redpanda-data/benthos/v4 v4.82.1-0.20261012100231-d93f6a6a2fa1/go.mod h1:YsJ1iRaygMHHMNDXWE3hobDvDTF7Jco80g6HrzCLdAw=
+github.com/redpanda-data/benthos/v4 v4.82.1-0.20261012110540-2c2a0deb5cb8 h1:wl7BUXtzl5I1beB2h7V4ztxKox8K28t8qikT9vrmQoU=
+github.com/redpanda-data/benthos/v4 v4.82.1-0.20261012110540-2c2a0deb5cb8/go.mod h1:YsJ1iRaygMHHMNDXWE3hobDvDTF7Jco80g6HrzCLdAw=
+github.com/redpanda-data/benthos/v4 v4.82.1-0.20261012111059-012ba8d05126 h1:+Vi7VxsBoW0luPfpuifChLL+3EKWfJN53uTB5ZgVKHg=
+github.com/redpanda-data/benthos/v4 v4.82.1-0.20261012111059-012ba8d05126/go.mod h1:YsJ1iRaygMHHMNDXWE3hobDvDTF7Jco80g6HrzCLdAw=
 github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8 h1:hZTIp81OUDNOTCTD0gM01b1t821pDbToU9jWnZRnd/E=
 github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8/go.mod h1:sHhzCYf64ZYUBi7snbopQl+wQaKySbFsKCvGhmSckhk=
 github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0 h1:xL2THs63tUTZmTiBfBm/mrjFMrwQaHKduvgQ6gIizXg=
