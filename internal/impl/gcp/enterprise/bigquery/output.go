@@ -129,7 +129,7 @@ The exactly-once guarantee of `+"`pending_stream`"+` is "exactly-once within a s
 
 == CDC migration
 
-When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode, see the xref:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
+When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode, see the xref:components:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
 `).
 		Fields(
 			service.NewStringField(bqwaFieldProject).
