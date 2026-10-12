@@ -1236,14 +1236,14 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 		}
 
 		if err := emit(event); err != nil {
-			return err
+			return fmt.Errorf("emitting redo events: %w", err)
 		}
 	}
 
 	if err := rows.Err(); err != nil {
 		// Drop any incomplete pending statement; flush what is complete.
 		if ferr := flush(); ferr != nil {
-			return ferr
+			return fmt.Errorf("flushing redo events: %w", ferr)
 		}
 		return err
 	}
@@ -1252,11 +1252,11 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 	if pending != nil {
 		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
 		if err := emit(pending); err != nil {
-			return err
+			return fmt.Errorf("emitting pending redo events: %w", err)
 		}
 	}
 	if err := flush(); err != nil {
-		return err
+		return fmt.Errorf("flushing redo events: %w", err)
 	}
 	// capture timings if 0 rows
 	if firstRow {
