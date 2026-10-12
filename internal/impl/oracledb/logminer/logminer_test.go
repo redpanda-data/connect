@@ -1173,3 +1173,21 @@ func (r *genRows) Next(dest []driver.Value) error {
 	copy(dest, []driver.Value{scn, sqlText, int64(1), "T", "S", time.Now(), []byte("xidxidxi"), nil, csf, "u", nil, nil})
 	return nil
 }
+
+func TestReadAheadBatches(t *testing.T) {
+	for _, tt := range []struct {
+		prefetchRows int
+		want         int
+	}{
+		{0, 4},
+		{500, 4},
+		{1000, 4},
+		{2000, 4},
+		{2001, 5},
+		{10000, 20},
+	} {
+		t.Run(fmt.Sprint(tt.prefetchRows), func(t *testing.T) {
+			assert.Equal(t, tt.want, readAheadBatches(tt.prefetchRows))
+		})
+	}
+}

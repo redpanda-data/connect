@@ -1098,7 +1098,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	// The reader owns rows and closes it before closing batches, so once
 	// batches is drained or closed the cursor is released.
 	var (
-		batches = make(chan []logMinerRow, logMinerReadAheadBatches)
+		batches = make(chan []logMinerRow, readAheadBatches(lm.cfg.PrefetchRows))
 		readErr error
 	)
 	go func() {
@@ -1174,11 +1174,17 @@ const (
 	// logMinerReadBatchSize is the number of scanned rows sent per channel
 	// operation, which keeps channel overhead negligible.
 	logMinerReadBatchSize = 500
-	// logMinerReadAheadBatches bounds buffering to 2000 rows (up to 4 KB of
-	// SQL_REDO each), enough to overlap the next fetch with processing without
-	// letting memory grow when processing is the bottleneck.
+	// logMinerReadAheadBatches is the minimum read-ahead (2000 rows). See
+	// readAheadBatches; memory grows with prefetch_rows, up to 4 KB per row.
 	logMinerReadAheadBatches = 4
 )
+
+// readAheadBatches returns the read-ahead channel capacity, large enough to
+// buffer one whole fetch so the next round trip overlaps with processing.
+func readAheadBatches(prefetchRows int) int {
+	fetchBatches := (prefetchRows + logMinerReadBatchSize - 1) / logMinerReadBatchSize
+	return max(logMinerReadAheadBatches, fetchBatches)
+}
 
 type logMinerRow struct {
 	event *sqlredo.RedoEvent
