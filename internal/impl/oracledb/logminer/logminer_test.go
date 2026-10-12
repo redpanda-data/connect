@@ -1077,6 +1077,41 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 		assert.Equal(t, uint64(total-1), last)
 	})
 
+	t.Run("incomplete CSF statement at end of results", func(t *testing.T) {
+		// Rows: r0 plain, (r1,r2) joined, r3 is a dangling first fragment.
+		lm, conn := newRowsMiner(t, &rowsSpec{total: 4, csfEvery: 1})
+
+		var (
+			got  []string
+			scns []uint64
+		)
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			scns = append(scns, ev.SCN)
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"r0", "r1-ar2-b", "r3-a"}, got)
+		assert.Equal(t, []uint64{1, 2, 4}, scns)
+		assert.Equal(t, uint64(4), last)
+	})
+
+	t.Run("fetch error mid CSF statement", func(t *testing.T) {
+		// Rows 0..3 are scanned; r3 starts a statement that never completes.
+		d := &rowsSpec{total: 100, csfEvery: 1, failAt: 4}
+		lm, conn := newRowsMiner(t, d)
+
+		var got []string
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			return nil
+		})
+		require.ErrorIs(t, err, errFetch)
+		assert.Equal(t, []string{"r0", "r1-ar2-b"}, got, "incomplete statement must be dropped")
+		assert.Equal(t, uint64(2), last)
+		assert.True(t, d.closed.Load())
+	})
+
 	t.Run("process error stops reader", func(t *testing.T) {
 		d := &rowsSpec{total: 100000}
 		lm, conn := newRowsMiner(t, d)

@@ -334,7 +334,7 @@ func valuesEqual(a, b any) bool {
 		}
 	case time.Time:
 		if y, ok := b.(time.Time); ok && x.Location() == y.Location() {
-			return x == y //nolint:staticcheck // Equal ignores the monotonic reading, which %v prints
+			return x == y //nolint:staticcheck,revive // Equal ignores the monotonic reading, which %v prints
 		}
 	}
 	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
