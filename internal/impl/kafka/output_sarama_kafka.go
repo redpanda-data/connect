@@ -88,7 +88,7 @@ However, this also means that manual intervention will eventually be required in
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tls-enabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			saramaAddressesField(oskFieldAddresses),
 			service.NewTLSToggledField(oskFieldTLS),

@@ -122,7 +122,7 @@ By default messages of a topic partition can be processed in parallel, up to a l
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tls-enabled, enabled TLS>> if applicable.`).
 		Fields(
 			saramaAddressesField(iskFieldAddresses),
 			service.NewStringListField(iskFieldTopics).
