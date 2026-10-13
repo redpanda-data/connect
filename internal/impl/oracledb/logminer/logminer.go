@@ -674,10 +674,10 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
-			commit := commitInfo{
-				scn:           replication.SCN(redoEvent.SCN),
-				checkpointSCN: replication.SCN(safeCheckpointSCN),
-				timestamp:     redoEvent.Timestamp,
+			txnFields := txnEventFields{
+				scn:             replication.SCN(redoEvent.SCN),
+				checkpointSCN:   replication.SCN(safeCheckpointSCN),
+				commitTimestamp: redoEvent.Timestamp,
 			}
 			var rowSeqs rowSeqCounter
 			for _, dmlEvent := range txn.Events {
@@ -701,7 +701,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 					lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s", dmlEvent.Schema, dmlEvent.Table)
 					continue
 				}
-				msg := toMessageEvent(dmlEvent, commit, rowSeqs.next(dmlEvent))
+				msg := toMessageEvent(dmlEvent, txnFields, rowSeqs.next(dmlEvent))
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -1432,9 +1432,10 @@ func (c *rowSeqCounter) next(ev *sqlredo.DMLEvent) int {
 	return c.seq
 }
 
-// commitInfo describes the COMMIT of one transaction. toMessageEvent copies it
-// into every event of the transaction that is published.
-type commitInfo struct {
+// txnEventFields holds the MessageEvent fields that are the same for every
+// event of one committed transaction. processRedoEvent builds it once per
+// COMMIT, and toMessageEvent copies it into each published event.
+type txnEventFields struct {
 	// scn is the SCN of the COMMIT redo row. It is the scn metadata of each
 	// event of the transaction.
 	scn replication.SCN
@@ -1448,12 +1449,13 @@ type commitInfo struct {
 	// transactions count.
 	checkpointSCN replication.SCN
 
-	// timestamp is the time of the COMMIT redo row (V$LOGMNR_CONTENTS.TIMESTAMP,
-	// not COMMIT_TIMESTAMP). It is the commit_ts_ms metadata.
-	timestamp time.Time
+	// commitTimestamp is the time of the COMMIT redo row
+	// (V$LOGMNR_CONTENTS.TIMESTAMP, not COMMIT_TIMESTAMP). It is the
+	// commit_ts_ms metadata.
+	commitTimestamp time.Time
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, commit commitInfo, rowSeq int) *replication.MessageEvent {
+func toMessageEvent(dml *sqlredo.DMLEvent, txnFields txnEventFields, rowSeq int) *replication.MessageEvent {
 	var data map[string]any
 	switch dml.Operation {
 	case sqlredo.OpDelete:
@@ -1469,14 +1471,14 @@ func toMessageEvent(dml *sqlredo.DMLEvent, commit commitInfo, rowSeq int) *repli
 	}
 
 	m := &replication.MessageEvent{
-		SCN:             commit.scn,
-		CheckpointSCN:   commit.checkpointSCN,
+		SCN:             txnFields.scn,
+		CheckpointSCN:   txnFields.checkpointSCN,
 		Schema:          dml.Schema,
 		Table:           dml.Table,
 		Data:            data,
 		Timestamp:       dml.Timestamp,
 		TransactionID:   dml.TransactionID.String(),
-		CommitTimestamp: commit.timestamp,
+		CommitTimestamp: txnFields.commitTimestamp,
 		Username:        dml.Username,
 		RSID:            dml.RSID,
 		SSN:             dml.SSN,
