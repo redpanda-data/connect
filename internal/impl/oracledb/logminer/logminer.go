@@ -675,9 +675,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 
 			commit := commitInfo{
-				SCN:           replication.SCN(redoEvent.SCN),
-				CheckpointSCN: replication.SCN(safeCheckpointSCN),
-				Timestamp:     redoEvent.Timestamp,
+				scn:           replication.SCN(redoEvent.SCN),
+				checkpointSCN: replication.SCN(safeCheckpointSCN),
+				timestamp:     redoEvent.Timestamp,
 			}
 			var rowSeqs rowSeqCounter
 			for _, dmlEvent := range txn.Events {
@@ -1435,22 +1435,22 @@ func (c *rowSeqCounter) next(ev *sqlredo.DMLEvent) int {
 // commitInfo describes the COMMIT of one transaction. toMessageEvent copies it
 // into every event of the transaction that is published.
 type commitInfo struct {
-	// SCN is the SCN of the COMMIT redo row. It is the scn metadata of each
+	// scn is the SCN of the COMMIT redo row. It is the scn metadata of each
 	// event of the transaction.
-	SCN replication.SCN
+	scn replication.SCN
 
-	// CheckpointSCN is the SCN to checkpoint after the events of this
+	// checkpointSCN is the SCN to checkpoint after the events of this
 	// transaction are acked. It is the checkpoint_scn metadata.
 	//
-	// It is SCN when no other transaction is open. Otherwise it is one below the
+	// It is scn when no other transaction is open. Otherwise it is one below the
 	// start SCN of the oldest open transaction, so a restart reads that
 	// transaction again. TransactionCache.LowWatermarkSCN tells which open
 	// transactions count.
-	CheckpointSCN replication.SCN
+	checkpointSCN replication.SCN
 
-	// Timestamp is the time of the COMMIT redo row (V$LOGMNR_CONTENTS.TIMESTAMP,
+	// timestamp is the time of the COMMIT redo row (V$LOGMNR_CONTENTS.TIMESTAMP,
 	// not COMMIT_TIMESTAMP). It is the commit_ts_ms metadata.
-	Timestamp time.Time
+	timestamp time.Time
 }
 
 func toMessageEvent(dml *sqlredo.DMLEvent, commit commitInfo, rowSeq int) *replication.MessageEvent {
@@ -1469,14 +1469,14 @@ func toMessageEvent(dml *sqlredo.DMLEvent, commit commitInfo, rowSeq int) *repli
 	}
 
 	m := &replication.MessageEvent{
-		SCN:             commit.SCN,
-		CheckpointSCN:   commit.CheckpointSCN,
+		SCN:             commit.scn,
+		CheckpointSCN:   commit.checkpointSCN,
 		Schema:          dml.Schema,
 		Table:           dml.Table,
 		Data:            data,
 		Timestamp:       dml.Timestamp,
 		TransactionID:   dml.TransactionID.String(),
-		CommitTimestamp: commit.Timestamp,
+		CommitTimestamp: commit.timestamp,
 		Username:        dml.Username,
 		RSID:            dml.RSID,
 		SSN:             dml.SSN,
