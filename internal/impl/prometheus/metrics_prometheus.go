@@ -55,6 +55,14 @@ func configSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
 		Footnotes(`
+== Timing metrics
+
+Timing metrics such as `+"`processor_latency_ns`"+` are exported as a summary by default, or as a histogram when `+"`use_histogram_timing`"+` is `+"`true`"+`. Both variants are exported under the same metric name unless `+"`histogram_timing_seconds_suffix`"+` is also `+"`true`"+`.
+
+IMPORTANT: If several Redpanda Connect instances send metrics to the same destination, they must all use the same `+"`use_histogram_timing`"+` value. Otherwise, set `+"`histogram_timing_seconds_suffix: true`"+` on every instance that has `+"`use_histogram_timing: true`"+`. When a fleet mixes the setting without the suffix, one metric name is reported as a summary by some instances and as a histogram by others. Prometheus remote-write receivers such as Vector and Mimir reject the whole write request with an error like "multiple metric kinds given for metric name", so metrics from every instance in that request are dropped.
+
+The suffix only renames timing metrics whose names end in `+"`_ns`"+`. All built-in timing metrics do. Custom timing metrics from the `+"`metric`"+` processor with other names are not renamed, so give them an `+"`_ns`"+` suffix or keep `+"`use_histogram_timing`"+` consistent across the fleet.
+
 == Push gateway
 
 The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Redpanda Connect shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
@@ -64,7 +72,7 @@ The Push Gateway is useful for when Redpanda Connect instances are short lived. 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
 		Fields(
 			service.NewBoolField(pmFieldUseHistogramTiming).
-				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").
+				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/. Instances that report to the same destination must use the same value, unless `histogram_timing_seconds_suffix` is enabled. See <<timing-metrics, Timing metrics>>.").
 				Version("3.63.0").
 				Advanced().
 				Default(false),
