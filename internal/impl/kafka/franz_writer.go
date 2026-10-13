@@ -376,6 +376,7 @@ const (
 	kfwFieldMetadata    = "metadata"
 	kfwFieldTimestamp   = "timestamp"
 	kfwFieldTimestampMs = "timestamp_ms"
+	kfwFieldTombstone   = "tombstone"
 )
 
 // Descriptions shared by the fields of the franz-go and Sarama based Kafka
@@ -416,6 +417,13 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().
 			Advanced(),
+		service.NewInterpolatedStringField(kfwFieldTombstone).
+			Description("An optional boolean that, when it resolves to `true` for a message, writes that message as a tombstone: a record with a null value. The message payload is ignored for tombstones. Use this to delete keys on compacted topics, or to keep tombstones intact when mirroring a topic. An empty payload is not a tombstone. The interpolation must resolve to a value that can be parsed as a boolean, otherwise the write fails. Metadata that is not set resolves to `null`, so use `.or(false)` when some messages may not carry it.").
+			Version("4.114.0").
+			Example(`${! @kafka_tombstone_message.or(false) }`).
+			Example(`${! this.op == "delete" }`).
+			Optional().
+			Advanced(),
 	}
 }
 
@@ -453,6 +461,7 @@ type FranzWriter struct {
 	Partition     *service.InterpolatedString
 	Timestamp     *service.InterpolatedString
 	IsTimestampMs bool
+	Tombstone     *service.InterpolatedString
 	MetaFilter    *service.MetadataFilter
 	hooks         franzWriterHooks
 
@@ -521,6 +530,12 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks
 		w.IsTimestampMs = true
 	}
 
+	if conf.Contains(kfwFieldTombstone) {
+		if w.Tombstone, err = conf.FieldInterpolatedString(kfwFieldTombstone); err != nil {
+			return nil, err
+		}
+	}
+
 	return &w, nil
 }
 
@@ -543,10 +558,24 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 
 		var err error
 
-		// Required: Value
-		r.Value, err = msg.AsBytes()
-		if err != nil {
-			return nil, fmt.Errorf("message to bytes: %w", err)
+		// Optional: Tombstone
+		var tombstone bool
+		if w.Tombstone != nil {
+			tsStr, err := w.Tombstone.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("tombstone interpolation: %w", err)
+			}
+			if tombstone, err = strconv.ParseBool(tsStr); err != nil {
+				return nil, fmt.Errorf("parse tombstone: %w", err)
+			}
+		}
+
+		// Required: Value, left nil for tombstones so it is encoded as null.
+		if !tombstone {
+			r.Value, err = msg.AsBytes()
+			if err != nil {
+				return nil, fmt.Errorf("message to bytes: %w", err)
+			}
 		}
 
 		// Required: Topic
