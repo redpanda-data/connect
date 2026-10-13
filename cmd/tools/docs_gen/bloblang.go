@@ -159,7 +159,7 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 	}
 	b.WriteString("\n")
 	if spec.Params != nil && len(spec.Params.Named) > 0 {
-		b.WriteString("\n== Parameters\n\n[cols=\"1,1,3\"]\n|===\n| Name | Type | Description\n\n")
+		b.WriteString("\n== Parameters\n\n[cols=\"1,1,3a\"]\n|===\n| Name | Type | Description\n\n")
 		for _, p := range spec.Params.Named {
 			b.WriteString("| `" + htmlEscaper.Replace(p.Name) + "`")
 			if p.optional() {
@@ -169,7 +169,7 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 			if d, ok := bloblangDefault(p.Default); ok {
 				desc = strings.TrimFunc(ensurePeriod(desc)+" Default: "+d+".", jsIsSpace)
 			}
-			b.WriteString("\n| `" + htmlEscaper.Replace(p.Type) + "`\n| " + desc + "\n\n")
+			b.WriteString("\n| `" + htmlEscaper.Replace(p.Type) + "`\n" + tableCell(desc) + "\n\n")
 		}
 		b.WriteString("|===\n\n")
 	} else if spec.Params != nil && spec.Params.Variadic {

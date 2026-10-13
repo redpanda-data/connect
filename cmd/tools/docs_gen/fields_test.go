@@ -177,6 +177,19 @@ func TestFieldVersionsShowOnlyWhenNewerThanTheParent(t *testing.T) {
 	assert.True(t, versionLater("4.1.0", ""), "no ancestor version shows the field version")
 }
 
+func TestAnnotatedOptionsStartingWithAConditionalRenderOnTheirOwnLine(t *testing.T) {
+	out := renderFields([]fieldSpec{{Name: "mode", Type: "string", AnnotatedOptions: [][2]string{
+		{"fast", "Skips validation."},
+		{"local", "ifndef::env-cloud[]\nReads from the local disk, which Cloud pipelines don't have.\nendif::[]"},
+		{"multi", "First line.\nSecond line."},
+	}}}, "")
+	assert.Contains(t, out, "[cols=\"1m,2a\"]\n|===\n|Option |Summary\n\n", "the summary column has the a style, so block content renders")
+	assert.Contains(t, out, "|fast\n| Skips validation.\n\n", "one-line content stays on the cell bar line")
+	assert.Contains(t, out, "|local\n|\nifndef::env-cloud[]\nReads from the local disk, which Cloud pipelines don't have.\nendif::[]\n\n",
+		"a directive starts at column 0 on the line after the cell bar")
+	assert.Contains(t, out, "|multi\n|\nFirst line.\nSecond line.\n\n", "multi-line content starts on the line after the cell bar")
+}
+
 func TestEmptyEnumOptionRendersAsQuotedEmptyString(t *testing.T) {
 	out := renderFields([]fieldSpec{{Name: "level", Type: "string", Options: []string{"INFO", ""}}}, "")
 	assert.Contains(t, out, "*Options*: `INFO`, `\"\"`")
