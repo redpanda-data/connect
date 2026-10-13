@@ -77,11 +77,15 @@ jobs:
       # up as a review that silently does not appear. Read the job log, not
       # the check color.
       use_adp_gateway: true
-      # The reusable workflow defaults to sonnet-5, which is not proven
-      # against claude-code-provider-adp. A model the provider does not allow
-      # is a 400 that surfaces as a missing review rather than a failure, so
-      # pin the proven one here.
-      gateway_model: us.anthropic.claude-opus-5
+      # Sonnet 5, about a fifth of Opus 5's cost. On the review's own eval
+      # suite (docs-extensions-and-macros evals/doc-strings, production
+      # prompt) it matched Opus except for one C++ line over the 80-column
+      # limit, which connect's Go strings do not have. It is on the
+      # claude-code-provider-adp allowlist: docs-site's doc-impact match check
+      # runs on it through the same provider. A model the provider does not
+      # allow is a 400 that surfaces as a missing review rather than a
+      # failure, so pin it here rather than rely on the reusable default.
+      gateway_model: us.anthropic.claude-sonnet-5
       surfaces: connect
     secrets:
       # No anthropic_api_key: the reusable workflow only reads it when
