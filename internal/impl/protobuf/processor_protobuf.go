@@ -80,6 +80,7 @@ The main functionality of this processor is to map to and from JSON documents. F
 Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively. For an example, see the https://github.com/redpanda-data/redpanda-connect-plugin-example[Redpanda Connect plugin example^].
 
 The processor will ignore any files that begin with a dot ("."), a convention for hidden files, when loading protocol buffer definitions.
+
 == Operators
 
 === `+"`to_json`"+`
