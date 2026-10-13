@@ -86,6 +86,8 @@ func iskConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Connects to Kafka brokers and consumes one or more topics.`).
 		Description(`
+Use the xref:components:inputs/redpanda.adoc[`+"`redpanda` input"+`] instead.
+
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
 The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
@@ -117,8 +119,6 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 By default messages of a topic partition can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
 == Troubleshooting
-
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"xref:components:inputs/kafka_franz.adoc[`kafka_franz` input]"+`.
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
