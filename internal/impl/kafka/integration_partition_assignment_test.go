@@ -259,30 +259,29 @@ func TestIntegrationRedpandaPartitionAssignmentMigration(t *testing.T) {
 		g := newAssignmentGroup(t, 10, 4, 7)
 		stops := make([]func(), 3)
 		for i := range stops {
-			stops[i] = g.startMember("cooperative-sticky")
+			stops[i] = g.startMember("range")
 		}
 		protocol, _ := g.waitStable(3)
-		require.Equal(t, "cooperative-sticky", protocol)
+		require.Equal(t, "range", protocol)
 
 		// Step one: list the old strategy first and the new one second. The
 		// group keeps the old strategy throughout.
 		for i := range stops {
 			stops[i]()
-			stops[i] = g.startMember("cooperative-sticky", "range")
+			stops[i] = g.startMember("range", "cooperative-sticky")
 			protocol, _ = g.waitStable(3)
-			require.Equal(t, "cooperative-sticky", protocol, "after replacing member %d in step one", i)
+			require.Equal(t, "range", protocol, "after replacing member %d in step one", i)
 		}
 
 		// Step two: list only the new strategy. Every member still shares a
 		// strategy with the group, so none are rejected.
 		for i := range stops {
 			stops[i]()
-			stops[i] = g.startMember("range")
+			stops[i] = g.startMember("cooperative-sticky")
 			g.waitStable(3)
 		}
 
-		protocol, assigned := g.waitStable(3)
-		assert.Equal(t, "range", protocol)
-		g.requireEvenPerTopic(assigned)
+		protocol, _ = g.waitStable(3)
+		assert.Equal(t, "cooperative-sticky", protocol)
 	})
 }

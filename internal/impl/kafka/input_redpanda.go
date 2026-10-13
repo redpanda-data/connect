@@ -118,12 +118,15 @@ When using a consumer group, the strategies this client supports for assigning p
 - ` + "`range`" + `: Divides the partitions of each topic evenly across the members subscribed to it. Remainder partitions go to the first members by sort order, so when consuming many topics the earlier members can own more partitions overall.
 - ` + "`roundrobin`" + `: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.
 
-To change strategies on a running group, first roll out a list with the old strategy followed by the new one, then a list with only the new one. Members that share no strategy with the group are rejected. Switching from ` + "`cooperative-sticky`" + ` to an eager strategy revokes all partitions once, which can cause records to be reprocessed from the last committed offsets.`).
+The eager strategies (` + "`sticky`" + `, ` + "`range`" + ` and ` + "`roundrobin`" + `) revoke every partition from every member on each rebalance, such as when a member joins, leaves or restarts. Records that are in flight but not yet committed are then reprocessed from the last committed offsets, so frequent rebalances cause repeated duplicates.
+
+To change strategies on a running group, first roll out a list with the old strategy followed by the new one, then a list with only the new one. Members that share no strategy with the group are rejected. This is safe between eager strategies and from an eager strategy to ` + "`cooperative-sticky`" + `. Once every member uses only ` + "`cooperative-sticky`" + `, do not roll out an eager strategy: an eager member joining a cooperative group can be elected leader and break rebalancing. Instead, stop all members and start them with the new strategy.`).
 				ShortDescription("The strategies used to assign partitions to consumer group members, in order of preference.").
 				Example([]string{"range"}).
 				Example([]string{"cooperative-sticky", "roundrobin"}).
 				Default([]any{"cooperative-sticky"}).
-				Advanced(),
+				Advanced().
+				Version("4.114.0"),
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
 			service.NewExtractTracingSpanMappingField().Version("4.85.0"),
