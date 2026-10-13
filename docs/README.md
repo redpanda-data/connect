@@ -1,6 +1,6 @@
 # Connect reference docs
 
-The reference docs for Redpanda Connect components and Bloblang are generated from the specs in this repo and published at https://docs.redpanda.com/redpanda-connect/. They aren't committed. To change what a field or component page says, edit the spec in `internal/impl/` (or the shared field helpers in benthos).
+The reference docs for Redpanda Connect components and Bloblang are generated from the specs in this repo and published at https://docs.redpanda.com/connect/. They aren't committed. To change what a field or component page says, edit the spec in `internal/impl/` (or the shared field helpers in benthos).
 
 ## How they're published
 
