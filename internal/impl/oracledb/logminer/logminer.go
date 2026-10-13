@@ -674,6 +674,12 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
+			txnFields := txnEventFields{
+				scn:             replication.SCN(redoEvent.SCN),
+				checkpointSCN:   replication.SCN(safeCheckpointSCN),
+				commitTimestamp: redoEvent.Timestamp,
+			}
+			var rowSeqs rowSeqCounter
 			for _, dmlEvent := range txn.Events {
 				// Suppress Oracle-internal LOB-initialisation UPDATEs. With LOBEnabled,
 				// only once confirmed merged: the table having some other row's INSERT
@@ -695,7 +701,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 					lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s", dmlEvent.Schema, dmlEvent.Table)
 					continue
 				}
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
+				msg := toMessageEvent(dmlEvent, txnFields, rowSeqs.next(dmlEvent))
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -1395,7 +1401,61 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	return nil
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, commitTimestamp time.Time) *replication.MessageEvent {
+// rowSeqCounter assigns RowSeq to the events of one transaction.
+//
+// Oracle says (RS_ID, SSN) identifies one row change. That is not true for a
+// bulk DELETE: Oracle writes up to 255 rows into one redo record, and every row
+// gets the same RS_ID and SSN. RowSeq numbers those rows from 0 so that
+// (RS_ID, SSN, RowSeq) is unique again.
+//
+// LogMiner returns the rows of one redo record next to each other, so the
+// counter only has to remember the previous (RS_ID, SSN) and restart at 0 when
+// it changes. The zero value is ready to use.
+type rowSeqCounter struct {
+	rsID string
+	ssn  int64
+	seq  int
+}
+
+// next returns the RowSeq of ev. Call it for every published event of the
+// transaction, in redo order. An event without RS_ID belongs to no redo record,
+// so it gets 0 and does not change the counter.
+func (c *rowSeqCounter) next(ev *sqlredo.DMLEvent) int {
+	if ev.RSID == "" {
+		return 0
+	}
+	if ev.RSID != c.rsID || ev.SSN != c.ssn {
+		c.rsID, c.ssn, c.seq = ev.RSID, ev.SSN, 0
+	} else {
+		c.seq++
+	}
+	return c.seq
+}
+
+// txnEventFields holds the MessageEvent fields that are the same for every
+// event of one committed transaction. processRedoEvent builds it once per
+// COMMIT, and toMessageEvent copies it into each published event.
+type txnEventFields struct {
+	// scn is the SCN of the COMMIT redo row. It is the scn metadata of each
+	// event of the transaction.
+	scn replication.SCN
+
+	// checkpointSCN is the SCN to checkpoint after the events of this
+	// transaction are acked. It is the checkpoint_scn metadata.
+	//
+	// It is scn when no other transaction is open. Otherwise it is one below the
+	// start SCN of the oldest open transaction, so a restart reads that
+	// transaction again. TransactionCache.LowWatermarkSCN tells which open
+	// transactions count.
+	checkpointSCN replication.SCN
+
+	// commitTimestamp is the time of the COMMIT redo row
+	// (V$LOGMNR_CONTENTS.TIMESTAMP, not COMMIT_TIMESTAMP). It is the
+	// commit_ts_ms metadata.
+	commitTimestamp time.Time
+}
+
+func toMessageEvent(dml *sqlredo.DMLEvent, txnFields txnEventFields, rowSeq int) *replication.MessageEvent {
 	var data map[string]any
 	switch dml.Operation {
 	case sqlredo.OpDelete:
@@ -1411,17 +1471,18 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 	}
 
 	m := &replication.MessageEvent{
-		SCN:             replication.SCN(scn),
-		CheckpointSCN:   replication.SCN(checkpointSCN),
+		SCN:             txnFields.scn,
+		CheckpointSCN:   txnFields.checkpointSCN,
 		Schema:          dml.Schema,
 		Table:           dml.Table,
 		Data:            data,
 		Timestamp:       dml.Timestamp,
 		TransactionID:   dml.TransactionID.String(),
-		CommitTimestamp: commitTimestamp,
+		CommitTimestamp: txnFields.commitTimestamp,
 		Username:        dml.Username,
 		RSID:            dml.RSID,
 		SSN:             dml.SSN,
+		RowSeq:          rowSeq,
 	}
 
 	switch dml.Operation {
