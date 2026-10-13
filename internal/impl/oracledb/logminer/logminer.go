@@ -1131,11 +1131,11 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 }
 
 const (
-	// logMinerReadBatchSize is the number of events sent per channel
-	// operation, which keeps channel overhead negligible.
+	// logMinerReadBatchSize is the number of rows (including CSF fragments)
+	// read per channel send. It bounds a batch to ~2 MB of SQL_REDO (4000
+	// bytes per row) and keeps channel overhead negligible.
 	logMinerReadBatchSize = 500
-	// logMinerReadAheadBatches is the minimum read-ahead (2000 rows). See
-	// readAheadBatches; memory grows with prefetch_rows, up to 4 KB per row.
+	// logMinerReadAheadBatches is the minimum read-ahead (2000 rows).
 	logMinerReadAheadBatches = 4
 )
 
@@ -1150,29 +1150,32 @@ func readAheadBatches(prefetchRows int) int {
 // fragments. On error, it sends the complete events read so far.
 func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batches chan<- []*sqlredo.RedoEvent, queryStart time.Time, startSCN, endSCN uint64) error {
 	var (
-		batch    = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
-		firstRow = true
-		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
+		rowsInBatch int // rows read for batch, including CSF fragments
+		firstRow    = true
+		pending     *sqlredo.RedoEvent // accumulates CSF continuation fragments
+
+		batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
+		flush = func() error {
+			if len(batch) == 0 {
+				return nil
+			}
+			select {
+			case batches <- batch:
+				batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
+				rowsInBatch = 0
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		emit = func(ev *sqlredo.RedoEvent) error {
+			batch = append(batch, ev)
+			if rowsInBatch < logMinerReadBatchSize {
+				return nil
+			}
+			return flush()
+		}
 	)
-	flush := func() error {
-		if len(batch) == 0 {
-			return nil
-		}
-		select {
-		case batches <- batch:
-			batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	emit := func(ev *sqlredo.RedoEvent) error {
-		batch = append(batch, ev)
-		if len(batch) < logMinerReadBatchSize {
-			return nil
-		}
-		return flush()
-	}
 
 	for rows.Next() {
 		if firstRow {
@@ -1206,6 +1209,7 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 			}
 			return err
 		}
+		rowsInBatch++
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.

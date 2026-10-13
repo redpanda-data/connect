@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1160,11 +1161,58 @@ func TestQueryLogMinerParallelFetching(t *testing.T) {
 	})
 }
 
+func TestReadLogMinerRowsBatchesByRows(t *testing.T) {
+	tests := []struct {
+		name      string
+		total     int
+		fragments int
+		want      []int // events per batch
+	}{
+		{name: "single row statements", total: 1200, fragments: 1, want: []int{500, 500, 200}},
+		{name: "4 row statements", total: 2000, fragments: 4, want: []int{125, 125, 125, 125}},
+		{name: "4 row statements partial last batch", total: 2200, fragments: 4, want: []int{125, 125, 125, 125, 50}},
+		{name: "statement larger than a batch is not split", total: 1200, fragments: 600, want: []int{1, 1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lm, conn := newRowsMiner(t, &rowsSpec{total: test.total, fragments: test.fragments})
+			rows, err := conn.QueryContext(t.Context(), "SELECT * FROM V$LOGMNR_CONTENTS")
+			require.NoError(t, err)
+			defer rows.Close()
+
+			// Large enough that the reader never blocks.
+			batches := make(chan []*sqlredo.RedoEvent, test.total)
+			require.NoError(t, lm.readLogMinerRows(t.Context(), rows, batches, time.Now(), 0, 1<<40))
+			close(batches)
+
+			var (
+				sizes []int
+				n     int
+			)
+			for batch := range batches {
+				sizes = append(sizes, len(batch))
+				for _, ev := range batch {
+					var want strings.Builder
+					for i := range test.fragments {
+						fmt.Fprintf(&want, "r%d,", n*test.fragments+i)
+					}
+					assert.Equal(t, want.String(), ev.SQLRedo.String)
+					assert.Equal(t, uint64(n*test.fragments+1), ev.SCN, "first fragment's SCN")
+					n++
+				}
+			}
+			assert.Equal(t, test.want, sizes)
+			assert.Equal(t, test.total/test.fragments, n)
+		})
+	}
+}
+
 type rowsSpec struct {
-	total    int
-	csfEvery int // when > 0, rows (1,2), (3,4), ... are 2-fragment statements
-	failAt   int // Next returns errFetch after this many rows when > 0
-	closed   atomic.Bool
+	total     int
+	csfEvery  int // when > 0, rows (1,2), (3,4), ... are 2-fragment statements
+	fragments int // when > 0, every statement spans this many rows; overrides csfEvery
+	failAt    int // Next returns errFetch after this many rows when > 0
+	closed    atomic.Bool
 }
 
 func newRowsMiner(t *testing.T, d *rowsSpec) (*LogMiner, *sql.Conn) {
@@ -1198,7 +1246,12 @@ func (r *genRows) Next(dest []driver.Value) error {
 	n := r.n
 	r.n++
 	csf, sqlText, scn := int64(0), fmt.Sprintf("r%d", n), int64(n+1)
-	if r.d.csfEvery > 0 && n > 0 {
+	if r.d.fragments > 0 {
+		sqlText = fmt.Sprintf("r%d,", n)
+		if n%r.d.fragments != r.d.fragments-1 {
+			csf = 1
+		}
+	} else if r.d.csfEvery > 0 && n > 0 {
 		if n%2 == 1 {
 			csf, sqlText = 1, fmt.Sprintf("r%d-a", n)
 		} else {
