@@ -410,6 +410,7 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	require.True(t, ok, "Data should be map[string]any")
 	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE OOR column should have deferred LOB_WRITEs assembled")
 	assert.Equal(t, "securedata", data["SECUREFILE_COL"], "SecureFile column should have its LOB_WRITE data")
+	assert.Empty(t, pub.messages[0].RSID, "synthetic LOB-only UPDATE has no redo record of its own, so no rs_id")
 	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
 }
 
@@ -880,5 +881,57 @@ func TestIncludeInLowWatermark(t *testing.T) {
 				assert.Equal(t, test.want, c.LowWatermarkSCN(test.excludeTxnID))
 			})
 		}
+	}
+}
+
+// RS_ID and SSN must survive both transaction cache kinds. The Connect cache
+// resource stores events as JSON, so this also covers cache_resource.go.
+func TestProcessRedoEventPropagatesRecordIdentity(t *testing.T) {
+	// One transaction with one INSERT that carries a record identity.
+	redoEvents := []*sqlredo.RedoEvent{
+		{
+			SCN:           100,
+			Operation:     sqlredo.OpStart,
+			TransactionID: "txA",
+		},
+		{
+			SCN:           101,
+			Operation:     sqlredo.OpInsert,
+			TransactionID: "txA",
+			SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID") values ('1')`, Valid: true},
+			RSID:          sql.NullString{String: "0x000027.00001a33.0010", Valid: true},
+			SSN:           sql.NullInt64{Int64: 2, Valid: true},
+		},
+		{
+			SCN:           200,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txA",
+		},
+	}
+
+	caches := map[string]func() TransactionCache{
+		"in-memory cache": func() TransactionCache {
+			return NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+		"connect cache resource": func() TransactionCache {
+			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: 0}
+			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+	}
+
+	for name, newCache := range caches {
+		t.Run(name, func(t *testing.T) {
+			pub := &publisherStub{}
+			lm := newLogMiner(pub, newCache())
+
+			for _, ev := range redoEvents {
+				require.NoError(t, lm.processRedoEvent(t.Context(), ev))
+			}
+
+			require.Len(t, pub.messages, 1)
+			assert.Equal(t, "0x000027.00001a33.0010", pub.messages[0].RSID)
+			assert.Equal(t, int64(2), pub.messages[0].SSN)
+		})
 	}
 }
