@@ -78,13 +78,13 @@ func mustDuration(s string) time.Duration {
 
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
-	Version("4.114.0").
+	Version("4.113.1").
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
 - `+"`bulk`"+`: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
 - `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows.
-- `+"`query`"+`: executes a user-supplied SQL statement and emits one message per result row.
+- `+"`query`"+`: executes a user-supplied SQL statement once and emits one message per result row, then the input terminates.
 - `+"`timestamp`"+`: polls for rows where `+"`timestamp_column`"+` falls within `+"`(last_hwm, database_now - timestamp_delay]`"+`. The bound is read from the database clock (see `+"`timestamp_clock`"+`) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed, so a restart mid-window re-reads that window from its start (rows sharing a timestamp cannot be split, hence no finer checkpoint).
 - `+"`timestamp+incrementing`"+`: like `+"`timestamp`"+` but orders by `+"`(timestamp_column, incrementing_column)`"+` and resumes after the exact `+"`(timestamp, incrementing)`"+` pair of the last delivered row, so rows sharing a timestamp are neither duplicated nor missed and a restart mid-window continues from the last acknowledged batch rather than the window start.
 
@@ -96,6 +96,10 @@ Messages produced in `+"`bulk`, `incrementing`, `timestamp`, and `timestamp+incr
 - `+"`database_schema`"+`: The configured `+"`schema_name`"+`. Only present when `+"`schema_name`"+` is set.
 - `+"`schema`"+`: Avro-compatible schema derived from `+"`SYS.TABLE_COLUMNS`"+`, suitable for use with `+"`schema_registry_encode`"+`. Column additions are detected automatically without a pipeline restart. Only present when `+"`schema_name`"+` is configured.
 - `+"`primary_key_columns`"+`: JSON array of the table's primary-key column names in key order. Only present when `+"`schema_name`"+` is configured and the table has a primary key.
+
+== Permissions
+
+The connecting user needs `+"`SELECT`"+` on the source table, or on the statement's tables in `+"`query`"+` mode. When `+"`schema_name`"+` is set, the user also needs read access to the `+"`SYS.TABLE_COLUMNS`"+`, `+"`SYS.INDEX_COLUMNS`"+`, and `+"`SYS.INDEXES`"+` system views, which the input reads to build the `+"`schema`"+` and `+"`primary_key_columns`"+` metadata. Granting `+"`CATALOG READ`"+` covers these views.
 
 == Troubleshooting
 
@@ -160,6 +164,18 @@ cache_resources:
   - label: hana_checkpoints
     file:
       directory: /var/lib/redpanda-connect/sap_hana
+`).
+	Example("Run a custom query",
+		"Runs a SQL statement once and emits one message per result row. In `query` mode, `table` and `schema_name` are not required and no metadata is attached.",
+		`
+input:
+  sap_hana:
+    dsn: hdb://user:password@hana-host:39017
+    mode: query
+    query: |
+      SELECT ORDER_ID, CUSTOMER_ID, STATUS
+      FROM SALES.ORDERS
+      WHERE STATUS = 'PENDING'
 `).
 	Field(service.NewStringField(shFieldDSN).
 		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
