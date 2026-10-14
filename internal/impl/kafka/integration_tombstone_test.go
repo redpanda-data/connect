@@ -87,6 +87,8 @@ func TestRedpandaOutputTombstoneIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("config only", func(t *testing.T) {
+		t.Parallel()
+
 		topic := "tombstone-config-only"
 		runStreamYAML(t, fmt.Sprintf(`
 input:
@@ -121,6 +123,8 @@ output:
 	})
 
 	t.Run("mirror keeps tombstones", func(t *testing.T) {
+		t.Parallel()
+
 		src, dst := "tombstone-mirror-src", "tombstone-mirror-dst"
 
 		client, err := kgo.NewClient(kgo.SeedBrokers(rp.BrokerAddr), kgo.AllowAutoTopicCreation())
