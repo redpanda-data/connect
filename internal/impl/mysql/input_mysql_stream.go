@@ -77,6 +77,8 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Version("4.45.0").
 	Summary("Streams data changes from a MySQL or MariaDB database, using the binary log to capture data updates.").
 	Description(`
+This input reads the MySQL https://dev.mysql.com/doc/refman/8.4/en/binary-log.html[binary log (`+"`binlog`"+`)^] to capture changes to the tables listed in <<tables,`+"`tables`"+`>> as they happen.
+
 This input is built on the https://github.com/go-mysql-org/go-mysql?tab=readme-ov-file#replication[`+"`go-mysql` canal library"+`^] but uses a custom approach for streaming historical data.
 
 == Snapshot and streaming modes
@@ -95,7 +97,7 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 
 == Data types
 
-Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns.
+Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, an `+"`INT`"+` value of `+"`123`"+` becomes the number `+"`123`"+`, and a `+"`JSON`"+` value of `+"`{\"red\": 1, \"blue\": 2}`"+` becomes an object with the fields `+"`red`"+` and `+"`blue`"+`.
 
 == Metadata
 

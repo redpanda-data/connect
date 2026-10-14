@@ -94,9 +94,9 @@ func newPostgresCDCConfig() *service.ConfigSpec {
 		Version("4.43.0").
 		Summary(`Streams changes from a PostgreSQL database using logical replication.`).
 		Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
-Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+Additionally, if <<` + fieldStreamSnapshot + `,` + "`" + fieldStreamSnapshot + "`" + `>> is set to true, then the existing data in the database is also streamed too. Use <<` + fieldTables + `,` + "`" + fieldTables + "`" + `>> to choose which tables to stream changes from.
 
-This input was renamed from ` + "`pg_stream`" + ` to ` + "`postgres_cdc`" + ` in version 4.43.0. The ` + "`pg_stream`" + ` name still works, but it's deprecated.
+This input was introduced in version 4.40.0 as ` + "`pg_stream`" + ` and renamed to ` + "`postgres_cdc`" + ` in version 4.43.0. The ` + "`pg_stream`" + ` name still works, but it's deprecated.
 
 == Requirements
 
@@ -104,13 +104,15 @@ The source database must have logical replication enabled, which means its ` + "
 
 == Snapshot and streaming modes
 
+This input reads changes through a logical replication slot, which it creates if the slot does not already exist. PostgreSQL retains the write-ahead log (WAL) that the slot still needs, so the input can resume from its last acknowledged position after a restart.
+
 When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `, and then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
 
 When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
 
 == Data types
 
-Column values keep their PostgreSQL types where an equivalent exists. ` + "`BOOL`" + ` columns become booleans, integer and floating-point columns become numbers, ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, and ` + "`TIMESTAMPTZ`" + ` columns become timestamps, ` + "`BYTEA`" + ` columns become byte arrays, and ` + "`JSON`" + ` and ` + "`JSONB`" + ` columns become structured values. ` + "`NUMERIC`" + ` and ` + "`DECIMAL`" + ` columns become strings to preserve their precision, as do ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, and ` + "`TIMETZ`" + ` columns.
+Column values keep their PostgreSQL types where an equivalent exists. ` + "`BOOL`" + ` columns become booleans, integer and floating-point columns become numbers, ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, and ` + "`TIMESTAMPTZ`" + ` columns become timestamps, ` + "`BYTEA`" + ` columns become byte arrays, and ` + "`JSON`" + ` and ` + "`JSONB`" + ` columns become structured values. ` + "`NUMERIC`" + ` and ` + "`DECIMAL`" + ` columns become strings to preserve their precision, as do ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, and ` + "`TIMETZ`" + ` columns. ` + "`INTEGER[]`" + ` and ` + "`TEXT[]`" + ` columns become arrays, for example ` + "`[1,2,3]`" + ` and ` + "`[\"a\",\"b\"]`" + `. ` + "`INET`" + ` columns become strings in CIDR notation, for example ` + "`\"192.168.1.1/32\"`" + `. ` + "`POINT`" + `, ` + "`TSRANGE`" + `, and ` + "`TSVECTOR`" + ` columns become strings in their PostgreSQL text form, for example ` + "`\"(45.5,-122.6)\"`" + `, ` + "`\"[2024-01-01 00:00:00,2024-12-31 00:00:00)\"`" + `, and ` + "`\"'brown':3 'fox':4\"`" + `.
 
 == Metadata
 
