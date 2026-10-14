@@ -150,9 +150,9 @@ func FranzProducerFields() []*service.ConfigField {
 				Default("all").
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
-				Description("Set an explicit compression type (optional). By default, the client uses `snappy` when the broker supports it, and falls back to `none` if not.").
-				ShortDescription("Explicit compression type. Defaults to snappy when the broker supports it, otherwise none.").
-				Optional().
+				Description("The compression codec for produced record batches. A batch that compression does not make smaller is sent uncompressed, whichever codec you choose.").
+				ShortDescription("Compression codec for produced record batches. A batch that compression does not shrink is sent uncompressed.").
+				Default("snappy").
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
 				Description("Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.").Version("4.58.0").
@@ -269,22 +269,22 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 			return nil, err
 		}
 
-		var c kgo.CompressionCodec
 		switch cStr {
 		case "lz4":
-			c = kgo.Lz4Compression()
+			compressionPrefs = append(compressionPrefs, kgo.Lz4Compression())
 		case "gzip":
-			c = kgo.GzipCompression()
+			compressionPrefs = append(compressionPrefs, kgo.GzipCompression())
 		case "snappy":
-			c = kgo.SnappyCompression()
+			// The same preference list as the franz-go default, which the
+			// default value of this field stands for.
+			compressionPrefs = append(compressionPrefs, kgo.SnappyCompression(), kgo.NoCompression())
 		case "zstd":
-			c = kgo.ZstdCompression()
+			compressionPrefs = append(compressionPrefs, kgo.ZstdCompression())
 		case "none":
-			c = kgo.NoCompression()
+			compressionPrefs = append(compressionPrefs, kgo.NoCompression())
 		default:
 			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
 		}
-		compressionPrefs = append(compressionPrefs, c)
 	}
 	if len(compressionPrefs) > 0 {
 		opts = append(opts, kgo.ProducerBatchCompression(compressionPrefs...))
