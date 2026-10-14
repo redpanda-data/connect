@@ -45,7 +45,7 @@ func init() {
 func newBedrockEmbeddingsConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Computes vector embeddings on text, using the AWS Bedrock API.").
-		Description(`This processor sends text to your chosen large language model (LLM) and computes vector embeddings, using the AWS Bedrock API.
+		Description(`This processor sends text to your chosen large language model (LLM) and computes vector embeddings, using the https://aws.amazon.com/bedrock/[AWS Bedrock API^].
 For more information, see the https://docs.aws.amazon.com/bedrock/latest/userguide[AWS Bedrock documentation^].`).
 		Categories("AI").
 		Version("4.37.0").

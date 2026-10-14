@@ -75,11 +75,11 @@ func ollamaChatProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
 		Summary("Generates responses to messages in a chat conversation, using the Ollama API.").
-		Description(`This processor sends prompts to your chosen Ollama large language model (LLM) and generates text from the responses, using the Ollama API.
+		Description(`This processor sends prompts to your chosen Ollama large language model (LLM) and generates text from the responses, using the Ollama API. The model can also call external tools that you define in the `+"<<tools,`tools`>>"+` field to retrieve more information to answer a prompt.
 
 By default, the processor starts and runs a locally installed Ollama server. Alternatively, to use an already running Ollama server, add your server details to the `+"`"+bopFieldServerAddress+"`"+` field. You can https://ollama.com/download[download and install Ollama from the Ollama website^].
 
-For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
+For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^] and <<examples,Examples>>.`).
 		Version("4.32.0").
 		Fields(
 			modelField("llama3.1", "gemma2", "qwen2", "phi3"),

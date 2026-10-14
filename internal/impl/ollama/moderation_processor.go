@@ -39,11 +39,11 @@ func ollamaModerationProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
 		Summary("Checks whether responses from a large language model (LLM) are safe, using the Ollama API.").
-		Description(`This processor checks LLM response safety using either `+"`llama-guard3`"+` or `+"`shieldgemma`"+`. If you want to check if a given prompt is safe, then that can be done with the `+"`ollama_chat`"+` processor - this processor is for response classification only.
+		Description(`This processor checks LLM response safety using either https://ollama.com/library/llama-guard3[Llama Guard 3^] (`+"`llama-guard3`"+`) or https://ollama.com/library/shieldgemma[ShieldGemma^] (`+"`shieldgemma`"+`). This processor is for response classification only. To check whether a prompt is safe, use the `+"xref:components:processors/ollama_chat.adoc[`ollama_chat` processor]"+`.
 
 By default, the processor starts and runs a locally installed Ollama server. Alternatively, to use an already running Ollama server, add your server details to the `+"`"+bopFieldServerAddress+"`"+` field. You can https://ollama.com/download[download and install Ollama from the Ollama website^].
 
-For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
+For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^] and <<examples,Examples>>.`).
 		Version("4.42.0").
 		Fields(
 			service.NewStringAnnotatedEnumField(bopFieldModel, map[string]string{
