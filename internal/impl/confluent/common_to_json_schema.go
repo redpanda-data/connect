@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
@@ -88,12 +89,7 @@ func jsonSchemaAcceptsNull(m map[string]any) bool {
 	case string:
 		return t == "null"
 	case []string:
-		for _, v := range t {
-			if v == "null" {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(t, "null")
 	}
 	if oneOf, ok := m["oneOf"].([]any); ok {
 		for _, b := range oneOf {
