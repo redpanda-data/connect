@@ -574,11 +574,11 @@ pipeline:
   processors:
     - mapping: |
         meta op = match this.op {
-          "d" => "delete",
-          _   => "upsert",
+          this == "d" => "delete"
+          _ => "upsert"
         }
         # Debezium puts the row image in 'after' (or 'before' for deletes).
-        root = this.after | this.before
+        root = this.after.catch(this.before)
 
 output:
   iceberg:
@@ -611,10 +611,10 @@ pipeline:
   processors:
     - mapping: |
         meta op = match this.op {
-          "d" => "delete",
-          _   => "upsert",
+          this == "d" => "delete"
+          _ => "upsert"
         }
-        root = this.after | this.before
+        root = this.after.catch(this.before)
 
 output:
   iceberg:
