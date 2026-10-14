@@ -186,7 +186,7 @@ Guarantees:
 Limitations and requirements:
 
 - Destination Schema Registry must be in `+"`READWRITE`"+` or `+"`IMPORT`"+` mode.
-- When the destination cluster enforces ACLs, the destination principal needs permission to create topics, add partitions, describe topic configurations, and produce records. Consumer group migration also needs permission to commit the groups' offsets, and `+"`sync_topic_acls`"+` also needs permission to create ACLs. For the exact ACL operations, see xref:cookbooks:redpanda_migrator.adoc#required-permissions[Required permissions].
+- When the destination cluster enforces ACLs, the destination principal needs permission to create topics, add partitions, describe topic configurations, and produce records. Consumer group migration also needs group `+"`READ`"+` and topic `+"`READ`"+` to commit the groups' offsets, and `+"`sync_topic_acls`"+` also needs permission to create ACLs. For the exact ACL operations, see xref:cookbooks:redpanda_migrator.adoc#required-permissions[Required permissions].
 - Offset translation is best-effort: if the previous-offset timestamp cannot be read, or no destination offset exists after the timestamp, that partition is skipped.
 - Consumer group migration requires identical partition counts for source and destination topics.
 
