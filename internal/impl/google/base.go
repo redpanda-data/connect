@@ -31,12 +31,15 @@ func authDescription(scope string) string {
 	return strings.ReplaceAll(`== Authentication
 By default, this connector will use https://cloud.google.com/docs/authentication/application-default-credentials[Google Application Default Credentials (ADC)^] to authenticate with Google APIs.
 
-To use this mechanism locally, the following gcloud commands can be used:
+To use this mechanism locally, run these gcloud commands:
 
-	# Login for the application default credentials and add scopes for readonly drive access
-	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/cloud-platform,$SCOPE'
-	# When logging in with a user account, you may need to set the quota project for the application default credentials
-	gcloud auth application-default set-quota-project <project-id>
+[source,bash]
+----
+# Log in for the application default credentials and add scopes for read-only Drive access
+gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/cloud-platform,$SCOPE'
+# When logging in with a user account, you may need to set the quota project for the application default credentials
+gcloud auth application-default set-quota-project <project-id>
+----
 
 Replace `+"`<project-id>`"+` with your Google Cloud project ID.
 

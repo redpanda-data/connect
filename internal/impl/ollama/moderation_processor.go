@@ -57,7 +57,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 
 If you're using the `+"`"+`ollama_chat`+"`"+` processor, you can set the `+"`"+`save_prompt_metadata`+"`"+` field to save the contents of your prompts. You can then run them through the `+"`"+`ollama_moderation`+"`"+` processor to check the model responses for safety.
 
-You can also check the safety of your prompts. For more information, see the xref:components:processors/ollama_chat.adoc#examples[`+"`"+`ollama_chat`+"`"+` processor] documentation.`).
+You can also check the safety of your prompts. For more information, see the xref:components:processors/ollama_chat.adoc[`+"`"+`ollama_chat`+"`"+` processor] documentation.`).
 				ShortDescription("The input prompt used with the LLM. With ollama_chat, save_prompt_metadata can store it as metadata."),
 			service.NewInterpolatedStringField(ompFieldAssistantResponse).
 				Description("The LLM's response that you want to check for safety (classify as safe or unsafe content)."),
