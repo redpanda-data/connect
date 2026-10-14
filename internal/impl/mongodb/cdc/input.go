@@ -204,7 +204,7 @@ By default MongoDB does not propagate changes in all cases. In order to capture 
 
 When `+"`stream_snapshot`"+` is `+"`true`"+` and `+"`checkpoint_cache`"+` holds no stream position, this input records the current change stream position, reads all documents in the selected collections using `+"`snapshot_parallelism`"+` connections, and then streams the changes made since the recorded position. Snapshot progress is not checkpointed, so if the pipeline restarts before the snapshot completes, the snapshot runs again from the start. Once the snapshot completes and is acknowledged, its position is stored in `+"`checkpoint_cache`"+`, so later restarts resume the stream without another snapshot.
 
-When `+"`snapshot_parallelism`"+` is greater than `+"`1`"+`, this input reads the snapshot in parallel by splitting each collection into chunks with the `+"`$splitVector`"+` command. In environments where `+"`$splitVector`"+` is not available, such as MongoDB Atlas, set <<snapshot_auto_bucket_sharding,`+"`snapshot_auto_bucket_sharding`"+`>> to `+"`true`"+` to compute the chunks with the `+"`$bucketAuto`"+` aggregation stage instead.
+When `+"`snapshot_parallelism`"+` is greater than `+"`1`"+`, this input reads the snapshot in parallel by splitting each collection into chunks with the `+"`splitVector`"+` command. In environments where `+"`splitVector`"+` is not available, such as MongoDB Atlas, set <<snapshot_auto_bucket_sharding,`+"`snapshot_auto_bucket_sharding`"+`>> to `+"`true`"+` to compute the chunks with the `+"`$bucketAuto`"+` aggregation stage instead.
 
 When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the latest position in the https://www.mongodb.com/docs/manual/core/replica-set-oplog/[operations log (oplog)^]. In both modes, a restart resumes streaming from the position stored in `+"`checkpoint_cache`"+`.
 
@@ -289,7 +289,7 @@ Schema metadata is discovered using a two-tier strategy:
 			service.NewIntField(fieldSnapshotParallelism).
 				Description(`Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot.
 
-This feature uses the `+"`"+`$splitVector`+"`"+` command to split snapshot data into chunks for more efficient processing.
+This feature uses the `+"`"+`splitVector`+"`"+` command to split snapshot data into chunks for more efficient processing.
 
 This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"+`true`+"`"+`.`).
 				Default(1).

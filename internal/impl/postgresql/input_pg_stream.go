@@ -112,7 +112,41 @@ When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input cr
 
 == Data types
 
-Column values keep their PostgreSQL types where an equivalent exists. ` + "`BOOL`" + ` columns become booleans, integer and floating-point columns become numbers, ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, and ` + "`TIMESTAMPTZ`" + ` columns become timestamps, ` + "`BYTEA`" + ` columns become byte arrays, and ` + "`JSON`" + ` and ` + "`JSONB`" + ` columns become structured values. ` + "`NUMERIC`" + ` and ` + "`DECIMAL`" + ` columns become strings to preserve their precision, as do ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, and ` + "`TIMETZ`" + ` columns. ` + "`INTEGER[]`" + ` and ` + "`TEXT[]`" + ` columns become arrays, for example ` + "`[1,2,3]`" + ` and ` + "`[\"a\",\"b\"]`" + `. ` + "`INET`" + ` columns become strings in CIDR notation, for example ` + "`\"192.168.1.1/32\"`" + `. ` + "`POINT`" + `, ` + "`TSRANGE`" + `, and ` + "`TSVECTOR`" + ` columns become strings in their PostgreSQL text form, for example ` + "`\"(45.5,-122.6)\"`" + `, ` + "`\"[2024-01-01 00:00:00,2024-12-31 00:00:00)\"`" + `, and ` + "`\"'brown':3 'fox':4\"`" + `.
+Column values keep their PostgreSQL types where an equivalent exists. The following table shows how each PostgreSQL type is represented in a message:
+
+|===
+| PostgreSQL type | Value in the message
+
+| ` + "`BOOL`" + `
+| Boolean
+
+| Integer and floating-point types
+| Number
+
+| ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
+| Timestamp
+
+| ` + "`BYTEA`" + `
+| Byte array
+
+| ` + "`JSON`" + `, ` + "`JSONB`" + `
+| Structured value
+
+| ` + "`NUMERIC`" + `, ` + "`DECIMAL`" + `
+| String, to preserve precision
+
+| ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, ` + "`TIMETZ`" + `
+| String
+
+| ` + "`INTEGER[]`" + `, ` + "`TEXT[]`" + `
+| Array, for example ` + "`[1,2,3]`" + ` or ` + "`[\"a\",\"b\"]`" + `
+
+| ` + "`INET`" + `
+| String in CIDR notation, for example ` + "`\"192.168.1.1/32\"`" + `
+
+| ` + "`POINT`" + `, ` + "`TSRANGE`" + `, ` + "`TSVECTOR`" + `
+| String in its PostgreSQL text form, for example ` + "`\"(45.5,-122.6)\"`" + `, ` + "`\"[2024-01-01 00:00:00,2024-12-31 00:00:00)\"`" + `, or ` + "`\"'brown':3 'fox':4\"`" + `
+|===
 
 == Metadata
 
