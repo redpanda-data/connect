@@ -111,7 +111,7 @@ Each message becomes one row in the target table. The keys of a message object a
 `+service.OutputPerformanceDocs(true, true)+`
 
 It is recommended that each batches results in at least 16MiB of compressed output being written to Snowflake.
-You can monitor the output batch size using the `+"`snowflake_compressed_output_size_bytes`"+` metric.
+To see how much compressed data each batch uploads, watch the rate of the `+"`snowflake_compressed_output_size_bytes`"+` counter.
 
 == Metrics
 
