@@ -11,9 +11,16 @@ package logminer
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"math"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1044,6 +1051,231 @@ func TestRowSeqCounter(t *testing.T) {
 				got = append(got, c.next(&sqlredo.DMLEvent{RSID: ch.rsID, SSN: ch.ssn}))
 			}
 			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// TestQueryLogMinerParallelFetching tests the log miner package's ability
+// to process LOB data whilst fetching in the background.
+func TestQueryLogMinerParallelFetching(t *testing.T) {
+	t.Run("ordering across batches", func(t *testing.T) {
+		// Not a multiple of the batch size; CSF pairs straddle batch boundaries.
+		total := logMinerReadBatchSize*(logMinerReadAheadBatches+3) + 1
+		lm, conn := newRowsMiner(t, &rowsSpec{total: total, csfEvery: 1})
+
+		var got []string
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			return nil
+		})
+		require.NoError(t, err)
+		// Row 0 is plain; pairs (1,2)...(total-2,total-1) join, including (499,500)
+		// which straddles a batch boundary.
+		require.Len(t, got, 1+total/2)
+		assert.Equal(t, "r0", got[0])
+		assert.Equal(t, "r1-ar2-b", got[1])
+		assert.Equal(t, fmt.Sprintf("r%d-ar%d-b", total-2, total-1), got[len(got)-1])
+		assert.Equal(t, uint64(total-1), last)
+	})
+
+	t.Run("incomplete CSF statement at end of results", func(t *testing.T) {
+		// Rows: r0 plain, (r1,r2) joined, r3 is a dangling first fragment.
+		lm, conn := newRowsMiner(t, &rowsSpec{total: 4, csfEvery: 1})
+
+		var (
+			got  []string
+			scns []uint64
+		)
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			scns = append(scns, ev.SCN)
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"r0", "r1-ar2-b", "r3-a"}, got)
+		assert.Equal(t, []uint64{1, 2, 4}, scns)
+		assert.Equal(t, uint64(4), last)
+	})
+
+	t.Run("fetch error mid CSF statement", func(t *testing.T) {
+		// Rows 0..3 are scanned; r3 starts a statement that never completes.
+		d := &rowsSpec{total: 100, csfEvery: 1, failAt: 4}
+		lm, conn := newRowsMiner(t, d)
+
+		var got []string
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			return nil
+		})
+		require.ErrorIs(t, err, errFetch)
+		assert.Equal(t, []string{"r0", "r1-ar2-b"}, got, "incomplete statement must be dropped")
+		assert.Equal(t, uint64(2), last)
+		assert.True(t, d.closed.Load())
+	})
+
+	t.Run("process error stops reader", func(t *testing.T) {
+		d := &rowsSpec{total: 100000}
+		lm, conn := newRowsMiner(t, d)
+
+		boom := errors.New("boom")
+		calls := 0
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(context.Context, *sqlredo.RedoEvent) error {
+			calls++
+			if calls == 10 {
+				return boom
+			}
+			return nil
+		})
+		require.ErrorIs(t, err, boom)
+		assert.Equal(t, uint64(9), last)
+		assert.True(t, d.closed.Load(), "rows must be closed before returning")
+	})
+
+	t.Run("fetch error unchanged", func(t *testing.T) {
+		d := &rowsSpec{total: 100000, failAt: logMinerReadBatchSize + 7}
+		lm, conn := newRowsMiner(t, d)
+
+		var n int
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(context.Context, *sqlredo.RedoEvent) error {
+			n++
+			return nil
+		})
+		require.ErrorIs(t, err, errFetch)
+		assert.Equal(t, logMinerReadBatchSize+7, n, "rows before the failure must all be processed")
+		assert.Equal(t, uint64(n), last)
+		assert.True(t, d.closed.Load())
+	})
+
+	t.Run("context cancel", func(t *testing.T) {
+		d := &rowsSpec{total: 1 << 30}
+		lm, conn := newRowsMiner(t, d)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		_, err := lm.queryLogMinerContents(ctx, conn, 0, 1<<40, 1, func(context.Context, *sqlredo.RedoEvent) error {
+			cancel()
+			return ctx.Err()
+		})
+		require.Error(t, err)
+		assert.True(t, d.closed.Load())
+	})
+}
+
+func TestReadLogMinerRowsBatchesByRows(t *testing.T) {
+	tests := []struct {
+		name      string
+		total     int
+		fragments int
+		want      []int // events per batch
+	}{
+		{name: "single row statements", total: 1200, fragments: 1, want: []int{500, 500, 200}},
+		{name: "4 row statements", total: 2000, fragments: 4, want: []int{125, 125, 125, 125}},
+		{name: "4 row statements partial last batch", total: 2200, fragments: 4, want: []int{125, 125, 125, 125, 50}},
+		{name: "statement larger than a batch is not split", total: 1200, fragments: 600, want: []int{1, 1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lm, conn := newRowsMiner(t, &rowsSpec{total: test.total, fragments: test.fragments})
+			rows, err := conn.QueryContext(t.Context(), "SELECT * FROM V$LOGMNR_CONTENTS")
+			require.NoError(t, err)
+			defer rows.Close()
+
+			// Large enough that the reader never blocks.
+			batches := make(chan []*sqlredo.RedoEvent, test.total)
+			require.NoError(t, lm.readLogMinerRows(t.Context(), rows, batches, time.Now(), 0, 1<<40))
+			close(batches)
+
+			var (
+				sizes []int
+				n     int
+			)
+			for batch := range batches {
+				sizes = append(sizes, len(batch))
+				for _, ev := range batch {
+					var want strings.Builder
+					for i := range test.fragments {
+						fmt.Fprintf(&want, "r%d,", n*test.fragments+i)
+					}
+					assert.Equal(t, want.String(), ev.SQLRedo.String)
+					assert.Equal(t, uint64(n*test.fragments+1), ev.SCN, "first fragment's SCN")
+					n++
+				}
+			}
+			assert.Equal(t, test.want, sizes)
+			assert.Equal(t, test.total/test.fragments, n)
+		})
+	}
+}
+
+type rowsSpec struct {
+	total     int
+	csfEvery  int // when > 0, rows (1,2), (3,4), ... are 2-fragment statements
+	fragments int // when > 0, every statement spans this many rows; overrides csfEvery
+	failAt    int // Next returns errFetch after this many rows when > 0
+	closed    atomic.Bool
+}
+
+func newRowsMiner(t *testing.T, d *rowsSpec) (*LogMiner, *sql.Conn) {
+	t.Helper()
+	conn, fc := newFakeSQLConn(t, nil)
+	fc.contentRows = func() driver.Rows { return &genRows{d: d} }
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, NewDefaultConfig(), nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	return lm, conn
+}
+
+var errFetch = errors.New("fetch failed")
+
+type genRows struct {
+	fakeContentRows
+	d *rowsSpec
+	n int
+}
+
+func (r *genRows) Close() error { r.d.closed.Store(true); return nil }
+
+// Row n has SCN n+1. With csfEvery, odd rows start a statement (CSF=1) that the
+// following even row completes.
+func (r *genRows) Next(dest []driver.Value) error {
+	if r.d.failAt > 0 && r.n >= r.d.failAt {
+		return errFetch
+	}
+	if r.n >= r.d.total {
+		return io.EOF
+	}
+	n := r.n
+	r.n++
+	csf, sqlText, scn := int64(0), fmt.Sprintf("r%d", n), int64(n+1)
+	if r.d.fragments > 0 {
+		sqlText = fmt.Sprintf("r%d,", n)
+		if n%r.d.fragments != r.d.fragments-1 {
+			csf = 1
+		}
+	} else if r.d.csfEvery > 0 && n > 0 {
+		if n%2 == 1 {
+			csf, sqlText = 1, fmt.Sprintf("r%d-a", n)
+		} else {
+			sqlText = fmt.Sprintf("r%d-b", n)
+		}
+	}
+	copy(dest, []driver.Value{scn, sqlText, int64(1), "T", "S", time.Now(), []byte("xidxidxi"), nil, csf, "u", nil, nil})
+	return nil
+}
+
+func TestReadAheadBatches(t *testing.T) {
+	for _, tt := range []struct {
+		prefetchRows int
+		want         int
+	}{
+		{0, 4},
+		{500, 4},
+		{1000, 4},
+		{2000, 4},
+		{2001, 5},
+		{10000, 20},
+	} {
+		t.Run(fmt.Sprint(tt.prefetchRows), func(t *testing.T) {
+			assert.Equal(t, tt.want, readAheadBatches(tt.prefetchRows))
 		})
 	}
 }

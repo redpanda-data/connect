@@ -1085,16 +1085,98 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		lm.contentStmt = stmt
 	}
 	queryStart := time.Now()
-	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN)
+	// Cancelled on return so a failing consumer stops the reader, including a
+	// fetch blocked on the network.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN) //nolint:rowserrcheck
 	if err != nil {
 		return lastSCN, fmt.Errorf("querying logminer: %w", err)
 	}
-	defer rows.Close()
 
+	// The reader owns rows and closes it before closing batches, so once
+	// batches is drained or closed the cursor is released.
 	var (
-		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
-		firstRow = true
+		batches = make(chan []*sqlredo.RedoEvent, readAheadBatches(lm.cfg.PrefetchRows))
+		readErr error
 	)
+	go func() {
+		defer close(batches)
+		defer rows.Close()
+		readErr = lm.readLogMinerRows(ctx, rows, batches, queryStart, startSCN, endSCN)
+	}()
+	// On an early return, stop the reader and wait until it has closed rows.
+	defer func() {
+		cancel()
+		for range batches {
+		}
+	}()
+
+	for batch := range batches {
+		for _, event := range batch {
+			if err := processEvent(ctx, event); err != nil {
+				return lastSCN, fmt.Errorf("processing redo event: %w", err)
+			}
+			lastSCN = event.SCN
+		}
+	}
+
+	// batches is closed, so the reader has finished writing readErr.
+	if readErr != nil {
+		return lastSCN, fmt.Errorf("reading rows from logminer: %w", readErr)
+	}
+
+	return lastSCN, nil
+}
+
+const (
+	// logMinerReadBatchSize is the number of rows (including CSF fragments)
+	// read per channel send. It bounds a batch to ~2 MB of SQL_REDO (4000
+	// bytes per row) and keeps channel overhead negligible.
+	logMinerReadBatchSize = 500
+	// logMinerReadAheadBatches is the minimum read-ahead (2000 rows).
+	logMinerReadAheadBatches = 4
+)
+
+// readAheadBatches returns the read-ahead channel capacity, large enough to
+// buffer one whole fetch so the next round trip overlaps with processing.
+func readAheadBatches(prefetchRows int) int {
+	fetchBatches := (prefetchRows + logMinerReadBatchSize - 1) / logMinerReadBatchSize
+	return max(logMinerReadAheadBatches, fetchBatches)
+}
+
+// readLogMinerRows sends rows to batches as complete events, joining CSF
+// fragments. On error, it sends the complete events read so far.
+func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batches chan<- []*sqlredo.RedoEvent, queryStart time.Time, startSCN, endSCN uint64) error {
+	var (
+		rowsInBatch int // rows read for batch, including CSF fragments
+		firstRow    = true
+		pending     *sqlredo.RedoEvent // accumulates CSF continuation fragments
+
+		batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
+		flush = func() error {
+			if len(batch) == 0 {
+				return nil
+			}
+			select {
+			case batches <- batch:
+				batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
+				rowsInBatch = 0
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		emit = func(ev *sqlredo.RedoEvent) error {
+			batch = append(batch, ev)
+			if rowsInBatch < logMinerReadBatchSize {
+				return nil
+			}
+			return flush()
+		}
+	)
+
 	for rows.Next() {
 		if firstRow {
 			elapsed := time.Since(queryStart)
@@ -1122,8 +1204,12 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&event.RSID,
 			&event.SSN,
 		); err != nil {
-			return lastSCN, err
+			if ferr := flush(); ferr != nil {
+				return ferr
+			}
+			return err
 		}
+		rowsInBatch++
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
@@ -1136,12 +1222,11 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 				pending.SQLRedo.String += event.SQLRedo.String
 			}
 			if csf == 0 {
-				// Final fragment — emit the accumulated event.
-				if err := processEvent(ctx, pending); err != nil {
-					return lastSCN, fmt.Errorf("processing redo event: %w", err)
+				// Final fragment — emit the accumulated event. The first
+				// fragment's SCN, so a retry re-reads the whole statement.
+				if err := emit(pending); err != nil {
+					return err
 				}
-				// The first fragment's SCN, so a retry re-reads the whole statement.
-				lastSCN = pending.SCN
 				pending = nil
 			}
 			// If csf == 1, continue accumulating.
@@ -1154,32 +1239,36 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			continue
 		}
 
-		if err := processEvent(ctx, event); err != nil {
-			return lastSCN, fmt.Errorf("processing redo event: %w", err)
+		if err := emit(event); err != nil {
+			return fmt.Errorf("emitting redo events: %w", err)
 		}
-		lastSCN = event.SCN
 	}
 
 	if err := rows.Err(); err != nil {
-		return lastSCN, err
+		// Drop any incomplete pending statement; flush what is complete.
+		if ferr := flush(); ferr != nil {
+			return fmt.Errorf("flushing redo events: %w", ferr)
+		}
+		return err
 	}
 
+	// Emit any incomplete pending event (shouldn't happen in practice).
+	if pending != nil {
+		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
+		if err := emit(pending); err != nil {
+			return fmt.Errorf("emitting pending redo events: %w", err)
+		}
+	}
+	if err := flush(); err != nil {
+		return fmt.Errorf("flushing redo events: %w", err)
+	}
 	// capture timings if 0 rows
 	if firstRow {
 		elapsed := time.Since(queryStart)
 		lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
 		lm.log.Debugf("LogMiner query returned no rows after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
 	}
-
-	// Flush any incomplete pending event (shouldn't happen in practice).
-	if pending != nil {
-		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
-		if err := processEvent(ctx, pending); err != nil {
-			return lastSCN, fmt.Errorf("processing redo event: %w", err)
-		}
-	}
-
-	return lastSCN, nil
+	return nil
 }
 
 const (

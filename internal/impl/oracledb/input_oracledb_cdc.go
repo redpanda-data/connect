@@ -447,8 +447,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if err := parseWalletConfig(conf, overrides); err != nil {
 		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
 	}
-	if err := parsePrefetchRowsConfig(conf, overrides, logger); err != nil {
+	effectivePrefetchRows, err := parsePrefetchRowsConfig(conf, overrides, logger)
+	if err != nil {
 		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldPrefetchRows, err)
+	}
+	if lmCfg != nil {
+		lmCfg.PrefetchRows = effectivePrefetchRows
 	}
 
 	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {
