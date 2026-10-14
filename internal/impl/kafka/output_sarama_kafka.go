@@ -68,6 +68,8 @@ func OSKConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
 		Description(`
+Use the xref:components:outputs/redpanda.adoc[`+"`redpanda` output"+`] instead.
+
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
 Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].
@@ -84,11 +86,9 @@ However, this also means that manual intervention will eventually be required in
 
 == Troubleshooting
 
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"xref:components:outputs/kafka_franz.adoc[`kafka_franz` output]"+`.
-
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tls-enabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			saramaAddressesField(oskFieldAddresses),
 			service.NewTLSToggledField(oskFieldTLS),

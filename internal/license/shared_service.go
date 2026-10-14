@@ -53,7 +53,7 @@ func CheckRunningEnterprise(res *service.Resources) error {
 	return nil
 }
 
-var errEnterpriseLicenseRequired = errors.New("this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product. For more information check out: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+var errEnterpriseLicenseRequired = errors.New("this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product. For more information check out: https://docs.redpanda.com/connect/get-started/licensing/")
 
 type sharedServiceKeyType int
 

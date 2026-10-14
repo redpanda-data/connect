@@ -9,6 +9,7 @@
 package sqlredo_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"testing"
 	"time"
@@ -308,4 +309,33 @@ func TestExtractValuesWithConverter(t *testing.T) {
 			}
 		})
 	}
+}
+
+// RS_ID and SSN identify one logical row change in V$LOGMNR_CONTENTS. They must
+// survive the RedoEvent to DMLEvent conversion. Oracle pads RS_ID with
+// whitespace, which must be trimmed at this boundary.
+func TestRedoEventToDMLEventCopiesRecordIdentity(t *testing.T) {
+	p := sqlredo.NewParser()
+
+	t.Run("copies and trims", func(t *testing.T) {
+		event, err := p.RedoEventToDMLEvent(&sqlredo.RedoEvent{
+			Operation: sqlredo.OpInsert,
+			SQLRedo:   sql.NullString{String: `insert into "MYAPP"."CUSTOMERS" ("ID") values ('1')`, Valid: true},
+			RSID:      sql.NullString{String: " 0x000027.00001a33.0010 ", Valid: true},
+			SSN:       sql.NullInt64{Int64: 3, Valid: true},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "0x000027.00001a33.0010", event.RSID)
+		assert.Equal(t, int64(3), event.SSN)
+	})
+
+	t.Run("NULL columns leave zero values", func(t *testing.T) {
+		event, err := p.RedoEventToDMLEvent(&sqlredo.RedoEvent{
+			Operation: sqlredo.OpInsert,
+			SQLRedo:   sql.NullString{String: `insert into "MYAPP"."CUSTOMERS" ("ID") values ('1')`, Valid: true},
+		})
+		require.NoError(t, err)
+		assert.Empty(t, event.RSID)
+		assert.Zero(t, event.SSN)
+	})
 }

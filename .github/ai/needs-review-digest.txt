@@ -1,0 +1,9 @@
+You are helping engineers decide which open pull requests to review.
+For each pull request, emit exactly one entry.
+Write a one-sentence summary of what the PR changes, aimed at a reviewer, not an end user.
+Rate review effort as S, M or L, based on:
+- Lines added and deleted, and the number of files changed
+- Whether the changes are mechanical (renames, generated code, dependency bumps, docs) or need careful reasoning
+- Risky areas: concurrency, checkpointing and acks, protocol handling, security, data loss
+Generated files, go.sum, vendored code and test fixtures should barely count towards effort.
+If an existing summary comment is provided, use it but don't copy it word for word.

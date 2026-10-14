@@ -1,0 +1,47 @@
+{
+  "model": "claude-haiku-4-5",
+  "max_tokens": 2048,
+  "system": "PROMPT",
+  "messages": [
+    {
+      "role": "user",
+      "content": "DATA"
+    }
+  ],
+  "output_config": {
+    "format": {
+      "type": "json_schema",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pr": { "type": "integer", "description": "PR number" },
+                "summary": {
+                  "type": "string",
+                  "description": "One sentence for a reviewer: what the PR changes and which component it touches."
+                },
+                "effort": {
+                  "type": "string",
+                  "enum": ["S", "M", "L"],
+                  "description": "S: under ~15 min, small or mechanical. M: up to ~1 hour, moderate logic in one area. L: over an hour, large, cross-cutting or subtle (concurrency, protocol, data loss risk)."
+                },
+                "effort_reason": {
+                  "type": "string",
+                  "description": "A few words justifying the effort rating."
+                }
+              },
+              "required": ["pr", "summary", "effort", "effort_reason"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["entries"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

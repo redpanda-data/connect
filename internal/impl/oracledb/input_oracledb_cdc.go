@@ -96,6 +96,9 @@ This input adds the following metadata fields to each message:
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time. Not present on snapshot (` + "`read`" + `) messages.
 - commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - username: The Oracle database username of the session that performed the DML, sourced from ` + "`V$LOGMNR_CONTENTS.USERNAME`" + `. Not present on snapshot (` + "`read`" + `) messages, nor on change messages where Oracle reports a NULL or empty username.
+- rs_id: The LogMiner record set ID from ` + "`V$LOGMNR_CONTENTS.RS_ID`" + `, identifying the redo record that produced the change. Use ` + "`rs_id`" + `, ` + "`ssn`" + ` and ` + "`row_seq`" + ` together to identify one row change and to order the changes of a transaction. Not present on snapshot (` + "`read`" + `) messages, nor on LOB-only synthetic updates.
+- ssn: The SQL sequence number from ` + "`V$LOGMNR_CONTENTS.SSN`" + `. Compare it numerically. Not present whenever ` + "`rs_id`" + ` is not present.
+- row_seq: The position of the row change among the consecutive row changes that report the same ` + "`rs_id`" + ` and ` + "`ssn`" + `, starting at 0 in redo order. Oracle reports the same ` + "`rs_id`" + ` and ` + "`ssn`" + ` for every row of an array DML redo record, such as a bulk ` + "`DELETE`" + ` of up to 255 rows, so this field tells those rows apart. It is 0 for every other change. LogMiner returns the rows of one redo record one after the other, and the connector counts them in that order. Compare it numerically. Not present whenever ` + "`rs_id`" + ` is not present.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -444,8 +447,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if err := parseWalletConfig(conf, overrides); err != nil {
 		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
 	}
-	if err := parsePrefetchRowsConfig(conf, overrides, logger); err != nil {
+	effectivePrefetchRows, err := parsePrefetchRowsConfig(conf, overrides, logger)
+	if err != nil {
 		return nil, fmt.Errorf("parsing oracle %s config: %w", ociFieldPrefetchRows, err)
+	}
+	if lmCfg != nil {
+		lmCfg.PrefetchRows = effectivePrefetchRows
 	}
 
 	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {

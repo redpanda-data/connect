@@ -56,6 +56,9 @@ func TestMetaSummary(t *testing.T) {
 	assert.Equal(t, "Listens to a changefeed and creates a message for each row received.", metaSummary(changefeed))
 	assert.Equal(t, "First paragraph.", metaSummary("First paragraph.\n\nSecond paragraph."))
 	assert.Equal(t, "Lists items:", metaSummary("Lists items:\n- one\n- two"))
+	assert.Equal(t, "Reads rows.", metaSummary("Reads rows.\n\nifndef::env-cloud[]\nSelf-managed only.\nendif::[]"), "a conditional after the sentence is cut")
+	assert.Equal(t, "Reads rows.", metaSummary("Reads rows.\nifndef::env-cloud[]\nSelf-managed only.\nendif::[]"), "a conditional glued to the sentence is cut")
+	assert.Equal(t, "Reads rows.", metaSummary("Reads rows.\nifndef::env-cloud[Self-managed only.]"), "the single-line form is cut")
 }
 
 func TestCloudGuardXrefs(t *testing.T) {
@@ -75,6 +78,22 @@ func TestCloudGuardXrefs(t *testing.T) {
 
 	code := "----\nxref:components:processors/grok.adoc[grok]\n----"
 	assert.Equal(t, code, cloudGuardXrefs(code, excluded), "verbatim blocks are left alone")
+
+	singleLine := "ifndef::env-cloud[Self-managed only.]\n\nSee xref:components:processors/grok.adoc[grok]."
+	assert.Equal(t, "ifndef::env-cloud[Self-managed only.]\n\n"+
+		"ifndef::env-cloud[]\nSee xref:components:processors/grok.adoc[grok].\nendif::[]\n"+
+		"ifdef::env-cloud[]\nSee grok.\nendif::[]",
+		cloudGuardXrefs(singleLine, excluded), "a single-line conditional has no endif, so later paragraphs are still guarded")
+
+	cloudOnly := "ifdef::env-cloud[]\nUse xref:components:processors/grok.adoc[grok] instead.\nendif::[]\n\nAfter."
+	assert.Equal(t, "ifdef::env-cloud[]\nUse grok instead.\nendif::[]\n\nAfter.",
+		cloudGuardXrefs(cloudOnly, excluded), "inside an ifdef::env-cloud block the link is replaced in place")
+
+	nested := "ifdef::env-cloud[]\nifndef::env-cloud[]\nUse xref:components:processors/grok.adoc[grok].\nendif::[]\nendif::[]\n\nSee xref:components:processors/grok.adoc[grok]."
+	assert.Equal(t, "ifdef::env-cloud[]\nifndef::env-cloud[]\nUse xref:components:processors/grok.adoc[grok].\nendif::[]\nendif::[]\n\n"+
+		"ifndef::env-cloud[]\nSee xref:components:processors/grok.adoc[grok].\nendif::[]\n"+
+		"ifdef::env-cloud[]\nSee grok.\nendif::[]",
+		cloudGuardXrefs(nested, excluded), "an ifndef::env-cloud block hides its content in Cloud even when nested, and the depth unwinds")
 }
 
 func TestRenderDescriptionPartial(t *testing.T) {
