@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,6 +72,8 @@ type LogMiner struct {
 	// lobReplay is the in-flight window that re-mines open LOB transactions.
 	// It stays set until the window succeeds, so a retry resets them again.
 	lobReplay *lobReplay
+	// lobWarner warns once when one transaction has been re-mined for too long.
+	lobWarner lobReplayWarner
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -107,7 +111,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME, RS_ID, SSN FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2" + buf.String()
+	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME, RS_ID, SSN FROM V$LOGMNR_CONTENTS" + logMinerRangeClause + buf.String()
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -330,13 +334,18 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 			return false, err
 		}
 		lm.lobReplay = replay
+		warn, age := lm.lobWarner.observe(replay, time.Now())
 		if replay != nil {
 			sessionStart = replay.fromSCN - 1
 			// The preselected files start at currentSCN and may not cover fromSCN.
 			if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, sessionStart, endSCN); err != nil {
 				return false, fmt.Errorf("collecting redo logs for LOB replay: %w", err)
 			}
-			lm.log.Debugf("Re-mining %d open transaction(s) with LOB changes from SCN %d; rows of other transactions up to SCN %d are skipped", len(replay.txns), replay.fromSCN, replay.processedSCN)
+			remined := replay.processedSCN - replay.fromSCN + 1
+			lm.log.Debugf("Re-mining %d open transaction(s) with LOB changes from SCN %d (%d SCNs re-mined); rows of other transactions up to SCN %d are skipped", len(replay.txns), replay.fromSCN, remined, replay.processedSCN)
+			if warn {
+				lm.log.Warnf("An open transaction with LOB changes since SCN %d has been re-mined in every mining window for %s so its LOB data is complete (%d SCNs re-read this window). Long-running transactions with LOB changes increase mining work and can increase lag until they commit or roll back", replay.fromSCN, age.Round(time.Second), remined)
+			}
 			processEvent = func(ctx context.Context, ev *sqlredo.RedoEvent) error {
 				if replay.skip(ev) {
 					return nil
@@ -418,6 +427,43 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	return endSCN >= dbCurrentSCN, nil
 }
 
+// xidParts is the number of components in a "USN.SLOT.SEQ" transaction ID.
+const xidParts = 3
+
+const (
+	// logMinerRangeClause is the SCN range every contents query starts with.
+	logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
+	// lobReplayWarnAfter is how long one transaction may be re-mined before
+	// it is logged as a warning.
+	lobReplayWarnAfter = 3 * time.Minute
+)
+
+// lobReplayWarner tracks the oldest replay start so a long-running
+// transaction warns once rather than every window.
+type lobReplayWarner struct {
+	fromSCN uint64
+	since   time.Time
+	warned  bool
+}
+
+// observe records the current window's replay (nil for none) and reports
+// whether to warn, along with how long fromSCN has been re-mined.
+func (w *lobReplayWarner) observe(replay *lobReplay, now time.Time) (warn bool, age time.Duration) {
+	if replay == nil {
+		*w = lobReplayWarner{}
+		return false, 0
+	}
+	if replay.fromSCN != w.fromSCN {
+		*w = lobReplayWarner{fromSCN: replay.fromSCN, since: now}
+	}
+	age = now.Sub(w.since)
+	if w.warned || age < lobReplayWarnAfter {
+		return false, age
+	}
+	w.warned = true
+	return true, age
+}
+
 // lobReplay is a window that re-mines open transactions with LOB changes from their start.
 type lobReplay struct {
 	txns         map[sqlredo.TransactionID]struct{}
@@ -432,6 +478,40 @@ func (r *lobReplay) skip(ev *sqlredo.RedoEvent) bool {
 	}
 	_, replayed := r.txns[ev.TransactionID]
 	return !replayed
+}
+
+// queryFilter returns a predicate, ANDed into the contents query, limiting it
+// to rows above processedSCN and rows of the replayed transactions, with the
+// processedSCN bound as :3. The XID is matched on V$LOGMNR_CONTENTS' numeric
+// XIDUSN, XIDSLT and XIDSQN columns, parsed from the "USN.SLOT.SEQ" ID so only
+// integers reach the SQL. ok is false if an ID cannot be parsed, in which case
+// the caller must not filter, as the client-side skip alone is still lossless.
+func (r *lobReplay) queryFilter() (pred string, ok bool) {
+	ids := make([]string, 0, len(r.txns))
+	for id := range r.txns {
+		ids = append(ids, string(id))
+	}
+	slices.Sort(ids)
+
+	var sb strings.Builder
+	sb.WriteString(" AND (SCN > :3")
+	for _, id := range ids {
+		parts := strings.Split(id, ".")
+		if len(parts) != xidParts {
+			return "", false
+		}
+		var nums [xidParts]uint64
+		for i, part := range parts {
+			n, err := strconv.ParseUint(part, 10, 32)
+			if err != nil {
+				return "", false
+			}
+			nums[i] = n
+		}
+		fmt.Fprintf(&sb, " OR (XIDUSN = %d AND XIDSLT = %d AND XIDSQN = %d)", nums[0], nums[1], nums[2])
+	}
+	sb.WriteString(")")
+	return sb.String(), true
 }
 
 // planLOBReplay selects the open transactions with LOB state, resets them so
@@ -1182,9 +1262,24 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	default:
 		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	}
-	if lm.contentStmt == nil {
-		stmt, err := conn.PrepareContext(ctx, lm.logMinerQuery)
-		if err != nil {
+	stmt, queryArgs := lm.contentStmt, []any{startSCN, endSCN}
+	if replay := lm.lobReplay; replay != nil {
+		// The replay set changes per window, so this statement is not cached.
+		if pred, ok := replay.queryFilter(); ok {
+			query := strings.Replace(lm.logMinerQuery, logMinerRangeClause, logMinerRangeClause+pred, 1)
+			replayStmt, err := conn.PrepareContext(ctx, query)
+			if err != nil {
+				return lastSCN, fmt.Errorf("preparing logminer LOB replay query: %w", err)
+			}
+			defer replayStmt.Close()
+			stmt, queryArgs = replayStmt, append(queryArgs, replay.processedSCN)
+		} else {
+			lm.log.Debugf("Unparseable transaction ID in LOB replay set, querying without a transaction filter")
+		}
+	}
+	if stmt == nil {
+		var err error
+		if stmt, err = conn.PrepareContext(ctx, lm.logMinerQuery); err != nil {
 			return lastSCN, fmt.Errorf("preparing logminer contents query: %w", err)
 		}
 		lm.contentStmt = stmt
@@ -1195,7 +1290,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN) //nolint:rowserrcheck
+	rows, err := stmt.QueryContext(ctx, queryArgs...) //nolint:rowserrcheck
 	if err != nil {
 		return lastSCN, fmt.Errorf("querying logminer: %w", err)
 	}
