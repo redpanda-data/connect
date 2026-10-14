@@ -27,7 +27,7 @@ func franzKafkaInputConfig() *service.ConfigSpec {
 		Version("3.61.0").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-Use the xref:components:inputs/redpanda.adoc[` + "`redpanda` input" + `] instead.
+This input is deprecated as of version 4.68.0. Use the xref:components:inputs/redpanda.adoc[` + "`redpanda` input" + `] instead.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 

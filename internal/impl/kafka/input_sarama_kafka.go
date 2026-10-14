@@ -86,7 +86,7 @@ func iskConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Connects to Kafka brokers and consumes one or more topics.`).
 		Description(`
-Use the xref:components:inputs/redpanda.adoc[`+"`redpanda` input"+`] instead.
+This input is deprecated as of version 4.68.0. Use the xref:components:inputs/redpanda.adoc[`+"`redpanda` input"+`] instead.
 
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
