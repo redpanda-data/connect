@@ -753,6 +753,219 @@ func TestLOBOnlyTransactionWithoutStartIsPublished(t *testing.T) {
 	assert.Equal(t, replication.SCN(140), pub.messages[0].CheckpointSCN)
 }
 
+func TestLOBReplaySkip(t *testing.T) {
+	r := &lobReplay{
+		txns:         map[sqlredo.TransactionID]struct{}{"replayed": {}},
+		processedSCN: 100,
+	}
+	tests := []struct {
+		name string
+		txn  sqlredo.TransactionID
+		scn  uint64
+		want bool
+	}{
+		{name: "other txn below processed", txn: "other", scn: 50, want: true},
+		{name: "other txn at processed", txn: "other", scn: 100, want: true},
+		{name: "other txn above processed", txn: "other", scn: 101, want: false},
+		{name: "replayed txn below processed", txn: "replayed", scn: 50, want: false},
+		{name: "replayed txn at processed", txn: "replayed", scn: 100, want: false},
+		{name: "replayed txn above processed", txn: "replayed", scn: 101, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, r.skip(&sqlredo.RedoEvent{SCN: test.scn, TransactionID: test.txn}))
+		})
+	}
+}
+
+func TestPlanLOBReplay(t *testing.T) {
+	ctx := t.Context()
+	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`
+
+	t.Run("no LOB state", func(t *testing.T) {
+		lm, _, cache := newLOBReplayMiner(t)
+		require.NoError(t, cache.StartTransaction(ctx, "plain", 10))
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, replay)
+		txn, err := cache.GetTransaction(ctx, "plain")
+		require.NoError(t, err)
+		assert.NotNil(t, txn)
+	})
+
+	t.Run("selects and resets LOB transactions", func(t *testing.T) {
+		lm, _, cache := newLOBReplayMiner(t)
+		lm.currentSCN = 100
+		for id, scn := range map[sqlredo.TransactionID]uint64{"withState": 30, "pendingOnly": 20, "plain": 5} {
+			require.NoError(t, cache.StartTransaction(ctx, id, scn))
+		}
+		require.NoError(t, lm.processRedoEvent(ctx, lobEv(31, "withState", sqlredo.OpSelectLobLocator, locator)))
+		require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(32, "withState", "abc", 1)))
+		require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(21, "pendingOnly", "xyz", 1)))
+		require.Contains(t, lm.lobStates, sqlredo.TransactionID("withState"))
+		require.Contains(t, lm.pendingLOBWrites, sqlredo.TransactionID("pendingOnly"))
+
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"withState": {}, "pendingOnly": {}}, replay.txns)
+		assert.Equal(t, uint64(20), replay.fromSCN)
+		assert.Equal(t, uint64(100), replay.processedSCN)
+
+		for _, id := range []sqlredo.TransactionID{"withState", "pendingOnly"} {
+			txn, err := cache.GetTransaction(ctx, id)
+			require.NoError(t, err)
+			assert.Nil(t, txn, id)
+		}
+		assert.Empty(t, lm.lobStates)
+		assert.Empty(t, lm.pendingLOBWrites)
+
+		txn, err := cache.GetTransaction(ctx, "plain")
+		require.NoError(t, err)
+		assert.NotNil(t, txn, "transaction without LOB state must be untouched")
+	})
+
+	t.Run("candidate missing from cache is not selected", func(t *testing.T) {
+		lm, _, _ := newLOBReplayMiner(t)
+		lm.currentSCN = 100
+		lm.pendingLOBWrites["ghost"] = []*sqlredo.RedoEvent{lobWriteEv(21, "ghost", "xyz", 1)}
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, replay)
+	})
+
+	t.Run("carried-over replay is kept", func(t *testing.T) {
+		lm, _, cache := newLOBReplayMiner(t)
+		lm.currentSCN = 150
+		lm.lobReplay = &lobReplay{
+			txns:         map[sqlredo.TransactionID]struct{}{"carried": {}},
+			fromSCN:      10,
+			processedSCN: 100,
+		}
+		// A fresh LOB transaction with a higher start SCN joins the replay.
+		require.NoError(t, cache.StartTransaction(ctx, "fresh", 120))
+		require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(121, "fresh", "xyz", 1)))
+
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"carried": {}, "fresh": {}}, replay.txns)
+		assert.Equal(t, uint64(10), replay.fromSCN, "carried-over fromSCN must be kept")
+		assert.Equal(t, uint64(150), replay.processedSCN, "max of previous and current SCN")
+
+		lm.lobReplay = replay
+		lm.currentSCN = 120
+		again, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, again, "carried txns stay even when absent from the cache")
+		assert.Equal(t, uint64(150), again.processedSCN)
+	})
+}
+
+// TestLOBReplayAcrossWindowBoundary emulates miningCycle: a LOB write in
+// progress at the window boundary is re-mined from its transaction start while
+// already-processed rows of other transactions are skipped.
+func TestLOBReplayAcrossWindowBoundary(t *testing.T) {
+	ctx := t.Context()
+	insert := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
+		return lobEv(scn, txn, sqlredo.OpInsert, `insert into "TESTDB"."T" ("ID") values ('7')`)
+	}
+	update := func(scn uint64) *sqlredo.RedoEvent {
+		return lobEv(scn, "txA", sqlredo.OpUpdate, `update "TESTDB"."T" set "ID" = '42' where "ID" = '42'`)
+	}
+	locator := func(scn uint64) *sqlredo.RedoEvent {
+		return lobEv(scn, "txA", sqlredo.OpSelectLobLocator,
+			`declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`)
+	}
+	start := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
+		return &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: sqlredo.OpStart}
+	}
+	commit := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
+		return &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: sqlredo.OpCommit}
+	}
+
+	window1 := func() []*sqlredo.RedoEvent {
+		return []*sqlredo.RedoEvent{
+			start(10, "txA"), update(20), locator(20), lobWriteEv(30, "txA", "hello", 1),
+			start(40, "txB"), insert(50, "txB"), commit(60, "txB"),
+		}
+	}
+	// Window 2 starts at SCN 9, so it re-mines everything from txA's start.
+	window2 := func() []*sqlredo.RedoEvent {
+		return append(window1(),
+			lobWriteEv(110, "txA", "world", 6), commit(120, "txA"))
+	}
+	feed := func(lm *LogMiner, replay *lobReplay, evs []*sqlredo.RedoEvent) {
+		for _, ev := range evs {
+			if replay == nil || !replay.skip(ev) {
+				require.NoError(t, lm.processRedoEvent(ctx, ev))
+			}
+		}
+	}
+	t.Run("replay assembles the full LOB once", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		feed(lm, nil, window1())
+		require.Len(t, pub.messages, 1, "txB is published in window 1")
+
+		lm.currentSCN = 100
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, uint64(10), replay.fromSCN)
+		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"txA": {}}, replay.txns)
+
+		feed(lm, replay, window2())
+
+		var txA, txB int
+		for _, m := range pub.messages {
+			d, _ := m.Data.(map[string]any)
+			if _, ok := d["DOC"]; ok {
+				txA++
+				assert.Equal(t, "helloworld", d["DOC"])
+			} else {
+				txB++
+			}
+		}
+		assert.Equal(t, 1, txA, "txA published exactly once")
+		assert.Equal(t, 1, txB, "txB published exactly once")
+		assert.Len(t, pub.messages, 2)
+	})
+
+	t.Run("re-feeding without a reset duplicates output", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		feed(lm, nil, window1())
+		// No planLOBReplay and no skip: the sanity baseline the reset protects against.
+		feed(lm, nil, window2())
+
+		assert.Greater(t, len(pub.messages), 2, "re-fed rows are published again without the reset and skip")
+	})
+}
+
+func newLOBReplayMiner(t *testing.T) (*LogMiner, *publisherStub, TransactionCache) {
+	t.Helper()
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+	return lm, pub, cache
+}
+
+func lobEv(scn uint64, txn sqlredo.TransactionID, op sqlredo.Operation, redo string) *sqlredo.RedoEvent {
+	ev := &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: op}
+	if redo != "" {
+		ev.SchemaName = sql.NullString{String: "TESTDB", Valid: true}
+		ev.TableName = sql.NullString{String: "T", Valid: true}
+		ev.SQLRedo = sql.NullString{String: redo, Valid: true}
+	}
+	return ev
+}
+
+func lobWriteEv(scn uint64, txn sqlredo.TransactionID, data string, offset int) *sqlredo.RedoEvent {
+	return lobEv(scn, txn, sqlredo.OpLobWrite,
+		fmt.Sprintf(" buf_c := '%s';\n  dbms_lob.write(loc_c, %d, %d, buf_c);", data, len(data), offset))
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher:        pub,

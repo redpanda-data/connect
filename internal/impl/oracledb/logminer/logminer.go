@@ -67,6 +67,9 @@ type LogMiner struct {
 	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
 	// replayed after the INSERT is buffered so inferLOBLocator can find it.
 	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
+	// lobReplay is the in-flight window that re-mines open LOB transactions.
+	// It stays set until the window succeeds, so a retry resets them again.
+	lobReplay *lobReplay
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -314,7 +317,36 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		}
 	}
 
-	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, logFiles); err != nil {
+	// LogMiner cannot decode the LOB_WRITE rows of a LOB whose locator precedes
+	// the session's STARTSCN, so open LOB transactions are re-mined from their
+	// start in every window.
+	var (
+		sessionStart = lm.currentSCN
+		processEvent = lm.processRedoEvent
+	)
+	if lm.cfg.LOBEnabled {
+		replay, err := lm.planLOBReplay(ctx)
+		if err != nil {
+			return false, err
+		}
+		lm.lobReplay = replay
+		if replay != nil {
+			sessionStart = replay.fromSCN - 1
+			// The preselected files start at currentSCN and may not cover fromSCN.
+			if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, sessionStart, endSCN); err != nil {
+				return false, fmt.Errorf("collecting redo logs for LOB replay: %w", err)
+			}
+			lm.log.Debugf("Re-mining %d open transaction(s) with LOB changes from SCN %d; rows of other transactions up to SCN %d are skipped", len(replay.txns), replay.fromSCN, replay.processedSCN)
+			processEvent = func(ctx context.Context, ev *sqlredo.RedoEvent) error {
+				if replay.skip(ev) {
+					return nil
+				}
+				return lm.processRedoEvent(ctx, ev)
+			}
+		}
+	}
+
+	if err := lm.prepareLogsAndStartSession(ctx, conn, sessionStart, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
 			var reduceWindowHint string
@@ -359,7 +391,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, len(logFiles), lm.processRedoEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, sessionStart, endSCN, len(logFiles), processEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			// Resume just before the last processed SCN rather than from the start
@@ -381,8 +413,81 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	default:
 		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	}
+	lm.lobReplay = nil
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
+}
+
+// lobReplay is a window that re-mines open transactions with LOB changes from their start.
+type lobReplay struct {
+	txns         map[sqlredo.TransactionID]struct{}
+	fromSCN      uint64 // lowest start SCN of txns
+	processedSCN uint64 // rows of other transactions at or below this SCN were already processed
+}
+
+// skip reports whether ev was already processed by an earlier window.
+func (r *lobReplay) skip(ev *sqlredo.RedoEvent) bool {
+	if ev.SCN > r.processedSCN {
+		return false
+	}
+	_, replayed := r.txns[ev.TransactionID]
+	return !replayed
+}
+
+// planLOBReplay selects the open transactions with LOB state, resets them so
+// they are rebuilt from scratch, and returns the window to re-mine. It returns
+// nil when there is nothing to replay.
+func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
+	replay := &lobReplay{
+		txns:         make(map[sqlredo.TransactionID]struct{}),
+		fromSCN:      math.MaxUint64,
+		processedSCN: lm.currentSCN,
+	}
+	// A replay left over from a failed attempt already rolled back its
+	// transactions, so they may be absent from the cache until their rows are
+	// re-mined. They must stay in the set or their rows would be skipped.
+	if prev := lm.lobReplay; prev != nil {
+		for id := range prev.txns {
+			replay.txns[id] = struct{}{}
+		}
+		replay.fromSCN = prev.fromSCN
+		replay.processedSCN = max(prev.processedSCN, lm.currentSCN)
+	}
+
+	candidates := make(map[sqlredo.TransactionID]struct{}, len(lm.lobStates)+len(lm.pendingLOBWrites))
+	for id := range lm.lobStates {
+		candidates[id] = struct{}{}
+	}
+	for id := range lm.pendingLOBWrites {
+		candidates[id] = struct{}{}
+	}
+	for id := range candidates {
+		if _, carried := replay.txns[id]; carried {
+			continue
+		}
+		txn, err := lm.txnCache.GetTransaction(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("getting transaction %s for LOB replay: %w", id, err)
+		}
+		// Missing or discarded transactions have their events dropped at commit.
+		if txn == nil {
+			continue
+		}
+		replay.txns[id] = struct{}{}
+		replay.fromSCN = min(replay.fromSCN, txn.SCN)
+	}
+	if len(replay.txns) == 0 {
+		return nil, nil
+	}
+
+	for id := range replay.txns {
+		if err := lm.txnCache.RollbackTransaction(ctx, id); err != nil {
+			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)
+		}
+		delete(lm.lobStates, id)
+		delete(lm.pendingLOBWrites, id)
+	}
+	return replay, nil
 }
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
