@@ -60,6 +60,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		disableTelemetry        bool
 		telemetryDeploymentType string
 		telemetryTenantID       string
+		telemetryPipelineID     string
 		authzResourceName       string
 		authzPolicyFile         string
 		authzPolicyEndpoint     string
@@ -158,7 +159,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			// Kick off telemetry exporter
 			if !disableTelemetry {
-				telemetry.ActivateExporter(instanceID, version, telemetryDeploymentType, telemetryTenantID, fbLogger, schema, pConf)
+				telemetry.ActivateExporter(instanceID, version, telemetryDeploymentType, telemetryTenantID, telemetryPipelineID, fbLogger, schema, pConf)
 			}
 			return rpMgr.InitFromParsedConfig(pConf.Namespace("redpanda"))
 		}),
@@ -215,6 +216,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				if err != nil {
 					return err
 				}
+				telemetryPipelineID = pipelineID
 
 				// Parse and resolve cloud auth flags
 				if authzResourceName, authzPolicyFile, authzPolicyEndpoint, err = parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
