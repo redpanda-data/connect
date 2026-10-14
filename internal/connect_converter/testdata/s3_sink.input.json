@@ -1,0 +1,9 @@
+{
+  "name": "s3-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "s3.bucket.name": "my-bucket",
+    "s3.region": "us-east-1",
+    "topics": "orders"
+  }
+}
