@@ -203,7 +203,8 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}
-			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) {
+			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) ||
+				(ev.Operation == OpUpdate && pkMatchesAfterImage(ev, acc.PKValues)) {
 				ev.Data[acc.Column] = assembled
 				merged = true
 				logDebugf("LOB merge: set %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
@@ -340,4 +341,22 @@ func valuesEqual(a, b any) bool {
 		}
 	}
 	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+}
+
+func pkMatchesAfterImage(ev *DMLEvent, pkValues map[string]any) bool {
+	if len(pkValues) == 0 {
+		return false
+	}
+	for k, pkVal := range pkValues {
+		val, exists := ev.Data[k]
+		if !exists {
+			if val, exists = ev.OldValues[k]; !exists {
+				return false
+			}
+		}
+		if !valuesEqual(val, pkVal) {
+			return false
+		}
+	}
+	return true
 }
