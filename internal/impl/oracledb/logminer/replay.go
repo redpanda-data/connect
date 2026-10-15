@@ -46,6 +46,7 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 	if prev := lm.lobReplay; prev != nil {
 		for id := range prev.txns {
 			replay.txns[id] = struct{}{}
+			lm.log.Debugf("LOB transaction %s is carried over from an interrupted replay; re-mining it from SCN %d", id, prev.fromSCN)
 		}
 		replay.fromSCN = prev.fromSCN
 		replay.processedSCN = max(prev.processedSCN, lm.currentSCN)
@@ -72,6 +73,7 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		}
 		replay.txns[id] = struct{}{}
 		replay.fromSCN = min(replay.fromSCN, txn.SCN)
+		lm.log.Debugf("LOB transaction %s started at SCN %d is still open at the window boundary (SCN %d); re-mining it from its start", id, txn.SCN, replay.processedSCN)
 	}
 	if len(replay.txns) == 0 {
 		return nil, nil
