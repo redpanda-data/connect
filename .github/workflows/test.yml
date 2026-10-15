@@ -31,7 +31,7 @@ jobs:
           # TestNewSpecsHaveVersions reads the previous release tag.
           fetch-depth: 0
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
 
@@ -89,7 +89,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
 
