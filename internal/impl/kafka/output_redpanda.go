@@ -65,6 +65,36 @@ redpanda:
     - mechanism: SCRAM-SHA-512
       password: bar
       username: foo
+`).
+		Example("Deletes From CDC", "Changes from a PostgreSQL table are written to a compacted topic keyed by the primary key. The `postgres_cdc` input sets the `operation` metadata field to `delete` for deleted rows, so `tombstone` writes those as records with a null value and compaction removes the key. Other operations are written with their row as the value.", `
+input:
+  postgres_cdc:
+    dsn: postgres://user:pass@localhost:5432/db?sslmode=disable
+    slot_name: users_slot
+    schema: public
+    tables: [ users ]
+    stream_snapshot: true
+
+output:
+  redpanda:
+    seed_brokers: [ "127.0.0.1:9092" ]
+    topic: users
+    key: ${! this.id }
+    tombstone: ${! @operation == "delete" }
+`).
+		Example("Topic Mirror", "Records are copied from one topic to another. The `redpanda` input sets the `kafka_tombstone_message` metadata field to `true` for tombstones and `false` otherwise, so `tombstone` keeps tombstones as records with a null value instead of writing them as empty records.", `
+input:
+  redpanda:
+    seed_brokers: [ "127.0.0.1:9092" ]
+    topics: [ source ]
+    consumer_group: mirror
+
+output:
+  redpanda:
+    seed_brokers: [ "127.0.0.1:9092" ]
+    topic: destination
+    key: ${! @kafka_key }
+    tombstone: ${! @kafka_tombstone_message }
 `)
 }
 

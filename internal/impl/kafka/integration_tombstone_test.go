@@ -149,7 +149,7 @@ output:
     seed_brokers: [ %[1]s ]
     topic: %[3]s
     key: ${! @kafka_key }
-    tombstone: ${! @kafka_tombstone_message.or(false) }
+    tombstone: ${! @kafka_tombstone_message }
 `, rp.BrokerAddr, src, dst))
 
 		records := consumeAllRecords(t, rp.BrokerAddr, dst, 3)

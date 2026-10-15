@@ -418,10 +418,10 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Optional().
 			Advanced(),
 		service.NewInterpolatedStringField(kfwFieldTombstone).
-			Description("An optional boolean that, when it resolves to `true` for a message, writes that message as a tombstone: a record with a null value. The message payload is ignored for tombstones. Use this to delete keys on compacted topics, or to keep tombstones intact when mirroring a topic. An empty payload is not a tombstone. The interpolation must resolve to a value that can be parsed as a boolean, otherwise the write fails. Metadata that is not set resolves to `null`, so use `.or(false)` when some messages may not carry it.").
+			Description("An optional boolean that, when it resolves to `true` for a message, writes that message as a tombstone: a record with a null value. The message payload is ignored for tombstones. Use this to delete keys on compacted topics, or to keep tombstones intact when mirroring a topic. An empty payload is not a tombstone. The interpolation must resolve to a value that can be parsed as a boolean, otherwise the write fails.").
 			Version("4.114.0").
-			Example(`${! @kafka_tombstone_message.or(false) }`).
-			Example(`${! this.op == "delete" }`).
+			Example(`${! @kafka_tombstone_message }`).
+			Example(`${! @operation == "delete" }`).
 			Optional().
 			Advanced(),
 	}
