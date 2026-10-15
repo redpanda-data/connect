@@ -767,6 +767,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 			}
+			lm.lobReplay.end(redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
@@ -774,6 +775,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+			lm.lobReplay.end(redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)

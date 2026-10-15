@@ -10,10 +10,10 @@ package logminer
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -90,6 +90,14 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 	return replay, nil
 }
 
+// end removes a committed or rolled back transaction from the replay, so a
+// retry that carries the replay over doesn't re-mine and publish it again.
+func (r *lobReplay) end(id sqlredo.TransactionID) {
+	if r != nil {
+		delete(r.txns, id)
+	}
+}
+
 // skip reports whether ev was already processed by an earlier window.
 func (r *lobReplay) skip(ev *sqlredo.RedoEvent) bool {
 	if ev.SCN > r.processedSCN {
@@ -99,11 +107,9 @@ func (r *lobReplay) skip(ev *sqlredo.RedoEvent) bool {
 	return !replayed
 }
 
-// xidParts is the number of components in a "USN.SLOT.SEQ" transaction ID.
-const xidParts = 3
-
 // queryFilter returns a predicate for rows above processedSCN (:3) or of the
-// replayed transactions. ok is false if an ID doesn't parse to integers.
+// replayed transactions, matched on the raw XID bytes so it holds regardless
+// of host byte order. ok is false if an ID can't be converted.
 func (r *lobReplay) queryFilter() (pred string, ok bool) {
 	ids := make([]string, 0, len(r.txns))
 	for id := range r.txns {
@@ -111,22 +117,19 @@ func (r *lobReplay) queryFilter() (pred string, ok bool) {
 	}
 	slices.Sort(ids)
 
-	var sb strings.Builder
-	sb.WriteString(" AND (SCN > :3")
+	hexIDs := make([]string, 0, len(ids))
 	for _, id := range ids {
-		parts := strings.Split(id, ".")
-		if len(parts) != xidParts {
+		raw, err := sqlredo.TransactionID(id).RawXID()
+		if err != nil {
 			return "", false
 		}
-		var nums [xidParts]uint64
-		for i, part := range parts {
-			n, err := strconv.ParseUint(part, 10, 32)
-			if err != nil {
-				return "", false
-			}
-			nums[i] = n
-		}
-		fmt.Fprintf(&sb, " OR (XIDUSN = %d AND XIDSLT = %d AND XIDSQN = %d)", nums[0], nums[1], nums[2])
+		hexIDs = append(hexIDs, "HEXTORAW('"+strings.ToUpper(hex.EncodeToString(raw))+"')")
+	}
+
+	var sb strings.Builder
+	sb.WriteString(" AND (SCN > :3")
+	if len(hexIDs) > 0 {
+		sb.WriteString(" OR XID IN (" + strings.Join(hexIDs, ", ") + ")")
 	}
 	sb.WriteString(")")
 	return sb.String(), true

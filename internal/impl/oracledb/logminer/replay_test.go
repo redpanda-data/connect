@@ -36,28 +36,29 @@ func TestLOBReplayQueryFilter(t *testing.T) {
 		{
 			name:   "one txn",
 			txns:   []sqlredo.TransactionID{"1.2.3"},
-			want:   " AND (SCN > :3 OR (XIDUSN = 1 AND XIDSLT = 2 AND XIDSQN = 3))",
+			want:   " AND (SCN > :3 OR XID IN (HEXTORAW('0100020003000000')))",
 			wantOK: true,
 		},
 		{
 			name:   "two txns sorted",
 			txns:   []sqlredo.TransactionID{"9.8.7", "10.2.30", "1.2.3"},
-			want:   " AND (SCN > :3 OR (XIDUSN = 1 AND XIDSLT = 2 AND XIDSQN = 3) OR (XIDUSN = 10 AND XIDSLT = 2 AND XIDSQN = 30) OR (XIDUSN = 9 AND XIDSLT = 8 AND XIDSQN = 7))",
+			want:   " AND (SCN > :3 OR XID IN (HEXTORAW('0100020003000000'), HEXTORAW('0A0002001E000000'), HEXTORAW('0900080007000000')))",
 			wantOK: true,
 		},
 		{
-			name:   "max uint32",
-			txns:   []sqlredo.TransactionID{"4294967295.0.1"},
-			want:   " AND (SCN > :3 OR (XIDUSN = 4294967295 AND XIDSLT = 0 AND XIDSQN = 1))",
+			name:   "max values",
+			txns:   []sqlredo.TransactionID{"65535.65535.4294967295"},
+			want:   " AND (SCN > :3 OR XID IN (HEXTORAW('FFFFFFFFFFFFFFFF')))",
 			wantOK: true,
 		},
+		{name: "usn beyond uint16", txns: []sqlredo.TransactionID{"4294967295.0.1"}},
 		{name: "non-numeric part", txns: []sqlredo.TransactionID{"1.x.3"}},
 		{name: "injection attempt", txns: []sqlredo.TransactionID{"1.2.3 OR 1=1"}},
 		{name: "negative", txns: []sqlredo.TransactionID{"1.-2.3"}},
 		{name: "too few parts", txns: []sqlredo.TransactionID{"1.2"}},
 		{name: "too many parts", txns: []sqlredo.TransactionID{"1.2.3.4"}},
 		{name: "empty id", txns: []sqlredo.TransactionID{""}},
-		{name: "out of uint32 range", txns: []sqlredo.TransactionID{"4294967296.2.3"}},
+		{name: "seq out of uint32 range", txns: []sqlredo.TransactionID{"1.2.4294967296"}},
 		{name: "one bad among good", txns: []sqlredo.TransactionID{"1.2.3", "bad", "4.5.6"}},
 	}
 	for _, test := range tests {
@@ -91,7 +92,7 @@ func TestQueryLogMinerContentsLOBReplayFilter(t *testing.T) {
 				processedSCN: 15,
 			},
 			wantArgs: []any{int64(10), int64(20), int64(15)},
-			wantPred: " AND (SCN > :3 OR (XIDUSN = 1 AND XIDSLT = 2 AND XIDSQN = 3) OR (XIDUSN = 2 AND XIDSLT = 1 AND XIDSQN = 1))",
+			wantPred: " AND (SCN > :3 OR XID IN (HEXTORAW('0100020003000000'), HEXTORAW('0200010001000000')))",
 		},
 		{
 			name: "replay with unparseable id falls back",
@@ -389,6 +390,121 @@ func TestLOBReplayAcrossWindowBoundary(t *testing.T) {
 
 		assert.Greater(t, len(pub.messages), 2, "re-fed rows are published again without the reset and skip")
 	})
+}
+
+// TestLOBReplayCarriedOverEndedTxns covers a replay that is carried over after
+// a failed window (such as ORA-01368): transactions that committed or rolled
+// back during the failed window must leave the carried set.
+func TestLOBReplayCarriedOverEndedTxns(t *testing.T) {
+	ctx := t.Context()
+	start := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
+		return &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: sqlredo.OpStart}
+	}
+	end := func(scn uint64, txn sqlredo.TransactionID, op sqlredo.Operation) *sqlredo.RedoEvent {
+		return &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: op}
+	}
+	update := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
+		return lobEv(scn, txn, sqlredo.OpUpdate, `update "TESTDB"."T" set "ID" = '42' where "ID" = '42'`)
+	}
+	locator := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
+		return lobEv(scn, txn, sqlredo.OpSelectLobLocator,
+			`declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`)
+	}
+	// txA and txC both hold open LOB writes at the window boundary.
+	window1 := func() []*sqlredo.RedoEvent {
+		return []*sqlredo.RedoEvent{
+			start(10, "txA"), update(20, "txA"), locator(20, "txA"), lobWriteEv(30, "txA", "hello", 1),
+			start(15, "txC"), update(25, "txC"), locator(25, "txC"), lobWriteEv(35, "txC", "foo", 1),
+		}
+	}
+	feed := func(lm *LogMiner, replay *lobReplay, evs []*sqlredo.RedoEvent) {
+		for _, ev := range evs {
+			if replay == nil || !replay.skip(ev) {
+				require.NoError(t, lm.processRedoEvent(ctx, ev))
+			}
+		}
+	}
+	countDOC := func(pub *publisherStub, doc string) int {
+		var n int
+		for _, m := range pub.messages {
+			if d, _ := m.Data.(map[string]any); d["DOC"] == doc {
+				n++
+			}
+		}
+		return n
+	}
+
+	t.Run("committed txn is not replayed again", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		feed(lm, nil, window1())
+		lm.currentSCN = 100
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Len(t, replay.txns, 2)
+		lm.lobReplay = replay
+
+		window2 := append(window1(), lobWriteEv(110, "txA", "world", 6), end(120, "txA", sqlredo.OpCommit))
+		feed(lm, replay, window2)
+		require.Equal(t, 1, countDOC(pub, "helloworld"))
+		assert.NotContains(t, lm.lobReplay.txns, sqlredo.TransactionID("txA"))
+		assert.Contains(t, lm.lobReplay.txns, sqlredo.TransactionID("txC"))
+
+		// ORA-01368 after the commit: the replay is kept, currentSCN advanced.
+		lm.currentSCN = 119
+		replay, err = lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"txC": {}}, replay.txns)
+		lm.lobReplay = replay
+
+		// Re-mining the same window must not publish txA again.
+		feed(lm, replay, window2)
+		assert.Equal(t, 1, countDOC(pub, "helloworld"), "txA published exactly once")
+	})
+
+	t.Run("committed txn alone leaves no replay", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		feed(lm, nil, window1()[:4])
+		lm.currentSCN = 100
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		lm.lobReplay = replay
+		feed(lm, replay, append(window1()[:4], lobWriteEv(110, "txA", "world", 6), end(120, "txA", sqlredo.OpCommit)))
+		require.Equal(t, 1, countDOC(pub, "helloworld"))
+
+		lm.currentSCN = 119
+		replay, err = lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, replay)
+	})
+
+	t.Run("rolled back txn leaves the carried set", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		feed(lm, nil, window1())
+		lm.currentSCN = 100
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		lm.lobReplay = replay
+
+		feed(lm, replay, append(window1(), end(120, "txC", sqlredo.OpRollback)))
+		assert.NotContains(t, lm.lobReplay.txns, sqlredo.TransactionID("txC"))
+		assert.Contains(t, lm.lobReplay.txns, sqlredo.TransactionID("txA"))
+
+		lm.currentSCN = 119
+		replay, err = lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"txA": {}}, replay.txns)
+		assert.Empty(t, pub.messages)
+	})
+}
+
+func TestLOBReplayEndNil(t *testing.T) {
+	var r *lobReplay
+	assert.NotPanics(t, func() { r.end("txA") })
 }
 
 func newLOBReplayMiner(t *testing.T) (*LogMiner, *publisherStub, TransactionCache) {
