@@ -23,9 +23,8 @@ import (
 	"sync"
 )
 
-// ErrSealed identifies the error of a sealed Lock. The error from Wait and
-// Lock.Err wraps ErrSealed and also the cause given to Seal. Use errors.Is
-// to test for it.
+// ErrSealed marks a sealed Lock. After Seal, the error from Wait and Lock.Err
+// wraps ErrSealed. Use errors.Is to test for it.
 var ErrSealed = errors.New("ticket lock sealed")
 
 // Lock is a FIFO ticket lock. It works like the "take a number" counter at
@@ -89,9 +88,9 @@ type Lock struct {
 	// their turn. advanceLocked skips each one when its turn comes, and
 	// removes it.
 	abandoned map[uint64]struct{}
-	// err is nil until the first seal. Then it holds ErrSealed joined with
-	// the seal cause, and it does not change again. Wait and Err return it.
-	// A non-nil err refuses all further turns.
+	// err is nil until the first seal. Then it holds ErrSealed, with the
+	// seal cause in the message, and it does not change again. Wait and Err
+	// return it. A non-nil err refuses all further turns.
 	err error
 }
 
@@ -133,8 +132,13 @@ func (l *Lock) take(sealOnAbandon bool) Ticket {
 
 // Seal refuses all further turns, for good. cause says why, for example
 // the error of a failed Track. Wait and Err then return an error that wraps
-// both ErrSealed and cause. A nil cause is allowed: the error is then
-// ErrSealed alone.
+// ErrSealed, with the text of cause in its message. A nil cause is allowed:
+// the error is then ErrSealed alone.
+//
+// The error does not wrap cause. The cause is often a context error of one
+// goroutine. If the seal error wrapped it, every other goroutine would get
+// an error that matches context.Canceled, and could take a lost batch for a
+// clean shutdown. Each caller must decide on shutdown from its own context.
 //
 // Only the first seal sets the cause. Later calls do nothing, so the error
 // always shows the first failure.
@@ -152,7 +156,7 @@ func (l *Lock) Seal(cause error) {
 }
 
 // Err returns nil if the lock is not sealed. If it is sealed, Err returns
-// the error that wraps ErrSealed and the first seal cause.
+// the error that wraps ErrSealed, with the first seal cause in its message.
 func (l *Lock) Err() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -168,7 +172,8 @@ func (l *Lock) sealLocked(cause error) {
 	}
 	l.err = ErrSealed
 	if cause != nil {
-		l.err = fmt.Errorf("%w: %w", ErrSealed, cause)
+		// %v, not %w: see Seal.
+		l.err = fmt.Errorf("%w: %v", ErrSealed, cause)
 	}
 	for t, ch := range l.waiters {
 		close(ch)
@@ -260,7 +265,7 @@ type Ticket struct {
 //     Release when you are done.
 //   - ctx is cancelled. Wait abandons t and returns ctx.Err(). For a Take
 //     ticket, the abandon also seals the lock, with the context cause in
-//     the seal cause.
+//     the message of the seal error.
 //   - The lock is sealed. Wait returns the seal error (see Lock.Err).
 //
 // If it is already the turn of t, Wait returns nil and does not look at
