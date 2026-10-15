@@ -354,6 +354,21 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	if err := lm.prepareLogsAndStartSession(ctx, conn, sessionStart, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
+			if replay := lm.lobReplay; replay != nil {
+				// The missing log is the one needed to re-mine an open LOB transaction
+				// from its start, so a smaller window cannot help, and a restart resumes
+				// from a checkpoint below that transaction and needs the same log.
+				//nolint:staticcheck
+				return false, fmt.Errorf("preparing logs and starting session at position %d%s: %w\n\n"+
+					"The archived redo logs back to SCN %d have been purged while a transaction with LOB changes\n"+
+					"that started there is still open. Its LOB data can only be rebuilt from its start, so every\n"+
+					"window, and a restart, needs those logs; reducing the window size will not help.\n\n"+
+					"To fix this issue, either keep archived logs for longer than your longest-running transaction\n"+
+					"with LOB changes (for example CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS; in RMAN),\n"+
+					"or delete the checkpoint cache entry at checkpoint_cache_key and restart from the current SCN,\n"+
+					"which loses events between the last checkpoint and the restart.",
+					sessionStart, replay.describe(lm.currentSCN), err, replay.fromSCN)
+			}
 			var reduceWindowHint string
 			switch lm.cfg.WindowStrategy {
 			case WindowStrategyRedoVolume:
@@ -385,13 +400,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   - This loses events between the last checkpoint and the restart. To avoid that, delete the\n"+
 				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time — snapshot_mode\n"+
 				"     alone has no effect, since a checkpoint that is still present skips snapshotting entirely.",
-				lm.currentSCN, err, reduceWindowHint, lm.cfg.MiningBackoffInterval)
+				sessionStart, err, reduceWindowHint, lm.cfg.MiningBackoffInterval)
 		}
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			lm.log.Debugf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
 			return false, nil
 		}
-		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
+		return false, fmt.Errorf("preparing logs and starting session at position %d%s: %w", sessionStart, lm.lobReplay.describe(lm.currentSCN), err)
 	}
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
@@ -409,7 +424,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 			lm.log.Warnf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying from SCN %d — archived log will be used on next cycle", startSCN, endSCN, lm.currentSCN)
 			return false, nil
 		}
-		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
+		return false, fmt.Errorf("querying logminer contents between %d and %d%s: %w", sessionStart, endSCN, lm.lobReplay.describe(lm.currentSCN), err)
 	}
 
 	switch lm.cfg.WindowStrategy {
