@@ -35,7 +35,6 @@ type lobReplay struct {
 // they are rebuilt from scratch, and returns the window to re-mine. It returns
 // nil when there is nothing to replay.
 func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
-	return nil, nil
 	replay := &lobReplay{
 		txns:         make(map[sqlredo.TransactionID]struct{}),
 		fromSCN:      math.MaxUint64,
