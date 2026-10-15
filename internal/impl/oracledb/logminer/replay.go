@@ -35,6 +35,7 @@ type lobReplay struct {
 // they are rebuilt from scratch, and returns the window to re-mine. It returns
 // nil when there is nothing to replay.
 func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
+	return nil, nil
 	replay := &lobReplay{
 		txns:         make(map[sqlredo.TransactionID]struct{}),
 		fromSCN:      math.MaxUint64,
@@ -77,6 +78,9 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		return nil, nil
 	}
 
+	// Record the set before resetting it, so a rollback that fails part way
+	// leaves the reset transactions carried over to the next attempt.
+	lm.lobReplay = replay
 	for id := range replay.txns {
 		if err := lm.txnCache.RollbackTransaction(ctx, id); err != nil {
 			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)

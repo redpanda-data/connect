@@ -250,6 +250,35 @@ func TestPlanLOBReplay(t *testing.T) {
 		require.NotNil(t, again, "carried txns stay even when absent from the cache")
 		assert.Equal(t, uint64(150), again.processedSCN)
 	})
+
+	t.Run("partial rollback failure carries all transactions over", func(t *testing.T) {
+		lm, _, inner := newLOBReplayMiner(t)
+		cache := &failingRollbackCache{TransactionCache: inner, failID: "t2", fail: true}
+		lm.txnCache = cache
+		lm.currentSCN = 100
+		for id, scn := range map[sqlredo.TransactionID]uint64{"t1": 30, "t2": 20, "t3": 40} {
+			require.NoError(t, cache.StartTransaction(ctx, id, scn))
+			require.NoError(t, lm.processRedoEvent(ctx, lobEv(scn+1, id, sqlredo.OpSelectLobLocator, locator)))
+			require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(scn+2, id, "abc", 1)))
+		}
+		want := map[sqlredo.TransactionID]struct{}{"t1": {}, "t2": {}, "t3": {}}
+
+		replay, err := lm.planLOBReplay(ctx)
+		require.ErrorContains(t, err, "resetting transaction t2")
+		assert.Nil(t, replay)
+		require.NotNil(t, lm.lobReplay)
+		assert.Equal(t, want, lm.lobReplay.txns)
+		assert.Equal(t, uint64(20), lm.lobReplay.fromSCN)
+
+		cache.fail = false
+		replay, err = lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, want, replay.txns, "txns already rolled back must be carried over")
+		assert.Equal(t, uint64(20), replay.fromSCN)
+		assert.Empty(t, lm.lobStates)
+		assert.Empty(t, lm.pendingLOBWrites)
+	})
 }
 
 func TestLOBReplayWarner(t *testing.T) {
@@ -385,4 +414,18 @@ func lobEv(scn uint64, txn sqlredo.TransactionID, op sqlredo.Operation, redo str
 func lobWriteEv(scn uint64, txn sqlredo.TransactionID, data string, offset int) *sqlredo.RedoEvent {
 	return lobEv(scn, txn, sqlredo.OpLobWrite,
 		fmt.Sprintf(" buf_c := '%s';\n  dbms_lob.write(loc_c, %d, %d, buf_c);", data, len(data), offset))
+}
+
+// failingRollbackCache fails RollbackTransaction for failID while fail is set.
+type failingRollbackCache struct {
+	TransactionCache
+	failID sqlredo.TransactionID
+	fail   bool
+}
+
+func (c *failingRollbackCache) RollbackTransaction(ctx context.Context, id sqlredo.TransactionID) error {
+	if c.fail && id == c.failID {
+		return fmt.Errorf("injected rollback failure for %s", id)
+	}
+	return c.TransactionCache.RollbackTransaction(ctx, id)
 }
