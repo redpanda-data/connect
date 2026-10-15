@@ -125,7 +125,12 @@ func TestAbandonSeals(t *testing.T) {
 
 	// The seal wakes the waiter behind the abandoned ticket before any
 	// Release, so it cannot pass the gap.
-	require.ErrorIs(t, requireResult(t, r2), ErrSealed)
+	err := requireResult(t, r2)
+	require.ErrorIs(t, err, ErrSealed)
+	// The context of t2 is not cancelled. If the seal error matched
+	// context.Canceled, a caller would report the lost batch as a clean
+	// shutdown.
+	assert.NotErrorIs(t, err, context.Canceled)
 	t0.Release()
 }
 
@@ -497,7 +502,7 @@ func TestSealCause(t *testing.T) {
 
 	err := l.Err()
 	require.ErrorIs(t, err, ErrSealed)
-	require.ErrorIs(t, err, errTestSeal)
+	assert.NotErrorIs(t, err, errTestSeal, "the cause must be in the message only")
 	assert.EqualError(t, err, "ticket lock sealed: test seal")
 	assert.Equal(t, err, t0.Wait(t.Context()), "Wait must return the seal error")
 }

@@ -562,6 +562,8 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 	}()
 	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+	require.NotErrorIs(t, laterErr, context.Canceled,
+		"the refusal must not look like a shutdown: the input logs context.Canceled at Info as a clean stop")
 }
 
 // TestTrackFailureSealsQueue is TestAbandonedBatchSealsQueue's sibling: an
@@ -614,6 +616,8 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	}()
 	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+	require.NotErrorIs(t, laterErr, context.Canceled,
+		"the refusal must not look like a shutdown: the input logs context.Canceled at Info as a clean stop")
 	require.ErrorContains(t, laterErr, "tracking flushed batch",
 		"the refusal must show why the queue was sealed")
 }
