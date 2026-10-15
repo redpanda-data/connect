@@ -39,7 +39,7 @@ func amqp09OutputSpec() *service.ConfigSpec {
 
 It's possible for this output type to create the target exchange by setting `+"`exchange_declare.enabled` to `true`"+`, if the exchange already exists then the declaration passively verifies that the settings match.
 
-TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the `+"`tls`"+` section.
+TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the <<tls,`+"`tls`"+`>> section.
 
 The fields 'key', 'exchange' and 'type' can be dynamically set using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).
 		Fields(

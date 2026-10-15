@@ -42,7 +42,7 @@ func franzKafkaOutputConfig() *service.ConfigSpec {
 		Version("3.61.0").
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
-Use the xref:components:outputs/redpanda.adoc[` + "`redpanda` output" + `] instead.
+This output is deprecated as of version 4.113.0. Use the xref:components:outputs/redpanda.adoc[` + "`redpanda` output" + `] instead.
 
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
