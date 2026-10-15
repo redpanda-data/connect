@@ -5,7 +5,7 @@ The reference docs for Redpanda Connect components and Bloblang are generated fr
 ## How they're published
 
 1. `cmd/tools/docs_gen` writes Antora partials and examples to `docs/modules/components/`, which is gitignored.
-2. When a release is tagged, the release workflow runs the generator and attaches the output to the GitHub release as `redpanda-connect-docs.tar.gz`.
+2. When a release is tagged, the release workflow runs the generator and attaches the output to the GitHub release as `redpanda-connect-docs.tar.gz`. The asset also carries the release's connector data, `attachments/connect-<version>.json`, which the Bloblang playground and other site tools read.
 3. The docs site build downloads that asset for the latest release and merges it into the `connect` Antora component, alongside the pages in [rp-connect-docs](https://github.com/redpanda-data/rp-connect-docs).
 
 The published reference therefore always matches a released version, never unreleased code on `main`.

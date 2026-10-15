@@ -70,7 +70,10 @@ var generatedDirs = []string{
 
 func main() {
 	root := "./docs/modules/components"
+	var version, date string
 	flag.StringVar(&root, "dir", root, "The components module directory to write docs to")
+	flag.StringVar(&version, "version", "", "The release version, such as 4.113.0. With it, also writes the release's connector data to "+connectJSONPath("<version>"))
+	flag.StringVar(&date, "date", "", "The release date to record in the connector data, in RFC 3339 format")
 	flag.Parse()
 
 	raw, err := schema.Standard("", "").MarshalJSONV0()
@@ -148,6 +151,10 @@ func main() {
 	}
 	w.templateFields(templateRaw)
 
+	if version != "" {
+		w.connectJSON(version, date)
+	}
+
 	fmt.Printf("Wrote %v files to %v\n", w.count, root)
 }
 
@@ -155,6 +162,34 @@ type writer struct {
 	root      string
 	count     int
 	platforms platformSet
+}
+
+// connectJSON writes the release's connector data, replacing any other
+// version's, so the docs asset carries exactly one.
+func (w *writer) connectJSON(version, date string) {
+	if !builtWithAllComponents {
+		panic("-version needs a build with every component: run with CGO_ENABLED=1 and -tags x_benthos_extra")
+	}
+	notInBinary, err := notInReleaseBinary()
+	if err != nil {
+		panic(fmt.Errorf("finding the components only Redpanda Cloud runs: %w", err))
+	}
+	raw, err := schema.Standard(version, date).MarshalJSONV0()
+	if err != nil {
+		panic(err)
+	}
+	cloudRaw, err := schema.Cloud("", "").MarshalJSONV0()
+	if err != nil {
+		panic(err)
+	}
+	out, err := renderConnectJSON(raw, cloudRaw, w.platforms, notInBinary)
+	if err != nil {
+		panic(err)
+	}
+	if err := os.RemoveAll(filepath.Join(w.root, "attachments")); err != nil {
+		panic(err)
+	}
+	w.write(connectJSONPath(version), out)
 }
 
 // platformFiles writes the component catalog and the cgo-only list.

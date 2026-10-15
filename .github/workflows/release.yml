@@ -210,17 +210,38 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+      # -version also writes the connector data the Bloblang playground and
+      # other site tools read, attachments/connect-<version>.json. The date is
+      # the tag commit's, in UTC, so a rerun writes the same file. A tag whose
+      # docs_gen predates the flag (a docs_tag rerun of an older release) gets
+      # the partials only.
       - name: Generate the reference docs
-        run: CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen
+        id: generate
+        run: |
+          set -euo pipefail
+          args=()
+          if grep -q 'flag.StringVar(&version, "version"' cmd/tools/docs_gen/main.go; then
+            date=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ)
+            args=(-version "${DOCS_TAG#v}" -date "$date")
+            echo "connect_json=true" >> "$GITHUB_OUTPUT"
+          fi
+          CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen "${args[@]}"
       # Releases from before the generator wrote partials produce full pages
       # instead. Their asset must stay missing, so the docs build falls back
       # to a release that has real partials.
       - name: Check the layout of the generated docs
+        env:
+          CONNECT_JSON: ${{ steps.generate.outputs.connect_json }}
         run: |
           set -euo pipefail
           c=docs/modules/components
           if [ -d "$c/pages" ]; then
             echo "::error::$DOCS_TAG predates the generated partials (docs_gen wrote $c/pages), so it gets no docs asset."
+            exit 1
+          fi
+          json="$c/attachments/connect-${DOCS_TAG#v}.json"
+          if [ "${CONNECT_JSON:-}" = true ] && ! jq -e '.version and (.inputs | length > 0) and (.["bloblang-functions"] | length > 0)' "$json" > /dev/null; then
+            echo "::error::The generated docs have no valid connector data at $json."
             exit 1
           fi
           for d in partials/fields partials/descriptions partials/availability examples/common examples/advanced; do
