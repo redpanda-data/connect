@@ -29,9 +29,9 @@ func dataLakeSpec() *service.ConfigSpec {
 		Version("4.38.0").
 		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+dloFieldPath+"`"+` field.`).
 		Description(`
-In order to have a different path for each file you should use function
-interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are
-calculated per message of a batch.
+This output writes files to an https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-introduction[Azure Data Lake Storage Gen2^] file system.
+
+To set a different `+"<<path,`path`>>"+` value (file name) for each file, use xref:configuration:interpolation.adoc#bloblang-queries[function interpolations], which are calculated per message of a batch.
 
 Supports multiple authentication methods but only one of the following is required:
 
