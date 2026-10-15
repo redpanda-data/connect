@@ -27,15 +27,34 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
+	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
 const connectorListPath = "/etc/redpanda/connector_list.yaml"
+
+// DocsOpts points the CLI at the self-managed Connect docs: the help footer
+// and the links in doc strings rendered as Markdown. Which conditional text
+// readers see is not decided here but by the attributes the distribution's
+// schema declares (see public/schema).
+func DocsOpts() []service.CLIOptFunc {
+	return []service.CLIOptFunc{
+		service.CLIOptSetDocumentationURL(schema.DocumentationURL),
+		service.CLIOptSetDocsComponentURLs(schema.DocsComponentURLs),
+	}
+}
+
+// CloudDocsOpts points the CLI at the Cloud copy of the Connect docs instead.
+func CloudDocsOpts() []service.CLIOptFunc {
+	return []service.CLIOptFunc{
+		service.CLIOptSetDocumentationURL(schema.CloudDocumentationURL),
+	}
+}
 
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
-func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
+func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, extraOpts ...service.CLIOptFunc) {
 	instanceID := xid.New().String()
 
 	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
@@ -73,7 +92,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
 
-	opts = append(opts,
+	opts := append(DocsOpts(),
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
@@ -93,7 +112,6 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return schema
 		}),
@@ -242,7 +260,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptAddCommand(pluginInit()),
 	)
 
-	exitCode, err := service.RunCLIToCode(context.Background(), opts...)
+	exitCode, err := service.RunCLIToCode(context.Background(), append(opts, extraOpts...)...)
 	if err != nil {
 		slog.New(rpMgr.SlogHandler()).With("status", exitCode, "error", err).Error("Pipeline exited with non-zero status")
 		if fbLogger != nil {

@@ -26,6 +26,25 @@ func redpandaTopLevelConfigField() *service.ConfigField {
 	return service.NewObjectField("redpanda", enterprise.GlobalRedpandaFields()...)
 }
 
+// Where each distribution's documentation lives. The CLI prints the URL as
+// its documentation link and resolves doc string links against it when it
+// renders them as Markdown.
+const (
+	DocumentationURL      = "https://docs.redpanda.com/connect"
+	CloudDocumentationURL = "https://docs.redpanda.com/cloud-data-platform/develop/connect"
+)
+
+// DocsComponentURLs maps the other docs site components that doc strings link
+// to with component-qualified xrefs, such as xref:streaming:manage:x.adoc[],
+// to their base URLs.
+var DocsComponentURLs = map[string]string{
+	// Version-less streaming URLs redirect to the current version; link there
+	// directly.
+	"streaming":           "https://docs.redpanda.com/streaming/current",
+	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
+	"connect":             DocumentationURL,
+}
+
 // Standard returns the config schema of a standard build of Redpanda Connect.
 func Standard(version, dateBuilt string) *service.ConfigSchema {
 	env := service.NewEnvironment()
@@ -64,6 +83,10 @@ func Cloud(version, dateBuilt string) *service.ConfigSchema {
 		"@service": "redpanda-connect",
 	}, "logger", "static_fields")
 	s = s.Field(redpandaTopLevelConfigField())
+	// Readers of this distribution run inside Redpanda Cloud, so doc strings
+	// wrapped in ifndef::env-cloud[] are hidden from them and ifdef::env-cloud[]
+	// text is shown, the same as on the Cloud docs site.
+	s.SetDocsAttributes(service.DocsAttributeCloud)
 	return s
 }
 
@@ -93,5 +116,9 @@ func CloudAI(version, dateBuilt string) *service.ConfigSchema {
 		"@service": "redpanda-connect",
 	}, "logger", "static_fields")
 	s = s.Field(redpandaTopLevelConfigField())
+	// Readers of this distribution run inside Redpanda Cloud, so doc strings
+	// wrapped in ifndef::env-cloud[] are hidden from them and ifdef::env-cloud[]
+	// text is shown, the same as on the Cloud docs site.
+	s.SetDocsAttributes(service.DocsAttributeCloud)
 	return s
 }
