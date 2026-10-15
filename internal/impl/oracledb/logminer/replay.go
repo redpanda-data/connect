@@ -98,14 +98,6 @@ func (r *lobReplay) end(id sqlredo.TransactionID) {
 	}
 }
 
-// describe returns error context for a replay window, or "" when r is nil.
-func (r *lobReplay) describe(windowStart uint64) string {
-	if r == nil {
-		return ""
-	}
-	return fmt.Sprintf(" (re-mining %d open transaction(s) with LOB changes from SCN %d; the window itself starts at SCN %d)", len(r.txns), r.fromSCN, windowStart)
-}
-
 // skip reports whether ev was already processed by an earlier window.
 func (r *lobReplay) skip(ev *sqlredo.RedoEvent) bool {
 	if ev.SCN > r.processedSCN {
