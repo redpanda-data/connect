@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -245,7 +246,7 @@ func (conf clientConf) build() (c client.Client, err error) {
 	default:
 		return nil, fmt.Errorf("protocol needs to be http, https or udp and is %s", conf.u.Scheme)
 	}
-	return c, err
+	return c, redact.Error(err, redact.Conns(conf.u.String()))
 }
 
 func (i *influxDBMetrics) loop() {
@@ -259,12 +260,12 @@ func (i *influxDBMetrics) loop() {
 			return
 		case <-ticker.C:
 			if err := i.publishRegistry(); err != nil {
-				i.log.Errorf("failed to send metrics data: %s", err)
+				i.log.Errorf("failed to send metrics data: %s", redact.Error(err, redact.Conns(i.clientConf.u.String())))
 			}
 		case <-pingTicker.C:
 			_, _, err := i.client.Ping(i.timeout)
 			if err != nil {
-				i.log.Warnf("unable to ping influx endpoint: %s", err)
+				i.log.Warnf("unable to ping influx endpoint: %s", redact.Error(err, redact.Conns(i.clientConf.u.String())))
 				if tmpClient, err := i.clientConf.build(); err != nil {
 					i.log.Errorf("unable to recreate client: %s", err)
 				} else {
@@ -400,7 +401,7 @@ func (*influxDBMetrics) HandlerFunc() http.HandlerFunc {
 
 func (i *influxDBMetrics) Close(context.Context) error {
 	if err := i.publishRegistry(); err != nil {
-		i.log.Errorf("failed to send metrics data: %s", err)
+		i.log.Errorf("failed to send metrics data: %s", redact.Error(err, redact.Conns(i.clientConf.u.String())))
 	}
 	i.client.Close()
 	return nil
