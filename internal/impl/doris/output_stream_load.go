@@ -17,7 +17,6 @@ package doris
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +37,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -651,7 +651,7 @@ func (d *dorisStreamLoadOutput) connectionCheck(ctx context.Context, feURL strin
 	cfg.ReadTimeout = 5 * time.Second
 	cfg.WriteTimeout = 5 * time.Second
 
-	db, err := sql.Open("mysql", cfg.FormatDSN())
+	db, err := sqlredact.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return fmt.Errorf("opening Doris query_port connection to %s:%d: %w", host, queryPort, err)
 	}
