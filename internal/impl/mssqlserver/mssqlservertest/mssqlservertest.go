@@ -367,21 +367,20 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 		if dbName == "" {
 			return true
 		}
-		var exists bool
-		if openErr = masterDB.QueryRowContext(ctx, "SELECT CASE WHEN DB_ID(?) IS NULL THEN 0 ELSE 1 END", dbName).Scan(&exists); openErr != nil {
+		// The database exists only when the test runs again in the same process (go test -count=N). Then all tests
+		// drop the database of the run before at about the same time, so the drops need dropDatabaseMu. Every test
+		// takes the lock, but the DB_ID check takes only some milliseconds when there is nothing to drop.
+		dropDatabaseMu.Lock()
+		_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf(`
+			IF DB_ID(N'%s') IS NOT NULL
+			BEGIN
+				ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+				DROP DATABASE [%s];
+			END;`, dbName, dbName, dbName))
+		dropDatabaseMu.Unlock()
+		if openErr != nil {
 			lastErr = openErr
 			return false
-		}
-		// The database exists only when the test runs again in the same process (go test -count=N). Then all tests
-		// drop the database of the run before at about the same time, so the drops need dropDatabaseMu.
-		if exists {
-			dropDatabaseMu.Lock()
-			_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf("ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [%s];", dbName, dbName))
-			dropDatabaseMu.Unlock()
-			if openErr != nil {
-				lastErr = openErr
-				return false
-			}
 		}
 		if _, openErr = masterDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE [%s];", dbName)); openErr != nil {
 			lastErr = openErr
