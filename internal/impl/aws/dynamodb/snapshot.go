@@ -38,7 +38,11 @@ type SnapshotScannerConfig struct {
 	BatchSize  int
 	Throttle   time.Duration
 	MaxBackoff time.Duration // Maximum backoff on throttling errors (0 = no limit).
-	Logger     *service.Logger
+	// ConsistentRead requests strongly consistent Scan reads (2x RCU). The
+	// incremental snapshot mode needs it: a write whose stream record was
+	// processed before a page opened must be visible to that page's read.
+	ConsistentRead bool
+	Logger         *service.Logger
 }
 
 // SnapshotScanner performs a parallel scan of a DynamoDB table using the
@@ -46,13 +50,14 @@ type SnapshotScannerConfig struct {
 // resumable checkpointing, adaptive backoff on throttling, and reports
 // progress through user-supplied callbacks.
 type SnapshotScanner struct {
-	client     *dynamodb.Client
-	table      string
-	segments   int
-	batchSize  int
-	throttle   time.Duration
-	maxBackoff time.Duration
-	log        *service.Logger
+	client         *dynamodb.Client
+	table          string
+	segments       int
+	batchSize      int
+	throttle       time.Duration
+	maxBackoff     time.Duration
+	consistentRead bool
+	log            *service.Logger
 
 	// Callbacks. Progress persistence is NOT the scanner's job: batches carry
 	// their scan resume position (lastKey) to the batch callback, and the
@@ -61,6 +66,7 @@ type SnapshotScanner struct {
 	onProgress        func(segment, totalSegments int, recordsRead int64)
 	onSegmentSealed   func(ctx context.Context, segment int) error
 	onSegmentComplete func(segment int, duration time.Duration, recordsRead int64)
+	beforeRequest     func(segment int)
 
 	// State tracking
 	activeSegments atomic.Int32
@@ -69,13 +75,14 @@ type SnapshotScanner struct {
 // NewSnapshotScanner creates a new snapshot scanner.
 func NewSnapshotScanner(conf SnapshotScannerConfig) *SnapshotScanner {
 	return &SnapshotScanner{
-		client:     conf.Client,
-		table:      conf.Table,
-		segments:   conf.Segments,
-		batchSize:  conf.BatchSize,
-		throttle:   conf.Throttle,
-		maxBackoff: conf.MaxBackoff,
-		log:        conf.Logger,
+		client:         conf.Client,
+		table:          conf.Table,
+		segments:       conf.Segments,
+		batchSize:      conf.BatchSize,
+		throttle:       conf.Throttle,
+		maxBackoff:     conf.MaxBackoff,
+		consistentRead: conf.ConsistentRead,
+		log:            conf.Logger,
 	}
 }
 
@@ -84,6 +91,13 @@ func NewSnapshotScanner(conf SnapshotScannerConfig) *SnapshotScanner {
 // it is the only position safe to persist once the batch is acknowledged.
 func (s *SnapshotScanner) SetBatchCallback(fn func(ctx context.Context, items DynamoItems, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error) {
 	s.onBatch = fn
+}
+
+// SetBeforeRequestCallback sets a callback fired immediately before every
+// Scan request of a segment, retries included. The incremental snapshot uses
+// it to open the page's window before the read starts.
+func (s *SnapshotScanner) SetBeforeRequestCallback(fn func(segment int)) {
+	s.beforeRequest = fn
 }
 
 // SetProgressCallback sets the callback for progress updates.
@@ -182,13 +196,17 @@ func (s *SnapshotScanner) scanSegment(ctx context.Context, segment int, startKey
 		}
 		firstRequest = false
 
+		if s.beforeRequest != nil {
+			s.beforeRequest(segment)
+		}
+
 		result, err := s.client.Scan(ctx, &dynamodb.ScanInput{
 			TableName:         aws.String(s.table),
 			Limit:             aws.Int32(int32(s.batchSize)),
 			Segment:           aws.Int32(int32(segment)),
 			TotalSegments:     aws.Int32(int32(s.segments)),
 			ExclusiveStartKey: lastEvaluatedKey,
-			ConsistentRead:    aws.Bool(false),
+			ConsistentRead:    aws.Bool(s.consistentRead),
 		})
 		if err != nil {
 			if isThrottlingError(err) {
@@ -364,6 +382,17 @@ func (c *SnapshotCheckpoint) IsComplete() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.Complete
+}
+
+// HasSegmentProgress reports whether any segment has recorded progress.
+func (c *SnapshotCheckpoint) HasSegmentProgress() bool {
+	if c == nil {
+		return false
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.SegmentProgress) > 0
 }
 
 // MarkSegmentComplete marks a segment as complete.
