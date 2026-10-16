@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -44,7 +45,7 @@ func NewSnapshot(
 	logger *service.Logger,
 	metrics *service.Metrics,
 ) (*Snapshot, error) {
-	db, err := sql.Open("mssql", connectionString)
+	db, err := sqlredact.Open("mssql", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to microsoft sql server for snapshotting: %w", err)
 	}
