@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // Ensure input implements service.Input at compile time.
@@ -248,7 +249,7 @@ func (in *input) cloneRepo(ctx context.Context) error {
 		SingleBranch:  true,
 	})
 	if err != nil {
-		return fmt.Errorf("git clone failed: %w", err)
+		return fmt.Errorf("git clone failed: %w", redact.Error(err, redact.Conns(in.cfg.repoURL)))
 	}
 	ref, err := in.repository.Head()
 	if err != nil {
@@ -432,7 +433,7 @@ func (in *input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth tran
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("git pull failed: %w", err)
+		return fmt.Errorf("git pull failed: %w", redact.Error(err, redact.Conns(in.cfg.repoURL)))
 	}
 	return nil
 }
