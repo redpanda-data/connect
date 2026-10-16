@@ -17,6 +17,7 @@ package schemaregistry
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -77,4 +78,20 @@ func TestClientFromParsedBadURLRedacted(t *testing.T) {
 	_, _, err := ClientFromParsed(parseClientConfig(t, `url: 'http://u:`+testSecret+`@bad host:8081'`), service.MockResources())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), testSecret)
+}
+
+func TestBasicAuthFromURL(t *testing.T) {
+	u, err := url.Parse("http://u:p@h:8081/ctx")
+	require.NoError(t, err)
+
+	got, opts := BasicAuthFromURL(u)
+	assert.Equal(t, "http://h:8081/ctx", got.String())
+	assert.Len(t, opts, 1)
+	assert.Equal(t, "http://u:p@h:8081/ctx", u.String(), "input must not be modified")
+
+	u, err = url.Parse("http://h:8081")
+	require.NoError(t, err)
+	got, opts = BasicAuthFromURL(u)
+	assert.Same(t, u, got)
+	assert.Empty(t, opts)
 }

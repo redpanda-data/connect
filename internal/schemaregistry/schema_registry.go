@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/twmb/franz-go/pkg/sr"
 
@@ -54,6 +55,20 @@ func ConfigFields() []*service.ConfigField {
 	return fields
 }
 
+// BasicAuthFromURL returns u without its userinfo, and the client options that
+// send the userinfo as basic auth instead, as the client includes request URLs
+// in its errors. Options added after them, such as a request signer, take
+// precedence. u is not modified.
+func BasicAuthFromURL(u *url.URL) (*url.URL, []sr.ClientOpt) {
+	if u.User == nil {
+		return u, nil
+	}
+	pass, _ := u.User.Password()
+	stripped := *u
+	stripped.User = nil
+	return &stripped, []sr.ClientOpt{sr.BasicAuth(u.User.Username(), pass)}
+}
+
 // ClientFromParsed creates a franz-go Schema Registry client from a parsed
 // config. The returned cancel function must be called when the client is no
 // longer needed to clean up OAuth2 resources.
@@ -84,13 +99,9 @@ func ClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.
 	opts := []sr.ClientOpt{
 		sr.UserAgent("redpanda-connect"),
 	}
-	// The client includes request URLs in its errors, so userinfo is sent as
-	// basic auth instead. A request signer or OAuth2 still takes precedence.
-	if srURL.User != nil {
-		pass, _ := srURL.User.Password()
-		opts = append(opts, sr.BasicAuth(srURL.User.Username(), pass))
-		srURL.User = nil
-	}
+	// A request signer or OAuth2 still takes precedence over URL userinfo.
+	srURL, authOpts := BasicAuthFromURL(srURL)
+	opts = append(opts, authOpts...)
 	opts = append(opts, sr.URLs(srURL.String()))
 
 	var oa2Conf oauth2.Config

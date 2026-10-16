@@ -27,6 +27,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/redact"
+
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 // Client is used to make requests to a schema registry.
@@ -46,14 +48,7 @@ func NewClient(
 		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
-	// The client includes request URLs in its errors, so userinfo is sent as
-	// basic auth instead, as the HTTP client would do anyway.
-	var opts []sr.ClientOpt
-	if u.User != nil {
-		pass, _ := u.User.Password()
-		opts = append(opts, sr.BasicAuth(u.User.Username(), pass))
-		u.User = nil
-	}
+	u, opts := schemaregistry.BasicAuthFromURL(u)
 	opts = append(opts, sr.URLs(u.String()))
 	if tlsConf != nil {
 		opts = append(opts, sr.DialTLSConfig(tlsConf))

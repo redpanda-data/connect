@@ -42,6 +42,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/confx"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 // Versions represents which schema versions to migrate
@@ -220,14 +221,10 @@ func schemaRegistryClientAndURLFromParsed(pConf *service.ParsedConfig, mgr *serv
 		sr.HTTPClient(&http.Client{Timeout: timeout}),
 		sr.UserAgent("franz-go"),
 	}
-	// The client includes request URLs in its errors, so userinfo is sent as
-	// basic auth instead. A request signer still takes precedence.
-	if srURL.User != nil {
-		pass, _ := srURL.User.Password()
-		opts = append(opts, sr.BasicAuth(srURL.User.Username(), pass))
-		srURL.User = nil
-	}
-	opts = append(opts, sr.URLs(srURL.String()))
+	// A request signer still takes precedence over URL userinfo.
+	clientURL, authOpts := schemaregistry.BasicAuthFromURL(srURL)
+	opts = append(opts, authOpts...)
+	opts = append(opts, sr.URLs(clientURL.String()))
 
 	if tlsConf != nil {
 		opts = append(opts, sr.DialTLSConfig(tlsConf))
@@ -236,7 +233,7 @@ func schemaRegistryClientAndURLFromParsed(pConf *service.ParsedConfig, mgr *serv
 		opts = append(opts, sr.PreReq(func(req *http.Request) error { return reqSigner(mgr.FS(), req) }))
 	}
 	client, err := sr.NewClient(opts...)
-	return client, srURL.String(), err
+	return client, clientURL.String(), err
 }
 
 // SchemaRegistryMigratorConfig configures subject selection, transformation,
