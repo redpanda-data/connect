@@ -15,7 +15,6 @@
 package elasticsearch
 
 import (
-	"context"
 	"net"
 	"testing"
 
@@ -37,11 +36,11 @@ action: index
 	out, err := outputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
-	err = out.Connect(context.Background())
+	err = out.Connect(t.Context())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 
-	res := out.ConnectionTest(context.Background())
+	res := out.ConnectionTest(t.Context())
 	require.Len(t, res, 1)
 	require.Error(t, res[0].Err)
 	assert.NotContains(t, res[0].Err.Error(), "S3cretPass")

@@ -15,7 +15,6 @@
 package httpclient
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -56,7 +55,7 @@ func TestTracingTransportRedactsURL(t *testing.T) {
 
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer func() { _ = tp.Shutdown(context.Background()) }()
+	defer func() { _ = tp.Shutdown(t.Context()) }()
 	rt := newTracingTransport(http.DefaultTransport, tp)
 
 	u, err := url.Parse(srv.URL)
@@ -68,7 +67,7 @@ func TestTracingTransportRedactsURL(t *testing.T) {
 	resp, err := rt.RoundTrip(req)
 	require.NoError(t, err)
 	resp.Body.Close()
-	tp.ForceFlush(context.Background())
+	tp.ForceFlush(t.Context())
 
 	spans := exporter.GetSpans()
 	require.Len(t, spans, 1)

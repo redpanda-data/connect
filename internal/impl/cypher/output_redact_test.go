@@ -15,7 +15,6 @@
 package cypher
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,7 @@ uri: "neo4j://u:S3cretPass@bad host:7687"
 cypher: "CREATE (n)"
 `)
 
-	err := o.Connect(context.Background())
+	err := o.Connect(t.Context())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }

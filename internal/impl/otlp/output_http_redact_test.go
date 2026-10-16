@@ -12,7 +12,6 @@
 package otlp_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,7 +44,7 @@ proxy_url: "http://u:S3cretPass@bad host:8080"
 `)
 	require.NoError(t, err)
 
-	err = out.Connect(context.Background())
+	err = out.Connect(t.Context())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }

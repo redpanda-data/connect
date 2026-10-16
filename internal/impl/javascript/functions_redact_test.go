@@ -46,5 +46,5 @@ code: |
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 
-	require.NoError(t, proc.Close(context.Background()))
+	require.NoError(t, proc.Close(t.Context()))
 }
