@@ -53,6 +53,6 @@ func main() {
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
+		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/connect"),
 	)
 }

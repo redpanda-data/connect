@@ -250,6 +250,13 @@ oracledb_cdc:
 
 			username, hasUsername := msg.MetaGet("username")
 			assert.Falsef(t, hasUsername, "Expected snapshot message[%d] to have no 'username' metadata, got %q", i, username)
+
+			rsID, hasRSID := msg.MetaGet("rs_id")
+			assert.Falsef(t, hasRSID, "Expected snapshot message[%d] to have no 'rs_id' metadata, got %q", i, rsID)
+			ssn, hasSSN := msg.MetaGet("ssn")
+			assert.Falsef(t, hasSSN, "Expected snapshot message[%d] to have no 'ssn' metadata, got %q", i, ssn)
+			rowSeq, hasRowSeq := msg.MetaGet("row_seq")
+			assert.Falsef(t, hasRowSeq, "Expected snapshot message[%d] to have no 'row_seq' metadata, got %q", i, rowSeq)
 		}
 	}
 
@@ -262,14 +269,16 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	// Use explicit IDs, not an identity column. The filters below need IDs 1..1000 with no gaps, and an Oracle
+	// sequence does not guarantee that: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/CREATE-SEQUENCE.html
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
 
 	// Insert 2000 rows across tables for initial snapshot streaming
 	want := 1000
-	for range 1000 {
-		db.MustExec("INSERT INTO " + db.Schema + ".foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
-		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
+	for i := range 1000 {
+		db.MustExec("INSERT INTO "+db.Schema+".foo (id, name, excluded_col) VALUES (:1, 'foo_name', 'should_not_appear')", i+1)
+		db.MustExec("INSERT INTO "+db.Schema+".foo2 (id, name, excluded_col) VALUES (:1, 'foo2_name', 'should_not_appear')", i+1)
 	}
 
 	var (
@@ -687,6 +696,8 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	mustAssertMetadata := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
 		results := make(map[string][]*service.Message)
+		scnByTxn := make(map[string][]string)
+		seenTriples := make(map[string]struct{})
 		for i, msg := range msgs {
 			// assert database_schema metadata
 			schema, ok := msg.MetaGet("database_schema")
@@ -731,6 +742,35 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 			username, ok := msg.MetaGet("username")
 			require.Truef(t, ok, "message %d missing 'username' metadata", i)
 			assert.Equalf(t, "SYSTEM", username, "message %d: expected username 'SYSTEM', got %q", i, username)
+
+			// assert rs_id, ssn and row_seq metadata: the triple must identify one row change
+			rsID, ok := msg.MetaGet("rs_id")
+			require.Truef(t, ok, "message %d missing 'rs_id' metadata", i)
+			assert.Regexpf(t, `(?i)^0x[0-9a-f]+\.[0-9a-f]+\.[0-9a-f]+$`, rsID, "message %d: rs_id %q not in thread.block.offset hex format", i, rsID)
+			ssn, ok := msg.MetaGet("ssn")
+			require.Truef(t, ok, "message %d missing 'ssn' metadata", i)
+			assert.Regexpf(t, `^\d+$`, ssn, "message %d: ssn %q is not a non-negative integer", i, ssn)
+			rowSeq, ok := msg.MetaGet("row_seq")
+			require.Truef(t, ok, "message %d missing 'row_seq' metadata", i)
+			assert.Regexpf(t, `^\d+$`, rowSeq, "message %d: row_seq %q is not a non-negative integer", i, rowSeq)
+
+			scn, ok := msg.MetaGet("scn")
+			require.Truef(t, ok, "message %d missing 'scn' metadata", i)
+			scnByTxn[txID] = append(scnByTxn[txID], scn)
+			// Oracle gives every row of an array DELETE redo record (up to 255 rows)
+			// the same (rs_id, ssn) with ssn=0. row_seq tells those rows apart, so
+			// the triple is unique for every operation. See the rs_id metadata docs.
+			triple := rsID + ":" + ssn + ":" + rowSeq
+			assert.NotContainsf(t, seenTriples, triple, "message %d: (rs_id, ssn, row_seq) %s already seen, triples must be unique", i, triple)
+			seenTriples[triple] = struct{}{}
+		}
+
+		// Every row change in a transaction carries the commit SCN, which is why
+		// scn alone cannot order rows. rs_id/ssn must be what tells them apart.
+		for txID, scns := range scnByTxn {
+			for _, scn := range scns[1:] {
+				assert.Equalf(t, scns[0], scn, "transaction %s: all rows must share one scn", txID)
+			}
 		}
 
 		for _, expectedKey := range []string{db.Schema + ".FOO", db.Schema + ".FOO2", db.Schema2 + ".BAR"} {
@@ -1078,8 +1118,9 @@ oracledb_cdc:
 }
 
 // consumeWithUsername appends the raw bytes of each message to batch and records
-// the "username" metadata by row ID. The maps are guarded by the batch lock.
-func consumeWithUsername(t *testing.T, batch *oracledbtest.Batch, usernameByID map[string]string, hasUsernameByID map[string]bool) service.MessageBatchHandlerFunc {
+// the "username" metadata and the presence of the "rs_id" metadata by row ID.
+// The maps are guarded by the batch lock.
+func consumeWithUsername(t *testing.T, batch *oracledbtest.Batch, usernameByID map[string]string, hasUsernameByID, hasRSIDByID map[string]bool) service.MessageBatchHandlerFunc {
 	return func(_ context.Context, mb service.MessageBatch) error {
 		batch.Lock()
 		defer batch.Unlock()
@@ -1095,6 +1136,7 @@ func consumeWithUsername(t *testing.T, batch *oracledbtest.Batch, usernameByID m
 				username, hasUser := msg.MetaGet("username")
 				usernameByID[parsed.ID] = username
 				hasUsernameByID[parsed.ID] = hasUser
+				_, hasRSIDByID[parsed.ID] = msg.MetaGet("rs_id")
 			}
 		}
 		return nil
@@ -1144,6 +1186,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			batch           oracledbtest.Batch
 			usernameByID    = make(map[string]string)
 			hasUsernameByID = make(map[string]bool)
+			hasRSIDByID     = make(map[string]bool)
 		)
 		t.Logf("%s: Launching component...", t.Name())
 		{
@@ -1157,7 +1200,7 @@ oracledb_cdc:
     min_scn_window_size: 0
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBDISABLED"]`
-			stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
+			stream = oracledbtest.StartPipelineWithLogLevel(t, cfg, "WARN", consumeWithUsername(t, &batch, usernameByID, hasUsernameByID, hasRSIDByID))
 		}
 
 		t.Logf("%s: assert snapshot...", t.Name())
@@ -1178,8 +1221,10 @@ oracledb_cdc:
 
 			batch.Lock()
 			hasUser := hasUsernameByID["1"]
+			hasRSID := hasRSIDByID["1"]
 			batch.Unlock()
 			assert.Falsef(t, hasUser, "snapshot message should not carry 'username' metadata")
+			assert.Falsef(t, hasRSID, "snapshot message should not carry 'rs_id' metadata")
 		}
 
 		batch.Reset()
@@ -1207,8 +1252,10 @@ oracledb_cdc:
 
 			batch.Lock()
 			username, hasUser := usernameByID["51"], hasUsernameByID["51"]
+			hasRSID := hasRSIDByID["51"]
 			batch.Unlock()
 			require.Truef(t, hasUser, "streaming message missing 'username' metadata")
+			require.Truef(t, hasRSID, "streaming message missing 'rs_id' metadata")
 			assert.Equalf(t, "SYSTEM", username, "expected username 'SYSTEM', got %q", username)
 		}
 
@@ -1228,6 +1275,7 @@ oracledb_cdc:
 			batch           oracledbtest.Batch
 			usernameByID    = make(map[string]string)
 			hasUsernameByID = make(map[string]bool)
+			hasRSIDByID     = make(map[string]bool)
 		)
 		t.Logf("%s: Launching component...", t.Name())
 		{
@@ -1242,7 +1290,7 @@ oracledb_cdc:
     min_scn_window_size: 0
     backoff_interval: 1s
   include: ["` + db.Schema + `.LOBENABLED"]`
-			stream = oracledbtest.StartPipeline(t, cfg, consumeWithUsername(t, &batch, usernameByID, hasUsernameByID))
+			stream = oracledbtest.StartPipeline(t, cfg, consumeWithUsername(t, &batch, usernameByID, hasUsernameByID, hasRSIDByID))
 		}
 
 		t.Logf("%s: assert snapshot...", t.Name())
@@ -1263,8 +1311,10 @@ oracledb_cdc:
 
 			batch.Lock()
 			hasUser := hasUsernameByID["1"]
+			hasRSID := hasRSIDByID["1"]
 			batch.Unlock()
 			assert.Falsef(t, hasUser, "snapshot message should not carry 'username' metadata")
+			assert.Falsef(t, hasRSID, "snapshot message should not carry 'rs_id' metadata")
 		}
 
 		batch.Reset()
@@ -1292,8 +1342,10 @@ oracledb_cdc:
 
 			batch.Lock()
 			username, hasUser := usernameByID["51"], hasUsernameByID["51"]
+			hasRSID := hasRSIDByID["51"]
 			batch.Unlock()
 			require.Truef(t, hasUser, "streaming message missing 'username' metadata")
+			require.Truef(t, hasRSID, "streaming message missing 'rs_id' metadata")
 			assert.Equalf(t, "SYSTEM", username, "expected username 'SYSTEM', got %q", username)
 		}
 
@@ -2434,6 +2486,118 @@ oracledb_cdc:
 		}, time.Second*3, time.Millisecond*200, "received unexpected messages from excluded table")
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("Preserves writes across window boundaries", func(t *testing.T) {
+		const (
+			chunks    = 100
+			chunkSize = 500
+		)
+		// Deterministic, non-repeating bytes so truncation or reordering is detectable.
+		var (
+			want   []byte
+			writes strings.Builder
+		)
+		for i := range chunks {
+			chunk := make([]byte, chunkSize)
+			for j := range chunk {
+				chunk[j] = byte(i*31 + j*7 + i*j)
+			}
+			want = append(want, chunk...)
+			fmt.Fprintf(&writes, "DBMS_LOB.WRITEAPPEND(loc, %d, HEXTORAW('%X')); %s.lobwindow_bump_scn;\n", chunkSize, chunk, db.Schema)
+		}
+
+		for _, test := range []struct {
+			name string
+			pk   string
+		}{
+			{name: "with primary key", pk: " PRIMARY KEY"},
+			{name: "without primary key"},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				table := db.Schema + ".lobwindow"
+				scratch := db.Schema + ".lobscratch"
+				if test.pk == "" {
+					table += "nopk"
+				}
+				include := strings.ToUpper(strings.TrimPrefix(table, db.Schema+"."))
+
+				// SECUREFILE with DISABLE STORAGE IN ROW makes every write produce LOB_WRITE redo.
+				require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), table,
+					`CREATE TABLE `+table+` (id NUMBER`+test.pk+`, note VARCHAR2(20), payload BLOB)
+				LOB(payload) STORE AS SECUREFILE (DISABLE STORAGE IN ROW)`))
+				// lobwindow_bump_scn commits in its own transaction, advancing the SCN without ending the LOB transaction.
+				db.MustExec(`CREATE TABLE ` + scratch + `_` + include + ` (n NUMBER)`)
+				db.MustExec(`CREATE OR REPLACE PROCEDURE ` + db.Schema + `.lobwindow_bump_scn IS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN
+				INSERT INTO ` + scratch + `_` + include + ` VALUES (1); COMMIT; END;`)
+				db.MustExec("INSERT INTO " + table + " (id, note, payload) VALUES (1, 'seed', HEXTORAW('00'))")
+				db.MustExec("INSERT INTO " + table + " (id, note, payload) VALUES (2, 'barrier', HEXTORAW('00'))")
+
+				// Own checkpoint table per subtest: a shared one would resume the second pipeline from the first one's SCN.
+				// A fixed one-SCN window puts a boundary at every SCN of the transaction, whatever the timing.
+				cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.Schema + `.ckpt_` + include + `
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 1
+    min_scn_window_size: 0
+    max_scn_window_size: 1
+    mining_interval: 10ms
+    backoff_interval: 100ms
+  include: ["` + db.Schema + `.` + include + `"]`
+
+				var (
+					batch  oracledbtest.Batch
+					logBuf oracledbtest.SyncBuffer
+				)
+				logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug}))
+				stream := oracledbtest.StartPipelineWithLogger(t, cfg, logger, batch.Consumer(t))
+				oracledbtest.WaitForStreaming(t, &logBuf)
+
+				db.MustExec(`DECLARE loc BLOB; BEGIN
+				SELECT payload INTO loc FROM ` + table + ` WHERE id = 1 FOR UPDATE;
+				DBMS_LOB.TRIM(loc, 0);
+				` + writes.String() + `
+				UPDATE ` + table + ` SET note = 'rewritten' WHERE id = 1;
+				COMMIT; END;`)
+				// Later transaction, so its message arrives after every message of the LOB transaction.
+				db.MustExec("UPDATE " + table + " SET note = 'done' WHERE id = 2")
+
+				type row struct {
+					ID      json.Number `json:"ID"`
+					Payload string      `json:"PAYLOAD"`
+				}
+				var rows []row
+				require.Eventually(t, func() bool {
+					for _, m := range batch.Clone() {
+						var r row
+						if json.Unmarshal([]byte(m), &r) == nil && r.ID == "2" {
+							return true
+						}
+					}
+					return false
+				}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the barrier change")
+				for _, m := range batch.Clone() {
+					var r row
+					require.NoError(t, json.Unmarshal([]byte(m), &r))
+					if r.ID == "1" {
+						rows = append(rows, r)
+					}
+				}
+
+				// Exactly one message for the row, not an extra UPDATE ... AND ROWID emitted for INTERNAL rows.
+				require.Len(t, rows, 1, "expected one message for the rewritten row")
+				got, err := base64.StdEncoding.DecodeString(rows[0].Payload)
+				require.NoError(t, err)
+				assert.Truef(t, bytes.Equal(want, got), "BLOB mismatch: want %d bytes, got %d bytes", len(want), len(got))
+
+				assert.Contains(t, logBuf.String(), "Re-mining", "no mining window boundary fell inside the open LOB transaction")
+				require.NoError(t, stream.StopWithin(time.Second*10))
+			})
+		}
 	})
 }
 

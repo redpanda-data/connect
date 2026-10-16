@@ -405,9 +405,16 @@ jobs:
           sed -Ei "/redpandadata\/connect\$/,/tag:/ s|tag: \"[0-9]+\.[0-9]+\.[0-9]+\"|tag: \"${VERSION}\"|" \
             operator/chart/values.yaml
 
-          printf 'project: operator\nkind: Changed\nbody: Bumped the default Redpanda Connect image for `Pipeline` resources to %s.\ntime: %s\n' \
-            "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            > ".changes/unreleased/operator-Changed-$(date -u +%Y%m%d-%H%M%S).yaml"
+          # Reuse a bump entry that hasn't shipped in an operator release yet,
+          # so consecutive bumps produce one changelog line.
+          ENTRY=$(grep -lF 'Bumped the default Redpanda Connect image' .changes/unreleased/operator-*.yaml 2>/dev/null | head -n1 || true)
+          if [ -n "$ENTRY" ]; then
+            sed -Ei "s|resources to [0-9]+\.[0-9]+\.[0-9]+|resources to ${VERSION}|" "$ENTRY"
+          else
+            printf 'project: operator\nkind: Changed\nbody: Bumped the default Redpanda Connect image for `Pipeline` resources to %s.\ntime: %s\n' \
+              "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              > ".changes/unreleased/operator-Changed-$(date -u +%Y%m%d-%H%M%S).yaml"
+          fi
 
           git config user.name "vbotbuildovich"
           git config user.email "62446873+vbotbuildovich@users.noreply.github.com"

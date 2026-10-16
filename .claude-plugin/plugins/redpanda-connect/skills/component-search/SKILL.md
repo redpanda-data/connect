@@ -92,11 +92,11 @@ Every docs page has a Markdown version for agents. Fetch that instead of the HTM
 
 ```
 # URL pattern:
-https://docs.redpanda.com/redpanda-connect/components/{category}/{component}.md
+https://docs.redpanda.com/connect/components/{category}/{component}.md
 
 # Examples:
-https://docs.redpanda.com/redpanda-connect/components/inputs/kafka_franz.md
-https://docs.redpanda.com/redpanda-connect/components/outputs/sql_insert.md
+https://docs.redpanda.com/connect/components/inputs/kafka_franz.md
+https://docs.redpanda.com/connect/components/outputs/sql_insert.md
 ```
 The published docs always describe the latest release. For the exact fields of the installed version, use `rpk connect list --format json-full` or the component's `--help`.
 

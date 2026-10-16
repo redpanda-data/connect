@@ -86,6 +86,8 @@ func iskConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Connects to Kafka brokers and consumes one or more topics.`).
 		Description(`
+This input is deprecated as of version 4.68.0. Use the xref:components:inputs/redpanda.adoc[`+"`redpanda` input"+`] instead.
+
 Offsets are managed within Kafka under the specified consumer group, and partitions for each topic are automatically balanced across members of the consumer group.
 
 The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
@@ -118,11 +120,9 @@ By default messages of a topic partition can be processed in parallel, up to a l
 
 == Troubleshooting
 
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"xref:components:inputs/kafka_franz.adoc[`kafka_franz` input]"+`.
-
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tls-enabled, enabled TLS>> if applicable.`).
 		Fields(
 			saramaAddressesField(iskFieldAddresses),
 			service.NewStringListField(iskFieldTopics).

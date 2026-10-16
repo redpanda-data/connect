@@ -107,6 +107,8 @@ This input adds the following metadata fields to each message:
 - `+"`otel_trace_id`"+`: The base64-encoded trace ID. Set on trace messages only.
 - `+"`otel_span_id`"+`: The base64-encoded span ID. Set on trace messages only.
 
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
+
 == Authentication
 
 When `+"`auth_token`"+` is configured, clients must include the token in the HTTP `+"`Authorization`"+` header:

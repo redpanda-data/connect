@@ -441,6 +441,25 @@ func newFakeSQLDB(t *testing.T, files []*LogFile) (*sql.DB, *fakeConn) {
 	return db, fc
 }
 
+type fakeConn struct {
+	mu         sync.Mutex
+	logFiles   []*LogFile
+	execs      []string
+	queries    []string
+	prepares   []string
+	closes     []string
+	currentSCN uint64
+	// contentRows, when set, serves V$LOGMNR_CONTENTS queries instead of an empty result.
+	contentRows func() driver.Rows
+	// contentCalls records every V$LOGMNR_CONTENTS query with its bound args.
+	contentCalls []contentCall
+}
+
+type contentCall struct {
+	query string
+	args  []any
+}
+
 func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
 	t.Helper()
 
@@ -458,16 +477,6 @@ type fakeDriver struct {
 
 func (d *fakeDriver) Open(string) (driver.Conn, error) {
 	return d.conn, nil
-}
-
-type fakeConn struct {
-	mu         sync.Mutex
-	logFiles   []*LogFile
-	execs      []string
-	queries    []string
-	prepares   []string
-	closes     []string
-	currentSCN uint64
 }
 
 func (c *fakeConn) count(substr string) int {
@@ -537,17 +546,28 @@ func (*fakeConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("fakeConn: transactions not supported")
 }
 
-func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.queries = append(c.queries, query)
+	if strings.Contains(query, "V$LOGMNR_CONTENTS") {
+		call := contentCall{query: query}
+		for _, a := range args {
+			call.args = append(call.args, a.Value)
+		}
+		c.contentCalls = append(c.contentCalls, call)
+	}
 	switch {
 	case strings.Contains(query, "CURRENT_SCN"):
 		return &fakeSCNRow{scn: c.currentSCN}, nil
 	case strings.Contains(query, "V$LOGMNR_CONTENTS"):
-		// No redo events are returned - these tests only care about how many
-		// times the query gets prepared/executed, not about the events it
-		// would produce against a real LogMiner session.
+		// By default no redo events are returned - most tests only care about
+		// how many times the query gets prepared/executed, not about the events
+		// it would produce against a real LogMiner session. Tests that need
+		// rows set contentRows.
+		if c.contentRows != nil {
+			return c.contentRows(), nil
+		}
 		return &fakeContentRows{}, nil
 	default:
 		return &fakeRows{files: c.logFiles}, nil
@@ -592,7 +612,7 @@ func (s *fakeStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (
 type fakeContentRows struct{}
 
 func (*fakeContentRows) Columns() []string {
-	return []string{"SCN", "SQL_REDO", "OPERATION_CODE", "TABLE_NAME", "SEG_OWNER", "TIMESTAMP", "XID", "COMMIT_SCN", "CSF", "USERNAME"}
+	return []string{"SCN", "SQL_REDO", "OPERATION_CODE", "TABLE_NAME", "SEG_OWNER", "TIMESTAMP", "XID", "COMMIT_SCN", "CSF", "USERNAME", "RS_ID", "SSN"}
 }
 
 func (*fakeContentRows) Close() error { return nil }

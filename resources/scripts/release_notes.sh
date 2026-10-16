@@ -1,5 +1,5 @@
 #!/bin/sh
-echo "For installation instructions check out the [getting started guide](https://docs.redpanda.com/redpanda-connect/guides/getting_started)."
+echo "For installation instructions check out the [getting started guide](https://docs.redpanda.com/connect/guides/getting_started)."
 cat CHANGELOG.md | awk '
   /^## [0-9]/ {
       release++;

@@ -36,7 +36,7 @@ func redpandaCommonInputConfig() *service.ConfigSpec {
 				},
 			)...,
 		).
-		Description("Use the xref:components:inputs/redpanda.adoc[`redpanda` input] instead. When you omit its connection fields, the `redpanda` input connects using the same top-level `redpanda` config block.\n" + kafka.RedpandaInputDescription(`
+		Description("This input is deprecated as of version 4.68.0. Use the xref:components:inputs/redpanda.adoc[`redpanda` input] instead. When you omit its connection fields, the `redpanda` input connects using the same top-level xref:components:redpanda/about.adoc[`redpanda` config block].\n" + kafka.RedpandaInputDescription(`
 output:
   fallback:
     - redpanda_common:

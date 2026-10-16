@@ -248,6 +248,7 @@ salesforce                ,input     ,Salesforce                ,enterprise ,n  
 salesforce_cdc            ,input     ,Salesforce                ,enterprise ,n          ,y     ,y              ,
 salesforce_graphql        ,input     ,Salesforce                ,enterprise ,n          ,y     ,y              ,
 salesforce_sink           ,output    ,Salesforce                ,enterprise ,n          ,y     ,y              ,
+sap_hana                  ,input     ,SAP HANA                  ,enterprise ,n          ,n     ,n              ,not yet certified for cloud
 schema_registry           ,input     ,schema_registry           ,certified  ,n          ,y     ,y              ,
 schema_registry           ,output    ,schema_registry           ,certified  ,n          ,y     ,y              ,
 schema_registry_decode    ,processor ,schema_registry_decode    ,certified  ,n          ,y     ,y              ,
