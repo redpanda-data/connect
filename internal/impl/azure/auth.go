@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,18 +17,22 @@ package azure
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
-
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake"
 	dlservice "github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake/service"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -38,6 +42,39 @@ const (
 	bscFieldStorageSASToken         = "storage_sas_token"
 	bscFieldStorageConnectionString = "storage_connection_string"
 )
+
+// redactErrorsPolicy redacts credentials, such as a SAS signature, from the
+// request URLs in transport errors, which the SDKs return unchanged.
+type redactErrorsPolicy struct{}
+
+func (redactErrorsPolicy) Do(req *policy.Request) (*http.Response, error) {
+	resp, err := req.Next()
+	return resp, redact.Error(err)
+}
+
+// clientOptions returns new azcore options for each client, as the SDKs
+// modify the options they are given.
+func clientOptions() azcore.ClientOptions {
+	return azcore.ClientOptions{
+		PerRetryPolicies: []policy.Policy{redactErrorsPolicy{}},
+	}
+}
+
+func blobClientOptions() *azblob.ClientOptions {
+	return &azblob.ClientOptions{ClientOptions: clientOptions()}
+}
+
+func dlClientOptions() *dlservice.ClientOptions {
+	return &dlservice.ClientOptions{ClientOptions: clientOptions()}
+}
+
+func queueClientOptions() *azqueue.ClientOptions {
+	return &azqueue.ClientOptions{ClientOptions: clientOptions()}
+}
+
+func tablesClientOptions() *aztables.ClientOptions {
+	return &aztables.ClientOptions{ClientOptions: clientOptions()}
+}
 
 func azureComponentSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
@@ -109,7 +146,7 @@ func dlClientFromParsed(pConf *service.ParsedConfig, fsName *service.Interpolate
 func getDLClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
 	if storageConnectionString != "" {
 		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
-		client, err := dlservice.NewClientFromConnectionString(storageConnectionString, nil)
+		client, err := dlservice.NewClientFromConnectionString(storageConnectionString, dlClientOptions())
 		if err != nil {
 			return nil, false, fmt.Errorf("creating new data lake file client from connection string: %w", err)
 		}
@@ -123,7 +160,7 @@ func getDLClient(storageConnectionString, storageAccount, storageAccessKey, stor
 		if err != nil {
 			return nil, false, fmt.Errorf("creating new shared key credential: %w", err)
 		}
-		client, err := dlservice.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+		client, err := dlservice.NewClientWithSharedKeyCredential(serviceURL, cred, dlClientOptions())
 		if err != nil {
 			return nil, false, fmt.Errorf("creating new client from shared key credential: %w", err)
 		}
@@ -144,7 +181,7 @@ func getDLClient(storageConnectionString, storageAccount, storageAccessKey, stor
 			// storage account SAS token
 			serviceURL = fmt.Sprintf("%s?%s", serviceURL, storageSASToken)
 		}
-		client, err := dlservice.NewClientWithNoCredential(serviceURL, nil)
+		client, err := dlservice.NewClientWithNoCredential(serviceURL, dlClientOptions())
 		if err != nil {
 			return nil, false, fmt.Errorf("creating client with no credentials: %w", err)
 		}
@@ -156,7 +193,7 @@ func getDLClient(storageConnectionString, storageAccount, storageAccessKey, stor
 	if err != nil {
 		return nil, false, fmt.Errorf("getting default Azure credentials: %w", err)
 	}
-	client, err := dlservice.NewClient(serviceURL, cred, nil)
+	client, err := dlservice.NewClient(serviceURL, cred, dlClientOptions())
 	if err != nil {
 		return nil, false, fmt.Errorf("creating client from default credentials: %w", err)
 	}
@@ -174,14 +211,14 @@ func getBlobStorageClient(storageConnectionString, storageAccount, storageAccess
 	var containerSASToken bool
 	if storageConnectionString != "" {
 		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
-		client, err = azblob.NewClientFromConnectionString(storageConnectionString, nil)
+		client, err = azblob.NewClientFromConnectionString(storageConnectionString, blobClientOptions())
 	} else if storageAccessKey != "" {
 		cred, credErr := azblob.NewSharedKeyCredential(storageAccount, storageAccessKey)
 		if credErr != nil {
 			return nil, false, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
 		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
-		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, cred, blobClientOptions())
 	} else if storageSASToken != "" {
 		var serviceURL string
 		if strings.HasPrefix(storageSASToken, "sp=") {
@@ -196,14 +233,14 @@ func getBlobStorageClient(storageConnectionString, storageAccount, storageAccess
 			// storage account SAS token
 			serviceURL = fmt.Sprintf("%s/%s", fmt.Sprintf(blobEndpointExp, storageAccount), storageSASToken)
 		}
-		client, err = azblob.NewClientWithNoCredential(serviceURL, nil)
+		client, err = azblob.NewClientWithNoCredential(serviceURL, blobClientOptions())
 	} else {
 		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
 		if credErr != nil {
 			return nil, false, fmt.Errorf("error getting default Azure credentials: %v", credErr)
 		}
 		serviceURL := fmt.Sprintf(blobEndpointExp, storageAccount)
-		client, err = azblob.NewClient(serviceURL, cred, nil)
+		client, err = azblob.NewClient(serviceURL, cred, blobClientOptions())
 	}
 	if err != nil {
 		return nil, false, fmt.Errorf("invalid azure storage account credentials: %v", err)
@@ -291,24 +328,24 @@ func getQueueServiceClient(storageAccount, storageAccessKey, storageConnectionSt
 	var err error
 	if storageConnectionString != "" {
 		connStr := parseStorageConnectionString(storageConnectionString, storageAccount)
-		client, err = azqueue.NewServiceClientFromConnectionString(connStr, nil)
+		client, err = azqueue.NewServiceClientFromConnectionString(connStr, queueClientOptions())
 	} else if storageAccessKey != "" {
 		cred, credErr := azqueue.NewSharedKeyCredential(storageAccount, storageAccessKey)
 		if credErr != nil {
 			return nil, fmt.Errorf("error creating shared key credential: %w", credErr)
 		}
 		serviceURL := fmt.Sprintf(azQueueEndpointExp, storageAccount)
-		client, err = azqueue.NewServiceClientWithSharedKeyCredential(serviceURL, cred, nil)
+		client, err = azqueue.NewServiceClientWithSharedKeyCredential(serviceURL, cred, queueClientOptions())
 	} else if storageSASToken != "" {
 		serviceURL := fmt.Sprintf("%s/%s", fmt.Sprintf(azQueueEndpointExp, storageAccount), storageSASToken)
-		client, err = azqueue.NewServiceClientWithNoCredential(serviceURL, nil)
+		client, err = azqueue.NewServiceClientWithNoCredential(serviceURL, queueClientOptions())
 	} else {
 		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
 		if credErr != nil {
 			return nil, fmt.Errorf("error getting default azure credentials: %v", credErr)
 		}
 		serviceURL := fmt.Sprintf(azQueueEndpointExp, storageAccount)
-		client, err = azqueue.NewServiceClient(serviceURL, cred, nil)
+		client, err = azqueue.NewServiceClient(serviceURL, cred, queueClientOptions())
 	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %w", err)
@@ -354,23 +391,23 @@ func getTablesServiceClient(account, accessKey, connectionString, storageSASToke
 	var client *aztables.ServiceClient
 	if connectionString != "" {
 		storageConnectionString := parseStorageConnectionString(connectionString, account)
-		client, err = aztables.NewServiceClientFromConnectionString(storageConnectionString, &aztables.ClientOptions{})
+		client, err = aztables.NewServiceClientFromConnectionString(storageConnectionString, tablesClientOptions())
 	} else if accessKey != "" {
 		cred, credErr := aztables.NewSharedKeyCredential(account, accessKey)
 		if credErr != nil {
 			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 		}
-		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf(tableEndpointExp, account), cred, nil)
+		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf(tableEndpointExp, account), cred, tablesClientOptions())
 	} else if storageSASToken != "" {
 		serviceURL := fmt.Sprintf("%s/%s", fmt.Sprintf(tableEndpointExp, account), storageSASToken)
-		client, err = aztables.NewServiceClientWithNoCredential(serviceURL, nil)
+		client, err = aztables.NewServiceClientWithNoCredential(serviceURL, tablesClientOptions())
 	} else {
 		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
 		if credErr != nil {
 			return nil, fmt.Errorf("error getting default Azure credentials: %v", credErr)
 		}
 		serviceURL := fmt.Sprintf(tableEndpointExp, account)
-		client, err = aztables.NewServiceClient(serviceURL, cred, nil)
+		client, err = aztables.NewServiceClient(serviceURL, cred, tablesClientOptions())
 	}
 	return client, err
 }
