@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // Client is used to make requests to a schema registry.
@@ -41,12 +41,20 @@ func NewClient(
 	tlsConf *tls.Config,
 	mgr *service.Resources,
 ) (*Client, error) {
-	_, err := url.Parse(urlStr)
+	u, err := redact.ParseURL(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
-	opts := []sr.ClientOpt{sr.URLs(urlStr)}
+	// The client includes request URLs in its errors, so userinfo is sent as
+	// basic auth instead, as the HTTP client would do anyway.
+	var opts []sr.ClientOpt
+	if u.User != nil {
+		pass, _ := u.User.Password()
+		opts = append(opts, sr.BasicAuth(u.User.Username(), pass))
+		u.User = nil
+	}
+	opts = append(opts, sr.URLs(u.String()))
 	if tlsConf != nil {
 		opts = append(opts, sr.DialTLSConfig(tlsConf))
 	}
