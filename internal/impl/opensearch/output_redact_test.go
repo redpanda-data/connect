@@ -15,7 +15,6 @@
 package opensearch
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,7 +35,7 @@ action: index
 	out, err := OutputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
-	err = out.Connect(context.Background())
+	err = out.Connect(t.Context())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }

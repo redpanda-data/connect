@@ -8,7 +8,6 @@
 package splunk
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +32,7 @@ event_index: i
 	o, err := outputFromParsed(pConf, service.MockResources().Logger())
 	require.NoError(t, err)
 
-	err = o.WriteBatch(context.Background(), service.MessageBatch{service.NewMessage([]byte(`{"a":1}`))})
+	err = o.WriteBatch(t.Context(), service.MessageBatch{service.NewMessage([]byte(`{"a":1}`))})
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }
@@ -50,7 +49,7 @@ query: q
 	i, err := inputFromParsed(pConf, service.MockResources().Logger())
 	require.NoError(t, err)
 
-	err = i.Connect(context.Background())
+	err = i.Connect(t.Context())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }
