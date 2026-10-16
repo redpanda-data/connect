@@ -230,13 +230,12 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	return nil
 }
 
-// cdcJobsMu makes the calls that change the CDC jobs in msdb run one at a time.
+// dropDatabaseMu makes the DROP DATABASE calls in createDatabase run one at a time.
 //
-// The CDC jobs are the capture and cleanup SQL Server Agent jobs of each CDC database. openAndEnableCDC adds them, and
-// DROP DATABASE in dropDatabase removes them. When parallel tests on the shared container add jobs at the same time
-// for different databases, msdb.dbo.sp_add_job deadlocks (error 1205) and the call fails. SQL Server also runs these
-// calls one at a time internally, so parallel calls are not faster.
-var cdcJobsMu sync.Mutex
+// DROP DATABASE on a CDC database also removes its capture and cleanup SQL Server Agent jobs from msdb. Parallel drops
+// on the shared container deadlock (error 1205) in msdb.dbo.sp_delete_job, sys.sp_MScdc_db_ddl_event, or
+// sys.sp_cdc_cleanup_job_entries.
+var dropDatabaseMu sync.Mutex
 
 // State of the container that all tests in one test package share. Only sharedContainer writes it.
 var (
@@ -312,38 +311,13 @@ func testDatabaseName(t *testing.T) string {
 	return name[:maxLen-len(suffix)] + suffix
 }
 
-// dropDatabase drops the test database, so that its CDC capture job stops and does not load the shared container.
-// It disconnects all open sessions first. Errors are only logged, because the container is removed at the end anyway.
-func dropDatabase(t *testing.T, ctr *tcmssql.MSSQLServerContainer, dbName string) {
-	ctx := context.Background()
-	connStr, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
-	if err != nil {
-		t.Logf("drop database %q: %v", dbName, err)
-		return
-	}
-	db, err := sql.Open("mssql", connStr)
-	if err != nil {
-		t.Logf("drop database %q: %v", dbName, err)
-		return
-	}
-	defer db.Close()
-	q := fmt.Sprintf("ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [%s];", dbName, dbName)
-	cdcJobsMu.Lock()
-	defer cdcJobsMu.Unlock()
-	if _, err := db.ExecContext(ctx, q); err != nil {
-		t.Logf("drop database %q: %v", dbName, err)
-	}
-}
-
 // SetupTestWithMicrosoftSQLServerVersion creates a database for the test on the shared Microsoft SQL Server container,
 // enables CDC on it, and returns its connection string and a TestDB wrapper.
-// The database is dropped when the test completes.
 func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 
 	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
-	t.Cleanup(func() { dropDatabase(t, ctr, dbName) })
 
 	db, connectionString, err := openAndEnableCDC(t.Context(), ctr, dbName)
 	require.NoError(t, err)
@@ -365,8 +339,11 @@ func startMSSQLServerContainer(ctx context.Context) (*tcmssql.MSSQLServerContain
 	)
 }
 
-// createDatabase waits until the master database accepts connections, then creates dbName if it does not exist.
-// An empty dbName only waits.
+// createDatabase waits until the master database accepts connections, then creates dbName. An empty dbName only waits.
+//
+// Notes:
+//   - It drops an existing dbName first, so the test starts empty.
+//   - Tests keep their database at the end: a CDC drop is slow, and the container is removed anyway.
 func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) error {
 	masterConn, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
 	if err != nil {
@@ -390,12 +367,21 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 		if dbName == "" {
 			return true
 		}
-		query := fmt.Sprintf(`
-			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'%s')
+		// The database exists only with go test -count=N, where all tests drop it at about the same time and need
+		// dropDatabaseMu. The lock costs little when there is nothing to drop.
+		dropDatabaseMu.Lock()
+		_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf(`
+			IF DB_ID(N'%s') IS NOT NULL
 			BEGIN
-				CREATE DATABASE [%s];
-			END;`, dbName, dbName)
-		if _, openErr = masterDB.ExecContext(ctx, query); openErr != nil {
+				ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+				DROP DATABASE [%s];
+			END;`, dbName, dbName, dbName))
+		dropDatabaseMu.Unlock()
+		if openErr != nil {
+			lastErr = openErr
+			return false
+		}
+		if _, openErr = masterDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE [%s];", dbName)); openErr != nil {
 			lastErr = openErr
 			return false
 		}
@@ -442,10 +428,13 @@ func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, db
 
 		// Add the CDC jobs here, before sp_cdc_enable_table needs them. sp_cdc_enable_table adds them with
 		// @start_job = 1, which waits about 3.4s for each job to start. Adding them with @start_job = 0 and then
-		// starting the capture job takes about 1s in total. The cleanup job runs on a daily schedule, so it does not
-		// have to start. The IF guards and the "already running" check make a retry safe. The guards read
-		// msdb.dbo.sysjobs, because msdb.dbo.cdc_jobs does not exist before the first CDC job is added.
-		cdcJobsMu.Lock()
+		// starting the capture job takes about 1s in total.
+		//
+		// This does not take dropDatabaseMu. Parallel adds do not deadlock with each other or with a drop, and they
+		// are about 3 times faster than adds one at a time.
+		//
+		// The IF guards make a retry safe. They read msdb.dbo.sysjobs, because msdb.dbo.cdc_jobs does not exist
+		// before the first CDC job is added.
 		_, openErr = db.ExecContext(ctx, `
 			IF (SELECT is_cdc_enabled FROM sys.databases WHERE database_id = DB_ID()) = 0
 				EXEC sys.sp_cdc_enable_db;
@@ -453,13 +442,14 @@ func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, db
 				EXEC sys.sp_cdc_add_job @job_type = N'capture', @start_job = 0;
 			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_cleanup')
 				EXEC sys.sp_cdc_add_job @job_type = N'cleanup', @start_job = 0;`)
+		// Start only the capture job. The cleanup job runs on a daily schedule, so it does not have to start.
 		if openErr == nil {
 			_, openErr = db.ExecContext(ctx, "EXEC sys.sp_cdc_start_job @job_type = N'capture';")
+			// A retry can find the job running from the attempt before.
 			if openErr != nil && strings.Contains(openErr.Error(), "already running") {
 				openErr = nil
 			}
 		}
-		cdcJobsMu.Unlock()
 		if openErr != nil {
 			lastErr = openErr
 			db.Close()
@@ -498,13 +488,11 @@ func eventually(ctx context.Context, timeout, tick time.Duration, fn func() bool
 // MustSetupTestWithMicrosoftSQLServerVersion creates a database for the test on the shared Microsoft SQL Server
 // container, and returns its connection string and a raw sql.DB connected to it.
 // Unlike SetupTestWithMicrosoftSQLServerVersion, this does not enable CDC.
-// The database is dropped when the test completes.
 func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 
 	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
-	t.Cleanup(func() { dropDatabase(t, ctr, dbName) })
 
 	connectionString, err := ctr.ConnectionString(t.Context(), "database="+dbName, "encrypt=disable")
 	require.NoError(t, err)
