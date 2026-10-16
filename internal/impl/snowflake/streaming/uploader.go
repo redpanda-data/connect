@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -14,7 +14,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +29,7 @@ import (
 	"golang.org/x/oauth2"
 	gcsopt "google.golang.org/api/option"
 
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
@@ -89,7 +89,7 @@ func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
 	case "AZURE":
 		sasToken := fileLocationInfo.Creds["AZURE_SAS_TOKEN"]
 		urlString := fmt.Sprintf("https://%s.%s/%s", fileLocationInfo.StorageAccount, fileLocationInfo.EndPoint, sasToken)
-		u, err := url.Parse(urlString)
+		u, err := redact.ParseURL(urlString)
 		if err != nil {
 			return nil, fmt.Errorf("invalid azure blob storage url: %w", err)
 		}
@@ -125,7 +125,8 @@ func (u *azureUploader) upload(ctx context.Context, path string, encrypted, md5H
 	o := blockblob.UploadBufferOptions{Metadata: md}
 	resp, err := u.client.UploadBuffer(ctx, u.container, filepath.Join(u.pathPrefix, path), encrypted, &o)
 	if err != nil {
-		return err
+		// Transport errors include the request URL, which holds the SAS token.
+		return redact.Error(err)
 	}
 	if !bytes.Equal(resp.ContentMD5, md5Hash) {
 		return fmt.Errorf("invalid md5 hash got: %s want: %s", hex.EncodeToString(resp.ContentMD5), md5Hash)
