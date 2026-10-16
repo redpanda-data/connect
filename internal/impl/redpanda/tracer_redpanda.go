@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -275,6 +275,13 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		srURL, err := conf.FieldURL("schema_registry", "url")
 		if err != nil {
 			return nil, err
+		}
+		// The client includes request URLs in its errors, so userinfo is sent
+		// as basic auth instead.
+		if srURL.User != nil {
+			pass, _ := srURL.User.Password()
+			t.srOpts = append(t.srOpts, sr.BasicAuth(srURL.User.Username(), pass))
+			srURL.User = nil
 		}
 		t.srURL = srURL
 		authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
