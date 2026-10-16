@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -445,13 +446,18 @@ func debugf(l *service.Logger, msg string, args ...any) {
 }
 
 // redactedBody formats a JSON response body for debug logging with the stage
-// credentials removed. Bodies that are not valid JSON are omitted.
+// credentials and encryption keys removed. Bodies that are not valid JSON are
+// omitted.
 type redactedBody []byte
+
+// secretBodyKeys are the lowercase JSON keys whose values redactedBody removes.
+var secretBodyKeys = []string{"creds", "presignedurl", "encryption_key"}
 
 func (b redactedBody) String() string {
 	// Some loggers format arguments even when the trace level is disabled, so
 	// skip the JSON round trip for bodies that cannot hold credentials.
-	if lb := bytes.ToLower(b); !bytes.Contains(lb, []byte("creds")) && !bytes.Contains(lb, []byte("presignedurl")) {
+	lb := bytes.ToLower(b)
+	if !slices.ContainsFunc(secretBodyKeys, func(k string) bool { return bytes.Contains(lb, []byte(k)) }) {
 		return string(b)
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -468,13 +474,13 @@ func (b redactedBody) String() string {
 	return string(out)
 }
 
-// redactStageCreds replaces the values of stage location fields that hold
-// credentials, at any depth in v.
+// redactStageCreds replaces the values of the fields named by secretBodyKeys,
+// at any depth in v.
 func redactStageCreds(v any) {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
-			if strings.EqualFold(k, "creds") || strings.EqualFold(k, "presignedUrl") {
+			if slices.Contains(secretBodyKeys, strings.ToLower(k)) {
 				t[k] = redact.Marker
 				continue
 			}

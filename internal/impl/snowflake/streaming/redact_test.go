@@ -32,6 +32,15 @@ func TestRedactedBody(t *testing.T) {
 	assert.Equal(t, "<invalid JSON omitted>", redactedBody("creds: "+testSecret).String())
 }
 
+func TestRedactedBodyEncryptionKey(t *testing.T) {
+	body := `{"channel":"c","encryption_key":"` + testSecret + `","encryption_key_id":42}`
+
+	got := redactedBody(body).String()
+	assert.NotContains(t, got, testSecret)
+	assert.Contains(t, got, `"encryption_key":"xxxxx"`)
+	assert.Contains(t, got, `"encryption_key_id":42`)
+}
+
 func TestAzureUploaderRedactsSASToken(t *testing.T) {
 	_, err := newUploader(fileLocationInfo{
 		LocationType:   "AZURE",
