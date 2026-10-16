@@ -23,6 +23,10 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// unknownToolName is the tool_name label value used for tool calls that can't
+// be attributed to a registered tool.
+const unknownToolName = "unknown"
+
 // Metrics contains counters, gauges, and timers for tracking MCP operations.
 type Metrics struct {
 	// Tool metrics
@@ -33,10 +37,16 @@ type Metrics struct {
 	// Message metrics
 	messagesReceived *service.MetricCounter
 	messagesSent     *service.MetricCounter
+
+	isKnownTool func(name string) bool
 }
 
 // NewMetrics creates a new Metrics instance using the provided service Metrics.
-func NewMetrics(m *service.Metrics) *Metrics {
+//
+// Tool names in tools/call requests are chosen by the client, so isKnownTool
+// is used to report calls to unregistered tools under a single tool_name
+// label value rather than creating a new metric series per requested name.
+func NewMetrics(m *service.Metrics, isKnownTool func(name string) bool) *Metrics {
 	return &Metrics{
 		// Tool metrics
 		toolInvocations:          m.NewCounter("mcp_tool_invocations_total", "tool_name", "status"),
@@ -46,6 +56,8 @@ func NewMetrics(m *service.Metrics) *Metrics {
 		// Message metrics
 		messagesReceived: m.NewCounter("mcp_messages_received_total", "method"),
 		messagesSent:     m.NewCounter("mcp_messages_sent_total", "method"),
+
+		isKnownTool: isKnownTool,
 	}
 }
 
@@ -83,6 +95,9 @@ func (m *Metrics) handleToolCall(ctx context.Context, next mcp.MethodHandler, re
 
 	// Extract tool name from request
 	toolName := extractToolName(req)
+	if !m.isKnownTool(toolName) {
+		toolName = unknownToolName
+	}
 
 	// Track concurrent executions
 	m.toolConcurrentExecutions.Incr(1, toolName)
@@ -119,5 +134,5 @@ func extractToolName(req mcp.Request) string {
 		return callToolParams.Name
 	}
 
-	return "unknown"
+	return unknownToolName
 }
