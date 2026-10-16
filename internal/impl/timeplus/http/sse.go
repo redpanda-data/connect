@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func NewSSEClient(logger *service.Logger, baseURL *url.URL, workspace, apikey, u
 
 	queryURL.Path = path.Join(queryURL.Path, workspace, "api", timeplusAPIVersion, "queries")
 
-	logger.With("host", queryURL.Host).With("query_url", queryURL.RequestURI()).Debug("new sse client created")
+	logger.With("host", queryURL.Host).With("query_url", queryURL.EscapedPath()).Debug("new sse client created")
 
 	return &sseClient{
 		header:   NewHeader(apikey, username, password),
