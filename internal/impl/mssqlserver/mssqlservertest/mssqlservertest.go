@@ -367,9 +367,8 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 		if dbName == "" {
 			return true
 		}
-		// The database exists only when the test runs again in the same process (go test -count=N). Then all tests
-		// drop the database of the run before at about the same time, so the drops need dropDatabaseMu. Every test
-		// takes the lock, but the DB_ID check takes only some milliseconds when there is nothing to drop.
+		// The database exists only with go test -count=N, where all tests drop it at about the same time and need
+		// dropDatabaseMu. The lock costs little when there is nothing to drop.
 		dropDatabaseMu.Lock()
 		_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf(`
 			IF DB_ID(N'%s') IS NOT NULL
