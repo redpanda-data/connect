@@ -11,6 +11,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/urfave/cli/v2"
 
@@ -49,4 +50,27 @@ func applyEnvFileFlag(c *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+var rpcPluginsFlag = &cli.StringSliceFlag{
+	Name:  "rpc-plugins",
+	Usage: "Plugins to load over the RPC interface. This flag should point to manifest files containing the plugin definitions. Globs are also supported.",
+}
+
+// rpcPluginsFromLineage returns the rpc-plugins values from each context in
+// the lineage of c where the flag is set, without duplicates.
+//
+// Do not replace this with c.StringSlice("rpc-plugins"). The flag is defined
+// on the root app and on subcommands such as run. urfave/cli returns the value
+// of the first flag set in the lineage that defines the flag, also when the
+// flag is not set there. Thus `connect --rpc-plugins P run` loses P.
+func rpcPluginsFromLineage(c *cli.Context) []string {
+	var paths []string
+	for _, cc := range c.Lineage() {
+		if slices.Contains(cc.LocalFlagNames(), rpcPluginsFlag.Name) {
+			paths = append(paths, cc.StringSlice(rpcPluginsFlag.Name)...)
+		}
+	}
+	slices.Sort(paths)
+	return slices.Compact(paths)
 }
