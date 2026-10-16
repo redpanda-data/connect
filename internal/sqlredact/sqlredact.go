@@ -28,8 +28,8 @@ import (
 // Open is sql.Open, except that credentials in dsn are redacted from errors.
 // Drivers often parse the DSN lazily, so the connector is wrapped.
 func Open(driverName, dsn string) (*sql.DB, error) {
-	// sql.Open only looks up the driver. Its DB is closed after the connector
-	// is opened, so that drivers that cache connectors, such as spanner, reuse it.
+	// sql.Open is the only way to look up a driver, and it opens a connector of
+	// its own. It closes after ours opens, so cached connectors are reused.
 	probe, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return nil, redact.Error(err, redact.Conns(dsn))
