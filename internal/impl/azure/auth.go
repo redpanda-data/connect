@@ -395,7 +395,7 @@ func getTablesServiceClient(account, accessKey, connectionString, storageSASToke
 	} else if accessKey != "" {
 		cred, credErr := aztables.NewSharedKeyCredential(account, accessKey)
 		if credErr != nil {
-			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+			return nil, fmt.Errorf("invalid azure storage account credentials: %w", credErr)
 		}
 		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf(tableEndpointExp, account), cred, tablesClientOptions())
 	} else if storageSASToken != "" {
