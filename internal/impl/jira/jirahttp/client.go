@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // jiraAPIBasePath is the base path for Jira Rest API
@@ -47,18 +48,18 @@ func (j *Client) CallAPI(ctx context.Context, u *url.URL) ([]byte, error) {
 // by httpclient.NewClient in production). This method sets Jira-specific headers and performs the
 // X-Seraph-LoginReason auth header check.
 func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
-	j.log.Debugf("API call: %s", u.String())
+	j.log.Debugf("API call: %s", redact.URL(u))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", redact.Error(err, redact.Conns(u.String())))
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Redpanda-Connect")
 
 	resp, err := j.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("request failed: %w", redact.Error(err, redact.Conns(u.String())))
 	}
 	defer resp.Body.Close()
 
@@ -137,7 +138,7 @@ func (j *Client) GetAllCustomFields(ctx context.Context, fieldsToSearch []string
 
 // Function to get a single page of custom fields using startAt strategy as the maximum number of custom fields to be retrieved is capped at 50.
 func (j *Client) getCustomFieldsPage(ctx context.Context, startAt int) (*CustomFieldSearchResponse, error) {
-	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/field/search")
+	apiUrl, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/field/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
