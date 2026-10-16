@@ -103,7 +103,9 @@ output:
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = stream.Run(runCtx)
+		if err := stream.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+			g.t.Errorf("member with strategies %v exited unexpectedly: %v", strategies, err)
+		}
 	}()
 
 	stopped := false
