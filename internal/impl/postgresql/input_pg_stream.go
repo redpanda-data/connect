@@ -359,7 +359,7 @@ This option is off by default because it changes the unit of failure and retry f
 This option cannot be combined with a ` + "`" + fieldBatching + "`" + ` policy. Snapshot pages are not affected: each page of ` + "`" + fieldSnapshotBatchSize + "`" + ` rows is always emitted as one batch.`).
 			ShortDescription("Emit the rows of each replication transaction as one batch, rather than one message per row.").
 			Default(false).
-			Version("4.114.0")).
+			Version("4.115.0")).
 		Field(service.NewBatchPolicyField(fieldBatching).
 			Description(`Optional xref:configuration:batching.adoc[batching policy] for the emitted messages.
 
