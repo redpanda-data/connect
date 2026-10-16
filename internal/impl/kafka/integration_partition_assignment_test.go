@@ -16,6 +16,7 @@ package kafka_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
