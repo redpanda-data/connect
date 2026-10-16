@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/singleton"
 )
@@ -290,7 +291,7 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 			return
 		}
 		var u *url.URL
-		u, err = url.Parse(a)
+		u, err = redact.ParseURL(a)
 		if err != nil {
 			return
 		}

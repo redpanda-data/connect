@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -276,7 +276,9 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		if err != nil {
 			return nil, err
 		}
-		t.srURL = srURL
+		var authOpts []sr.ClientOpt
+		t.srURL, authOpts = schemaregistry.BasicAuthFromURL(srURL)
+		t.srOpts = append(t.srOpts, authOpts...)
 		authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
 		if err != nil {
 			return nil, err

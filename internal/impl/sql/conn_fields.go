@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks", "hana").
@@ -402,35 +404,43 @@ func connSettingsFromParsed(
 
 func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, error) {
 	if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
-		u, err := url.Parse(dsn)
+		newDSN, err := reworkOldClickhouseDSN(dsn)
 		if err != nil {
 			return nil, err
 		}
-
-		u.Scheme = "clickhouse"
-
-		uq := u.Query()
-		u.Path = uq.Get("database")
-		if username, password := uq.Get("username"), uq.Get("password"); username != "" {
-			if password != "" {
-				u.User = url.User(username)
-			} else {
-				u.User = url.UserPassword(username, password)
-			}
-		}
-
-		uq.Del("database")
-		uq.Del("username")
-		uq.Del("password")
-
-		u.RawQuery = uq.Encode()
-		newDSN := u.String()
-
-		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
+		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", redact.String(dsn), redact.String(newDSN))
 		dsn = newDSN
 	}
 	if driver == "hana" {
 		driver = "hdb"
 	}
-	return sql.Open(driver, dsn)
+	return sqlredact.Open(driver, dsn)
+}
+
+// reworkOldClickhouseDSN converts tcp://host:port?database=db&username=u&password=p
+// into clickhouse://u:p@host:port/db.
+func reworkOldClickhouseDSN(dsn string) (string, error) {
+	u, err := redact.ParseURL(dsn)
+	if err != nil {
+		return "", err
+	}
+
+	u.Scheme = "clickhouse"
+
+	uq := u.Query()
+	u.Path = uq.Get("database")
+	if username, password := uq.Get("username"), uq.Get("password"); username != "" {
+		if password != "" {
+			u.User = url.UserPassword(username, password)
+		} else {
+			u.User = url.User(username)
+		}
+	}
+
+	uq.Del("database")
+	uq.Del("username")
+	uq.Del("password")
+
+	u.RawQuery = uq.Encode()
+	return u.String(), nil
 }

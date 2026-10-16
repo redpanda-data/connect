@@ -23,6 +23,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -60,7 +61,7 @@ func NewSnapshot(ctx context.Context,
 	logger *service.Logger,
 	metrics *service.Metrics,
 ) (*Snapshot, error) {
-	db, err := sql.Open("oracle", connectionString)
+	db, err := sqlredact.Open("oracle", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
 	}

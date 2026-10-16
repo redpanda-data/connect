@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -471,7 +472,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		GetSSLPassword: func(context.Context) string { return "" },
 	})
 	if err != nil {
-		return nil, err
+		return nil, redact.Error(err, redact.Conns(dsn))
 	}
 
 	logger := mgr.Logger()

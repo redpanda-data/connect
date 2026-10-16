@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -552,7 +553,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		o.db = nil
 	}
 
-	if o.db, err = sql.Open("oracle", o.cfg.ConnectionString); err != nil {
+	if o.db, err = sqlredact.Open("oracle", o.cfg.ConnectionString); err != nil {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {

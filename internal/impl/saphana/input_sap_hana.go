@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // rowKey is one row's (timestamp, incrementing) position, the unit the
@@ -84,7 +85,7 @@ func (s *sapHANAInput) Connect(ctx context.Context) (err error) {
 
 	connector, connErr := gohdb.NewDSNConnector(s.conf.dsn)
 	if connErr != nil {
-		return fmt.Errorf("creating SAP HANA connector: %w", connErr)
+		return fmt.Errorf("creating SAP HANA connector: %w", redact.Error(connErr, redact.Conns(s.conf.dsn)))
 	}
 	connector.SetFetchSize(s.conf.fetchSize)
 	db := sql.OpenDB(connector)

@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -21,6 +21,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 )
@@ -148,7 +149,7 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		agentcard.WithPath(cardPath),
 		agentcard.WithRequestHeader("Authorization", "Bearer "+token.AccessToken))
 	if err != nil {
-		return nil, fmt.Errorf("fetching agent card from %s: %w", agentCardURL, err)
+		return nil, fmt.Errorf("fetching agent card from %s: %w", redact.String(agentCardURL), redact.Error(err, redact.Conns(agentCardURL, baseURL)))
 	}
 
 	mgr.Logger().Debugf("Fetched agent card: %s (version: %s, protocol: %s)", card.Name, card.Version, card.ProtocolVersion)
@@ -221,7 +222,7 @@ func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (s
 	a2aMessage := a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: promptText})
 
 	// Send message
-	p.logger.Debugf("Sending message/send to agent: %s", p.agentURL)
+	p.logger.Debugf("Sending message/send to agent: %s", redact.String(p.agentURL))
 	result, err := p.client.SendMessage(ctx, &a2a.MessageSendParams{
 		Message: a2aMessage,
 	})

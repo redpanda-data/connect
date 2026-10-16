@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"github.com/Azure/go-amqp"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 //go:embed input_description.adoc
@@ -317,12 +318,13 @@ func (a *amqp1Reader) reDial(ctx context.Context, urls []string) (conn *amqp.Con
 	for i, url := range urls {
 		conn, err = amqp.Dial(ctx, url, a.connOpts)
 		if err != nil {
-			a.log.With("error", err).Warnf("unable to connect to url %q #%d, trying next", url, i)
+			err = redact.Error(err, redact.Conns(url))
+			a.log.With("error", err).Warnf("unable to connect to url %q #%d, trying next", redact.String(url), i)
 
 			continue
 		}
 
-		a.log.Tracef("successful connection to use %q #%d", url, i)
+		a.log.Tracef("successful connection to use %q #%d", redact.String(url), i)
 
 		return conn, nil
 	}

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"runtime"
 	"slices"
 	"strings"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -342,7 +342,7 @@ func NewConfigFromParsed(pConf *service.ParsedConfig) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if _, err := url.ParseRequestURI(baseURL); err != nil {
+	if _, err := redact.ParseRequestURI(baseURL); err != nil {
 		return Config{}, fmt.Errorf("base_url is not a valid URL: %w", err)
 	}
 	cfg, err := newConfigFromParsedNoBaseURL(pConf)

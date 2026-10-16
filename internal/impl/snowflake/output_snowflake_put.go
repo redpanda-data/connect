@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -29,6 +29,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -664,7 +665,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 func (s *snowflakeWriter) Connect(context.Context) error {
 	var err error
-	s.db, err = sql.Open("snowflake", s.dsn)
+	s.db, err = sqlredact.Open("snowflake", s.dsn)
 	if err != nil {
 		return fmt.Errorf("connecting to snowflake: %s", err)
 	}
