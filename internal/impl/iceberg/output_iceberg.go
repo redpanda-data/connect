@@ -11,7 +11,6 @@ package iceberg
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/apache/iceberg-go"
@@ -20,6 +19,7 @@ import (
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
@@ -290,7 +290,7 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 		}
 		serverURI, _ := conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthOAuth2, ioFieldOAuth2ServerURI)
 		if serverURI != "" {
-			cfg.OAuth2ServerURI, err = url.Parse(serverURI)
+			cfg.OAuth2ServerURI, err = redact.ParseURL(serverURI)
 			if err != nil {
 				return cfg, fmt.Errorf("parsing oauth2 server URI: %w", err)
 			}
