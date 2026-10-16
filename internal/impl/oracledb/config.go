@@ -11,13 +11,13 @@ package oracledb
 import (
 	"fmt"
 	"maps"
-	"net/url"
 	"strconv"
 	"strings"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
-
 	go_ora "github.com/sijms/go-ora/v2"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 // buildConnectionString parses connStr (oracle://user:password@host:port/service) supporting
 // overriding of of connectio parameters.
 func buildConnectionString(connStr string, overrides map[string]string, log *service.Logger) (string, error) {
-	u, err := url.Parse(connStr)
+	u, err := redact.ParseURL(connStr)
 	if err != nil {
 		return "", fmt.Errorf("parsing url: %w", err)
 	}
@@ -123,7 +123,7 @@ func parsePrefetchRowsConfig(conf *service.ParsedConfig, overrides map[string]st
 	if err != nil {
 		return 0, err
 	}
-	u, err := url.Parse(connStr)
+	u, err := redact.ParseURL(connStr)
 	if err != nil {
 		return 0, fmt.Errorf("parsing %s: %w", ociFieldConnectionString, err)
 	}
