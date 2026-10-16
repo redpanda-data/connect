@@ -23,6 +23,8 @@ import (
 	goora "github.com/sijms/go-ora/v2/network"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 // connectionCapacityErrCodes are the ORA codes returned when the database has no room for another connection.
@@ -60,7 +62,7 @@ type snapshotDB struct {
 
 // newSnapshotDB opens the connection pool, using DefaultSnapshotConnBackoff when connBackoff is nil.
 func newSnapshotDB(ctx context.Context, connStr, pdbName string, connBackoff *backoff.ExponentialBackOff, log *service.Logger) (*snapshotDB, error) {
-	pool, err := sql.Open("oracle", connStr)
+	pool, err := sqlredact.Open("oracle", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
 	}
