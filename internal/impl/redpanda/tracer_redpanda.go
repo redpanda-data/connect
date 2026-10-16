@@ -276,14 +276,9 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		if err != nil {
 			return nil, err
 		}
-		// The client includes request URLs in its errors, so userinfo is sent
-		// as basic auth instead.
-		if srURL.User != nil {
-			pass, _ := srURL.User.Password()
-			t.srOpts = append(t.srOpts, sr.BasicAuth(srURL.User.Username(), pass))
-			srURL.User = nil
-		}
-		t.srURL = srURL
+		var authOpts []sr.ClientOpt
+		t.srURL, authOpts = schemaregistry.BasicAuthFromURL(srURL)
+		t.srOpts = append(t.srOpts, authOpts...)
 		authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
 		if err != nil {
 			return nil, err
