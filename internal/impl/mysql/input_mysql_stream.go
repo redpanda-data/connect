@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -32,10 +32,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -239,7 +241,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 	i.mysqlConfig, err = mysql.ParseDSN(i.dsn)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
+		return nil, fmt.Errorf("error parsing mysql DSN: %w", redact.Error(err, redact.Conns(i.dsn)))
 	}
 	// We require this configuration option is enabled.
 	i.mysqlConfig.ParseTime = true
@@ -366,7 +368,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
-		db, err := sql.Open("mysql", i.mysqlConfig.FormatDSN())
+		db, err := sqlredact.Open("mysql", i.mysqlConfig.FormatDSN())
 		if err != nil {
 			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}
