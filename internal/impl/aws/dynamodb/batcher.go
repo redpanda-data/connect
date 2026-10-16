@@ -31,6 +31,38 @@ const (
 	throttlePinWarnInterval = 5 * time.Minute
 )
 
+// pinClock encapsulates continuous throttling duration tracking and
+// rate-limited warning log state.
+type pinClock struct {
+	// throttledSince records when reservations started continuously failing
+	// without an intervening successful reservation/check; zero while not
+	// throttled.
+	throttledSince time.Time
+	// lastPinWarn is the timestamp when the pinned-throttle warning was last
+	// logged, used to rate-limit warnings.
+	lastPinWarn time.Time
+}
+
+func (c *pinClock) clear() {
+	c.throttledSince = time.Time{}
+}
+
+// check records the start of a throttling event or checks if a warning is due.
+// Returns the total duration spent continuously throttled and whether a log
+// warning should be emitted.
+func (c *pinClock) check(now time.Time) (since time.Duration, shouldWarn bool) {
+	if c.throttledSince.IsZero() {
+		c.throttledSince = now
+		return 0, false
+	}
+	since = now.Sub(c.throttledSince)
+	if since >= throttlePinWarnAfter && now.Sub(c.lastPinWarn) >= throttlePinWarnInterval {
+		c.lastPinWarn = now
+		return since, true
+	}
+	return since, false
+}
+
 // RecordBatcher tracks in-flight message batches and persists shard
 // checkpoints in stream order.
 //
@@ -84,13 +116,9 @@ type RecordBatcher struct {
 	// shard with nothing in flight always admits one batch regardless, so
 	// progress is guaranteed for any cap/batch-size combination.
 	perShardCap int
-	// throttledSince is when reservations last started failing on the global
-	// budget without one passing the global check in between (a reservation
-	// the shard's own cap then refuses still proves the global budget has
-	// room); zero while not throttled. lastPinWarn rate-limits the
-	// pinned-throttle warning.
-	throttledSince time.Time
-	lastPinWarn    time.Time
+	// pinClock tracks continuous throttling duration and rate-limits pinned
+	// warnings on the global budget.
+	pinClock pinClock
 }
 
 // trackedBatch is the settlement handle for one dispatched batch, returned by
@@ -142,15 +170,9 @@ type shardAckTracker struct {
 	// Together with the shard's entry in the batcher's reservedByShard it is
 	// bounded by perShardCap.
 	inflight int
-	// throttledSince is when reservations last started failing on this
-	// shard's in-flight cap without a successful reserve in between; zero
-	// while not throttled. A shard pinned at its cap never reaches the
-	// global-budget branch (fewer than four pinned shards leave the global
-	// budget under 100%), so the per-shard refusal needs its own pin clock
-	// or a wedged shard parks in silence. lastPinWarn rate-limits the
-	// warning.
-	throttledSince time.Time
-	lastPinWarn    time.Time
+	// pinClock tracks continuous throttling duration and rate-limits pinned
+	// warnings on this shard's in-flight cap.
+	pinClock pinClock
 }
 
 // NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC.
@@ -187,22 +209,20 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// If the batcher has zero messages in flight, always allow the first reservation
-	// to go through, even if it exceeds the maximum budget.
+	// If the batcher has zero messages in flight, always allow the first
+	// reservation to go through, even if it exceeds the maximum budget.
 	//
-	// Why? Even though configuration validation normally ensures batch sizes are smaller
-	// than the budget, a batch that is larger than the limit must never cause the reader
-	// loop to hang forever waiting for space that can never clear.
+	// Why? Even though configuration validation normally ensures batch sizes
+	// are smaller than the budget, a batch that is larger than the limit must
+	// never cause the reader loop to hang forever waiting for space that can
+	// never clear.
 	globalInFlight := b.inFlightCountLocked()
 	if globalInFlight > 0 && globalInFlight+n > b.maxTrackedMessages {
 		// Surface a continuously pinned budget: every shard reader parks on
 		// this check, so if in-flight messages never settle the input is
 		// stalled with no other signal.
 		now := time.Now()
-		if b.throttledSince.IsZero() {
-			b.throttledSince = now
-		} else if since := now.Sub(b.throttledSince); since >= throttlePinWarnAfter && now.Sub(b.lastPinWarn) >= throttlePinWarnInterval {
-			b.lastPinWarn = now
+		if since, shouldWarn := b.pinClock.check(now); shouldWarn {
 			b.log.Warnf("Shard readers throttled for %v: %d/%d in-flight messages are still awaiting downstream acknowledgement (top shards: %s); no records are being read while this persists",
 				since.Round(time.Second), b.trackedMessages, b.maxTrackedMessages, b.topInflightShardsLocked(3))
 		}
@@ -211,7 +231,7 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	// The global budget can admit this reservation, so it is not pinned:
 	// clear its clock even if the shard's own cap refuses below, or the next
 	// global exhaustion would report a pin spanning the drained interval.
-	b.throttledSince = time.Time{}
+	b.pinClock.clear()
 
 	shardInFlight := b.shardInFlightLocked(shardID)
 	if shardInFlight > 0 && shardInFlight+n > b.perShardCap && b.otherShardActiveLocked(shardID) {
@@ -225,10 +245,7 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 		// guard is belt and braces.
 		if st := b.shards[shardID]; st != nil {
 			now := time.Now()
-			if st.throttledSince.IsZero() {
-				st.throttledSince = now
-			} else if since := now.Sub(st.throttledSince); since >= throttlePinWarnAfter && now.Sub(st.lastPinWarn) >= throttlePinWarnInterval {
-				st.lastPinWarn = now
+			if since, shouldWarn := st.pinClock.check(now); shouldWarn {
 				b.log.Warnf("Shard %s reader throttled for %v: %d/%d in-flight messages on this shard are still awaiting downstream acknowledgement; no records are being read from it while this persists",
 					shardID, since.Round(time.Second), shardInFlight, b.perShardCap)
 			}
@@ -237,7 +254,7 @@ func (b *RecordBatcher) TryReserve(shardID string, n int) bool {
 	}
 
 	if st := b.shards[shardID]; st != nil {
-		st.throttledSince = time.Time{}
+		st.pinClock.clear()
 	}
 	b.reservedByShard[shardID] += n
 	b.reserved += n
@@ -591,8 +608,8 @@ func (b *RecordBatcher) InFlightCount() int {
 	return b.inFlightCountLocked()
 }
 
-// shardInFlightLocked returns the in-flight (tracked and reserved) message count
-// for a specific shard. Callers must hold b.mu.
+// shardInFlightLocked returns the in-flight (tracked and reserved) message
+// count for a specific shard. Callers must hold b.mu.
 func (b *RecordBatcher) shardInFlightLocked(shardID string) int {
 	inflight := 0
 	if st := b.shards[shardID]; st != nil {
