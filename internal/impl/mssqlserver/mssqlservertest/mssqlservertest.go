@@ -339,11 +339,11 @@ func startMSSQLServerContainer(ctx context.Context) (*tcmssql.MSSQLServerContain
 	)
 }
 
-// createDatabase waits until the master database accepts connections, then creates dbName.
-// If dbName exists, createDatabase drops it first, so the test starts empty. An empty dbName only waits.
+// createDatabase waits until the master database accepts connections, then creates dbName. An empty dbName only waits.
 //
-// Tests do not drop their database when they complete: dropping a CDC database takes about 3.5s under dropDatabaseMu,
-// and the container is removed at the end of the package.
+// Notes:
+//   - It drops an existing dbName first, so the test starts empty.
+//   - Tests keep their database at the end: a CDC drop is slow, and the container is removed anyway.
 func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) error {
 	masterConn, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
 	if err != nil {
