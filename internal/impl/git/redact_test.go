@@ -34,3 +34,17 @@ func TestCloneErrorRedactsCredentials(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretToken")
 }
+
+func TestCloneErrorRedactsUsernameToken(t *testing.T) {
+	in := &input{
+		cfg: inputCfg{
+			repoURL: "https://ghp_S3cretToken@127.0.0.1:1/org/repo.git",
+			branch:  "main",
+		},
+		tempDir: t.TempDir(),
+	}
+
+	err := in.cloneRepo(t.Context())
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "S3cretToken")
+}
