@@ -17,7 +17,6 @@
 package ollama
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +26,7 @@ import (
 func TestDownloadOllamaURLRedacted(t *testing.T) {
 	c := &runOllamaConfig{downloadURL: testBadURL}
 
-	err := c.downloadOllama(context.Background(), t.TempDir())
+	err := c.downloadOllama(t.Context(), t.TempDir())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }

@@ -9,7 +9,6 @@
 package catalogx
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,7 @@ import (
 )
 
 func TestNewCatalogClientURLRedacted(t *testing.T) {
-	_, err := NewCatalogClient(context.Background(), Config{
+	_, err := NewCatalogClient(t.Context(), Config{
 		URL:      "http://u:S3cretPass@bad host:8181",
 		AuthType: "none",
 	}, []string{"ns"})

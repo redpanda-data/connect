@@ -15,7 +15,6 @@
 package jirahttp
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +24,7 @@ import (
 func TestBaseURLParseErrorRedacted(t *testing.T) {
 	j := &Client{baseURL: "https://u:S3cretPass@bad host"}
 
-	_, err := j.searchRoles(context.Background())
+	_, err := j.searchRoles(t.Context())
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }

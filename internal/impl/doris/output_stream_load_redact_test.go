@@ -15,7 +15,6 @@
 package doris
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,7 +47,7 @@ func TestStreamLoadURLsParseErrorRedacted(t *testing.T) {
 
 func TestConnectionCheckParseErrorRedacted(t *testing.T) {
 	d := &dorisStreamLoadOutput{}
-	err := d.connectionCheck(context.Background(), testBadURL, 9030)
+	err := d.connectionCheck(t.Context(), testBadURL, 9030)
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretPass")
 }
