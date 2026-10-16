@@ -18,13 +18,13 @@ All notable changes to this project will be documented in this file.
 - couchbase: Couchbase output now correctly fails only messages whose individual operations failed, instead of acking all messages regardless of operation errors. ([@Leward](https://github.com/Leward), [#4969](https://github.com/redpanda-data/connect/pull/4969))
 - redpanda_migrator: Schema registry sync no longer fails the entire output on per-subject registration errors; partial sync failures are now retried on the next interval. ([@rjustice-rp](https://github.com/rjustice-rp), [#4895](https://github.com/redpanda-data/connect/pull/4895))
 - schema_registry_encode: Optional fields in json_schema mode now accept null values, matching Avro conversion behavior for NULL values from CDC inputs. ([@JakeSCahill](https://github.com/JakeSCahill), [#4950](https://github.com/redpanda-data/connect/pull/4950))
+- oracledb_cdc: replay open LOB transactions at window boundaries. ([@josephwoodward](https://github.com/josephwoodward), [#4964](https://github.com/redpanda-data/connect/pull/4964))
 
 ### Changed
 
 - general: Shared field descriptions from benthos internals as exported constants and gave component-specific fields their own descriptions. ([@JakeSCahill](https://github.com/JakeSCahill), [#4877](https://github.com/redpanda-data/connect/pull/4877))
 - general: Updated Benthos dependency to v4.83.0 to pull in credential redaction for URLs and httpclient retry fixes. ([@Jeffail](https://github.com/Jeffail), [#4972](https://github.com/redpanda-data/connect/pull/4972))
 - kafka: Clarified compression field behavior when unset and set default to snappy to match franz-go's actual default preference. ([@JakeSCahill](https://github.com/JakeSCahill), [#4951](https://github.com/redpanda-data/connect/pull/4951))
-- mssqlserver: MSSQL Server integration tests now share one container across tests with separate databases per test, running in parallel. ([@Leward](https://github.com/Leward), [#4928](https://github.com/redpanda-data/connect/pull/4928))
 - oracledb_cdc: Improved oracledb_cdc parsing and message processing with better row type handling, inline read-ahead scaling, and cleaner error handling. ([@josephwoodward](https://github.com/josephwoodward), [#4941](https://github.com/redpanda-data/connect/pull/4941))
 - prometheus: Added documentation for mixed use_histogram_timing settings across fleets and histogram_timing_seconds_suffix workaround for remote-write receivers. ([@squiidz](https://github.com/squiidz), [#4946](https://github.com/redpanda-data/connect/pull/4946))
 - sql: SQL integration tests now run in parallel with shared database containers, reducing overall test package execution time. ([@Leward](https://github.com/Leward), [#4874](https://github.com/redpanda-data/connect/pull/4874))
