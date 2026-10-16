@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
@@ -443,6 +444,49 @@ func debugf(l *service.Logger, msg string, args ...any) {
 	l.Tracef(msg, args...)
 }
 
+// redactedBody formats a JSON response body for debug logging with the stage
+// credentials removed. Bodies that are not valid JSON are omitted.
+type redactedBody []byte
+
+func (b redactedBody) String() string {
+	// Some loggers format arguments even when the trace level is disabled, so
+	// skip the JSON round trip for bodies that cannot hold credentials.
+	if lb := bytes.ToLower(b); !bytes.Contains(lb, []byte("creds")) && !bytes.Contains(lb, []byte("presignedurl")) {
+		return string(b)
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return "<invalid JSON omitted>"
+	}
+	redactStageCreds(v)
+	out, err := json.Marshal(v)
+	if err != nil {
+		return "<invalid JSON omitted>"
+	}
+	return string(out)
+}
+
+// redactStageCreds replaces the values of stage location fields that hold
+// credentials, at any depth in v.
+func redactStageCreds(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, child := range t {
+			if strings.EqualFold(k, "creds") || strings.EqualFold(k, "presignedUrl") {
+				t[k] = redact.Marker
+				continue
+			}
+			redactStageCreds(child)
+		}
+	case []any:
+		for _, child := range t {
+			redactStageCreds(child)
+		}
+	}
+}
+
 func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req, resp any) error {
 	marshaller := json.Marshal
 	if debug {
@@ -487,7 +531,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req, resp 
 			}
 			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
 		}
-		debugf(c.logger, "got response to %s with body %s", url, respBody)
+		debugf(c.logger, "got response to %s with body %s", url, redactedBody(respBody))
 		return respBody, nil
 	},
 		backoff.WithContext(
