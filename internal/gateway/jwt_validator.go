@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -27,6 +26,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -64,7 +64,7 @@ func newJWTValidator(mgr *service.Resources) (*jwtValidator, error) {
 		return nil, fmt.Errorf("gateway JWT authentication requires an organisation ID set via %v", rpEnvJWTOrgID)
 	}
 
-	issuerURL, err := url.Parse(issuerURLStr)
+	issuerURL, err := redact.ParseURL(issuerURLStr)
 	if err != nil {
 		return nil, fmt.Errorf("parsing gateway JWT issuer URL: %w", err)
 	}
