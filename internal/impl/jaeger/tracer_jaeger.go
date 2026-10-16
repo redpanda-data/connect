@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/jaeger"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
@@ -138,6 +139,9 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	// Create the Jaeger exporter
 	var epOpt jaeger.EndpointOption
 	if config.CollectorURL != "" {
+		if _, err := redact.ParseURL(config.CollectorURL); err != nil {
+			return nil, fmt.Errorf("invalid collector_url: %w", err)
+		}
 		epOpt = jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorURL))
 	} else {
 		agentOpts, err := getAgentOpts(config.AgentAddress)
