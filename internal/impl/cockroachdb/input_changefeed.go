@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	_ "github.com/lib/pq"
 )
@@ -116,7 +117,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 	}
 
 	if c.pgConfig, err = pgxpool.ParseConfig(dsn); err != nil {
-		return nil, err
+		return nil, redact.Error(err, redact.Conns(dsn))
 	}
 
 	if c.pgConfig.ConnConfig.TLSConfig, err = conf.FieldTLS("tls"); err != nil {
