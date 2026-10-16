@@ -85,3 +85,11 @@ func TestStorageClientsRedactSASFromTransportErrors(t *testing.T) {
 		assertRedactedTransportError(t, err)
 	})
 }
+
+func TestTablesClientBadAccessKeyError(t *testing.T) {
+	_, err := getTablesServiceClient("account", "not base64!", "", "")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "%!v")
+	assert.Contains(t, err.Error(), "invalid azure storage account credentials: ")
+	assert.NotContains(t, err.Error(), "not base64!")
+}
