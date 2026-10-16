@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jiraauth"
@@ -496,7 +497,7 @@ func (r *reader) Connect(ctx context.Context) error {
 	// Validate auth via /myself, and capture the account timezone: JQL date
 	// literals are evaluated in the requesting account's timezone, so the
 	// cursor predicate must be rendered in it rather than UTC.
-	myselfURL, err := url.Parse(r.cfg.httpCfg.BaseURL + "/rest/api/3/myself")
+	myselfURL, err := redact.ParseURL(r.cfg.httpCfg.BaseURL + "/rest/api/3/myself")
 	if err != nil {
 		return fmt.Errorf("invalid base_url: %w", err)
 	}
@@ -513,7 +514,7 @@ func (r *reader) Connect(ctx context.Context) error {
 	}
 	r.setCursor(c)
 	r.connected.Store(true)
-	r.log.Infof("connected to %s as %s", r.cfg.httpCfg.BaseURL, r.cfg.authEmail)
+	r.log.Infof("connected to %s as %s", redact.String(r.cfg.httpCfg.BaseURL), r.cfg.authEmail)
 	return nil
 }
 
@@ -782,7 +783,7 @@ func (*reader) messageFromIssue(raw json.RawMessage, meta rawIssue) *service.Mes
 // keys containing slashes or unicode (which Jira technically allows for some
 // projects) round-trip safely.
 func (r *reader) fetchComments(ctx context.Context, issue rawIssue) ([]*service.Message, error) {
-	u, err := url.Parse(r.cfg.httpCfg.BaseURL + "/rest/api/3/issue/" + url.PathEscape(issue.Key) + "/comment")
+	u, err := redact.ParseURL(r.cfg.httpCfg.BaseURL + "/rest/api/3/issue/" + url.PathEscape(issue.Key) + "/comment")
 	if err != nil {
 		return nil, err
 	}
@@ -870,7 +871,7 @@ func (r *reader) messagesFromChangelog(raw json.RawMessage, meta rawIssue) ([]*s
 }
 
 func (r *reader) buildSearchURL() (*url.URL, error) {
-	u, err := url.Parse(r.cfg.httpCfg.BaseURL + "/rest/api/3/search/jql")
+	u, err := redact.ParseURL(r.cfg.httpCfg.BaseURL + "/rest/api/3/search/jql")
 	if err != nil {
 		return nil, err
 	}
