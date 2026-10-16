@@ -83,8 +83,15 @@ func ClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.
 
 	opts := []sr.ClientOpt{
 		sr.UserAgent("redpanda-connect"),
-		sr.URLs(srURL.String()),
 	}
+	// The client includes request URLs in its errors, so userinfo is sent as
+	// basic auth instead. A request signer or OAuth2 still takes precedence.
+	if srURL.User != nil {
+		pass, _ := srURL.User.Password()
+		opts = append(opts, sr.BasicAuth(srURL.User.Username(), pass))
+		srURL.User = nil
+	}
+	opts = append(opts, sr.URLs(srURL.String()))
 
 	var oa2Conf oauth2.Config
 	if pConf.Contains("oauth2") {
