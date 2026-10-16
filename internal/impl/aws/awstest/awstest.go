@@ -18,6 +18,8 @@ package awstest
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,23 +35,68 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// GetLocalStack starts a LocalStack container and returns the service port.
+var (
+	localStackOnce sync.Once
+	localStackCtr  testcontainers.Container
+	localStackErr  error
+	localStackPort string
+)
+
+// GetLocalStack returns the service port of a single, package-wide LocalStack
+// container. It starts the container on first use.
+//
+// One container per test binary keeps the package within its `go test -timeout`
+// budget and lets the tests of a package run in parallel. Callers must use
+// unique per-test resource names (streams, buckets, queues, log groups). The
+// stream-test harness already does this through its generated $ID.
+//
+// The container outlives the test that starts it. Call TestMain from the
+// package's own TestMain to terminate it after all tests complete.
 func GetLocalStack(t testing.TB) (port string) {
-	ctr, err := testcontainers.Run(t.Context(), "localstack/localstack:3",
-		testcontainers.WithExposedPorts("4566/tcp"),
-		testcontainers.WithWaitStrategy(
-			wait.ForHTTP("/_localstack/health").
-				WithPort("4566/tcp").
-				WithStartupTimeout(2*time.Minute),
-		),
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	require.NoError(t, err)
+	t.Helper()
 
-	mappedPort, err := ctr.MappedPort(t.Context(), "4566/tcp")
-	require.NoError(t, err)
+	localStackOnce.Do(func() {
+		// context.Background(), not t.Context(): the container outlives the
+		// first test that triggers startup.
+		ctx := context.Background()
+		ctr, err := testcontainers.Run(ctx, "localstack/localstack:3",
+			testcontainers.WithExposedPorts("4566/tcp"),
+			testcontainers.WithWaitStrategy(
+				wait.ForHTTP("/_localstack/health").
+					WithPort("4566/tcp").
+					WithStartupTimeout(2*time.Minute),
+			),
+		)
+		if err != nil {
+			if ctr != nil {
+				_ = ctr.Terminate(ctx)
+			}
+			localStackErr = err
+			return
+		}
+		localStackCtr = ctr
 
-	return mappedPort.Port()
+		mappedPort, err := ctr.MappedPort(ctx, "4566/tcp")
+		if err != nil {
+			localStackErr = err
+			return
+		}
+		localStackPort = mappedPort.Port()
+	})
+	require.NoError(t, localStackErr)
+
+	return localStackPort
+}
+
+// TestMain runs the package's tests, terminates the shared LocalStack container
+// (if one was started), and exits with the test result code. Call it from the
+// TestMain of every package that uses GetLocalStack.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if localStackCtr != nil {
+		_ = localStackCtr.Terminate(context.Background())
+	}
+	os.Exit(code)
 }
 
 // CreateBucket creates an S3 bucket on a LocalStack instance.
