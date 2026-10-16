@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,6 +235,18 @@ func (in *input) Close(ctx context.Context) error {
 	return nil
 }
 
+// redactErr removes the credentials of the repository URL from err. A username
+// without a password, as in https://<token>@github.com/org/repo, is a token.
+func (in *input) redactErr(err error) error {
+	opts := []redact.Option{redact.Conns(in.cfg.repoURL)}
+	if u, perr := url.Parse(in.cfg.repoURL); perr == nil && u.User != nil && strings.HasPrefix(u.Scheme, "http") {
+		if _, hasPass := u.User.Password(); !hasPass && u.User.Username() != "" {
+			opts = append(opts, redact.Values(u.User.Username()))
+		}
+	}
+	return redact.Error(err, opts...)
+}
+
 // cloneRepo clones the configured Git repository into the temporary directory and
 // sets the initial commit hash.
 func (in *input) cloneRepo(ctx context.Context) error {
@@ -249,7 +262,7 @@ func (in *input) cloneRepo(ctx context.Context) error {
 		SingleBranch:  true,
 	})
 	if err != nil {
-		return fmt.Errorf("git clone failed: %w", redact.Error(err, redact.Conns(in.cfg.repoURL)))
+		return fmt.Errorf("git clone failed: %w", in.redactErr(err))
 	}
 	ref, err := in.repository.Head()
 	if err != nil {
@@ -433,7 +446,7 @@ func (in *input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth tran
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("git pull failed: %w", redact.Error(err, redact.Conns(in.cfg.repoURL)))
+		return fmt.Errorf("git pull failed: %w", in.redactErr(err))
 	}
 	return nil
 }
