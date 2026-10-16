@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,10 +36,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/confx"
-
 	"github.com/twmb/franz-go/pkg/sr"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
+
+	"github.com/redpanda-data/connect/v4/internal/confx"
 )
 
 // Versions represents which schema versions to migrate
@@ -217,8 +219,15 @@ func schemaRegistryClientAndURLFromParsed(pConf *service.ParsedConfig, mgr *serv
 	opts := []sr.ClientOpt{
 		sr.HTTPClient(&http.Client{Timeout: timeout}),
 		sr.UserAgent("franz-go"),
-		sr.URLs(srURL.String()),
 	}
+	// The client includes request URLs in its errors, so userinfo is sent as
+	// basic auth instead. A request signer still takes precedence.
+	if srURL.User != nil {
+		pass, _ := srURL.User.Password()
+		opts = append(opts, sr.BasicAuth(srURL.User.Username(), pass))
+		srURL.User = nil
+	}
+	opts = append(opts, sr.URLs(srURL.String()))
 
 	if tlsConf != nil {
 		opts = append(opts, sr.DialTLSConfig(tlsConf))
@@ -1154,7 +1163,7 @@ func (m *schemaRegistryMigrator) validateSchemaRegistries(ctx context.Context) e
 		return errors.New("destination schema registry client not configured")
 	}
 	if m.srcURL == m.dstURL {
-		return fmt.Errorf("source and destination schema registry URLs must be different: %s", m.srcURL)
+		return fmt.Errorf("source and destination schema registry URLs must be different: %s", redact.String(m.srcURL))
 	}
 	mode, err := srGlobalMode(ctx, m.dst)
 	if err != nil {
