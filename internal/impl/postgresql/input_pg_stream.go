@@ -356,7 +356,7 @@ Use this to let batch-aware outputs, such as a multi-row ` + "`sql_insert`" + ` 
 
 This option is off by default because it changes the unit of failure and retry from one row to one transaction. If an output rejects a batch because of one bad row, outputs such as ` + "`fallback`" + ` handle the whole batch, including the good rows. Leave it off if your pipeline routes individual bad rows to a dead-letter queue.
 
-This option cannot be combined with a ` + "`" + fieldBatching + "`" + ` policy. Snapshot pages are not affected: each page of ` + "`" + fieldSnapshotBatchSize + "`" + ` rows is always emitted as one batch.`).
+This option cannot be combined with a ` + "`" + fieldBatching + "`" + ` policy: it bypasses the policy, including its processors. Snapshot pages are not affected: each page of ` + "`" + fieldSnapshotBatchSize + "`" + ` rows is always emitted as one batch.`).
 			ShortDescription("Emit the rows of each replication transaction as one batch, rather than one message per row.").
 			Default(false).
 			Version("4.115.0")).
@@ -370,7 +370,7 @@ To change this:
 * Set a policy to control batch size and timing. It applies to both the snapshot and the stream.
 * Set ` + "`" + fieldBatchTransactions + "`" + ` to receive each replication transaction as one batch. This cannot be combined with a policy.
 
-If the policy's ` + "`processors`" + ` fail on a batch, its rows are published unprocessed with their error set rather than dropped or retried, so error-handling components can route them.`))
+If the policy's ` + "`processors`" + ` fail on a batch, its rows are published as the batcher held them, with their error set, rather than dropped or retried, so error-handling components can route them. A processor earlier in the chain may already have altered them. If the processors drop every row of a batch, the position those rows reached is still acknowledged.`))
 }
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
@@ -614,13 +614,14 @@ func init() {
 // explicit count: 1 is distinguishable and honoured (one message per batch).
 // With no policy, Count is forced to 1 so a Batcher can be constructed: that
 // is what delivers streaming rows one message at a time by default. A
-// configured policy and batch_transactions cannot both apply, as the policy
-// would re-batch the transactions; that combination is rejected here rather
-// than silently resolved either way.
+// configured policy and batch_transactions cannot both apply: the
+// pass-through never touches the batcher, so the policy and its processors
+// would silently never run; that combination is rejected here rather than
+// silently resolved either way.
 func resolveBatchingPolicy(batching service.BatchPolicy, batchTransactions bool) (policy service.BatchPolicy, configured bool, err error) {
 	configured = !batching.IsNoop() || batching.Count == 1
 	if configured && batchTransactions {
-		return batching, false, fmt.Errorf("%s cannot be combined with a %s policy: the policy would re-batch the transactions", fieldBatchTransactions, fieldBatching)
+		return batching, false, fmt.Errorf("%s cannot be combined with a %s policy: it bypasses the policy, including its processors", fieldBatchTransactions, fieldBatching)
 	}
 	if !configured {
 		batching.Count = 1
@@ -808,14 +809,12 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			}
 			var (
 				mb []byte
-				// passThrough collects the whole reader batch when it is
-				// to be handed on as one output batch; see passesThrough.
-				passThrough service.MessageBatch
+				// passThrough collects the whole reader batch, and the stamp
+				// of its last change row, when it is to be handed on as one
+				// output batch; see passesThrough.
+				passThrough pendingRows
 			)
 			passesThrough := p.passesThrough(batch)
-			if passesThrough {
-				passThrough = make(service.MessageBatch, 0, len(batch))
-			}
 			for _, msg := range batch {
 				// noop if not configured
 				if _, err := p.controlSig.listen(&msg); err != nil {
@@ -870,7 +869,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				}
 
 				if passesThrough {
-					passThrough = append(passThrough, batchMsg)
+					passThrough.add(batchMsg, msg.AckLSN)
 					continue
 				}
 				st.pending.add(batchMsg, msg.AckLSN)
@@ -891,13 +890,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				// The reader has already promoted its LSN bookkeeping for this
 				// batch, so if it cannot be handed on the stream must restart
 				// rather than continue past it.
-				if !p.emitBatch(ctx, pgStream, cp, passThrough, lastAckLSN(batch), st) {
+				if !p.emitBatch(ctx, pgStream, cp, passThrough.msgs, passThrough.ackLSN, st) {
 					break
 				}
 			} else if d, ok := batcher.UntilNext(); ok {
 				nextTimedBatchChan = time.After(d)
-			} else {
-				nextTimedBatchChan = nil
 			}
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
@@ -931,28 +928,17 @@ func (p *pgStreamInput) passesThrough(batch []pglogicalstream.StreamMessage) boo
 	return p.batchTransactions
 }
 
-// lastAckLSN is the reader's stamp for the last row of a reader batch that
-// carries one: the position to acknowledge once the whole batch is processed
-// (see StreamMessage.AckLSN). Nil for a snapshot page or chunk, whose rows
-// carry no position.
-func lastAckLSN(batch []pglogicalstream.StreamMessage) *string {
-	for i := len(batch) - 1; i >= 0; i-- {
-		if batch[i].AckLSN != nil {
-			return batch[i].AckLSN
-		}
-	}
-	return nil
-}
-
 // lsnAcker confirms a replication position to Postgres. *pglogicalstream.Stream
 // implements it; tests substitute a recorder.
 type lsnAcker interface {
 	AckLSN(ctx context.Context, lsn string) error
 }
 
-// pendingRows is the input's own record of what the batcher holds since its
-// last flush. msgs are republished with their error set if the batching
-// processors fail. ackLSN is the AckLSN of the last change row added:
+// pendingRows collects the messages of one output batch together with the
+// position to acknowledge for it. For the batcher path it is the input's own
+// record of what the batcher holds since its last flush, republished with
+// their error set if the batching processors fail; for a pass-through batch
+// it is simply the batch. ackLSN is the AckLSN of the last change row added:
 // whatever the processors make of the messages, acknowledging the batch they
 // produce means every row handed over so far is processed, and the last
 // row's stamp is the position that says so (a commit record when that row
@@ -1019,10 +1005,17 @@ func (p *pgStreamInput) emitBatch(ctx context.Context, pgStream lsnAcker, cp *ch
 // were decoded from WAL the reader has already moved past. Dropping them is
 // silent loss; restarting re-reads and fails identically when the failure is
 // deterministic, so the input would loop forever with the slot never
-// advancing. Instead the rows are published as they were added, with the
-// processors' error set, the same way an unmarshalable row is: at-least-once
-// holds, the stream keeps moving, and error-handling components can route
-// them.
+// advancing. Instead the rows are published as the batcher held them, with
+// the processors' error set, the same way an unmarshalable row is:
+// at-least-once holds, the stream keeps moving, and error-handling
+// components can route them. The processors ran on these same messages, so
+// one earlier in the chain may already have altered them.
+//
+// When the processors drop every row (a filter, say) nothing reaches the
+// pipeline, so nothing would ever acknowledge the position those rows
+// reached and the slot would stop advancing for as long as only filtered
+// rows arrive. The position is tracked as a row-less checkpoint instead and
+// resolved at once, behind any earlier batch still in flight.
 func (p *pgStreamInput) flushBatcher(ctx context.Context, pgStream lsnAcker, cp *checkpointTracker, batcher *service.Batcher, st *flushState) bool {
 	flushed, err := batcher.Flush(ctx)
 	held, ackLSN := st.pending.msgs, st.pending.ackLSN
@@ -1037,14 +1030,45 @@ func (p *pgStreamInput) flushBatcher(ctx context.Context, pgStream lsnAcker, cp 
 			p.stopSig.TriggerSoftStop()
 			return false
 		}
-		p.logger.Warnf("Publishing %d row(s) unprocessed with their error set for error-routing, the batching processors failed: %v", len(held), err)
+		p.logger.Warnf("Publishing %d row(s) with their error set for error-routing, as the batcher held them, the batching processors failed: %v", len(held), err)
 		procErr := fmt.Errorf("batching processors: %w", err)
 		for _, msg := range held {
 			msg.SetError(procErr)
 		}
 		flushed = held
 	}
+	if len(flushed) == 0 && len(held) > 0 {
+		return p.acknowledgeFilteredRows(ctx, pgStream, cp, ackLSN, st)
+	}
 	return p.emitBatch(ctx, pgStream, cp, flushed, ackLSN, st)
+}
+
+// acknowledgeFilteredRows checkpoints the position of rows the batching
+// processors dropped, together with any pending incremental snapshot state,
+// as a zero-size batch resolved immediately, the way a row-less incremental
+// snapshot checkpoint is. A failure to confirm it is only logged: the next
+// acknowledged batch confirms a later position anyway.
+func (p *pgStreamInput) acknowledgeFilteredRows(ctx context.Context, pgStream lsnAcker, cp *checkpointTracker, ackLSN *string, st *flushState) bool {
+	if ackLSN == nil && st.incSnapshotState == nil {
+		return true
+	}
+	resolveFn, err := cp.Track(ctx, checkpointOffset{lsn: ackLSN, incSnapshotState: st.incSnapshotState}, 0)
+	if err != nil {
+		if ctx.Err() == nil {
+			p.logger.Errorf("unable to checkpoint a fully filtered batch, restarting stream: %s", err)
+			p.stopSig.TriggerSoftStop()
+		}
+		return false
+	}
+	// The tracker has merged the state into every later offset, so it is
+	// persisted by a later acknowledgement even if this one fails.
+	st.incSnapshotState = nil
+	if maxOffset := resolveFn(); maxOffset != nil {
+		if err := p.commitCheckpoint(ctx, pgStream, *maxOffset); err != nil {
+			p.logger.Warnf("unable to acknowledge a fully filtered batch, the next acknowledged batch will: %s", err)
+		}
+	}
+	return true
 }
 
 // checkpointTracker tracks checkpointOffset values. It resolves

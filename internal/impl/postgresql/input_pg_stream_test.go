@@ -253,9 +253,12 @@ tables:
 		{name: "period only", batching: "batching:\n  period: 1s\n", configured: true, count: 0},
 		{name: "byte size only", batching: "batching:\n  byte_size: 1024\n", configured: true, count: 0},
 		{name: "processors only", batching: "batching:\n  processors:\n    - mapping: root = this\n", configured: true, count: 0},
-		{name: "count 3 with batch_transactions", batching: "batching:\n  count: 3\n", batchTransactions: true, errContains: "batch_transactions cannot be combined with a batching policy"},
-		{name: "count 1 with batch_transactions", batching: "batching:\n  count: 1\n", batchTransactions: true, errContains: "batch_transactions cannot be combined with a batching policy"},
-		{name: "period with batch_transactions", batching: "batching:\n  period: 1s\n", batchTransactions: true, errContains: "batch_transactions cannot be combined with a batching policy"},
+		{name: "count 3 with batch_transactions", batching: "batching:\n  count: 3\n", batchTransactions: true, errContains: "batch_transactions cannot be combined with a batching policy: it bypasses the policy, including its processors"},
+		{name: "count 1 with batch_transactions", batching: "batching:\n  count: 1\n", batchTransactions: true, errContains: "batch_transactions cannot be combined with a batching policy: it bypasses the policy, including its processors"},
+		{name: "period with batch_transactions", batching: "batching:\n  period: 1s\n", batchTransactions: true, errContains: "batch_transactions cannot be combined with a batching policy: it bypasses the policy, including its processors"},
+		// Processors alone make a policy too: the pass-through never touches
+		// the batcher, so they would silently never run.
+		{name: "processors only with batch_transactions", batching: "batching:\n  processors:\n    - mapping: root = this\n", batchTransactions: true, errContains: "it bypasses the policy, including its processors"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -294,7 +297,7 @@ batching:
 	res := service.MockResources()
 	license.InjectTestService(res)
 	_, err = newPgStreamInput(pConf, res)
-	require.ErrorContains(t, err, "batch_transactions cannot be combined with a batching policy")
+	require.ErrorContains(t, err, "batch_transactions cannot be combined with a batching policy: it bypasses the policy, including its processors")
 }
 
 // TestPassesThrough pins which reader batches are handed on whole: snapshot
@@ -578,4 +581,70 @@ func TestFlushBatcherAcksSnapshotBatchesAsSnapshot(t *testing.T) {
 	require.NoError(t, got.ackFn(t.Context(), nil))
 	require.Empty(t, acker.acked(), "nothing is confirmed for a snapshot batch")
 	p.snapshotAckWG.Wait()
+}
+
+type dropAllProcessor struct{}
+
+func (dropAllProcessor) ProcessBatch(context.Context, service.MessageBatch) ([]service.MessageBatch, error) {
+	return nil, nil
+}
+
+func (dropAllProcessor) Close(context.Context) error { return nil }
+
+var registerDropAllProcessor = sync.OnceValue(func() error {
+	return service.RegisterBatchProcessor("pgstream_test_drop_all_processor", service.NewConfigSpec(),
+		func(*service.ParsedConfig, *service.Resources) (service.BatchProcessor, error) {
+			return dropAllProcessor{}, nil
+		})
+})
+
+// TestFlushBatcherAcksAFullyFilteredBatch: when batching.processors drop
+// every row of a flush nothing reaches the pipeline, so nothing downstream
+// would ever acknowledge the position those rows reached. The input
+// checkpoints it itself, behind any earlier batch still in flight, so a
+// stretch of filtered-only rows cannot stall the slot.
+func TestFlushBatcherAcksAFullyFilteredBatch(t *testing.T) {
+	require.NoError(t, registerDropAllProcessor())
+	pConf, err := newPostgresCDCConfig().ParseYAML(`
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+batching:
+  count: 1
+  processors:
+    - pgstream_test_drop_all_processor: {}
+`, service.NewEnvironment())
+	require.NoError(t, err)
+	policy, err := pConf.FieldBatchPolicy(fieldBatching)
+	require.NoError(t, err)
+	batcher, err := policy.NewBatcher(service.MockResources())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = batcher.Close(context.Background()) })
+
+	p := newTestInput(t, 4)
+	cp := newCheckpointTracker(10, &p.checkpointSeq)
+	acker := &ackRecorder{}
+	st := &flushState{blockingSnapshotComplete: true}
+
+	// An earlier batch is still in flight downstream: the filtered position
+	// must queue behind it rather than overtake it.
+	earlier, earlierStamp := streamRow("0/10", "0/15")
+	require.NoError(t, p.flushBatch(t.Context(), acker, cp, service.MessageBatch{earlier}, earlierStamp, nil, true))
+	inFlight := <-p.msgChan
+
+	filtered, filteredStamp := streamRow("0/20", "0/25")
+	st.pending.add(filtered, filteredStamp)
+	require.True(t, batcher.Add(filtered))
+	require.True(t, p.flushBatcher(t.Context(), acker, cp, batcher, st))
+	require.Empty(t, acker.acked(), "the filtered position waits behind the unacknowledged earlier batch")
+	select {
+	case got := <-p.msgChan:
+		require.Fail(t, "a fully filtered batch must not reach the pipeline", "got %d message(s)", len(got.msg))
+	default:
+	}
+
+	require.NoError(t, inFlight.ackFn(t.Context(), nil))
+	require.Equal(t, []string{"0/25"}, acker.acked(), "acknowledging the earlier batch confirms through the filtered position")
 }

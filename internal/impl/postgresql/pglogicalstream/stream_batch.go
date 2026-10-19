@@ -69,14 +69,24 @@ func (b *streamBatch) append(msg StreamMessage, walBytes int, msgLSN LSN) {
 }
 
 // markCommit records that a commit record (emitted or suppressed) was
-// processed at msgLSN and forces the next shouldFlush to return true.
+// processed at msgLSN; commitPending then reports true until the next take.
 func (b *streamBatch) markCommit(msgLSN LSN) {
 	b.commitLSN = msgLSN
 	b.commitSeen = true
 }
 
-func (b *streamBatch) shouldFlush() bool {
-	return b.commitSeen || len(b.msgs) >= b.maxRows || b.bytes >= b.maxBytes
+// full reports whether the pending rows have reached a cap. The reader checks
+// it before appending the next row rather than right after a row lands, so a
+// transaction that ends exactly on a cap still waits for its commit record
+// and its last row is stamped with the commit rather than its own LSN.
+func (b *streamBatch) full() bool {
+	return len(b.msgs) >= b.maxRows || b.bytes >= b.maxBytes
+}
+
+// commitPending reports whether a commit record closed the pending rows, so
+// handing them over now is a transaction boundary.
+func (b *streamBatch) commitPending() bool {
+	return b.commitSeen
 }
 
 // take hands back the pending messages (possibly empty) and resets the

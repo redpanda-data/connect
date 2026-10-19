@@ -504,15 +504,10 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		batch = newStreamBatch(s.streamMaxRows, streamBatchMaxBytes, currentLSN)
 	)
 
-	// Built once: commitLSN runs on every frame, and a hard-stop context costs
-	// a goroutine each time. It is cancelled only by a hard stop, so the
-	// deferred shutdown commit below still has a live context on a soft stop.
-	// Declared before that defer, so LIFO order runs the commit first.
-	hardStopCtx, hardStopDone := s.shutSig.HardStopCtx(context.Background())
-	defer hardStopDone()
-
 	commitLSN := func(force bool) (committed bool, err error) {
-		ctx := hardStopCtx
+		// SendStandbyStatusUpdate writes synchronously and ignores its
+		// context, so there is nothing for a cancellable one to interrupt.
+		ctx := context.Background()
 		ackedLSN := s.getAckedLSN()
 		// The consumer acks the stamp of the last row it processed, which is
 		// already a commit record at transaction boundaries. When that stamp
@@ -642,6 +637,15 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			case changeResultSuppressedCommitMessage:
 				batch.markCommit(msgLSN)
 			case changeResultEmittedMessage:
+				// The caps apply before the next row goes in, not right after
+				// a row lands: a transaction that ends exactly on a cap then
+				// still waits for its commit record, and its last row is
+				// stamped with the commit rather than its own LSN.
+				if batch.full() {
+					if err := flush(); err != nil {
+						return err
+					}
+				}
 				batch.append(*message, len(xld.WALData), msgLSN)
 				if message.Operation == CommitOpType {
 					batch.markCommit(msgLSN)
@@ -655,7 +659,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			// NewPgStream): a transaction's rows always end with its commit record
 			// before the next transaction's rows begin, so a commit-triggered flush
 			// is always a transaction boundary.
-			if batch.shouldFlush() {
+			if batch.commitPending() {
 				if err := flush(); err != nil {
 					return err
 				}
