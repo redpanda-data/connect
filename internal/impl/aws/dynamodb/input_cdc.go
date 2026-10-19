@@ -3236,6 +3236,32 @@ func (d *dynamoDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 	}
 }
 
+// settleUndeliveredBatches removes the batches that are still in msgChan and
+// calls their ack functions. It returns the number of batches it settled.
+//
+// Call it only after d.closed is set. Then each ack function only releases
+// its tracking and its pending ack. It does not write a checkpoint, and the
+// input reads the data again on restart. If d.closed is not set, the ack
+// functions save positions for data that the pipeline did not get.
+//
+// It does not block: when a worker did not stop in time, msgChan can stay
+// open.
+func (d *dynamoDBCDCInput) settleUndeliveredBatches(ctx context.Context) int {
+	settled := 0
+	for {
+		select {
+		case am, open := <-d.msgChan:
+			if !open {
+				return settled
+			}
+			_ = am.ackFn(ctx, nil)
+			settled++
+		default:
+			return settled
+		}
+	}
+}
+
 func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	// Mark as closed to reject new acks
 	d.closed.Store(true)
@@ -3269,26 +3295,9 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 		d.log.Warn("Timeout waiting for background workers")
 	}
 
-	// Settle the batches that are still in msgChan. ReadBatch never delivered
-	// them, so their acks never come and the wait below would time out.
-	// d.closed is set, so each ack function only releases its tracking and
-	// its pending ack. It does not write a checkpoint, and the data is read
-	// again on restart. Do not block: when a worker did not stop in time,
-	// msgChan can stay open.
-	settled := 0
-drain:
-	for {
-		select {
-		case am, open := <-d.msgChan:
-			if !open {
-				break drain
-			}
-			_ = am.ackFn(ctx, nil)
-			settled++
-		default:
-			break drain
-		}
-	}
+	// ReadBatch never delivered the batches that are still in msgChan, so
+	// their acks never come and the wait below would time out.
+	settled := d.settleUndeliveredBatches(ctx)
 	d.log.Debugf("Settled %d undelivered batches on close", settled)
 
 	// Wait for pending acknowledgments with timeout
