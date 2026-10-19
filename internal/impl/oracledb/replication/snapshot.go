@@ -27,21 +27,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
-// errCodeInvalidIdentifier is Oracle's ORA-00904, raised when a query references a
-// column that doesn't exist in its source. Used to detect a custom snapshot filter
-// that doesn't project all of a table's primary key columns - see querySnapshotTable.
-const errCodeInvalidIdentifier = 904
-
-// errCodeFlashbackTableChanged is Oracle's ORA-01466, which AS OF SCN (flashback) reads
-// can raise transiently when issued very soon after the DML that the SCN was captured
-// against - Oracle's delayed block cleanout for that DML may not have caught up yet. It's
-// self-resolving; see withFlashbackRetry.
-const errCodeFlashbackTableChanged = 1466
-
-// errCodeInsufficientPrivileges is Oracle's ORA-01031. In the chunked snapshot path it
-// almost always means the user lacks the FLASHBACK privilege that AS OF SCN reads require
-// on tables it doesn't own - see withFlashbackPrivilegeHint.
-const errCodeInsufficientPrivileges = 1031
+const (
+	// errCodeInvalidIdentifier (ORA-00904) flags a custom snapshot filter that doesn't
+	// select every primary key column.
+	errCodeInvalidIdentifier = 904
+	// errCodeFlashbackTableChanged (ORA-01466) is a transient AS OF SCN error raised just
+	// after the SCN is captured; see withFlashbackRetry.
+	errCodeFlashbackTableChanged = 1466
+	// errCodeInsufficientPrivileges (ORA-01031) on an AS OF SCN read usually means a missing
+	// FLASHBACK grant; see withFlashbackPrivilegeHint.
+	errCodeInsufficientPrivileges = 1031
+)
 
 // withFlashbackPrivilegeHint annotates an ORA-01031 raised by an AS OF SCN read with the
 // grant needed to fix it, since the error alone doesn't say which privilege is missing and
@@ -56,21 +52,18 @@ func withFlashbackPrivilegeHint(err error, table UserTable) error {
 		err, table.FullName(), table.FullName())
 }
 
-// flashbackRetryAttempts and flashbackRetryDelay bound the retry in withFlashbackRetry.
-// These aren't exposed as config because they guard a narrow, internal-only race window
-// (freshly-committed DML settling before it's safely flashback-readable) rather than
-// anything a user would tune - by design the retry window closes within a few hundred
-// milliseconds of the snapshot's SCN being captured.
-const (
-	flashbackRetryAttempts = 5
-	flashbackRetryDelay    = 100 * time.Millisecond
-)
-
-// withFlashbackRetry retries fn a bounded number of times on ORA-01466 (see
-// errCodeFlashbackTableChanged), which every AS OF SCN read in this file's chunked
-// snapshot path can hit transiently right after Prepare captures its SCN. Any other error
-// is returned immediately.
+// withFlashbackRetry retries fn on ORA-01466, which AS OF SCN reads can hit transiently
+// just after Prepare captures the SCN. Other errors are returned immediately.
 func withFlashbackRetry[T any](ctx context.Context, fn func() (T, error)) (result T, err error) {
+	// flashbackRetryAttempts and flashbackRetryDelay bound the retry in withFlashbackRetry.
+	// These aren't exposed as config because they guard a narrow, internal-only race window
+	// (freshly-committed DML settling before it's safely flashback-readable) rather than
+	// anything a user would tune - by design the retry window closes within a few hundred
+	// milliseconds of the snapshot's SCN being captured.
+	const (
+		flashbackRetryAttempts = 5
+		flashbackRetryDelay    = 100 * time.Millisecond
+	)
 	for range flashbackRetryAttempts {
 		result, err = fn()
 		if err == nil {
@@ -88,20 +81,6 @@ func withFlashbackRetry[T any](ctx context.Context, fn func() (T, error)) (resul
 	}
 	return result, err
 }
-
-// overSampleFactor controls how many primary-key samples are drawn per worker when
-// planning parallel snapshot chunks, matching pglogicalstream's processSnapshot: enough
-// samples to bucket the keyspace fairly, without the sampling query itself becoming
-// expensive.
-const overSampleFactor = 32
-
-// maxKeyspaceSampleRows caps how many sampled primary keys sampleTableKeyspace reads into
-// memory. With accurate statistics a sample is roughly numSamples blocks' worth of rows,
-// well under this; the cap only bites when ALL_TABLES.BLOCKS is stale (the table has grown
-// a lot since statistics were last gathered), which would otherwise push the sample
-// percentage toward 100% and read, sort and hold every key of a large table. Truncating
-// the sample can only skew chunk sizes, never correctness - every range is still covered.
-const maxKeyspaceSampleRows = 100_000
 
 // errNoPrimaryKey indicates a table has no discoverable primary key. Snapshot planning
 // treats this as expected (not fatal) for unfiltered tables, falling back to a full
@@ -336,23 +315,20 @@ type chunkRange struct {
 	max map[string]any
 }
 
-// planChunkRanges samples table's primary-key keyspace and buckets it into up to
-// maxWorkers roughly-even ranges, mirroring pglogicalstream.processSnapshot's own
-// sampled-keyspace chunking. Small tables (where sampling naturally returns few or no
-// rows) collapse to a single, unbounded range rather than failing or over-splitting.
-// Tables without optimizer statistics aren't sampled at all, and also return a single
-// range: without a block count the sample percentage can't be sized, and guessing high
-// would read the whole table.
+// planChunkRanges samples table's primary key keyspace and splits it into up to maxWorkers
+// roughly even ranges. Tables that are too small or lack optimizer statistics (needed to
+// size the sample) get a single unbounded range.
 //
-// Block sampling is tried first since it only reads the sampled blocks. Oracle samples in
-// units of multiblock reads rather than single blocks, though, so on a table of a few
-// hundred blocks there are only a handful of units to pick from and SAMPLE BLOCK
-// frequently returns no rows at all - which would leave mid-sized tables unchunked at
-// random. When block sampling comes back with too few keys to split, the keyspace is
-// re-sampled by row instead, which reads the whole primary-key index but reliably returns
-// about the requested number of keys. That fallback only triggers when block sampling
-// fails, which is when the table (and so its index) is small enough for it to be cheap.
+// SAMPLE BLOCK is tried first as it only reads the sampled blocks, but it samples whole
+// multiblock reads, so on smaller tables it often returns no rows. If it returns too few
+// keys, row SAMPLE is used instead, which reads the whole primary key index but is cheap
+// on a table small enough for block sampling to fail.
 func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
+	const (
+		// overSampleFactor is the number of primary key samples drawn per worker when planning
+		// chunks: enough to split the keyspace evenly while keeping the sample query cheap.
+		overSampleFactor = 32
+	)
 	numSamples := min(maxWorkers, 256) * overSampleFactor
 
 	var samples []map[string]any
@@ -791,43 +767,39 @@ func getTableStats(ctx context.Context, db DBQuerier, table UserTable) (tableSta
 }
 
 // samplePercent returns the SAMPLE percentage expected to draw numSamples of total units
-// (blocks or rows), mirroring pglogicalstream's randomlySampleKeyspace formula. For small
-// tables this deliberately pushes the percentage toward 100%, accepting a read of nearly
-// everything rather than trying to be clever. Unlike Postgres's TABLESAMPLE SYSTEM (which
-// accepts up to and including 100), Oracle's SAMPLE clause rejects a percentage of exactly
-// 100 (ORA-30562: invalid SAMPLE percentage), so the upper bound is capped just short of it.
+// (blocks or rows). For small tables this deliberately pushes the percentage toward 100%,
+// accepting a read of nearly everything rather than trying to be clever.
+// Unlike Postgres's TABLESAMPLE SYSTEM (which accepts up to and including 100),
+// Oracle's SAMPLE clause rejects a percentage of exactly 100 (ORA-30562: invalid SAMPLE percentage),
+// so the upper bound is capped just short of it.
 func samplePercent(numSamples int, total int64) float64 {
 	const maxSamplePercent = 99.9999
 	return min(maxSamplePercent, max(0.0001, 100.0*float64(numSamples)/float64(max(total, 1))))
 }
 
-// sampleTableKeyspace draws a roughly-uniform sample of a table's primary-key values by
-// combining sampleClause (a SAMPLE or SAMPLE BLOCK clause, see planChunkRanges) with a
-// flashback query pinned to scn, then sorting the result. The returned, sorted PK tuples are used as candidate chunk
-// boundaries by planChunkRanges. SAMPLE must precede AS OF SCN in the table reference -
-// the reverse order is a syntax error (ORA-03049) - and SAMPLE cannot target a subquery or
-// view, which is why this (and chunking generally) is restricted to the base-table,
-// no-custom-filter path.
+// sampleTableKeyspace returns sorted primary-key samples as of scn, used by planChunkRanges
+// as candidate chunk boundaries. SAMPLE must precede AS OF SCN (ORA-03049 otherwise) and
+// can't target a view or subquery, so chunking only applies to unfiltered base tables.
 //
-// ROWNUM is evaluated before ORDER BY, so the maxKeyspaceSampleRows cap stops the scan
-// early and bounds the sort and memory used when stale statistics make the percentage far
-// too high for the table's real size. Sampling can still return anywhere from zero rows to
-// the whole table; that's fine, since sampling only picks split points, and
-// planChunkRanges collapses to a single unbounded range when too few samples come back.
+// ROWNUM applies before ORDER BY, so maxKeyspaceSampleRows bounds the scan when stale
+// statistics inflate the percentage. Too few samples just means a single range.
 func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, scn SCN, sampleClause string) ([]map[string]any, error) {
+	const (
+		// maxKeyspaceSampleRows caps the keys sampleTableKeyspace holds in memory when stale
+		// statistics inflate the sample percentage. Truncating only skews chunk sizes, never
+		// coverage.
+		maxKeyspaceSampleRows = 100_000
+	)
 	quoted := make([]string, len(pkCols))
 	for i, col := range pkCols {
 		quoted[i] = `"` + col + `"`
 	}
 	cols := strings.Join(quoted, ", ")
-
-	q := fmt.Sprintf(
-		`SELECT %s FROM "%s"."%s" %s AS OF SCN %d WHERE ROWNUM <= %d ORDER BY %s`,
-		cols, table.Schema, table.Name, sampleClause, uint64(scn), maxKeyspaceSampleRows, cols,
-	)
+	q := `SELECT %s FROM "%s"."%s" %s AS OF SCN %d WHERE ROWNUM <= %d ORDER BY %s`
+	query := fmt.Sprintf(q, cols, table.Schema, table.Name, sampleClause, uint64(scn), maxKeyspaceSampleRows, cols)
 
 	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
-		return db.QueryContext(ctx, q)
+		return db.QueryContext(ctx, query)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sampling keyspace for table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
@@ -866,16 +838,13 @@ func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkC
 	return samples, nil
 }
 
-// buildLexicographicBoundExpr builds a WHERE expression comparing the composite key
-// (pk[0], pk[1], ...) against boundVals using a lexicographic tuple comparison - Oracle
-// has no native row-value tuple comparison, so a composite bound like (col1, col2) > (v1,
-// v2) must be expanded to: (col1 > v1) OR (col1 = v1 AND col2 > v2).
+// buildLexicographicBoundExpr expands a composite key bound into the lexicographic form
+// Oracle needs in place of tuple comparison: (col1, col2) > (v1, v2) becomes
+// (col1 > v1) OR (col1 = v1 AND col2 > v2).
 //
-// op is the comparison used at the deepest (final) column of each clause; every shallower
-// column position uses the strict form of op, so that (for example) an inclusive upper
-// bound op of "<=" only becomes non-strict on the very last clause: (col1 < v1) OR (col1 =
-// v1 AND col2 <= v2). paramIdx is shared across successive calls (e.g. a lower and an upper
-// bound in the same query) so parameter numbering stays contiguous.
+// op applies only to the last column; earlier columns use its strict form, so "<=" yields
+// (col1 < v1) OR (col1 = v1 AND col2 <= v2). paramIdx is shared across calls so bind
+// parameters in one query stay contiguous.
 func buildLexicographicBoundExpr(pk []string, boundVals map[string]any, op string, paramIdx *int) (expr string, args []any) {
 	strictOp := op
 	if op == "<=" {
@@ -911,15 +880,12 @@ func buildLexicographicBoundExpr(pk []string, boundVals map[string]any, op strin
 	return sb.String(), args
 }
 
-// querySnapshotTable pages through table (or, for the custom-filter path, customQuery's
-// own result set) using PK-keyset pagination. lastSeenPkVal is the exclusive lower bound
-// (nil for the first page); maxInclusivePkVal is an optional inclusive upper bound used
-// only for the base-table, no-custom-filter chunked scan path (see scanTableRangeTask) -
-// SAMPLE, and therefore chunking, can't target the custom-filter form. scn, if not
-// InvalidSCN, pins the base-table form to that flashback SCN so every independently
-// scheduled chunk (and every table) reads a single consistent point in time without a
-// shared, long-lived transaction; it is never applied to the custom-filter form, which
-// keeps relying on its enclosing READ ONLY transaction for consistency instead.
+// querySnapshotTable fetches the next page of table, or of customQuery if set, using
+// PK-keyset pagination. lastSeenPkVal is the exclusive lower bound (nil on the first page)
+// and maxInclusivePkVal the optional inclusive upper bound of a chunk.
+//
+// For the base table, a valid scn adds AS OF SCN so chunks read a consistent point in time
+// without a shared transaction. customQuery relies on its READ ONLY transaction instead.
 func querySnapshotTable(ctx context.Context, db DBQuerier, table UserTable, pk []string, lastSeenPkVal, maxInclusivePkVal map[string]any, limit int, customQuery string, scn SCN) (*sql.Rows, error) {
 	baseTableRef := fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
 	flashback := customQuery == "" && scn != InvalidSCN
