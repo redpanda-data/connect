@@ -3243,8 +3243,8 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	// Do not wait for the other acks, because they can never come: Benthos
 	// drops a batch at shutdown without its ack when the batch did not get
 	// into the pipeline, and the batches that stay in msgChan are never
-	// delivered. Their records are not checkpointed, so the input reads them
-	// again on restart.
+	// delivered. Their records are not checkpointed, so a restart that resumes
+	// from a checkpoint reads them again.
 	d.ackMu.Lock()
 	d.closed = true
 	d.ackMu.Unlock()
