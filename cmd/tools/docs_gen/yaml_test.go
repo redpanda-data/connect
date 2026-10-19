@@ -64,9 +64,8 @@ func TestYAMLStringifyMatchesNPMYAML(t *testing.T) {
 	}
 }
 
-// yaml.v3, which connect reads config with, and YAML 1.1 parsers read more
-// plain scalars as non-strings than the YAML 1.2 core schema does. The emitter
-// quotes these strings too.
+// yaml.v3 and YAML 1.1 parsers read more plain scalars as non-strings than the
+// YAML 1.2 core schema does. The emitter quotes these strings too.
 func TestYAMLStringifyQuotesYAMLv3NonStrings(t *testing.T) {
 	tests := []struct {
 		name string
