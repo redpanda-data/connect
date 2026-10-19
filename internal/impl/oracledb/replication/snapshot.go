@@ -189,6 +189,8 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 		tasks = append(tasks, tableTasks...)
 	}
 
+	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(tasks), len(s.tables), min(len(tasks), maxWorkers), maxWorkers)
+
 	wg, ctx := errgroup.WithContext(ctx)
 	wg.SetLimit(maxWorkers)
 	for _, task := range tasks {
@@ -205,7 +207,8 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 // tableCompletionTracker counts down the outstanding tasks for a single table so the
 // "done" gauge and rows-processed log line fire exactly once, right after that table's own
 // last chunk finishes - even though every table's tasks now share one flattened, global
-// worker pool rather than each table getting its own goroutine.
+// worker pool rather than each table getting its own goroutine. Tasks only report in when
+// they succeed, so a table with a failed task is never marked as complete.
 type tableCompletionTracker struct {
 	remaining atomic.Int32
 	rows      atomic.Int64
@@ -219,8 +222,8 @@ func newTableCompletionTracker(s *Snapshot, table UserTable, taskCount int) *tab
 	return t
 }
 
-// done records a finished task's row count, marking the table as fully snapshotted once
-// every one of its tasks has reported in.
+// done records a successfully finished task's row count, marking the table as fully
+// snapshotted once every one of its tasks has reported in.
 func (t *tableCompletionTracker) done(rowsProcessed int) {
 	t.rows.Add(int64(rowsProcessed))
 	if t.remaining.Add(-1) == 0 {
@@ -319,10 +322,9 @@ type chunkRange struct {
 // roughly even ranges. Tables that are too small or lack optimizer statistics (needed to
 // size the sample) get a single unbounded range.
 //
-// SAMPLE BLOCK is tried first as it only reads the sampled blocks, but it samples whole
-// multiblock reads, so on smaller tables it often returns no rows. If it returns too few
-// keys, row SAMPLE is used instead, which reads the whole primary key index but is cheap
-// on a table small enough for block sampling to fail.
+// Row SAMPLE is used rather than SAMPLE BLOCK: it reads the whole primary key index, but
+// returns keys spread across the keyspace. SAMPLE BLOCK picks whole multiblock reads, so it
+// returns either no rows or a few contiguous runs of keys, which skews the chunks.
 func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
 	const (
 		// overSampleFactor is the number of primary key samples drawn per worker when planning
@@ -333,29 +335,31 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 
 	var samples []map[string]any
 	if err := s.withSnapshotConn(ctx, func(db *sql.Conn) error {
-		stats, err := getTableStats(ctx, db, table)
+		numRows, err := getTableRowCount(ctx, db, table)
 		if err != nil {
 			return err
 		}
-		if !stats.valid() {
+		if numRows <= 0 {
 			s.log.With("src_table", table.FullName()).Infof("Table '%s' has no optimizer statistics, so it will be snapshotted without parallel chunking; gather statistics with DBMS_STATS.GATHER_TABLE_STATS to enable it", table.FullName())
 			return nil
 		}
-		blockClause := fmt.Sprintf("SAMPLE BLOCK (%.4f)", samplePercent(numSamples, stats.blocks))
-		if samples, err = sampleTableKeyspace(ctx, db, table, pkCols, s.scn, blockClause); err != nil || len(samples) > maxWorkers {
-			return err
-		}
-		rowClause := fmt.Sprintf("SAMPLE (%.4f)", samplePercent(numSamples, stats.numRows))
-		samples, err = sampleTableKeyspace(ctx, db, table, pkCols, s.scn, rowClause)
+		sampleClause := fmt.Sprintf("SAMPLE (%.4f)", samplePercent(numSamples, numRows))
+		samples, err = sampleTableKeyspace(ctx, db, table, pkCols, s.scn, sampleClause, numSamples)
 		return err
 	}); err != nil {
 		return nil, fmt.Errorf("sampling keyspace for table '%s': %w", table.FullName(), err)
 	}
 
-	// Use max(1, ...) to avoid chunkSize=0 when samples < maxWorkers (e.g. small tables
-	// that fit on a single block produce only a handful of samples), which would otherwise
-	// cause an infinite loop below.
-	chunkSize := max(1, len(samples)/maxWorkers)
+	return splitChunkRanges(samples, maxWorkers), nil
+}
+
+// splitChunkRanges splits the sorted keyspace samples into at most maxWorkers contiguous
+// ranges, using every chunkSize-th sample as a boundary. The first range's min and the
+// last range's max are unbounded, so together the ranges cover the whole keyspace.
+func splitChunkRanges(samples []map[string]any, maxWorkers int) []chunkRange {
+	// Round up so there are at most maxWorkers ranges. max(1, ...) avoids chunkSize=0
+	// when there are no samples, which would otherwise loop forever below.
+	chunkSize := max(1, (len(samples)+maxWorkers-1)/maxWorkers)
 	var (
 		prev   map[string]any
 		ranges []chunkRange
@@ -365,8 +369,7 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 		ranges = append(ranges, chunkRange{min: prev, max: bound})
 		prev = bound
 	}
-	ranges = append(ranges, chunkRange{min: prev, max: nil})
-	return ranges, nil
+	return append(ranges, chunkRange{min: prev, max: nil})
 }
 
 // withSnapshotConn runs fn against a dedicated *sql.Conn suitable for snapshot queries,
@@ -486,8 +489,11 @@ func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int
 			}
 			return nil
 		})
+		if err != nil {
+			return err
+		}
 		tracker.done(numRowsProcessed)
-		return err
+		return nil
 	}
 }
 
@@ -503,10 +509,10 @@ func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, 
 			numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName)
 			return err
 		})
-		tracker.done(numRowsProcessed)
 		if err != nil {
 			return fmt.Errorf("processing snapshot table scan: %w", err)
 		}
+		tracker.done(numRowsProcessed)
 		return nil
 	}
 }
@@ -542,11 +548,11 @@ func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclu
 			}
 			return nil
 		})
-		tracker.done(numRowsProcessed)
 		if err != nil {
 			return err
 		}
 		l.Debugf("Finished scanning range chunk (%+v %+v], %d rows processed", minExclusive, maxInclusive, numRowsProcessed)
+		tracker.done(numRowsProcessed)
 		return nil
 	}
 }
@@ -738,36 +744,22 @@ func getTablePrimaryKeys(ctx context.Context, db DBQuerier, table UserTable) (pk
 	return pks, status == "ENABLED" && validated == "VALIDATED", nil
 }
 
-// tableStats is a table's optimizer-statistics size estimate, used to scale the sample
-// percentages in planChunkRanges. A zero field means the statistic is unknown.
-type tableStats struct {
-	blocks  int64
-	numRows int64
-}
-
-// valid reports whether both estimates are known. BLOCKS and NUM_ROWS are null if
-// DBMS_STATS was never run against the table (and zero if it was empty when it last ran),
-// in which case the table's real size is unknown.
-func (t tableStats) valid() bool {
-	return t.blocks > 0 && t.numRows > 0
-}
-
-// getTableStats reads table's block and row count estimates from ALL_TABLES rather than
-// the more precise DBA_SEGMENTS, since the latter needs elevated catalog privileges a
-// normal CDC user may not have.
-func getTableStats(ctx context.Context, db DBQuerier, table UserTable) (tableStats, error) {
-	var blocks, numRows sql.NullInt64
+// getTableRowCount returns table's optimizer-statistics row count estimate from
+// ALL_TABLES, used to size the sample percentage in planChunkRanges. It returns 0 when the
+// count is unknown: NUM_ROWS is null if DBMS_STATS was never run against the table, and
+// zero if it was empty when it last ran.
+func getTableRowCount(ctx context.Context, db DBQuerier, table UserTable) (int64, error) {
+	var numRows sql.NullInt64
 	if err := db.QueryRowContext(ctx,
-		`SELECT BLOCKS, NUM_ROWS FROM ALL_TABLES WHERE OWNER = :1 AND TABLE_NAME = :2`,
+		`SELECT NUM_ROWS FROM ALL_TABLES WHERE OWNER = :1 AND TABLE_NAME = :2`,
 		table.Schema, table.Name,
-	).Scan(&blocks, &numRows); err != nil {
-		return tableStats{}, fmt.Errorf("getting statistics for table '%s': %w", table.FullName(), err)
+	).Scan(&numRows); err != nil {
+		return 0, fmt.Errorf("getting statistics for table '%s': %w", table.FullName(), err)
 	}
-	return tableStats{blocks: max(blocks.Int64, 0), numRows: max(numRows.Int64, 0)}, nil
+	return max(numRows.Int64, 0), nil
 }
 
-// samplePercent returns the SAMPLE percentage expected to draw numSamples of total units
-// (blocks or rows). For small tables this deliberately pushes the percentage toward 100%,
+// samplePercent returns the SAMPLE percentage expected to draw numSamples of total rows. For small tables this deliberately pushes the percentage toward 100%,
 // accepting a read of nearly everything rather than trying to be clever.
 // Unlike Postgres's TABLESAMPLE SYSTEM (which accepts up to and including 100),
 // Oracle's SAMPLE clause rejects a percentage of exactly 100 (ORA-30562: invalid SAMPLE percentage),
@@ -781,22 +773,21 @@ func samplePercent(numSamples int, total int64) float64 {
 // as candidate chunk boundaries. SAMPLE must precede AS OF SCN (ORA-03049 otherwise) and
 // can't target a view or subquery, so chunking only applies to unfiltered base tables.
 //
-// ROWNUM applies before ORDER BY, so maxKeyspaceSampleRows bounds the scan when stale
-// statistics inflate the percentage. Too few samples just means a single range.
-func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, scn SCN, sampleClause string) ([]map[string]any, error) {
-	const (
-		// maxKeyspaceSampleRows caps the keys sampleTableKeyspace holds in memory when stale
-		// statistics inflate the sample percentage. Truncating only skews chunk sizes, never
-		// coverage.
-		maxKeyspaceSampleRows = 100_000
-	)
+// The sample is sorted and then thinned to every k-th key, returning at most maxKeys keys
+// spread evenly across it. Capping with ROWNUM instead would apply before the sort and keep
+// only the first sampled blocks in storage order, skewing the chunk boundaries. Too few
+// samples just means a single range.
+func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, scn SCN, sampleClause string, maxKeys int) ([]map[string]any, error) {
 	quoted := make([]string, len(pkCols))
 	for i, col := range pkCols {
 		quoted[i] = `"` + col + `"`
 	}
 	cols := strings.Join(quoted, ", ")
-	q := `SELECT %s FROM "%s"."%s" %s AS OF SCN %d WHERE ROWNUM <= %d ORDER BY %s`
-	query := fmt.Sprintf(q, cols, table.Schema, table.Name, sampleClause, uint64(scn), maxKeyspaceSampleRows, cols)
+	q := `SELECT %[1]s FROM (
+		SELECT %[1]s, ROW_NUMBER() OVER (ORDER BY %[1]s) "RPCN__RN", COUNT(*) OVER () "RPCN__CNT"
+		FROM "%[2]s"."%[3]s" %[4]s AS OF SCN %[5]d
+	) WHERE MOD("RPCN__RN", CEIL("RPCN__CNT" / %[6]d)) = 0 ORDER BY %[1]s`
+	query := fmt.Sprintf(q, cols, table.Schema, table.Name, sampleClause, uint64(scn), max(maxKeys, 1))
 
 	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
 		return db.QueryContext(ctx, query)
