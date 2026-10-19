@@ -3291,7 +3291,10 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 		d.flushCheckpoint(ctx, ts.checkpointer, ts.recordBatcher, "table "+tableName)
 	}
 
-	// Clear references to help GC
+	// Clear references to help GC. Keep msgChan and shutSig: ReadBatch reads
+	// them without a lock, and the Benthos auto-retry wrapper can call
+	// ReadBatch from its own goroutine while Close runs. After Close, the
+	// soft stop signal makes ReadBatch return ErrNotConnected.
 	d.mu.Lock()
 	d.dynamoClient = nil
 	d.streamsClient = nil
@@ -3299,8 +3302,6 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	d.keySchema = nil
 	d.checkpointer = nil
 	d.recordBatcher = nil
-	d.msgChan = nil
-	d.shutSig = nil
 	d.tableStreams = nil
 	if d.snapshot != nil {
 		d.snapshot.seqBuffer = nil

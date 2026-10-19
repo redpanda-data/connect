@@ -497,6 +497,39 @@ func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
 	}
 }
 
+// TestClose_ConcurrentReadBatch: the Benthos auto-retry wrapper calls
+// ReadBatch from its own goroutine, so a ReadBatch call can run while Close
+// runs. Close must not change the fields that ReadBatch reads without a lock.
+// Run with -race.
+func TestClose_ConcurrentReadBatch(t *testing.T) {
+	d := &dynamoDBCDCInput{
+		log:     service.MockResources().Logger(),
+		metrics: newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		msgChan: make(chan asyncMessage),
+		shutSig: shutdown.NewSignaller(),
+	}
+	// Stand in for the coordinator: signal that the workers stopped after
+	// soft stop.
+	go func() {
+		<-d.shutSig.SoftStopChan()
+		d.shutSig.TriggerHasStopped()
+	}()
+
+	readErr := make(chan error, 1)
+	go func() {
+		_, _, err := d.ReadBatch(t.Context())
+		readErr <- err
+	}()
+
+	require.NoError(t, d.Close(t.Context()))
+	select {
+	case err := <-readErr:
+		assert.ErrorIs(t, err, service.ErrNotConnected)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadBatch must return after Close")
+	}
+}
+
 // TestClose_DoesNotWaitForAcksThatCannotCome: Close must not wait for the
 // acks of batches that nobody will ack. A batch that stays in the message
 // channel is never delivered. Benthos drops a batch that it read at shutdown
