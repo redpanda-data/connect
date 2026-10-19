@@ -21,19 +21,20 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"gopkg.in/yaml.v3"
 )
 
 const interpolationNotice = "This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]."
 
 var (
-	betaPrefix     = regexp.MustCompile(`(?i)^\s*BETA:\s*`)
-	blankLineRuns  = regexp.MustCompile(`\n{2,}`)
-	numericLooking = regexp.MustCompile(`^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$`)
-	yamlBoolLike   = regexp.MustCompile(`(?i)^(true|false|null|yes|no|on|off)$`)
-	yamlSpecial    = regexp.MustCompile("[:\\[\\]{},&>|%@`\"]")
-	yamlSpecialNQ  = regexp.MustCompile("[:\\[\\]{},&>|%@`]")
-	// YAML 1.1 reads an unquoted 0x value as a number, so 0x1E0F3 becomes 123123.
-	yamlHex = regexp.MustCompile(`^0[xX][0-9A-Fa-f]+$`)
+	betaPrefix    = regexp.MustCompile(`(?i)^\s*BETA:\s*`)
+	blankLineRuns = regexp.MustCompile(`\n{2,}`)
+	// yamlBoolLike finds the YAML 1.1 bools. yaml.v3 reads yes, no, on and
+	// off as strings, but YAML 1.1 parsers read them as bools.
+	yamlBoolLike  = regexp.MustCompile(`(?i)^(true|false|null|yes|no|on|off)$`)
+	yamlSpecial   = regexp.MustCompile("[:\\[\\]{},&>|%@`\"]")
+	yamlSpecialNQ = regexp.MustCompile("[:\\[\\]{},&>|%@`]")
 	// interpolationPhrase finds a description that mentions interpolation
 	// functions without linking them.
 	interpolationPhrase = regexp.MustCompile(`(?i)interpolation functions`)
@@ -264,8 +265,7 @@ func quoteListScalar(item any) string {
 		if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
 			return yamlQuotedString(s, "    ", false)
 		}
-		if s == "" || s == "*" || yamlBoolLike.MatchString(s) || numericLooking.MatchString(s) ||
-			yamlHex.MatchString(s) || yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
+		if s == "*" || yamlReadsAsNonString(s) || yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
 			return doubleQuote(s)
 		}
 		return s
@@ -275,6 +275,22 @@ func quoteListScalar(item any) string {
 		return doubleQuote(s)
 	}
 	return s
+}
+
+// yamlReadsAsNonString reports whether a YAML parser reads s, written as a
+// plain scalar, as something other than the string s. For example, yaml.v3
+// reads 0x1E0F3 as the int 123123, -0x1F as -31, and ~ as null. The list
+// renderers use it to decide when a string item must be quoted.
+//
+// It asks yaml.v3 instead of matching a regex, because yaml.v3 accepts more
+// number forms (signs, underscores, 0b, 0o) than the YAML 1.2 core schema, and
+// connect reads its config with yaml.v3. yamlBoolLike adds the YAML 1.1 bools
+// that yaml.v3 reads as strings.
+func yamlReadsAsNonString(s string) bool {
+	if yamlBoolLike.MatchString(s) {
+		return true
+	}
+	return (&yaml.Node{Kind: yaml.ScalarNode, Value: s}).ShortTag() != "!!str"
 }
 
 // doubleQuote renders s as a YAML double-quoted scalar. A JSON string is one,
@@ -289,8 +305,10 @@ func renderYAMLList(name string, items []any) string {
 	b.WriteString(name + ":\n")
 	for _, item := range items {
 		switch t := item.(type) {
-		case string, bool, json.Number:
-			b.WriteString("  - " + quoteSpecialScalar(jsString(t)) + "\n")
+		case string:
+			b.WriteString("  - " + quoteSpecialScalar(t) + "\n")
+		case bool, json.Number:
+			b.WriteString("  - " + jsString(t) + "\n")
 		default:
 			lines := strings.Split(strings.TrimSpace(yamlStringify(item, yamlPlain)), "\n")
 			for i, l := range lines {
@@ -307,11 +325,13 @@ func renderYAMLList(name string, items []any) string {
 	return b.String()
 }
 
+// quoteSpecialScalar renders a string item of a list whose items include
+// objects.
 func quoteSpecialScalar(s string) string {
 	if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
 		return yamlQuotedString(s, "    ", false)
 	}
-	if s == "*" || yamlSpecialNQ.MatchString(s) {
+	if s == "*" || yamlReadsAsNonString(s) || yamlSpecialNQ.MatchString(s) {
 		return doubleQuote(s)
 	}
 	return s
