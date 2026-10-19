@@ -105,9 +105,8 @@ input:
 	// default nack redelivery delay of the Pulsar client (1 minute). Run the
 	// suites as parallel subtests so that they wait at the same time.
 	//
-	// Go does not add the time that a test waits for its parallel subtests to
-	// the elapsed time of the test. Thus the elapsed time of
-	// TestIntegrationPulsar is less than the package time.
+	// The reported time of TestIntegrationPulsar does not include its parallel
+	// subtests, so it is much less than the package time.
 	t.Run("with topics", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
