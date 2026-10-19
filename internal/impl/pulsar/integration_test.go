@@ -104,9 +104,6 @@ input:
 	// Each suite takes about 2 minutes, because the lossy tests wait for the
 	// default nack redelivery delay of the Pulsar client (1 minute). Run the
 	// suites as parallel subtests so that they wait at the same time.
-	//
-	// The reported time of TestIntegrationPulsar does not include its parallel
-	// subtests, so it is much less than the package time.
 	t.Run("with topics", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
