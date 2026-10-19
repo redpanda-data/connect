@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+
+	"gopkg.in/yaml.v3"
 )
 
 // A small YAML emitter for defaults and examples in the reference docs. Its
@@ -28,6 +30,10 @@ import (
 // which the published docs were generated with, so regenerating from Go does
 // not reformat every snippet. gopkg.in/yaml.v3 quotes and indents
 // differently.
+//
+// One difference from the npm package: the emitter also quotes the strings
+// that yaml.v3 or a YAML 1.1 parser reads as another type, for example -0x1F
+// or yes. See yamlReadsAsNonString.
 
 type yamlStringStyle int
 
@@ -160,6 +166,8 @@ var (
 		regexp.MustCompile(`^[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+$`),
 		regexp.MustCompile(`^[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*)$`),
 	}
+	// yamlBool11 finds the YAML 1.1 bools that are strings in YAML 1.2.
+	yamlBool11 = regexp.MustCompile(`(?i)^(yes|no|on|off)$`)
 )
 
 func (e yamlEmitter) str(s, indent string, implicitKey bool) string {
@@ -194,7 +202,20 @@ func yamlPlainString(s, indent string, implicitKey bool) string {
 			return yamlQuotedString(s, indent, implicitKey)
 		}
 	}
+	if yamlReadsAsNonString(s) {
+		return yamlQuotedString(s, indent, implicitKey)
+	}
 	return s
+}
+
+// yamlReadsAsNonString reports whether yaml.v3 or a YAML 1.1 parser reads s,
+// written as a plain scalar, as something other than the string s.
+// yamlPlainString uses it after the YAML 1.2 core schema check, because those
+// parsers accept more forms. For example, yaml.v3 reads -0x1F as -31 and
+// 0b1010 as 10, and YAML 1.1 reads yes as true. Connect reads its config with
+// yaml.v3, so a snippet must quote these strings to keep their value.
+func yamlReadsAsNonString(s string) bool {
+	return yamlBool11.MatchString(s) || (&yaml.Node{Kind: yaml.ScalarNode, Value: s}).ShortTag() != "!!str"
 }
 
 func yamlQuotedString(s, indent string, implicitKey bool) string {
