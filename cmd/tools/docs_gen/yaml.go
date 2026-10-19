@@ -212,8 +212,12 @@ func yamlPlainString(s, indent string, implicitKey bool) string {
 // written as a plain scalar, as something other than the string s.
 // yamlPlainString uses it after the YAML 1.2 core schema check, because those
 // parsers accept more forms. For example, yaml.v3 reads -0x1F as -31 and
-// 0b1010 as 10, and YAML 1.1 reads yes as true. Connect reads its config with
-// yaml.v3, so a snippet must quote these strings to keep their value.
+// 0b1010 as 10, and YAML 1.1 reads yes as true.
+//
+// A connect string field keeps the text as written, so for most of these
+// values the quotes do not change what connect reads. Only ~ does: it reads
+// as "". The quotes keep the type for fields of any type, and for other YAML
+// tools that users copy the snippets into.
 func yamlReadsAsNonString(s string) bool {
 	return yamlBool11.MatchString(s) || (&yaml.Node{Kind: yaml.ScalarNode, Value: s}).ShortTag() != "!!str"
 }
