@@ -232,6 +232,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -283,6 +284,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -348,6 +350,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -413,6 +416,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -515,6 +519,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: trim_horizon
 checkpoint_limit: 2
 credentials:
@@ -724,6 +729,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 snapshot_mode: snapshot_only
 snapshot_segments: 1
 snapshot_batch_size: 10
@@ -873,6 +879,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_only
 snapshot_segments: 1
@@ -955,6 +962,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_and_cdc
 snapshot_segments: 1
@@ -1042,6 +1050,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_only
 snapshot_segments: 1
@@ -1174,6 +1183,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1242,6 +1252,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1308,6 +1319,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1473,6 +1485,7 @@ table_tag_filter: "%s:%s"
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1539,6 +1552,7 @@ table_tag_filter: "%s:%s"
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
