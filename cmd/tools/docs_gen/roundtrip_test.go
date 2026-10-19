@@ -107,9 +107,13 @@ func TestListExamplesKeepQuotes(t *testing.T) {
 	assert.Equal(t, []string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`, "'single'"}, got["tables"])
 }
 
-// A string list item that YAML reads as a number, a bool, or null must be
-// quoted. The test decodes into any, because yaml.v3 copies the raw text of
-// any scalar into a string target and so cannot show the misread.
+// Some strings look like a number, a bool, or null, for example 0x1F or ~.
+// In a list example, these strings must have quotes. If not, YAML reads them
+// as the wrong type.
+//
+// The test decodes into any, not string. When the target is a string, yaml.v3
+// keeps the text as written. An unquoted 0x1F then comes back as "0x1F", and
+// the test cannot see the bug.
 func TestListExamplesQuoteNonStrings(t *testing.T) {
 	tests := []struct {
 		name    string
