@@ -731,10 +731,16 @@ credentials:
 		require.NoError(t, err)
 		require.Len(t, batch, itemCount, "expected the whole snapshot in one batch")
 
-		// Give the input time to (wrongly) persist progress or the completion
-		// marker - the pre-fix code did both at read time.
-		time.Sleep(3 * time.Second)
-		require.Zero(t, countCheckpointRows(),
+		// The pre-fix code persisted the segment position in the scanner and
+		// the completion marker right after the scan returned. When no segment
+		// is active, the scanner has done all of its work. The completion
+		// marker comes a few milliseconds later, so poll for a short window.
+		require.Eventually(t, func() bool {
+			return input.snapshot.scanner.ActiveSegments() == 0
+		}, 10*time.Second, 10*time.Millisecond, "the snapshot scan did not finish")
+		assert.Never(t, func() bool {
+			return countCheckpointRows() != 0
+		}, time.Second, 50*time.Millisecond,
 			"no snapshot checkpoint state may be persisted before the batch is acknowledged")
 
 		// Simulated crash: abandon without acking.
