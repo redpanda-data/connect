@@ -104,7 +104,7 @@ func TestGlobalTableValidation_EmptyReplicas(t *testing.T) {
 		globalTableReplicas: nil,
 		startFrom:           "trim_horizon",
 		batchSize:           100,
-		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100, idleShardGrace: time.Minute},
 	}
 	err := validateDynamoDBCDCConfig(conf)
 	require.Error(t, err)
@@ -582,7 +582,7 @@ func TestCheckpointNamespaceValidation_RejectsDelimiter(t *testing.T) {
 		checkpointNamespace: "dev#alice",
 		startFrom:           "trim_horizon",
 		batchSize:           100,
-		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100, idleShardGrace: time.Minute},
 	}
 	err := validateDynamoDBCDCConfig(conf)
 	require.Error(t, err)
@@ -602,7 +602,7 @@ func TestBatchSizeValidation(t *testing.T) {
 		checkpointTable: "cps",
 		startFrom:       "trim_horizon",
 		batchSize:       100,
-		snapshot:        snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+		snapshot:        snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100, idleShardGrace: time.Minute},
 	}
 	require.NoError(t, validateDynamoDBCDCConfig(conf))
 
