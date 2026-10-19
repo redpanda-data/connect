@@ -174,6 +174,9 @@ You must include the correct placeholders for the specified database driver. Som
 | ` + "`" + `gocosmos` + "`" + `
 | Colon (` + "`" + `:` + "`" + `)
 
+| ` + "`" + `hana` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
 | ` + "`" + `mssql` + "`" + `
 | Question mark (` + "`" + `?` + "`" + `)
 
