@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -1422,4 +1423,170 @@ credentials:
 	// If tag value matching works, we should have found events
 	// Note: DynamoDB Local may not fully support tagging, so we're lenient here
 	t.Logf("Tag value matching: found events = %v", foundEvent)
+}
+
+// TestIntegrationDynamoDBStartFromLatestCrashBeforeFirstCheckpoint verifies
+// that a restart of a start_from: latest pipeline does not skip records when
+// the first run stopped before it saved a checkpoint row.
+//
+// The first run gets a LATEST iterator, reads item A and then crashes before
+// an ack. No checkpoint row exists, so the restart cannot know that the
+// pipeline already started. Item B is written while no input runs. The
+// restart must deliver A (in flight at the crash) and B (written during the
+// downtime) to keep at-least-once delivery.
+func TestIntegrationDynamoDBStartFromLatestCrashBeforeFirstCheckpoint(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := context.Background()
+
+	ctr, err := testcontainers.Run(ctx,
+		"amazon/dynamodb-local:latest",
+		testcontainers.WithExposedPorts("8000/tcp"),
+		testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := ctr.Terminate(context.Background()); err != nil {
+			t.Logf("failed to terminate dynamodb container: %v", err)
+		}
+	})
+
+	mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
+
+	t.Run("NoCheckpointRow", func(t *testing.T) {
+		// Default checkpoint_limit (1000) and no ack: run 1 saves no
+		// checkpoint row before the crash.
+		testStartFromLatestCrashRestart(t, port, "test-latest-crash-nostate", "test-checkpoints-latest-crash-nostate", 0, false,
+			[]string{"item-a", "item-b", "item-c"})
+	})
+
+	t.Run("CheckpointRowPresent", func(t *testing.T) {
+		// Control case: checkpoint_limit 1 and an ack of A make run 1 save a
+		// checkpoint row before the crash. The restart resumes after A, so it
+		// must deliver B and C. A can come again or not.
+		testStartFromLatestCrashRestart(t, port, "test-latest-crash-state", "test-checkpoints-latest-crash-state", 1, true,
+			[]string{"item-b", "item-c"})
+	})
+}
+
+// testStartFromLatestCrashRestart runs the crash and restart sequence on its
+// own source table and checkpoint table. checkpointLimit 0 keeps the default.
+// ackFirst acks the batch that holds A before the crash. want lists the item
+// IDs that run 2 must deliver.
+func testStartFromLatestCrashRestart(t *testing.T, port, tableName, checkpointTable string, checkpointLimit int, ackFirst bool, want []string) {
+	ctx := context.Background()
+
+	client, err := createTableWithStreams(ctx, t, port, tableName)
+	require.NoError(t, err)
+
+	confStr := fmt.Sprintf(`
+tables: [%s]
+checkpoint_table: %s
+endpoint: http://localhost:%s
+region: us-east-1
+start_from: latest
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx
+`, tableName, checkpointTable, port)
+	if checkpointLimit > 0 {
+		confStr += fmt.Sprintf("checkpoint_limit: %d\n", checkpointLimit)
+	}
+
+	spec := dynamoDBCDCInputConfig()
+	parsed, err := spec.ParseYAML(confStr, nil)
+	require.NoError(t, err)
+
+	// Run 1: connect, read A, then crash.
+	input1, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, input1.Connect(ctx))
+
+	require.NoError(t, putTestItem(ctx, client, tableName, "item-a", "value-a"))
+	run1 := readItemIDsUntil(ctx, t, input1, "item-a", 30*time.Second, ackFirst)
+	require.Contains(t, run1, "item-a", "run 1 must read A before the crash")
+
+	// Simulate a crash. Close is not called, because Close flushes the
+	// pending checkpoints, and a process that is killed does not do that.
+	// A hard stop ends the background shard readers, so they do not poll
+	// the stream or write to the checkpoint table after this point.
+	input1.shutSig.TriggerHardStop()
+	waitBackgroundWorkers(t, input1, 10*time.Second)
+
+	// B is written while no input runs.
+	require.NoError(t, putTestItem(ctx, client, tableName, "item-b", "value-b"))
+
+	// Run 2: same config and checkpoint table. C marks the end of the read.
+	input2, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, input2.Connect(ctx))
+	t.Cleanup(func() {
+		_ = input2.Close(ctx)
+	})
+
+	require.NoError(t, putTestItem(ctx, client, tableName, "item-c", "value-c"))
+	run2 := readItemIDsUntil(ctx, t, input2, "item-c", 30*time.Second, true)
+	require.Contains(t, run2, "item-c", "run 2 must read C")
+
+	var missing []string
+	for _, id := range want {
+		if !slices.Contains(run2, id) {
+			missing = append(missing, id)
+		}
+	}
+	assert.Empty(t, missing, "run 2 skipped records: missing=%v, run 2 delivered=%v", missing, run2)
+}
+
+// readItemIDsUntil reads batches until it sees the item with ID stopAt or
+// until the timeout. It returns the item IDs in the order of delivery. If ack
+// is true, it acks each batch with success.
+func readItemIDsUntil(ctx context.Context, t *testing.T, input *dynamoDBCDCInput, stopAt string, timeout time.Duration, ack bool) []string {
+	t.Helper()
+
+	var ids []string
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, ackFn, err := input.ReadBatch(readCtx)
+		cancel()
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				continue
+			}
+			require.NoError(t, err)
+		}
+
+		for _, msg := range batch {
+			structured, err := msg.AsStructured()
+			require.NoError(t, err)
+			keys := structured.(map[string]any)["dynamodb"].(map[string]any)["keys"].(map[string]any)
+			ids = append(ids, fmt.Sprint(keys["id"]))
+		}
+		if ack {
+			require.NoError(t, ackFn(ctx, nil))
+		}
+		if slices.Contains(ids, stopAt) {
+			return ids
+		}
+	}
+	return ids
+}
+
+// waitBackgroundWorkers waits until the background workers of input stop.
+func waitBackgroundWorkers(t *testing.T, input *dynamoDBCDCInput, timeout time.Duration) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		input.backgroundWorkers.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		require.FailNow(t, "background workers did not stop after the hard stop")
+	}
 }
