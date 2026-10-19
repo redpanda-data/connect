@@ -497,6 +497,36 @@ func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
 	}
 }
 
+// TestClose_SettlesUndeliveredBatches: Close must not wait for the acks of
+// batches that stay in the message channel. ReadBatch never delivers them,
+// so their acks never come, and Close waited the full shutdown timeout.
+func TestClose_SettlesUndeliveredBatches(t *testing.T) {
+	for name, mk := range readerHarnesses(twoRecordsPage, 100, 10) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+
+			// Stand in for the coordinator: run the reader until soft stop,
+			// then close the channel and signal that the workers stopped.
+			workerCtx, workerCancel := h.d.shutSig.SoftStopCtx(context.Background())
+			go func() {
+				defer workerCancel()
+				h.start(workerCtx)
+				close(h.d.msgChan)
+				h.d.shutSig.TriggerHasStopped()
+			}()
+
+			require.Eventually(t, func() bool {
+				return len(h.d.msgChan) == 1
+			}, 5*time.Second, 5*time.Millisecond, "expected one batch in the message channel")
+
+			start := time.Now()
+			require.NoError(t, h.d.Close(t.Context()))
+			assert.Less(t, time.Since(start), 2*time.Second, "Close must not wait for acks of undelivered batches")
+			assert.Equal(t, 0, h.batcher.TrackedMessageCount(), "Close must untrack undelivered batches")
+		})
+	}
+}
+
 // TestShardReader_AckDrainsAfterWrapperPointerReplacement is the
 // end-to-end regression test for the INC-2974 ack-path stall: benthos's
 // AutoRetryNacksBatched (auto_replay_nacks, default on) replaces every

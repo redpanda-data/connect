@@ -228,8 +228,9 @@ credentials:
 	require.NoError(t, putTestItem(ctx, client, tableName, "test-2", "value-2"))
 
 	// Read events
-	batch, _, err := input.ReadBatch(ctx)
+	batch, ackFn, err := input.ReadBatch(ctx)
 	require.NoError(t, err)
+	require.NoError(t, ackFn(ctx, nil))
 	require.NotEmpty(t, batch)
 
 	// Verify we got INSERT events
@@ -286,11 +287,12 @@ credentials:
 	// Read events (may need multiple batches)
 	foundModify := false
 	for i := 0; i < 5 && !foundModify; i++ {
-		batch, _, err := input.ReadBatch(ctx)
+		batch, ackFn, err := input.ReadBatch(ctx)
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			eventName, _ := msg.MetaGet("dynamodb_event_name")
@@ -350,11 +352,12 @@ credentials:
 	// Read events (may need multiple batches)
 	foundRemove := false
 	for i := 0; i < 5 && !foundRemove; i++ {
-		batch, _, err := input.ReadBatch(ctx)
+		batch, ackFn, err := input.ReadBatch(ctx)
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			eventName, _ := msg.MetaGet("dynamodb_event_name")
@@ -442,12 +445,13 @@ credentials:
 		}
 
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			eventName, exists := msg.MetaGet("dynamodb_event_name")
@@ -527,8 +531,9 @@ credentials:
 	require.NoError(t, putTestItem(ctx, client, tableName, "checkpoint-3", "value-3"))
 
 	// Second input should read new events (not re-read old ones)
-	batch2, _, err := input2.ReadBatch(ctx)
+	batch2, ackFn2, err := input2.ReadBatch(ctx)
 	require.NoError(t, err)
+	require.NoError(t, ackFn2(ctx, nil))
 
 	// The batch may include checkpoint-3 but should not re-process already checkpointed items
 	assert.NotEmpty(t, batch2, "Should read new events after resumption")
@@ -939,13 +944,16 @@ credentials:
 	readCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
 
-	batch2, _, err := input2.ReadBatch(readCtx2)
+	batch2, ackFn2, err := input2.ReadBatch(readCtx2)
 
 	// We expect either:
 	// 1. More snapshot data to read (no error)
 	// 2. Snapshot complete (ErrEndOfInput or timeout)
 	if err != nil && !errors.Is(err, service.ErrEndOfInput) && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Unexpected error on resume: %v", err)
+	}
+	if err == nil {
+		require.NoError(t, ackFn2(ctx, nil))
 	}
 
 	// If we got data, verify it's snapshot data
@@ -1052,12 +1060,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, exists := msg.MetaGet("dynamodb_table")
@@ -1117,12 +1126,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts && eventsWithMetadata < 2; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, hasTable := msg.MetaGet("dynamodb_table")
@@ -1183,12 +1193,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, hasTable := msg.MetaGet("dynamodb_table")
@@ -1346,12 +1357,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, exists := msg.MetaGet("dynamodb_table")
@@ -1411,12 +1423,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts && !foundEvent; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		if len(batch) > 0 {
 			foundEvent = true
