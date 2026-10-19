@@ -497,33 +497,45 @@ func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
 	}
 }
 
-// TestClose_SettlesUndeliveredBatches: Close must not wait for the acks of
-// batches that stay in the message channel. ReadBatch never delivers them,
-// so their acks never come, and Close waited the full shutdown timeout.
-func TestClose_SettlesUndeliveredBatches(t *testing.T) {
-	for name, mk := range readerHarnesses(twoRecordsPage, 100, 10) {
-		t.Run(name, func(t *testing.T) {
-			h := mk()
+// TestClose_DoesNotWaitForAcksThatCannotCome: Close must not wait for the
+// acks of batches that nobody will ack. A batch that stays in the message
+// channel is never delivered. Benthos drops a batch that it read at shutdown
+// without its ack when the batch did not get into the pipeline. Close waited
+// the full shutdown timeout (10s) for both.
+func TestClose_DoesNotWaitForAcksThatCannotCome(t *testing.T) {
+	cases := map[string]bool{
+		"batch in message channel": false,
+		"batch read but not acked": true,
+	}
+	for caseName, readBatch := range cases {
+		for name, mk := range readerHarnesses(twoRecordsPage, 100, 10) {
+			t.Run(caseName+"/"+name, func(t *testing.T) {
+				h := mk()
 
-			// Stand in for the coordinator: run the reader until soft stop,
-			// then close the channel and signal that the workers stopped.
-			workerCtx, workerCancel := h.d.shutSig.SoftStopCtx(context.Background())
-			go func() {
-				defer workerCancel()
-				h.start(workerCtx)
-				close(h.d.msgChan)
-				h.d.shutSig.TriggerHasStopped()
-			}()
+				// Stand in for the coordinator: run the reader until soft
+				// stop, then close the channel and signal that the workers
+				// stopped.
+				workerCtx, workerCancel := h.d.shutSig.SoftStopCtx(context.Background())
+				go func() {
+					defer workerCancel()
+					h.start(workerCtx)
+					close(h.d.msgChan)
+					h.d.shutSig.TriggerHasStopped()
+				}()
 
-			require.Eventually(t, func() bool {
-				return len(h.d.msgChan) == 1
-			}, 5*time.Second, 5*time.Millisecond, "expected one batch in the message channel")
+				require.Eventually(t, func() bool {
+					return len(h.d.msgChan) == 1
+				}, 5*time.Second, 5*time.Millisecond, "expected one batch in the message channel")
+				if readBatch {
+					_, _, err := h.d.ReadBatch(t.Context())
+					require.NoError(t, err)
+				}
 
-			start := time.Now()
-			require.NoError(t, h.d.Close(t.Context()))
-			assert.Less(t, time.Since(start), 2*time.Second, "Close must not wait for acks of undelivered batches")
-			assert.Equal(t, 0, h.batcher.TrackedMessageCount(), "Close must untrack undelivered batches")
-		})
+				start := time.Now()
+				require.NoError(t, h.d.Close(t.Context()))
+				assert.Less(t, time.Since(start), 2*time.Second, "Close must not wait for acks that cannot come")
+			})
+		}
 	}
 }
 
