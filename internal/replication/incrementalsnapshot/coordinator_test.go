@@ -655,6 +655,89 @@ func TestCoordinatorAddTables(t *testing.T) {
 	})
 }
 
+// TestCoordinatorRequeueTables covers a request to read tables again: unlike
+// AddTables a finished table is queued once more, but a table still queued
+// or being read is not doubled up.
+func TestCoordinatorRequeueTables(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	newCoordinatorChunked := func(t *testing.T, resume *State, chunkSize int) *Coordinator[uint64, testWatermark] {
+		t.Helper()
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1), rowFor(tableA, 2)}, maxPK: PrimaryKey{2}},
+			tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+		}, chunkSize)
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+
+		coord, err := NewCoordinator(testConfig{ChunkSize: chunkSize, Deps: mock}, resume)
+		require.NoError(t, err)
+		require.NoError(t, coord.Start(t.Context()))
+		return coord
+	}
+	newCoordinator := func(t *testing.T, resume *State) *Coordinator[uint64, testWatermark] {
+		t.Helper()
+		return newCoordinatorChunked(t, resume, 1)
+	}
+
+	t.Run("a finished table is read again", func(t *testing.T) {
+		coord := newCoordinator(t, &State{Version: CurrentStateVersion, Tables: []TableID{tableA}})
+		require.True(t, coord.Idle())
+
+		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA}))
+		assert.False(t, coord.Idle())
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables, "known tables are not duplicated")
+		assert.Equal(t, []TableID{tableA}, coord.State().RemainingTables)
+
+		var chunks [][]Row
+		for pos := uint64(5); pos < 10; pos++ {
+			_, err := coord.OnCommit(t.Context(), pos, collect(&chunks))
+			require.NoError(t, err)
+		}
+		var keys []PrimaryKey
+		for _, chunk := range chunks {
+			for _, row := range chunk {
+				keys = append(keys, row.PK)
+			}
+		}
+		assert.Equal(t, []PrimaryKey{{1}, {2}}, keys)
+		assert.True(t, coord.Idle())
+	})
+
+	t.Run("a queued table is not queued twice", func(t *testing.T) {
+		coord := newCoordinator(t, nil)
+		coord.AddTables([]TableID{tableA, tableB})
+		_, err := coord.OnCommit(t.Context(), 5, collect(new([][]Row)))
+		require.NoError(t, err)
+		require.True(t, coord.Snapshotting(tableA))
+
+		// A is mid-read and B is still queued.
+		before := coord.State().RemainingTables
+		assert.Empty(t, coord.RequeueTables([]TableID{tableA, tableB}))
+		assert.Equal(t, before, coord.State().RemainingTables, "the queue must not change")
+	})
+
+	t.Run("a table whose final chunk is unreleased is checkpointed once", func(t *testing.T) {
+		// B's one row is a short chunk, so it is B's last.
+		coord := newCoordinatorChunked(t, nil, 2)
+		coord.AddTables([]TableID{tableB})
+		// The queue checkpoint, then B's only chunk is read: B is now current
+		// and exhausted, its chunk buffered, the committed queue still [B].
+		_, err := coord.OnCommit(t.Context(), 5, collect(new([][]Row)))
+		require.NoError(t, err)
+		require.True(t, coord.Snapshotting(tableB))
+
+		assert.Equal(t, []TableID{tableB}, coord.RequeueTables([]TableID{tableB}))
+		assert.Equal(t, []TableID{tableB}, coord.State().RemainingTables, "a resume from here must read B once more, not twice")
+	})
+
+	t.Run("duplicates in one request are queued once", func(t *testing.T) {
+		coord := newCoordinator(t, nil)
+		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA, tableA}))
+		assert.Equal(t, []TableID{tableA}, coord.State().RemainingTables)
+	})
+}
+
 // TestCoordinatorAddTablesIsDurable: the request for these tables belongs
 // to the transaction whose commit follows, and nothing replays it once the
 // caller acknowledges that position. The queue must be in a checkpoint by

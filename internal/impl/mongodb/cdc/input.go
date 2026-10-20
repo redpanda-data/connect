@@ -35,6 +35,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/mongodb"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // awsSessionDurationSnapshotNote extends the shared MongoDB `session_duration`
@@ -68,6 +70,20 @@ const (
 	fieldReadMaxWait            = "read_max_wait"
 	fieldDocumentMode           = "document_mode"
 	fieldJSONMarshalMode        = "json_marshal_mode"
+	fieldSnapshotMode           = "snapshot_mode"
+	fieldIncSnapshot            = "incremental_snapshot"
+	fieldIncSnapshotChunkSize   = "chunk_size"
+	fieldIncSnapshotKey         = "checkpoint_key"
+	fieldSignalCollection       = "signal_collection_name"
+
+	snapshotModeBlocking    = "blocking"
+	snapshotModeIncremental = "incremental"
+
+	defaultIncSnapshotChunkSize = 1024
+	// incSnapshotKeySuffix derives the default progress key from
+	// checkpoint_key, so two inputs can only share progress by already sharing
+	// a stream position.
+	incSnapshotKeySuffix = "_incremental_snapshot"
 
 	marshalModeCanonical string = "canonical"
 	marshalModeRelaxed   string = "relaxed"
@@ -208,6 +224,27 @@ When `+"`snapshot_parallelism`"+` is greater than `+"`1`"+`, this input reads th
 
 When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the latest position in the https://www.mongodb.com/docs/manual/core/replica-set-oplog/[operations log (oplog)^]. In both modes, a restart resumes streaming from the position stored in `+"`checkpoint_cache`"+`.
 
+== Incremental snapshots
+
+With `+"`snapshot_mode: incremental`"+` the snapshot no longer holds back streaming. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
+
+A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. A pipeline switched from `+"`blocking`"+` to `+"`incremental`"+` with a stream position already stored reads nothing again. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
+
+Documents from a chunk have the operation set to "read" and the operation time of the chunk read. Collections are read one at a time, so `+"`snapshot_parallelism`"+` and `+"`snapshot_auto_bucket_sharding`"+` do not apply. Chunks are bounded by index ranges rather than comparisons, so a collection whose `+"`_id`"+` values mix BSON types is read in full.
+
+A document can be delivered twice, once streamed and once in a chunk: when it is inserted with an `+"`_id`"+` below the collection's largest before its chunk is read. Treat documents as idempotent upserts keyed by `+"`_id`"+`, as is standard CDC practice. With `+"`document_mode: partial_update`"+`, an update streamed while its document is buffered replaces the chunk's full document with the update description alone, so a consumer that has not seen the document before receives only the delta; prefer `+"`update_lookup`"+` or `+"`pre_and_post_images`"+` with incremental snapshots. On sharded collections documents are matched on `+"`_id`"+` alone, which MongoDB requires to be unique across shards for this to hold.
+
+A chunk can only be released once the change stream has passed the moment it was read. On a busy deployment that happens almost at once, and on a quiet replica set the input releases several chunks per poll. A quiet sharded cluster is slower: its change stream only advances as far as its least active shard, which moves on with its periodic no-op write, every 10 seconds by default (the shards' `+"`periodicNoopIntervalSecs`"+`). Expect about one chunk per interval there, and raise `+"`incremental_snapshot.chunk_size`"+` to compensate.
+
+== Signals
+
+When `+"`signal_collection_name`"+` is set, documents inserted into that collection control the input while it runs. Each signal has a `+"`type`"+` and a `+"`data`"+` field, which may be an embedded document or a JSON string:
+
+- `+"`"+replication.LogSignalType+"`"+`: logs `+"`data.message`"+` at info level, for example `+"`{\"type\": \""+replication.LogSignalType+"\", \"data\": {\"message\": \"hello\"}}`"+`.
+- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`snapshot_mode: incremental`"+`. Each named collection must also be in `+"`collections`"+`. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
+
+Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored, and signals are never emitted.
+
 == Scaling
 
 All configured collections are consumed through a single database-level change stream: the collection list is a server-side filter on that one stream, not a set of independent streams. Because a change stream is one totally-ordered cursor over the replica set's oplog, throughput does not increase with additional collections, and CPU beyond roughly two cores is not used. This is a property of MongoDB change streams rather than of this input. To scale beyond the single-stream ceiling, shard the cluster: a change stream against a sharded cluster merges parallel per-shard cursors on the server side.
@@ -284,7 +321,7 @@ Schema metadata is discovered using a two-tier strategy:
 				ShortDescription("Maximum time MongoDB waits to fill read_batch_size on the change stream before returning.").
 				Default("1s"),
 			service.NewBoolField(fieldStreamSnapshot).
-				Description("When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes.").
+				Description("When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes, or alongside them with `"+fieldSnapshotMode+": "+snapshotModeIncremental+"`.").
 				Default(false),
 			service.NewIntField(fieldSnapshotParallelism).
 				Description(`Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot.
@@ -305,6 +342,33 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				ShortDescription("Use $bucketAuto rather than splitVector to determine parallel snapshot chunks, avoiding privileged access.").
 				Default(false).
 				Advanced(),
+			service.NewStringAnnotatedEnumField(fieldSnapshotMode, map[string]string{
+				snapshotModeBlocking:    "Reads every collection before streaming any change, as described in <<snapshot-and-streaming-modes,Snapshot and streaming modes>>.",
+				snapshotModeIncremental: "Streams changes from the start and reads the collections in chunks alongside them, as described in <<incremental-snapshots,Incremental snapshots>>.",
+			}).
+				Description("How the snapshot enabled by `"+fieldStreamSnapshot+"` is taken.").
+				Default(snapshotModeBlocking).
+				Version("4.115.0"),
+			service.NewObjectField(fieldIncSnapshot,
+				service.NewIntField(fieldIncSnapshotChunkSize).
+					Description("The number of documents read per chunk.").
+					Default(defaultIncSnapshotChunkSize).
+					LintRule(`match {
+  this < 1 => ["field chunk_size must be greater or equal to 1."],
+}`),
+				service.NewStringField(fieldIncSnapshotKey).
+					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nClearing it while a stream position is stored discards the record of which collections have been read, so a restart reads none of them again: a `"+replication.SnapshotSignalType+"` signal re-reads one on request. With any other `"+fieldSnapshotMode+"`, the input discards progress left under this key, so returning to `"+snapshotModeIncremental+"` later never resumes a read the stream has long since moved past.").
+					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from `"+fieldCheckpointKey+"`.").
+					Default(""),
+			).
+				Description("Settings for `"+fieldSnapshotMode+": "+snapshotModeIncremental+"`.").
+				Version("4.115.0").
+				Advanced(),
+			service.NewStringField(fieldSignalCollection).
+				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Refer to <<signals,Signals>>. Documents inserted into it are consumed as signals and never emitted.").
+				ShortDescription("A collection watched for signal documents that control the input at runtime.").
+				Optional().
+				Version("4.115.0"),
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{
 				"update_lookup":       "In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[MongoDB documentation^] for more information.",
 				"pre_and_post_images": "Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[MongoDB documentation^].",
@@ -434,6 +498,10 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 				return func(ctx context.Context) {
 					cdc.resumeTokenMu.Lock()
 					defer cdc.resumeTokenMu.Unlock()
+					if err := cdc.storeIncStateLocked(ctx); err != nil {
+						res.Logger().Warnf("unable to store checkpoints in cache: %v", err)
+						return
+					}
 					if cdc.resumeToken == nil || bytes.Equal(lastResumeToken, cdc.resumeToken) {
 						return
 					}
@@ -462,8 +530,60 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	if cdc.onUnresumablePosition, err = conf.FieldString(fieldOnUnresumablePosition); err != nil {
 		return
 	}
+	if err = cdc.parseIncrementalSnapshot(conf, snapshotEnabled, cacheName); err != nil {
+		return
+	}
 
 	return service.AutoRetryNacksBatchedToggled(conf, cdc)
+}
+
+// parseIncrementalSnapshot reads snapshot_mode, its settings, and the signal
+// collection.
+func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshotEnabled bool, cacheName string) error {
+	mode, err := conf.FieldString(fieldSnapshotMode)
+	if err != nil {
+		return err
+	}
+	if conf.Contains(fieldSignalCollection) {
+		if m.signalCollection, err = conf.FieldString(fieldSignalCollection); err != nil {
+			return err
+		}
+		if slices.Contains(m.collections, m.signalCollection) {
+			return fmt.Errorf("field %s must not name one of the streamed collections: its documents are consumed as signals, never emitted", fieldSignalCollection)
+		}
+	}
+	inc := conf.Namespace(fieldIncSnapshot)
+	key, err := inc.FieldString(fieldIncSnapshotKey)
+	if err != nil {
+		return err
+	}
+	if key == "" {
+		key = m.checkpoint.cacheKey + incSnapshotKeySuffix
+	}
+	if key == m.checkpoint.cacheKey {
+		return fmt.Errorf("field %s.%s must differ from %s: the stream position and the snapshot progress are stored separately", fieldIncSnapshot, fieldIncSnapshotKey, fieldCheckpointKey)
+	}
+	// Every mode needs the store: the others discard stale progress from it.
+	m.incStateStore = &incStateCache{resources: m.checkpoint.resources, cacheName: cacheName, cacheKey: key}
+
+	if mode != snapshotModeIncremental {
+		return nil
+	}
+	if !snapshotEnabled {
+		return fmt.Errorf("field %s: %s requires %s: true", fieldSnapshotMode, snapshotModeIncremental, fieldStreamSnapshot)
+	}
+	m.incremental = true
+
+	if m.incChunkSize, err = inc.FieldInt(fieldIncSnapshotChunkSize); err != nil {
+		return err
+	}
+	if m.incChunkSize < 1 {
+		return fmt.Errorf("field %s.%s must be greater or equal to 1", fieldIncSnapshot, fieldIncSnapshotChunkSize)
+	}
+	if m.snapshotParallelism > 1 || m.useAutoBucketSnapshots {
+		m.logger.Warnf("%s and %s do not apply with %s: %s, which reads collections one chunk at a time", fieldSnapshotParallelism, fieldBucketSharding, fieldSnapshotMode, snapshotModeIncremental)
+	}
+	return nil
 }
 
 type mongoBatch struct {
@@ -530,6 +650,21 @@ type mongoCDC struct {
 
 	collectionSchemas   map[string]*cachedSchema
 	collectionSchemasMu sync.RWMutex
+
+	// incremental selects snapshot_mode: incremental, which needs
+	// snapshotParallelism > 0 (stream_snapshot) but never runs the blocking
+	// snapshot.
+	incremental      bool
+	incChunkSize     int
+	incStateStore    *incStateCache
+	signalCollection string
+
+	// incState is the snapshot progress to checkpoint with resumeToken, and
+	// storedIncState what the cache last accepted. Both are guarded by
+	// resumeTokenMu, so a token is never stored ahead of the state that
+	// accompanied it. incState is nil while there is nothing new to store.
+	incState       []byte
+	storedIncState []byte
 }
 
 // commitResumeToken records token as the position to checkpoint next, and - when
@@ -554,16 +689,52 @@ type mongoCDC struct {
 // failed write costs a re-run, but the stream still advanced, which is the thing
 // being counted.
 func (m *mongoCDC) commitResumeToken(ctx context.Context, epoch uint64, token bson.Raw) error {
+	return m.commitPosition(ctx, epoch, streamPosition{token: token})
+}
+
+// streamPosition is what a tracked batch checkpoints once it and everything
+// before it is acknowledged: the stream's resume token, and with incremental
+// snapshots the coordinator's progress at the time the batch was tracked.
+type streamPosition struct {
+	token    bson.Raw
+	incState []byte
+}
+
+// commitPosition is commitResumeToken for a position that may carry snapshot
+// progress. A nil incState leaves the recorded progress as it was.
+func (m *mongoCDC) commitPosition(ctx context.Context, epoch uint64, pos streamPosition) error {
 	m.resumeTokenMu.Lock()
 	defer m.resumeTokenMu.Unlock()
 	if epoch != m.tokenEpoch {
 		return nil
 	}
 	m.unresumableRecoveries = 0
-	m.resumeToken = token
-	if m.checkpointFlusher == nil {
-		return m.checkpoint.Store(ctx, token)
+	m.resumeToken = pos.token
+	if pos.incState != nil {
+		m.incState = pos.incState
 	}
+	if m.checkpointFlusher == nil {
+		if err := m.storeIncStateLocked(ctx); err != nil {
+			return err
+		}
+		return m.checkpoint.Store(ctx, pos.token)
+	}
+	return nil
+}
+
+// storeIncStateLocked writes the snapshot progress recorded alongside the
+// resume token, if it changed. Every token write is preceded by this: a token
+// stored ahead of its progress could checkpoint past a snapshot-execute signal
+// whose request the stored progress does not yet hold, losing it for good.
+// The reverse order only costs a re-read chunk or a replayed change.
+func (m *mongoCDC) storeIncStateLocked(ctx context.Context) error {
+	if m.incStateStore == nil || m.incState == nil || bytes.Equal(m.incState, m.storedIncState) {
+		return nil
+	}
+	if err := m.incStateStore.Store(ctx, m.incState); err != nil {
+		return fmt.Errorf("storing incremental snapshot progress: %w", err)
+	}
+	m.storedIncState = m.incState
 	return nil
 }
 
@@ -582,6 +753,7 @@ func (m *mongoCDC) beginTokenEpoch(token bson.Raw) uint64 {
 // in one critical section.
 func (m *mongoCDC) beginTokenEpochLocked(token bson.Raw) uint64 {
 	m.resumeToken = token
+	m.incState = nil
 	m.tokenEpoch++
 	return m.tokenEpoch
 }
@@ -684,6 +856,14 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 		resumeToken = nil
 	}
+	var incResume *incrementalsnapshot.State
+	if m.incremental {
+		if incResume, resumeToken, err = m.loadIncSnapshotState(ctx, resumeToken); err != nil {
+			return err
+		}
+	} else if err := m.discardIncSnapshotProgress(ctx); err != nil {
+		return err
+	}
 	// Open this connection's checkpoint generation, abandoning any token still in
 	// flight from a previous one: those belong to a position this connection is
 	// not resuming from, and the loaded checkpoint is the only start position that
@@ -736,6 +916,13 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			m.collectionSchemasMu.Lock()
 			m.collectionSchemas[coll] = &cachedSchema{schema: s, keys: keys}
 			m.collectionSchemasMu.Unlock()
+		}
+	}
+
+	var incRun *incSnapshotRun
+	if m.incremental {
+		if incRun, err = newIncSnapshotRun(m.db, m.collections, m.incChunkSize, incResume, m.logger); err != nil {
+			return fmt.Errorf("unable to set up the incremental snapshot: %w", err)
 		}
 	}
 
@@ -797,8 +984,8 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			nextTS := nextTimestamp(ts)
 			opts = opts.SetStartAtOperationTime(&nextTS)
 		}
-		cp := checkpoint.NewCapped[bson.Raw](int64(m.checkpointLimit))
-		if resumeToken == nil {
+		cp := checkpoint.NewCapped[streamPosition](int64(m.checkpointLimit))
+		if resumeToken == nil && !m.incremental {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
@@ -836,7 +1023,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				m.client, m.db = client, db
 			}
 		}
-		if err := m.readFromStream(ctx, tokenEpoch, cp, opts); err != nil {
+		if err := m.readFromStream(ctx, tokenEpoch, cp, opts, incRun); err != nil {
 			if isUnresumableTokenError(err) {
 				m.recoverFromUnresumablePosition(ctx, err)
 			}
@@ -851,6 +1038,10 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			defer cancel()
 			m.resumeTokenMu.Lock()
 			defer m.resumeTokenMu.Unlock()
+			if err := m.storeIncStateLocked(ctx); err != nil {
+				m.logger.Warnf("unable to store checkpoint before stopping `mongodb_cdc`: %v", err)
+				return
+			}
 			if m.resumeToken == nil {
 				return
 			}
@@ -1109,13 +1300,88 @@ func (m *mongoCDC) recoverFromUnresumablePosition(ctx context.Context, cause err
 		// this run reports.
 		m.logger.Warnf("unable to clear the unresumable checkpoint: %v", err)
 	}
+	if m.incStateStore != nil {
+		// Housekeeping only: with no stream position stored the next start
+		// ignores any progress and reads every collection again.
+		if err := m.incStateStore.Delete(deleteCtx); err != nil {
+			m.logger.Warnf("unable to clear the incremental snapshot progress: %v", err)
+		}
+	}
+}
+
+// discardIncSnapshotProgress removes progress an earlier incremental run left
+// behind. Outside incremental mode nothing keeps it current while the stream
+// position moves on, so a later switch back would otherwise resume a read
+// against a position it no longer belongs to.
+func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
+	if m.incStateStore == nil {
+		return nil
+	}
+	b, err := getCacheKey(ctx, m.incStateStore.resources, m.incStateStore.cacheName, m.incStateStore.cacheKey)
+	if err != nil {
+		return fmt.Errorf("unable to check for incremental snapshot progress: %w", err)
+	}
+	if b == nil {
+		return nil
+	}
+	m.logger.Infof("Discarding the incremental snapshot progress stored under %s: only %s: %s keeps it current", m.incStateStore.cacheKey, fieldSnapshotMode, snapshotModeIncremental)
+	if err := m.incStateStore.Delete(ctx); err != nil {
+		return fmt.Errorf("unable to discard incremental snapshot progress: %w", err)
+	}
+	return nil
+}
+
+// loadIncSnapshotState returns the snapshot progress to resume, alongside the
+// stream position to resume it with.
+//
+// Progress is only meaningful against the stream position it was recorded
+// with. Without a position the stream starts afresh, so every collection is
+// read again and any stored progress is ignored. A position without progress
+// is a pipeline switching from the blocking snapshot, which has already read
+// every configured collection, so they are all marked done.
+//
+// Undecodable progress follows the corrupt checkpoint policy: clearing both
+// re-reads every collection, which loses nothing, under the same breaker.
+func (m *mongoCDC) loadIncSnapshotState(ctx context.Context, resumeToken bson.Raw) (*incrementalsnapshot.State, bson.Raw, error) {
+	m.resumeTokenMu.Lock()
+	m.storedIncState = nil
+	m.resumeTokenMu.Unlock()
+	if resumeToken == nil {
+		return nil, nil, nil
+	}
+
+	state, err := m.incStateStore.Load(ctx)
+	if errors.Is(err, errCorruptCheckpoint) {
+		if plan, recoveries := m.planUnresumableRecovery(); plan == unresumableRecoveryRefuseChurn {
+			return nil, nil, fmt.Errorf("the stored incremental snapshot progress cannot be decoded and has been cleared %d times in a row without the change stream ever advancing in between; refusing to clear it again - repair or delete the checkpoint cache entries, then restart the pipeline: %w", recoveries, err)
+		}
+		m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing the checkpoint to read every collection again: %v", err)
+		if derr := m.incStateStore.Delete(ctx); derr != nil {
+			return nil, nil, fmt.Errorf("unable to clear the corrupt incremental snapshot progress: %w", derr)
+		}
+		if derr := m.checkpoint.Delete(ctx); derr != nil {
+			return nil, nil, fmt.Errorf("unable to clear the checkpoint: %w", derr)
+		}
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to load incremental snapshot progress from cache: %w", err)
+	}
+	if state == nil {
+		m.logger.Infof("Resuming a stream with no incremental snapshot progress, treating every configured collection as already read")
+		state = &incrementalsnapshot.State{Version: incrementalsnapshot.CurrentStateVersion}
+		for _, c := range m.collections {
+			state.Tables = append(state.Tables, incrementalsnapshot.TableID{Schema: m.db.Name(), Table: c})
+		}
+	}
+	return state, resumeToken, nil
 }
 
 func (m *mongoCDC) readSnapshot(
 	ctx context.Context,
 	coll *mongo.Collection,
 	snapshotTime bson.Timestamp,
-	cp *checkpoint.Capped[bson.Raw],
+	cp *checkpoint.Capped[streamPosition],
 ) (err error) {
 	if m.snapshotParallelism == 0 {
 		return nil
@@ -1225,7 +1491,7 @@ func (m *mongoCDC) readParallelSnapshot(
 	ctx context.Context,
 	coll *mongo.Collection,
 	snapshotTime bson.Timestamp,
-	cp *checkpoint.Capped[bson.Raw],
+	cp *checkpoint.Capped[streamPosition],
 ) error {
 	begin := time.Now()
 	ranges, err := m.getParallelRanges(ctx, coll)
@@ -1249,7 +1515,7 @@ func (m *mongoCDC) readSnapshotRange(
 	ctx context.Context,
 	coll *mongo.Collection,
 	snapshotTime bson.Timestamp,
-	cp *checkpoint.Capped[bson.Raw],
+	cp *checkpoint.Capped[streamPosition],
 	start, end any,
 ) error {
 	if err := m.snapshotSemaphore.Acquire(ctx, 1); err != nil {
@@ -1282,7 +1548,7 @@ func (m *mongoCDC) readSnapshotRange(
 		}
 		mb = append(mb, msg)
 		if cursor.RemainingBatchLength() == 0 {
-			resolve, err := cp.Track(ctx, nil, int64(len(mb)))
+			resolve, err := cp.Track(ctx, streamPosition{}, int64(len(mb)))
 			if err != nil {
 				return fmt.Errorf("unable to create batch: %w", err)
 			}
@@ -1292,9 +1558,9 @@ func (m *mongoCDC) readSnapshotRange(
 			// batches), which also lets the post-snapshot checkpoint proceed.
 			// The drop scope is that batch, per the framework contract.
 			b := mongoBatch{mb, func(context.Context, error) error {
-				resumeToken := resolve()
-				if resumeToken != nil && *resumeToken != nil {
-					return fmt.Errorf("unexpected resume token for snapshot batch: %s", resumeToken.String())
+				pos := resolve()
+				if pos != nil && pos.token != nil {
+					return fmt.Errorf("unexpected resume token for snapshot batch: %s", pos.token.String())
 				}
 				return nil
 			}}
@@ -1380,10 +1646,23 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 // it returns), so every token this run produces shares one generation. Acks
 // carrying it can still be resolved much later, which is exactly when the check
 // earns its keep.
-func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpoint.Capped[bson.Raw], opts *options.ChangeStreamOptionsBuilder) error {
-	filter := []bson.M{{"$match": bson.M{
-		"ns.coll": bson.M{"$in": slices.Clone(m.collections)},
-	}}}
+//
+// run is the connection's incremental snapshot, nil when there is none. Its
+// chunks are emitted from this goroutine, between change events, into the same
+// tracker, so acknowledgements resolve in stream order.
+func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpoint.Capped[streamPosition], opts *options.ChangeStreamOptionsBuilder, run *incSnapshotRun) error {
+	match := bson.M{"ns.coll": bson.M{"$in": slices.Clone(m.collections)}}
+	if m.signalCollection != "" {
+		// Inserts only: nothing else is a signal, and with document_mode
+		// pre_and_post_images the server would fail the whole stream on an
+		// update or delete of a signal document, whose collection has no
+		// reason to keep images.
+		match = bson.M{"$or": bson.A{
+			match,
+			bson.M{"ns.coll": m.signalCollection, "operationType": "insert"},
+		}}
+	}
+	filter := []bson.M{{"$match": match}}
 	stream, err := m.db.Watch(ctx, filter, opts)
 	if err != nil {
 		// Tagged with errOpeningChangeStream so the recovery classifier can tell
@@ -1392,7 +1671,104 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 		return fmt.Errorf("%w: %w", errOpeningChangeStream, err)
 	}
 	stream.SetBatchSize(int32(m.readBatchSize))
+	if run != nil {
+		// After the stream opens, so nothing the first chunk read misses can
+		// predate the stream's start.
+		if err := run.coord.Start(ctx); err != nil {
+			return fmt.Errorf("starting incremental snapshot: %w", err)
+		}
+	}
+
+	// currentState is the snapshot progress to checkpoint with a batch tracked
+	// now.
+	currentState := func() ([]byte, error) {
+		if run == nil {
+			return nil, nil
+		}
+		return run.state()
+	}
+	// send tracks batch at pos and hands it downstream, reporting whether it
+	// was received.
+	send := func(batch service.MessageBatch, pos streamPosition) error {
+		resolve, err := cp.Track(ctx, pos, int64(len(batch)))
+		if err != nil {
+			return err
+		}
+		// Nacks resolve like acks: they are replayed by auto_replay_nacks
+		// (the default), and disabling that is a documented opt-in to DROP
+		// rejected messages, so the checkpoint must advance past them
+		// rather than pin the shared tracker (which would block cp.Track
+		// at checkpoint_limit and stall the input permanently) - the same
+		// contract the snapshot ack path follows.
+		ackFn := func(ctx context.Context, ackErr error) error {
+			if ackErr != nil {
+				m.logger.Warnf("Advancing past a batch rejected downstream: auto_replay_nacks is disabled, so the rejected messages are dropped by contract: %v", ackErr)
+			}
+			pos := resolve()
+			if pos == nil || pos.token == nil {
+				return nil
+			}
+			// This can run long after the stream died, so the epoch decides
+			// whether the position is still one the input wants to resume from.
+			return m.commitPosition(ctx, epoch, *pos)
+		}
+		select {
+		case m.readChan <- mongoBatch{batch, ackFn}:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.shutsig.SoftStopChan():
+			return context.Canceled
+		}
+	}
+	// The driver's token aliases its batch buffer, and a tracked one outlives
+	// the batch.
+	token := func() bson.Raw { return bson.Raw(slices.Clone([]byte(stream.ResumeToken()))) }
+
 	var mb service.MessageBatch
+	// preState is the progress before the latest advance, which is what the
+	// stream changes buffered so far may checkpoint. A released chunk moves the
+	// coordinator's progress past itself before emit runs, so changes tracked
+	// ahead of the chunk carrying that progress could checkpoint it unread.
+	var preState []byte
+	emit := func(rows []incrementalsnapshot.Row) error {
+		if len(mb) > 0 {
+			if err := send(mb, streamPosition{token: token(), incState: preState}); err != nil {
+				return err
+			}
+			mb = nil
+		}
+		if len(rows) == 0 {
+			// A queue change: the progress rides on the next tracked batch or
+			// heartbeat checkpoint, both of which read it fresh.
+			return nil
+		}
+		state, err := run.releasedState()
+		if err != nil {
+			return err
+		}
+		chunk := make(service.MessageBatch, 0, len(rows))
+		for _, row := range rows {
+			msg, err := m.newMongoDBCDCMessage(bson.M(row.Data), "read", row.Table.Table, run.lastHigh, false)
+			if err != nil {
+				return fmt.Errorf("unable to create message from snapshot document: %w", err)
+			}
+			chunk = append(chunk, msg)
+		}
+		return send(chunk, streamPosition{token: token(), incState: state})
+	}
+	advance := func(pos bson.Timestamp) error {
+		if run == nil {
+			return nil
+		}
+		var err error
+		if preState, err = run.state(); err != nil {
+			return err
+		}
+		return run.advance(ctx, pos, emit)
+	}
+
+	var loopErr error
 	// You'd think that this would be the same as just calling stream.Next(ctx), but surprise! It's not
 	// They do something funky where they apply another timeout they probably shouldn't be applying,
 	// so work around that by doing the polling loop for the next record ourselves.
@@ -1404,16 +1780,52 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 			if stream.Err() != nil || stream.ID() == 0 {
 				return false
 			}
+			if run != nil {
+				// An empty poll's token is the stream's position, which is
+				// what lets a quiet collection's chunks be released.
+				if ts, err := resumeTokenTimestamp(stream.ResumeToken()); err != nil {
+					m.logger.Debugf("Unable to read a position from the post-batch resume token, the incremental snapshot waits for the next change: %v", err)
+				} else if err := advance(ts); err != nil {
+					loopErr = err
+					return false
+				}
+			}
 			// If we have no pending batches, then we can accept this resume token as the new checkpoint, this
 			// is important to advance our oplog position while the collections we're streaming don't have changes.
 			// If there are batches in flight, then we just drop the resume token - we can pick up it back up
 			// next time after we poll for changes.
 			if cp.Pending() == 0 {
-				if err := m.commitResumeToken(ctx, epoch, stream.ResumeToken()); err != nil {
+				state, err := currentState()
+				if err != nil {
+					loopErr = err
+					return false
+				}
+				if err := m.commitPosition(ctx, epoch, streamPosition{token: token(), incState: state}); err != nil {
 					m.logger.Warnf("unable to store checkpoint in cache: %v", err)
 				}
 			}
 		}
+	}
+	// afterEvent advances the snapshot past the change at ct and hands the
+	// batch downstream once the driver's batch is consumed.
+	afterEvent := func(ct bson.Timestamp) error {
+		// A change only proves the stream is through the tick before it: the
+		// rest of its transaction shares ct.
+		if err := advance(prevTimestamp(ct)); err != nil {
+			return err
+		}
+		if stream.RemainingBatchLength() > 0 || len(mb) == 0 {
+			return nil
+		}
+		state, err := currentState()
+		if err != nil {
+			return err
+		}
+		if err := send(mb, streamPosition{token: token(), incState: state}); err != nil {
+			return err
+		}
+		mb = nil
+		return nil
 	}
 	for next() {
 		var data bson.M
@@ -1423,6 +1835,21 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 		opType, ok := data["operationType"].(string)
 		if !ok {
 			return fmt.Errorf("unable to extract operation type from change string, got: %s", data)
+		}
+		if coll, _ := bsonGetPath(data, "ns", "coll").(string); m.signalCollection != "" && coll == m.signalCollection {
+			// Signals are consumed, never emitted. Only an insert is one: an
+			// update or delete of a signal document requests nothing.
+			if opType == "insert" {
+				m.handleSignal(stream.Current, run)
+			}
+			ct, ok := data["clusterTime"].(bson.Timestamp)
+			if !ok {
+				return fmt.Errorf("unable to extract optime from change stream, got: %T", data["clusterTime"])
+			}
+			if err := afterEvent(ct); err != nil {
+				return err
+			}
+			continue
 		}
 		var doc any
 		var keyOnly bool // true when doc is documentKey-only or synthetic partial update
@@ -1527,7 +1954,16 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 		case "invalidate":
 			return errors.New("watch stream invalidated")
 		default:
-			// Otherwise skip the other kinds of events
+			// Otherwise skip the other kinds of events, but still finish the
+			// driver batch: one ending on a skipped event would otherwise
+			// leave the changes before it unsent, and the next empty poll
+			// would checkpoint the post-batch token past them.
+			// A missing clusterTime leaves the zero value, which advance
+			// ignores: positions never move backwards.
+			ct, _ := data["clusterTime"].(bson.Timestamp)
+			if err := afterEvent(ct); err != nil {
+				return err
+			}
 			continue
 		}
 		coll, ok := bsonGetPath(data, "ns", "coll").(string)
@@ -1542,37 +1978,20 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 		if err != nil {
 			return fmt.Errorf("unable to create message from change stream event: %w", err)
 		}
-		mb = append(mb, msg)
-		if stream.RemainingBatchLength() == 0 {
-			resolve, err := cp.Track(ctx, stream.ResumeToken(), int64(len(mb)))
-			if err != nil {
-				return err
+		if run != nil {
+			// Before the advance below, which may release the chunk: a
+			// buffered copy of this document is older than this change.
+			if err := run.streamedChange(coll, stream.Current.Lookup("documentKey", "_id")); err != nil {
+				return fmt.Errorf("unable to read the document key of a change: %w", err)
 			}
-			// Nacks resolve like acks: they are replayed by auto_replay_nacks
-			// (the default), and disabling that is a documented opt-in to DROP
-			// rejected messages, so the checkpoint must advance past them
-			// rather than pin the shared tracker (which would block cp.Track
-			// at checkpoint_limit and stall the input permanently) - the same
-			// contract the snapshot ack path follows.
-			ackFn := func(ctx context.Context, ackErr error) error {
-				if ackErr != nil {
-					m.logger.Warnf("Advancing past a batch rejected downstream: auto_replay_nacks is disabled, so the rejected messages are dropped by contract: %v", ackErr)
-				}
-				resumeToken := resolve()
-				if resumeToken == nil || *resumeToken == nil {
-					return nil
-				}
-				// This can run long after the stream died, so the epoch decides
-				// whether the position is still one the input wants to resume from.
-				return m.commitResumeToken(ctx, epoch, *resumeToken)
-			}
-			select {
-			case m.readChan <- mongoBatch{mb, ackFn}:
-			case <-ctx.Done():
-			case <-m.shutsig.SoftStopChan():
-			}
-			mb = nil
 		}
+		mb = append(mb, msg)
+		if err := afterEvent(optime); err != nil {
+			return err
+		}
+	}
+	if loopErr != nil {
+		return loopErr
 	}
 	return stream.Err()
 }

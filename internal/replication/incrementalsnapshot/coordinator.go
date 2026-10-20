@@ -163,27 +163,59 @@ func (c *Coordinator[P, W]) Idle() bool {
 }
 
 // AddTables queues tables for backfill and reports the ones it queued. It
-// is the only way a table enters the queue.
+// and RequeueTables are the only ways a table enters the queue.
 //
 // Call it at any time. Before Start it seeds the queue; on a resume the
 // checkpoint's queue is read first and these follow it. Afterwards the next
 // OnCommit checkpoints the queue and plans.
 //
 // A table is skipped when knownTables holds it, which covers the finished
-// ones. Re-reading one takes a fresh checkpoint.
+// ones. Re-reading one takes RequeueTables or a fresh checkpoint.
 func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
+	return c.queue(tables, func(table TableID) bool {
+		return !slices.Contains(c.knownTables, table)
+	})
+}
+
+// RequeueTables is AddTables for a request to read tables again: a finished
+// table is queued once more, so only one still queued or being read is
+// skipped. It reports the ones it queued.
+//
+// A table whose last chunk is buffered counts as finished: its read is over,
+// and queueing it behind the release reads it again from the start.
+func (c *Coordinator[P, W]) RequeueTables(tables []TableID) (added []TableID) {
+	return c.queue(tables, func(table TableID) bool {
+		if slices.Contains(c.remaining, table) {
+			return false
+		}
+		return c.current == nil || *c.current != table || c.currentExhausted
+	})
+}
+
+// queue appends each table eligible reports true for, in order, and reports
+// the ones it appended.
+func (c *Coordinator[P, W]) queue(tables []TableID, eligible func(TableID) bool) (added []TableID) {
 	for _, table := range tables {
-		if slices.Contains(c.knownTables, table) {
+		if !eligible(table) || slices.Contains(added, table) {
 			continue
 		}
 		added = append(added, table)
-		c.knownTables = append(c.knownTables, table)
+		if !slices.Contains(c.knownTables, table) {
+			c.knownTables = append(c.knownTables, table)
+		}
 		c.remaining = append(c.remaining, table)
 		// Also the committed queue, which State reports. Nothing has been
 		// read yet, so "committed" is the truth. Without it State reports the
 		// table under Tables with no queue entry, and a resume from that is
 		// idle and rejects a repeat request.
-		c.committedRemaining = append(c.committedRemaining, table)
+		//
+		// A requeued table can still be there: its single, final chunk is
+		// buffered but unreleased, so the committed state has not yet moved
+		// past queueing it. Once is enough, as that read is not checkpointed
+		// either.
+		if !slices.Contains(c.committedRemaining, table) {
+			c.committedRemaining = append(c.committedRemaining, table)
+		}
 	}
 	if len(added) > 0 {
 		// Owed whether or not a backfill is running: a mid-backfill request
