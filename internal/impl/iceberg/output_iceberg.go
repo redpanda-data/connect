@@ -146,6 +146,11 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing %s: %w", ioFieldCaseSensitiveColumns, err)
 	}
 
+	timestampLayout, err := conf.FieldString(ioFieldTimestampFormat)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", ioFieldTimestampFormat, err)
+	}
+
 	// Parse schema evolution config
 	schemaEvoCfg, err := parseSchemaEvolutionConfig(conf)
 	if err != nil {
@@ -223,6 +228,7 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, rowOpCfg, writerOpts, mgr.Logger())
 	rtr.metrics = newOpMetrics(mgr.Metrics())
 	rtr.parquetCompression = parquetCompression
+	rtr.SetTimestampLayout(timestampLayout)
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),

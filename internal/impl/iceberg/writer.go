@@ -141,6 +141,12 @@ type writer struct {
 	// never mix annotations. The zero value is the spec encoding.
 	tsEncoding icebergx.TimestampEncoding
 
+	// timestampLayout is the timestamp_format layout used to parse string
+	// values for timestamp columns, identically on the insert path (the
+	// shredder) and every mutation path (jsonLeafValue). Empty means
+	// [shredder.DefaultTimestampLayout]. Set by the router after NewWriter.
+	timestampLayout string
+
 	// coerceLoggedFieldIDs tracks the iceberg field IDs we have already
 	// logged a coerce-on-write notice for, so that a long-running writer
 	// emits the divergence between schema metadata and existing column
@@ -531,14 +537,15 @@ func (w *writer) dedupKeyer(batch service.MessageBatch) func(msg *service.Messag
 			}
 			values[i] = v
 			if f := fields[i]; f != nil {
-				if jv, err := jsonLeafValue(f.Type, v, commons[f.ID], w.requireSchemaMetadata); err == nil {
+				if jv, err := jsonLeafValue(f.Type, v, commons[f.ID], w.requireSchemaMetadata, w.timestampLayout); err == nil {
 					values[i] = jv
 				} else {
 					// The write path will reject this value; keep it visible to
 					// that authoritative error by NOT collapsing it away. The
 					// fallback identity must be DISJOINT from the canonical
-					// space — a raw string "42" marshals identically to the
-					// canonical form of int 42, and colliding there would let
+					// space — an RFC 3339 string rejected under a custom
+					// timestamp_format marshals identically to the canonical
+					// form of the instant it names, and colliding there would let
 					// last-writer-wins silently swallow the invalid spelling
 					// (order-dependently) instead of failing the batch as the
 					// docs promise. Canonical leaf outputs are never JSON
@@ -658,7 +665,7 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 			if !ok || v == nil {
 				return nil, fmt.Errorf("%s %q is missing or null in message %d", ioFieldIdentifierFields, field.Name, i)
 			}
-			jv, err := jsonLeafValue(field.Type, v, fieldCommons[field.ID], w.requireSchemaMetadata)
+			jv, err := jsonLeafValue(field.Type, v, fieldCommons[field.ID], w.requireSchemaMetadata, w.timestampLayout)
 			if err != nil {
 				return nil, fmt.Errorf("%s %q in message %d: %w", ioFieldIdentifierFields, field.Name, i, err)
 			}
@@ -788,6 +795,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	// extended to per-message metadata lookup with a small cache.
 	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
 	rs.StrictTemporalMode = w.requireSchemaMetadata
+	rs.TimestampLayout = w.timestampLayout
 	if w.resolver != nil && len(batch) > 0 {
 		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
 			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)

@@ -160,6 +160,11 @@ type Router struct {
 	// resolveParquetCompression.
 	parquetCompression string
 
+	// timestampLayout is the configured `timestamp_format` layout, copied onto
+	// every writer. Set after construction by the output, like
+	// parquetCompression, so NewRouter's signature stays put.
+	timestampLayout string
+
 	// metrics is optional (nil in some tests); set after construction by the
 	// output. Writers and committers inherit it.
 	metrics *opMetrics
@@ -194,6 +199,13 @@ func NewRouter(
 		resolver:      newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, caseSensitive, logger),
 		logger:        logger,
 	}
+}
+
+// SetTimestampLayout sets the time.Parse layout that writers use to parse
+// string values for timestamp columns. Call it before the first write; writers
+// already created keep their layout.
+func (r *Router) SetTimestampLayout(layout string) {
+	r.timestampLayout = layout
 }
 
 // getOrCreateEntry returns the entry for a table, creating one if needed.
@@ -997,6 +1009,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 
 	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(key, writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
+	w.timestampLayout = r.timestampLayout
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

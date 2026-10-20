@@ -231,7 +231,7 @@ func TestJSONLeafValue(t *testing.T) {
 	// against its insert-path parity contract; the calls below use nil schema
 	// metadata and non-strict mode, the schema-agnostic default.
 	leaf := func(typ iceberg.Type, v any) (any, error) {
-		return jsonLeafValue(typ, v, nil, false)
+		return jsonLeafValue(typ, v, nil, false, "")
 	}
 
 	// int64 beyond float64 precision must survive as an exact string.
@@ -259,12 +259,11 @@ func TestJSONLeafValue(t *testing.T) {
 	_, err = leaf(iceberg.PrimitiveTypes.Int64, 1.5)
 	require.Error(t, err)
 
-	// a numeric STRING into an integer column is a hard error: the insert path
-	// rejects it, so the mutation paths must not quietly accept it. This pin
-	// intentionally replaces the old passthrough leniency.
-	_, err = leaf(iceberg.PrimitiveTypes.Int64, "42")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported value type string")
+	// a numeric STRING into an integer column is parsed exactly as the insert
+	// path parses it, and canonicalised like any other integer.
+	v, err = leaf(iceberg.PrimitiveTypes.Int64, "42")
+	require.NoError(t, err)
+	assert.Equal(t, "42", v)
 
 	// an integer-valued float64 within float64's exact-integer range is fine.
 	v, err = leaf(iceberg.PrimitiveTypes.Int64, float64(1_000_000_000_000_000))

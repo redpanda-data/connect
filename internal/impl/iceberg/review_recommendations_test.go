@@ -268,24 +268,24 @@ func TestNumericTimeOutOfRangeRejected(t *testing.T) {
 	timeType := iceberg.PrimitiveTypes.Time
 
 	t.Run("24h rejected", func(t *testing.T) {
-		_, err := jsonLeafValue(timeType, int64(86_400_000_000), nil, false)
+		_, err := jsonLeafValue(timeType, int64(86_400_000_000), nil, false, "")
 		require.Error(t, err, "86400000000 µs is exactly 24h and must not wrap to 00:00:00")
 		assert.ErrorContains(t, err, "time-of-day")
 	})
 
 	t.Run("negative rejected", func(t *testing.T) {
-		_, err := jsonLeafValue(timeType, int64(-1), nil, false)
+		_, err := jsonLeafValue(timeType, int64(-1), nil, false, "")
 		require.Error(t, err, "a negative time-of-day has no wall-clock representation")
 	})
 
 	t.Run("boundary 24h-1µs accepted", func(t *testing.T) {
-		got, err := jsonLeafValue(timeType, int64(86_399_999_999), nil, false)
+		got, err := jsonLeafValue(timeType, int64(86_399_999_999), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, "23:59:59.999999", got)
 	})
 
 	t.Run("in-range control", func(t *testing.T) {
-		got, err := jsonLeafValue(timeType, int64(54_000_000_000), nil, false)
+		got, err := jsonLeafValue(timeType, int64(54_000_000_000), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, "15:00:00", got)
 	})
@@ -300,11 +300,11 @@ func TestNumericTimeOutOfRangeRejected(t *testing.T) {
 				TimeOfDay: &benthosschema.TimeOfDayParams{Unit: benthosschema.TimeUnitMillis},
 			},
 		}
-		_, err := jsonLeafValue(timeType, int64(86_400_000), millisMeta, false)
+		_, err := jsonLeafValue(timeType, int64(86_400_000), millisMeta, false, "")
 		require.Error(t, err, "86400000 declared millis scales to exactly 24h and must be rejected post-scaling")
 		assert.ErrorContains(t, err, "time-of-day")
 
-		got, err := jsonLeafValue(timeType, int64(86_399_999), millisMeta, false)
+		got, err := jsonLeafValue(timeType, int64(86_399_999), millisMeta, false, "")
 		require.NoError(t, err, "24h-1ms is in range after scaling")
 		assert.Equal(t, "23:59:59.999", got)
 	})
@@ -454,19 +454,17 @@ func TestProbeErrCache(t *testing.T) {
 
 // TestMutationRejectionNamesValue pins the diagnostic content of
 // jsonLeafValue's integer and boolean rejections: the error must include the
-// offending VALUE (not just its Go type — "42" and "forty-two" need different
-// upstream fixes) and the concrete bloblang conversion that repairs the
-// pipeline.
+// offending VALUE (not just its Go type), and the boolean rejection must name
+// the concrete bloblang conversion that repairs the pipeline.
 func TestMutationRejectionNamesValue(t *testing.T) {
-	t.Run("integer column names value and .number()", func(t *testing.T) {
-		_, err := jsonLeafValue(iceberg.PrimitiveTypes.Int64, "42", nil, false)
-		require.Error(t, err, "the insert path rejects numeric strings, so the mutation paths must too")
-		assert.ErrorContains(t, err, "42", "the error must show WHAT arrived, not just its type")
-		assert.ErrorContains(t, err, ".number()", "the error must name the bloblang conversion that fixes the upstream")
+	t.Run("integer column names unparseable string", func(t *testing.T) {
+		_, err := jsonLeafValue(iceberg.PrimitiveTypes.Int64, "forty-two", nil, false, "")
+		require.Error(t, err, "the insert path rejects non-numeric strings, so the mutation paths must too")
+		assert.ErrorContains(t, err, `"forty-two"`, "the error must show WHAT arrived, not just its type")
 	})
 
 	t.Run("boolean column names value and .bool()", func(t *testing.T) {
-		_, err := jsonLeafValue(iceberg.PrimitiveTypes.Bool, "true", nil, false)
+		_, err := jsonLeafValue(iceberg.PrimitiveTypes.Bool, "true", nil, false, "")
 		require.Error(t, err, "the insert path rejects stringified booleans, so the mutation paths must too")
 		assert.ErrorContains(t, err, "true", "the error must show WHAT arrived, not just its type")
 		assert.ErrorContains(t, err, ".bool()", "the error must name the bloblang conversion that fixes the upstream")
@@ -482,12 +480,12 @@ func TestDecimalSpellingsShareCanonicalForm(t *testing.T) {
 	dt := iceberg.DecimalTypeOf(10, 2)
 	want := "1.50"
 	for _, v := range []any{1.5, "1.5", json.Number("1.5"), "1.50"} {
-		got, err := jsonLeafValue(dt, v, nil, false)
+		got, err := jsonLeafValue(dt, v, nil, false, "")
 		require.NoError(t, err, "%T %v", v, v)
 		assert.Equal(t, want, got, "spelling %T %v must share the canonical form", v, v)
 	}
 	// Excess precision follows the insert path's rounding.
-	got, err := jsonLeafValue(dt, "1.505", nil, false)
+	got, err := jsonLeafValue(dt, "1.505", nil, false, "")
 	require.NoError(t, err)
 	assert.Equal(t, "1.51", got, "excess digits round exactly as the insert path rounds")
 }

@@ -9,6 +9,8 @@
 package iceberg
 
 import (
+	"time"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -36,6 +38,9 @@ const (
 	ioFieldNamespace            = "namespace"
 	ioFieldTable                = "table"
 	ioFieldCaseSensitiveColumns = "case_sensitive_columns"
+
+	// Value parsing fields
+	ioFieldTimestampFormat = "timestamp_format"
 
 	// Row-operation fields for row-level mutations (insert / upsert / delete).
 	// `row_operation` is named to avoid colliding with Iceberg's snapshot-level
@@ -146,9 +151,9 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"`upsert` and `delete` require `identifier_fields`. How those mutations are materialised on disk, and, critically, which query engines can then read the table, is controlled by `merge_strategy`. See <<merge-strategies,Merge strategies: merge-on-read vs copy-on-write>> below for the decision guide, support matrix, and maintenance guidance.\n" +
 	"\n" +
-	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) are interpreted exactly like their data columns: time values and RFC 3339 strings are unambiguous, and a bare numeric epoch is interpreted using the batch's schema metadata when present, falling back to the same default units the insert path applies (the key is interpreted by the identical rules as the insert path, so it encodes what the insert stored whenever both batches carry the same unit declaration). Beware feeding numeric epochs *without* schema metadata in a unit other than that default: the key would silently match nothing; set `require_schema_metadata: true` to make an undeclared unit fail loudly instead, or convert to a timestamp upstream. If the table is partitioned, `merge-on-read` additionally requires every partition source column to be one of the `identifier_fields`, since equality deletes are partition-scoped; `copy-on-write` carries no such restriction (it rewrites whole files by filter and routes new rows by value, and can even move a key across partitions). See the support matrix for the merge-key types each strategy accepts.\n" +
+	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) are interpreted exactly like their data columns: time values and timestamp strings in the `timestamp_format` layout are unambiguous, and a bare numeric epoch is interpreted using the batch's schema metadata when present, falling back to the same default units the insert path applies (the key is interpreted by the identical rules as the insert path, so it encodes what the insert stored whenever both batches carry the same unit declaration). Beware feeding numeric epochs *without* schema metadata in a unit other than that default: the key would silently match nothing; set `require_schema_metadata: true` to make an undeclared unit fail loudly instead, or convert to a timestamp upstream. If the table is partitioned, `merge-on-read` additionally requires every partition source column to be one of the `identifier_fields`, since equality deletes are partition-scoped; `copy-on-write` carries no such restriction (it rewrites whole files by filter and routes new rows by value, and can even move a key across partitions). See the support matrix for the merge-key types each strategy accepts.\n" +
 	"\n" +
-	"*Strict key and value typing.* Merge keys and row values on the `upsert`/`delete` paths are validated as strictly as the insert path has always been: a string-typed integer or boolean (for example `{\"id\": \"42\"}` into a `long` column, or `\"true\"` into a `boolean` column) previously worked by accident on the mutation paths and now fails the batch with an actionable error, matching the insert path's rejections. Convert such values upstream (for example with Bloblang's `.number()` or `.bool()`) if a source emits stringified scalars.\n" +
+	"*Key and value typing.* Merge keys and row values on the `upsert`/`delete` paths are converted by the same rules as the insert path, so identical inputs store identical values on every path. A numeric string (for example `{\"id\": \"42\"}` into a `long` column) is parsed as a number, and a string bound for a `timestamp` or `timestamptz` column is parsed with `timestamp_format`; a string that does not parse fails the batch. A string-typed boolean (for example `\"true\"` into a `boolean` column) fails the batch on every path; convert it upstream (for example with Bloblang's `.bool()`).\n" +
 	"\n" +
 	"Under `merge-on-read`, when this output auto-creates a table (via `schema_evolution`), the `identifier_fields` columns are created as *required* and registered as the table's Iceberg identifier-field-ids, so downstream engines and other writers see the primary key. A consequence is that a null or missing value in an identifier column is rejected on write, even for `insert`; identifier columns must therefore be present at creation: in the first message or declared via `schema_metadata`. Under `copy-on-write` the identifier fields are used only as the connector-side merge key and are *not* registered as identifier-field-ids, so auto-created columns are not forced required (this is also what lets engine-backed catalogs such as the Databricks Unity Catalog, which rejects identifier-field-ids at table creation, accept the `CREATE TABLE`). Pre-existing tables are never modified.\n" +
 	"\n" +
@@ -348,6 +353,12 @@ array:list
 				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive; set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").Version("4.89.3").
 				ShortDescription("Whether message field names must match table column names exactly.").
 				Default(true).
+				Advanced(),
+
+			service.NewStringField(ioFieldTimestampFormat).
+				Description("The format to parse string values for `timestamp` and `timestamptz` columns. Should be a layout for https://pkg.go.dev/time#Parse[time.Parse^] in Go. Layouts without a time zone are read as UTC. Sub-microsecond digits are truncated, because the output writes microsecond timestamps.").Version("4.115.0").
+				ShortDescription("Format used to parse string values for timestamp columns, as a Go time.Parse layout.").
+				Default(time.RFC3339Nano).
 				Advanced(),
 
 			// Row-level operation mapping (insert / upsert / delete).

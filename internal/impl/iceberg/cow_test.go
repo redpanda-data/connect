@@ -341,16 +341,16 @@ func TestCOWKeyLiteralBareNumberTemporalKey(t *testing.T) {
 	t.Run("interpreted like the insert path without metadata", func(t *testing.T) {
 		// No metadata: timestamps use bloblang's unix-seconds default — the
 		// exact interpretation the insert path stores for the same input.
-		lit, err := cowKeyLiteral(iceberg.PrimitiveTypes.Timestamp, "k", int64(1_700_000_000), nil, false)
+		lit, err := cowKeyLiteral(iceberg.PrimitiveTypes.Timestamp, "k", int64(1_700_000_000), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, iceberg.NewLiteral(iceberg.Timestamp(1_700_000_000*int64(1_000_000))), lit)
 
 		// Dates are days since the epoch, times are microseconds since
 		// midnight — again the insert path's units.
-		lit, err = cowKeyLiteral(iceberg.PrimitiveTypes.Date, "k", int64(20000), nil, false)
+		lit, err = cowKeyLiteral(iceberg.PrimitiveTypes.Date, "k", int64(20000), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, iceberg.NewLiteral(iceberg.Date(20000)), lit)
-		lit, err = cowKeyLiteral(iceberg.PrimitiveTypes.Time, "k", int64(54_000_000_000), nil, false)
+		lit, err = cowKeyLiteral(iceberg.PrimitiveTypes.Time, "k", int64(54_000_000_000), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, iceberg.NewLiteral(iceberg.Time(54_000_000_000)), lit)
 	})
@@ -362,13 +362,13 @@ func TestCOWKeyLiteralBareNumberTemporalKey(t *testing.T) {
 			Type:    benthosschema.Timestamp,
 			Logical: &benthosschema.LogicalParams{Timestamp: &benthosschema.TimestampParams{Unit: benthosschema.TimeUnitMillis, AdjustToUTC: true}},
 		}
-		lit, err := cowKeyLiteral(iceberg.PrimitiveTypes.TimestampTz, "k", int64(1_730_000_000_000), common, false)
+		lit, err := cowKeyLiteral(iceberg.PrimitiveTypes.TimestampTz, "k", int64(1_730_000_000_000), common, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, iceberg.NewLiteral(iceberg.Timestamp(1_730_000_000_000*int64(1_000))), lit)
 	})
 
 	t.Run("strict mode still rejects the ambiguous no-metadata case", func(t *testing.T) {
-		_, err := cowKeyLiteral(iceberg.PrimitiveTypes.Timestamp, "k", int64(1_700_000_000), nil, true)
+		_, err := cowKeyLiteral(iceberg.PrimitiveTypes.Timestamp, "k", int64(1_700_000_000), nil, true, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "require_schema_metadata=true")
 	})

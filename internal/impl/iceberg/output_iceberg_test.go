@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -210,4 +211,35 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
 		})
 	}
+}
+
+// TestTimestampFormatParsed pins the timestamp_format plumbing from the YAML
+// field onto the router, which copies it onto every writer it creates.
+func TestTimestampFormatParsed(t *testing.T) {
+	build := func(t *testing.T, extra string) *icebergOutput {
+		t.Helper()
+		conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+extra, nil)
+		require.NoError(t, err)
+		out, err := newIcebergOutputFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+		return out
+	}
+
+	t.Run("configured", func(t *testing.T) {
+		out := build(t, `timestamp_format: "2006-01-02 15:04:05"`+"\n")
+		assert.Equal(t, "2006-01-02 15:04:05", out.router.timestampLayout)
+	})
+
+	t.Run("default", func(t *testing.T) {
+		out := build(t, "")
+		assert.Equal(t, time.RFC3339Nano, out.router.timestampLayout)
+	})
 }

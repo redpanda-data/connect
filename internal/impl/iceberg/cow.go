@@ -296,7 +296,7 @@ func (w *writer) buildCOWFilter(tableSchema *iceberg.Schema, keyed service.Messa
 			if err != nil {
 				return nil, err
 			}
-			lit, err := cowKeyLiteral(f.Type, f.Name, v, fieldCommons[f.ID], w.requireSchemaMetadata)
+			lit, err := cowKeyLiteral(f.Type, f.Name, v, fieldCommons[f.ID], w.requireSchemaMetadata, w.timestampLayout)
 			if err != nil {
 				return nil, err
 			}
@@ -320,7 +320,7 @@ func (w *writer) buildCOWFilter(tableSchema *iceberg.Schema, keyed service.Messa
 			if err != nil {
 				return nil, err
 			}
-			lit, err := cowKeyLiteral(f.Type, f.Name, v, fieldCommons[f.ID], w.requireSchemaMetadata)
+			lit, err := cowKeyLiteral(f.Type, f.Name, v, fieldCommons[f.ID], w.requireSchemaMetadata, w.timestampLayout)
 			if err != nil {
 				return nil, err
 			}
@@ -425,8 +425,9 @@ func cowKeyTypeSupported(name string, t iceberg.Type) error {
 // array.RecordFromJSON, so this function derives each literal FROM that same
 // canonicalisation — filter and storage share an encoding by construction, for
 // every input shape jsonLeafValue accepts (including []byte into string
-// columns, numeric epochs and RFC 3339 strings into timestamp columns, and the
-// temporal-to-numeric metadata bridge into int/long columns):
+// columns, numeric epochs and timestamp_format strings into timestamp columns,
+// numeric strings and the temporal-to-numeric metadata bridge into int/long
+// columns):
 //
 //   - int/long: canonicalised to the exact decimal string the data path
 //     stores, parsed back, and range-checked before narrowing to int32.
@@ -442,7 +443,8 @@ func cowKeyTypeSupported(name string, t iceberg.Type) error {
 // common and requireSchemaMetadata are the key column's schema metadata and
 // strict-mode flag, forwarded to jsonLeafValue so a numeric temporal key is
 // interpreted with the identical unit-aware conversion as data columns and the
-// insert path.
+// insert path. timestampLayout is the timestamp_format layout, forwarded so a
+// string timestamp key is parsed as the insert path parsed it.
 //
 // decimal is deliberately NOT a supported merge key: iceberg-go's overwrite
 // applies the filter through its substrait conversion, which panics on a decimal
@@ -453,10 +455,10 @@ func cowKeyTypeSupported(name string, t iceberg.Type) error {
 // (that path does not go through substrait).
 //
 // Other key types return a clear, actionable error.
-func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, requireSchemaMetadata bool) (iceberg.Literal, error) {
+func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, requireSchemaMetadata bool, timestampLayout string) (iceberg.Literal, error) {
 	switch t.(type) {
 	case iceberg.Int32Type, iceberg.Int64Type:
-		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata)
+		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata, timestampLayout)
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
@@ -483,7 +485,7 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 		}
 		return iceberg.NewLiteral(n), nil
 	case iceberg.StringType:
-		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata)
+		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata, timestampLayout)
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
@@ -493,7 +495,7 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 		}
 		return iceberg.NewLiteral(s), nil
 	case iceberg.TimestampType, iceberg.TimestampTzType:
-		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata)
+		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata, timestampLayout)
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
@@ -510,7 +512,7 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 		}
 		return iceberg.NewLiteral(iceberg.Timestamp(tm.UnixMicro())), nil
 	case iceberg.DateType, iceberg.TimeType, iceberg.UUIDType:
-		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata)
+		jv, err := jsonLeafValue(t, v, common, requireSchemaMetadata, timestampLayout)
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
@@ -776,6 +778,6 @@ func (w *writer) cowMassage(t iceberg.Type, fieldID int, v any, fieldCommons map
 		// leaf's schema metadata, so the rewrite, the equality-delete keys,
 		// and the filter literals all share ONE encoding — see jsonLeafValue
 		// for the per-type rules and the insert-path parity invariant.
-		return jsonLeafValue(t, v, fieldCommons[fieldID], w.requireSchemaMetadata)
+		return jsonLeafValue(t, v, fieldCommons[fieldID], w.requireSchemaMetadata, w.timestampLayout)
 	}
 }
