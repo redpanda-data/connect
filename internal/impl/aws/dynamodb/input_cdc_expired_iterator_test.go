@@ -705,13 +705,13 @@ func (s *closedShardStubTransport) Do(req *http.Request) (*http.Response, error)
 	}, nil
 }
 
-// TestShardReader_ClosedShardFinalPageDelivered (CON-599): when GetRecords
+// TestShardReaderClosedShardFinalPageDelivered (CON-599): when GetRecords
 // returns a closed shard's last records together with a nil
 // NextShardIterator, those records must still be delivered before the
 // reader stops and records the shard as completed. Returning on the nil
 // iterator first dropped them, and since a completed shard is never read
 // again they would be lost for good.
-func TestShardReader_ClosedShardFinalPageDelivered(t *testing.T) {
+func TestShardReaderClosedShardFinalPageDelivered(t *testing.T) {
 	scenarios := map[string]struct {
 		records   string
 		wantBatch int
