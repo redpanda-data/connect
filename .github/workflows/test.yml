@@ -106,11 +106,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Check out the merge base
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: git checkout --quiet "$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+      # The docs job builds the merge commit GitHub made for this PR, so build
+      # its first parent: the exact base that merge commit was made from. The
+      # merge base of the branch would also pull in every docs change that
+      # reached main after the branch was cut, and pull_request.base.sha can lag
+      # the commit GitHub actually merged into.
+      - name: Check out the base of the merge commit
+        run: |
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+            echo "::error::HEAD is not a two-parent merge commit in this checkout"
+            exit 1
+          fi
+          git checkout --quiet HEAD^1
       - name: Install Go
         uses: actions/setup-go@v6
         with:
