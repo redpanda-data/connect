@@ -819,3 +819,156 @@ func TestBeginTokenEpochAdvancesAndInstallsToken(t *testing.T) {
 	require.Nil(t, m.resumeToken, "clearing installs no position")
 	m.resumeTokenMu.Unlock()
 }
+
+const incSnapshotTestConfig = `
+url: mongodb://localhost:27017
+database: foo
+collections: [bar]
+checkpoint_cache: baz
+`
+
+func TestIncrementalSnapshotConfigRejected(t *testing.T) {
+	tests := []struct {
+		name        string
+		extra       string
+		errContains string
+	}{
+		{
+			name: "signal collection is a streamed collection",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+signal_collection_name: bar
+`,
+			errContains: "field signal_collection_name must not name one of the streamed collections",
+		},
+		{
+			name: "progress key equals checkpoint_key",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+checkpoint_key: same
+incremental_snapshot:
+  checkpoint_cache_key: same
+`,
+			errContains: "field incremental_snapshot.checkpoint_cache_key must differ from checkpoint_key",
+		},
+		{
+			name: "incremental without stream_snapshot",
+			extra: `snapshot_mode: incremental
+`,
+			errContains: "field snapshot_mode: incremental requires stream_snapshot: true",
+		},
+		{
+			name: "chunk_size below one",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+incremental_snapshot:
+  chunk_size: 0
+`,
+			errContains: "field incremental_snapshot.chunk_size must be greater or equal to 1",
+		},
+		{
+			name: "negative retry_cooldown",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+incremental_snapshot:
+  retry_cooldown: -1s
+`,
+			errContains: "field incremental_snapshot.retry_cooldown must not be negative",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := spec().ParseYAML(incSnapshotTestConfig+tc.extra, nil)
+			require.NoError(t, err)
+			res := service.MockResources(service.MockResourcesOptAddCache("baz"))
+			license.InjectTestService(res)
+			_, err = newMongoCDC(parsed, res)
+			require.ErrorContains(t, err, tc.errContains)
+		})
+	}
+}
+
+func TestIncrementalSnapshotConfigAccepted(t *testing.T) {
+	tests := []struct {
+		name            string
+		extra           string
+		wantIncremental bool
+		wantKey         string
+		wantChunkSize   int
+		wantCooldown    time.Duration
+		wantSignal      string
+	}{
+		{
+			name: "defaults derive the progress key from checkpoint_key",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+`,
+			wantIncremental: true,
+			wantKey:         "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
+			wantChunkSize:   defaultIncSnapshotChunkSize,
+			wantCooldown:    defaultIncSnapshotRetryCooldown,
+		},
+		{
+			name: "custom checkpoint_key carries into the derived key",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+checkpoint_key: mine
+`,
+			wantIncremental: true,
+			wantKey:         "mine" + incSnapshotKeySuffix,
+			wantChunkSize:   defaultIncSnapshotChunkSize,
+			wantCooldown:    defaultIncSnapshotRetryCooldown,
+		},
+		{
+			name: "explicit settings",
+			extra: `stream_snapshot: true
+snapshot_mode: incremental
+signal_collection_name: signals
+incremental_snapshot:
+  chunk_size: 10
+  checkpoint_cache_key: progress
+  retry_cooldown: 0s
+`,
+			wantIncremental: true,
+			wantKey:         "progress",
+			wantChunkSize:   10,
+			wantCooldown:    0,
+			wantSignal:      "signals",
+		},
+		{
+			name: "blocking keeps the store so it can discard stale progress",
+			extra: `stream_snapshot: true
+`,
+			wantKey: "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := spec().ParseYAML(incSnapshotTestConfig+tc.extra, nil)
+			require.NoError(t, err)
+			res := service.MockResources(service.MockResourcesOptAddCache("baz"))
+			license.InjectTestService(res)
+			_, err = newMongoCDC(parsed, res)
+			require.NoError(t, err)
+
+			key, err := parsed.FieldString(fieldCheckpointKey)
+			require.NoError(t, err)
+			streamSnapshot, err := parsed.FieldBool(fieldStreamSnapshot)
+			require.NoError(t, err)
+			collections, err := parsed.FieldStringList(fieldCollections)
+			require.NoError(t, err)
+			m := &mongoCDC{
+				logger:      res.Logger(),
+				collections: collections,
+				checkpoint:  &checkpointCache{resources: res, cacheName: "baz", cacheKey: key},
+			}
+			require.NoError(t, m.parseIncrementalSnapshot(parsed, streamSnapshot, "baz"))
+			require.Equal(t, tc.wantIncremental, m.incremental)
+			require.NotNil(t, m.incStateStore)
+			require.Equal(t, tc.wantKey, m.incStateStore.cacheKey)
+			require.Equal(t, tc.wantChunkSize, m.incChunkSize)
+			require.Equal(t, tc.wantCooldown, m.incRetryCooldown)
+			require.Equal(t, tc.wantSignal, m.signalCollection)
+		})
+	}
+}
