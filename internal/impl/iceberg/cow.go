@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -375,13 +376,13 @@ func (w *writer) cowKeyFields(tableSchema *iceberg.Schema) ([]iceberg.NestedFiel
 // lookupKeyValue extracts a single identifier column's value from a message,
 // erroring on a missing or null key (a null merge key cannot select rows).
 func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField, idx int) (any, error) {
-	structured, err := msg.AsStructured()
+	row, err := w.messageRow(msg)
 	if err != nil {
+		var notObj notObjectError
+		if errors.As(err, &notObj) {
+			return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", idx, notObj.got)
+		}
 		return nil, fmt.Errorf("reading structured message %d for merge key: %w", idx, err)
-	}
-	row, ok := structured.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", idx, structured)
 	}
 	v, ok := lookupField(row, field.Name, w.caseSensitive)
 	if !ok || v == nil {
@@ -553,13 +554,13 @@ func (w *writer) cowDetectNewColumns(tableSchema *iceberg.Schema, rows service.M
 	var newErrs []*UnknownFieldError
 	seen := make(map[string]struct{})
 	for i, msg := range rows {
-		structured, err := msg.AsStructured()
+		row, err := w.messageRow(msg)
 		if err != nil {
+			var notObj notObjectError
+			if errors.As(err, &notObj) {
+				return fmt.Errorf("message %d must be an object, got %T", i, notObj.got)
+			}
 			return fmt.Errorf("reading structured message %d: %w", i, err)
-		}
-		row, ok := structured.(map[string]any)
-		if !ok {
-			return fmt.Errorf("message %d must be an object, got %T", i, structured)
 		}
 		for name, v := range row {
 			_, known := findSchemaField(tableSchema, name, w.caseSensitive)
@@ -607,13 +608,13 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 	fields := tableSchema.Fields()
 	encoded := make([]map[string]any, 0, len(rows))
 	for i, msg := range rows {
-		structured, err := msg.AsStructured()
+		row, err := w.messageRow(msg)
 		if err != nil {
+			var notObj notObjectError
+			if errors.As(err, &notObj) {
+				return nil, fmt.Errorf("message %d must be an object, got %T", i, notObj.got)
+			}
 			return nil, fmt.Errorf("reading structured message %d: %w", i, err)
-		}
-		row, ok := structured.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("message %d must be an object, got %T", i, structured)
 		}
 		out := make(map[string]any, len(fields))
 		for _, field := range fields {

@@ -165,6 +165,10 @@ type Router struct {
 	// parquetCompression, so NewRouter's signature stays put.
 	timestampLayout string
 
+	// messageFormat is the configured `message_format`, copied onto every
+	// writer. Set after construction by the output, like timestampLayout.
+	messageFormat MessageFormat
+
 	// metrics is optional (nil in some tests); set after construction by the
 	// output. Writers and committers inherit it.
 	metrics *opMetrics
@@ -206,6 +210,12 @@ func NewRouter(
 // already created keep their layout.
 func (r *Router) SetTimestampLayout(layout string) {
 	r.timestampLayout = layout
+}
+
+// SetMessageFormat sets the shape writers expect incoming messages to have.
+// Call it before the first write; writers already created keep their format.
+func (r *Router) SetMessageFormat(f MessageFormat) {
+	r.messageFormat = f
 }
 
 // getOrCreateEntry returns the entry for a table, creating one if needed.
@@ -321,6 +331,9 @@ func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service
 		if i == 0 {
 			r.logger.Debugf("Write failed for %s.%s, retrying with fresh writer: %v", key.namespace, key.table, err)
 			continue
+		}
+		if r.messageFormat == MessageFormatArray && errors.Is(err, catalog.ErrNoSuchTable) {
+			return fmt.Errorf("writing to %s.%s: message_format is array, so the table must be created before writing: %w", key.namespace, key.table, err)
 		}
 		return fmt.Errorf("writing to %s.%s: %w", key.namespace, key.table, err)
 	}
@@ -1010,6 +1023,8 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(key, writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	w.timestampLayout = r.timestampLayout
+	w.messageFormat = r.messageFormat
+	w.arrayColumns = topLevelColumnNames(writerTbl.Schema())
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

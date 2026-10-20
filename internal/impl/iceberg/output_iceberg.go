@@ -10,6 +10,7 @@ package iceberg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -151,10 +152,21 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing %s: %w", ioFieldTimestampFormat, err)
 	}
 
+	messageFormatStr, err := conf.FieldString(ioFieldMessageFormat)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", ioFieldMessageFormat, err)
+	}
+	messageFormat := MessageFormat(messageFormatStr)
+
 	// Parse schema evolution config
 	schemaEvoCfg, err := parseSchemaEvolutionConfig(conf)
 	if err != nil {
 		return nil, fmt.Errorf("parsing schema evolution config: %w", err)
+	}
+
+	// Linting flags this too, but linting is advisory and easily skipped.
+	if messageFormat == MessageFormatArray && schemaEvoCfg.Enabled {
+		return nil, errors.New(arraySchemaEvolutionConflict)
 	}
 
 	// Parse commit config
@@ -229,6 +241,7 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 	rtr.metrics = newOpMetrics(mgr.Metrics())
 	rtr.parquetCompression = parquetCompression
 	rtr.SetTimestampLayout(timestampLayout)
+	rtr.SetMessageFormat(messageFormat)
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),

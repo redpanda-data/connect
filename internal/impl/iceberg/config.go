@@ -41,6 +41,7 @@ const (
 
 	// Value parsing fields
 	ioFieldTimestampFormat = "timestamp_format"
+	ioFieldMessageFormat   = "message_format"
 
 	// Row-operation fields for row-level mutations (insert / upsert / delete).
 	// `row_operation` is named to avoid colliding with Iceberg's snapshot-level
@@ -361,6 +362,15 @@ array:list
 				Default(time.RFC3339Nano).
 				Advanced(),
 
+			service.NewStringAnnotatedEnumField(ioFieldMessageFormat, map[string]string{
+				string(MessageFormatObject): "Messages are objects whose keys are column names.",
+				string(MessageFormatArray):  "Messages are arrays of values, written by position into the table's top-level columns in schema order. The table must already exist, and `schema_evolution.enabled` must be `false`.",
+			}).
+				Description("The format to expect incoming messages from the rest of the pipeline.").Version("4.115.0").
+				Default(string(MessageFormatObject)).
+				Advanced().
+				Example(string(MessageFormatArray)),
+
 			// Row-level operation mapping (insert / upsert / delete).
 			service.NewInterpolatedStringField(ioFieldRowOperation).
 				Description(`The row-level operation to apply for each message: `+"`"+`insert`+"`"+` (append), `+"`"+`upsert`+"`"+` (replace rows matching `+"`"+`identifier_fields`+"`"+`, then append), or `+"`"+`delete`+"`"+` (remove rows matching `+"`"+`identifier_fields`+"`"+`). Supports interpolation so the operation can be driven by the data, such as a change-data-capture stream's operation field. Defaults to `+"`"+`insert`+"`"+`, preserving the original append-only behavior.
@@ -562,15 +572,25 @@ See the Row-level operations section above for the full constraints, including t
 			service.NewBatchPolicyField(ioFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 		).
+		// A spec holds a single lint rule, so each check below yields an array
+		// of lint messages and the rule merges them.
+		//
 		// Keyed (upsert/delete) writes rely on per-key ordering. With more than
 		// one batch in flight, concurrent batches can commit out of order and
 		// corrupt the last-writer-wins result, so require max_in_flight: 1 for
 		// any non-insert row_operation. A static `insert` (the default) is
 		// append-only and unaffected; an interpolated row_operation is treated
 		// conservatively as potentially mutating.
-		LintRule(`root = if this.row_operation.or("insert") != "insert" && this.max_in_flight.or(4) > 1 {
+		//
+		// Arrays carry no column names, so they cannot drive table creation or
+		// schema evolution; array mode writes only into a pre-created table.
+		LintRule(`let ordering = if this.row_operation.or("insert") != "insert" && this.max_in_flight.or(4) > 1 {
   [ "row_operation can resolve to upsert/delete, which rely on per-key write ordering; with max_in_flight > 1 concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads, or use a static row_operation: insert for append-only writes." ]
-}`).
+} else { [] }
+let message_format = if this.message_format.or("object") == "array" && this.schema_evolution.enabled.or(false) {
+  [ "`+arraySchemaEvolutionConflict+`" ]
+} else { [] }
+root = $ordering.merge($message_format)`).
 		Example(
 			"Change-data-capture upsert/delete",
 			"Materialize a change-data-capture stream into an Iceberg table. A mapping derives the row operation from the source's operation field (here Debezium's `op`: `c`reate / `r`ead / `u`pdate map to `upsert`, `d`elete maps to `delete`) and selects the row image, while `identifier_fields` is the primary key. Note that creates map to `upsert`, never `insert`, so re-delivered or snapshot rows do not duplicate.",
