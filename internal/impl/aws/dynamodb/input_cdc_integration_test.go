@@ -582,17 +582,14 @@ func TestIntegrationDynamoDBShutdownWithBufferedBatches(t *testing.T) {
 		testcontainers.WithExposedPorts("8000/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
 	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err := ctr.Terminate(context.Background()); err != nil {
-			t.Logf("failed to terminate dynamodb container: %v", err)
-		}
-	})
 
 	mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
 	require.NoError(t, err)
 	port := mappedPort.Port()
 
+	t.Log("Given: a table with 100 items in its stream")
 	tableName := "test-shutdown-buffered"
 	client, err := createTableWithStreams(ctx, t, port, tableName)
 	require.NoError(t, err)
@@ -647,13 +644,15 @@ aws_dynamodb_cdc:
 		stream, err := sb.Build()
 		require.NoError(t, err)
 		go func() {
-			_ = stream.Run(ctx)
+			if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 		return stream
 	}
 
-	// Run 1: a slow output. Stop after the first message, while the buffer
-	// holds batches that the pipeline did not get.
+	t.Log("When: a pipeline with a slow output stops after the first message")
+	// The buffer then holds batches that the pipeline did not get.
 	stream1 := startStream(func(_ context.Context, msg *service.Message) error {
 		time.Sleep(50 * time.Millisecond)
 		return record(msg)
@@ -665,13 +664,15 @@ aws_dynamodb_cdc:
 	defer stopCancel()
 	start := time.Now()
 	require.NoError(t, stream1.Stop(stopCtx))
+	t.Log("Then: the stop does not wait for acks that cannot come")
 	assert.Less(t, time.Since(start), 5*time.Second, "stop must not wait for acks that cannot come")
 	require.Less(t, seenCount(), itemCount, "expected undelivered batches at shutdown")
 
-	// Run 2: a restart must read the undelivered records again.
+	t.Log("When: the pipeline restarts")
 	stream2 := startStream(func(_ context.Context, msg *service.Message) error {
 		return record(msg)
 	})
+	t.Log("Then: it reads the records that the first run did not ack")
 	require.Eventually(t, func() bool { return seenCount() == itemCount }, 30*time.Second, 10*time.Millisecond,
 		"expected all items after restart")
 	require.NoError(t, stream2.Stop(stopCtx))
