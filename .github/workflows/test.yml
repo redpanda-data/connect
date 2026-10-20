@@ -54,10 +54,19 @@ jobs:
     env:
       CGO_ENABLED: 1
     steps:
-      - name: Free disk space
+      # In October 2026 the runner starts with 86 to 92 GiB free.
+      # The job uses 14.4 GiB at peak, and this includes the 8.2 GiB that the Go cache restore extracts.
+      # The restore also keeps the 2.1 GB cache archive on disk until the extraction ends.
+      # The 40 GiB limit covers this use with a large margin, as in the test job.
+      # The job does not use Docker, so do not prune Docker images (~20 s).
+      # Do not delete /usr/local/lib/android: it has ~311k files and its delete took most of the 55 s to 300 s of the old step.
+      - name: Free disk space if low
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
-          sudo docker image prune --all --force
+          df -h /
+          if [ "$(df -BG --output=avail / | tail -1 | tr -dc 0-9)" -lt 40 ]; then
+            sudo rm -rf /usr/share/swift /usr/local/share/powershell /usr/local/.ghcup /usr/share/dotnet
+            df -h /
+          fi
 
       - name: Checkout code
         uses: actions/checkout@v6
