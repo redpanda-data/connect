@@ -112,6 +112,9 @@ func TestPublicationCoversTableQuery(t *testing.T) {
 	// publication sets publish_via_partition_root.
 	assert.Contains(t, q, "pg_partition_tree")
 	assert.Contains(t, q, "pg_partition_ancestors")
+	// Those functions return no rows for a plain table, so the table itself
+	// must be matched directly.
+	assert.Contains(t, q, `SELECT to_regclass( '"public"."it''s"' )::oid`)
 	// Every leaf partition must be published, so a publication listing only
 	// some partitions does not cover the parent.
 	assert.Contains(t, q, "leaf.isleaf")

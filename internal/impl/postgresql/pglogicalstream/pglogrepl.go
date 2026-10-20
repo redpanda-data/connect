@@ -468,8 +468,10 @@ func missingFromPublicationError(publicationName string, missing []TableFQN) err
 // publish_via_partition_root, so a table is covered when the publication
 // lists something in its partition tree or above it, and every leaf partition
 // is listed itself or through one of its ancestors. A publication listing
-// only some partitions does not cover the parent. A table that does not exist
-// is not covered. pg_partition_tree and pg_partition_ancestors need
+// only some partitions does not cover the parent. The table itself is matched
+// directly, since pg_partition_tree and pg_partition_ancestors return no rows
+// for a table that is neither partitioned nor a partition. A table that does
+// not exist is not covered. pg_partition_tree and pg_partition_ancestors need
 // PostgreSQL 12 or later.
 func publicationCoversTableQuery(publication, table string) (string, error) {
 	return sanitize.SQLQuery(`
@@ -483,6 +485,8 @@ func publicationCoversTableQuery(publication, table string) (string, error) {
         SELECT EXISTS (
                    SELECT 1 FROM published
                    WHERE  oid IN (
+                              SELECT to_regclass($2)::oid
+                              UNION
                               SELECT relid FROM pg_partition_tree(to_regclass($2))
                               UNION
                               SELECT relid FROM pg_partition_ancestors(to_regclass($2))
