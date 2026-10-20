@@ -143,8 +143,8 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
-          # An issue_comment run builds PR code but saves its cache in the default-branch scope.
-          # Trusted workflows restore caches from that scope (cache poisoning). Thus, do not cache on that event.
+          # A PR command (/integration) runs this job on the main branch, but with PR code.
+          # A cache save from that run can poison the main cache. Thus, do not cache for a PR command.
           cache: ${{ github.event_name != 'issue_comment' }}
 
       - name: Install Task
