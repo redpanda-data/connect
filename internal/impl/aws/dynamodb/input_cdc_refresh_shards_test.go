@@ -289,14 +289,14 @@ func TestRefreshTableShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 	assert.False(t, ts.honorStartFrom.Load())
 }
 
-// TestRefreshShards_CompletedShardNotRediscoveredAfterCleanup (CON-599):
+// TestRefreshShardsCompletedShardNotRediscoveredAfterCleanup (CON-599):
 // DescribeStream keeps listing closed shards for the 24h retention window.
 // Once a reader has read a closed shard to the end and the cleanup ticker has
 // pruned it, the next discovery cycle must not register it again: doing so
 // re-read the shard from its (lagging) checkpoint or TRIM_HORIZON every
 // cleanup cycle, redelivering its tail and churning thousands of
 // GetItem/GetShardIterator/GetRecords calls.
-func TestRefreshShards_CompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
+func TestRefreshShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
 	transport := &refreshStubTransport{shardIDs: []string{"shard-closed", "shard-open"}}
 	d := newRefreshTestInput(t, transport)
 
@@ -332,9 +332,9 @@ func TestRefreshShards_CompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
 	d.mu.RUnlock()
 }
 
-// TestRefreshTableShards_CompletedShardNotRediscoveredAfterCleanup mirrors
+// TestRefreshTableShardsCompletedShardNotRediscoveredAfterCleanup mirrors
 // the CON-599 contract on the multi-table path.
-func TestRefreshTableShards_CompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
+func TestRefreshTableShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
 	transport := &refreshStubTransport{shardIDs: []string{"shard-closed", "shard-open"}}
 	d := &dynamoDBCDCInput{
 		conf:          dynamoDBCDCConfig{startFrom: "trim_horizon"},
