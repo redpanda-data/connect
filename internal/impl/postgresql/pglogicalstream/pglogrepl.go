@@ -305,13 +305,22 @@ func getPublication(ctx context.Context, conn *pgconn.PgConn, publicationName st
 	return publicationInfo{exists: true, allTables: string(rows[0].Rows[0][0]) == "t"}, nil
 }
 
+// errAllTablesPublication is returned when a managed publication is FOR ALL
+// TABLES but the input is configured with a table list.
+var errAllTablesPublication = errors.New("publication is FOR ALL TABLES")
+
 // publicationSyncPlan returns the tables to add to and drop from an existing
 // publication so that it lists exactly tables. A FOR ALL TABLES publication
-// already covers every table and rejects ADD TABLE and DROP TABLE, so it is
-// left alone.
-func publicationSyncPlan(pub publicationInfo, pubTables, tables []TableFQN) (add, drop []TableFQN) {
+// already covers every table when tables is empty, so it is left alone. With a
+// table list it cannot be narrowed, since PostgreSQL rejects ADD TABLE and DROP
+// TABLE on it, and keeping it would stream every table in the database, so an
+// error is returned instead.
+func publicationSyncPlan(publicationName string, pub publicationInfo, pubTables, tables []TableFQN) (add, drop []TableFQN, err error) {
 	if pub.allTables {
-		return nil, nil
+		if len(tables) > 0 {
+			return nil, nil, fmt.Errorf("%w: %s replicates every table and cannot be narrowed to the configured tables: drop it so it can be recreated for the configured tables, use a different publication, or set manage_publication to false to stream from it as is", errAllTablesPublication, publicationName)
+		}
+		return nil, nil, nil
 	}
 	for _, table := range tables {
 		if !slices.Contains(pubTables, table) {
@@ -323,7 +332,7 @@ func publicationSyncPlan(pub publicationInfo, pubTables, tables []TableFQN) (add
 			drop = append(drop, table)
 		}
 	}
-	return add, drop
+	return add, drop, nil
 }
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
@@ -361,16 +370,17 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
-	if pub.allTables {
-		return nil
+	var pubTables []TableFQN
+	if !pub.allTables {
+		if pubTables, _, err = GetPublicationTables(ctx, conn, publicationName); err != nil {
+			return fmt.Errorf("getting publication tables: %w", err)
+		}
 	}
 
-	pubTables, _, err := GetPublicationTables(ctx, conn, publicationName)
+	tablesToAddToPublication, tablesToRemoveFromPublication, err := publicationSyncPlan(publicationName, pub, pubTables, tables)
 	if err != nil {
-		return fmt.Errorf("getting publication tables: %w", err)
+		return err
 	}
-
-	tablesToAddToPublication, tablesToRemoveFromPublication := publicationSyncPlan(pub, pubTables, tables)
 
 	// remove tables from publication
 	for _, dropTable := range tablesToRemoveFromPublication {
@@ -452,25 +462,41 @@ func missingFromPublicationError(publicationName string, missing []TableFQN) err
 	return fmt.Errorf("publication %s does not include table(s) %s: add them with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
 }
 
-// publicationCoversTableQuery reports whether a publication replicates a
-// table. pg_publication_tables lists a partitioned table's partitions rather
-// than the table itself unless the publication sets publish_via_partition_root,
-// so the table matches when the publication lists it, a partition of it, or
-// a table it is a partition of. A table that does not exist is not covered.
+// publicationCoversTableQuery reports whether a publication replicates every
+// row of a table. pg_publication_tables lists a partitioned table's partitions
+// rather than the table itself unless the publication sets
+// publish_via_partition_root, so a table is covered when the publication
+// lists something in its partition tree or above it, and every leaf partition
+// is listed itself or through one of its ancestors. A publication listing
+// only some partitions does not cover the parent. A table that does not exist
+// is not covered. pg_partition_tree and pg_partition_ancestors need
+// PostgreSQL 12 or later.
 func publicationCoversTableQuery(publication, table string) (string, error) {
 	return sanitize.SQLQuery(`
-        SELECT EXISTS (
-            SELECT 1
+        WITH published AS (
+            SELECT c.oid
             FROM   pg_publication_tables pt
             JOIN   pg_namespace n ON n.nspname = pt.schemaname
             JOIN   pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
             WHERE  pt.pubname = $1
-            AND    c.oid IN (
-                       SELECT relid FROM pg_partition_tree(to_regclass($2))
-                       UNION
-                       SELECT relid FROM pg_partition_ancestors(to_regclass($2))
-                   )
-        );
+        )
+        SELECT EXISTS (
+                   SELECT 1 FROM published
+                   WHERE  oid IN (
+                              SELECT relid FROM pg_partition_tree(to_regclass($2))
+                              UNION
+                              SELECT relid FROM pg_partition_ancestors(to_regclass($2))
+                          )
+               )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM   pg_partition_tree(to_regclass($2)) leaf
+                   WHERE  leaf.isleaf
+                   AND    NOT EXISTS (
+                              SELECT 1 FROM published
+                              WHERE  oid IN (SELECT relid FROM pg_partition_ancestors(leaf.relid))
+                          )
+               );
     `, publication, table)
 }
 

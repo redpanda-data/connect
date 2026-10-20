@@ -263,9 +263,10 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.True(t, forAllTables)
 
-	// Syncing a FOR ALL TABLES publication to a table list must not try to
-	// drop the tables it lists, which PostgreSQL rejects.
-	require.NoError(t, CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"test_table"`}}))
+	// A FOR ALL TABLES publication cannot be narrowed to a table list, so
+	// syncing it to one fails instead of streaming every table.
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"test_table"`}})
+	require.ErrorIs(t, err, errAllTablesPublication)
 	_, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.True(t, forAllTables)
@@ -406,6 +407,22 @@ func TestIntegrationValidatePublication(t *testing.T) {
 	tables, _, err := GetPublicationTables(ctx, conn, "pub_some")
 	require.NoError(t, err)
 	assert.NotContains(t, tables, users)
+
+	// A publication listing only some partitions does not cover the
+	// partitioned table, but does cover the partition it lists.
+	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
+	exec("CREATE PUBLICATION pub_partial FOR TABLE events_2026;")
+	err = ValidatePublication(ctx, conn, "pub_partial", []TableFQN{events})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"public"."events"`)
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_partial", []TableFQN{{schema, `"events_2026"`}}))
+
+	// pub_some lists the partitioned table, so a partition attached later is
+	// covered too.
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_some", []TableFQN{events}))
+
+	exec("CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_root", []TableFQN{events, {schema, `"events_2027"`}}))
 
 	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
 	require.NoError(t, ValidatePublication(ctx, conn, "pub_all", []TableFQN{orders, users, events}))

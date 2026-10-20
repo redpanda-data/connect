@@ -35,15 +35,21 @@ func TestPublicationSyncPlan(t *testing.T) {
 		tables    []TableFQN
 		wantAdd   []TableFQN
 		wantDrop  []TableFQN
+		wantErr   bool
 	}{
 		{
-			// pg_publication_tables lists every table for a FOR ALL TABLES
-			// publication, which rejects DROP TABLE and ADD TABLE, so the
-			// list must not be reconciled against the configured tables.
-			name:      "FOR ALL TABLES publication is left alone",
+			name: "FOR ALL TABLES publication without a table list is left alone",
+			pub:  publicationInfo{exists: true, allTables: true},
+		},
+		{
+			// A FOR ALL TABLES publication rejects DROP TABLE and ADD TABLE,
+			// and keeping it would stream every table instead of the
+			// configured ones, so a table list must fail fast.
+			name:      "FOR ALL TABLES publication with a table list is an error",
 			pub:       publicationInfo{exists: true, allTables: true},
 			pubTables: []TableFQN{a, b, c},
 			tables:    []TableFQN{a},
+			wantErr:   true,
 		},
 		{
 			// A FOR TABLE publication with every table dropped lists nothing,
@@ -70,7 +76,13 @@ func TestPublicationSyncPlan(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			add, drop := publicationSyncPlan(test.pub, test.pubTables, test.tables)
+			add, drop, err := publicationSyncPlan("pub", test.pub, test.pubTables, test.tables)
+			if test.wantErr {
+				require.ErrorIs(t, err, errAllTablesPublication)
+				assert.ErrorContains(t, err, "manage_publication")
+			} else {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, test.wantAdd, add)
 			assert.Equal(t, test.wantDrop, drop)
 		})
@@ -100,6 +112,9 @@ func TestPublicationCoversTableQuery(t *testing.T) {
 	// publication sets publish_via_partition_root.
 	assert.Contains(t, q, "pg_partition_tree")
 	assert.Contains(t, q, "pg_partition_ancestors")
+	// Every leaf partition must be published, so a publication listing only
+	// some partitions does not cover the parent.
+	assert.Contains(t, q, "leaf.isleaf")
 }
 
 func TestSnapshotSignalChecksExternallyManagedPublication(t *testing.T) {
