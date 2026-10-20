@@ -255,9 +255,23 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
+	// A FOR ALL TABLES publication lists every table, and is still reported
+	// as FOR ALL TABLES.
 	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
+	assert.Len(t, tables, 1)
+	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
+	assert.True(t, forAllTables)
+
+	// Syncing a FOR ALL TABLES publication to a table list must not try to
+	// drop the tables it lists, which PostgreSQL rejects.
+	require.NoError(t, CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"test_table"`}}))
+	_, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	assert.True(t, forAllTables)
+
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	require.NoError(t, err)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.False(t, forAllTables)
@@ -342,6 +356,59 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
 	assert.False(t, forAllTables)
+}
+
+func TestIntegrationValidatePublication(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	exec := func(sql string) {
+		t.Helper()
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+	exec("CREATE TABLE orders (id serial PRIMARY KEY);")
+	exec("CREATE TABLE users (id serial PRIMARY KEY);")
+	exec("CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
+	exec("CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
+
+	schema := `"public"`
+	orders := TableFQN{schema, `"orders"`}
+	users := TableFQN{schema, `"users"`}
+	events := TableFQN{schema, `"events"`}
+
+	err = ValidatePublication(ctx, conn, "pub_missing", []TableFQN{orders})
+	require.ErrorIs(t, err, errPublicationNotFound)
+
+	exec("CREATE PUBLICATION pub_some FOR TABLE orders, events;")
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_some", []TableFQN{orders}))
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_some", nil))
+	// Without publish_via_partition_root the publication lists the
+	// partition, not the partitioned table.
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_some", []TableFQN{events}))
+
+	err = ValidatePublication(ctx, conn, "pub_some", []TableFQN{orders, users, {schema, `"no_such_table"`}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"public"."users"`)
+	assert.Contains(t, err.Error(), `"public"."no_such_table"`)
+	assert.NotContains(t, err.Error(), `"public"."orders"`)
+
+	// Validation must never alter the publication.
+	tables, _, err := GetPublicationTables(ctx, conn, "pub_some")
+	require.NoError(t, err)
+	assert.NotContains(t, tables, users)
+
+	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
+	require.NoError(t, ValidatePublication(ctx, conn, "pub_all", []TableFQN{orders, users, events}))
 }
 
 func TestIntegrationStartReplication(t *testing.T) {

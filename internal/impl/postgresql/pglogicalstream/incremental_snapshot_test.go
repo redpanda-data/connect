@@ -519,6 +519,9 @@ type fakeQueryDriver struct {
 	// describe an ordinary table, which is what most tests want.
 	partitioned bool
 	pubViaRoot  bool
+	// notInPublication answers the publication membership query. The zero
+	// value reports the table as covered.
+	notInPublication bool
 }
 
 func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
@@ -553,6 +556,14 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	}
 	if err := s.conn.driver.queryErr; err != nil {
 		return nil, err
+	}
+	// The publication membership query also names pg_publication, so it is
+	// matched first.
+	if strings.Contains(s.query, "pg_partition_tree") {
+		return &fakeQueryRows{
+			columns: []string{"exists"},
+			rows:    [][]driver.Value{{!s.conn.driver.notInPublication}},
+		}, nil
 	}
 	// The partition query has its own shape, so it needs its own result.
 	if strings.Contains(s.query, "pg_publication") {

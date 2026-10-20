@@ -275,23 +275,63 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
-	// Check if publication exists
+// publicationInfo describes an existing publication.
+type publicationInfo struct {
+	exists bool
+	// allTables is pg_publication.puballtables. It must be read from there:
+	// pg_publication_tables lists every table for a FOR ALL TABLES
+	// publication, and nothing for a FOR TABLE publication that has had all of
+	// its tables dropped, so the table list alone cannot tell them apart.
+	allTables bool
+}
+
+func getPublication(ctx context.Context, conn *pgconn.PgConn, publicationName string) (publicationInfo, error) {
 	pubQuery, err := sanitize.SQLQuery(`
-			SELECT pubname, puballtables
+			SELECT puballtables
 			FROM pg_publication
 			WHERE pubname = $1;
 		`, publicationName)
 	if err != nil {
-		return fmt.Errorf("sanitizing publication query: %w", err)
+		return publicationInfo{}, fmt.Errorf("sanitizing publication query: %w", err)
 	}
 
-	result := conn.Exec(ctx, pubQuery)
-
-	rows, err := result.ReadAll()
+	rows, err := conn.Exec(ctx, pubQuery).ReadAll()
 	if err != nil {
-		return fmt.Errorf("checking publication existence: %w", err)
+		return publicationInfo{}, fmt.Errorf("checking publication existence: %w", err)
+	}
+	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+		return publicationInfo{}, nil
+	}
+	return publicationInfo{exists: true, allTables: string(rows[0].Rows[0][0]) == "t"}, nil
+}
+
+// publicationSyncPlan returns the tables to add to and drop from an existing
+// publication so that it lists exactly tables. A FOR ALL TABLES publication
+// already covers every table and rejects ADD TABLE and DROP TABLE, so it is
+// left alone.
+func publicationSyncPlan(pub publicationInfo, pubTables, tables []TableFQN) (add, drop []TableFQN) {
+	if pub.allTables {
+		return nil, nil
+	}
+	for _, table := range tables {
+		if !slices.Contains(pubTables, table) {
+			add = append(add, table)
+		}
+	}
+	for _, table := range pubTables {
+		if !slices.Contains(tables, table) {
+			drop = append(drop, table)
+		}
+	}
+	return add, drop
+}
+
+// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
+// existing one so that it lists exactly those tables. An empty list creates a FOR ALL TABLES publication.
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
+	pub, err := getPublication(ctx, conn, publicationName)
+	if err != nil {
+		return err
 	}
 
 	tablesClause := "FOR ALL TABLES"
@@ -307,47 +347,30 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		tablesClause = sb.String()
 	}
 
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+	if !pub.exists {
 		// tablesClause is sanitized, so we can safely interpolate it into the query
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
 		if err != nil {
 			return fmt.Errorf("sanitizing publication creation query: %w", err)
 		}
 		// Publication doesn't exist, create new one
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
 			return fmt.Errorf("creating publication: %w", err)
 		}
 
 		return nil
 	}
 
-	// assuming publication already exists
-	// get a list of tables in the publication
-	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
+	if pub.allTables {
+		return nil
+	}
+
+	pubTables, _, err := GetPublicationTables(ctx, conn, publicationName)
 	if err != nil {
 		return fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
-		return nil
-	}
-
-	tablesToRemoveFromPublication := []TableFQN{}
-	tablesToAddToPublication := []TableFQN{}
-	for _, table := range tables {
-		if !slices.Contains(pubTables, table) {
-			tablesToAddToPublication = append(tablesToAddToPublication, table)
-		}
-	}
-
-	for _, table := range pubTables {
-		if !slices.Contains(tables, table) {
-			tablesToRemoveFromPublication = append(tablesToRemoveFromPublication, table)
-		}
-	}
+	tablesToAddToPublication, tablesToRemoveFromPublication := publicationSyncPlan(pub, pubTables, tables)
 
 	// remove tables from publication
 	for _, dropTable := range tablesToRemoveFromPublication {
@@ -355,8 +378,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		if err != nil {
 			return fmt.Errorf("sanitizing drop table query: %w", err)
 		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
 			return fmt.Errorf("removing table from publication: %w", err)
 		}
 	}
@@ -367,8 +389,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		if err != nil {
 			return fmt.Errorf("sanitizing add table query: %w", err)
 		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
 			return fmt.Errorf("adding table to publication: %w", err)
 		}
 	}
@@ -376,9 +397,93 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	return nil
 }
 
-// GetPublicationTables returns a list of tables currently in the publication
+// errPublicationNotFound is returned by ValidatePublication when the
+// publication does not exist.
+var errPublicationNotFound = errors.New("publication does not exist")
+
+// ValidatePublication checks, without altering anything, that an externally
+// managed publication exists and covers every table in tables. A FOR ALL
+// TABLES publication covers every table. A partitioned table counts as
+// covered when the publication lists it, one of its partitions, or one of its
+// ancestors.
+func ValidatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
+	pub, err := getPublication(ctx, conn, publicationName)
+	if err != nil {
+		return err
+	}
+	if !pub.exists {
+		return fmt.Errorf("%w: %s must be created before this input starts, since it is configured not to manage the publication", errPublicationNotFound, publicationName)
+	}
+	if pub.allTables {
+		return nil
+	}
+
+	var missing []TableFQN
+	for _, table := range tables {
+		q, err := publicationCoversTableQuery(publicationName, table.String())
+		if err != nil {
+			return fmt.Errorf("sanitizing publication membership query: %w", err)
+		}
+		rows, err := conn.Exec(ctx, q).ReadAll()
+		if err != nil {
+			return fmt.Errorf("checking whether publication %s includes table %s: %w", publicationName, table, err)
+		}
+		if !queryReturnedTrue(rows) {
+			missing = append(missing, table)
+		}
+	}
+	return missingFromPublicationError(publicationName, missing)
+}
+
+func queryReturnedTrue(rows []*pgconn.Result) bool {
+	return len(rows) > 0 && len(rows[0].Rows) > 0 && len(rows[0].Rows[0]) > 0 && string(rows[0].Rows[0][0]) == "t"
+}
+
+// missingFromPublicationError reports the tables a publication does not
+// cover, or nil when there are none.
+func missingFromPublicationError(publicationName string, missing []TableFQN) error {
+	if len(missing) == 0 {
+		return nil
+	}
+	names := make([]string, len(missing))
+	for i, table := range missing {
+		names[i] = table.String()
+	}
+	return fmt.Errorf("publication %s does not include table(s) %s: add them with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
+}
+
+// publicationCoversTableQuery reports whether a publication replicates a
+// table. pg_publication_tables lists a partitioned table's partitions rather
+// than the table itself unless the publication sets publish_via_partition_root,
+// so the table matches when the publication lists it, a partition of it, or
+// a table it is a partition of. A table that does not exist is not covered.
+func publicationCoversTableQuery(publication, table string) (string, error) {
+	return sanitize.SQLQuery(`
+        SELECT EXISTS (
+            SELECT 1
+            FROM   pg_publication_tables pt
+            JOIN   pg_namespace n ON n.nspname = pt.schemaname
+            JOIN   pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
+            WHERE  pt.pubname = $1
+            AND    c.oid IN (
+                       SELECT relid FROM pg_partition_tree(to_regclass($2))
+                       UNION
+                       SELECT relid FROM pg_partition_ancestors(to_regclass($2))
+                   )
+        );
+    `, publication, table)
+}
+
+// GetPublicationTables returns the tables a publication replicates, and
+// whether it is FOR ALL TABLES. For a FOR ALL TABLES publication the list is
+// every table in the database.
 // Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+	pub, err := getPublication(ctx, conn, publicationName)
+	if err != nil {
+		return nil, false, err
+	}
+
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		tablename as table_name,
@@ -392,27 +497,24 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 	}
 
 	// Get specific tables in the publication
-	result := conn.Exec(ctx, query)
-
-	rows, err := result.ReadAll()
+	rows, err := conn.Exec(ctx, query).ReadAll()
 	if err != nil {
 		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
+	var tables []TableFQN
+	if len(rows) > 0 {
+		tables = make([]TableFQN, 0, len(rows[0].Rows))
+		for _, row := range rows[0].Rows {
+			// These come from postgres so they are valid, but we have to quote them
+			// to prevent normalization
+			table := sanitize.QuotePostgresIdentifier(string(row[0]))
+			schema := sanitize.QuotePostgresIdentifier(string(row[1]))
+			tables = append(tables, TableFQN{Table: table, Schema: schema})
+		}
 	}
 
-	tables := make([]TableFQN, 0, len(rows))
-	for _, row := range rows[0].Rows {
-		// These come from postgres so they are valid, but we have to quote them
-		// to prevent normalization
-		table := sanitize.QuotePostgresIdentifier(string(row[0]))
-		schema := sanitize.QuotePostgresIdentifier(string(row[1]))
-		tables = append(tables, TableFQN{Table: table, Schema: schema})
-	}
-
-	return tables, false, nil
+	return tables, pub.allTables, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.

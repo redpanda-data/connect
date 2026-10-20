@@ -63,6 +63,12 @@ type Stream struct {
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
+
+	// externallyManagedPublication means the publication is owned outside
+	// the connector: it is validated rather than created or altered, and may
+	// change while the stream runs.
+	externallyManagedPublication bool
+
 	// streamMaxRows caps the rows the streaming reader accumulates before
 	// handing a batch to the consumer. Defaults to streamBatchMaxRows; named
 	// to avoid clashing with that constant.
@@ -145,6 +151,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		unchangedToastValue:   config.UnchangedToastValue,
 		streamMaxRows:         streamMaxRows,
 	}
+	stream.externallyManagedPublication = config.ExternallyManagedPublication
 
 	monitor, err := NewMonitor(ctx, config, stream.logger, tables, stream.slotName)
 	if err != nil {
@@ -195,11 +202,16 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.decodingPluginArguments = pluginArguments
 
 	tablesForPublication := tables
+	// The tables an externally managed publication must already cover. Unlike
+	// tablesForPublication this includes the signal table even when tables is
+	// empty, since a FOR TABLE publication would not stream its rows.
+	tablesRequiredInPublication := tables
 	if config.SignalTableName != "" {
 		signalTable, err := validateSignalTable(ctx, stream, schema, config)
 		if err != nil {
 			return nil, fmt.Errorf("validating signal table: %w", err)
 		}
+		tablesRequiredInPublication = append(slices.Clone(tables), signalTable)
 
 		// An empty tables list means the publication covers FOR ALL TABLES, already including the signal table.
 		// Appending it here would collapse that into a single-table publication and silently stop replicating everything else.
@@ -217,9 +229,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.snapshotSchema = config.DBSchema
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
-		return nil, err
+	if config.ExternallyManagedPublication {
+		// Checked on every connect, so a table dropped from the publication
+		// since the last one fails here rather than going silently missing.
+		stream.logger.Infof("Validating externally managed publication %s for tables: %s", pubName, tablesRequiredInPublication)
+		if err = ValidatePublication(ctx, stream.pgConn, pubName, tablesRequiredInPublication); err != nil {
+			return nil, fmt.Errorf("validating publication: %w", err)
+		}
+	} else {
+		stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+		if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
+			return nil, err
+		}
 	}
 	cleanups = append(cleanups, func() {
 		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).

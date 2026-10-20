@@ -57,8 +57,8 @@ type incrementalSnapshot struct {
 	pkCache map[string][]string
 	// lastTable is only used to log a transition between tables.
 	lastTable *incrementalsnapshot.TableID
-	// replicated is the set a signal may ask for, nil when the publication
-	// is FOR ALL TABLES and so accepts any.
+	// replicated is the set a signal may ask for, nil when the input's
+	// tables is empty and so accepts any the publication replicates.
 	replicated map[incrementalsnapshot.TableID]struct{}
 	// backfilling tells the heartbeat whether it still owes transaction ids.
 	backfilling atomic.Bool
@@ -96,7 +96,9 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	}
 
 	// A signal may only ask for a replicated table. An empty DBTables means
-	// the publication is FOR ALL TABLES, so leave the set nil to accept any.
+	// the publication decides, so leave the set nil to accept any:
+	// checkInPublication covers an externally managed publication, and a
+	// connector-managed one is then FOR ALL TABLES.
 	if len(config.DBTables) > 0 {
 		s.incSnapshot.replicated = make(map[incrementalsnapshot.TableID]struct{}, len(config.DBTables))
 		for _, name := range config.DBTables {
@@ -888,6 +890,9 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 	if err := s.checkReplicated(table); err != nil {
 		return fmt.Errorf("%w: %w", errSignalRejected, err)
 	}
+	if err := s.checkInPublication(ctx, table); err != nil {
+		return err
+	}
 	// The backfill pages by key, so a table without one can never be read.
 	if _, err := s.incrementalPKColumns(ctx, table); err != nil {
 		if errors.Is(err, incrementalsnapshot.ErrTableUnusable) {
@@ -902,7 +907,7 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 
 func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 	if s.incSnapshot.replicated == nil {
-		return nil // FOR ALL TABLES
+		return nil // the publication decides
 	}
 	if _, replicated := s.incSnapshot.replicated[table]; replicated {
 		return nil
@@ -911,6 +916,34 @@ func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 		"table %s is not replicated, so a write during its backfill could not be deduplicated and would be lost: add it to the input's tables",
 		table,
 	)
+}
+
+// checkInPublication rejects a table an externally managed publication does
+// not replicate: its writes during the backfill would never stream, so they
+// could not be deduplicated and would be lost. A connector-managed
+// publication lists exactly the input's tables, which checkReplicated already
+// covers. An externally managed one can change while the stream runs, so it
+// is read on every signal rather than once at startup.
+func (s *Stream) checkInPublication(ctx context.Context, table incrementalsnapshot.TableID) error {
+	if !s.externallyManagedPublication {
+		return nil
+	}
+	publication := "pglog_stream_" + s.slotName
+	q, err := publicationCoversTableQuery(publication, tableFQN(table).String())
+	if err != nil {
+		return fmt.Errorf("sanitizing publication membership query: %w", err)
+	}
+	var covered bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&covered); err != nil {
+		// Whether the table is replicated is still unknown. Propagate, and
+		// the redelivered row asks again.
+		return fmt.Errorf("checking whether publication %s includes table %s: %w", publication, table, err)
+	}
+	if !covered {
+		return fmt.Errorf("%w: table %s is not in publication %s, so a write during its backfill could not be deduplicated and would be lost: add it with ALTER PUBLICATION %s ADD TABLE",
+			errSignalRejected, table, publication, publication)
+	}
+	return nil
 }
 
 // snapshotSignalTables reads a snapshot signal's table list, or nil when the
