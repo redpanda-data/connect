@@ -1,6 +1,6 @@
 module github.com/redpanda-data/connect/v4
 
-go 1.26.6
+go 1.26.9
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
@@ -38,6 +38,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.1
 	github.com/Azure/go-amqp v1.5.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.43.0
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.31.0
 	github.com/IBM/sarama v1.47.0
 	github.com/Jeffail/checkpoint v1.1.0
@@ -47,6 +48,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/SAP/go-hdb v1.16.8
 	github.com/a2aproject/a2a-go v0.3.12
 	github.com/apache/arrow-go/v18 v18.7.0
 	github.com/apache/iceberg-go v0.6.1-0.20260817231015-4390d2af2bb0
@@ -143,7 +145,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.14.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/redpanda-data/benthos/v4 v4.80.0
+	github.com/redpanda-data/benthos/v4 v4.83.0
 	github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
@@ -201,10 +203,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.starlark.net v0.0.0-20260210143700-b62fd896b91b
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.56.0
-	golang.org/x/net v0.58.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/text v0.41.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/net v0.60.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/text v0.42.0
 	google.golang.org/api v0.292.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	modernc.org/sqlite v1.53.0
@@ -377,7 +379,7 @@ require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
-	github.com/apache/thrift v0.24.0 // indirect
+	github.com/apache/thrift v0.25.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/armon/go-metrics v0.3.10 // indirect
@@ -544,10 +546,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
-	golang.org/x/mod v0.40.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/term v0.45.0 // indirect
+	golang.org/x/sys v0.48.0
+	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

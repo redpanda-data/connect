@@ -34,6 +34,7 @@ import (
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Run("With Default SQL Server Cache", func(t *testing.T) {
 		t.Parallel()
@@ -357,6 +358,7 @@ file:
 
 func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -372,8 +374,7 @@ func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 		db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 	}
 
-	// wait for changes to propagate to change tables
-	time.Sleep(5 * time.Second)
+	db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 	var (
 		outBatches   []string
@@ -438,6 +439,7 @@ microsoft_sql_server_cdc:
 // snapshot must re-run on restart. See CON-504.
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAckBarrier(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.barrier", "CREATE TABLE dbo.barrier (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -557,6 +559,7 @@ microsoft_sql_server_cdc:
 // fully-published transaction boundary. See CON-504.
 func TestIntegration_MicrosoftSQLServerCDC_TransactionSplitAcrossBatches(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.splittx", "CREATE TABLE dbo.splittx (id INT IDENTITY(1,1) PRIMARY KEY, val INT NOT NULL);"))
@@ -668,6 +671,7 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create table
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -755,6 +759,7 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create table
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -828,6 +833,7 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	q := `
@@ -1076,8 +1082,13 @@ microsoft_sql_server_cdc:
 	}
 }
 
-func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
+// TestIntegration_MicrosoftSQLServerCDC_MessageMetadata checks the `schema` metadata on
+// every message, and the `lsn`, `seqval` and `command_id` metadata on change messages
+// and their absence on snapshot messages. One transaction updates two rows, so four
+// change rows share one commit LSN.
+func TestIntegration_MicrosoftSQLServerCDC_MessageMetadata(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.schema_meta_test", `
@@ -1089,14 +1100,22 @@ func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 			created DATETIME2    NOT NULL
 		);`))
 
-	// Disable CDC so the first row becomes a snapshot row, then re-enable CDC.
+	// Disable CDC so the seed rows become snapshot rows, then re-enable CDC.
 	db.MustDisableCDC(t.Context(), "dbo.schema_meta_test")
-	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (1, N'snapshot', 1, 3.14, SYSDATETIME())`)
+	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES
+		(1, N'snapshot', 1, 3.14, SYSDATETIME()),
+		(2, N'snapshot', 0, 2.71, SYSDATETIME())`)
 	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test")
 
 	type msgMeta struct {
-		schema any
-		op     string
+		schema    any
+		op        string
+		lsn       string
+		seqval    string
+		commandID string
+		hasLSN    bool
+		hasSeqval bool
+		hasCmdID  bool
 	}
 	var received []msgMeta
 	var receivedMu sync.Mutex
@@ -1111,10 +1130,14 @@ microsoft_sql_server_cdc:
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
 	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
-			s, _ := msg.MetaGetMut("schema")
-			op, _ := msg.MetaGet("operation")
+			var m msgMeta
+			m.schema, _ = msg.MetaGetMut("schema")
+			m.op, _ = msg.MetaGet("operation")
+			m.lsn, m.hasLSN = msg.MetaGet("lsn")
+			m.seqval, m.hasSeqval = msg.MetaGet("seqval")
+			m.commandID, m.hasCmdID = msg.MetaGet("command_id")
 			receivedMu.Lock()
-			received = append(received, msgMeta{schema: s, op: op})
+			received = append(received, m)
 			receivedMu.Unlock()
 		}
 		return nil
@@ -1130,37 +1153,35 @@ microsoft_sql_server_cdc:
 		}
 	}()
 
-	// Wait for the snapshot row to arrive.
-	assert.Eventually(t, func() bool {
+	countOp := func(op string) int {
 		receivedMu.Lock()
 		defer receivedMu.Unlock()
+		n := 0
 		for _, m := range received {
-			if m.op == "read" {
-				return true
+			if m.op == op {
+				n++
 			}
 		}
-		return false
-	}, time.Second*30, time.Millisecond*100)
+		return n
+	}
 
-	// Insert a CDC row and wait for it to arrive.
-	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (2, N'cdc', 0, 2.71, SYSDATETIME())`)
-	assert.Eventually(t, func() bool {
-		receivedMu.Lock()
-		defer receivedMu.Unlock()
-		for _, m := range received {
-			if m.op == "insert" {
-				return true
-			}
-		}
-		return false
-	}, time.Second*30, time.Millisecond*100)
+	// Wait for both snapshot rows.
+	assert.Eventually(t, func() bool { return countOp("read") == 2 }, time.Second*30, time.Millisecond*100)
+
+	// One transaction, two updates: four change rows with one commit LSN.
+	db.MustExecContext(t.Context(), `
+		BEGIN TRANSACTION;
+		UPDATE dbo.schema_meta_test SET label = N'cdc' WHERE id = 1;
+		UPDATE dbo.schema_meta_test SET label = N'cdc' WHERE id = 2;
+		COMMIT TRANSACTION;`)
+	assert.Eventually(t, func() bool { return countOp("update_after") == 2 }, time.Second*30, time.Millisecond*100)
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 
 	receivedMu.Lock()
 	defer receivedMu.Unlock()
 
-	require.Len(t, received, 2, "expected 1 snapshot message and 1 CDC message")
+	require.Len(t, received, 6, "expected 2 snapshot messages and 4 change messages")
 
 	// Expected column name → benthos common type string for dbo.schema_meta_test.
 	expectedCols := map[string]string{
@@ -1198,6 +1219,32 @@ microsoft_sql_server_cdc:
 			assert.Truef(t, optional, "message %d column %q should be optional", i, name)
 		}
 	}
+
+	var changes []msgMeta
+	for _, m := range received {
+		if m.op == "read" {
+			assert.False(t, m.hasLSN, "snapshot message must not carry lsn")
+			assert.False(t, m.hasSeqval, "snapshot message must not carry seqval")
+			assert.False(t, m.hasCmdID, "snapshot message must not carry command_id")
+			continue
+		}
+		changes = append(changes, m)
+	}
+	require.Len(t, changes, 4)
+
+	for i, m := range changes {
+		require.True(t, m.hasLSN && m.hasSeqval && m.hasCmdID, "change %d is missing ordering metadata", i)
+		assert.Equal(t, changes[0].lsn, m.lsn, "all rows of one transaction share the commit lsn")
+	}
+	// Each UPDATE is one command that produces an update_before and an update_after row.
+	// Both rows share (__$start_lsn, __$seqval, __$command_id).
+	for i := 0; i < 4; i += 2 {
+		assert.Equal(t, "update_before", changes[i].op)
+		assert.Equal(t, "update_after", changes[i+1].op)
+		assert.Equal(t, changes[i].commandID, changes[i+1].commandID, "both rows of one update share a command_id")
+		assert.Equal(t, changes[i].seqval, changes[i+1].seqval, "both rows of one update share a seqval")
+	}
+	assert.NotEqual(t, changes[0].commandID, changes[2].commandID, "two statements give two distinct command_id values")
 }
 
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN

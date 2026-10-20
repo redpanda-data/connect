@@ -91,7 +91,7 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 `+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(bsoFieldContainer).
-				Description("The container for uploading the messages to.").
+				Description(`The container for uploading the messages to.`).
 				Example(`messages-${!timestamp("2006")}`),
 			service.NewInterpolatedStringField(bsoFieldPath).
 				Description("The path of each message to upload.").
@@ -100,12 +100,12 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
-				Description("Block and Append blobs are comprized of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").
+				Description("Block and Append blobs are made up of blocks, and each blob can support up to 50,000 blocks. The default value is `BLOCK`.").
 				ShortDescription("Block and Append blobs are made up of blocks, and each blob supports up to 50,000 blocks.").
 				Advanced().
 				Default("BLOCK"),
 			service.NewInterpolatedStringEnumField(bsoFieldPublicAccessLevel, "PRIVATE", "BLOB", "CONTAINER").
-				Description(`The container's public access level. The default value is `+"`PRIVATE`"+`.`).
+				Description(`The container's public access level. The default value is `+"`"+`PRIVATE`+"`"+`.`).
 				ShortDescription("The container's public access level.").
 				Advanced().
 				Default("PRIVATE"),

@@ -65,7 +65,7 @@ This input adds the following metadata fields to each message:
 == Authentication
 
 Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in Salesforce, enable OAuth settings and the Client Credentials Flow, then supply the Consumer Key as ` + "`client_id`" + ` and Consumer Secret as ` + "`client_secret`" + `.
-`)
+`).Version("4.90.3")
 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringField(sfiFieldObject).
@@ -88,7 +88,7 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 			Example("OwnerId IN (?, ?)").
 			Optional()).
 		Field(service.NewBloblangField(sfiFieldArgsMapping).
-			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an array of values matching the count of `?` placeholders in `where`. Values are SOQL-escaped: strings become quoted literals, timestamps become ISO-8601, booleans and numbers pass through. The mapping is evaluated once at startup with no message context; use `now()`, `env()`, or `cache()`.").
+			Description("Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an array of values matching the count of `?` placeholders in `where`. Values are SOQL-escaped: strings become quoted literals, timestamps become ISO-8601, booleans and numbers pass through. The mapping runs once at startup with no message context, so it can use literal values and functions that don't read a message, such as `now()`, but can't reference message content or metadata.").
 			ShortDescription("Optional Bloblang mapping returning an array of values matching the ? placeholders in where.").
 			Example(`root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ]`).
 			Example(`root = [ "Active", (now() - "24h").ts_format("2006-01-02T15:04:05Z") ]`).

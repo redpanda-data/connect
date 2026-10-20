@@ -43,25 +43,13 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 			Description("A list of columns to select.").
 			Example([]string{"*"}).
 			Example([]string{"foo", "bar", "baz"})).
-		Field(service.NewStringField("where").
-			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres or clickhouse drivers are used.").
-			ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
+		Field(selectWhereField().
 			Example("type = ? and created_at > ?").
-			Example("user_id = ?").
-			Optional()).
-		Field(service.NewBloblangField("args_mapping").
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
-			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
-			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
-			Optional()).
-		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the select query (before SELECT).").
-			Optional().
-			Advanced()).
-		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the select query.").
-			Optional().
-			Advanced()).
+			Example("user_id = ?")).
+		Field(selectArgsMappingField().
+			Example(`root = [ "article", now().ts_format("2006-01-02") ]`)).
+		Field(selectPrefixField()).
+		Field(selectSuffixField()).
 		Field(service.NewAutoRetryNacksToggleField())
 
 	for _, f := range connFields() {

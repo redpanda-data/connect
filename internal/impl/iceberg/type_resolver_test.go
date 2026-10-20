@@ -39,6 +39,8 @@ func TestParseIcebergTypeString(t *testing.T) {
 		{"time", "time", false},
 		{"timestamp", "timestamp", false},
 		{"timestamptz", "timestamptz", false},
+		{"timestamp_ns", "timestamp_ns", false},
+		{"timestamptz_ns", "timestamptz_ns", false},
 		{"uuid", "uuid", false},
 		// Case insensitivity
 		{"Boolean", "boolean", false},
@@ -127,6 +129,9 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 			Type:    schema.Timestamp,
 			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false}},
 		}, "timestamp", false},
+		// Nanos still map to the V3 types at this stage so that
+		// new_column_type_mapping can downcast them; the resolver entry
+		// points reject whatever survives (see TestTypeResolverRejectsNanosecondTimestamps).
 		{"Timestamp nanos UTC (V3)", schema.Common{
 			Type:    schema.Timestamp,
 			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: true}},
@@ -679,4 +684,113 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		}
 		assert.Len(t, allIDs, 6, "expected 2 top-level + 4 nested IDs")
 	})
+}
+
+// TestTypeResolverRejectsNanosecondTimestamps guards CON-521 at both resolver
+// entry points: a nanosecond timestamp that survives all three stages is
+// rejected with errNanosecondTimestamp and the column path, while a
+// new_column_type_mapping that downcasts it is honored.
+func TestTypeResolverRejectsNanosecondTimestamps(t *testing.T) {
+	nanos := func(name string) schema.Common {
+		return schema.Common{
+			Name:    name,
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: true}},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		field       schema.Common
+		mapping     string
+		wantType    string
+		wantPath    string
+		wantMapHint bool
+	}{
+		{
+			name:        "leaf rejected, suggests mapping",
+			field:       nanos("ts"),
+			wantPath:    "ts",
+			wantMapHint: true,
+		},
+		{
+			name:     "leaf downcast by new_column_type_mapping",
+			field:    nanos("ts"),
+			mapping:  `root = "timestamptz"`,
+			wantType: "timestamptz",
+		},
+		{
+			name:        "leaf passed through by new_column_type_mapping still rejected",
+			field:       nanos("ts"),
+			mapping:     `root = this.inferred_type`,
+			wantPath:    "ts",
+			wantMapHint: true,
+		},
+		{
+			name:     "nested in struct",
+			field:    schema.Common{Name: "ts", Type: schema.Object, Children: []schema.Common{nanos("inner")}},
+			wantPath: "ts/inner",
+		},
+		{
+			name:     "list element",
+			field:    schema.Common{Name: "ts", Type: schema.Array, Children: []schema.Common{nanos("")}},
+			wantPath: "ts/[*]",
+		},
+		{
+			name:     "map value",
+			field:    schema.Common{Name: "ts", Type: schema.Map, Children: []schema.Common{nanos("")}},
+			wantPath: "ts/{}",
+		},
+		{
+			name:     "nested is not rescued by a leaf mapping",
+			field:    schema.Common{Name: "ts", Type: schema.Array, Children: []schema.Common{nanos("")}},
+			mapping:  `root = "timestamptz"`,
+			wantPath: "ts/[*]",
+		},
+	}
+
+	check := func(t *testing.T, got iceberg.Type, err error, wantType, wantPath string, wantMapHint bool) {
+		t.Helper()
+		if wantType != "" {
+			require.NoError(t, err)
+			assert.Equal(t, wantType, got.Type())
+			return
+		}
+		require.ErrorIs(t, err, errNanosecondTimestamp)
+		assert.Contains(t, err.Error(), "column "+wantPath+" ")
+		assert.Contains(t, err.Error(), "upstream")
+		if wantMapHint {
+			assert.Contains(t, err.Error(), "new_column_type_mapping")
+		} else {
+			assert.NotContains(t, err.Error(), "new_column_type_mapping")
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var exec *bloblang.Executor
+			if tt.mapping != "" {
+				exec = mustParseBloblang(t, tt.mapping)
+			}
+			r := newTypeResolver("test_schema", exec, true, nil)
+
+			commonSchema := schema.Common{Type: schema.Object, Children: []schema.Common{tt.field}}
+			msg := service.NewMessage(nil)
+			msg.SetStructuredMut(map[string]any{"ts": "2026-09-24T12:00:00.123456789Z"})
+			msg.MetaSetMut("test_schema", commonSchema.ToAny())
+
+			t.Run("create table", func(t *testing.T) {
+				common, err := r.parseSchemaMetadata(msg)
+				require.NoError(t, err)
+				got, err := r.resolveTypeForCreateTable("ts", "2026-09-24T12:00:00.123456789Z", msg, common, "ns", "tbl", newTypeInferrer(true))
+				check(t, got, err, tt.wantType, tt.wantPath, tt.wantMapHint)
+			})
+
+			t.Run("add column", func(t *testing.T) {
+				field := NewUnknownFieldError(nil, "ts", "2026-09-24T12:00:00.123456789Z")
+				got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
+				check(t, got, err, tt.wantType, tt.wantPath, tt.wantMapHint)
+			})
+		})
+	}
 }

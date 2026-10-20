@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -254,4 +255,65 @@ max_in_flight_requests: 5
 			}
 		})
 	}
+}
+
+func TestFranzProducerOptsCompression(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzProducerFields()...)
+
+	clientCompression := func(t *testing.T, opts ...kgo.Opt) any {
+		t.Helper()
+		cl, err := kgo.NewClient(append([]kgo.Opt{kgo.SeedBrokers("localhost:9092")}, opts...)...)
+		require.NoError(t, err)
+		defer cl.Close()
+		return cl.OptValue(kgo.ProducerBatchCompression)
+	}
+	franzDefault := clientCompression(t)
+
+	testCases := []struct {
+		name string
+		conf string
+		want any
+	}{
+		{
+			name: "unset matches the franz-go default",
+			conf: `{}`,
+			want: franzDefault,
+		},
+		{
+			name: "explicit snappy matches the franz-go default",
+			conf: `compression: snappy`,
+			want: franzDefault,
+		},
+		{
+			name: "explicit gzip",
+			conf: `compression: gzip`,
+			want: []kgo.CompressionCodec{kgo.GzipCompression()},
+		},
+		{
+			name: "explicit none",
+			conf: `compression: none`,
+			want: []kgo.CompressionCodec{kgo.NoCompression()},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(test.conf, nil)
+			require.NoError(t, err)
+
+			opts, err := FranzProducerOptsFromConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, test.want, clientCompression(t, opts...))
+		})
+	}
+}
+
+func TestFranzProducerFieldsCompressionDefault(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzProducerFields()...)
+	conf, err := spec.ParseYAML(`{}`, nil)
+	require.NoError(t, err)
+
+	v, err := conf.FieldString("compression")
+	require.NoError(t, err)
+	assert.Equal(t, "snappy", v)
 }

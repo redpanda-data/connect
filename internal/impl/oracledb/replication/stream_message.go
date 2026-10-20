@@ -135,4 +135,14 @@ type MessageEvent struct {
 	ColumnMeta      []ColumnMeta
 	TransactionID   string
 	Username        string
+	// RSID comes from V$LOGMNR_CONTENTS.RS_ID. Empty RSID means not
+	// available (snapshot rows, synthetic LOB-only updates).
+	RSID string
+	// SSN comes from V$LOGMNR_CONTENTS.SSN.
+	SSN int64
+	// RowSeq numbers consecutive row changes that report the same (RSID, SSN),
+	// from 0 in redo order. Oracle reports the same pair for every row of an
+	// array DML redo record, so only (RSID, SSN, RowSeq) identifies one row
+	// change.
+	RowSeq int
 }

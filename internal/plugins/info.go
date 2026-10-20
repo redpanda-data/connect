@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -220,6 +220,40 @@ func PluginNamesForCloud(typeStr TypeName) []string {
 		}
 	}
 	return names
+}
+
+// Unregistered returns the keys of core plugins within the collection that
+// match the filter but are not registered within the provided environment, in
+// sorted order. Plugins are matched by both name and type, so an input does not
+// mask a missing output of the same name.
+func (i InfoCollection) Unregistered(env *service.Environment, filter func(PluginInfo) bool) []string {
+	registered := map[string]struct{}{}
+	add := func(typeStr TypeName) func(string, *service.ConfigView) {
+		return func(name string, _ *service.ConfigView) {
+			registered[PluginInfo{Name: name, Type: typeStr}.key()] = struct{}{}
+		}
+	}
+	env.WalkBuffers(add(TypeBuffer))
+	env.WalkCaches(add(TypeCache))
+	env.WalkInputs(add(TypeInput))
+	env.WalkMetrics(add(TypeMetric))
+	env.WalkOutputs(add(TypeOutput))
+	env.WalkProcessors(add(TypeProcessor))
+	env.WalkRateLimits(add(TypeRateLimit))
+	env.WalkScanners(add(TypeScanner))
+	env.WalkTracers(add(TypeTracer))
+
+	var missing []string
+	for k, info := range i {
+		if !info.Type.IsCore() || !filter(info) {
+			continue
+		}
+		if _, exists := registered[k]; !exists {
+			missing = append(missing, k)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 // Hydrate uses a reference environment in order to hydrate plugins that

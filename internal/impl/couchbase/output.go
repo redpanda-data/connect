@@ -33,15 +33,15 @@ func outputConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or delete data.").
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
-		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! json("id") }`)).
-		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
-		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Optional().Advanced()).
+		Field(service.NewInterpolatedStringField("id").Description(`The document ID to use.`).Example(`${! json("id") }`)).
+		Field(service.NewBloblangField("content").Description("The document content to update. When inserting, replacing, or upserting documents, you must set a `content` value.").Optional()).
+		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Version("4.73.0").Optional().Advanced()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
 			string(client.OperationInsert):  "insert a new document.",
 			string(client.OperationRemove):  "delete a document.",
 			string(client.OperationReplace): "replace the contents of a document.",
 			string(client.OperationUpsert):  "creates a new document if it does not exist, if it does exist then it updates it.",
-		}).Description("Couchbase operation to perform.").Default(string(client.OperationUpsert))).
+		}).Description("The Couchbase operation to perform.").Default(string(client.OperationUpsert))).
 		LintRule(`root = if ((this.operation == "insert" || this.operation == "replace" || this.operation == "upsert") && !this.exists("content")) { [ "content must be set for insert, replace and upsert operations." ] }`).
 		Field(service.NewOutputMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching"))
@@ -175,7 +175,28 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 		ops[index] = o.op(k, content, o.ttl)
 	}
 
-	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})
+	if err := o.client.collection.Do(ops, &gocb.BulkOpOptions{}); err != nil {
+		return err
+	}
+
+	// Do does not return the errors of single operations. Fail only the messages whose operation failed, so that
+	// the other messages are acked.
+	var batchErr *service.BatchError
+	for index, op := range ops {
+		err := opErr(op)
+		if err == nil {
+			continue
+		}
+		err = fmt.Errorf("couchbase operation failed: %w", err)
+		if batchErr == nil {
+			batchErr = service.NewBatchError(batch, err)
+		}
+		batchErr.Failed(index, err)
+	}
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
 }
 
 // Close closes the connection to the cluster if Connect was successful.

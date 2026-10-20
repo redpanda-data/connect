@@ -44,8 +44,8 @@ var sampleString = `{
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Summary(fmt.Sprintf("Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed^] and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
-		Description("This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Redpanda Connect keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation^].").
+		Summary("Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed^] and creates a message for each row received.").
+		Description(fmt.Sprintf("Each message is a JSON object like the following:\n\n```json\n%s\n```\n\n", sampleString)+"This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Redpanda Connect keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation^].").Version("4.25.0").
 		Fields(
 			service.NewStringField("dsn").
 				Description(`A Data Source Name to identify the target database.`).
@@ -55,7 +55,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
 			service.NewStringField("cursor_cache").
-				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
+				Description("A xref:components:caches/about.adoc[cache resource] to use for storing the latest cursor that has been successfully delivered. This allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				ShortDescription("Cache resource storing the last delivered cursor, so restarts resume instead of re-reading the table.").
 				Optional(),
 			service.NewStringListField("options").

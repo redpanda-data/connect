@@ -85,14 +85,14 @@ func groupsMigratorFields() []*service.ConfigField {
 		service.NewStringListField(cgFieldInclude).
 			Description("Regular expressions for consumer groups to include in offset migration. If empty, all groups are included (unless excluded).").
 			ShortDescription("Regular expressions for consumer groups to include in offset migration. All groups are included if empty.").
-			Example(`["prod-.*", "staging-.*"]`).
-			Example(`["app-.*", "service-.*"]`).
+			Example([]any{"prod-.*", "staging-.*"}).
+			Example([]any{"app-.*", "service-.*"}).
 			Optional(),
 		service.NewStringListField(cgFieldExclude).
 			Description("Regular expressions for consumer groups to exclude from offset migration. Takes precedence over include patterns. Useful for excluding system or temporary groups.").
 			ShortDescription("Regular expressions for consumer groups to exclude from offset migration. Takes precedence over include.").
-			Example(`[".*-test", ".*-temp", "connect-.*"]`).
-			Example(`["dev-.*", "local-.*"]`).
+			Example([]any{".*-test", ".*-temp", "connect-.*"}).
+			Example([]any{"dev-.*", "local-.*"}).
 			Optional(),
 		service.NewBoolField(cgFieldOnlyEmpty).
 			Description("Whether to only migrate Empty consumer groups. When false (default), all statuses except Dead are included; when true, only Empty groups are migrated.").

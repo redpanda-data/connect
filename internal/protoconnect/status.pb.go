@@ -85,7 +85,7 @@ func (StatusEvent_Type) EnumDescriptor() ([]byte, []int) {
 type ConnectionError struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`   // The error message.
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`         // The path of the connector in the config, following the spec outlined in https://docs.redpanda.com/redpanda-connect/configuration/field_paths/
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`         // The path of the connector in the config, following the spec outlined in https://docs.redpanda.com/connect/configuration/field_paths/
 	Label         *string                `protobuf:"bytes,3,opt,name=label,proto3,oneof" json:"label,omitempty"` // An optional label given to the connector.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

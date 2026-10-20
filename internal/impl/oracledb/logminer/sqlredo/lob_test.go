@@ -9,8 +9,11 @@
 package sqlredo
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +28,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 		pkValues          map[string]any
 		events            []*DMLEvent
 		expectedDataPerEv []map[string]any
+		expectedMerged    bool
 	}{
 		{
 			name:   "nil pkValues merges into all inserts for schema.table",
@@ -39,6 +43,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 				{"ID": "1", "RESUME": "hello"},
 				{"ID": "2", "RESUME": "hello"},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "pkValues matches first row only first insert updated",
@@ -53,6 +58,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 				{"ID": "1", "RESUME": "row1 content"},
 				{"ID": "2", "RESUME": nil},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "pkValues matches second row only second insert updated",
@@ -67,6 +73,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 				{"ID": "1", "RESUME": nil},
 				{"ID": "2", "RESUME": "row2 content"},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "empty byte slice is EMPTY_CLOB placeholder and is skipped",
@@ -79,6 +86,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			expectedDataPerEv: []map[string]any{
 				{"ID": "1", "RESUME": "assembled data"},
 			},
+			expectedMerged: true,
 		},
 		{
 			name:   "different schema is not modified",
@@ -91,6 +99,7 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			expectedDataPerEv: []map[string]any{
 				{"ID": "1", "RESUME": nil},
 			},
+			expectedMerged: false,
 		},
 		{
 			name:   "different table is not modified",
@@ -103,12 +112,27 @@ func TestMergeInlineLOBValues(t *testing.T) {
 			expectedDataPerEv: []map[string]any{
 				{"ID": "1", "RESUME": nil},
 			},
+			expectedMerged: false,
+		},
+		{
+			name:   "pkValues with no matching INSERT reports unmerged",
+			schema: "HR", table: "EMPLOYEES",
+			lobData:  map[string]any{"RESUME": "orphaned content"},
+			pkValues: map[string]any{"ID": "999"},
+			events: []*DMLEvent{
+				{Schema: "HR", Table: "EMPLOYEES", Operation: OpInsert, Data: map[string]any{"ID": "1", "RESUME": nil}},
+			},
+			expectedDataPerEv: []map[string]any{
+				{"ID": "1", "RESUME": nil},
+			},
+			expectedMerged: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			MergeInlineLOBValues(tt.lobData, tt.schema, tt.table, tt.pkValues, tt.events, nil)
+			merged := MergeInlineLOBValues(tt.lobData, tt.schema, tt.table, tt.pkValues, tt.events, nil)
+			assert.Equal(t, tt.expectedMerged, merged)
 			for i, ev := range tt.events {
 				assert.Equal(t, tt.expectedDataPerEv[i], ev.Data, "event[%d]", i)
 			}
@@ -211,4 +235,87 @@ func TestMergeLOBsEmptyPKSingleCandidate(t *testing.T) {
 	unmerged := MergeLOBsIntoDMLEvents(state, events, nil)
 	assert.Empty(t, unmerged)
 	assert.Equal(t, "hello", events[0].Data["DOC"])
+}
+
+func TestValuesEqualMatchesSprintf(t *testing.T) {
+	ts := time.Date(2024, 1, 2, 3, 4, 5, 6, time.UTC)
+	values := []any{
+		"5", "", "a",
+		int64(5), int64(-1), int64(0),
+		json.Number("5"), json.Number("5.0"),
+		[]byte{},
+		[]byte("a"), []byte(nil),
+		nil,
+		ts, ts.Add(time.Nanosecond), ts.In(time.FixedZone("X", 3600)),
+		time.Now(), time.Now(),
+		1.5,
+	}
+	for _, a := range values {
+		for _, b := range values {
+			want := fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+			assert.Equal(t, want, valuesEqual(a, b), "valuesEqual(%#v, %#v)", a, b)
+		}
+	}
+}
+
+func FuzzValuesEqualMatchesSprintf(f *testing.F) {
+	f.Add("5", "5", int64(5), int64(5), int64(0))
+	f.Add("a", "b", int64(-1), int64(1), int64(1))
+	f.Fuzz(func(t *testing.T, s1, s2 string, i1, i2, nanos int64) {
+		t1 := time.Unix(0, i1).UTC()
+		t2 := time.Unix(0, i1+nanos).UTC()
+		values := []any{
+			s1, s2, i1, i2,
+			json.Number(s1), json.Number(s2),
+			[]byte(s1), []byte(s2),
+			t1, t2, t1.In(time.FixedZone("X", int(nanos%86400))),
+		}
+		for _, a := range values {
+			for _, b := range values {
+				want := fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+				if got := valuesEqual(a, b); got != want {
+					t.Fatalf("valuesEqual(%#v, %#v) = %v, want %v", a, b, got, want)
+				}
+			}
+		}
+	})
+}
+
+// pkMatchesSprintf is the previous pkMatches, kept as a benchmark reference.
+func pkMatchesSprintf(data, pkValues map[string]any) bool {
+	if len(pkValues) == 0 {
+		return false
+	}
+	for k, pkVal := range pkValues {
+		dataVal, ok := data[k]
+		if !ok {
+			return false
+		}
+		if fmt.Sprintf("%v", dataVal) != fmt.Sprintf("%v", pkVal) {
+			return false
+		}
+	}
+	return true
+}
+
+func BenchmarkPKMatches(b *testing.B) {
+	ts := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	pk := map[string]any{
+		"A": "abc", "B": int64(42), "C": ts, "D": ts.Add(time.Second), "E": json.Number("12.5"),
+	}
+	data := map[string]any{
+		"A": "abc", "B": int64(42), "C": ts, "D": ts.Add(2 * time.Second), "E": json.Number("12.5"),
+	}
+	b.Run("new", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			pkMatches(data, pk)
+		}
+	})
+	b.Run("sprintf", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			pkMatchesSprintf(data, pk)
+		}
+	})
 }

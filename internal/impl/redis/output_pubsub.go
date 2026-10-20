@@ -39,7 +39,7 @@ This output will interpolate functions within the channel field, you can find a 
 		Fields(clientFields()...).
 		Fields(
 			service.NewInterpolatedStringField(psoFieldChannel).
-				Description("The channel to publish messages to."),
+				Description(`The channel to publish messages to.`),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(psoFieldBatching),
 		)

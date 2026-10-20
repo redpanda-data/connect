@@ -253,6 +253,59 @@ use_histogram_timing: true
 	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.4e-08")
 }
 
+// In histogram mode timings are recorded in seconds, so a `_ns`-suffixed metric
+// is renamed to `_seconds` to reflect the unit. This also ensures the histogram
+// variant uses a distinct series name from the summary variant emitted by nodes
+// with use_histogram_timing disabled, avoiding remote-write metric-kind
+// conflicts in a mixed fleet. See INC-1095.
+func TestPrometheusHistogramTimingSecondsSuffix(t *testing.T) {
+	tests := []struct {
+		name        string
+		conf        string
+		wantType    string
+		wantSum     string
+		wantMissing string
+	}{
+		{
+			name:        "histogram with suffix rewrite renames _ns to _seconds",
+			conf:        "use_histogram_timing: true\nhistogram_timing_seconds_suffix: true\n",
+			wantType:    "\n# TYPE processor_latency_seconds histogram",
+			wantSum:     "\nprocessor_latency_seconds_sum 2",
+			wantMissing: "processor_latency_ns",
+		},
+		{
+			// The default keeps existing histogram series names so upgrades
+			// don't silently break dashboards and alerts.
+			name:        "histogram without suffix rewrite keeps _ns",
+			conf:        "use_histogram_timing: true\n",
+			wantType:    "\n# TYPE processor_latency_ns histogram",
+			wantSum:     "\nprocessor_latency_ns_sum 2",
+			wantMissing: "processor_latency_seconds",
+		},
+		{
+			name:        "summary ignores suffix rewrite",
+			conf:        "histogram_timing_seconds_suffix: true\n",
+			wantType:    "\n# TYPE processor_latency_ns summary",
+			wantSum:     "\nprocessor_latency_ns_sum 2e+09",
+			wantMissing: "processor_latency_seconds",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := promFromYAML(t, "%s", tt.conf)
+
+			tmr := nm.NewTimerCtor("processor_latency_ns")()
+			tmr.Timing(2_000_000_000) // 2s expressed in nanoseconds
+
+			body := getPage(t, nm.HandlerFunc())
+
+			assert.Contains(t, body, tt.wantType)
+			assert.Contains(t, body, tt.wantSum)
+			assert.NotContains(t, body, tt.wantMissing)
+		})
+	}
+}
+
 func TestPrometheusWithFileOutputPath(t *testing.T) {
 	fPath := t.TempDir() + "/benthos_metrics.prom"
 

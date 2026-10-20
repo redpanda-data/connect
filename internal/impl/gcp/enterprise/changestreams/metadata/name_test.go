@@ -54,8 +54,16 @@ func TestTableNamesFromExistingTable(t *testing.T) {
 	assert.NotContains(t, names1.WatermarkIndexName, "-")
 	assert.NotContains(t, names1.CreatedAtIndexName, "-")
 
+	// Repeated calls for the same database/table must produce identical
+	// index names -- this is what makes CREATE INDEX IF NOT EXISTS actually
+	// idempotent across connector restarts. See deterministicSuffix.
 	names2 := TableNamesFromExistingTable(databaseID, tableName)
 	assert.Equal(t, tableName, names2.TableName)
-	assert.NotEqual(t, names1.WatermarkIndexName, names2.WatermarkIndexName)
-	assert.NotEqual(t, names1.CreatedAtIndexName, names2.CreatedAtIndexName)
+	assert.Equal(t, names1.WatermarkIndexName, names2.WatermarkIndexName)
+	assert.Equal(t, names1.CreatedAtIndexName, names2.CreatedAtIndexName)
+
+	// A different table in the same database must not collide.
+	namesOtherTable := TableNamesFromExistingTable(databaseID, "othertable")
+	assert.NotEqual(t, names1.WatermarkIndexName, namesOtherTable.WatermarkIndexName)
+	assert.NotEqual(t, names1.CreatedAtIndexName, namesOtherTable.CreatedAtIndexName)
 }

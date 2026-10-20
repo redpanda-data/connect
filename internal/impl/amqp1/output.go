@@ -52,20 +52,8 @@ Message metadata is added to each AMQP message as string annotations. In order t
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.`).
 		Fields(
-			service.NewURLField(urlField).
-				Description("A URL to connect to.").
-				Example("amqp://localhost:5672/").
-				Example("amqps://guest:guest@localhost:5672/").
-				Deprecated().
-				Optional(),
-			service.NewURLListField(urlsField).
-				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
-				ShortDescription("URLs to connect to. The first to connect successfully is used until the connection closes.").
-				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
-				Optional().
-				Version("4.23.0"),
+			urlFieldSpec(),
+			urlsFieldSpec(),
 			service.NewStringField(targetAddrField).
 				Description("The target address to write to. When left empty, the output uses the Anonymous Terminus pattern where the destination is specified per-message using `message_properties_to`.").
 				ShortDescription("The target address to write to. Leave empty to specify the destination per message.").
@@ -77,26 +65,28 @@ This output benefits from sending multiple messages in flight in parallel for im
 			service.NewOutputMaxInFlightField(),
 			service.NewTLSToggledField(tlsField),
 			service.NewBloblangField(appPropsMapField).
-				Description("An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").
+				Description("An optional Bloblang mapping that can be defined in order to set the `application-properties` on output messages.").Version("4.11.0").
 				ShortDescription("An optional Bloblang mapping setting application-properties on output messages.").
 				Optional().
 				Advanced(),
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
-				Description("Specify criteria for which metadata values are attached to messages as headers."),
+				Description("Specify which message metadata keys are added to each AMQP 1.0 message as message annotations."),
 			service.NewStringEnumField(contentTypeField,
 				string(amqpContentTypeOpaqueBinary), string(amqpContentTypeString)).
-				Description("Specify the message body content type. The option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.").
+				Description(`The content type of the message body.
+
+Set this field value to `+"`"+`string`+"`"+` to transfer each message as an AMQP string. Consider using the `+"`"+`string`+"`"+` option if you want to write UTF-8 string messages, such as JSON messages, to your data destination.`).Version("4.45.0").
 				ShortDescription("The message body content type. Choose string to transfer UTF-8 strings as an AMQP string value.").
 				Advanced().
 				Default(string(amqpContentTypeOpaqueBinary)),
 			service.NewBoolField(persistentField).
-				Description("If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.").
+				Description("If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.").Version("4.70.0").
 				ShortDescription("Mark the message as persistent so it is stored durably and survives a broker restart.").
 				Advanced().
 				Default(false),
 			service.NewStringListField(targetCapsField).
-				Description("Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.").
+				Description("Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.").Version("4.70.0").
 				ShortDescription("Extension capabilities the sender desires from the target, such as queues, topics or durability.").
 				Optional().
 				Advanced().
@@ -104,58 +94,58 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Example([]string{"topic"}).
 				Example([]string{"queue", "topic"}),
 			service.NewInterpolatedStringField(messagePropsTo).
-				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.").
+				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.").Version("4.70.0").
 				ShortDescription("The node that is the intended destination of the message, which may differ from the receiving node.").
 				Optional().
 				Advanced().
 				Example("amqp://localhost:5672/").
 				Example(`${! meta("target_address") }`),
 			service.NewInterpolatedStringField(messagePropsMsgID).
-				Description("Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.").
+				Description(`Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the message-id property on outgoing messages, auto-detected as UUID, uint64 or string.").
 				Optional().
 				Advanced().
 				Example(`${! uuid_v4() }`).
 				Example(`${! meta("amqp_message_id") }`),
 			service.NewInterpolatedStringField(messagePropsCorrelID).
-				Description("Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.").
+				Description(`Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the correlation-id property on outgoing messages, auto-detected as UUID, uint64 or string.").
 				Optional().
 				Advanced().
 				Example(`${! meta("amqp_correlation_id") }`),
 			service.NewInterpolatedStringField(messagePropsSubject).
-				Description("Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsReplyTo).
-				Description("Set the reply-to property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the reply-to property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsGroupID).
-				Description("Set the group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsGroupSeq).
-				Description("Set the group-sequence property on outgoing AMQP messages. Must be a valid uint32 value. This field supports Bloblang interpolation.").
+				Description(`Set the group-sequence property on outgoing AMQP messages. Must be a valid uint32 value. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the group-sequence property on outgoing messages. Must be a valid uint32.").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsReplyToGrpID).
-				Description("Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsUserID).
-				Description("Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(messagePropsContentType).
-				Description("Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced().
 				Example("application/json").
 				Example("text/plain; charset=utf-8"),
 			service.NewInterpolatedStringField(messagePropsContentEnc).
-				Description("Set the content-encoding property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Description(`Set the content-encoding property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().
 				Advanced(),
 		).LintRule(`

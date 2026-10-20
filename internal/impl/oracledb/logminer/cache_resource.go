@@ -273,6 +273,26 @@ func (c *ConnectCacheResource) LowWatermarkSCN(excludeTxnID sqlredo.TransactionI
 	return lowestOpenSCN
 }
 
+// IncludeInLowWatermark starts tracking the start SCN of an open transaction
+// so that LowWatermarkSCN counts it even without DML events.
+func (c *ConnectCacheResource) IncludeInLowWatermark(ctx context.Context, txnID sqlredo.TransactionID) error {
+	if _, discarded := c.discarded[txnID]; discarded {
+		return nil
+	}
+	if _, tracked := c.startSCNs[txnID]; tracked {
+		return nil
+	}
+	m, err := c.readMetadata(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
+	}
+	if m == nil {
+		return nil
+	}
+	c.startSCNs[txnID] = m.SCN
+	return nil
+}
+
 func (c *ConnectCacheResource) toMetaKey(txnID sqlredo.TransactionID) string {
 	return c.keyPrefix + ":meta:" + string(txnID)
 }
@@ -439,6 +459,8 @@ type serializedDMLEvent struct {
 	Timestamp     time.Time             `json:"ts"`
 	TransactionID sqlredo.TransactionID `json:"txn_id"`
 	Username      string                `json:"username"`
+	RSID          string                `json:"rs_id,omitempty"`
+	SSN           int64                 `json:"ssn,omitempty"`
 }
 
 type serializedTransactionMetadata struct {
@@ -466,6 +488,8 @@ func marshalEvent(ev *sqlredo.DMLEvent) ([]byte, error) {
 		Timestamp:     ev.Timestamp,
 		TransactionID: ev.TransactionID,
 		Username:      ev.Username,
+		RSID:          ev.RSID,
+		SSN:           ev.SSN,
 	}
 	return json.Marshal(se)
 }
@@ -493,5 +517,7 @@ func unmarshalEvent(data []byte) (*sqlredo.DMLEvent, error) {
 		Timestamp:     se.Timestamp,
 		TransactionID: se.TransactionID,
 		Username:      se.Username,
+		RSID:          se.RSID,
+		SSN:           se.SSN,
 	}, nil
 }

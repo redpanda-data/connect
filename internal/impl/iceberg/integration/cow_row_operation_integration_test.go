@@ -58,11 +58,13 @@ func countManifestsByContent(t *testing.T, ctx context.Context, tbl *table.Table
 // equality-delete manifests, so this assertion is what distinguishes the two.
 func TestCOWRowOperationsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_row_ops_ns", "cow_row_ops_test"
+	infra.EnsureNamespaceAbsent(t, ns)
 
 	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
 	require.NoError(t, err)

@@ -22,6 +22,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/llm"
 )
 
 const (
@@ -54,17 +56,16 @@ To learn more about vector embeddings, see the https://platform.openai.com/docs/
 			)...,
 		).
 		Fields(
-			service.NewBloblangField(oepFieldTextMapping).
-				Description("The text you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.").
+			llm.EmbeddingTextMappingField(oepFieldTextMapping).
 				Optional(),
 			service.NewIntField(oepFieldDims).
-				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").
+				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").Version("4.34.0").
 				ShortDescription("The number of dimensions for output embeddings. Only supported in text-embedding-3 and later.").
 				Optional(),
 		).
 		Example(
 			"Store embedding vectors in Pinecone",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/pinecone.adoc[Pinecone]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/pinecone.adoc[Pinecone].",
 			`input:
   generate:
     interval: 1s
@@ -84,7 +85,7 @@ output:
     vector_mapping: "root = this"`).
 		Example(
 			"Store embedding vectors in CyborgDB",
-			"Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]",
+			"Computes embeddings for some generated data and stores them in xref:components:outputs/cyborgdb.adoc[CyborgDB].",
 			`input:
   generate:
     interval: 1s

@@ -54,13 +54,15 @@ func migratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.67.0").
-		Summary("Kafka consumer for migration pipelines. All migration logic is handled by the redpanda_migrator output.").
+		Summary("Consumes records from a source Kafka or Redpanda cluster for the redpanda_migrator output to migrate.").
 		Description(`
 The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream.
 It does not perform topic/schema/group synchronisation.
-All migration features and coordination live in the paired ` + "`redpanda_migrator`" + ` output.
+All migration features and coordination live in the paired ` + "xref:components:outputs/redpanda_migrator.adoc[`redpanda_migrator` output]" + `, which migrates topic data, topic ACLs, schemas, and consumer group offsets between clusters.
 
-**IMPORTANT:** This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
+When you set a ` + "<<consumer_group,`consumer_group`>>" + `, this input consumes one or more topics and automatically balances the topic partitions across any other connected clients with the same consumer group. Otherwise, topics are consumed in their entirety or with explicit partitions.
+
+IMPORTANT: This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
 Each pipeline must have both input and output components configured.
 For capabilities, guarantees, scheduling, and examples, see the output documentation.
 
@@ -71,7 +73,35 @@ adjust the following fields to increase buffer sizes and batch processing:
 - ` + "`max_yield_batch_bytes: 1MB`" + `
 
 These settings allow the consumer to buffer more data per partition and yield larger batches,
-reducing overhead and improving throughput at the cost of higher memory usage.`).
+reducing overhead and improving throughput at the cost of higher memory usage.
+
+== Delivery guarantees
+
+This input commits consumer group offsets only after the paired output acknowledges the writes, so it provides the same at-least-once delivery and per-partition ordering as the ` + "xref:components:inputs/redpanda.adoc[`redpanda` input]" + `.
+
+When a pipeline contains more than one migrator pair, each input is paired with the output that has the same ` + "`label`" + `. The labels must match exactly. If they do not match, the input and output of that pair fail to connect.
+
+== Source cluster permissions
+
+When the source cluster enforces ACLs, the source principal needs the topic ` + "`READ`" + ` and ` + "`DESCRIBE_CONFIGS`" + ` operations, in addition to the consumer group and cluster permissions that the migration uses. A ` + "`READ`" + ` ACL implies ` + "`DESCRIBE`" + ` but not ` + "`DESCRIBE_CONFIGS`" + `, so without ` + "`DESCRIBE_CONFIGS`" + ` the input consumes records but the paired output fails to create topics with a ` + "`TOPIC_AUTHORIZATION_FAILED`" + ` error. For the full list of source and destination ACLs, see xref:cookbooks:redpanda_migrator.adoc#required-permissions[Required permissions].
+
+== Metrics
+
+When a consumer group is set, this input emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic. The metric records the number of produced messages that the consumer group has not yet read from each topic partition. Monitor this metric to track migration progress.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- ` + "`kafka_key`" + `
+- ` + "`kafka_topic`" + `
+- ` + "`kafka_partition`" + `
+- ` + "`kafka_offset`" + `
+- ` + "`kafka_lag`" + `: Set only when ` + "`consumer_group`" + ` is set.
+- ` + "`kafka_timestamp_ms`" + `
+- ` + "`kafka_timestamp_unix`" + `
+- ` + "`kafka_tombstone_message`" + `
+- All record headers`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzConsumerFields()...).
@@ -87,34 +117,34 @@ func migratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("4.67.0").
-		Summary("A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.").
+		Summary("Migrates topics, records, schemas, consumer group offsets, and topic ACLs from a source Kafka or Redpanda cluster to a destination cluster.").
 		Description(`
 The `+"`redpanda_migrator`"+` output performs all migration work.
 It coordinates topics, schema registry, and consumer groups to migrate data from a source Kafka/Redpanda cluster to a destination cluster.
 
-**IMPORTANT:** This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline.
+IMPORTANT: This output requires a corresponding `+"xref:components:inputs/redpanda_migrator.adoc[`redpanda_migrator` input]"+` in the same pipeline.
 Each pipeline must have both input and output components configured.
 
 **Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline,
 the mapping between input and output components is done based on the label field.
-The label of the input and output must match exactly for proper coordination.
+The label of the input and output must match exactly for proper coordination, and each pair needs its own label.
 
 **Performance tuning for high throughput:** For workloads with high message rates or large messages,
 adjust the following settings to optimize throughput:
 
-On the paired input component:
+On the paired `+"xref:components:inputs/redpanda_migrator.adoc[`redpanda_migrator` input]"+`:
 - `+"`partition_buffer_bytes: 2MB`"+` - increases per-partition buffer size
 - `+"`max_yield_batch_bytes: 1MB`"+` - allows larger batches to be yielded
 
 On this output component:
-- `+"`max_in_flight`"+` - set to the total number of partitions being copied in parallel (up to all partitions in the cluster)
+- `+"`max_in_flight`"+` - set to the total number of partitions being copied in parallel (up to all partitions in the cluster). The input processes one batch per partition at a time, so values higher than the partition count provide no benefit.
 
 What gets synchronised:
 
 - Topics
   - Name resolution with interpolation (default: preserve source name)
   - Automatic creation with mirrored partition counts
-  - Selectable replication factor (default: inherit from source)
+  - Selectable replication factor with `+"`topic_replication_factor`"+` (default: inherit from source)
   - Copy of supported topic configuration keys (serverless-aware subset)
   - Optional ACL replication with safe transforms:
     - Excludes `+"`ALLOW WRITE`"+` entries
@@ -126,36 +156,37 @@ What gets synchronised:
   - Subject selection via include/exclude regex
   - Subject renaming with interpolation
   - Versions: `+"`latest`"+` or `+"`all`"+` (default: `+"`all`"+`)
-  - Optional include of soft-deleted subjects
-  - ID handling: translate IDs (create-or-reuse) or keep fixed IDs and versions
-  - Optional schema normalisation on create
+  - Optional include of soft-deleted subjects with `+"`schema_registry.include_deleted`"+`
+  - ID handling: translate IDs (create-or-reuse) with `+"`schema_registry.translate_ids`"+`, or keep fixed IDs and versions
+  - Optional schema normalisation on create with `+"`schema_registry.normalize`"+`
   - Optional per-subject compatibility propagation when explicitly set on source (global mode is not forced)
   - Serverless note: schema metadata and rule sets are not copied in serverless mode
 
 - Consumer Groups
   - Periodic syncing
   - Group selection via include/exclude regex
-  - Only groups in `+"`Empty`"+` state are migrated (active groups are skipped)
-  - Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`
+  - Groups in every state except `+"`Dead`"+` are migrated by default. Set `+"`consumer_groups.only_empty`"+` to `+"`true`"+` to migrate only groups in the `+"`Empty`"+` state
+  - Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`, which can be imprecise when multiple records share the same timestamp (see `+"<<offset_header,`offset_header`>>"+` for exact translation)
   - No rewind guarantee: destination offsets are never moved backwards
   - Commit performed in parallel with per-group metrics
   - Requires matching partition counts between source and destination topics
 
 How it runs:
 
-- Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
-- Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
-- Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
+- Topics: the first write triggers a sync of all consumed topics, and any other topic is created when its first record arrives. A background loop also syncs topics every `+"`sync_topic_interval`"+` (default `+"`5m`"+`), which creates destination topics for source topics that have no current data, for example after retention cleanup. Set `+"`sync_topic_interval`"+` to `+"`0s`"+` to disable the periodic sync.
+- Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (default `+"`5m`"+`; set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
+- Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` (default `+"`1m`"+`) and filtered by the current topic mappings.
 
 Guarantees:
 
-- Topics are created with the intended partitioning and configured replication factor. Existing topics are respected; partition mismatches are logged and consumer group migration for mismatched topics is skipped.
+- Topics are created with the intended partitioning and configured replication factor. Existing destination topics are never re-created. If an existing destination topic has fewer partitions than its source topic, partitions are added to match. Consumer group migration skips topics whose partition counts still differ.
 - Consumer group offsets are never rewound. Only translated forward positions are committed.
 - ACL replication excludes `+"`ALLOW WRITE`"+` operations and downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+` to avoid unsafe grants.
 
 Limitations and requirements:
 
 - Destination Schema Registry must be in `+"`READWRITE`"+` or `+"`IMPORT`"+` mode.
+- When the destination cluster enforces ACLs, the destination principal needs permission to create topics, add partitions, describe topic configurations, and produce records. Consumer group migration also needs group `+"`READ`"+` and topic `+"`READ`"+` to commit the groups' offsets, and `+"`sync_topic_acls`"+` also needs permission to create ACLs. For the exact ACL operations, see xref:cookbooks:redpanda_migrator.adoc#required-permissions[Required permissions].
 - Offset translation is best-effort: if the previous-offset timestamp cannot be read, or no destination offset exists after the timestamp, that partition is skipped.
 - Consumer group migration requires identical partition counts for source and destination topics.
 
@@ -252,7 +283,7 @@ output:
 		Field(service.NewObjectField(groupsObjectField, groupsMigratorFields()...).Optional()).
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
-			Description("The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.").
+			Description("The topic to write messages to. To derive destination topic names from source topics, use interpolation. The source topic name is available in the `kafka_topic` metadata field.").
 			ShortDescription("The topic to write messages to. Interpolation can derive it from the kafka_topic metadata.").
 			Default("${! @kafka_topic }").
 			Example("prod_${! @kafka_topic }")).
@@ -263,7 +294,7 @@ output:
 			Example("1  # For single-node clusters").
 			Optional()).
 		Field(service.NewDurationField(rmoFieldSyncTopicInterval).
-			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").
+			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").Version("4.82.0").
 			ShortDescription("How often to synchronise topics from source to destination. Set to 0s to disable periodic syncing.").
 			Example("0s     # Disable periodic sync").
 			Example("1m     # Sync every minute").
@@ -282,26 +313,39 @@ output:
 		Field(service.NewInterpolatedStringMapField(rmoFieldHeaders).
 			Description("Custom headers to add to migrated records, keyed by header name with interpolated string values. " +
 				"Useful for injecting metadata such as processing timestamps or latency measurements that should surface as header values on the destination cluster. " +
-				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").
+				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").Version("4.102.0").
 			Example(map[string]any{
 				"x-migration-processed-at": "${! timestamp_unix_milli() }",
 				"x-migration-latency-ms":   "${! timestamp_unix_milli() - meta(\"kafka_timestamp_ms\") }",
 			}).
 			Optional()).
 		Field(service.NewStringField(rmoFieldProvenanceHeader).
-			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
+			Description("Header name to add to migrated records indicating their source cluster. " +
+				"When set, each migrated record that does not already carry this header receives it, with the source cluster's ID (from the cluster metadata) as the value. " +
+				"Downstream systems can use the header to track record origins. " +
+				"A record that already carries the header keeps its existing value. " +
+				"A record whose header value is the destination cluster's ID is skipped, so it is not sent back to the cluster it came from. " +
+				"A record whose header value is empty or equal to the source cluster's ID causes an error. " +
+				"If empty, no provenance header is added and no provenance checks run.").Version("4.69.0").
 			Default(DefaultProvenanceHeader).
 			Advanced()).
 		Field(service.NewStringField(rmoFieldOffsetHeader).
-			Description("Header name to add to migrated records containing the source offset for exact consumer group migration. " +
-				"If empty, no offset header is added and exact offset translation is disabled. " +
-				"When disabled, consumer groups are still migrated but precision for empty groups may not be ideal if there are multiple records with the same timestamp, as timestamps have millisecond resolution. " +
-				"When consumer group migration is disabled, this header is not added.").
+			Description(`The name of a message header to add to migrated records. This header contains the source offset, enabling exact consumer group offset translation during migration.
+
+If this field is empty, no offset header is added and exact offset translation is disabled. Consumer groups are still migrated using timestamp-based positioning, which works well for most cases but may be imprecise for consumer groups in the ` + "`Empty`" + ` state when multiple records share the same timestamp (timestamps have millisecond resolution).
+
+Exact offset translation only applies to consumer groups in the ` + "`Empty`" + ` state, which have no active members. Other groups always use timestamp-based positioning. The default value enables exact offset translation.
+
+This header is only added when consumer group migration is enabled.`).Version("4.71.0").
 			ShortDescription("Header added to migrated records carrying the source offset. Leave empty to disable exact offset translation.").
 			Default(DefaultOffsetHeader).
 			Advanced()).
 		Field(service.NewIntField(rmoFieldMaxInFlight).
-			Description("Maximum number of batches to have in flight at any given time. For optimal throughput, set this to the total number of partitions being copied in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions is ineffective.").
+			Description(`The maximum number of batches to send in parallel at any given time. Increase this value to improve throughput during migration.
+
+For optimal performance, set this to the total number of partitions being migrated in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions provides no additional benefit.
+
+For example, if you are migrating 100 partitions, set ` + "`" + `max_in_flight: 100` + "`" + ` for maximum throughput.`).
 			ShortDescription("Maximum number of batches in flight at any given time.").
 			Default(10).
 			Example("64  # For a cluster with 64 partitions").
@@ -463,7 +507,10 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			metrics:       newSchemaRegistryMetrics(mgr.Metrics()),
 			log:           log,
 			knownSubjects: make(map[schemaSubjectVersion]struct{}),
-			knownSchemas:  make(map[int]schemaInfo),
+			schemas:       make(map[int]schemaState),
+
+			retryMinBackoff: 10 * time.Second,
+			retryMaxBackoff: 5 * time.Minute,
 		},
 		groups: groupsMigrator{
 			metrics:         newGroupsMetrics(mgr.Metrics()),
@@ -600,10 +647,23 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 		return srcAdm, src.GetConsumeTopics
 	})
 
-	// Sync the schema registry once
+	// Sync the schema registry once. Subjects that fail to sync must not fail
+	// the output connect: topic and consumer group migration do not depend on
+	// them, and a failed connect restarts the whole pipeline, so no topic would
+	// ever be created. Errors that prevent the sync from running at all, such
+	// as a misconfigured destination registry, still fail the connect.
 	if err := m.sr.Sync(ctx); err != nil {
-		cancel()
-		return err
+		var pErr *partialSyncError
+		if !errors.As(err, &pErr) {
+			cancel()
+			return err
+		}
+		retry := fmt.Sprintf("retrying every %s", m.sr.conf.Interval)
+		if m.sr.conf.Interval <= 0 {
+			retry = "retrying with backoff until synced"
+		}
+		m.log.Errorf("Schema migration: initial sync incomplete, %d schemas synced, %d failed; topic and data migration continues, failed subjects %s",
+			pErr.Synced, len(pErr.Failed), retry)
 	}
 	go m.sr.SyncLoop(ctx)
 

@@ -41,7 +41,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 				Description("The DSN address to send sentry events to. If left empty, then SENTRY_DSN is used."),
 
 			service.NewInterpolatedStringField("message").
-				Description("A message to set on the sentry event").
+				Description(`A message to set on the sentry event`).
 				Example("webhook event received").
 				Example("failed to find product in database: ${! error() }"),
 
@@ -53,7 +53,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 				Example(`root = deleted()`),
 
 			service.NewBloblangField("extras").
-				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)").
+				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)").Version("4.55.0").
 				ShortDescription("A mapping evaluating to an object, attached to the Sentry event as a context named extras.").
 				Optional().
 				Example(`root.foo = "bar"`).
@@ -61,7 +61,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 
 			service.NewInterpolatedStringMapField("tags").
 				Optional().
-				Description("Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations.").
+				Description(`Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations.`).
 				ShortDescription("Key/value string tags on an event. Indexed and searchable, but length limited."),
 
 			service.NewStringField("environment").

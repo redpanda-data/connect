@@ -9,11 +9,14 @@
 package sqlredo
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -164,7 +167,7 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 	for _, acc := range state.Accumulators {
 		assembled := acc.Assemble()
 		if assembled == nil {
-			logDebugf("LOB merge: skipping %s.%s.%s; no fragments accumulated", acc.Schema, acc.Table, acc.Column)
+			logDebugf("LOB merge: skipping %s.%s.%s — no fragments accumulated", acc.Schema, acc.Table, acc.Column)
 			continue
 		}
 
@@ -232,11 +235,11 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		case 0:
 			// no candidates — fall through to unmerged
 		default:
-			logWarnf("LOB merge: %s.%s.%s has %d candidate events with no PK in WHERE clause; cannot distinguish rows; will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, len(candidates))
+			logWarnf("LOB merge: %s.%s.%s has %d candidate events with no PK in WHERE clause — cannot distinguish rows; will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, len(candidates))
 		}
 
 		if !merged {
-			logDebugf("LOB merge: no matching DML event for %s.%s.%s (pks=%v); will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, acc.PKValues)
+			logDebugf("LOB merge: no matching DML event for %s.%s.%s (pks=%v) — will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, acc.PKValues)
 			unmerged = append(unmerged, acc)
 		}
 	}
@@ -245,13 +248,17 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 }
 
 // MergeInlineLOBValues merges LOB column values from an inline-LOB-only UPDATE into the
-// matching INSERT event for the same row. The pkValues parameter (sourced from the WHERE
-// clause of the LOB-init UPDATE) is used to identify the correct INSERT event.
-// When pkValues is empty, all INSERT events for schema.table are updated as a fallback.
+// matching INSERT event for the same row, reporting whether a matching INSERT was found.
+// The pkValues parameter (sourced from the WHERE clause of the LOB-init UPDATE) is used
+// to identify the correct INSERT event. When pkValues is empty, all INSERT events for
+// schema.table are updated as a fallback.
 //
 // This handles Oracle's behaviour of omitting LOB columns from INSERT SQL_REDO and
-// instead emitting a separate UPDATE whose SET clause carries the actual LOB data.
-func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues map[string]any, events []*DMLEvent, log *service.Logger) {
+// instead emitting a separate UPDATE whose SET clause carries the actual LOB data. The
+// caller must check the return value: a false result means the LOB-only UPDATE is still
+// the only place this row's LOB data lives, and must not be suppressed as "already merged".
+func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues map[string]any, events []*DMLEvent, log *service.Logger) bool {
+	merged := false
 	for _, ev := range events {
 		if ev.Operation != OpInsert {
 			continue
@@ -272,10 +279,12 @@ func MergeInlineLOBValues(lobData map[string]any, schema, table string, pkValues
 			}
 			ev.Data[col] = val
 		}
+		merged = true
 		if log != nil {
 			log.Debugf("inline LOB merge: set %d LOB columns into INSERT for %s.%s (pks=%v)", len(lobData), schema, table, pkValues)
 		}
 	}
+	return merged
 }
 
 // pkMatches returns true when every key in pkValues is present in data and the
@@ -295,9 +304,40 @@ func pkMatches(data map[string]any, pkValues map[string]any) bool {
 		if !ok {
 			return false
 		}
-		if fmt.Sprintf("%v", dataVal) != fmt.Sprintf("%v", pkVal) {
+		if !valuesEqual(dataVal, pkVal) {
 			return false
 		}
 	}
 	return true
+}
+
+// valuesEqual reports whether a and b format identically with %v. Common
+// same-typed values are compared directly to avoid the allocations of
+// formatting, since nearly all PK comparisons are mismatches.
+func valuesEqual(a, b any) bool {
+	switch x := a.(type) {
+	case string:
+		if y, ok := b.(string); ok {
+			return x == y
+		}
+	case int64:
+		if y, ok := b.(int64); ok {
+			return x == y
+		}
+	case json.Number:
+		if y, ok := b.(json.Number); ok {
+			return x == y
+		}
+	case []byte:
+		if y, ok := b.([]byte); ok {
+			return bytes.Equal(x, y)
+		}
+	case time.Time:
+		if y, ok := b.(time.Time); ok && x.Location() == y.Location() {
+			// Both hold a time.Time, so == compares the instant and the
+			// monotonic reading, which %v prints and Equal ignores.
+			return a == b
+		}
+	}
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 }

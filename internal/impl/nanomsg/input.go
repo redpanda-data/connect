@@ -40,6 +40,12 @@ const (
 	niFieldPollTimeout = "poll_timeout"
 )
 
+// urlsField returns the `urls` field shared by the nanomsg input and output.
+func urlsField() *service.ConfigField {
+	return service.NewURLListField("urls").
+		Description("A list of URLs to connect to, or to listen on when `bind` is `true`. If an item in the list contains commas, it is split into multiple URLs. A `*` host, such as `tcp://*:5555`, is replaced with `0.0.0.0`.")
+}
+
 func inputConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -47,8 +53,7 @@ func inputConfigSpec() *service.ConfigSpec {
 		Summary(`Consumes messages via Nanomsg sockets (scalability protocols).`).
 		Description(`Currently only PULL and SUB sockets are supported.`).
 		Fields(
-			service.NewURLListField(niFieldURLs).
-				Description("A list of URLs to connect to (or as). If an item of the list contains commas it will be expanded into multiple URLs."),
+			urlsField(),
 			service.NewBoolField(niFieldBind).
 				Description("Whether the URLs provided should be connected to, or bound as.").
 				Default(true),
@@ -57,7 +62,7 @@ func inputConfigSpec() *service.ConfigSpec {
 				Default("PULL"),
 			service.NewAutoRetryNacksToggleField(),
 			service.NewStringListField(niFieldSubFilters).
-				Description("A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").
+				Description("A list of topic prefixes to subscribe to when `socket_type` is `SUB`. A message is received only when its body starts with one of the prefixes, so a single empty filter (`''`) subscribes to everything. A SUB socket requires at least one filter.").
 				ShortDescription("Subscription topic filters for a SUB socket. A single empty filter subscribes to everything.").
 				Default([]any{}),
 			service.NewDurationField(niFieldPollTimeout).

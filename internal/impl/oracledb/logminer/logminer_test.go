@@ -11,8 +11,16 @@ package logminer
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"fmt"
+	"io"
 	"log/slog"
+	"math"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -409,7 +417,340 @@ func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
 	require.True(t, ok, "Data should be map[string]any")
 	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE OOR column should have deferred LOB_WRITEs assembled")
 	assert.Equal(t, "securedata", data["SECUREFILE_COL"], "SecureFile column should have its LOB_WRITE data")
+	assert.Empty(t, pub.messages[0].RSID, "synthetic LOB-only UPDATE has no redo record of its own, so no rs_id")
 	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
+}
+
+// TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable verifies that a LOB-only UPDATE is
+// only suppressed when ITS OWN row was actually merged into a matching INSERT, not
+// merely because some other row in the same table had an INSERT in the transaction.
+func TestLOBOnlyUpdateSuppressionIsPerRowNotPerTable(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// Row 1: INSERT (LOB column omitted, as Oracle does) followed by its inline
+	// LOB-init UPDATE - merges into the INSERT and is suppressed.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           101,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID","NAME") values ('1','foo')`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row1 desc' where "ID" = '1'`, Valid: true},
+	}))
+
+	// Row 2: a LOB-only UPDATE with no matching INSERT anywhere in the transaction,
+	// despite being in the same table as row 1's INSERT.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row2 desc' where "ID" = '2'`, Valid: true},
+	}))
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 2, "row 1's merged INSERT and row 2's unmerged UPDATE must both be published")
+
+	row1 := pub.messages[0].Data.(map[string]any)
+	assert.Equal(t, "row1 desc", row1["DESC"], "row 1's LOB-only UPDATE should be merged into its INSERT")
+
+	row2 := pub.messages[1].Data.(map[string]any)
+	assert.Equal(t, "2", row2["ID"], "row 2's unmerged LOB-only UPDATE should be published as-is")
+	assert.Equal(t, "row2 desc", row2["DESC"])
+}
+
+// TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled verifies that with
+// LOBEnabled=false, Oracle's internal LOB-initialisation UPDATEs are still suppressed
+// via the table-level check, since no per-row merge is ever attempted in that mode -
+// mergedIntoInsert is only populated when LOBEnabled is true, so gating suppression on
+// it alone would leave every LOB-init UPDATE unsuppressed and published as a spurious
+// extra event whenever LOB support is disabled.
+func TestLOBOnlyUpdateSuppressionFallsBackToTableLevelWhenLOBDisabled(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = false
+	lm.lobColTypes = map[string]string{"TESTDB.T.DESC": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// Row 1: INSERT followed by its inline LOB-init UPDATE. No merge is attempted
+	// with LOBEnabled=false, but the UPDATE must still be suppressed.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           101,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID","NAME") values ('1','foo')`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row1 desc' where "ID" = '1'`, Valid: true},
+	}))
+
+	// Row 2: a LOB-only UPDATE with no INSERT of its own, but the table still has row
+	// 1's INSERT. The table-level fallback suppresses this too - unlike LOBEnabled=true,
+	// there is no per-row merge outcome here that could be lost by suppressing it.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "DESC" = 'row2 desc' where "ID" = '2'`, Valid: true},
+	}))
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1, "both LOB-only UPDATEs must be suppressed, leaving only row 1's INSERT")
+
+	row1 := pub.messages[0].Data.(map[string]any)
+	assert.NotContains(t, row1, "DESC", "LOBEnabled=false must not merge or leak LOB column data")
+}
+
+func TestLowWatermarkSCN(t *testing.T) {
+	tests := []struct {
+		name         string
+		excludeTxnID sqlredo.TransactionID
+		// dmlTxns gives the start SCN of each open transaction. Each one has one DML event.
+		dmlTxns map[sqlredo.TransactionID]uint64
+		// lobTxns gives the start SCN of each open transaction that has no DML events
+		// and is marked with IncludeInLowWatermark.
+		lobTxns map[sqlredo.TransactionID]uint64
+		want    uint64
+	}{
+		{
+			name: "no open state",
+			want: math.MaxUint64,
+		},
+		{
+			name:    "lowest of DML and LOB transactions",
+			dmlTxns: map[sqlredo.TransactionID]uint64{"txB": 900},
+			lobTxns: map[sqlredo.TransactionID]uint64{"txC": 800, "txD": 850},
+			want:    800,
+		},
+		{
+			name:         "committing transaction is excluded",
+			excludeTxnID: "txA",
+			dmlTxns:      map[sqlredo.TransactionID]uint64{"txA": 700},
+			lobTxns:      map[sqlredo.TransactionID]uint64{"txA": 710, "txB": 900},
+			want:         900,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+			for txnID, scn := range tt.dmlTxns {
+				require.NoError(t, cache.StartTransaction(t.Context(), txnID, scn))
+				require.NoError(t, cache.AddEvent(t.Context(), txnID, scn, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+			}
+			for txnID, scn := range tt.lobTxns {
+				require.NoError(t, cache.StartTransaction(t.Context(), txnID, scn))
+				require.NoError(t, cache.IncludeInLowWatermark(t.Context(), txnID))
+			}
+
+			assert.Equal(t, tt.want, cache.LowWatermarkSCN(tt.excludeTxnID))
+		})
+	}
+}
+
+// TestCommitCheckpointStaysBelowOpenLOBTransaction verifies that when A commits
+// while LOB-only transaction B is open, A's checkpoint stays below B's START, or
+// below B's first LOB event if the START is unknown.
+func TestCommitCheckpointStaysBelowOpenLOBTransaction(t *testing.T) {
+	tests := []struct {
+		name      string
+		omitStart bool
+		want      replication.SCN
+		txBEvents []*sqlredo.RedoEvent
+	}{
+		{
+			name: "SecureFile locator and write",
+			want: 99,
+			txBEvents: []*sqlredo.RedoEvent{
+				{
+					SCN:           110,
+					Operation:     sqlredo.OpSelectLobLocator,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+				},
+				{
+					SCN:           111,
+					Operation:     sqlredo.OpLobWrite,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+				},
+			},
+		},
+		{
+			name: "deferred write only",
+			want: 99,
+			txBEvents: []*sqlredo.RedoEvent{
+				{
+					SCN:           110,
+					Operation:     sqlredo.OpLobWrite,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+				},
+			},
+		},
+		{
+			name:      "START unknown stays below first LOB event",
+			omitStart: true,
+			want:      109,
+			txBEvents: []*sqlredo.RedoEvent{
+				{
+					SCN:           110,
+					Operation:     sqlredo.OpLobWrite,
+					TransactionID: "txB",
+					SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+					TableName:     sql.NullString{String: "T", Valid: true},
+					SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+			pub := &publisherStub{}
+			lm := newLogMiner(pub, cache)
+			lm.cfg.LOBEnabled = true
+			lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+
+			if !tt.omitStart {
+				require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+					SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txB",
+				}))
+			}
+			for _, ev := range tt.txBEvents {
+				require.NoError(t, lm.processRedoEvent(t.Context(), ev))
+			}
+			require.NotEmpty(t, len(lm.lobStates)+len(lm.pendingLOBWrites), "txB must hold LOB state")
+
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 120, Operation: sqlredo.OpStart, TransactionID: "txA",
+			}))
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN:           121,
+				Operation:     sqlredo.OpInsert,
+				TransactionID: "txA",
+				SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+				TableName:     sql.NullString{String: "U", Valid: true},
+				SQLRedo:       sql.NullString{String: `insert into "TESTDB"."U" ("ID") values ('1')`, Valid: true},
+			}))
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 130, Operation: sqlredo.OpCommit, TransactionID: "txA",
+			}))
+
+			require.Len(t, pub.messages, 1)
+			assert.Equal(t, tt.want, pub.messages[0].CheckpointSCN, "the checkpoint must stay below the START of txB (or its first LOB event if START is unknown)")
+		})
+	}
+}
+
+// TestLOBTransactionReleasesCheckpointOnEnd verifies that a transaction held by
+// IncludeInLowWatermark no longer holds back the checkpoint after it commits or
+// rolls back.
+func TestLOBTransactionReleasesCheckpointOnEnd(t *testing.T) {
+	for _, end := range []sqlredo.Operation{sqlredo.OpRollback, sqlredo.OpCommit} {
+		t.Run(end.String(), func(t *testing.T) {
+			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+			lm := newLogMiner(&publisherStub{}, cache)
+			lm.cfg.LOBEnabled = true
+			lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txB",
+			}))
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN:           110,
+				Operation:     sqlredo.OpLobWrite,
+				TransactionID: "txB",
+				SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+				TableName:     sql.NullString{String: "T", Valid: true},
+				SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+			}))
+			require.Equal(t, uint64(100), cache.LowWatermarkSCN(""), "txB must hold the checkpoint")
+
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 120, Operation: end, TransactionID: "txB",
+			}))
+			assert.Equal(t, uint64(math.MaxUint64), cache.LowWatermarkSCN(""))
+		})
+	}
+}
+
+// TestLOBOnlyTransactionWithoutStartIsPublished verifies that a transaction with
+// only LOB events is published when its START is not mined. This occurs after a
+// restart from a checkpoint between the START and the first LOB event.
+func TestLOBOnlyTransactionWithoutStartIsPublished(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           110,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txB",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           111,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txB",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 140, Operation: sqlredo.OpCommit, TransactionID: "txB",
+	}))
+
+	require.Len(t, pub.messages, 1, "the synthesized UPDATE must be published")
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "hello", data["DOC"])
+	assert.Equal(t, replication.SCN(140), pub.messages[0].CheckpointSCN)
 }
 
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
@@ -432,3 +773,509 @@ func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent
 }
 
 func (*publisherStub) Close() {}
+
+// TestIncludeInLowWatermark verifies IncludeInLowWatermark on each transaction
+// cache implementation. A discarded transaction is one that exceeded the max
+// event buffer of 1.
+func TestIncludeInLowWatermark(t *testing.T) {
+	ctx := t.Context()
+	dml := &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}
+
+	caches := map[string]func(maxEvents int) TransactionCache{
+		"in memory": func(maxEvents int) TransactionCache {
+			return NewInMemoryCache(maxEvents, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+		"connect cache resource": func(maxEvents int) TransactionCache {
+			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: maxEvents}
+			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+	}
+
+	tests := []struct {
+		name         string
+		maxEvents    int
+		excludeTxnID sqlredo.TransactionID
+		setup        func(t *testing.T, c TransactionCache)
+		want         uint64
+	}{
+		{
+			name: "marked transaction without events is counted at its start SCN",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+			},
+			want: 100,
+		},
+		{
+			name: "unmarked transaction without events is not counted",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name: "marking is idempotent",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+			},
+			want: 100,
+		},
+		{
+			name: "a later event does not change the start SCN",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.AddEvent(ctx, "txA", 150, dml))
+			},
+			want: 100,
+		},
+		{
+			name: "marking a missing transaction does nothing",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "missing"))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name:      "marking a discarded transaction does nothing",
+			maxEvents: 1,
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, dml))
+				require.NoError(t, c.AddEvent(ctx, "txA", 102, dml))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name:         "excluded transaction is not counted",
+			excludeTxnID: "txA",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.StartTransaction(ctx, "txB", 200))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txB"))
+			},
+			want: 200,
+		},
+		{
+			name: "committed transaction is no longer counted",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.CommitTransaction(ctx, "txA"))
+			},
+			want: math.MaxUint64,
+		},
+		{
+			name: "rolled back transaction is no longer counted",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.IncludeInLowWatermark(ctx, "txA"))
+				require.NoError(t, c.RollbackTransaction(ctx, "txA"))
+			},
+			want: math.MaxUint64,
+		},
+	}
+	for cacheName, newCache := range caches {
+		for _, test := range tests {
+			t.Run(cacheName+"/"+test.name, func(t *testing.T) {
+				c := newCache(test.maxEvents)
+				test.setup(t, c)
+				assert.Equal(t, test.want, c.LowWatermarkSCN(test.excludeTxnID))
+			})
+		}
+	}
+}
+
+// RS_ID and SSN must survive both transaction cache kinds. The Connect cache
+// resource stores events as JSON, so this also covers cache_resource.go.
+func TestProcessRedoEventPropagatesRecordIdentity(t *testing.T) {
+	// One transaction with one INSERT that carries a record identity.
+	redoEvents := []*sqlredo.RedoEvent{
+		{
+			SCN:           100,
+			Operation:     sqlredo.OpStart,
+			TransactionID: "txA",
+		},
+		{
+			SCN:           101,
+			Operation:     sqlredo.OpInsert,
+			TransactionID: "txA",
+			SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T" ("ID") values ('1')`, Valid: true},
+			RSID:          sql.NullString{String: "0x000027.00001a33.0010", Valid: true},
+			SSN:           sql.NullInt64{Int64: 2, Valid: true},
+		},
+		{
+			SCN:           200,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txA",
+		},
+	}
+
+	caches := map[string]func() TransactionCache{
+		"in-memory cache": func() TransactionCache {
+			return NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+		"connect cache resource": func() TransactionCache {
+			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: 0}
+			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+	}
+
+	for name, newCache := range caches {
+		t.Run(name, func(t *testing.T) {
+			pub := &publisherStub{}
+			lm := newLogMiner(pub, newCache())
+
+			for _, ev := range redoEvents {
+				require.NoError(t, lm.processRedoEvent(t.Context(), ev))
+			}
+
+			require.Len(t, pub.messages, 1)
+			assert.Equal(t, "0x000027.00001a33.0010", pub.messages[0].RSID)
+			assert.Equal(t, int64(2), pub.messages[0].SSN)
+		})
+	}
+}
+
+// Oracle gives every row of an array DML redo record (a bulk DELETE, for example)
+// the same RS_ID and SSN. RowSeq numbers the rows of one record from 0 in redo
+// order so that (RS_ID, SSN, RowSeq) identifies one row change. Rows of other
+// records, even in the same transaction, start again at 0.
+func TestProcessRedoEventNumbersRowsOfSharedRedoRecord(t *testing.T) {
+	// --- Arrange ---
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default())))
+
+	const (
+		recA = "0x000027.00001a33.0010"
+		recB = "0x000027.00001a34.0010"
+	)
+
+	// In an array DML, rows in the same record share RSID and SSN.
+	// RowSeq must increment within a record and reset when RSID or SSN changes.
+	scenario := []struct {
+		description string
+		rsID        string
+		ssn         int64
+		wantRowSeq  int
+	}{
+		{description: "recA row 0 (first in array DML)", rsID: recA, ssn: 0, wantRowSeq: 0},
+		{description: "recA row 1 (increments)", rsID: recA, ssn: 0, wantRowSeq: 1},
+		{description: "recA row 2 (increments)", rsID: recA, ssn: 0, wantRowSeq: 2},
+		{description: "recB row 0 (new RSID resets)", rsID: recB, ssn: 0, wantRowSeq: 0},
+		{description: "recB row 1 (new SSN resets)", rsID: recB, ssn: 1, wantRowSeq: 0},
+	}
+
+	// --- Act ---
+	// 1. Begin transaction.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// 2. Process DML events.
+	for _, step := range scenario {
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpDelete,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: `delete from "TESTDB"."T" where "ID" = '1'`, Valid: true},
+			RSID:          sql.NullString{String: step.rsID, Valid: true},
+			SSN:           sql.NullInt64{Int64: step.ssn, Valid: true},
+		}))
+	}
+
+	// 3. Commit transaction to flush buffered events to the publisher.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	// --- Assert ---
+	require.Len(t, pub.messages, len(scenario))
+	for i, step := range scenario {
+		assert.Equal(t, step.wantRowSeq, pub.messages[i].RowSeq, "step %d: %s", i, step.description)
+	}
+}
+
+func TestRowSeqCounter(t *testing.T) {
+	type change struct {
+		rsID string
+		ssn  int64
+	}
+	const recA, recB = "0x000027.00001a33.0010", "0x000027.00001a34.0010"
+
+	cases := []struct {
+		name    string
+		changes []change
+		want    []int
+	}{
+		{
+			name:    "single-row records stay at 0",
+			changes: []change{{recA, 0}, {recB, 0}},
+			want:    []int{0, 0},
+		},
+		{
+			name:    "rows of one array record count up",
+			changes: []change{{recA, 0}, {recA, 0}, {recA, 0}},
+			want:    []int{0, 1, 2},
+		},
+		{
+			name:    "a new RS_ID restarts the count",
+			changes: []change{{recA, 0}, {recA, 0}, {recB, 0}, {recB, 0}},
+			want:    []int{0, 1, 0, 1},
+		},
+		{
+			name:    "a new SSN inside the same RS_ID restarts the count",
+			changes: []change{{recA, 1}, {recA, 1}, {recA, 2}},
+			want:    []int{0, 1, 0},
+		},
+		{
+			name:    "events without RS_ID get 0 and do not disturb the count",
+			changes: []change{{"", 0}, {"", 0}, {recA, 0}, {"", 0}, {recA, 0}},
+			want:    []int{0, 0, 0, 0, 1},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var c rowSeqCounter
+			got := make([]int, 0, len(tc.changes))
+			for _, ch := range tc.changes {
+				got = append(got, c.next(&sqlredo.DMLEvent{RSID: ch.rsID, SSN: ch.ssn}))
+			}
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// TestQueryLogMinerParallelFetching tests the log miner package's ability
+// to process LOB data whilst fetching in the background.
+func TestQueryLogMinerParallelFetching(t *testing.T) {
+	t.Run("ordering across batches", func(t *testing.T) {
+		// Not a multiple of the batch size; CSF pairs straddle batch boundaries.
+		total := logMinerReadBatchSize*(logMinerReadAheadBatches+3) + 1
+		lm, conn := newRowsMiner(t, &rowsSpec{total: total, csfEvery: 1})
+
+		var got []string
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			return nil
+		})
+		require.NoError(t, err)
+		// Row 0 is plain; pairs (1,2)...(total-2,total-1) join, including (499,500)
+		// which straddles a batch boundary.
+		require.Len(t, got, 1+total/2)
+		assert.Equal(t, "r0", got[0])
+		assert.Equal(t, "r1-ar2-b", got[1])
+		assert.Equal(t, fmt.Sprintf("r%d-ar%d-b", total-2, total-1), got[len(got)-1])
+		assert.Equal(t, uint64(total-1), last)
+	})
+
+	t.Run("incomplete CSF statement at end of results", func(t *testing.T) {
+		// Rows: r0 plain, (r1,r2) joined, r3 is a dangling first fragment.
+		lm, conn := newRowsMiner(t, &rowsSpec{total: 4, csfEvery: 1})
+
+		var (
+			got  []string
+			scns []uint64
+		)
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			scns = append(scns, ev.SCN)
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"r0", "r1-ar2-b", "r3-a"}, got)
+		assert.Equal(t, []uint64{1, 2, 4}, scns)
+		assert.Equal(t, uint64(4), last)
+	})
+
+	t.Run("fetch error mid CSF statement", func(t *testing.T) {
+		// Rows 0..3 are scanned; r3 starts a statement that never completes.
+		d := &rowsSpec{total: 100, csfEvery: 1, failAt: 4}
+		lm, conn := newRowsMiner(t, d)
+
+		var got []string
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(_ context.Context, ev *sqlredo.RedoEvent) error {
+			got = append(got, ev.SQLRedo.String)
+			return nil
+		})
+		require.ErrorIs(t, err, errFetch)
+		assert.Equal(t, []string{"r0", "r1-ar2-b"}, got, "incomplete statement must be dropped")
+		assert.Equal(t, uint64(2), last)
+		assert.True(t, d.closed.Load())
+	})
+
+	t.Run("process error stops reader", func(t *testing.T) {
+		d := &rowsSpec{total: 100000}
+		lm, conn := newRowsMiner(t, d)
+
+		boom := errors.New("boom")
+		calls := 0
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(context.Context, *sqlredo.RedoEvent) error {
+			calls++
+			if calls == 10 {
+				return boom
+			}
+			return nil
+		})
+		require.ErrorIs(t, err, boom)
+		assert.Equal(t, uint64(9), last)
+		assert.True(t, d.closed.Load(), "rows must be closed before returning")
+	})
+
+	t.Run("fetch error unchanged", func(t *testing.T) {
+		d := &rowsSpec{total: 100000, failAt: logMinerReadBatchSize + 7}
+		lm, conn := newRowsMiner(t, d)
+
+		var n int
+		last, err := lm.queryLogMinerContents(t.Context(), conn, 0, 1<<40, 1, func(context.Context, *sqlredo.RedoEvent) error {
+			n++
+			return nil
+		})
+		require.ErrorIs(t, err, errFetch)
+		assert.Equal(t, logMinerReadBatchSize+7, n, "rows before the failure must all be processed")
+		assert.Equal(t, uint64(n), last)
+		assert.True(t, d.closed.Load())
+	})
+
+	t.Run("context cancel", func(t *testing.T) {
+		d := &rowsSpec{total: 1 << 30}
+		lm, conn := newRowsMiner(t, d)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		_, err := lm.queryLogMinerContents(ctx, conn, 0, 1<<40, 1, func(context.Context, *sqlredo.RedoEvent) error {
+			cancel()
+			return ctx.Err()
+		})
+		require.Error(t, err)
+		assert.True(t, d.closed.Load())
+	})
+}
+
+func TestReadLogMinerRowsBatchesByRows(t *testing.T) {
+	tests := []struct {
+		name      string
+		total     int
+		fragments int
+		want      []int // events per batch
+	}{
+		{name: "single row statements", total: 1200, fragments: 1, want: []int{500, 500, 200}},
+		{name: "4 row statements", total: 2000, fragments: 4, want: []int{125, 125, 125, 125}},
+		{name: "4 row statements partial last batch", total: 2200, fragments: 4, want: []int{125, 125, 125, 125, 50}},
+		{name: "statement larger than a batch is not split", total: 1200, fragments: 600, want: []int{1, 1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lm, conn := newRowsMiner(t, &rowsSpec{total: test.total, fragments: test.fragments})
+			rows, err := conn.QueryContext(t.Context(), "SELECT * FROM V$LOGMNR_CONTENTS")
+			require.NoError(t, err)
+			defer rows.Close()
+
+			// Large enough that the reader never blocks.
+			batches := make(chan []*sqlredo.RedoEvent, test.total)
+			require.NoError(t, lm.readLogMinerRows(t.Context(), rows, batches, time.Now(), 0, 1<<40))
+			close(batches)
+
+			var (
+				sizes []int
+				n     int
+			)
+			for batch := range batches {
+				sizes = append(sizes, len(batch))
+				for _, ev := range batch {
+					var want strings.Builder
+					for i := range test.fragments {
+						fmt.Fprintf(&want, "r%d,", n*test.fragments+i)
+					}
+					assert.Equal(t, want.String(), ev.SQLRedo.String)
+					assert.Equal(t, uint64(n*test.fragments+1), ev.SCN, "first fragment's SCN")
+					n++
+				}
+			}
+			assert.Equal(t, test.want, sizes)
+			assert.Equal(t, test.total/test.fragments, n)
+		})
+	}
+}
+
+type rowsSpec struct {
+	total     int
+	csfEvery  int // when > 0, rows (1,2), (3,4), ... are 2-fragment statements
+	fragments int // when > 0, every statement spans this many rows; overrides csfEvery
+	failAt    int // Next returns errFetch after this many rows when > 0
+	closed    atomic.Bool
+}
+
+func newRowsMiner(t *testing.T, d *rowsSpec) (*LogMiner, *sql.Conn) {
+	t.Helper()
+	conn, fc := newFakeSQLConn(t, nil)
+	fc.contentRows = func() driver.Rows { return &genRows{d: d} }
+
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, NewDefaultConfig(), nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	return lm, conn
+}
+
+var errFetch = errors.New("fetch failed")
+
+type genRows struct {
+	fakeContentRows
+	d *rowsSpec
+	n int
+}
+
+func (r *genRows) Close() error { r.d.closed.Store(true); return nil }
+
+// Row n has SCN n+1. With csfEvery, odd rows start a statement (CSF=1) that the
+// following even row completes.
+func (r *genRows) Next(dest []driver.Value) error {
+	if r.d.failAt > 0 && r.n >= r.d.failAt {
+		return errFetch
+	}
+	if r.n >= r.d.total {
+		return io.EOF
+	}
+	n := r.n
+	r.n++
+	csf, sqlText, scn := int64(0), fmt.Sprintf("r%d", n), int64(n+1)
+	if r.d.fragments > 0 {
+		sqlText = fmt.Sprintf("r%d,", n)
+		if n%r.d.fragments != r.d.fragments-1 {
+			csf = 1
+		}
+	} else if r.d.csfEvery > 0 && n > 0 {
+		if n%2 == 1 {
+			csf, sqlText = 1, fmt.Sprintf("r%d-a", n)
+		} else {
+			sqlText = fmt.Sprintf("r%d-b", n)
+		}
+	}
+	copy(dest, []driver.Value{scn, sqlText, int64(1), "T", "S", time.Now(), []byte("xidxidxi"), nil, csf, "u", nil, nil})
+	return nil
+}
+
+func TestReadAheadBatches(t *testing.T) {
+	for _, tt := range []struct {
+		prefetchRows int
+		want         int
+	}{
+		{0, 4},
+		{500, 4},
+		{1000, 4},
+		{2000, 4},
+		{2001, 5},
+		{10000, 20},
+	} {
+		t.Run(fmt.Sprint(tt.prefetchRows), func(t *testing.T) {
+			assert.Equal(t, tt.want, readAheadBatches(tt.prefetchRows))
+		})
+	}
+}

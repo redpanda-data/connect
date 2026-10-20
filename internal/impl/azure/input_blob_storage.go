@@ -108,7 +108,7 @@ When downloading large files it's often necessary to process it in streamed part
 
 == Stream new files
 
-By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a `+"<<targetsinput, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Redpanda Connect will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
+By default this input will consume all files found within the target container and will then gracefully terminate. This is referred to as a "batch" mode of operation. However, it's possible to instead configure a container as https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[an Event Grid source^] and then use this as a `+"<<targets_input, `targets_input`>>"+`, in which case new files are consumed as they're uploaded and Redpanda Connect will continue listening for and downloading files as they arrive. This is referred to as a "streamed" mode of operation.
 
 == Metadata
 
@@ -133,11 +133,16 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewBoolField(bsiFieldDeleteObjects).
-				Description("Whether to delete downloaded objects from the blob once they are processed.").
+				Description("Whether to delete downloaded blobs from the container once they are processed.").
 				Advanced().
 				Default(false),
 			service.NewInputField(bsiFieldTargetsInput).
-				Description("EXPERIMENTAL: An optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `name`, which represents the blob to be downloaded.").
+				Description(`CAUTION: This is an experimental field that provides an optional source of download targets, configured as a xref:components:inputs/about.adoc[regular Redpanda Connect input]. Each message yielded by this input should be a single structured object containing a field `+"`"+`name`+"`"+`, which represents the blob to be downloaded.
+
+This requires setting up https://learn.microsoft.com/en-gb/azure/event-grid/event-schema-blob-storage[Azure Blob Storage as an Event Grid source^] and an associated event handler that a Redpanda Connect input can read from. For example, use either one of the following:
+
+* https://learn.microsoft.com/en-gb/azure/event-grid/handler-event-hubs[Azure Event Hubs] using the `+"`"+`kafka`+"`"+` input
+* https://learn.microsoft.com/en-gb/azure/event-grid/handler-event-grid-namespace-topic[Namespace topics] using the `+"`"+`mqtt`+"`"+` input`).
 				ShortDescription("EXPERIMENTAL: An optional input supplying download targets.").
 				Optional().
 				Version("4.27.0").

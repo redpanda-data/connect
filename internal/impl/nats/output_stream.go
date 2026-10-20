@@ -65,7 +65,7 @@ func soSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary(`Publish to a NATS Stream subject.`).
+		Summary(`Publishes to a NATS Stream subject.`).
 		Description(`
 [CAUTION]
 .Deprecation notice

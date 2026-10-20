@@ -27,20 +27,13 @@ func sqlDeprecatedOutputConfig() *service.ConfigSpec {
 		Description(`
 == Alternatives
 
-For basic inserts use the ` + "xref:components:outputs/sql.adoc[`sql_insert`]" + ` output. For more complex queries use the ` + "xref:components:outputs/sql_raw.adoc[`sql_raw`]" + ` output.`).
+For basic inserts use the ` + "xref:components:outputs/sql_insert.adoc[`sql_insert`]" + ` output. For more complex queries use the ` + "xref:components:outputs/sql_raw.adoc[`sql_raw`]" + ` output.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name").Description("Data source name.")).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
-		Field(service.NewBloblangField("args_mapping").
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
-			ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
-			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
-			Optional()).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of inserts to run in parallel.").
-			Default(64)).
+		Field(rawQueryArgsMappingField()).
+		Field(batchMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching")).
 		Version("3.65.0")
 }

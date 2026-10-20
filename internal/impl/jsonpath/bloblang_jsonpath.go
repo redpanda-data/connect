@@ -32,7 +32,7 @@ func init() {
 	if err := bloblang.RegisterMethodV2("json_path",
 		bloblang.NewPluginSpec().
 			Category("Object & Array Manipulation").
-			Description("Executes the given JSONPath expression on an object or array and returns the result. The JSONPath expression syntax can be found at https://goessner.net/articles/JsonPath/. For more complex logic, you can use Gval expressions (https://github.com/PaesslerAG/gval).").
+			Description("Executes the given JSONPath expression on an object or array and returns the result. The JSONPath expression syntax can be found at https://goessner.net/articles/JsonPath/. For more complex logic, you can use Gval expressions (https://github.com/PaesslerAG/gval).").Version("4.6.0").
 			Example("", `root.all_names = this.json_path("$..name")`, [2]string{
 				`{"name":"alice","foo":{"name":"bob"}}`,
 				`{"all_names":["alice","bob"]}`,

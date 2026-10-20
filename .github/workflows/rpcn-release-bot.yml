@@ -1,0 +1,65 @@
+name: RPCN Release Bot
+
+on:
+  # schedule:
+  #   - cron: "0 9 * * 1" # Mondays at 9am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-thread:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Calculate next minor version
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Use the highest stable vX.Y.Z tag rather than the "Latest" flag,
+          # which can be set manually on any release.
+          NEXT=$(gh release list --repo "$REPO" \
+              --exclude-drafts --exclude-pre-releases \
+              --limit 100 --json tagName \
+            | jq -r '[.[].tagName
+                      | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
+                      | ltrimstr("v") | split(".") | map(tonumber)]
+                     | max // empty
+                     | "\(.[0]).\(.[1] + 1).0"')
+          if [ -z "$NEXT" ]; then
+            echo "::error::Failed to determine next version from releases"
+            exit 1
+          fi
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "**Next release:** v$NEXT" >> "$GITHUB_STEP_SUMMARY"
+
+      # Incoming webhooks don't return the message timestamp, so threading
+      # requires the Web API (chat.postMessage) with a bot token. The bot
+      # needs the `chat:write` scope and must be a member of the channel.
+      - name: Post release thread
+        id: thread
+        uses: slackapi/slack-github-action@v3.0.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN_RELEASE }}
+          # Fail the job when the post fails; the default silently swallows
+          # errors and reports success.
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_RELEASE_CHANNEL_ID }}
+            text: ":redpanda: RPCN v${{ steps.version.outputs.next }} Release"
+
+      - name: Ask for release changes in thread
+        uses: slackapi/slack-github-action@v3.0.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN_RELEASE }}
+          errors: true
+          payload: |
+            channel: ${{ steps.thread.outputs.channel_id }}
+            thread_ts: "${{ steps.thread.outputs.ts }}"
+            text: "Does anyone have any changes they'd like to include in this week's release that need attention?"

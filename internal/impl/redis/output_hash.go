@@ -68,7 +68,7 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 		Fields(clientFields()...).
 		Fields(
 			service.NewInterpolatedStringField(hoFieldKey).
-				Description("The key for each message, function interpolations should be used to create a unique key per message.").
+				Description(`The key of the hash to set fields on for each message. Use function interpolations to create a unique key per message.`).
 				Examples("${! @.kafka_key }", "${! this.doc.id }", "${! counter() }"),
 			service.NewBoolField(hoFieldWalkMetadata).
 				Description("Whether all metadata fields of messages should be walked and added to the list of hash fields to set.").
@@ -77,7 +77,7 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 				Description("Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set.").
 				Default(false),
 			service.NewInterpolatedStringMapField(hoFieldFields).
-				Description("A map of key/value pairs to set as hash fields.").
+				Description(`A map of key/value pairs to set as hash fields.`).
 				Default(map[string]any{}),
 			service.NewOutputMaxInFlightField(),
 		)

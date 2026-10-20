@@ -49,7 +49,7 @@ Messages are not acknowledged at the input level until they have been added to t
 == Batching
 
 Messages that are logically batched at the point where they are added to the buffer will continue to be associated with that batch when they are consumed. This buffer is also more efficient when storing messages within batches, and therefore it is recommended to use batching at the input level in high-throughput use cases even if they are not required for processing.
-`).
+`).Version("4.11.0").
 		Field(service.NewStringField("path").
 			Description(`The path of the database file, which will be created if it does not already exist.`)).
 		Field(service.NewProcessorListField("pre_processors").

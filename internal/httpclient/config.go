@@ -182,7 +182,7 @@ type Config struct {
 // field; otherwise the field is required (no default).
 func FieldsWithBaseURL(baseURL string) []*service.ConfigField {
 	baseURLField := service.NewStringField(cFieldBaseURL).
-		Description("Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs.")
+		Description("The base URL of the target service (for example, `https://api.example.com`). TLS is enabled automatically for `https` URLs.")
 	if baseURL != "" {
 		baseURLField = baseURLField.Default(baseURL)
 	}
@@ -195,30 +195,30 @@ func FieldsWithBaseURL(baseURL string) []*service.ConfigField {
 func Fields() []*service.ConfigField {
 	fields := []*service.ConfigField{
 		service.NewDurationField(cFieldTimeout).
-			Description("HTTP request timeout.").
+			Description("HTTP request timeout.").Version("4.83.0").
 			Default("5s"),
 
-		service.NewTLSToggledField(cFieldTLS),
+		service.NewTLSToggledField(cFieldTLS).Version("4.83.0"),
 
 		service.NewStringField(cFieldProxyURL).
-			Description("HTTP proxy URL. Empty string disables proxying.").
+			Description("HTTP proxy URL. Empty string disables proxying.").Version("4.83.0").
 			Default("").
 			Advanced(),
 
 		service.NewBoolField(cFieldDisableHTTP2).
-			Description("Disable HTTP/2 and force HTTP/1.1.").
+			Description("Disable HTTP/2 and force HTTP/1.1.").Version("4.83.0").
 			Default(false).
 			Advanced(),
 	}
 
 	fields = append(fields,
 		service.NewFloatField(cFieldTPSLimit).
-			Description("Rate limit in requests per second. 0 disables rate limiting.").
+			Description("Rate limit in requests per second. 0 disables rate limiting.").Version("4.83.0").
 			Default(0.0).
 			Advanced(),
 
 		service.NewIntField(cFieldTPSBurst).
-			Description("Maximum burst size for rate limiting.").
+			Description("Maximum burst size for rate limiting.").Version("4.83.0").
 			Default(1).
 			Advanced(),
 
@@ -232,19 +232,19 @@ func Fields() []*service.ConfigField {
 			service.NewIntField(cFieldBackoffMaxRetries).
 				Description("Maximum number of retries on 429 responses.").
 				Default(3),
-		).Description("Adaptive backoff configuration for 429 (Too Many Requests) responses. Always active.").
+		).Description("Adaptive backoff configuration for 429 (Too Many Requests) responses. Always active.").Version("4.83.0").
 			Advanced(),
-		netutil.DialerConfigSpec(),
+		netutil.DialerConfigSpec().Version("4.83.0"),
 		httpTransportFieldSpec(),
 
 		service.NewStringEnumField(cFieldAccessLogLevel, "",
 			logLevelTrace.String(), logLevelDebug.String(), logLevelInfo.String(), logLevelWarn.String(), logLevelError.String()).
-			Description("Log level for HTTP request/response logging. Empty disables logging.").
+			Description("Log level for HTTP request/response logging. Empty disables logging.").Version("4.83.0").
 			Default("").
 			Advanced(),
 
 		service.NewIntField(cFieldAccessLogBodyLimit).
-			Description("Maximum bytes of request/response body to include in logs. 0 to skip body logging.").
+			Description("Maximum bytes of request/response body to include in logs. 0 to skip body logging.").Version("4.83.0").
 			Default(0).
 			Advanced(),
 	)
@@ -331,7 +331,7 @@ func httpTransportFieldSpec() *service.ConfigField {
 			Description("Size in bytes of the per-connection read buffer.").
 			Default(defaults.ReadBufferSize),
 		h2Fields,
-	).Description("HTTP transport settings controlling connection pooling, timeouts, and HTTP/2.").
+	).Description("HTTP transport settings controlling connection pooling, timeouts, and HTTP/2.").Version("4.83.0").
 		Advanced()
 }
 

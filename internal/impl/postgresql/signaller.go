@@ -9,7 +9,6 @@
 package pgstream
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -72,30 +71,30 @@ func (s *postgresSignaller) listen(msg *pglogicalstream.StreamMessage) (*replica
 		return nil, fmt.Errorf("expected string for %s.data column, got %T", s.tableName, row["data"])
 	}
 
-	var sig replication.ControlSignal
-	if sig.SignalType, ok = row["type"].(string); !ok {
+	signalType, ok := row["type"].(string)
+	if !ok {
 		return nil, fmt.Errorf("expected string for %s.type column, got %T", s.tableName, row["type"])
 	}
 
-	sig.ID = fmt.Sprintf("%v", row["id"])
-	log := s.log.With("id", sig.ID, "type", sig.SignalType)
+	id := fmt.Sprintf("%v", row["id"])
+	log := s.log.With("id", id, "type", signalType)
 
+	sig, err := replication.DecodeSignal(id, signalType, []byte(dataStr))
+	if err != nil {
+		return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
+	}
 	if msg.LSN != nil {
 		sig.LSN = []byte(*msg.LSN)
 	}
 
-	// validate signal type
-	switch sig.SignalType {
-	case replication.LogSignalType:
-		if err := json.Unmarshal([]byte(dataStr), &sig.LogSignal); err != nil {
-			return nil, fmt.Errorf("unmarshaling control signal %s.data: %w", s.tableName, err)
-		}
+	switch {
+	case sig.SignalType == replication.LogSignalType:
 		log.Infof("%s (lsn=%s)", sig.Message, sig.LSN)
-	default:
+	case !replication.IsKnownSignalType(sig.SignalType):
 		log.Warnf("Control signal %q received but not a recognized type", sig.SignalType)
 	}
 
-	return &sig, nil
+	return sig, nil
 }
 
 func wireFormPostgresIdentifier(name string) (string, error) {

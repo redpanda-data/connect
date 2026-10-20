@@ -28,33 +28,48 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// zmqBuildDescription explains how to get a Redpanda Connect build that
+// includes the zmq4 components. It is shared by the input and the output.
+const zmqBuildDescription = `
+This component links to the ZeroMQ C library (` + "`libzmq`" + `), so only cgo builds of Redpanda Connect include it. The standard release binaries, ` + "`rpk connect`" + `, and the Docker images don't include it.
+
+To get a build that includes this component, either download the ` + "`redpanda-connect-cgo_<version>_linux_amd64.tar.gz`" + ` archive from the https://github.com/redpanda-data/connect/releases[Redpanda Connect releases^], or build from source with cgo enabled and the ` + "`x_benthos_extra`" + ` build tag:
+
+` + "```bash" + `
+# Install the libzmq headers first, for example on Debian or Ubuntu
+sudo apt-get install libzmq3-dev
+
+CGO_ENABLED=1 go build -tags x_benthos_extra,timetzdata ./cmd/redpanda-connect
+` + "```" + `
+
+Both builds link ` + "`libzmq`" + ` dynamically, so the machine that runs Redpanda Connect also needs the ZeroMQ shared library installed.`
+
+// urlsField returns the `urls` field shared by the zmq4 input and output.
+func urlsField() *service.ConfigField {
+	return service.NewStringListField("urls").
+		Description("A list of ZeroMQ endpoints to connect to, or to bind when `bind` is `true`, using a transport such as `tcp://`, `ipc://`, or `inproc://`. If an item in the list contains commas, it is split into multiple endpoints.")
+}
+
+// bindField returns the `bind` field shared by the zmq4 input and output.
+func bindField() *service.ConfigField {
+	return service.NewBoolField("bind").
+		Description("Whether to bind to the URLs and wait for peers to connect, instead of connecting to them.")
+}
+
 func zmqInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Network").
 		Summary("Consumes messages from a ZeroMQ socket.").
-		Description(`
-By default Redpanda Connect does not build with components that require linking to external libraries. If you wish to build Redpanda Connect locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
-
-` + "```bash" + `
-# With go
-go install -tags "x_benthos_extra" github.com/redpanda-data/benthos/v4/cmd/benthos@latest
-
-# Using make
-make TAGS=x_benthos_extra
-` + "```" + `
-
-There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing this component.`).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+		Description(zmqBuildDescription).
+		Field(urlsField().
 			Example([]string{"tcp://localhost:5555"})).
-		Field(service.NewBoolField("bind").
-			Description("Whether to bind to the specified URLs (otherwise they are connected to).").
+		Field(bindField().
 			Default(false)).
 		Field(service.NewStringEnumField("socket_type", "PULL", "SUB").
 			Description("The socket type to connect as.")).
 		Field(service.NewStringListField("sub_filters").
-			Description("A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").
+			Description("The topics that the socket subscribes to when `socket_type` is `SUB`. ZeroMQ delivers a message only when its first frame begins with one of these prefixes, so specifying a single sub_filter of `''` subscribes to everything. At least one filter is required with a SUB socket.").
 			ShortDescription("Subscription topic filters for a SUB socket. A single empty filter subscribes to everything.").
 			Default([]any{})).
 		Field(service.NewIntField("high_water_mark").

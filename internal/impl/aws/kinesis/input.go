@@ -199,7 +199,9 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 					Default(0).
 					Advanced(),
 			},
-				config.SessionFields()...,
+				config.SessionFieldsWithVersions(map[string]string{
+					"region": "4.53.0", "endpoint": "4.53.0", "credentials": "4.53.0",
+				})...,
 			)...,
 		).
 			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.").
@@ -209,7 +211,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			ShortDescription("Maximum gap between the in-flight sequence and the latest acknowledged sequence.").
 			Default(1024),
 		service.NewDurationField(kiFieldPollPeriod).
-			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so setting this to e.g. `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
+			Description("An optional minimum period between GetRecords calls made against each shard. Kinesis allows a shared budget of 5 GetRecords calls per second per shard across all consumers of a stream, so a value such as `250ms` bounds this consumer to roughly four reads per second per shard, leaving headroom for other consumers of the same stream. The default of `0s` polls as fast as records are consumed. This setting has no effect when `enhanced_fan_out` is enabled. A shard is polled at most once per period, so the committed sequence advances no faster than that; values above `lease_period` are rejected.").
 			ShortDescription("Minimum period between record polls of a shard, for staying under the shared Kinesis read limit.").
 			Default("0s").
 			Version("4.109.0").
@@ -241,7 +243,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Description("The period of time between each update to the checkpoint table.").
 			Default("5s"),
 		service.NewDurationField(kiFieldStealGracePeriod).
-			Description("Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.").
+			Description("Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.").Version("4.55.0").
 			ShortDescription("How long past the next commit period to wait for a shard's current owner to store a checkpoint.").
 			Default("2s"),
 		service.NewDurationField(kiFieldRebalancePeriod).

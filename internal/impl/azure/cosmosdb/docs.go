@@ -234,10 +234,10 @@ func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 			service.NewBloblangField(fieldPatchValue).Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a value of any type that is supported by CosmosDB.").
 				ShortDescription("Bloblang mapping evaluating to any value type supported by CosmosDB.").Example(`root = "blobfish"`).Example(`root = 41`).Example(`root = true`).Example(`root = json("blobfish").depth`).Example(`root = [1, 2, 3]`).Optional(),
 		}...).Description("Patch operations to be performed when `" + fieldOperation + ": " + string(OperationPatch) + "` .").Optional().Advanced(),
-		service.NewInterpolatedStringField(fieldPatchCondition).Description("Patch operation condition.").Optional().Advanced().Example(`from c where not is_defined(c.blobfish)`),
+		service.NewInterpolatedStringField(fieldPatchCondition).Description(`Patch operation condition.`).Optional().Advanced().Example(`from c where not is_defined(c.blobfish)`),
 		service.NewBoolField(fieldAutoID).Description("Automatically set the item `id` field to a random UUID v4. If the `id` field is already set, then it will not be overwritten. Setting this to `false` can improve performance, since the messages will not have to be parsed.").
 			ShortDescription("Set the item id field to a random UUID v4, unless it is already set.").Default(true).Advanced(),
-		service.NewInterpolatedStringField(fieldItemID).Description("ID of item to replace or delete. Only used by the Replace and Delete operations").Example(`${! json("id") }`).Optional(),
+		service.NewInterpolatedStringField(fieldItemID).Description(`ID of item to replace or delete. Only used by the Replace and Delete operations`).Example(`${! json("id") }`).Optional(),
 	}
 }
 

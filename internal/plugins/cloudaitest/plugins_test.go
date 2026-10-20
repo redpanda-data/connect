@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -15,58 +15,15 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	_ "embed"
-
 	_ "github.com/redpanda-data/connect/v4/public/components/cloud"
 	_ "github.com/redpanda-data/connect/v4/public/components/ollama"
 )
 
 func TestImportsMatch(t *testing.T) {
-	allowSlice := plugins.PluginNamesForCloudAI(plugins.TypeNone)
-
-	env := service.GlobalEnvironment()
-
-	seen := map[string]struct{}{}
-
-	env.WalkBuffers(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
+	missing := plugins.BaseInfo.Unregistered(service.GlobalEnvironment(), func(info plugins.PluginInfo) bool {
+		return info.CloudWithGPU
 	})
-
-	env.WalkCaches(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkInputs(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkMetrics(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkOutputs(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkProcessors(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkRateLimits(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkScanners(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	env.WalkTracers(func(name string, _ *service.ConfigView) {
-		seen[name] = struct{}{}
-	})
-
-	for _, k := range allowSlice {
-		if _, exists := seen[k]; !exists {
-			t.Errorf("plugin '%v' referenced within internal/plugins/info.csv is not imported by this product", k)
-		}
+	for _, k := range missing {
+		t.Errorf("plugin '%v' is marked cloud_with_gpu within internal/plugins/info.csv but is not imported by this product", k)
 	}
 }

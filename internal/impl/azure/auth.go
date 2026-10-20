@@ -44,17 +44,17 @@ func azureComponentSpec() *service.ConfigSpec {
 		Categories("Services", "Azure").
 		Fields(
 			service.NewStringField(bscFieldStorageAccount).
-				Description("The storage account to access. This field is ignored if `"+bscFieldStorageConnectionString+"` is set.").
+				Description("The storage account to access. This field is ignored when the `"+bscFieldStorageConnectionString+"` field is populated, unless the connection string does not contain the `AccountName` parameter.").
 				Default(""),
 			service.NewStringField(bscFieldStorageAccessKey).
-				Description("The storage account access key. This field is ignored if `"+bscFieldStorageConnectionString+"` is set.").
+				Description("The access key for the storage account. Use this field along with `"+bscFieldStorageAccount+"` for authentication. This field is ignored when the `"+bscFieldStorageConnectionString+"` field is populated.").
 				Default(""),
 			service.NewStringField(bscFieldStorageConnectionString).
-				Description("A storage account connection string. This field is required if `"+bscFieldStorageAccount+"` and `"+bscFieldStorageAccessKey+"` / `"+bscFieldStorageSASToken+"` are not set.").
+				Description("The connection string for the storage account. This field is required if `"+bscFieldStorageAccount+"` is not set.\n\nNOTE: If the `"+bscFieldStorageConnectionString+"` field does not contain the `AccountName` parameter value, specify it in the `"+bscFieldStorageAccount+"` field.").
 				Default(""),
 		)
 	spec = spec.Field(service.NewStringField(bscFieldStorageSASToken).
-		Description("The storage account SAS token. This field is ignored if `" + bscFieldStorageConnectionString + "` or `" + bscFieldStorageAccessKey + "` are set.").
+		Description("The SAS token for the storage account. Use this field along with `" + bscFieldStorageAccount + "` for authentication. This field is ignored when either the `" + bscFieldStorageConnectionString + "` or `" + bscFieldStorageAccessKey + "` fields are populated.").
 		Default("")).
 		LintRule(`root = if this.storage_connection_string != "" && !this.storage_connection_string.contains("AccountName=")  && !this.storage_connection_string.contains("UseDevelopmentStorage=true;") && this.storage_account == "" { [ "storage_account must be set if storage_connection_string does not contain the \"AccountName\" parameter" ] }`)
 	return spec

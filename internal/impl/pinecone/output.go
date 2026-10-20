@@ -51,16 +51,16 @@ func outputSpec() *service.ConfigSpec {
 				LintRule(`root = if this.has_prefix("https://") { ["host field must be a FQDN not a URL (remove the https:// prefix)"] }`),
 			service.NewStringField(poFieldAPIKey).
 				Secret().
-				Description("The Pinecone api key."),
+				Description("The Pinecone API key."),
 			service.NewStringEnumField(poFieldOp, string(operationUpdate), string(operationUpsert), string(operationDelete)).
 				Default(string(operationUpsert)).
 				Description("The operation to perform against the Pinecone index."),
 			service.NewInterpolatedStringField(poFieldNamespace).
 				Default("").
 				Advanced().
-				Description("The namespace to write to - writes to the default namespace by default."),
+				Description(`The namespace to write to - writes to the default namespace by default.`),
 			service.NewInterpolatedStringField(poFieldID).
-				Description("The ID for the index entry in Pinecone."),
+				Description(`The ID for the index entry in Pinecone.`),
 			service.NewBloblangField(poFieldVectorMapping).
 				Optional().
 				Description("The mapping to extract out the vector from the document. The result must be a floating point array. Required if not a delete operation.").

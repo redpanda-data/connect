@@ -40,16 +40,12 @@ func outputSpec() *service.ConfigSpec {
 		Summary(`Sends message parts as files to a HDFS directory.`).
 		Description(`Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewStringListField(oFieldHosts).
-				Description("A list of target host addresses to connect to.").
-				Example("localhost:9000"),
-			service.NewStringField(oFieldUser).
-				Description("A user ID to connect as.").
-				Default(""),
+			hostsField(oFieldHosts),
+			userField(oFieldUser),
 			service.NewInterpolatedStringField(oFieldDirectory).
-				Description("A directory to store message files within. If the directory does not exist it will be created."),
+				Description(`A directory to store message files within. If the directory does not exist it will be created.`),
 			service.NewInterpolatedStringField(oFieldPath).
-				Description("The path to upload messages as, interpolation functions should be used in order to generate unique file paths.").
+				Description(`The path to upload messages as. Use interpolation functions to generate unique file paths.`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(oFieldBatching),

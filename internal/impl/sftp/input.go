@@ -59,7 +59,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(connectionFields()...).
 		Field(service.NewIntField(siFieldMaxSFTPSessions).
-			Description("The maximum number of SFTP sessions.").
+			Description("The maximum number of SFTP sessions.").Version("4.59.0").
 			// See `MaxSessions` and `MaxStartups` in the server `sshd_config`.
 			// Details here: https://serverfault.com/questions/392749/sftp-concurrent-connection
 			Default(10).

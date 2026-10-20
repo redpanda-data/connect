@@ -48,8 +48,9 @@ import (
 //     TIMESTAMP WITH TIME ZONE), proving the annotation is honoured on read.
 func TestCOWTemporalDataColumnIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_temporal_datacol_ns", "cow_temporal_datacol_test"
 	infra.CreateNamespace(t, ns)

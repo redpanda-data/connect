@@ -60,6 +60,8 @@ func snowflakePutOutputConfig() *service.ConfigSpec {
 		Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").
 		Description(`
+TIP: Use the xref:components:outputs/snowflake_streaming.adoc[`+"`snowflake_streaming`"+` output] for better performance, lower cost, and simpler configuration.
+
 In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described in
 xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries]. When using batching, messages are grouped by the calculated
 stage and Snowpipe and are streamed to individual files in their corresponding stage and, optionally, a Snowpipe
@@ -205,11 +207,11 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			ShortDescription("The cloud part of the Account Identifier. Required when using an Account Locator.").Example("aws").Example("gcp").Example("azure").Optional()).
 		Field(service.NewStringField("user").Description("Username.")).
 		Field(service.NewStringField("password").Description("An optional password.").Optional().Secret()).
-		Field(service.NewStringField("private_key").Description("The private SSH key. `private_key_pass` is required when using encrypted keys.").
+		Field(service.NewStringField("private_key").Description("Your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.").Version("4.38.0").
 			ShortDescription("The private SSH key. Encrypted keys also need private_key_pass.").Optional().Secret()).
-		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.").
+		Field(service.NewStringField("private_key_file").Description("The path to a file containing your private SSH key. When using encrypted keys, you must also set a value for `private_key_pass`.").
 			ShortDescription("Path to a file containing the private SSH key. Encrypted keys also need private_key_pass.").Optional()).
-		Field(service.NewStringField("private_key_pass").Description("An optional private SSH key passphrase.").Optional().Secret()).
+		Field(service.NewStringField("private_key_pass").Description("The passphrase for your private SSH key.").Optional().Secret()).
 		Field(service.NewStringField("role").Description("Role.")).
 		Field(service.NewStringField("database").Description("Database.")).
 		Field(service.NewStringField("warehouse").Description("Warehouse.")).
@@ -217,10 +219,10 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 		Field(service.NewInterpolatedStringField("stage").Description(`Stage name. Use either one of the
 		https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html[supported^] stage types.`).
 			ShortDescription("Stage name, using one of the supported stage types.")).
-		Field(service.NewInterpolatedStringField("path").Description("Stage path.").Default("")).
-		Field(service.NewInterpolatedStringField("file_name").Description("Stage file name. Will be equal to the Request ID if not set or empty.").Optional().Default("").Version("v4.12.0")).
-		Field(service.NewInterpolatedStringField("file_extension").Description("Stage file extension. Will be derived from the configured `compression` if not set or empty.").
-			ShortDescription("Stage file extension. Derived from the configured compression if unset.").Optional().Default("").Example("csv").Example("parquet").Version("v4.12.0")).
+		Field(service.NewInterpolatedStringField("path").Description(`Stage path.`).Default("")).
+		Field(service.NewInterpolatedStringField("file_name").Description(`Stage file name. Will be equal to the Request ID if not set or empty.`).Optional().Default("").Version("4.12.0")).
+		Field(service.NewInterpolatedStringField("file_extension").Description(`Stage file extension. Will be derived from the configured `+"`"+`compression`+"`"+` if not set or empty.`).
+			ShortDescription("Stage file extension. Derived from the configured compression if unset.").Optional().Default("").Example("csv").Example("parquet").Version("4.12.0")).
 		Field(service.NewIntField("upload_parallel_threads").Description("Specifies the number of threads to use for uploading files.").Advanced().Default(4).LintRule(`root = if this < 1 || this > 99 { [ "upload_parallel_threads must be between 1 and 99" ] }`)).
 		Field(service.NewStringAnnotatedEnumField("compression", map[string]string{
 			string(CompressionTypeNone):       "No compression is applied and messages must contain plain-text JSON. Default `file_extension`: `json`.",
@@ -230,12 +232,12 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			string(CompressionTypeRawDeflate): "Messages must be pre-compressed using the flate algorithm (without header, RFC1951). Default `file_extension`: `raw_deflate`.",
 			string(CompressionTypeZstandard):  "Messages must be pre-compressed using the Zstandard algorithm. Default `file_extension`: `zst`.",
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
-		Field(service.NewInterpolatedStringField("request_id").Description("Request ID. Will be assigned a random UUID (v4) string if not set or empty.").Optional().Default("").Version("v4.12.0")).
+		Field(service.NewInterpolatedStringField("request_id").Description(`Request ID. Will be assigned a random UUID (v4) string if not set or empty.`).Optional().Default("").Version("4.12.0")).
 		Field(service.NewInterpolatedStringField("snowpipe").Description("An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`. `private_key` or `private_key_file` must be set when using this feature.").
 			ShortDescription("An optional Snowpipe name. Requires private_key or private_key_file to be set.").Optional()).
-		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).
+		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Version("4.11.0").Advanced().Default(false)).
 		Field(service.NewBatchPolicyField("batching")).
-		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
+		Field(service.NewIntField("max_in_flight").Description("The maximum number of message batches to have in flight at any given time. Batches share one Snowflake connection and are uploaded one at a time, so a higher value lets batches queue but doesn't upload them in parallel. To upload the files of a batch in parallel, use `upload_parallel_threads`.").Default(1)).
 		LintRule(`root = match {
   (!this.exists("password") || this.password == "") && (!this.exists("private_key") || this.private_key == "") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "either `+"`password`"+` or `+"`private_key`"+` or `+"`private_key_file`"+` must be set" ],
   this.exists("password") && this.password != "" && (this.exists("private_key") && this.private_key != "" || this.exists("private_key_file") && this.private_key_file != "") => [ "only one of `+"`password`"+`, `+"`private_key`"+` and `+"`private_key_file`"+` can be set" ],

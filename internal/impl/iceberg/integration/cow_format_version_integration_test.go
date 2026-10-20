@@ -42,8 +42,9 @@ import (
 // and there are zero delete files.
 func TestCOWFormatVersion1Integration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	const ns, tbl = "cow_v1_ns", "cow_v1_test"
 	infra.CreateNamespace(t, ns)

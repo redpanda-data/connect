@@ -51,7 +51,7 @@ This input uses https://github.com/parquet-go/parquet-go[https://github.com/parq
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (` + "`[]byte`" + `) unless the logical type is UTF8, in which case they are extracted as a string (` + "`string`" + `).
 
 When a value extracted as a byte slice exists within a document which is later JSON serialized by default it will be base 64 encoded into strings, which is the default for arbitrary data fields. It is possible to convert these binary values to strings (or other data types) using Bloblang transformations such as ` + "`root.foo = this.foo.string()` or `root.foo = this.foo.encode(\"hex\")`" + `, etc.`).
-		Version("4.8.0")
+		Version("4.9.0")
 }
 
 func init() {

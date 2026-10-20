@@ -88,12 +88,6 @@ dockers_v2:
 
 publishers:
   # Gets run once per artifact (deb or rpm)
-  - name: Publish Linux packages to Cloudsmith
-    ids:
-      - connect-linux-pkgs
-    cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }} {{ .Version }}
-    env:
-      - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
   - name: Publish Linux packages to GCP Artifact Registry
     ids:
       - connect-linux-pkgs

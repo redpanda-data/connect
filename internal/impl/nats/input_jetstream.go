@@ -65,12 +65,12 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("An optional queue group to consume as. Used to configure a push consumer.").
 			Optional()).
 		Field(service.NewStringField("subject").
-			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
+			Description(consumeSubjectDescription + " Either a subject or stream must be specified.").
 			ShortDescription("A subject to consume from, supporting wildcards. Either a subject or stream is required.").
 			Optional().
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("durable").
-			Description("Preserve the state of your consumer under a durable name. Used to configure a pull consumer.").
+			Description("Preserve the state of your consumer under a durable name.").
 			Optional()).
 		LintRule(`root = match {
 			this.exists("queue") && this.queue != "" && this.exists("durable") && this.durable != "" => [ "both 'queue' and 'durable' can't be set simultaneously" ],
@@ -82,7 +82,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("Indicates that the subscription should use an existing consumer.").
 			Optional()).
 		Field(service.NewBoolField("create_stream").
-			Description("Whether to automatically create the stream if it doesn't exist (requires the stream field to be set).").
+			Description("Whether to automatically create the stream if it doesn't exist (requires the stream field to be set).").Version("4.84.0").
 			Advanced().
 			Default(false)).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{

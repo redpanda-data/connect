@@ -45,9 +45,10 @@ import (
 // only possible under copy-on-write.
 func TestCOWPartitionTransformExtrasIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	// t15/t16/t17/t18 are distinct days within Jan 2024; m1/m2/m3 are distinct
 	// months. Seeds pass timestamps as numeric microseconds (the append/shredder

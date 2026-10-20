@@ -3,6 +3,89 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.114.0 - 2026-10-16
+
+### Added
+
+- kafka: Added optional tombstone field to franz-based Kafka outputs (redpanda, kafka_franz) to support producing compacted topic deletes and null values. ([@squiidz](https://github.com/squiidz), [#4959](https://github.com/redpanda-data/connect/pull/4959))
+- oracledb_cdc: Exposed rs_id and ssn metadata from Oracle LogMiner to uniquely identify row changes in transactions, following Debezium's field names. ([@Leward](https://github.com/Leward), [#4826](https://github.com/redpanda-data/connect/pull/4826))
+- oracledb_cdc: Added row_seq metadata to disambiguate array DELETE rows that share the same rs_id and ssn, making the (rs_id, ssn, row_seq) triple unique per row change. ([@Leward](https://github.com/Leward), [#4827](https://github.com/redpanda-data/connect/pull/4827))
+- redpanda: Added partition_assignment_strategy field to redpanda input to control consumer group partition balancing across cooperative-sticky, sticky, range, and roundrobin strategies. ([@alextreichler](https://github.com/alextreichler), [#4923](https://github.com/redpanda-data/connect/pull/4923))
+- sap_hana: Added SAP HANA polling input with bulk, incrementing, timestamp, and query modes, supporting schema metadata discovery, high-water mark checkpointing, and LOB/binary column handling. ([@squiidz](https://github.com/squiidz), [#4775](https://github.com/redpanda-data/connect/pull/4775))
+
+### Fixed
+
+- couchbase: Couchbase output now correctly fails only messages whose individual operations failed, instead of acking all messages regardless of operation errors. ([@Leward](https://github.com/Leward), [#4969](https://github.com/redpanda-data/connect/pull/4969))
+- redpanda_migrator: Schema registry sync no longer fails the entire output on per-subject registration errors; partial sync failures are now retried on the next interval. ([@rjustice-rp](https://github.com/rjustice-rp), [#4895](https://github.com/redpanda-data/connect/pull/4895))
+- schema_registry_encode: Optional fields in json_schema mode now accept null values, matching Avro conversion behavior for NULL values from CDC inputs. ([@JakeSCahill](https://github.com/JakeSCahill), [#4950](https://github.com/redpanda-data/connect/pull/4950))
+- oracledb_cdc: replay open LOB transactions at window boundaries. ([@josephwoodward](https://github.com/josephwoodward), [#4964](https://github.com/redpanda-data/connect/pull/4964))
+
+### Changed
+
+- general: Shared field descriptions from benthos internals as exported constants and gave component-specific fields their own descriptions. ([@JakeSCahill](https://github.com/JakeSCahill), [#4877](https://github.com/redpanda-data/connect/pull/4877))
+- general: Updated Benthos dependency to v4.83.0 to pull in credential redaction for URLs and httpclient retry fixes. ([@Jeffail](https://github.com/Jeffail), [#4972](https://github.com/redpanda-data/connect/pull/4972))
+- kafka: Clarified compression field behavior when unset and set default to snappy to match franz-go's actual default preference. ([@JakeSCahill](https://github.com/JakeSCahill), [#4951](https://github.com/redpanda-data/connect/pull/4951))
+- oracledb_cdc: Improved oracledb_cdc parsing and message processing with better row type handling, inline read-ahead scaling, and cleaner error handling. ([@josephwoodward](https://github.com/josephwoodward), [#4941](https://github.com/redpanda-data/connect/pull/4941))
+- prometheus: Added documentation for mixed use_histogram_timing settings across fleets and histogram_timing_seconds_suffix workaround for remote-write receivers. ([@squiidz](https://github.com/squiidz), [#4946](https://github.com/redpanda-data/connect/pull/4946))
+- sql: SQL integration tests now run in parallel with shared database containers, reducing overall test package execution time. ([@Leward](https://github.com/Leward), [#4874](https://github.com/redpanda-data/connect/pull/4874))
+
+## 4.113.0 - 2026-10-09
+
+### Added
+
+- sftp: SFTP credentials now support an advanced opt-in block to enable additional SSH key exchange algorithms, ciphers, and MACs beyond the x/crypto/ssh defaults. ([@rockdatasrl001](https://github.com/rockdatasrl001), [#4906](https://github.com/redpanda-data/connect/pull/4906))
+
+### Fixed
+
+- license: Community binary now correctly reports an enterprise license error when a user configures an enterprise component without a license service, instead of reporting an internal fault. ([@Leward](https://github.com/Leward), [#4899](https://github.com/redpanda-data/connect/pull/4899))
+- oracledb: Oracle CDC now correctly tracks and holds the commit checkpoint below the START of open LOB-only transactions to prevent data loss on restart. ([@josephwoodward](https://github.com/josephwoodward), [#4920](https://github.com/redpanda-data/connect/pull/4920))
+- timeplus: Timeplus output is now properly registered and available in all binaries after being inadvertently dropped during a refactor. ([@Jeffail](https://github.com/Jeffail), [#4907](https://github.com/redpanda-data/connect/pull/4907))
+
+### Changed
+
+- jira: Jira input and processor are now correctly licensed as enterprise components to match their runtime requirements. ([@Jeffail](https://github.com/Jeffail), [#4909](https://github.com/redpanda-data/connect/pull/4909))
+- postgres: Postgres CDC now releases snapshot chunks on the first heartbeat when idle to improve resource management. ([@josephwoodward](https://github.com/josephwoodward), [#4926](https://github.com/redpanda-data/connect/pull/4926))
+
+### Deprecated
+
+- kafka: Kafka and kafka_franz outputs are now marked as deprecated in favor of the redpanda output, matching the earlier deprecation of the corresponding inputs. ([@Jeffail](https://github.com/Jeffail), [#4908](https://github.com/redpanda-data/connect/pull/4908))
+
+
+
+## 4.112.0 - 2026-10-02
+
+### Added
+
+- postgres_cdc: Added incremental snapshot support to Postgres CDC, enabling tables to be backfilled in chunks while replication continues running, eliminating the need for snapshot-induced stream blocking or restart from the beginning. ([@josephwoodward](https://github.com/josephwoodward), [#4811](https://github.com/redpanda-data/connect/pull/4811))
+- oracledb_cdc: Implemented a log_count based algorithm for the Oracle CDC window strategy to improve change capture efficiency. ([@josephwoodward](https://github.com/josephwoodward), [#4864](https://github.com/redpanda-data/connect/pull/4864))
+- opensearch: Added compress_request_body option to the OpenSearch output to enable gzip compression of HTTP request bodies, reducing bandwidth usage on cross-cloud or cross-region bulk writes. ([@doradojl](https://github.com/doradojl), [#4896](https://github.com/redpanda-data/connect/pull/4896))
+
+### Fixed
+
+- gcp_spanner_cdc: Fixed Cloud Spanner CDC metadata indexes being recreated on every connector restart by deriving index names deterministically from a hash instead of generating new UUIDs, preventing the 128-index-per-table limit from being exceeded. ([@bfbarkhouse-redpanda](https://github.com/bfbarkhouse-redpanda), [#4830](https://github.com/redpanda-data/connect/pull/4830))
+- iceberg: Fixed table creation and schema evolution failures with nanosecond timestamp columns by validating and rejecting unsupported nanosecond timestamp types before creating or modifying tables. ([@squiidz](https://github.com/squiidz), [#4853](https://github.com/redpanda-data/connect/pull/4853))
+- metrics: Fixed Prometheus histogram timing metrics being incorrectly exported with _ns suffix instead of _seconds, which caused remote-write targets to reject batches when mixed use_histogram_timing settings were present in a fleet. ([@squiidz](https://github.com/squiidz), [#4546](https://github.com/redpanda-data/connect/pull/4546))
+- oracledb_cdc: Fixed Oracle CDC losing LOB (Large Object) updates when transactions contained only LOB events without DML events, by tracking LOB event SCNs and holding the commit checkpoint until all open LOB transactions complete. ([@Leward](https://github.com/Leward), [#4902](https://github.com/redpanda-data/connect/pull/4902))
+
+### Changed
+
+- kafka: Removed the schema registry fixed-ID workaround for Redpanda versions before 25.3 by leveraging native IMPORT mode support, now requiring the destination registry to be in IMPORT mode when translate_ids is false. ([@Jeffail](https://github.com/Jeffail), [#4843](https://github.com/redpanda-data/connect/pull/4843))
+
+## 4.111.0 - 2026-09-24
+
+### Added
+
+- mssqlserver_cdc: Exposed seqval and command_id metadata fields alongside lsn to enable proper ordering of changes within transactions. ([@Leward](https://github.com/Leward), [#4831](https://github.com/redpanda-data/connect/pull/4831))
+- oracledb_cdc: Added prefetch_rows configuration option to optimize LogMiner query performance. ([@josephwoodward](https://github.com/josephwoodward), [#4698](https://github.com/redpanda-data/connect/pull/4698))
+- websocket: Enabled websocket input and output components for cloud distributions. ([@prakhargarg105](https://github.com/prakhargarg105), [#4708](https://github.com/redpanda-data/connect/pull/4708))
+
+### Fixed
+
+- oracledb_cdc: Fixed redelivery issue where ORA-01368 errors caused by reused online redo logs resulted in duplicate transaction publication. ([@josephwoodward](https://github.com/josephwoodward), [#4850](https://github.com/redpanda-data/connect/pull/4850))
+- postgres_cdc: Fixed validation to allow heartbeat_interval and pg_wal_monitor_interval to be set to 0s as documented to disable these features. ([@Leward](https://github.com/Leward), [#4846](https://github.com/redpanda-data/connect/pull/4846))
+- redpanda_migrator: Reduced schema registry fan-out from O(N²) to O(N) requests during translate_ids sync by using RegisterSchema instead of CreateSchema, preventing request bursts that overwhelmed single-node registries. ([@prakhargarg105](https://github.com/prakhargarg105), [#4734](https://github.com/redpanda-data/connect/pull/4734))
+- sftp: Fixed SSH channel leak on write failures that exhausted the server's channel limit and prevented reconnection. ([@brokenjacobs](https://github.com/brokenjacobs), [#4839](https://github.com/redpanda-data/connect/pull/4839))
+
 ## 4.110.0 - 2026-09-17
 
 ### Added
@@ -557,7 +640,7 @@ All notable changes to this project will be documented in this file.
 
 - `snowflake_streaming` output: the commit polling backoff is now configurable via the `commit_backoff` object. The `commit_timeout` field is deprecated in favour of `commit_backoff.max_elapsed_time`.
 - `tigerbeetle_cdc` input: adds the `timeout_seconds` configuration and triggers
-   [monitoring](https://docs.redpanda.com/redpanda-connect/guides/monitoring/) in case
+   [monitoring](https://docs.redpanda.com/connect/guides/monitoring/) in case
    of lost connectivity with the TigerBeetle cluster. (@batiati)
 
 ### Fixed

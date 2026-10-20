@@ -23,6 +23,17 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// tlsField returns the tls field shared by the input and output.
+func tlsField() *service.ConfigField {
+	return service.NewObjectField("tls",
+		service.NewStringField("root_cas_file").
+			Description("The path of a PEM file containing the certificate authority certificates that the client trusts when it verifies the TLS certificate of the broker. Leave empty to trust the certificate authorities of the host system.").
+			ShortDescription("An optional path to a root certificate authority file, often a `.pem` file containing a certificate chain.").
+			Default("").
+			Example("./root_cas.pem")).
+		Description("Specify the path to a custom CA certificate to trust the broker TLS service.").Version("4.2.0")
+}
+
 func authField() *service.ConfigField {
 	return service.NewObjectField("auth",
 		service.NewObjectField("oauth2",
@@ -36,7 +47,7 @@ func authField() *service.ConfigField {
 				Description("OAuth2 issuer URL.").
 				Default(""),
 			service.NewURLField("scope").
-				Description("OAuth2 scope to request.").
+				Description("OAuth2 scope to request.").Version("4.29.0").
 				Default(""),
 			service.NewStringField("private_key_file").
 				Description("The path to a file containing a private key.").

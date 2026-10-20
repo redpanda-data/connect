@@ -9,13 +9,16 @@
 package pgstream
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -25,9 +28,13 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 const (
@@ -44,6 +51,7 @@ const (
 	fieldWalMonitorInterval        = "pg_wal_monitor_interval"
 	fieldSlotName                  = "slot_name"
 	fieldBatching                  = "batching"
+	fieldBatchTransactions         = "batch_transactions"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
@@ -52,6 +60,14 @@ const (
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
 	shutdownTimeout        = 5 * time.Second
+
+	fieldIncSnapshot                   = "incremental_snapshot"
+	fieldIncSnapshotEnabled            = "enabled"
+	fieldIncrementalSnapshotChunkSize  = "chunk_size"
+	fieldIncSnapshotCheckpointCache    = "checkpoint_cache"
+	fieldIncSnapshotCheckpointCacheKey = "checkpoint_cache_key"
+	fieldIncSnapshotHeartbeatInterval  = "heartbeat_interval"
+	fieldIncSnapshotRetryCooldown      = "retry_cooldown"
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -76,10 +92,26 @@ func newPostgresCDCConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.39.0").
+		Version("4.43.0").
 		Summary(`Streams changes from a PostgreSQL database using logical replication.`).
 		Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+
+This input was renamed from ` + "`pg_stream`" + ` to ` + "`postgres_cdc`" + ` in version 4.43.0. The ` + "`pg_stream`" + ` name still works, but it's deprecated.
+
+== Requirements
+
+The source database must have logical replication enabled, which means its ` + "`wal_level`" + ` setting must be ` + "`logical`" + `. The database must also accept replication connections from the host that runs Redpanda Connect, for example through a ` + "`replication`" + ` entry in ` + "`pg_hba.conf`" + `.
+
+== Snapshot and streaming modes
+
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `, and then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
+
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
+
+== Data types
+
+Column values keep their PostgreSQL types where an equivalent exists. ` + "`BOOL`" + ` columns become booleans, integer and floating-point columns become numbers, ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, and ` + "`TIMESTAMPTZ`" + ` columns become timestamps, ` + "`BYTEA`" + ` columns become byte arrays, and ` + "`JSON`" + ` and ` + "`JSONB`" + ` columns become structured values. ` + "`NUMERIC`" + ` and ` + "`DECIMAL`" + ` columns become strings to preserve their precision, as do ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, and ` + "`TIMETZ`" + ` columns.
 
 == Metadata
 
@@ -94,17 +126,24 @@ This input adds the following metadata fields to each message:
 == Unserializable rows
 
 A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+
+== Metrics
+
+This input emits the following metrics:
+
+- ` + "`postgres_snapshot_progress`" + `: A gauge, labeled by ` + "`table`" + `, that reports the estimated fraction of each table's rows read so far in the initial snapshot. The value is 1 when the table's snapshot completes. The total row count comes from the PostgreSQL planner's row estimate, so the value is approximate until then.
+- ` + "`postgres_replication_lag_bytes`" + `: A gauge that reports how far, in bytes, the replication slot's restart position lags behind the current position of the source database's write-ahead log (WAL).
 		`).
 		Field(service.NewStringField(fieldDSN).
-			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
+			Description("The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.").
 			ShortDescription("The Data Source Name for the PostgreSQL database, in postgres:// URL form.").
 			Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
 		Field(service.NewBoolField(fieldIncludeTxnMarkers).
-			Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
+			Description(`When set to ` + "`" + `true` + "`" + `, creates empty messages for the ` + "`" + `BEGIN` + "`" + ` and ` + "`" + `COMMIT` + "`" + ` operations that start and complete each transaction. Messages with the ` + "`" + `operation` + "`" + ` metadata field set to ` + "`" + `begin` + "`" + ` or ` + "`" + `commit` + "`" + ` have null message payloads.`).
 			ShortDescription("Emit empty BEGIN and COMMIT messages at the start and end of each transaction.").
 			Default(false)).
 		Field(service.NewBoolField(fieldStreamSnapshot).
-			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized. Note that this has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
+			Description("When set to `true`, this input streams a snapshot of all existing data in the source database before streaming data changes. To use this setting, all database tables that you want to replicate _must_ have a primary key, which allows the input to read each table in parallel. This setting has no effect if `" + fieldTables + "` is left empty, since the snapshot is only planned for tables listed there.").
 			ShortDescription("Stream a snapshot of all existing data before streaming changes. Snapshot tables must have a primary key.").
 			Example(true).
 			Default(false)).
@@ -115,7 +154,9 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 			Default(1).
 			Deprecated()).
 		Field(service.NewIntField(fieldSnapshotBatchSize).
-			Description("The number of rows to fetch in each batch when querying the snapshot.").
+			Description(`The number of table rows to fetch in each batch when querying the snapshot.
+
+This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set to ` + "`" + `true` + "`" + `.`).
 			Example(10000).
 			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
@@ -123,94 +164,72 @@ A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finit
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
 		).
 		Field(service.NewStringListField(fieldTables).
-			Description(`A list of table names to include in the logical replication. Each table should be specified as a separate item.
+			Description(`A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
 If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
-		Field(service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
-			ShortDescription("The maximum number of messages that can be processed at a given time.").
-			Default(1024)).
+		Field(replication.CheckpointLimitField("log sequence number (LSN)")).
 		Field(service.NewBoolField(fieldTemporarySlot).
-			Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
+			Description(`If set to ` + "`" + `true` + "`" + `, the input creates a temporary replication slot that is automatically dropped when the connection to your source database is closed. You might use this option to:
+
+- Avoid data accumulating in the replication slot when a pipeline is paused or stopped.
+- Test the connector.
+
+If the pipeline is restarted and ` + "`" + `stream_snapshot` + "`" + ` is enabled, another data snapshot is taken before data updates are streamed.`).
 			Default(false)).
 		Field(service.NewStringField(fieldSlotName).
-			Description(`The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.
+			Description(`The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
-This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name>`" + `, so be sure to create them using this convention.
-			`).
-			ShortDescription("The name of the PostgreSQL logical replication slot to use. A random name is generated if not provided.").
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.
+
+Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" + ` to the names of the replication slots it creates. To keep using a replication slot that an earlier version created, add the ` + "`rs_`" + ` prefix to this field yourself.`).
+			ShortDescription("The name of the PostgreSQL logical replication slot to use. The input creates the slot if it does not exist.").
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
-			Description("Specify the standby timeout before refreshing an idle connection.").
+			Description("Specify the standby timeout after which an idle connection is refreshed to keep the connection alive.").
 			Example("30s").
 			Default("10s")).
 		Field(service.NewDurationField(fieldWalMonitorInterval).
-			Description("How often to report changes to the replication lag.").
+			Description("How often to report changes to the replication lag and write them to Redpanda Connect metrics.").
 			Example("6s").
 			Default("3s")).
 		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
+			Description("Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.").
+			ShortDescription("Number of tables to snapshot in parallel.").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
-			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See <<" + fieldSignalTableName + ",`" + fieldSignalTableName + "`>>.").Version("4.46.0").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Optional().
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
-			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
+			Description("The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.\n\n" +
+				"Heartbeat messages are useful when you subscribe to data changes from tables with low activity, while other tables in the database have higher-frequency updates. Without new messages to acknowledge, PostgreSQL cannot reclaim the WAL, which can exhaust the local disk. Heartbeat messages allow Redpanda Connect to periodically acknowledge new messages even when no data updates occur. Each acknowledgement advances the committed point in the WAL, which ensures that PostgreSQL can safely reclaim older log segments.\n\n" +
+				"Set `heartbeat_interval` to `0s` to disable heartbeats.\n\n" +
+				"Heartbeats also pace `" + fieldIncSnapshot + "`. On a quiet table they're the only thing that advances the snapshot. This interval keeps the slot current, and `" + fieldIncSnapshot + "." + fieldIncSnapshotHeartbeatInterval + "` applies alongside it: the more frequent of the two wins for the life of the input. A non-zero value is still required here.").Version("4.48.0").
 			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").
 			Example("24h").
 			Advanced()).
-		Field(service.NewTLSField("tls")).
-		Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
-		Field(service.NewObjectField(fieldAWSIAMAuth,
+		Field(service.NewTLSField("tls").
+			Description("Custom TLS settings for the PostgreSQL connection. When `enabled` is `true`, these settings replace the TLS settings derived from the `dsn` and from `PG*` environment variables such as `PGSSLMODE`, and the server name is set to the host from the DSN.").Version("4.70.0")).
+		Field(service.NewObjectField(fieldAWSIAMAuth, slices.Concat([]*service.ConfigField{
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
 				ShortDescription("Enable AWS IAM authentication, generating a temporary token to use as the password.").
 				Default(false),
-			service.NewStringField("region").
-				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
-				ShortDescription("The AWS region where the PostgreSQL instance is located. Defaults to the environment region.").
-				Optional(),
+			awsconfig.IAMAuthRegionField("PostgreSQL"),
 			service.NewStringField("endpoint").
 				Description("The PostgreSQL endpoint hostname (for example, mydb.abc123.us-east-1.rds.amazonaws.com)."),
-			service.NewStringField("id").
-				Description("The ID of credentials to use.").
-				Optional().Advanced(),
-			service.NewStringField("secret").
-				Description("The secret for the credentials being used.").
-				Optional().Advanced().Secret(),
-			service.NewStringField("token").
-				Description("The token for the credentials being used, required when using short term credentials.").
-				Optional().Advanced(),
-			service.NewStringField("role").
-				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional AWS IAM role ARN to assume for authentication.").
-				Optional(),
-			service.NewStringField("role_external_id").
-				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
-				ShortDescription("Optional external ID for the role assumption. Only used alongside the role field.").
-				Optional(),
-			service.NewObjectListField("roles",
-				service.NewStringField("role").
-					Default("").
-					Description("AWS IAM role ARN to assume."),
-				service.NewStringField("role_external_id").
-					Description("Optional external ID for the role assumption.").
-					Default("").
-					Optional(),
-			).
-				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
-				ShortDescription("AWS IAM roles to assume for authentication. Assumed in sequence to allow role chaining.").
-				Optional(),
-		).
-			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+		}, awsconfig.IAMAuthStaticCredentialFields(), awsconfig.IAMAuthRoleFields(false))...).
+			Description(`AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.
+
+This is useful for connecting to Amazon RDS or Aurora PostgreSQL instances with IAM database authentication enabled. The generated tokens are valid for 15 minutes and are automatically refreshed.
+
+For more information about AWS credentials configuration, see the xref:guides:cloud/aws.adoc[credentials for AWS] guide.`).Version("4.71.0").
 			ShortDescription("AWS IAM authentication configuration for PostgreSQL instances.").
 			Advanced().
 			Optional()).
@@ -223,8 +242,8 @@ column names only, not types, so a wrong column type (for example ` + "`data JSO
 is only caught at runtime, on the first signal row read:
 
 - **id**: any type representable as a string (for example ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
-- **type**: should be ` + "`VARCHAR`" + ` or another string type: the signal type (see supported signals below)
-- **data**: should be ` + "`TEXT`" + `: a JSON object containing signal parameters
+- **type**: should be ` + "`VARCHAR`" + ` or another string type (the signal type, see supported signals below)
+- **data**: should be ` + "`TEXT`" + `, a JSON object containing signal parameters
 
 Create the table with:
 
@@ -254,12 +273,104 @@ a JSON object with a ` + "`message`" + ` key, whose value is written to the conn
 
 ` + "```sql" + `
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('log', '{"message": "Signal message"}');
-` + "```").
+` + "```" + `
+
+**` + "`" + replication.SnapshotSignalType + "`" + `**: backfills the named tables incrementally, alongside streaming. Requires
+` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotEnabled + "`" + `. The ` + "`data`" + ` column must contain a JSON object
+with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema`" + `, excluding the schema itself:
+
+` + "```sql" + `
+INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('` + replication.SnapshotSignalType + `', '{"tables": ["orders", "customers"]}');
+` + "```" + `
+
+Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
+an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
+after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
+by. A table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
+may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
+survive neither that nor the checkpoint.
+
+**Partitioned tables**
+
+Partitioned tables are not yet supported in incremental snapshotting unless their publication sets
+` + "`publish_via_partition_root = true`" + `. PostgreSQL otherwise publishes their changes under the
+individual partitions' names while the snapshot backfill reads the parent, so updates to
+already-read snapshot rows cannot be detected.
+
+A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all (for
+example, because the connection resets), the stream restarts and the signal is read again, so the request is not lost.
+
+Each table joins the back of the backfill queue. A table this run already covers is skipped and
+logged, so a repeated signal does not re-read it. To read one again, point
+` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.
+
+**Tables with large (TOASTed) column values**
+
+Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
+omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
+under the default replica identity there is nothing in the message to recover it from, so
+` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
+buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
+placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
+makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
+set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.`).Version("4.105.0").
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
+		// incremental snapshot config
+		Field(service.NewObjectField(fieldIncSnapshot,
+			service.NewBoolField(fieldIncSnapshotEnabled).
+				Description("Backfills tables in chunks alongside replication, on request. Tables are not configured here: insert a `"+replication.SnapshotSignalType+"` row into `"+fieldSignalTableName+"` to ask for one, so a backfill can be started at any time without a config change. A signal table is therefore required. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay replication. The two are mutually exclusive: both read the same rows, so enabling either alongside the other would deliver everything twice.\n\nProgress is driven by the replication stream: each streamed transaction releases a buffered chunk, and several more follow immediately if the database was idle during the read. Quiet tables therefore advance in bursts on each heartbeat, paced by `"+fieldIncSnapshotHeartbeatInterval+"`.\n\nA row can arrive twice, once from replication and once from the backfill: when a primary key reuses or fills a gap below the table's current maximum, or, whatever the key type, when a row is inserted after replication starts but before the snapshot reaches its table. Treat rows as idempotent upserts keyed by primary key, as is standard CDC practice.\n\nThe following primary keys are currently not supported and a signal naming such a table is rejected and logged rather than started: `bytea`, `interval`, `bit`, `bit varying`, and any range or multirange type. Every other key type is supported, composite keys included.").
+				ShortDescription("Backfill signalled tables in chunks, alongside replication streaming.").
+				Default(incsnapshot.DefaultIncSnapshotEnabled),
+			service.NewIntField(fieldIncrementalSnapshotChunkSize).
+				Description("The number of rows to read per chunk while incrementally snapshotting a table.").
+				Default(incsnapshot.DefaultIncSnapshotChunkSize),
+			service.NewDurationField(fieldIncSnapshotHeartbeatInterval).
+				Description("How often to heartbeat while `"+fieldIncSnapshotEnabled+"` is `true`. The snapshot only advances on a streamed transaction, so on quiet tables this paces it. Raise it to reduce write load at the cost of a slower backfill.\n\nWhichever of this and the top-level `"+fieldHeartbeatInterval+"` is more frequent wins, and applies for the life of the input: it is fixed at startup, and stays in force between backfills as well as during them. Heartbeats are transactional only while a backfill is in progress, since that is the only time the snapshot needs a transaction id from one; between backfills they cost nothing extra.").
+				ShortDescription("How often to heartbeat while incremental snapshotting is enabled, which paces it on quiet tables.").
+				Default(incsnapshot.DefaultIncSnapshotHeartbeatInterval.String()),
+			service.NewDurationField(fieldIncSnapshotRetryCooldown).
+				Description("How long the backfill waits before retrying a chunk read that failed transiently, usually because of a conflicting lock on the table being backfilled, such as `VACUUM FULL` or most `ALTER TABLE` statements.\n\nThe snapshot's chunk read shares the goroutine that reads the replication stream, so each retry that blocks on the lock delays replication for every table. Retrying on every streamed transaction would repeat that delay for as long as the lock is held. Raise it to protect replication latency during a long migration, or lower it to resume the backfill sooner after a brief lock. Setting it to `0s` disables the cooldown, retrying on the next streamed transaction.").
+				ShortDescription("How long the backfill waits before retrying a chunk read that failed transiently, such as from a lock conflict.").
+				Default(incsnapshot.DefaultIncSnapshotRetryCooldown.String()),
+			service.NewStringField(fieldIncSnapshotCheckpointCache).
+				Description("A xref:components:caches/about.adoc[cache resource] storing the snapshot's progress, so a restart resumes instead of starting over. Required when `"+fieldIncSnapshotEnabled+"` is `true`.").
+				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
+				Optional(),
+			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so a `"+replication.SnapshotSignalType+"` signal reads a table again.").
+				Default(incsnapshot.DefaultIncSnapshotCheckpointKey),
+		).
+			Description("Configures chunked snapshotting that runs alongside replication streaming.").
+			ShortDescription("Configures chunked snapshotting that runs alongside replication streaming.").
+			Advanced().
+			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
-		Field(service.NewBatchPolicyField(fieldBatching))
+		Field(service.NewBoolField(fieldBatchTransactions).
+			Description(`When set to true, the rows of each replication transaction are emitted as one batch instead of one message per row. A batch never contains rows from more than one transaction.
+
+Large transactions are split into several batches. A batch holds at most 1000 rows, 4 MiB of WAL, or half of ` + "`" + fieldCheckpointLimit + "`" + `, whichever is smallest.
+
+Use this to let batch-aware outputs, such as a multi-row ` + "`sql_insert`" + ` or a Kafka producer, write a transaction's rows in one operation. It also lowers the per-message overhead of streaming.
+
+This option is off by default because it changes the unit of failure and retry from one row to one transaction. If an output rejects a batch because of one bad row, outputs such as ` + "`fallback`" + ` handle the whole batch, including the good rows. Leave it off if your pipeline routes individual bad rows to a dead-letter queue.
+
+This option cannot be combined with a ` + "`" + fieldBatching + "`" + ` policy: it bypasses the policy, including its processors. Snapshot pages are not affected: each page of ` + "`" + fieldSnapshotBatchSize + "`" + ` rows is always emitted as one batch.`).
+			ShortDescription("Emit the rows of each replication transaction as one batch, rather than one message per row.").
+			Default(false).
+			Version("4.115.0")).
+		Field(service.NewBatchPolicyField(fieldBatching).
+			Description(`Optional xref:configuration:batching.adoc[batching policy] for the emitted messages.
+
+By default, streaming rows arrive one message at a time and snapshot rows arrive one page at a time.
+
+To change this:
+
+* Set a policy to control batch size and timing. It applies to both the snapshot and the stream.
+* Set ` + "`" + fieldBatchTransactions + "`" + ` to receive each replication transaction as one batch. This cannot be combined with a policy.
+
+If the policy's ` + "`processors`" + ` fail on a batch, its rows are published as the batcher held them, with their error set, rather than dropped or retried, so error-handling components can route them. A processor earlier in the chain may already have altered them. If the processors drop every row of a batch, the position those rows reached is still acknowledged.`))
 }
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
@@ -277,6 +388,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		maxParallelSnapshotTables int
 		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
+		batchTransactions         bool
 		unchangedToastValue       any
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
@@ -332,8 +444,13 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
-	} else if batching.IsNoop() {
-		batching.Count = 1
+	}
+	if batchTransactions, err = conf.FieldBool(fieldBatchTransactions); err != nil {
+		return nil, err
+	}
+	batching, batchingConfigured, err := resolveBatchingPolicy(batching, batchTransactions)
+	if err != nil {
+		return nil, err
 	}
 
 	if pgStandbyTimeout, err = conf.FieldDuration(fieldPgStandbyTimeout); err != nil {
@@ -428,10 +545,13 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 			SignalTableName:          signalTableName,
+			StreamBatchMaxRows:       streamBatchMaxRowsFor(checkpointLimit),
 		},
-		batching:        batching,
-		checkpointLimit: checkpointLimit,
-		msgChan:         make(chan asyncMessage),
+		batching:           batching,
+		batchingConfigured: batchingConfigured,
+		batchTransactions:  batchTransactions,
+		checkpointLimit:    checkpointLimit,
+		msgChan:            make(chan asyncMessage),
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
@@ -440,6 +560,14 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		stopSig:         shutdown.NewSignaller(),
 
 		iamAuthEnabled: iamAuthEnabled,
+	}
+
+	if incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, signalTableName, streamSnapshot); err != nil {
+		return nil, err
+	} else {
+		i.streamConfig.IncrementalSnapshot = incSnapshot.cfg
+		i.incSnapshotCheckpointCache = incSnapshot.cache
+		i.incSnapshotCheckpointCacheKey = incSnapshot.cacheKey
 	}
 
 	if i.controlSig, err = newControlSignaller(schema, signalTableName, logger); err != nil {
@@ -473,22 +601,56 @@ func validateSimpleString(s string) error {
 
 func init() {
 	service.MustRegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
-	// Legacy naming
-	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
+	// Legacy name, which shipped first in 4.40.0 and was renamed to
+	// postgres_cdc in 4.43.0.
+	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Version("4.40.0").Deprecated(), newPgStreamInput)
+}
+
+// resolveBatchingPolicy decides whether the configured batching policy is
+// honoured per message, and whether the caller may combine it with
+// batch_transactions.
+//
+// IsNoop treats count <= 1 as "no policy", but the field defaults to 0, so an
+// explicit count: 1 is distinguishable and honoured (one message per batch).
+// With no policy, Count is forced to 1 so a Batcher can be constructed: that
+// is what delivers streaming rows one message at a time by default. A
+// configured policy and batch_transactions cannot both apply: the
+// pass-through never touches the batcher, so the policy and its processors
+// would silently never run; that combination is rejected here rather than
+// silently resolved either way.
+func resolveBatchingPolicy(batching service.BatchPolicy, batchTransactions bool) (policy service.BatchPolicy, configured bool, err error) {
+	configured = !batching.IsNoop() || batching.Count == 1
+	if configured && batchTransactions {
+		return batching, false, fmt.Errorf("%s cannot be combined with a %s policy: it bypasses the policy, including its processors", fieldBatchTransactions, fieldBatching)
+	}
+	if !configured {
+		batching.Count = 1
+	}
+	return batching, configured, nil
+}
+
+// streamBatchMaxRowsFor caps a streaming reader batch at half of
+// checkpoint_limit, so two batches fit under the checkpoint cap. The reader
+// further clamps it to its own package default.
+func streamBatchMaxRowsFor(checkpointLimit int) int {
+	return max(1, checkpointLimit/2)
 }
 
 type pgStreamInput struct {
-	streamConfig    *pglogicalstream.Config
-	logger          *service.Logger
-	mgr             *service.Resources
-	msgChan         chan asyncMessage
-	batching        service.BatchPolicy
-	checkpointLimit int
+	streamConfig       *pglogicalstream.Config
+	logger             *service.Logger
+	mgr                *service.Resources
+	msgChan            chan asyncMessage
+	batching           service.BatchPolicy
+	batchingConfigured bool
+	batchTransactions  bool
+	checkpointLimit    int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
 	controlSig      controlSignaller
 	stopSig         *shutdown.Signaller
+	iamAuthEnabled  bool
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
 	// snapshot batch (nil LSN) is enqueued and decremented when it is
@@ -496,8 +658,21 @@ type pgStreamInput struct {
 	// replication slot is not promoted before snapshot rows are durable.
 	snapshotAckWG sync.WaitGroup
 
-	// IAM authentication fields
-	iamAuthEnabled bool
+	// only applies to incremental snapshot when enabled
+	incSnapshotCheckpointCache    string
+	incSnapshotCheckpointCacheKey string
+	checkpointSeq                 atomic.Uint64
+
+	// lastPersistedMu protects the lastPersisted fields below, which
+	// commitCheckpoint touches from concurrent acknowledgements.
+	lastPersistedMu sync.Mutex
+	// lastPersistedIncSnapshotState avoids needless cache writes.
+	// checkpointTracker copies the last state onto every later checkpoint,
+	// so most acknowledgements carry an unchanged value.
+	lastPersistedIncSnapshotState []byte
+	// lastPersistedIncSnapshotSeq is the Seq of the state in the cache.
+	// persistIncSnapshotState uses it to reject an older state.
+	lastPersistedIncSnapshotSeq uint64
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -505,6 +680,20 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	if p.iamAuthEnabled && p.streamConfig.RefreshAuthToken != nil {
 		if err := p.streamConfig.RefreshAuthToken(ctx); err != nil {
 			return fmt.Errorf("unable to generate IAM auth token: %w", err)
+		}
+	}
+
+	if p.streamConfig.IncrementalSnapshotCfg().Enabled {
+		state, err := p.loadCachedIncSnapshotState(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to load incremental snapshot checkpoint: %w", err)
+		}
+		// IncrementalSnapshot is a value, so must be written through p.streamConfig
+		p.streamConfig.IncrementalSnapshot.ResumeState = state
+		if state == nil {
+			p.logger.Debugf("Incremental snapshot: no checkpoint found, will start fresh")
+		} else {
+			p.logger.Debugf("Incremental snapshot: loaded checkpoint (current_table=%v, remaining=%d, tables=%d)", state.CurrentTable, len(state.RemainingTables), len(state.Tables))
 		}
 	}
 
@@ -551,18 +740,20 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	var nextTimedBatchChan <-chan time.Time
 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
-	cp := checkpoint.NewCapped[*string](int64(p.checkpointLimit))
+	cp := newCheckpointTracker(int64(p.checkpointLimit), &p.checkpointSeq)
+
+	st := &flushState{
+		// The barrier applies to the one-shot stream_snapshot phase only,
+		// never to incremental snapshot's nil-LSN batches. See
+		// Stream.IsBlockingSnapshot.
+		blockingSnapshotComplete: !pgStream.IsBlockingSnapshot,
+	}
+
 	for !p.stopSig.IsSoftStopSignalled() {
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			flushedBatch, err := batcher.Flush(ctx)
-			if err != nil {
-				p.logger.Debugf("timed flush batch error: %s", err)
-				break
-			}
-			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-				p.logger.Debugf("failed to flush batch: %s", err)
+			if !p.flushBatcher(ctx, pgStream, cp, batcher, st) {
 				break
 			}
 		case batch := <-pgStream.Messages():
@@ -572,18 +763,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				// signalling the stream to promote the replication slot. Blocks
 				// until acks drain or soft-stop (no timeout, by design).
 				nextTimedBatchChan = nil
-				flushedBatch, err := batcher.Flush(ctx)
-				if err != nil {
-					p.logger.Debugf("error flushing snapshot completion batch: %s", err)
-					// The sentinel is a one-shot signal; if we bail here without
-					// acking, the barrier's snapshot goroutine blocks on
-					// snapshotAcked forever. Trigger a restart instead of stalling.
-					p.stopSig.TriggerSoftStop()
-					break
-				}
-				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-					p.logger.Debugf("failed to flush snapshot completion batch: %s", err)
-					p.stopSig.TriggerSoftStop()
+				// The sentinel is a one-shot signal: if this flush does not
+				// hand on and ack, the barrier's snapshot goroutine would wait
+				// on snapshotAcked forever, so a failure restarts rather than
+				// stalls. A clean shutdown is already stopping.
+				if !p.flushBatcher(ctx, pgStream, cp, batcher, st) {
 					break
 				}
 				drained := make(chan struct{})
@@ -596,19 +780,55 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				select {
 				case <-drained:
 					pgStream.MarkSnapshotAcknowledged()
+					st.blockingSnapshotComplete = true
 				case <-p.stopSig.SoftStopChan():
 				}
 				break
 			}
+			if len(batch) == 1 && batch[0].Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
+				// State advanced with no rows emitted, so no message can
+				// carry it. Hold it pending -- state only advances, so the
+				// newest wins and anything left pending rides out on the
+				// next flush.
+				st.incSnapshotState = batch[0].IncrementalSnapshotState
+				if len(st.pending.msgs) > 0 {
+					// The tracker cannot see the rows still in the batcher,
+					// so committing now would checkpoint past them.
+					break
+				}
+				// Nothing untracked is buffered, so this still resolves
+				// behind any unresolved earlier batch.
+				if err := p.commitIncrementalSnapshotCheckpoint(ctx, pgStream, cp, batch[0].IncrementalSnapshotState); err != nil {
+					// Stays pending for the next flush. Until one succeeds
+					// the stored checkpoint is stale.
+					p.logger.Warnf("unable to commit incremental snapshot checkpoint, retrying on the next flush: %s", err)
+					break
+				}
+				st.incSnapshotState = nil
+				break
+			}
 			var (
-				flush bool
-				mb    []byte
+				mb []byte
+				// passThrough collects the whole reader batch, and the stamp
+				// of its last change row, when it is to be handed on as one
+				// output batch; see passesThrough.
+				passThrough pendingRows
 			)
+			passesThrough := p.passesThrough(batch)
 			for _, msg := range batch {
 				// noop if not configured
 				if _, err := p.controlSig.listen(&msg); err != nil {
 					// Log it and fall through to the normal emit path below.
 					p.logger.Errorf("failed to detect control signal in change event: %s", err)
+				}
+
+				if msg.IncrementalSnapshotState != nil {
+					st.incSnapshotState = msg.IncrementalSnapshotState
+				}
+				if msg.Operation == pglogicalstream.IncrementalSnapshotCheckpointOpType {
+					// Defensive: this sentinel never shares a batch with other
+					// messages today, but never forward it if that changes.
+					continue
 				}
 
 				var marshalErr error
@@ -647,26 +867,34 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.BeforeData != nil {
 					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
-				if batcher.Add(batchMsg) {
-					flush = true
+
+				if passesThrough {
+					passThrough.add(batchMsg, msg.AckLSN)
+					continue
+				}
+				st.pending.add(batchMsg, msg.AckLSN)
+				if !batcher.Add(batchMsg) {
+					continue
+				}
+				// The policy is honoured per message: a multi-row reader batch
+				// may cross the configured count several times, and every
+				// crossing is its own output batch. The remaining rows of this
+				// reader batch are not yet in the batcher, so a failure here
+				// must stop the stream: carrying on would let a later
+				// transaction's ack confirm past them.
+				if !p.flushBatcher(ctx, pgStream, cp, batcher, st) {
+					break
 				}
 			}
-			if flush {
-				nextTimedBatchChan = nil
-				flushedBatch, err := batcher.Flush(ctx)
-				if err != nil {
-					p.logger.Debugf("error flushing batch: %s", err)
+			if passesThrough {
+				// The reader has already promoted its LSN bookkeeping for this
+				// batch, so if it cannot be handed on the stream must restart
+				// rather than continue past it.
+				if !p.emitBatch(ctx, pgStream, cp, passThrough.msgs, passThrough.ackLSN, st) {
 					break
 				}
-				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-					p.logger.Debugf("failed to flush batch: %s", err)
-					break
-				}
-			} else {
-				d, ok := batcher.UntilNext()
-				if ok {
-					nextTimedBatchChan = time.After(d)
-				}
+			} else if d, ok := batcher.UntilNext(); ok {
+				nextTimedBatchChan = time.After(d)
 			}
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
@@ -678,31 +906,312 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	}
 }
 
+// passesThrough reports whether a reader batch is handed to the pipeline as
+// it is, one output batch, rather than fed through the batcher message by
+// message. A configured batching policy always wins. Otherwise a snapshot
+// page passes through whole, as it always has, and a streaming batch (one
+// transaction, or a capped slice of one) passes through only when
+// batch_transactions is set; by default it goes through the count-1 batcher,
+// so streaming rows arrive one message at a time.
+//
+// A reader batch never mixes snapshot rows with streaming rows: snapshot
+// pages and incremental snapshot chunks are each their own send, and the
+// reader's streaming batches hold only decoded WAL rows. The first message
+// therefore decides for the batch.
+func (p *pgStreamInput) passesThrough(batch []pglogicalstream.StreamMessage) bool {
+	if p.batchingConfigured || len(batch) == 0 {
+		return false
+	}
+	if batch[0].Operation == pglogicalstream.ReadOpType {
+		return true
+	}
+	return p.batchTransactions
+}
+
+// lsnAcker confirms a replication position to Postgres. *pglogicalstream.Stream
+// implements it; tests substitute a recorder.
+type lsnAcker interface {
+	AckLSN(ctx context.Context, lsn string) error
+}
+
+// pendingRows collects the messages of one output batch together with the
+// position to acknowledge for it. For the batcher path it is the input's own
+// record of what the batcher holds since its last flush, republished with
+// their error set if the batching processors fail; for a pass-through batch
+// it is simply the batch. ackLSN is the AckLSN of the last change row added:
+// whatever the processors make of the messages, acknowledging the batch they
+// produce means every row handed over so far is processed, and the last
+// row's stamp is the position that says so (a commit record when that row
+// closed its transaction). Nil while only snapshot rows are pending.
+type pendingRows struct {
+	msgs   service.MessageBatch
+	ackLSN *string
+}
+
+// add records a message handed to the batcher. Snapshot rows carry no
+// position, so a nil stamp leaves the last change row's stamp standing: an
+// incremental snapshot chunk shares the batcher with change rows, and the
+// batch still confirms the changes it holds.
+func (r *pendingRows) add(msg *service.Message, ackLSN *string) {
+	r.msgs = append(r.msgs, msg)
+	if ackLSN != nil {
+		r.ackLSN = ackLSN
+	}
+}
+
+// flushState is what the consumer loop carries between flushes.
+type flushState struct {
+	// pending mirrors what the batcher holds since its last flush; see
+	// pendingRows. Its length is the number of rows the checkpoint tracker
+	// cannot see yet, so a row-less incremental snapshot checkpoint must not
+	// resolve while it is non-empty.
+	pending pendingRows
+	// incSnapshotState holds the newest incremental snapshot checkpoint until
+	// a flush tracks it. The "lsn" metadata of a message moves in the same
+	// way.
+	incSnapshotState []byte
+	// blockingSnapshotComplete gates the isSnapshot/snapshotAckWG barrier to
+	// the one-shot stream_snapshot phase, never to incremental snapshot's
+	// nil-LSN batches. See Stream.IsBlockingSnapshot.
+	blockingSnapshotComplete bool
+}
+
+// emitBatch hands a flushed batch to the pipeline and reports whether the
+// loop may continue. flushBatch only fails once the input's context is done,
+// so a failure is a shutdown in progress: the batch was never handed on and
+// is re-read on restart, which is not an error. Anything else is logged and
+// restarts the stream rather than continuing past rows that were dropped.
+func (p *pgStreamInput) emitBatch(ctx context.Context, pgStream lsnAcker, cp *checkpointTracker, batch service.MessageBatch, ackLSN *string, st *flushState) bool {
+	if err := p.flushBatch(ctx, pgStream, cp, batch, ackLSN, st.incSnapshotState, st.blockingSnapshotComplete); err != nil {
+		if ctx.Err() == nil {
+			p.logger.Errorf("failed to flush batch, restarting stream: %s", err)
+			p.stopSig.TriggerSoftStop()
+		}
+		return false
+	}
+	// Clear the state only when flushBatch tracked a batch. An empty flush
+	// tracks nothing, and a clear here loses the checkpoint.
+	if len(batch) > 0 {
+		st.incSnapshotState = nil
+	}
+	return true
+}
+
+// flushBatcher flushes the batcher, which runs any configured
+// batching.processors, and emits the result. st.pending is the input's own
+// copy of the messages the batcher holds, and is cleared here.
+//
+// When the processors fail the batcher gives its rows up, and those rows
+// were decoded from WAL the reader has already moved past. Dropping them is
+// silent loss; restarting re-reads and fails identically when the failure is
+// deterministic, so the input would loop forever with the slot never
+// advancing. Instead the rows are published as the batcher held them, with
+// the processors' error set, the same way an unmarshalable row is:
+// at-least-once holds, the stream keeps moving, and error-handling
+// components can route them. The processors ran on these same messages, so
+// one earlier in the chain may already have altered them.
+//
+// When the processors drop every row (a filter, say) nothing reaches the
+// pipeline, so nothing would ever acknowledge the position those rows
+// reached and the slot would stop advancing for as long as only filtered
+// rows arrive. The position is tracked as a row-less checkpoint instead and
+// resolved at once, behind any earlier batch still in flight.
+func (p *pgStreamInput) flushBatcher(ctx context.Context, pgStream lsnAcker, cp *checkpointTracker, batcher *service.Batcher, st *flushState) bool {
+	flushed, err := batcher.Flush(ctx)
+	held, ackLSN := st.pending.msgs, st.pending.ackLSN
+	st.pending = pendingRows{}
+	if err != nil {
+		if ctx.Err() != nil {
+			// Shutdown in progress; nothing was handed on, so nothing is acked.
+			return false
+		}
+		if len(held) == 0 {
+			p.logger.Errorf("error flushing batch, restarting stream: %s", err)
+			p.stopSig.TriggerSoftStop()
+			return false
+		}
+		p.logger.Warnf("Publishing %d row(s) with their error set for error-routing, as the batcher held them, the batching processors failed: %v", len(held), err)
+		procErr := fmt.Errorf("batching processors: %w", err)
+		for _, msg := range held {
+			msg.SetError(procErr)
+		}
+		flushed = held
+	}
+	if len(flushed) == 0 && len(held) > 0 {
+		return p.acknowledgeFilteredRows(ctx, pgStream, cp, ackLSN, st)
+	}
+	return p.emitBatch(ctx, pgStream, cp, flushed, ackLSN, st)
+}
+
+// acknowledgeFilteredRows checkpoints the position of rows the batching
+// processors dropped, together with any pending incremental snapshot state,
+// as a zero-size batch resolved immediately, the way a row-less incremental
+// snapshot checkpoint is. A failure to confirm it is only logged: the next
+// acknowledged batch confirms a later position anyway.
+func (p *pgStreamInput) acknowledgeFilteredRows(ctx context.Context, pgStream lsnAcker, cp *checkpointTracker, ackLSN *string, st *flushState) bool {
+	if ackLSN == nil && st.incSnapshotState == nil {
+		return true
+	}
+	resolveFn, err := cp.Track(ctx, checkpointOffset{lsn: ackLSN, incSnapshotState: st.incSnapshotState}, 0)
+	if err != nil {
+		if ctx.Err() == nil {
+			p.logger.Errorf("unable to checkpoint a fully filtered batch, restarting stream: %s", err)
+			p.stopSig.TriggerSoftStop()
+		}
+		return false
+	}
+	// The tracker has merged the state into every later offset, so it is
+	// persisted by a later acknowledgement even if this one fails.
+	st.incSnapshotState = nil
+	if maxOffset := resolveFn(); maxOffset != nil {
+		if err := p.commitCheckpoint(ctx, pgStream, *maxOffset); err != nil {
+			p.logger.Warnf("unable to acknowledge a fully filtered batch, the next acknowledged batch will: %s", err)
+		}
+	}
+	return true
+}
+
+// checkpointTracker tracks checkpointOffset values. It resolves
+// acknowledgements in order, also when they arrive out of order. It merges
+// each offset with the last offset before it tracks the offset. A
+// resolution with a nil lsn or a nil incSnapshotState therefore does not
+// remove the value of the field that it does not hold.
+//
+// Call Track only from the processStream goroutine. The functions that Track
+// returns are safe to call from other goroutines at the same time. The
+// acknowledgement functions do this.
+type checkpointTracker struct {
+	cp   *checkpoint.Capped[checkpointOffset]
+	last checkpointOffset
+	// seq is owned by the input, not this tracker, so it survives a
+	// reconnect: a replacement tracker keeps counting where the last one
+	// stopped. See pgStreamInput.checkpointSeq.
+	seq *atomic.Uint64
+}
+
+func newCheckpointTracker(limit int64, seq *atomic.Uint64) *checkpointTracker {
+	return &checkpointTracker{
+		cp:  checkpoint.NewCapped[checkpointOffset](limit),
+		seq: seq,
+	}
+}
+
+func (t *checkpointTracker) Track(ctx context.Context, offset checkpointOffset, batchSize int64) (func() *checkpointOffset, error) {
+	// Orders the offsets for commitCheckpoint, monotonic for the life of the
+	// input across any number of trackers.
+	offset.seq = t.seq.Add(1)
+	t.last = t.last.merge(offset)
+	return t.cp.Track(ctx, t.last, batchSize)
+}
+
+// commitCheckpoint applies a resolved checkpointOffset: the snapshot state
+// first, then the LSN, and the LSN only if that write succeeded.
+//
+// Either order alone is wrong. Acknowledging first leaves an acknowledged
+// position with no state; acknowledging anyway advances the slot past rows
+// the state was meant to account for, a snapshot signal among them, which
+// never streams again. Holding the acknowledgement back only retains WAL
+// until the next attempt, which is the recoverable direction.
+//
+// A failed AckLSN leaves the state written: it records what was delivered,
+// which stays true, and the position is retried.
+func (p *pgStreamInput) commitCheckpoint(ctx context.Context, pgStream lsnAcker, offset checkpointOffset) error {
+	if offset.incSnapshotState != nil {
+		if err := p.persistIncSnapshotState(ctx, offset); err != nil {
+			return err
+		}
+	}
+	if offset.lsn != nil {
+		if err := pgStream.AckLSN(ctx, *offset.lsn); err != nil {
+			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
+		}
+	}
+	return nil
+}
+
+// persistIncSnapshotState writes offset's snapshot state to the cache.
+//
+// Acknowledgements run concurrently, so it holds lastPersistedMu across the
+// test and the write to keep them atomic. The lock alone is not enough --
+// the calls can take it in either order -- so it also rejects an offset no
+// newer than the one already written.
+func (p *pgStreamInput) persistIncSnapshotState(ctx context.Context, offset checkpointOffset) error {
+	p.lastPersistedMu.Lock()
+	defer p.lastPersistedMu.Unlock()
+
+	if offset.seq <= p.lastPersistedIncSnapshotSeq {
+		// A newer state is already in the cache.
+		return nil
+	}
+
+	// Unchanged state: record the seq, skip the write.
+	if bytes.Equal(offset.incSnapshotState, p.lastPersistedIncSnapshotState) {
+		p.lastPersistedIncSnapshotSeq = offset.seq
+		return nil
+	}
+
+	if err := p.saveIncrementalSnapshotState(ctx, offset.incSnapshotState); err != nil {
+		return fmt.Errorf("unable to persist incremental snapshot checkpoint: %w", err)
+	}
+	p.lastPersistedIncSnapshotState = offset.incSnapshotState
+	p.lastPersistedIncSnapshotSeq = offset.seq
+	return nil
+}
+
+// commitIncrementalSnapshotCheckpoint tracks a row-less checkpoint and
+// resolves it. Tracking rather than writing it directly keeps it behind
+// every earlier batch, so it cannot pass rows the pipeline has not
+// acknowledged.
+//
+// Only call it when the batcher holds no rows the tracker does not have.
+// The tracker cannot see rows still in the batcher, so it would resolve
+// past them.
+func (p *pgStreamInput) commitIncrementalSnapshotCheckpoint(ctx context.Context, pgStream lsnAcker, checkpointer *checkpointTracker, state []byte) error {
+	resolveFn, err := checkpointer.Track(ctx, checkpointOffset{incSnapshotState: state}, 0)
+	if err != nil {
+		return fmt.Errorf("unable to checkpoint incremental snapshot state: %w", err)
+	}
+	maxOffset := resolveFn()
+	if maxOffset == nil {
+		return nil
+	}
+	return p.commitCheckpoint(ctx, pgStream, *maxOffset)
+}
+
+// flushBatch hands batch to the pipeline, tracked under ackLSN together with
+// any pending incremental snapshot state. ackLSN is the position acknowledged
+// to Postgres once this batch and every earlier one are acked: the AckLSN
+// stamp of the last change row that went into the batch (see
+// StreamMessage.AckLSN), so a batch ending a transaction confirms its commit
+// record rather than a row LSN below it. Nil means the batch holds only
+// snapshot rows, which carry no position.
 func (p *pgStreamInput) flushBatch(
 	ctx context.Context,
-	pgStream *pglogicalstream.Stream,
-	checkpointer *checkpoint.Capped[*string],
+	pgStream lsnAcker,
+	checkpointer *checkpointTracker,
 	batch service.MessageBatch,
+	ackLSN *string,
+	incSnapshotState []byte,
+	blockingSnapshotComplete bool,
 ) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
-	var lsn *string
-	lastMsg := batch[len(batch)-1]
-	lsnStr, ok := lastMsg.MetaGet("lsn")
-	if ok {
-		lsn = &lsnStr
-	}
-	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(batch)))
+	offset := checkpointOffset{lsn: ackLSN, incSnapshotState: incSnapshotState}
+	resolveFn, err := checkpointer.Track(ctx, offset, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
-	// Snapshot batches carry no LSN. Track them so the snapshot->stream handoff
-	// can block until they are acknowledged downstream (see the sentinel handling
-	// in the read loop).
-	isSnapshot := lsn == nil
+	// The single stream_snapshot phase also has no LSN. Track those batches,
+	// and the change from snapshot to stream can then wait for their
+	// acknowledgement. Refer to the message handling in the read loop.
+	//
+	// Incremental snapshot batches also have no LSN, but they continue for
+	// the life of the stream. Therefore blockingSnapshotComplete removes
+	// them from that wait after the first phase is complete.
+	isSnapshot := ackLSN == nil && !blockingSnapshotComplete
 
 	ackFn := func(ctx context.Context, _ error) error {
 		if isSnapshot {
@@ -712,14 +1221,7 @@ func (p *pgStreamInput) flushBatch(
 		if maxOffset == nil {
 			return nil
 		}
-		maxLSN := *maxOffset
-		if maxLSN == nil {
-			return nil
-		}
-		if err = pgStream.AckLSN(ctx, *maxLSN); err != nil {
-			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
-		}
-		return nil
+		return p.commitCheckpoint(ctx, pgStream, *maxOffset)
 	}
 	if isSnapshot {
 		p.snapshotAckWG.Add(1)
@@ -731,6 +1233,51 @@ func (p *pgStreamInput) flushBatch(
 			p.snapshotAckWG.Done()
 		}
 		return ctx.Err()
+	}
+	return nil
+}
+
+// loadCachedIncSnapshotState reads the incremental snapshot checkpoint from
+// the cache. A key that does not exist shows that there is no checkpoint and
+// that the snapshot starts new. This result is not an error.
+func (p *pgStreamInput) loadCachedIncSnapshotState(ctx context.Context) (*incrementalsnapshot.State, error) {
+	var (
+		cacheVal []byte
+		cErr     error
+	)
+	if err := p.mgr.AccessCache(ctx, p.incSnapshotCheckpointCache, func(c service.Cache) {
+		cacheVal, cErr = c.Get(ctx, p.incSnapshotCheckpointCacheKey)
+	}); err != nil {
+		return nil, fmt.Errorf("unable to access cache for reading: %w", err)
+	}
+	if errors.Is(cErr, service.ErrKeyNotFound) {
+		return nil, nil
+	} else if cErr != nil {
+		return nil, fmt.Errorf("unable to read checkpoint from cache: %w", cErr)
+	} else if cacheVal == nil {
+		return nil, nil
+	}
+	state := new(incrementalsnapshot.State)
+	if err := json.Unmarshal(cacheVal, state); err != nil {
+		if errors.Is(err, incrementalsnapshot.ErrUnsupportedStateVersion) {
+			return nil, fmt.Errorf("%w: change %s.%s, or clear that key, to start a fresh snapshot", err, fieldIncSnapshot, fieldIncSnapshotCheckpointCacheKey)
+		}
+		return nil, fmt.Errorf("unable to unmarshal incremental snapshot checkpoint: %w", err)
+	}
+	return state, nil
+}
+
+// saveIncrementalSnapshotState writes an incremental snapshot checkpoint to
+// the cache. The caller supplies the checkpoint as bytes.
+func (p *pgStreamInput) saveIncrementalSnapshotState(ctx context.Context, state []byte) error {
+	var cErr error
+	if err := p.mgr.AccessCache(ctx, p.incSnapshotCheckpointCache, func(c service.Cache) {
+		cErr = c.Set(ctx, p.incSnapshotCheckpointCacheKey, state, nil)
+	}); err != nil {
+		return fmt.Errorf("unable to access cache for writing: %w", err)
+	}
+	if cErr != nil {
+		return fmt.Errorf("unable to persist checkpoint to cache: %w", cErr)
 	}
 	return nil
 }

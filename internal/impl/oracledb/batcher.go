@@ -386,6 +386,11 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	if m.Username != "" {
 		msg.MetaSet("username", m.Username)
 	}
+	if m.RSID != "" {
+		msg.MetaSet("rs_id", m.RSID)
+		msg.MetaSet("ssn", strconv.FormatInt(m.SSN, 10))
+		msg.MetaSet("row_seq", strconv.Itoa(m.RowSeq))
+	}
 
 	if schemaAny != nil {
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})

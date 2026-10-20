@@ -56,6 +56,7 @@ func init() {
 
 func salesforceCDCInputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
+		Version("4.90.3").
 		Categories("Services").
 		Summary("Streams Salesforce Change Data Capture (CDC) and Platform Events from the Pub/Sub gRPC API, optionally preceded by a REST snapshot of the configured sObjects.").
 		Description(`Subscribes to one or more Salesforce Pub/Sub topics in parallel and emits a message per event. Topics may be:

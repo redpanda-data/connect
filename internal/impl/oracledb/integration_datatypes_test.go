@@ -11,7 +11,6 @@ package oracledb_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -31,7 +30,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // capturedMessage holds a single emitted CDC message decoded for type analysis
@@ -69,11 +67,12 @@ func decodeWithNumber(t *testing.T, raw string) map[string]any {
 // encoding rejects json.Number for string-typed fields.
 func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
-	const fullTable = "testdb.all_types"
-	create := `CREATE TABLE testdb.all_types (
+	fullTable := db.Schema + ".all_types"
+	create := `CREATE TABLE ` + db.Schema + `.all_types (
 		id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 		num_plain   NUMBER,
 		num_38      NUMBER(38),
@@ -100,7 +99,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	// A single literal INSERT so we control exactly what Oracle stores and what
 	// LogMiner SQL_REDO reports. Used once before launch (snapshot) and once
 	// after launch (streaming).
-	insertSQL := `INSERT INTO testdb.all_types
+	insertSQL := `INSERT INTO ` + db.Schema + `.all_types
 		(num_plain, num_38, num_38_0, num_38_2, num_10_2, num_5_0, num_star_2, num_neg, num_int, flt, bin_float, bin_double, vc, ch, nvc, dt, ts, ts_tz, rw)
 		VALUES (
 			12345.678,
@@ -126,7 +125,7 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	// integer-valued assignments to fractional decimal columns and negatives).
 	// UPDATE SET redo is the path most likely to surface bare numerics that the
 	// streaming converter turns into int64/json.Number.
-	updateSQL := `UPDATE testdb.all_types SET
+	updateSQL := `UPDATE ` + db.Schema + `.all_types SET
 		num_plain  = 100,
 		num_38     = 200,
 		num_38_0   = 300,
@@ -146,7 +145,6 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 		mu       sync.Mutex
 		captured []capturedMessage
 		stream   *service.Stream
-		err      error
 	)
 
 	collect := func(_ context.Context, mb service.MessageBatch) error {
@@ -203,30 +201,16 @@ func TestIntegrationOracleDBCDCDataTypeConsistency(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: %s
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.ALL_TYPES"]`
+  include: ["` + db.Schema + `.ALL_TYPES"]`
 
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(collect))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if rErr := stream.Run(t.Context()); rErr != nil && !errors.Is(rErr, context.Canceled) {
-				t.Error(rErr)
-			}
-		}()
-	}
+	stream = oracledbtest.StartPipelineWithLogLevel(t, fmt.Sprintf(cfg, connStr), "WARN", collect)
 
 	// Capture one message per phase: snapshot read, streaming INSERT, streaming
 	// UPDATE — each pinned to its operation so a duplicate delivery of an
@@ -255,22 +239,7 @@ oracledb_cdc:
 	captured = nil
 	mu.Unlock()
 
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(collect))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if rErr := stream.Run(t.Context()); rErr != nil && !errors.Is(rErr, context.Canceled) {
-				t.Error(rErr)
-			}
-		}()
-	}
+	stream = oracledbtest.StartPipelineWithLogLevel(t, fmt.Sprintf(cfg, connStr), "WARN", collect)
 
 	// The post-restart phase must capture the fresh INSERT and must never see
 	// a snapshot read: if the checkpoint wasn't persisted or resumed, the

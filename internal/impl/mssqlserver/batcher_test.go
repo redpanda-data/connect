@@ -936,3 +936,50 @@ func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublis
 	}()
 	return <-publisher.msgs()
 }
+
+func TestPublishSetsChangeMetadata(t *testing.T) {
+	t.Run("streaming rows carry lsn, seqval and command_id", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		event := streamingEvent("00000042", "00000041")
+		// A real __$seqval is 10 arbitrary bytes, usually not valid UTF-8.
+		event.SeqVal = replication.LSN{0x00, 0x00, 0x00, 0x2a, 0x00, 0x00, 0x0f, 0xa0, 0x00, 0x03}
+		event.CommandID = 7
+
+		am := publishAndReceive(t, ctx, publisher, event)
+		require.Len(t, am.msg, 1)
+		msg := am.msg[0]
+
+		want := map[string]string{
+			"database_schema": "dbo",
+			"table":           "t",
+			"operation":       replication.MessageOperationInsert.String(),
+			"lsn":             "00000042",
+			"seqval":          "0x0000002a00000fa00003",
+			"command_id":      "7",
+		}
+		for k, v := range want {
+			got, ok := msg.MetaGet(k)
+			require.True(t, ok, "metadata %q must be present", k)
+			require.Equal(t, v, got, "metadata %q", k)
+		}
+	})
+
+	t.Run("snapshot rows carry no ordering metadata", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, snapshotEvent())
+		require.Len(t, am.msg, 1)
+		msg := am.msg[0]
+
+		op, ok := msg.MetaGet("operation")
+		require.True(t, ok)
+		require.Equal(t, replication.MessageOperationRead.String(), op)
+		for _, k := range []string{"lsn", "seqval", "command_id"} {
+			_, ok := msg.MetaGet(k)
+			require.False(t, ok, "metadata %q must be absent on snapshot rows", k)
+		}
+	})
+}
