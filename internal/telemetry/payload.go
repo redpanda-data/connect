@@ -67,16 +67,22 @@ type payload struct {
 	// TenantID identifies the owning tenant for cloud-managed deployments
 	// (typically the Redpanda Cloud organization ID). Empty for self-hosted.
 	TenantID string `json:"tenantId,omitempty"`
+
+	// PipelineID identifies the control-plane pipeline resource this
+	// Connect instance is running, for cloud-managed deployments. Empty
+	// for self-hosted.
+	PipelineID string `json:"pipelineId,omitempty"`
 }
 
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
-func extractPayload(identifier, deploymentType, tenantID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
+func extractPayload(identifier, deploymentType, tenantID, pipelineID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
 	p := payload{
 		ID:             identifier,
 		Uptime:         0,
 		DeploymentType: deploymentType,
 		TenantID:       tenantID,
+		PipelineID:     pipelineID,
 		HostInfo: hostInfo{
 			NumCPU:     runtime.NumCPU(),
 			GoMaxProcs: runtime.GOMAXPROCS(0), // using 0 means to just read the value
