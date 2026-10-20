@@ -157,6 +157,9 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing %s: %w", ioFieldMessageFormat, err)
 	}
 	messageFormat := MessageFormat(messageFormatStr)
+	if messageFormat != MessageFormatObject && messageFormat != MessageFormatArray {
+		return nil, fmt.Errorf("unknown %s %q, expected %q or %q", ioFieldMessageFormat, messageFormatStr, MessageFormatObject, MessageFormatArray)
+	}
 
 	// Parse schema evolution config
 	schemaEvoCfg, err := parseSchemaEvolutionConfig(conf)

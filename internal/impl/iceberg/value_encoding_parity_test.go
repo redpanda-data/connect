@@ -213,6 +213,7 @@ func TestJSONLeafValueMatchesInsertPath(t *testing.T) {
 		{"int32 from int64", iceberg.PrimitiveTypes.Int32, func() any { return int64(-123) }, ""},
 		{"boolean from bool", iceberg.PrimitiveTypes.Bool, func() any { return true }, ""},
 		{"int64 from numeric string", iceberg.PrimitiveTypes.Int64, func() any { return "42" }, ""},
+		{"int64 from numeric []byte", iceberg.PrimitiveTypes.Int64, func() any { return []byte("42") }, ""},
 		{"int64 from string beyond 2^53", iceberg.PrimitiveTypes.Int64, func() any { return "9007199254740993" }, ""},
 		{"int32 from numeric string", iceberg.PrimitiveTypes.Int32, func() any { return "-123" }, ""},
 		{"double from numeric string", iceberg.PrimitiveTypes.Float64, func() any { return "45.67" }, ""},

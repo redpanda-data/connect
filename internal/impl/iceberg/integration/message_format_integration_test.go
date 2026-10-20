@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -50,7 +51,7 @@ func TestArrayMessageFormatIntegration(t *testing.T) {
 	infra.CreateNamespace(t, ns)
 	client := infra.NewCatalogClient(t, ns)
 
-	createTable := func(t *testing.T, name string) {
+	createTable := func(t *testing.T, name string, opts ...catalog.CreateTableOpt) {
 		t.Helper()
 		_, err := client.CreateTable(ctx, name, iceberg.NewSchema(1,
 			iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.Int64Type{}, Required: true},
@@ -58,7 +59,7 @@ func TestArrayMessageFormatIntegration(t *testing.T) {
 			iceberg.NestedField{ID: 3, Name: "price", Type: iceberg.DecimalTypeOf(18, 6), Required: false},
 			iceberg.NestedField{ID: 4, Name: "ts", Type: iceberg.TimestampType{}, Required: false},
 			iceberg.NestedField{ID: 5, Name: "qty", Type: iceberg.Int32Type{}, Required: false},
-		))
+		), opts...)
 		require.NoError(t, err)
 	}
 
@@ -134,6 +135,46 @@ func TestArrayMessageFormatIntegration(t *testing.T) {
 			assert.Equal(t, 5, rows[0].Qty)
 		})
 	}
+
+	// Partition values are computed from the row arrayToRow builds, so an
+	// identity(symbol) table must route each array to its symbol's partition.
+	t.Run("partitioned-insert", func(t *testing.T) {
+		const tblName = "array_partitioned"
+		spec := iceberg.NewPartitionSpec(iceberg.PartitionField{
+			SourceIDs: []int{2}, FieldID: 1000, Name: "symbol", Transform: iceberg.IdentityTransform{},
+		})
+		createTable(t, tblName, catalog.WithPartitionSpec(&spec))
+
+		router := infra.NewRouter(t, ns, tblName,
+			WithMessageFormat(icebergimpl.MessageFormatArray),
+			WithTimestampLayout(arrayTimestampLayout))
+		produceMessages(t, ctx, router, service.MessageBatch{
+			arrayMsg("", "1", "IBM", "1.5", "2025-05-29 11:54:26", "10"),
+			arrayMsg("", "2", "MSFT", "2.5", "2025-05-29 11:54:27", "20"),
+			arrayMsg("", "3", "IBM", "3.5", "2025-05-29 11:54:28", "30"),
+		})
+
+		assert.Equal(t, []row{
+			{1, "IBM", "1.500000", "2025-05-29 11:54:26", 10},
+			{2, "MSFT", "2.500000", "2025-05-29 11:54:27", 20},
+			{3, "IBM", "3.500000", "2025-05-29 11:54:28", 30},
+		}, readRows(t, tblName))
+
+		tbl, err := client.LoadTable(ctx, tblName)
+		require.NoError(t, err)
+		fsys, err := tbl.FS(ctx)
+		require.NoError(t, err)
+		manifests, err := tbl.CurrentSnapshot().Manifests(fsys)
+		require.NoError(t, err)
+		filesPerSymbol := map[any]int{}
+		for _, m := range manifests {
+			for entry, err := range m.Entries(fsys, true) {
+				require.NoError(t, err)
+				filesPerSymbol[entry.DataFile().Partition()[1000]]++
+			}
+		}
+		assert.Equal(t, map[any]int{"IBM": 1, "MSFT": 1}, filesPerSymbol)
+	})
 
 	t.Run("missing-table", func(t *testing.T) {
 		router := infra.NewRouter(t, ns, "array_no_such_table",

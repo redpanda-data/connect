@@ -99,6 +99,11 @@ type tableEntry struct {
 	// commit per generation. Created lazily in createWriter under mu; the set
 	// carries its own lock, so committers share it race-safely.
 	prohibitedProps *prohibitedKeySet
+
+	// arrayColumns is the column order the previous array-mode writer used,
+	// kept so a rebuilt writer can warn when an external schema change has
+	// moved array positions onto different columns. Guarded by mu.
+	arrayColumns []string
 }
 
 // cachedProbeErr returns the negative-cached probe-bound error when it was
@@ -1024,7 +1029,13 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	w.metrics = r.metrics
 	w.timestampLayout = r.timestampLayout
 	w.messageFormat = r.messageFormat
-	w.arrayColumns = topLevelColumnNames(writerTbl.Schema())
+	if r.messageFormat == MessageFormatArray {
+		w.arrayColumns = topLevelColumnNames(writerTbl.Schema())
+		if arrayColumnsRemapped(entry.arrayColumns, w.arrayColumns) {
+			r.logger.Warnf("Table %s.%s column order changed from %v to %v; message_format: array writes by position, so array elements now land in different columns", key.namespace, key.table, entry.arrayColumns, w.arrayColumns)
+		}
+		entry.arrayColumns = w.arrayColumns
+	}
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

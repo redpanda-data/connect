@@ -278,6 +278,12 @@ storage:
 		assert.Equal(t, MessageFormatObject, out.router.messageFormat)
 	})
 
+	t.Run("unknown value", func(t *testing.T) {
+		_, err := build(t, "message_format: csv\n")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `message_format "csv"`)
+	})
+
 	t.Run("array with schema evolution", func(t *testing.T) {
 		extra := "message_format: array\nschema_evolution:\n  enabled: true\n"
 		_, err := build(t, extra)

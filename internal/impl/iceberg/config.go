@@ -366,7 +366,14 @@ array:list
 				string(MessageFormatObject): "Messages are objects whose keys are column names.",
 				string(MessageFormatArray):  "Messages are arrays of values, written by position into the table's top-level columns in schema order. The table must already exist, and `schema_evolution.enabled` must be `false`.",
 			}).
-				Description("The format to expect incoming messages from the rest of the pipeline.").Version("4.115.0").
+				Description(`The format to expect incoming messages from the rest of the pipeline.
+
+In `+"`array`"+` mode, positions follow the table's current schema order, so a table whose columns are reordered, or dropped and re-added, remaps positions onto different columns. A warning is logged when that order changes. Only an array longer than the table is detected as a shape change; a shorter one leaves its trailing columns unset, which writes null to an optional column and fails a required one.
+
+For delimited text, use a mapping such as `+"`root = content().string().split(\"\\x01\", true)`"+`. The `+"`.string()`"+` call yields text elements, and `+"`true`"+` (`+"`empty_as_null`"+`) turns empty fields into nulls, because an empty string cannot be parsed into an int, long, decimal or timestamp column.
+
+The interpolated `+"`namespace`"+`, `+"`table`"+` and `+"`row_operation`"+` fields see the array as `+"`this`"+`, so reference elements with `+"`this.index(N)`"+` or use metadata.`).Version("4.115.0").
+				ShortDescription("Whether messages are objects keyed by column name or arrays written by position.").
 				Default(string(MessageFormatObject)).
 				Advanced().
 				Example(string(MessageFormatArray)),

@@ -23,12 +23,19 @@ const DefaultTimestampLayout = time.RFC3339Nano
 // ParseStringValue converts a string value into the Go type expected by the
 // column type t, so that sources which stringify numbers and timestamps can be
 // written into typed columns. The value is returned unchanged unless it is a
-// string and t is an integer, float or timestamp type. Whitespace is not
-// trimmed. Layouts without a zone are read as UTC. An empty timestampLayout
-// means [DefaultTimestampLayout].
+// string or []byte and t is an integer, float or timestamp type. A []byte is
+// read as text only for those types, because for decimal, binary and uuid
+// columns raw bytes already have a binary meaning. Whitespace is not trimmed.
+// Layouts without a zone are read as UTC. An empty timestampLayout means
+// [DefaultTimestampLayout].
 func ParseStringValue(value any, t iceberg.Type, timestampLayout string) (any, error) {
-	s, isString := value.(string)
-	if !isString {
+	var s string
+	switch v := value.(type) {
+	case string:
+		s = v
+	case []byte:
+		s = string(v)
+	default:
 		return value, nil
 	}
 
