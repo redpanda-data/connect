@@ -71,7 +71,6 @@ func BenchmarkSeedFromColumnMeta(b *testing.B) {
 		meta := oracleAllTypesColumnMeta()
 
 		b.ReportAllocs()
-		var i int
 		for b.Loop() {
 			sc.seedFromColumnMeta(tbl, meta)
 		}
