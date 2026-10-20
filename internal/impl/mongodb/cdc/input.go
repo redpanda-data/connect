@@ -226,6 +226,7 @@ When `+"`snapshot_parallelism`"+` is greater than `+"`1`"+`, this input reads th
 
 When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the latest position in the https://www.mongodb.com/docs/manual/core/replica-set-oplog/[operations log (oplog)^]. In both modes, a restart resumes streaming from the position stored in `+"`checkpoint_cache`"+`.
 
+[[incremental-snapshots]]
 == Incremental snapshots
 
 With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
@@ -238,6 +239,7 @@ A document can be delivered twice, once streamed and once in a chunk: when it is
 
 A chunk can only be released once the change stream has passed the moment it was read. On a busy deployment that happens almost at once, and on a quiet replica set the input releases several chunks per poll. A quiet sharded cluster is slower: its change stream only advances as far as its least active shard, which moves on with its periodic no-op write, every 10 seconds by default (the shards' `+"`periodicNoopIntervalSecs`"+`). Expect about one chunk per interval there, and raise `+"`incremental_snapshot.chunk_size`"+` to compensate.
 
+[[signals]]
 == Signals
 
 When `+"`signal_collection_name`"+` is set, documents inserted into that collection control the input while it runs. Each signal has a `+"`type`"+` and a `+"`data`"+` field, which may be an embedded document or a JSON string:
