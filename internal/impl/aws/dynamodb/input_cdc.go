@@ -1866,11 +1866,11 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 // has a registered reader or was already read to the end of the closed shard.
 // The caller holds the lock guarding both maps.
 func isKnownShard(readers map[string]*dynamoDBShardReader, completed map[string]struct{}, shardID string) bool {
-	if _, ok := readers[shardID]; ok {
+	if _, exists := readers[shardID]; exists {
 		return true
 	}
-	_, ok := completed[shardID]
-	return ok
+	_, exists := completed[shardID]
+	return exists
 }
 
 // pruneCompletedShards forgets completed shards that DescribeStream no longer
@@ -1886,7 +1886,7 @@ func pruneCompletedShards(completed map[string]struct{}, listed []types.Shard) {
 		stillListed[aws.ToString(shard.ShardId)] = struct{}{}
 	}
 	for shardID := range completed {
-		if _, ok := stillListed[shardID]; !ok {
+		if _, exists := stillListed[shardID]; !exists {
 			delete(completed, shardID)
 		}
 	}
@@ -1897,7 +1897,7 @@ func pruneCompletedShards(completed map[string]struct{}, listed []types.Shard) {
 // completed (allocated on first use) so later discovery cycles do not
 // re-register it. The caller holds the lock guarding both.
 func markShardCompleted(readers map[string]*dynamoDBShardReader, completed *map[string]struct{}, shardID string) {
-	if reader, ok := readers[shardID]; ok {
+	if reader, exists := readers[shardID]; exists {
 		reader.exhausted = true
 	}
 	if *completed == nil {
