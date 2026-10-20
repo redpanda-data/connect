@@ -140,6 +140,8 @@ type replayed struct {
 	regressed  []string
 	readCount  int
 	readByColl map[string]int
+	// ops counts messages by operation.
+	ops map[string]int
 	// reads counts how often each _id was read by the snapshot.
 	reads map[string]int
 	// interleaved records a snapshot read emitted after a streamed change.
@@ -156,12 +158,13 @@ type replayed struct {
 func replay(o *outputHelper) replayed {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	r := replayed{docs: map[string]float64{}, readByColl: map[string]int{}, reads: map[string]int{}}
+	r := replayed{docs: map[string]float64{}, readByColl: map[string]int{}, ops: map[string]int{}, reads: map[string]int{}}
 	streamed := false
 	for _, b := range o.batches {
 		for _, m := range b {
 			op, _ := m.MetaGet("operation")
 			coll, _ := m.MetaGet("collection")
+			r.ops[op]++
 			body, err := m.AsStructured()
 			if err != nil {
 				r.problems = append(r.problems, fmt.Sprintf("decoding a %s message from %s: %v", op, coll, err))
@@ -532,13 +535,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotMixedIDTypes(t *testing.T) {
 	h.db.UpdateOne(t, "foo", "s03", bson.M{"$inc": bson.M{"v": 1}})
 	h.db.UpdateOne(t, "foo", bson.D{{Key: "k", Value: 4}}, bson.M{"$inc": bson.M{"v": 1}})
 	require.Eventually(t, func() bool {
-		updates := 0
-		for _, m := range h.output.Metadata(t) {
-			if m["operation"] == "update" {
-				updates++
-			}
-		}
-		return updates == 2
+		return replay(h.output).ops["update"] == 2
 	}, time.Minute, 100*time.Millisecond, "updates to string and document keys did not stream")
 	stream.Stop(t)
 	wait()

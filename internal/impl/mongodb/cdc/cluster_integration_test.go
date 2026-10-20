@@ -272,8 +272,9 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 
 	// Once replication resumes the write becomes majority and visible.
 	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+	want := key(t, 4)
 	require.Eventually(t, func() bool {
 		maxKey, err := deps.ResolveMaxKey(ctx, table, nil)
-		return err == nil && assert.ObjectsAreEqual(key(t, 4), maxKey)
+		return err == nil && assert.ObjectsAreEqual(want, maxKey)
 	}, time.Minute, 250*time.Millisecond)
 }
