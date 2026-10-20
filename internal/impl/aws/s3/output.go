@@ -253,7 +253,9 @@ output:
     credentials:
       id: <r2-access-key-id>
       secret: <r2-secret-access-key>
-`+"```"+``+service.OutputPerformanceDocs(true, false)).
+`+"```"+`
+
+To find your account ID and generate R2 API credentials, see https://developers.cloudflare.com/r2/api/tokens/[Cloudflare R2 authentication^].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(s3oFieldBucket).
 				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN."),

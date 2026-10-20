@@ -150,9 +150,9 @@ func FranzProducerFields() []*service.ConfigField {
 				Default("all").
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
-				Description("Set an explicit compression type (optional). By default, the client uses `snappy` when the broker supports it, and falls back to `none` if not.").
-				ShortDescription("Explicit compression type. Defaults to snappy when the broker supports it, otherwise none.").
-				Optional().
+				Description("The compression codec for produced record batches. A batch that compression does not make smaller is sent uncompressed, whichever codec you choose.").
+				ShortDescription("Compression codec for produced record batches. A batch that compression does not shrink is sent uncompressed.").
+				Default("snappy").
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
 				Description("Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.").Version("4.58.0").
@@ -269,22 +269,22 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 			return nil, err
 		}
 
-		var c kgo.CompressionCodec
 		switch cStr {
 		case "lz4":
-			c = kgo.Lz4Compression()
+			compressionPrefs = append(compressionPrefs, kgo.Lz4Compression())
 		case "gzip":
-			c = kgo.GzipCompression()
+			compressionPrefs = append(compressionPrefs, kgo.GzipCompression())
 		case "snappy":
-			c = kgo.SnappyCompression()
+			// The same preference list as the franz-go default, which the
+			// default value of this field stands for.
+			compressionPrefs = append(compressionPrefs, kgo.SnappyCompression(), kgo.NoCompression())
 		case "zstd":
-			c = kgo.ZstdCompression()
+			compressionPrefs = append(compressionPrefs, kgo.ZstdCompression())
 		case "none":
-			c = kgo.NoCompression()
+			compressionPrefs = append(compressionPrefs, kgo.NoCompression())
 		default:
 			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
 		}
-		compressionPrefs = append(compressionPrefs, c)
 	}
 	if len(compressionPrefs) > 0 {
 		opts = append(opts, kgo.ProducerBatchCompression(compressionPrefs...))
@@ -376,6 +376,7 @@ const (
 	kfwFieldMetadata    = "metadata"
 	kfwFieldTimestamp   = "timestamp"
 	kfwFieldTimestampMs = "timestamp_ms"
+	kfwFieldTombstone   = "tombstone"
 )
 
 // Descriptions shared by the fields of the franz-go and Sarama based Kafka
@@ -416,6 +417,13 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().
 			Advanced(),
+		service.NewInterpolatedStringField(kfwFieldTombstone).
+			Description("An optional boolean that, when it resolves to `true` for a message, writes that message as a tombstone: a record with a null value. The message payload is ignored for tombstones. Use this to delete keys on compacted topics, or to keep tombstones intact when mirroring a topic. An empty payload is not a tombstone. The interpolation must resolve to a value that can be parsed as a boolean, otherwise the write fails.").
+			Version("4.114.0").
+			Example(`${! @kafka_tombstone_message }`).
+			Example(`${! @operation == "delete" }`).
+			Optional().
+			Advanced(),
 	}
 }
 
@@ -453,6 +461,7 @@ type FranzWriter struct {
 	Partition     *service.InterpolatedString
 	Timestamp     *service.InterpolatedString
 	IsTimestampMs bool
+	Tombstone     *service.InterpolatedString
 	MetaFilter    *service.MetadataFilter
 	hooks         franzWriterHooks
 
@@ -521,6 +530,12 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks
 		w.IsTimestampMs = true
 	}
 
+	if conf.Contains(kfwFieldTombstone) {
+		if w.Tombstone, err = conf.FieldInterpolatedString(kfwFieldTombstone); err != nil {
+			return nil, err
+		}
+	}
+
 	return &w, nil
 }
 
@@ -543,10 +558,24 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 
 		var err error
 
-		// Required: Value
-		r.Value, err = msg.AsBytes()
-		if err != nil {
-			return nil, fmt.Errorf("message to bytes: %w", err)
+		// Optional: Tombstone
+		var tombstone bool
+		if w.Tombstone != nil {
+			tsStr, err := w.Tombstone.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("tombstone interpolation: %w", err)
+			}
+			if tombstone, err = strconv.ParseBool(tsStr); err != nil {
+				return nil, fmt.Errorf("parse tombstone: %w", err)
+			}
+		}
+
+		// Required: Value, left nil for tombstones so it is encoded as null.
+		if !tombstone {
+			r.Value, err = msg.AsBytes()
+			if err != nil {
+				return nil, fmt.Errorf("message to bytes: %w", err)
+			}
 		}
 
 		// Required: Topic

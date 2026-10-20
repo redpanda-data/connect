@@ -202,10 +202,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 						Name:  "telemetry-tenant-id",
 						Usage: "Tags telemetry payloads with an opaque tenant identifier (typically the Redpanda Cloud organization ID for cloud-managed deployments). When unset the field is omitted from the payload.",
 					},
-					&cli.StringSliceFlag{
-						Name:  "rpc-plugins",
-						Usage: "Plugins to load over the RPC interface. This flag should point to manifest files containing the plugin definitions. Globs are also supported.",
-					},
+					rpcPluginsFlag,
 				},
 				redpandaFlags(),
 			),
@@ -222,8 +219,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 					return err
 				}
 
-				rpcPlugins := c.StringSlice("rpc-plugins")
-				err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), schema.Environment(), rpcPlugins)
+				err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), schema.Environment(), rpcPluginPaths(c))
 				if err != nil {
 					return err
 				}
