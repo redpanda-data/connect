@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.115.0 - TBD
+
+### Added
+
+- iceberg: Added message_format field to write positional arrays into pre-created tables, timestamp_format to parse timestamp strings with a custom layout, and parsing of numeric strings into int, long, float and double columns on insert, upsert and delete.
+
 ## 4.114.0 - 2026-10-16
 
 ### Added
