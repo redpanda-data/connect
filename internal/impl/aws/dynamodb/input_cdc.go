@@ -445,10 +445,19 @@ type tableStream struct {
 	checkpointer  *Checkpointer
 	recordBatcher *RecordBatcher
 
-	mu             sync.RWMutex // Level 2 lock - never hold when acquiring dynamoDBCDCInput.mu
-	shardReaders   map[string]*dynamoDBShardReader
-	snapshot       *snapshotState
-	shardRefreshCh chan struct{} // Signal coordinator to refresh shards immediately
+	mu           sync.RWMutex // Level 2 lock - never hold when acquiring dynamoDBCDCInput.mu
+	shardReaders map[string]*dynamoDBShardReader
+	// completedShards records shards whose reader reached the end of the
+	// closed shard (NextShardIterator == nil). DescribeStream keeps listing
+	// closed shards for the stream's 24h retention window, so without this
+	// set a shard pruned from shardReaders by the cleanup ticker would be
+	// rediscovered as new and read again from its checkpoint (or
+	// TRIM_HORIZON) on every refresh after cleanup. Entries are dropped once
+	// the shard is no longer listed. Guarded by the same lock as
+	// shardReaders (ts.mu).
+	completedShards map[string]struct{}
+	snapshot        *snapshotState
+	shardRefreshCh  chan struct{} // Signal coordinator to refresh shards immediately
 
 	// honorStartFrom is true only until the first successful shard discovery
 	// of a pipeline with no pre-existing checkpoint state. start_from applies
@@ -476,14 +485,23 @@ type dynamoDBCDCInput struct {
 	tableStreams map[string]*tableStream // keyed by table name
 
 	// Legacy fields for backward compatibility with single table mode
-	resolvedTable  string // Actual table name for single-table path; may differ from conf.tables in tag discovery mode
-	streamArn      *string
-	keySchema      []dynamodbtypes.KeySchemaElement // Table's primary key schema for deduplication
-	checkpointer   *Checkpointer
-	recordBatcher  *RecordBatcher
-	shardReaders   map[string]*dynamoDBShardReader
-	snapshot       *snapshotState // nil if snapshot mode is "none"
-	shardRefreshCh chan struct{}  // Signal coordinator to refresh shards immediately
+	resolvedTable string // Actual table name for single-table path; may differ from conf.tables in tag discovery mode
+	streamArn     *string
+	keySchema     []dynamodbtypes.KeySchemaElement // Table's primary key schema for deduplication
+	checkpointer  *Checkpointer
+	recordBatcher *RecordBatcher
+	shardReaders  map[string]*dynamoDBShardReader
+	// completedShards records shards whose reader reached the end of the
+	// closed shard (NextShardIterator == nil). DescribeStream keeps listing
+	// closed shards for the stream's 24h retention window, so without this
+	// set a shard pruned from shardReaders by the cleanup ticker would be
+	// rediscovered as new and read again from its checkpoint (or
+	// TRIM_HORIZON) on every refresh after cleanup. Entries are dropped once
+	// the shard is no longer listed. Guarded by the same lock as
+	// shardReaders (d.mu).
+	completedShards map[string]struct{}
+	snapshot        *snapshotState // nil if snapshot mode is "none"
+	shardRefreshCh  chan struct{}  // Signal coordinator to refresh shards immediately
 
 	pendingAcks       sync.WaitGroup
 	backgroundWorkers sync.WaitGroup // Tracks background goroutines for proper cleanup
@@ -1802,11 +1820,14 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		return err
 	}
 
+	d.mu.Lock()
+	pruneCompletedShards(d.completedShards, shards)
+	d.mu.Unlock()
+
 	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) bool {
 		d.mu.RLock()
 		defer d.mu.RUnlock()
-		_, exists := d.shardReaders[shardID]
-		return exists
+		return isKnownShard(d.shardReaders, d.completedShards, shardID)
 	}, "", d.honorStartFrom.Load())
 
 	// Add all new shard readers in a single critical section
@@ -1814,7 +1835,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.mu.Lock()
 		for _, s := range newShards {
 			// Double-check shard wasn't added by another goroutine
-			if _, exists := d.shardReaders[s.shardID]; !exists {
+			if !isKnownShard(d.shardReaders, d.completedShards, s.shardID) {
 				d.shardReaders[s.shardID] = &dynamoDBShardReader{
 					shardID:        s.shardID,
 					iterator:       s.iterator,
@@ -1839,6 +1860,50 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// isKnownShard reports whether shard discovery must skip shardID: it either
+// has a registered reader or was already read to the end of the closed shard.
+// The caller holds the lock guarding both maps.
+func isKnownShard(readers map[string]*dynamoDBShardReader, completed map[string]struct{}, shardID string) bool {
+	if _, ok := readers[shardID]; ok {
+		return true
+	}
+	_, ok := completed[shardID]
+	return ok
+}
+
+// pruneCompletedShards forgets completed shards that DescribeStream no longer
+// lists (aged out of the stream's retention window), bounding the set to the
+// closed shards still in retention. The caller holds the lock guarding the
+// set.
+func pruneCompletedShards(completed map[string]struct{}, listed []types.Shard) {
+	if len(completed) == 0 {
+		return
+	}
+	stillListed := make(map[string]struct{}, len(listed))
+	for _, shard := range listed {
+		stillListed[aws.ToString(shard.ShardId)] = struct{}{}
+	}
+	for shardID := range completed {
+		if _, ok := stillListed[shardID]; !ok {
+			delete(completed, shardID)
+		}
+	}
+}
+
+// markShardCompleted flags a reader that has read its closed shard to the end
+// as exhausted (so the cleanup ticker prunes it) and records the shard in
+// completed (allocated on first use) so later discovery cycles do not
+// re-register it. The caller holds the lock guarding both.
+func markShardCompleted(readers map[string]*dynamoDBShardReader, completed *map[string]struct{}, shardID string) {
+	if reader, ok := readers[shardID]; ok {
+		reader.exhausted = true
+	}
+	if *completed == nil {
+		*completed = make(map[string]struct{})
+	}
+	(*completed)[shardID] = struct{}{}
 }
 
 // startShardCoordinator spawns goroutines for each shard and manages shard refresh.
@@ -2050,18 +2115,21 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		return err
 	}
 
+	ts.mu.Lock()
+	pruneCompletedShards(ts.completedShards, shards)
+	ts.mu.Unlock()
+
 	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) bool {
 		ts.mu.RLock()
 		defer ts.mu.RUnlock()
-		_, exists := ts.shardReaders[shardID]
-		return exists
+		return isKnownShard(ts.shardReaders, ts.completedShards, shardID)
 	}, " (table "+tableName+")", ts.honorStartFrom.Load())
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
 		ts.mu.Lock()
 		for _, s := range newShards {
-			if _, exists := ts.shardReaders[s.shardID]; !exists {
+			if !isKnownShard(ts.shardReaders, ts.completedShards, s.shardID) {
 				ts.shardReaders[s.shardID] = &dynamoDBShardReader{
 					shardID:        s.shardID,
 					iterator:       s.iterator,
@@ -2360,17 +2428,14 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Success - reset backoff
 		boff.Reset()
 
-		// Update iterator
+		// Update iterator. A nil NextShardIterator means the shard is closed
+		// and this page is its last: its records are still delivered below
+		// before the shard is marked completed.
+		shardClosed := false
 		ts.mu.Lock()
 		if reader, ok := ts.shardReaders[shardID]; ok {
 			reader.iterator = getRecords.NextShardIterator
-			if reader.iterator == nil {
-				reader.exhausted = true
-				d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
-				ts.mu.Unlock()
-				ts.recordBatcher.Release(shardID, reserve)
-				return
-			}
+			shardClosed = reader.iterator == nil
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
 				reader.lastSequenceNumber = seq
 			}
@@ -2378,8 +2443,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		ts.mu.Unlock()
 
 		if len(getRecords.Records) == 0 {
-			// No records available: wait before polling again
 			ts.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeTableShard(tableName, ts, shardID)
+				return
+			}
+			// No records available: wait before polling again
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2397,6 +2466,10 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
 		if len(batch) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeTableShard(tableName, ts, shardID)
+				return
+			}
 			continue
 		}
 
@@ -2459,7 +2532,20 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
 		}
+		if shardClosed {
+			d.completeTableShard(tableName, ts, shardID)
+			return
+		}
 	}
+}
+
+// completeTableShard marks a multi-table shard read to the end of its closed
+// shard as exhausted and completed (see markShardCompleted).
+func (d *dynamoDBCDCInput) completeTableShard(tableName string, ts *tableStream, shardID string) {
+	ts.mu.Lock()
+	markShardCompleted(ts.shardReaders, &ts.completedShards, shardID)
+	ts.mu.Unlock()
+	d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
 }
 
 // shouldSkipFailoverRecord reports whether a record was already processed in the
@@ -2670,6 +2756,15 @@ func (d *dynamoDBCDCInput) cleanupExhaustedShards(activeShards map[string]contex
 	}
 }
 
+// completeShard marks a single-table shard read to the end of its closed shard
+// as exhausted and completed (see markShardCompleted).
+func (d *dynamoDBCDCInput) completeShard(shardID string) {
+	d.mu.Lock()
+	markShardCompleted(d.shardReaders, &d.completedShards, shardID)
+	d.mu.Unlock()
+	d.log.Infof("Shard %s exhausted", shardID)
+}
+
 // startShardReader continuously reads from a single shard and sends batches to the channel
 func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string) {
 	d.log.Debugf("Starting reader for shard %s", shardID)
@@ -2822,17 +2917,14 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Success - reset backoff
 		boff.Reset()
 
-		// Update iterator
+		// Update iterator. A nil NextShardIterator means the shard is closed
+		// and this page is its last: its records are still delivered below
+		// before the shard is marked completed.
+		shardClosed := false
 		d.mu.Lock()
 		if reader, ok := d.shardReaders[shardID]; ok {
 			reader.iterator = getRecords.NextShardIterator
-			if reader.iterator == nil {
-				reader.exhausted = true
-				d.log.Infof("Shard %s exhausted", shardID)
-				d.mu.Unlock()
-				d.recordBatcher.Release(shardID, reserve)
-				return
-			}
+			shardClosed = reader.iterator == nil
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
 				reader.lastSequenceNumber = seq
 			}
@@ -2840,8 +2932,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		d.mu.Unlock()
 
 		if len(getRecords.Records) == 0 {
-			// No records available: wait before polling again
 			d.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeShard(shardID)
+				return
+			}
+			// No records available: wait before polling again
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2855,6 +2951,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
 		if len(batch) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeShard(shardID)
+				return
+			}
 			continue
 		}
 
@@ -2917,6 +3017,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
+		}
+		if shardClosed {
+			d.completeShard(shardID)
+			return
 		}
 	}
 }
