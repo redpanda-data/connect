@@ -288,3 +288,100 @@ func TestRefreshTableShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 		"healthy shards must be registered even when another shard fails")
 	assert.False(t, ts.honorStartFrom.Load())
 }
+
+// TestRefreshShards_CompletedShardNotRediscoveredAfterCleanup (CON-599):
+// DescribeStream keeps listing closed shards for the 24h retention window.
+// Once a reader has read a closed shard to the end and the cleanup ticker has
+// pruned it, the next discovery cycle must not register it again: doing so
+// re-read the shard from its (lagging) checkpoint or TRIM_HORIZON every
+// cleanup cycle, redelivering its tail and churning thousands of
+// GetItem/GetShardIterator/GetRecords calls.
+func TestRefreshShards_CompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
+	transport := &refreshStubTransport{shardIDs: []string{"shard-closed", "shard-open"}}
+	d := newRefreshTestInput(t, transport)
+
+	require.NoError(t, d.refreshShards(t.Context()))
+	require.ElementsMatch(t, []string{"shard-closed", "shard-open"}, registeredShards(d))
+	require.Equal(t, 2, transport.iteratorCallCount())
+
+	// The reader reaches the end of the closed shard (NextShardIterator == nil).
+	d.mu.Lock()
+	d.shardReaders["shard-closed"].iterator = nil
+	d.mu.Unlock()
+	d.completeShard("shard-closed")
+
+	// The cleanup ticker prunes the exhausted reader.
+	d.cleanupExhaustedShards(map[string]context.CancelFunc{})
+	require.ElementsMatch(t, []string{"shard-open"}, registeredShards(d))
+
+	// The refresh ticker: DescribeStream still lists the closed shard.
+	require.NoError(t, d.refreshShards(t.Context()))
+	assert.ElementsMatch(t, []string{"shard-open"}, registeredShards(d),
+		"a closed shard already read to the end must not be re-registered")
+	assert.Equal(t, 2, transport.iteratorCallCount(),
+		"no new iterator may be acquired for a completed shard")
+
+	// Once the shard ages out of the stream listing it is forgotten, so the
+	// completed set stays bounded to shards still in retention.
+	transport.mu.Lock()
+	transport.shardIDs = []string{"shard-open"}
+	transport.mu.Unlock()
+	require.NoError(t, d.refreshShards(t.Context()))
+	d.mu.RLock()
+	assert.Empty(t, d.completedShards, "completed shards no longer listed must be pruned")
+	d.mu.RUnlock()
+}
+
+// TestRefreshTableShards_CompletedShardNotRediscoveredAfterCleanup mirrors
+// the CON-599 contract on the multi-table path.
+func TestRefreshTableShards_CompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
+	transport := &refreshStubTransport{shardIDs: []string{"shard-closed", "shard-open"}}
+	d := &dynamoDBCDCInput{
+		conf:          dynamoDBCDCConfig{startFrom: "trim_horizon"},
+		log:           service.MockResources().Logger(),
+		metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		streamsClient: newStubStreamsClient(transport),
+	}
+	ts := &tableStream{
+		tableName:      "test",
+		streamArn:      testStreamArn,
+		checkpointer:   newTestCheckpointer(t),
+		shardReaders:   map[string]*dynamoDBShardReader{},
+		shardRefreshCh: make(chan struct{}, 1),
+	}
+	tableShards := func() []string {
+		ts.mu.RLock()
+		defer ts.mu.RUnlock()
+		ids := make([]string, 0, len(ts.shardReaders))
+		for id := range ts.shardReaders {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+
+	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+	require.ElementsMatch(t, []string{"shard-closed", "shard-open"}, tableShards())
+	require.Equal(t, 2, transport.iteratorCallCount())
+
+	ts.mu.Lock()
+	ts.shardReaders["shard-closed"].iterator = nil
+	ts.mu.Unlock()
+	d.completeTableShard("test", ts, "shard-closed")
+
+	d.cleanupTableExhaustedShards("test", ts, map[string]context.CancelFunc{})
+	require.ElementsMatch(t, []string{"shard-open"}, tableShards())
+
+	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+	assert.ElementsMatch(t, []string{"shard-open"}, tableShards(),
+		"a closed shard already read to the end must not be re-registered")
+	assert.Equal(t, 2, transport.iteratorCallCount(),
+		"no new iterator may be acquired for a completed shard")
+
+	transport.mu.Lock()
+	transport.shardIDs = []string{"shard-open"}
+	transport.mu.Unlock()
+	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+	ts.mu.RLock()
+	assert.Empty(t, ts.completedShards, "completed shards no longer listed must be pruned")
+	ts.mu.RUnlock()
+}

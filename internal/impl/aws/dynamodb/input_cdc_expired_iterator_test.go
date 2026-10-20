@@ -401,6 +401,9 @@ type readerHarness struct {
 	// (d.shardReaders for single-table, ts.shardReaders for multi-table).
 	shardReaders map[string]*dynamoDBShardReader
 	start        func(ctx context.Context)
+	// completed reports whether the harnessed entry point recorded shard-001
+	// as read to the end of its closed shard.
+	completed func() bool
 }
 
 // readerHarnesses returns one fresh harness factory per reader entry point,
@@ -443,6 +446,11 @@ func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointL
 			}
 			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
 				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
+			}, completed: func() bool {
+				ts.mu.RLock()
+				defer ts.mu.RUnlock()
+				_, ok := ts.completedShards["shard-001"]
+				return ok
 			}}
 		}
 		d.streamArn = aws.String(testStreamArn)
@@ -450,6 +458,11 @@ func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointL
 		d.shardReaders = shardReaders
 		return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
 			d.startShardReader(ctx, "shard-001")
+		}, completed: func() bool {
+			d.mu.RLock()
+			defer d.mu.RUnlock()
+			_, ok := d.completedShards["shard-001"]
+			return ok
 		}}
 	}
 	return map[string]func() *readerHarness{
@@ -663,6 +676,83 @@ func TestShardReader_ReleasesReservationOnUnproductiveReads(t *testing.T) {
 						"released reservations must be pruned")
 					assert.Zero(t, trackerEntries,
 						"a shard that never yields a delivered record must not materialise tracker state")
+				})
+			}
+		})
+	}
+}
+
+// closedShardStubTransport serves a single GetRecords page carrying records
+// and no NextShardIterator: the final page of a closed shard.
+type closedShardStubTransport struct {
+	records string
+	pages   atomic.Int64
+}
+
+func (s *closedShardStubTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	if !strings.HasSuffix(target, ".GetRecords") {
+		return nil, fmt.Errorf("closedShardStubTransport: unexpected operation %q", target)
+	}
+	s.pages.Add(1)
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	return &http.Response{
+		StatusCode: 200,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(fmt.Sprintf(`{"Records":%s}`, s.records))),
+		Request:    req,
+	}, nil
+}
+
+// TestShardReader_ClosedShardFinalPageDelivered (CON-599): when GetRecords
+// returns a closed shard's last records together with a nil
+// NextShardIterator, those records must still be delivered before the
+// reader stops and records the shard as completed. Returning on the nil
+// iterator first dropped them, and since a completed shard is never read
+// again they would be lost for good.
+func TestShardReader_ClosedShardFinalPageDelivered(t *testing.T) {
+	scenarios := map[string]struct {
+		records   string
+		wantBatch int
+	}{
+		"final page with records": {records: twoRecordsPage, wantBatch: 2},
+		"empty final page":        {records: "[]"},
+	}
+	for scenarioName, sc := range scenarios {
+		t.Run(scenarioName, func(t *testing.T) {
+			var transport *closedShardStubTransport
+			mk := func() aws.HTTPClient {
+				transport = &closedShardStubTransport{records: sc.records}
+				return transport
+			}
+			for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+				t.Run(name, func(t *testing.T) {
+					h := mkHarness()
+					done := make(chan struct{})
+					go func() {
+						h.start(t.Context())
+						close(done)
+					}()
+					select {
+					case <-done:
+					case <-time.After(5 * time.Second):
+						t.Fatal("reader should stop once the closed shard is read to the end")
+					}
+
+					if sc.wantBatch > 0 {
+						select {
+						case am := <-h.d.msgChan:
+							assert.Len(t, am.msg, sc.wantBatch, "the closed shard's final records must be delivered")
+						default:
+							t.Fatal("the closed shard's final page was dropped")
+						}
+					} else {
+						assert.Empty(t, h.d.msgChan)
+					}
+					assert.Equal(t, int64(1), transport.pages.Load(), "a closed shard must not be polled past its last page")
+					assert.True(t, h.shardReaders["shard-001"].exhausted, "the reader must be marked exhausted for cleanup")
+					assert.True(t, h.completed(), "the shard must be recorded as completed")
 				})
 			}
 		})
