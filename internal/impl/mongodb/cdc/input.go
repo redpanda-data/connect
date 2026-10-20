@@ -73,13 +73,18 @@ const (
 	fieldSnapshotMode           = "snapshot_mode"
 	fieldIncSnapshot            = "incremental_snapshot"
 	fieldIncSnapshotChunkSize   = "chunk_size"
-	fieldIncSnapshotKey         = "checkpoint_key"
+	fieldIncSnapshotKey         = "checkpoint_cache_key"
+	fieldIncSnapshotRetryCool   = "retry_cooldown"
 	fieldSignalCollection       = "signal_collection_name"
 
 	snapshotModeBlocking    = "blocking"
 	snapshotModeIncremental = "incremental"
 
 	defaultIncSnapshotChunkSize = 1024
+	// defaultIncSnapshotRetryCooldown holds the backfill off after a chunk
+	// read failed retryably, so an election or a dropped connection is not
+	// retried on every streamed change.
+	defaultIncSnapshotRetryCooldown = 5 * time.Second
 	// incSnapshotKeySuffix derives the default progress key from
 	// checkpoint_key, so two inputs can only share progress by already sharing
 	// a stream position.
@@ -226,7 +231,7 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 
 == Incremental snapshots
 
-With `+"`snapshot_mode: incremental`"+` the snapshot no longer holds back streaming. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
+With `+"`snapshot_mode: incremental`"+` the snapshot no longer holds back streaming. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
 
 A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. A pipeline switched from `+"`blocking`"+` to `+"`incremental`"+` with a stream position already stored reads nothing again. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
 
@@ -360,6 +365,9 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nClearing it while a stream position is stored discards the record of which collections have been read, so a restart reads none of them again: a `"+replication.SnapshotSignalType+"` signal re-reads one on request. With any other `"+fieldSnapshotMode+"`, the input discards progress left under this key, so returning to `"+snapshotModeIncremental+"` later never resumes a read the stream has long since moved past.").
 					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from `"+fieldCheckpointKey+"`.").
 					Default(""),
+				service.NewDurationField(fieldIncSnapshotRetryCool).
+					Description("How long the snapshot waits before retrying a chunk read that failed transiently, for example during a replica set election or after a dropped connection. Change events keep streaming meanwhile. Setting it to `0s` retries on the next streamed change.").
+					Default(defaultIncSnapshotRetryCooldown.String()),
 			).
 				Description("Settings for `"+fieldSnapshotMode+": "+snapshotModeIncremental+"`.").
 				Version("4.115.0").
@@ -580,6 +588,12 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 	if m.incChunkSize < 1 {
 		return fmt.Errorf("field %s.%s must be greater or equal to 1", fieldIncSnapshot, fieldIncSnapshotChunkSize)
 	}
+	if m.incRetryCooldown, err = inc.FieldDuration(fieldIncSnapshotRetryCool); err != nil {
+		return err
+	}
+	if m.incRetryCooldown < 0 {
+		return fmt.Errorf("field %s.%s must not be negative", fieldIncSnapshot, fieldIncSnapshotRetryCool)
+	}
 	if m.snapshotParallelism > 1 || m.useAutoBucketSnapshots {
 		m.logger.Warnf("%s and %s do not apply with %s: %s, which reads collections one chunk at a time", fieldSnapshotParallelism, fieldBucketSharding, fieldSnapshotMode, snapshotModeIncremental)
 	}
@@ -656,6 +670,7 @@ type mongoCDC struct {
 	// snapshot.
 	incremental      bool
 	incChunkSize     int
+	incRetryCooldown time.Duration
 	incStateStore    *incStateCache
 	signalCollection string
 
@@ -921,7 +936,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 
 	var incRun *incSnapshotRun
 	if m.incremental {
-		if incRun, err = newIncSnapshotRun(m.db, m.collections, m.incChunkSize, incResume, m.logger); err != nil {
+		if incRun, err = newIncSnapshotRun(m.db, m.collections, m.incChunkSize, m.incRetryCooldown, incResume, m.logger); err != nil {
 			return fmt.Errorf("unable to set up the incremental snapshot: %w", err)
 		}
 	}

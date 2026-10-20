@@ -144,13 +144,16 @@ type replayed struct {
 	reads map[string]int
 	// interleaved records a snapshot read emitted after a streamed change.
 	interleaved bool
+	// problems records messages that could not be replayed. replay runs
+	// inside Eventually conditions, off the test goroutine, so it must not
+	// fail the test itself: replayChecked does that.
+	problems []string
 }
 
 // replay applies the output in order. Documents carry a counter v that every
 // update increments, so a document going backwards is a stale chunk emitted
-// after a newer change.
-func replay(t *testing.T, o *outputHelper) replayed {
-	t.Helper()
+// after a newer change. It is safe to call from an Eventually condition.
+func replay(o *outputHelper) replayed {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	r := replayed{docs: map[string]float64{}, readByColl: map[string]int{}, reads: map[string]int{}}
@@ -160,8 +163,15 @@ func replay(t *testing.T, o *outputHelper) replayed {
 			op, _ := m.MetaGet("operation")
 			coll, _ := m.MetaGet("collection")
 			body, err := m.AsStructured()
-			require.NoError(t, err)
-			doc := body.(map[string]any)
+			if err != nil {
+				r.problems = append(r.problems, fmt.Sprintf("decoding a %s message from %s: %v", op, coll, err))
+				continue
+			}
+			doc, ok := body.(map[string]any)
+			if !ok {
+				r.problems = append(r.problems, fmt.Sprintf("a %s message from %s is a %T, not a document", op, coll, body))
+				continue
+			}
 			// Keyed by collection too: tests seed several with the same _ids.
 			id := coll + "/" + fmt.Sprint(doc["_id"])
 			if op == "read" {
@@ -178,7 +188,8 @@ func replay(t *testing.T, o *outputHelper) replayed {
 				continue
 			case "read", "insert", "update", "replace":
 			default:
-				t.Fatalf("unexpected operation %q", op)
+				r.problems = append(r.problems, fmt.Sprintf("unexpected operation %q on %s", op, id))
+				continue
 			}
 			num, ok := doc["v"].(json.Number)
 			if !ok {
@@ -187,13 +198,25 @@ func replay(t *testing.T, o *outputHelper) replayed {
 				continue
 			}
 			v, err := num.Float64()
-			require.NoError(t, err)
+			if err != nil {
+				r.problems = append(r.problems, fmt.Sprintf("%s: counter %v: %v", id, num, err))
+				continue
+			}
 			if prev, seen := r.docs[id]; seen && v < prev {
 				r.regressed = append(r.regressed, fmt.Sprintf("%s: %v after %v (%s)", id, v, prev, op))
 			}
 			r.docs[id] = v
 		}
 	}
+	return r
+}
+
+// replayChecked is replay for the test goroutine: it fails the test if any
+// message could not be replayed.
+func replayChecked(t *testing.T, o *outputHelper) replayed {
+	t.Helper()
+	r := replay(o)
+	require.Empty(t, r.problems, "messages that could not be replayed")
 	return r
 }
 
@@ -284,10 +307,10 @@ mongodb_cdc:
 	want := dbState(t, db, "foo")
 
 	assert.Eventually(t, func() bool {
-		return assert.ObjectsAreEqual(want, replay(t, output).docs)
+		return assert.ObjectsAreEqual(want, replay(output).docs)
 	}, time.Minute, 250*time.Millisecond)
 
-	got := replay(t, output)
+	got := replayChecked(t, output)
 	assert.True(t, got.interleaved, "the snapshot never overlapped streaming, so nothing was deduplicated")
 	assert.Empty(t, got.regressed, "documents went backwards")
 	assert.Equal(t, want, got.docs)
@@ -360,14 +383,14 @@ func (h *incrementalHarness) seed(coll string, n int) {
 func (h *incrementalHarness) waitReads(coll string, atLeast int) {
 	h.t.Helper()
 	if !assert.Eventually(h.t, func() bool {
-		return replay(h.t, h.output).readByColl[coll] >= atLeast
+		return replay(h.output).readByColl[coll] >= atLeast
 	}, 90*time.Second, 100*time.Millisecond, "waiting for %d reads of %s", atLeast, coll) {
 		for _, r := range h.logs.matching("") {
 			if !strings.HasPrefix(r, "DEBUG") {
 				h.t.Logf("LOG %s", r)
 			}
 		}
-		h.t.Logf("reads so far: %v", replay(h.t, h.output).readByColl)
+		h.t.Logf("reads so far: %v", replay(h.output).readByColl)
 		h.t.FailNow()
 	}
 }
@@ -402,7 +425,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotResumesAfterRestart(t *testing.T)
 	h.waitReads("foo", 1000)
 	first.Stop(t)
 	wait()
-	stoppedAt := replay(t, h.output).readByColl["foo"]
+	stoppedAt := replayChecked(t, h.output).readByColl["foo"]
 	require.Less(t, stoppedAt, n, "the snapshot finished before the restart, so nothing was resumed")
 
 	second := h.stream(incrementalInput)
@@ -412,7 +435,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotResumesAfterRestart(t *testing.T)
 	second.Stop(t)
 	wait()
 
-	got := replay(t, h.output)
+	got := replayChecked(t, h.output)
 	for i := range n {
 		require.Positive(t, got.reads[fmt.Sprintf("foo/%d", i)], "document %d was never read", i)
 	}
@@ -447,17 +470,17 @@ mongodb_cdc:
 	h.waitReads("foo", 30)
 	blocking.Stop(t)
 	wait()
-	afterBlocking := replay(t, h.output).readCount
+	afterBlocking := replayChecked(t, h.output).readCount
 
 	// Switching to incremental with that position re-reads nothing.
 	incremental := h.stream(incrementalInput)
 	wait = incremental.RunAsync(t)
 	h.db.InsertOne(t, "foo", bson.M{"_id": 1000, "v": 0})
 	require.Eventually(t, func() bool {
-		_, ok := replay(t, h.output).docs["foo/1000"]
+		_, ok := replay(h.output).docs["foo/1000"]
 		return ok
 	}, time.Minute, 100*time.Millisecond, "streaming did not start")
-	assert.Equal(t, afterBlocking, replay(t, h.output).readCount, "switching modes re-read collections")
+	assert.Equal(t, afterBlocking, replayChecked(t, h.output).readCount, "switching modes re-read collections")
 
 	// A signal reads a collection again, alongside streaming.
 	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"bar"}}})
@@ -478,7 +501,7 @@ mongodb_cdc:
 	incremental.Stop(t)
 	wait()
 
-	got := replay(t, h.output)
+	got := replayChecked(t, h.output)
 	assert.Equal(t, 150, got.readByColl["bar"], "bar read by the blocking snapshot and once per signal")
 	assert.Equal(t, 30, got.readByColl["foo"])
 	assert.NotEmpty(t, h.logs.matching("are not in collections"))
@@ -522,7 +545,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotMixedIDTypes(t *testing.T) {
 	stream.Stop(t)
 	wait()
 
-	got := replay(t, h.output)
+	got := replayChecked(t, h.output)
 	assert.Equal(t, len(docs), got.readByColl["foo"], "every document read exactly once")
 	assert.Empty(t, got.regressed)
 }
@@ -575,7 +598,7 @@ func TestIntegrationMongoCDCSignalCollectionWithPrePostImages(t *testing.T) {
 	wait := stream.RunAsync(t)
 	h.db.InsertOne(t, "foo", bson.M{"_id": 0, "v": 0})
 	require.Eventually(t, func() bool {
-		_, ok := replay(t, h.output).docs["foo/0"]
+		_, ok := replay(h.output).docs["foo/0"]
 		return ok
 	}, time.Minute, 100*time.Millisecond, "streaming did not start")
 
@@ -587,7 +610,7 @@ func TestIntegrationMongoCDCSignalCollectionWithPrePostImages(t *testing.T) {
 	h.db.DeleteByID(t, "signals", "s1")
 	h.db.InsertOne(t, "foo", bson.M{"_id": 1, "v": 0})
 	require.Eventually(t, func() bool {
-		_, ok := replay(t, h.output).docs["foo/1"]
+		_, ok := replay(h.output).docs["foo/1"]
 		return ok
 	}, time.Minute, 100*time.Millisecond, "the stream stopped after a signal update or delete: %v", h.logs.matching("ERROR"))
 	stream.Stop(t)
@@ -608,7 +631,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 	h.waitReads("foo", 500)
 	first.Stop(t)
 	wait()
-	stoppedAt := replay(t, h.output).readByColl["foo"]
+	stoppedAt := replayChecked(t, h.output).readByColl["foo"]
 	require.Less(t, stoppedAt, n)
 	// A spell in blocking mode with a stream position stored: no snapshot, and
 	// the progress it cannot keep current is discarded.
@@ -616,7 +639,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 	wait = blocking.RunAsync(t)
 	h.db.InsertOne(t, "bar", bson.M{"_id": "blocking-marker", "v": 0})
 	require.Eventually(t, func() bool {
-		_, ok := replay(t, h.output).docs["bar/blocking-marker"]
+		_, ok := replay(h.output).docs["bar/blocking-marker"]
 		return ok
 	}, time.Minute, 100*time.Millisecond, "streaming did not start")
 	blocking.Stop(t)
@@ -630,11 +653,11 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 	wait = again.RunAsync(t)
 	h.db.InsertOne(t, "bar", bson.M{"_id": "incremental-marker", "v": 0})
 	require.Eventually(t, func() bool {
-		_, ok := replay(t, h.output).docs["bar/incremental-marker"]
+		_, ok := replay(h.output).docs["bar/incremental-marker"]
 		return ok
 	}, time.Minute, 100*time.Millisecond, "streaming did not start")
 	time.Sleep(2 * time.Second) // give a resumed read time to show itself
 	again.Stop(t)
 	wait()
-	assert.Equal(t, stoppedAt, replay(t, h.output).readByColl["foo"], "stale progress was resumed")
+	assert.Equal(t, stoppedAt, replayChecked(t, h.output).readByColl["foo"], "stale progress was resumed")
 }

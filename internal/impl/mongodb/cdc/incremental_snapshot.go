@@ -424,11 +424,6 @@ func cloneRawValue(v bson.RawValue) bson.RawValue {
 	return v
 }
 
-// incSnapshotRetryCooldown holds the coordinator off after a chunk read
-// failed retryably, so an election or a dropped connection is not retried on
-// every streamed change.
-const incSnapshotRetryCooldown = 5 * time.Second
-
 // incSnapshotRun is one connection's incremental snapshot. Everything but
 // construction runs on the stream goroutine, which the coordinator requires.
 type incSnapshotRun struct {
@@ -455,7 +450,7 @@ type incSnapshotRun struct {
 // newIncSnapshotRun builds the coordinator for one connection. resume is the
 // stored progress, nil on a fresh start; every configured collection is then
 // queued, and on a resume only those the progress does not know about.
-func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, resume *incrementalsnapshot.State, logger *service.Logger) (*incSnapshotRun, error) {
+func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, retryCooldown time.Duration, resume *incrementalsnapshot.State, logger *service.Logger) (*incSnapshotRun, error) {
 	run := &incSnapshotRun{
 		dbName:     db.Name(),
 		logger:     logger,
@@ -475,8 +470,8 @@ func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, 
 			logger.Warnf("Skipping incremental snapshot of collection %s: %v", table.Table, err)
 		},
 		OnPlanDeferred: func(err error) {
-			run.heldOffUntil = run.now().Add(incSnapshotRetryCooldown)
-			logger.Warnf("Incremental snapshot chunk read failed, retrying in %v: %v", incSnapshotRetryCooldown, err)
+			run.heldOffUntil = run.now().Add(retryCooldown)
+			logger.Warnf("Incremental snapshot chunk read failed, retrying in %v: %v", retryCooldown, err)
 		},
 	}, pruneResume(resume, run.tables(collections), logger))
 	if err != nil {

@@ -9,6 +9,7 @@
 package cdc
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -95,7 +96,12 @@ func connectTo(t *testing.T, uri string) *mongo.Client {
 	t.Helper()
 	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetTimeout(30 * time.Second))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Disconnect(t.Context()) })
+	t.Cleanup(func() {
+		// t.Context() is already cancelled during cleanup.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = client.Disconnect(ctx)
+	})
 	require.NoError(t, client.Ping(t.Context(), nil))
 	return client
 }
@@ -128,6 +134,8 @@ func startShardedCluster(t *testing.T) *mongoNode {
 
 func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
 	integration.CheckSkipExact(t)
+	// Each run starts its own containers on its own network.
+	t.Parallel()
 	mongos := startShardedCluster(t)
 	uri := mongos.uri(false)
 	client := connectTo(t, uri)
@@ -170,7 +178,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
 	// Sharded change streams are slow to emit: refer to
 	// TestIntegrationMongoCDCWithSnapshotShardedCluster.
 	assert.Eventually(t, func() bool {
-		return assert.ObjectsAreEqual(want, replay(t, h.output).of("foo"))
+		return assert.ObjectsAreEqual(want, replay(h.output).of("foo"))
 	}, 3*time.Minute, 500*time.Millisecond)
 
 	// Signals work through mongos too.
@@ -182,7 +190,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
 	stream.Stop(t)
 	wait()
 
-	got := replay(t, h.output)
+	got := replayChecked(t, h.output)
 	assert.Empty(t, got.regressed, "documents went backwards")
 	assert.Equal(t, want, got.of("foo"))
 	assert.Positive(t, got.readByColl["foo"])
@@ -213,6 +221,8 @@ func startTwoNodeReplicaSet(t *testing.T) (primary, secondary *mongoNode) {
 // before a failover rolls it back.
 func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	integration.CheckSkipExact(t)
+	// Each run starts its own containers on its own network.
+	t.Parallel()
 	primary, secondary := startTwoNodeReplicaSet(t)
 	client := connectTo(t, primary.uri(true))
 	db := client.Database("majority")
