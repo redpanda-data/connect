@@ -9,25 +9,21 @@ jobs:
   needs-review-digest:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
       issues: read
     env:
-      # Number of PRs actually listed in the Slack message. Must NOT be
-      # used to cap the `gh pr list` fetch: gh returns PRs newest-created
-      # first, so capping the fetch before sorting by label age would only
-      # ever surface the newest PRs and could never surface the PRs that
-      # have been waiting longest — exactly the ones this digest exists to
-      # highlight. The full (up to --limit) set is fetched, sorted, and
-      # only then sliced down to MAX_SHOWN for display.
+      # PRs shown in Slack. Applied after sorting by label age, not to the
+      # fetch: gh returns newest first, so capping it would hide the oldest.
       MAX_SHOWN: 5
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: List PRs needing review
         id: list
-        # Explicit `shell: bash` (rather than the default run shell) enables
-        # `-eo pipefail`, so a failing `gh` call fails this step instead of
-        # being swallowed by the trailing `jq`/`tee` in a pipeline. See
-        # soak_nightly.yml's postmortem comment for the same trap.
+        # Enables pipefail so a failing `gh` isn't masked by a trailing jq/tee.
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,7 +32,7 @@ jobs:
           gh pr list --repo "$REPO" \
             --state open \
             --label "needs review" \
-            --json number,title,url,author,createdAt \
+            --json number,title,url,author,createdAt,body,additions,deletions,changedFiles,files,comments \
             --limit 100 \
             > "$RUNNER_TEMP/needs-review-prs-raw.json"
 
@@ -79,18 +75,69 @@ jobs:
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "**PRs needing review:** $COUNT" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Build summariser request
+        if: steps.list.outputs.count != '0'
+        shell: bash
+        run: |
+          # Only summarise the PRs shown in Slack.
+          jq --argjson max_shown "$MAX_SHOWN" '[.[0:$max_shown][] | {
+            pr: .number,
+            title,
+            author: .author.login,
+            body: ((.body // "")[0:4000]),
+            additions,
+            deletions,
+            changedFiles,
+            files: [.files[] | {path, additions, deletions}],
+            summary: ([.comments[] | select(.author.login == "claude")] | last | .body)
+          }]' "$RUNNER_TEMP/needs-review-prs.json" > "$RUNNER_TEMP/summariser-input.json"
+
+          jq --slurpfile prs "$RUNNER_TEMP/summariser-input.json" \
+            --rawfile prompt .github/ai/needs-review-digest.txt \
+            '.system = $prompt |
+             (.messages[] | select(.role == "user") | .content) = ($prs[0] | tojson)' \
+            .github/ai/needs-review-digest.json | tee "$RUNNER_TEMP/request.json" | jq .
+
+      - name: Summarise PRs
+        if: steps.list.outputs.count != '0'
+        # Post the digest without summaries rather than not at all.
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Only keep response.json on a 200 with valid JSON; a partial body
+          # would break `jq --slurpfile` later. `|| HTTP_CODE=000` stops a curl
+          # failure exiting under `bash -e` before cleanup.
+          HTTP_CODE=$(curl -sSL --max-time 120 -o "$RUNNER_TEMP/response.tmp" -w '%{http_code}' \
+            https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d @"$RUNNER_TEMP/request.json") || HTTP_CODE=000
+          if [ "$HTTP_CODE" != "200" ] || ! jq empty "$RUNNER_TEMP/response.tmp" 2>/dev/null; then
+            cat "$RUNNER_TEMP/response.tmp" 2>/dev/null || true
+            rm -f "$RUNNER_TEMP/response.tmp"
+            echo "::warning::Anthropic API request failed (HTTP $HTTP_CODE); posting digest without summaries"
+            exit 1
+          fi
+          mv "$RUNNER_TEMP/response.tmp" "$RUNNER_TEMP/response.json"
+
       - name: Build Slack payload
         if: steps.list.outputs.count != '0'
         env:
           SEARCH_URL: "${{ github.server_url }}/${{ github.repository }}/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+review%22"
         run: |
-          # Slack requires &, < and > to be HTML-escaped inside mrkdwn text
-          # (in that order, so a literal "&" isn't double-escaped); an
-          # unescaped ">" in a title would otherwise terminate the link
-          # label early and mangle the line.
+          AI_FILE="$RUNNER_TEMP/response.json"
+          if [ ! -f "$AI_FILE" ]; then
+            AI_FILE="$RUNNER_TEMP/empty-response.json"
+            echo '{}' > "$AI_FILE"
+          fi
+
+          # Slack mrkdwn needs &, < and > escaped (& first to avoid double-escaping).
           jq --argjson count "${{ steps.list.outputs.count }}" \
              --argjson max_shown "$MAX_SHOWN" \
-             --arg search_url "$SEARCH_URL" '
+             --arg search_url "$SEARCH_URL" \
+             --slurpfile ai "$AI_FILE" '
             def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
             def human_age($seconds):
               ($seconds / 86400 | floor) as $days
@@ -100,21 +147,24 @@ jobs:
                   else (($seconds / 60 | floor) | tostring) + "m"
                   end
                 end;
-            {
+            ((try ($ai[0].content[0].text | fromjson | .entries
+                   | map({(.pr | tostring): .}) | add) catch null) // {}) as $ai_map
+            | {
             blocks: (
               [{
                 type: "header",
                 text: {
                   type: "plain_text",
-                  text: (($count | tostring) + " PR" + (if $count == 1 then "" else "s" end) + " need" + (if $count == 1 then "s" else "" end) + " review"),
+                  text: "PRs needing review",
                   emoji: true
                 }
               }]
               + (
                   [.[0:$max_shown][] |
-                    ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  _by " + (.author.login|esc)
-                      + " · opened " + human_age(now - (.createdAt | fromdateiso8601)) + " ago, labeled "
-                      + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + "_")
+                    $ai_map[(.number|tostring)] as $s |
+                    ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  by " + (.author.login|esc)
+                      + " · labeled for review " + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + " ago"
+                      + (if $s then "\n      " + ({S: "🟢", M: "🟡", L: "🔴"}[$s.effort] // $s.effort) + " _" + ($s.effort_reason|esc) + "_" else "" end))
                   ] as $lines
                   | if ($lines | length) > 0 then [{
                       type: "section",
@@ -139,6 +189,5 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL_PR_REVIEW }}
           webhook-type: incoming-webhook
           payload-file-path: ${{ runner.temp }}/slack_payload.json
-          # Fail the job when the webhook post fails; the default silently
-          # swallows errors and reports success.
+          # Fail on webhook errors; the default silently ignores them.
           errors: true

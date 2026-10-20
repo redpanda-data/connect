@@ -201,21 +201,21 @@ Most integration tests spin up Docker containers, so they're skipped by `task te
 go test -run "^Test.*Integration.*$" ./internal/impl/<connector directory>/...
 ```
 
-[inputs]: https://docs.redpanda.com/redpanda-connect/components/inputs/about
-[about-categories]: https://docs.redpanda.com/redpanda-connect/about#components
-[processors]: https://docs.redpanda.com/redpanda-connect/components/processors/about
-[outputs]: https://docs.redpanda.com/redpanda-connect/components/outputs/about
-[metrics]: https://docs.redpanda.com/redpanda-connect/components/metrics/about
-[tracers]: https://docs.redpanda.com/redpanda-connect/components/tracers/about
-[config-interp]: https://docs.redpanda.com/redpanda-connect/configuration/interpolation
-[streams-api]: https://docs.redpanda.com/redpanda-connect/guides/streams_mode/streams_api
-[streams-mode]: https://docs.redpanda.com/redpanda-connect/guides/streams_mode/about
-[general-docs]: https://docs.redpanda.com/redpanda-connect/about
-[bloblang-about]: https://docs.redpanda.com/redpanda-connect/guides/bloblang/about
-[config-doc]: https://docs.redpanda.com/redpanda-connect/configuration/about
+[inputs]: https://docs.redpanda.com/connect/components/inputs/about
+[about-categories]: https://docs.redpanda.com/connect/components/about/
+[processors]: https://docs.redpanda.com/connect/components/processors/about
+[outputs]: https://docs.redpanda.com/connect/components/outputs/about
+[metrics]: https://docs.redpanda.com/connect/components/metrics/about
+[tracers]: https://docs.redpanda.com/connect/components/tracers/about
+[config-interp]: https://docs.redpanda.com/connect/configuration/interpolation
+[streams-api]: https://docs.redpanda.com/connect/guides/streams_mode/streams_api
+[streams-mode]: https://docs.redpanda.com/connect/guides/streams_mode/about
+[general-docs]: https://docs.redpanda.com/connect/home/
+[bloblang-about]: https://docs.redpanda.com/connect/guides/bloblang/about
+[config-doc]: https://docs.redpanda.com/connect/configuration/about
 [releases]: https://github.com/redpanda-data/connect/releases
 [plugin-repo]: https://github.com/redpanda-data/redpanda-connect-plugin-example
-[getting-started]: https://docs.redpanda.com/redpanda-connect/guides/getting_started
+[getting-started]: https://docs.redpanda.com/connect/get-started/quickstarts/rpk/
 
 [godoc-badge]: https://pkg.go.dev/badge/github.com/redpanda-data/benthos/v4/public
 [godoc-url]: https://pkg.go.dev/github.com/redpanda-data/benthos/v4/public

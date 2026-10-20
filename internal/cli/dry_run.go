@@ -24,6 +24,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 )
 
 func isDirectory(path string) bool {
@@ -45,6 +46,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		secretsFlag,
 		envFileFlag,
 		licenseFlag,
+		rpcPluginsFlag,
 	}
 
 	return &cli.Command{
@@ -74,6 +76,10 @@ Exits with a status code 1 if any connection errors are detected in a directory:
 
 			var err error
 			if r.secretLookupFn, err = parseSecretsFlag(r.logger, c); err != nil {
+				return err
+			}
+
+			if err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), schema.Environment(), rpcPluginPaths(c)); err != nil {
 				return err
 			}
 

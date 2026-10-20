@@ -175,7 +175,28 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 		ops[index] = o.op(k, content, o.ttl)
 	}
 
-	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})
+	if err := o.client.collection.Do(ops, &gocb.BulkOpOptions{}); err != nil {
+		return err
+	}
+
+	// Do does not return the errors of single operations. Fail only the messages whose operation failed, so that
+	// the other messages are acked.
+	var batchErr *service.BatchError
+	for index, op := range ops {
+		err := opErr(op)
+		if err == nil {
+			continue
+		}
+		err = fmt.Errorf("couchbase operation failed: %w", err)
+		if batchErr == nil {
+			batchErr = service.NewBatchError(batch, err)
+		}
+		batchErr.Failed(index, err)
+	}
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
 }
 
 // Close closes the connection to the cluster if Connect was successful.

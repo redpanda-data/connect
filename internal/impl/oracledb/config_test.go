@@ -240,7 +240,9 @@ logminer: {}
 		require.NoError(t, err)
 
 		overrides := map[string]string{}
-		require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+		got, err := parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+		require.NoError(t, err)
+		assert.Equal(t, 500, got)
 		assert.Equal(t, map[string]string{"PREFETCH_ROWS": "500"}, overrides)
 	})
 
@@ -249,7 +251,9 @@ logminer: {}
 		require.NoError(t, err)
 
 		overrides := map[string]string{}
-		require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+		got, err := parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+		require.NoError(t, err)
+		assert.Equal(t, 5000, got)
 		assert.Equal(t, map[string]string{"PREFETCH_ROWS": "5000"}, overrides)
 	})
 
@@ -267,7 +271,7 @@ logminer: {}
 				require.NoError(t, err)
 
 				overrides := map[string]string{}
-				err = parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+				_, err = parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
 				assert.Error(t, err)
 				assert.Empty(t, overrides)
 			})
@@ -295,7 +299,9 @@ logminer: {}
 					require.NoError(t, err)
 
 					overrides := map[string]string{}
-					require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+					got, err := parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+					require.NoError(t, err)
+					assert.Equal(t, 100, got)
 					assert.Empty(t, overrides, "no override must be added when connection_string sets %s", key)
 
 					built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
@@ -305,6 +311,25 @@ logminer: {}
 					require.NoError(t, err)
 					assert.Equal(t, "100", parsed.Query().Get(key))
 				}
+			})
+		}
+	})
+
+	t.Run("non-positive-integer connection_string PREFETCH_ROWS yields no override", func(t *testing.T) {
+		for _, value := range []string{"abc", "0", "-5"} {
+			t.Run(value, func(t *testing.T) {
+				conf, err := oracleDBStreamConfigSpec.ParseYAML(`connection_string: "oracle://user:pass@host:1521/svc?PREFETCH_ROWS=`+value+`"
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`, nil)
+				require.NoError(t, err)
+
+				overrides := map[string]string{}
+				got, err := parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+				require.NoError(t, err)
+				assert.Zero(t, got)
+				assert.Empty(t, overrides)
 			})
 		}
 	})
@@ -327,7 +352,9 @@ prefetch_rows: 5000
 				require.NoError(t, err)
 
 				overrides := map[string]string{}
-				require.NoError(t, parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger()))
+				got, err := parsePrefetchRowsConfig(conf, overrides, service.MockResources().Logger())
+				require.NoError(t, err)
+				assert.Equal(t, 100, got)
 
 				built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
 				require.NoError(t, err)

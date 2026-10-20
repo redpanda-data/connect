@@ -15,6 +15,7 @@
 package kafka
 
 import (
+	"fmt"
 	"slices"
 	"time"
 
@@ -100,12 +101,32 @@ output:
 		LintRule(FranzConsumerFieldLintRules)
 }
 
+const rpiFieldPartitionAssignment = "partition_assignment_strategy"
+
 func redpandaInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
 		FranzConnectionOptionalFields(),
 		FranzConsumerFields(),
 		FranzReaderToggledConfigFields(),
 		[]*service.ConfigField{
+			service.NewStringListField(rpiFieldPartitionAssignment).
+				Description(`
+When using a consumer group, the strategies this client supports for assigning partitions to group members, in order of preference. This is the equivalent to the Java partition.assignment.strategy setting. Supported values:
+
+- ` + "`cooperative-sticky`" + `: Balances the total partition count per member while moving as few partitions as possible, and rebalances incrementally so that members keep consuming unaffected partitions. It does not balance partitions of each topic individually.
+- ` + "`sticky`" + `: The same assignment as ` + "`cooperative-sticky`" + `, using the eager protocol.
+- ` + "`range`" + `: Divides the partitions of each topic evenly across the members subscribed to it. Remainder partitions go to the first members by sort order, so when consuming many topics the earlier members can own more partitions overall.
+- ` + "`roundrobin`" + `: Assigns all partitions across members one at a time, which balances both each topic and the total when all members subscribe to the same topics.
+
+The eager strategies (` + "`sticky`" + `, ` + "`range`" + ` and ` + "`roundrobin`" + `) revoke every partition from every member on each rebalance, such as when a member joins, leaves or restarts. Records that are in flight but not yet committed are then reprocessed from the last committed offsets, so frequent rebalances cause repeated duplicates.
+
+To change strategies on a running group, first roll out a list with the old strategy followed by the new one, then a list with only the new one. Members that share no strategy with the group are rejected. This is safe between eager strategies and from an eager strategy to ` + "`cooperative-sticky`" + `. Once every member uses only ` + "`cooperative-sticky`" + `, do not roll out an eager strategy: an eager member joining a cooperative group can be elected leader and break rebalancing. Instead, stop all members and start them with the new strategy.`).
+				ShortDescription("The strategies used to assign partitions to consumer group members, in order of preference.").
+				Example([]string{"range"}).
+				Example([]string{"cooperative-sticky", "roundrobin"}).
+				Default([]any{"cooperative-sticky"}).
+				Advanced().
+				Version("4.114.0"),
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
 			service.NewExtractTracingSpanMappingField().Version("4.85.0"),
@@ -125,6 +146,12 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
+			balancers, err := redpandaPartitionAssignmentFromConfig(conf)
+			if err != nil {
+				return nil, err
+			}
+			consumerOpts = append(consumerOpts, kgo.Balancers(balancers...))
 
 			var rdr service.BatchInput
 			if connDetails.IsConfigured() {
@@ -173,4 +200,36 @@ func init() {
 
 			return rdr, nil
 		})
+}
+
+func redpandaPartitionAssignmentFromConfig(conf *service.ParsedConfig) ([]kgo.GroupBalancer, error) {
+	names, err := conf.FieldStringList(rpiFieldPartitionAssignment)
+	if err != nil {
+		return nil, err
+	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("field %v must list at least one strategy", rpiFieldPartitionAssignment)
+	}
+	seen := map[string]struct{}{}
+	balancers := make([]kgo.GroupBalancer, 0, len(names))
+	for _, name := range names {
+		if _, exists := seen[name]; exists {
+			return nil, fmt.Errorf("field %v lists strategy %q more than once", rpiFieldPartitionAssignment, name)
+		}
+		seen[name] = struct{}{}
+
+		switch name {
+		case "cooperative-sticky":
+			balancers = append(balancers, kgo.CooperativeStickyBalancer())
+		case "sticky":
+			balancers = append(balancers, kgo.StickyBalancer())
+		case "range":
+			balancers = append(balancers, kgo.RangeBalancer())
+		case "roundrobin":
+			balancers = append(balancers, kgo.RoundRobinBalancer())
+		default:
+			return nil, fmt.Errorf("field %v contains unsupported strategy %q, expected one of: cooperative-sticky, sticky, range, roundrobin", rpiFieldPartitionAssignment, name)
+		}
+	}
+	return balancers, nil
 }

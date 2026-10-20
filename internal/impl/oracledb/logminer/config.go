@@ -113,6 +113,7 @@ type Config struct {
 	WindowStrategy         WindowStrategy
 	RedoVolumeMin          int
 	RedoVolumeGrowthMax    int
+	PrefetchRows           int
 }
 
 // NewDefaultConfig returns a Config with default values

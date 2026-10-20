@@ -43,8 +43,8 @@ See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-de
 === NKey file
 
 The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
-with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
-configured in the ` + "`nkey_file`" + ` or ` + "`nkey`" + ` field.
+with a list of known public keys. The server then generates a challenge for each connection request from a client, and the
+client must respond to the challenge by signing it with its private NKey configured in the ` + "`nkey_file`" + ` or ` + "`nkey`" + ` field.
 
 https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
