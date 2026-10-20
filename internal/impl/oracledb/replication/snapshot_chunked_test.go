@@ -75,12 +75,36 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		)`,
 		"INSERT INTO "+db.Schema+".chunk_timestamp_key_test (ts, data) SELECT TIMESTAMP '2024-01-01 00:00:00' + NUMTODSINTERVAL(LEVEL * 1.5, 'SECOND'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
 	)
+	createChunkedTable(t, db, "chunk_date_key_test", `
+		CREATE TABLE `+db.Schema+`.chunk_date_key_test (
+			dt   DATE NOT NULL PRIMARY KEY,
+			data NVARCHAR2(100)
+		)`,
+		"INSERT INTO "+db.Schema+".chunk_date_key_test (dt, data) SELECT DATE '2024-01-01' + LEVEL * 2 / 86400, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+	)
+	// String keys can't be interpolated between MIN and MAX, so they're sampled.
+	createChunkedTable(t, db, "chunk_string_key_test", `
+		CREATE TABLE `+db.Schema+`.chunk_string_key_test (
+			id   VARCHAR2(10) NOT NULL PRIMARY KEY,
+			data NVARCHAR2(100)
+		)`,
+		"INSERT INTO "+db.Schema+".chunk_string_key_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+	)
+	// Without statistics a string key can't be sampled, but a numeric key can still be
+	// interpolated, since that only needs its MIN and MAX.
 	createChunkedTable(t, db, "chunk_no_stats_test", `
 		CREATE TABLE `+db.Schema+`.chunk_no_stats_test (
+			id   VARCHAR2(10) NOT NULL PRIMARY KEY,
+			data NVARCHAR2(100)
+		)`,
+		"INSERT INTO "+db.Schema+".chunk_no_stats_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+	)
+	createChunkedTable(t, db, "chunk_no_stats_numeric_test", `
+		CREATE TABLE `+db.Schema+`.chunk_no_stats_numeric_test (
 			id   NUMBER(10) NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_no_stats_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		"INSERT INTO "+db.Schema+".chunk_no_stats_numeric_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
 	)
 
 	// A RELY DISABLE NOVALIDATE primary key, as is common in warehouse schemas, is declared
@@ -96,14 +120,16 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 	db.MustExec("INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT LEVEL * 1000, 'duplicate-key' FROM dual CONNECT BY LEVEL <= :1", unenforcedDuplicateKeyRows)
 	db.MustExec("ALTER TABLE " + db.Schema + ".chunk_unenforced_key_test ADD CONSTRAINT chunk_unenforced_key_test_pk PRIMARY KEY (id) RELY DISABLE NOVALIDATE")
 
-	for _, table := range []string{"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_unenforced_key_test"} {
+	for _, table := range []string{"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test", "chunk_string_key_test", "chunk_unenforced_key_test"} {
 		db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.GATHER_TABLE_STATS('%s', '%s'); END;", db.Schema, table))
 	}
 	// Delete explicitly rather than relying on statistics never having been gathered, so
 	// the fallback is exercised even if the database collects them automatically.
 	// Lock them too, so an automatic statistics job can't gather them mid-test.
-	db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.DELETE_TABLE_STATS('%s', 'CHUNK_NO_STATS_TEST'); END;", db.Schema))
-	db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.LOCK_TABLE_STATS('%s', 'CHUNK_NO_STATS_TEST'); END;", db.Schema))
+	for _, table := range []string{"CHUNK_NO_STATS_TEST", "CHUNK_NO_STATS_NUMERIC_TEST"} {
+		db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.DELETE_TABLE_STATS('%s', '%s'); END;", db.Schema, table))
+		db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.LOCK_TABLE_STATS('%s', '%s'); END;", db.Schema, table))
+	}
 
 	// Wait for DDL changes to settle in Oracle's redo logs before taking snapshots.
 	time.Sleep(2 * time.Second)
@@ -124,7 +150,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
 
 		t.Log("Then the table is split into chunks that together return every row exactly once, as of the snapshot SCN")
-		assertSplitIntoChunks(t, logs, table)
+		assertSplitIntoChunks(t, logs, table, planInterpolated)
 		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
 			return fmt.Sprint(row["ID"])
 		}, strconv.Itoa)
@@ -147,7 +173,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 333))
 
 		t.Log("Then chunks bounded within a shared col1 prefix return every row exactly once")
-		assertSplitIntoChunks(t, logs, table)
+		assertSplitIntoChunks(t, logs, table, planSampled)
 		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
 			return fmt.Sprintf("%v/%v", row["COL1"], row["COL2"])
 		}, func(i int) string {
@@ -166,7 +192,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
 
 		t.Log("Then every TIMESTAMP key is returned exactly once")
-		assertSplitIntoChunks(t, logs, table)
+		assertSplitIntoChunks(t, logs, table, planInterpolated)
 		base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
 			ts, ok := row["TS"].(time.Time)
@@ -175,6 +201,62 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		}, func(i int) string {
 			return strconv.Itoa(i * 1500)
 		})
+	})
+
+	t.Run("DatePrimaryKey", func(t *testing.T) {
+		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_DATE_KEY_TEST"}
+		snapshot, publisher, logs := newChunkedSnapshot(t, connStr, "", table)
+
+		_, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+
+		t.Log("When the snapshot is read with multiple workers")
+		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
+
+		t.Log("Then the DATE key range is interpolated and every key is returned exactly once")
+		assertSplitIntoChunks(t, logs, table, planInterpolated)
+		base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
+			dt, ok := row["DT"].(time.Time)
+			require.Truef(t, ok, "Expected DT to be a time.Time, got %T", row["DT"])
+			return strconv.FormatInt(int64(dt.Sub(base).Seconds()), 10)
+		}, func(i int) string {
+			return strconv.Itoa(i * 2)
+		})
+	})
+
+	t.Run("StringPrimaryKeyIsSampled", func(t *testing.T) {
+		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_STRING_KEY_TEST"}
+		snapshot, publisher, logs := newChunkedSnapshot(t, connStr, "", table)
+
+		_, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+
+		t.Log("When the snapshot is read with multiple workers")
+		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
+
+		t.Log("Then the string key range is sampled and every key is returned exactly once")
+		assertSplitIntoChunks(t, logs, table, planSampled)
+		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
+			return fmt.Sprint(row["ID"])
+		}, paddedKey)
+	})
+
+	t.Run("NumericKeyWithoutStatisticsIsInterpolated", func(t *testing.T) {
+		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_NO_STATS_NUMERIC_TEST"}
+		snapshot, publisher, logs := newChunkedSnapshot(t, connStr, "", table)
+
+		_, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+
+		t.Log("When a table with a numeric key and no optimizer statistics is read with multiple workers")
+		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
+
+		t.Log("Then it is still chunked, and every row is returned exactly once")
+		assertSplitIntoChunks(t, logs, table, planInterpolated)
+		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
+			return fmt.Sprint(row["ID"])
+		}, strconv.Itoa)
 	})
 
 	t.Run("UnenforcedPrimaryKeyFallsBackToFullScan", func(t *testing.T) {
@@ -215,7 +297,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		_, err := snapshot.Prepare(t.Context())
 		require.NoError(t, err)
 
-		t.Log("When a table without optimizer statistics is read with multiple workers")
+		t.Log("When a table with a string key and no optimizer statistics is read with multiple workers")
 		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
 
 		t.Log("Then it is not chunked, but every row is still returned exactly once")
@@ -223,7 +305,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		assert.NotRegexp(t, chunkedLogPattern(table), logs.String())
 		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
 			return fmt.Sprint(row["ID"])
-		}, strconv.Itoa)
+		}, paddedKey)
 	})
 }
 
@@ -254,7 +336,7 @@ func TestIntegrationSnapshotChunkedCDB(t *testing.T) {
 	require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
 
 	t.Log("Then each chunk reads the PDB table and every row is returned exactly once")
-	assertSplitIntoChunks(t, logs, table)
+	assertSplitIntoChunks(t, logs, table, planInterpolated)
 	assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
 		return fmt.Sprint(row["ID"])
 	}, strconv.Itoa)
@@ -282,20 +364,33 @@ func newChunkedSnapshot(t *testing.T, connStr, pdbName string, tables ...replica
 	return snapshot, publisher, logs
 }
 
+// Planning methods, as named in the chunked planning log line.
+const (
+	planInterpolated = "interpolating its key range"
+	planSampled      = "sampling its key range"
+)
+
 func chunkedLogPattern(table replication.UserTable) *regexp.Regexp {
-	return regexp.MustCompile(`Launching snapshot of table '` + regexp.QuoteMeta(table.FullName()) + `' split into (\d+) parallel chunks`)
+	return regexp.MustCompile(`Launching snapshot of table '` + regexp.QuoteMeta(table.FullName()) + `' split into (\d+) parallel chunks by ([a-z ]+)`)
 }
 
-// assertSplitIntoChunks asserts that planning split table into more than one chunk, so the
-// test is known to have exercised the chunked path rather than the full-scan fallback.
-func assertSplitIntoChunks(t *testing.T, logs *oracledbtest.SyncBuffer, table replication.UserTable) {
+// assertSplitIntoChunks asserts that planning split table into more than one chunk using
+// method, so the test is known to have exercised that chunked path rather than another one
+// or the full-scan fallback.
+func assertSplitIntoChunks(t *testing.T, logs *oracledbtest.SyncBuffer, table replication.UserTable, method string) {
 	t.Helper()
 	m := chunkedLogPattern(table).FindStringSubmatch(logs.String())
 	require.NotNilf(t, m, "Expected table '%s' to be split into chunks, logs:\n%s", table.FullName(), logs.String())
 	chunks, err := strconv.Atoi(m[1])
 	require.NoError(t, err)
 	assert.Greater(t, chunks, 1)
-	t.Logf("Table '%s' was split into %d chunks", table.FullName(), chunks)
+	assert.Equal(t, method, m[2], "Expected table '%s' to be planned by %s", table.FullName(), method)
+	t.Logf("Table '%s' was split into %d chunks by %s", table.FullName(), chunks, m[2])
+}
+
+// paddedKey is the VARCHAR2 key of row i in the string key tables.
+func paddedKey(i int) string {
+	return fmt.Sprintf("%010d", i)
 }
 
 // assertEveryKeyOnce asserts that the published rows are exactly the keys wantKey(1) to

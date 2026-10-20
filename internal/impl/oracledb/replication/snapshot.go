@@ -238,12 +238,13 @@ func (t *tableCompletionTracker) done(rowsProcessed int) {
 //     the filter's own result set, unchanged from before (SAMPLE can't target a subquery,
 //     so chunking is out of scope for these).
 //   - no filter, and either a single worker, no discoverable primary key, a primary key
-//     that isn't enabled and validated, no table statistics, or a keyspace too small to
-//     split -> a single full unordered-scan task.
+//     that isn't enabled and validated, a keyspace too small to split, or no table
+//     statistics for a key that has to be sampled -> a single full unordered-scan task.
 //     A single sequential cursor is cheaper than ordered keyset pages when there's nothing
 //     to parallelise, and it preserves the ability to snapshot PK-less tables.
-//   - no filter, has a primary key -> the keyspace is sampled and split into up to
-//     maxWorkers range-bounded chunk tasks, each independently consistent via AS OF SCN.
+//   - no filter, has a primary key -> the keyspace is interpolated or sampled and split
+//     into range-bounded chunk tasks (see planChunkRanges), each independently consistent
+//     via AS OF SCN.
 func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorkers, maxBatchSize int) ([]func(context.Context) error, error) {
 	tableName := table.FullName()
 	l := s.log.With("src_table", tableName)
@@ -291,15 +292,15 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 		return fullScan(), nil
 	}
 
-	ranges, err := s.planChunkRanges(ctx, table, pks, maxWorkers)
+	ranges, method, err := s.planChunkRanges(ctx, table, pks, maxWorkers)
 	if err != nil {
-		return nil, fmt.Errorf("planning chunk ranges: %w", err)
+		return nil, err
 	}
 	if len(ranges) <= 1 {
 		return fullScan(), nil
 	}
 
-	l.Infof("Launching snapshot of table '%s' split into %d parallel chunks", tableName, len(ranges))
+	l.Infof("Launching snapshot of table '%s' split into %d parallel chunks by %s", tableName, len(ranges), method)
 
 	tracker := newTableCompletionTracker(s, table, len(ranges))
 	tasks := make([]func(context.Context) error, 0, len(ranges))
@@ -318,14 +319,52 @@ type chunkRange struct {
 	max map[string]any
 }
 
-// planChunkRanges samples table's primary key keyspace and splits it into up to maxWorkers
-// roughly even ranges. Tables that are too small or lack optimizer statistics (needed to
-// size the sample) get a single unbounded range.
+// planChunkRanges splits table's primary key keyspace into ranges that can be scanned in
+// parallel, returning a single unbounded range when the table can't be usefully split. It
+// also returns how the ranges were planned, for logging.
+//
+// A single-column NUMBER, FLOAT, DATE or TIMESTAMP key is split by interpolating between
+// its MIN and MAX, which reads only the two ends of the primary key index. Gaps and skew in
+// the key values make those ranges uneven, so the key range is split into
+// interpolatedRangesPerWorker ranges per worker and the shared worker pool evens out the
+// work. Other keys, such as strings or composite keys, can't be interpolated and are
+// sampled instead; see sampleChunkRanges.
+func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) (ranges []chunkRange, method string, err error) {
+	const interpolatedRangesPerWorker = 16
+
+	err = s.withSnapshotConn(ctx, func(db *sql.Conn) error {
+		if len(pkCols) == 1 {
+			keyType, err := getInterpolableKeyType(ctx, db, table, pkCols[0])
+			if err != nil {
+				return err
+			}
+			if keyType != keyTypeNotInterpolable {
+				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, min(maxWorkers, 256)*interpolatedRangesPerWorker)
+				if err != nil {
+					return err
+				}
+				ranges, method = rangesFromBounds(bounds), "interpolating its key range"
+				return nil
+			}
+		}
+		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, maxWorkers)
+		method = "sampling its key range"
+		return err
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("planning chunk ranges: %w", err)
+	}
+	return ranges, method, nil
+}
+
+// sampleChunkRanges samples table's primary key keyspace and splits it into up to
+// maxWorkers roughly even ranges. Tables that are too small or lack optimizer statistics
+// (needed to size the sample) get a single unbounded range.
 //
 // Row SAMPLE is used rather than SAMPLE BLOCK: it reads the whole primary key index, but
 // returns keys spread across the keyspace. SAMPLE BLOCK picks whole multiblock reads, so it
 // returns either no rows or a few contiguous runs of keys, which skews the chunks.
-func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
+func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
 	const (
 		// overSampleFactor is the number of primary key samples drawn per worker when planning
 		// chunks: enough to split the keyspace evenly while keeping the sample query cheap.
@@ -333,23 +372,19 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 	)
 	numSamples := min(maxWorkers, 256) * overSampleFactor
 
-	var samples []map[string]any
-	if err := s.withSnapshotConn(ctx, func(db *sql.Conn) error {
-		numRows, err := getTableRowCount(ctx, db, table)
-		if err != nil {
-			return err
-		}
-		if numRows <= 0 {
-			s.log.With("src_table", table.FullName()).Infof("Table '%s' has no optimizer statistics, so it will be snapshotted without parallel chunking; gather statistics with DBMS_STATS.GATHER_TABLE_STATS to enable it", table.FullName())
-			return nil
-		}
-		sampleClause := fmt.Sprintf("SAMPLE (%.4f)", samplePercent(numSamples, numRows))
-		samples, err = sampleTableKeyspace(ctx, db, table, pkCols, s.scn, sampleClause, numSamples)
-		return err
-	}); err != nil {
-		return nil, fmt.Errorf("sampling keyspace for table '%s': %w", table.FullName(), err)
+	numRows, err := getTableRowCount(ctx, db, table)
+	if err != nil {
+		return nil, err
 	}
-
+	if numRows <= 0 {
+		s.log.With("src_table", table.FullName()).Infof("Table '%s' has no optimizer statistics, so it will be snapshotted without parallel chunking; gather statistics with DBMS_STATS.GATHER_TABLE_STATS to enable it", table.FullName())
+		return []chunkRange{{}}, nil
+	}
+	sampleClause := fmt.Sprintf("SAMPLE (%.4f)", samplePercent(numSamples, numRows))
+	samples, err := sampleTableKeyspace(ctx, db, table, pkCols, s.scn, sampleClause, numSamples)
+	if err != nil {
+		return nil, err
+	}
 	return splitChunkRanges(samples, maxWorkers), nil
 }
 
@@ -360,16 +395,77 @@ func splitChunkRanges(samples []map[string]any, maxWorkers int) []chunkRange {
 	// Round up so there are at most maxWorkers ranges. max(1, ...) avoids chunkSize=0
 	// when there are no samples, which would otherwise loop forever below.
 	chunkSize := max(1, (len(samples)+maxWorkers-1)/maxWorkers)
-	var (
-		prev   map[string]any
-		ranges []chunkRange
-	)
+	var bounds []map[string]any
 	for i := chunkSize; i < len(samples); i += chunkSize {
-		bound := samples[i]
+		bounds = append(bounds, samples[i])
+	}
+	return rangesFromBounds(bounds)
+}
+
+// rangesFromBounds turns sorted, distinct bounds into contiguous (prev, bound] ranges,
+// with the first range unbounded below and the last unbounded above, so together they
+// cover the whole keyspace.
+func rangesFromBounds(bounds []map[string]any) []chunkRange {
+	ranges := make([]chunkRange, 0, len(bounds)+1)
+	var prev map[string]any
+	for _, bound := range bounds {
 		ranges = append(ranges, chunkRange{min: prev, max: bound})
 		prev = bound
 	}
 	return append(ranges, chunkRange{min: prev, max: nil})
+}
+
+// keyType classifies a primary key column by how interpolateKeyBounds can split it.
+type keyType int
+
+const (
+	keyTypeNotInterpolable keyType = iota
+	keyTypeInteger
+	keyTypeNumber
+	keyTypeDatetime
+)
+
+// getInterpolableKeyType reports how column of table can be interpolated between its MIN
+// and MAX. TIMESTAMP WITH TIME ZONE and floating-point types such as BINARY_DOUBLE aren't
+// interpolated, and nor is anything non-numeric.
+func getInterpolableKeyType(ctx context.Context, db DBQuerier, table UserTable, column string) (keyType, error) {
+	var (
+		dataType string
+		scale    sql.NullInt64
+	)
+	if err := db.QueryRowContext(ctx,
+		`SELECT DATA_TYPE, DATA_SCALE FROM ALL_TAB_COLUMNS WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3`,
+		table.Schema, table.Name, column,
+	).Scan(&dataType, &scale); err != nil {
+		return keyTypeNotInterpolable, fmt.Errorf("getting type of column %s of table '%s': %w", column, table.FullName(), err)
+	}
+	switch {
+	case dataType == "NUMBER" && scale.Valid && scale.Int64 == 0:
+		return keyTypeInteger, nil
+	case dataType == "NUMBER", dataType == "FLOAT":
+		return keyTypeNumber, nil
+	case dataType == "DATE", strings.HasPrefix(dataType, "TIMESTAMP") && !strings.Contains(dataType, "TIME ZONE"):
+		return keyTypeDatetime, nil
+	default:
+		return keyTypeNotInterpolable, nil
+	}
+}
+
+// interpolateKeyBounds returns up to numRanges-1 sorted, distinct bounds that split the
+// column's values as of scn into numRanges equal-width intervals between its MIN and MAX.
+// It returns no bounds for an empty table or one with a single key value. Integer keys are
+// rounded down to whole numbers, which keeps the bounds readable in logs.
+func interpolateKeyBounds(ctx context.Context, db DBQuerier, table UserTable, column string, kt keyType, scn SCN, numRanges int) ([]map[string]any, error) {
+	bound := `"LO" + ("HI" - "LO") * (LEVEL / %[1]d)`
+	if kt == keyTypeInteger {
+		bound = `FLOOR(` + bound + `)`
+	}
+	q := `SELECT DISTINCT "B" AS "%[2]s" FROM (
+		SELECT ` + bound + ` "B", "LO", "HI"
+		FROM (SELECT MIN("%[2]s") "LO", MAX("%[2]s") "HI" FROM "%[3]s"."%[4]s" AS OF SCN %[5]d)
+		WHERE "LO" < "HI" CONNECT BY LEVEL < %[1]d
+	) WHERE "B" > "LO" AND "B" < "HI" ORDER BY 1`
+	return queryKeyspace(ctx, db, table, fmt.Sprintf(q, max(numRanges, 1), column, table.Schema, table.Name, uint64(scn)))
 }
 
 // withSnapshotConn runs fn against a dedicated *sql.Conn suitable for snapshot queries,
@@ -787,46 +883,50 @@ func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkC
 		SELECT %[1]s, ROW_NUMBER() OVER (ORDER BY %[1]s) "RPCN__RN", COUNT(*) OVER () "RPCN__CNT"
 		FROM "%[2]s"."%[3]s" %[4]s AS OF SCN %[5]d
 	) WHERE MOD("RPCN__RN", CEIL("RPCN__CNT" / %[6]d)) = 0 ORDER BY %[1]s`
-	query := fmt.Sprintf(q, cols, table.Schema, table.Name, sampleClause, uint64(scn), max(maxKeys, 1))
+	return queryKeyspace(ctx, db, table, fmt.Sprintf(q, cols, table.Schema, table.Name, sampleClause, uint64(scn), max(maxKeys, 1)))
+}
 
+// queryKeyspace runs a flashback query returning primary key values of table, and decodes
+// each row into a map of column name to value, ready to use as a chunk bound.
+func queryKeyspace(ctx context.Context, db DBQuerier, table UserTable, query string) ([]map[string]any, error) {
 	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
 		return db.QueryContext(ctx, query)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("sampling keyspace for table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
+		return nil, fmt.Errorf("querying keyspace of table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
 	}
 	defer rows.Close()
 
 	types, err := rows.ColumnTypes()
 	if err != nil {
-		return nil, fmt.Errorf("fetch column types for keyspace sample: %w", err)
+		return nil, fmt.Errorf("fetching column types of keyspace of table '%s': %w", table.FullName(), err)
 	}
 	values, mappers := prepSnapshotScannerAndMappers(types)
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, fmt.Errorf("fetch columns for keyspace sample: %w", err)
+		return nil, fmt.Errorf("fetching columns of keyspace of table '%s': %w", table.FullName(), err)
 	}
 
-	var samples []map[string]any
+	var keys []map[string]any
 	for rows.Next() {
 		if err := rows.Scan(values...); err != nil {
-			return nil, fmt.Errorf("scanning sampled key for table '%s': %w", table.FullName(), err)
+			return nil, fmt.Errorf("scanning key of table '%s': %w", table.FullName(), err)
 		}
 		row := make(map[string]any, len(columns))
 		for i, col := range columns {
 			v, err := mappers[i](values[i])
 			if err != nil {
-				return nil, fmt.Errorf("decoding sampled column %s for table '%s': %w", col, table.FullName(), err)
+				return nil, fmt.Errorf("decoding key column %s of table '%s': %w", col, table.FullName(), err)
 			}
 			row[col] = v
 		}
-		samples = append(samples, row)
+		keys = append(keys, row)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating sampled keys for table '%s': %w", table.FullName(), err)
+		return nil, fmt.Errorf("iterating keys of table '%s': %w", table.FullName(), err)
 	}
-	return samples, nil
+	return keys, nil
 }
 
 // buildLexicographicBoundExpr expands a composite key bound into the lexicographic form
