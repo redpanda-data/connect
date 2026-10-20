@@ -267,10 +267,9 @@ mongodb_cdc:
   url: '$URI'
   database: '$DATABASE'
   checkpoint_cache: '$CACHE'
-  stream_snapshot: true
-  snapshot_mode: incremental
   json_marshal_mode: relaxed
   incremental_snapshot:
+    enabled: true
     chunk_size: 50
   collections:
     - 'foo'
@@ -402,10 +401,9 @@ mongodb_cdc:
   username: mongoadmin
   password: secret
   checkpoint_cache: '$CACHE'
-  stream_snapshot: true
-  snapshot_mode: incremental
   json_marshal_mode: relaxed
   incremental_snapshot:
+    enabled: true
     chunk_size: 20
   signal_collection_name: signals
   collections:
@@ -633,9 +631,9 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 	wait()
 	stoppedAt := replayChecked(t, h.output).readByColl["foo"]
 	require.Less(t, stoppedAt, n)
-	// A spell in blocking mode with a stream position stored: no snapshot, and
+	// A spell with stream_snapshot (blocking) and a stream position stored: no snapshot, and
 	// the progress it cannot keep current is discarded.
-	blocking := h.stream(strings.Replace(incrementalInput, "snapshot_mode: incremental", "snapshot_mode: blocking", 1))
+	blocking := h.stream(strings.Replace(incrementalInput, "  incremental_snapshot:\n    enabled: true\n", "  stream_snapshot: true\n  incremental_snapshot:\n    enabled: false\n", 1))
 	wait = blocking.RunAsync(t)
 	h.db.InsertOne(t, "bar", bson.M{"_id": "blocking-marker", "v": 0})
 	require.Eventually(t, func() bool {

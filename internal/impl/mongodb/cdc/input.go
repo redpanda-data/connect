@@ -70,15 +70,12 @@ const (
 	fieldReadMaxWait            = "read_max_wait"
 	fieldDocumentMode           = "document_mode"
 	fieldJSONMarshalMode        = "json_marshal_mode"
-	fieldSnapshotMode           = "snapshot_mode"
 	fieldIncSnapshot            = "incremental_snapshot"
+	fieldIncSnapshotEnabled     = "enabled"
 	fieldIncSnapshotChunkSize   = "chunk_size"
 	fieldIncSnapshotKey         = "checkpoint_cache_key"
 	fieldIncSnapshotRetryCool   = "retry_cooldown"
 	fieldSignalCollection       = "signal_collection_name"
-
-	snapshotModeBlocking    = "blocking"
-	snapshotModeIncremental = "incremental"
 
 	defaultIncSnapshotChunkSize = 1024
 	// defaultIncSnapshotRetryCooldown holds the backfill off after a chunk
@@ -231,9 +228,9 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 
 == Incremental snapshots
 
-With `+"`snapshot_mode: incremental`"+` the snapshot no longer holds back streaming. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
+With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
 
-A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. A pipeline switched from `+"`blocking`"+` to `+"`incremental`"+` with a stream position already stored reads nothing again. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
+A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. A pipeline switched from `+"`stream_snapshot: true`"+` to `+"`incremental_snapshot.enabled: true`"+` with a stream position already stored reads nothing again. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
 
 Documents from a chunk have the operation set to "read" and the operation time of the chunk read. Collections are read one at a time, so `+"`snapshot_parallelism`"+` and `+"`snapshot_auto_bucket_sharding`"+` do not apply. Chunks are bounded by index ranges rather than comparisons, so a collection whose `+"`_id`"+` values mix BSON types is read in full.
 
@@ -246,7 +243,7 @@ A chunk can only be released once the change stream has passed the moment it was
 When `+"`signal_collection_name`"+` is set, documents inserted into that collection control the input while it runs. Each signal has a `+"`type`"+` and a `+"`data`"+` field, which may be an embedded document or a JSON string:
 
 - `+"`"+replication.LogSignalType+"`"+`: logs `+"`data.message`"+` at info level, for example `+"`{\"type\": \""+replication.LogSignalType+"\", \"data\": {\"message\": \"hello\"}}`"+`.
-- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`snapshot_mode: incremental`"+`. Each named collection must also be in `+"`collections`"+`. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
+- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`incremental_snapshot.enabled: true`"+`. Each named collection must also be in `+"`collections`"+`. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
 
 Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored, and signals are never emitted.
 
@@ -314,7 +311,7 @@ Schema metadata is discovered using a two-tier strategy:
 				Default(defaultCheckpointWriteTimeout.String()).
 				Advanced(),
 			service.NewStringEnumField(fieldOnUnresumablePosition, onUnresumablePositionFail, onUnresumablePositionReset).
-				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and `stream_snapshot` is disabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.").Version("4.106.0").
+				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and no snapshot is enabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` or `incremental_snapshot.enabled` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.").Version("4.106.0").
 				ShortDescription("What to do when the stored position is unresumable and there is no snapshot to recover with.").
 				Default(onUnresumablePositionFail).
 				Advanced(),
@@ -326,7 +323,7 @@ Schema metadata is discovered using a two-tier strategy:
 				ShortDescription("Maximum time MongoDB waits to fill read_batch_size on the change stream before returning.").
 				Default("1s"),
 			service.NewBoolField(fieldStreamSnapshot).
-				Description("When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes, or alongside them with `"+fieldSnapshotMode+": "+snapshotModeIncremental+"`.").
+				Description("When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes. Mutually exclusive with `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`, which reads them alongside the changes instead.").
 				Default(false),
 			service.NewIntField(fieldSnapshotParallelism).
 				Description(`Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot.
@@ -347,14 +344,11 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				ShortDescription("Use $bucketAuto rather than splitVector to determine parallel snapshot chunks, avoiding privileged access.").
 				Default(false).
 				Advanced(),
-			service.NewStringAnnotatedEnumField(fieldSnapshotMode, map[string]string{
-				snapshotModeBlocking:    "Reads every collection before streaming any change, as described in <<snapshot-and-streaming-modes,Snapshot and streaming modes>>.",
-				snapshotModeIncremental: "Streams changes from the start and reads the collections in chunks alongside them, as described in <<incremental-snapshots,Incremental snapshots>>.",
-			}).
-				Description("How the snapshot enabled by `"+fieldStreamSnapshot+"` is taken.").
-				Default(snapshotModeBlocking).
-				Version("4.115.0"),
 			service.NewObjectField(fieldIncSnapshot,
+				service.NewBoolField(fieldIncSnapshotEnabled).
+					Description("Streams changes from the start and reads the collections in chunks alongside them, as described in <<incremental-snapshots,Incremental snapshots>>. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay streaming. The two are mutually exclusive: both read the same documents, so enabling both would deliver everything twice.").
+					ShortDescription("Read the collections in chunks, alongside change streaming.").
+					Default(false),
 				service.NewIntField(fieldIncSnapshotChunkSize).
 					Description("The number of documents read per chunk.").
 					Default(defaultIncSnapshotChunkSize).
@@ -362,14 +356,14 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
   this < 1 => ["field chunk_size must be greater or equal to 1."],
 }`),
 				service.NewStringField(fieldIncSnapshotKey).
-					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nClearing it while a stream position is stored discards the record of which collections have been read, so a restart reads none of them again: a `"+replication.SnapshotSignalType+"` signal re-reads one on request. With any other `"+fieldSnapshotMode+"`, the input discards progress left under this key, so returning to `"+snapshotModeIncremental+"` later never resumes a read the stream has long since moved past.").
+					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nClearing it while a stream position is stored discards the record of which collections have been read, so a restart reads none of them again: a `"+replication.SnapshotSignalType+"` signal re-reads one on request. While `"+fieldIncSnapshotEnabled+"` is `false`, the input discards progress left under this key, so enabling it again later never resumes a read the stream has long since moved past.").
 					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from `"+fieldCheckpointKey+"`.").
 					Default(""),
 				service.NewDurationField(fieldIncSnapshotRetryCool).
 					Description("How long the snapshot waits before retrying a chunk read that failed transiently, for example during a replica set election or after a dropped connection. Change events keep streaming meanwhile. Setting it to `0s` retries on the next streamed change.").
 					Default(defaultIncSnapshotRetryCooldown.String()),
 			).
-				Description("Settings for `"+fieldSnapshotMode+": "+snapshotModeIncremental+"`.").
+				Description("Configures chunked snapshotting that runs alongside change streaming.").
 				Version("4.115.0").
 				Advanced(),
 			service.NewStringField(fieldSignalCollection).
@@ -545,10 +539,11 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	return service.AutoRetryNacksBatchedToggled(conf, cdc)
 }
 
-// parseIncrementalSnapshot reads snapshot_mode, its settings, and the signal
+// parseIncrementalSnapshot reads incremental_snapshot and the signal
 // collection.
 func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshotEnabled bool, cacheName string) error {
-	mode, err := conf.FieldString(fieldSnapshotMode)
+	inc := conf.Namespace(fieldIncSnapshot)
+	enabled, err := inc.FieldBool(fieldIncSnapshotEnabled)
 	if err != nil {
 		return err
 	}
@@ -560,7 +555,6 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 			return fmt.Errorf("field %s must not name one of the streamed collections: its documents are consumed as signals, never emitted", fieldSignalCollection)
 		}
 	}
-	inc := conf.Namespace(fieldIncSnapshot)
 	key, err := inc.FieldString(fieldIncSnapshotKey)
 	if err != nil {
 		return err
@@ -571,14 +565,14 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 	if key == m.checkpoint.cacheKey {
 		return fmt.Errorf("field %s.%s must differ from %s: the stream position and the snapshot progress are stored separately", fieldIncSnapshot, fieldIncSnapshotKey, fieldCheckpointKey)
 	}
-	// Every mode needs the store: the others discard stale progress from it.
+	// Needed when disabled too, to discard stale progress.
 	m.incStateStore = &incStateCache{resources: m.checkpoint.resources, cacheName: cacheName, cacheKey: key}
 
-	if mode != snapshotModeIncremental {
+	if !enabled {
 		return nil
 	}
-	if !snapshotEnabled {
-		return fmt.Errorf("field %s: %s requires %s: true", fieldSnapshotMode, snapshotModeIncremental, fieldStreamSnapshot)
+	if snapshotEnabled {
+		return fmt.Errorf("%s and %s.%s are mutually exclusive snapshot modes, only one can be enabled", fieldStreamSnapshot, fieldIncSnapshot, fieldIncSnapshotEnabled)
 	}
 	m.incremental = true
 
@@ -594,10 +588,14 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 	if m.incRetryCooldown < 0 {
 		return fmt.Errorf("field %s.%s must not be negative", fieldIncSnapshot, fieldIncSnapshotRetryCool)
 	}
-	if m.snapshotParallelism > 1 || m.useAutoBucketSnapshots {
-		m.logger.Warnf("%s and %s do not apply with %s: %s, which reads collections one chunk at a time", fieldSnapshotParallelism, fieldBucketSharding, fieldSnapshotMode, snapshotModeIncremental)
-	}
 	return nil
+}
+
+// readsSnapshot reports whether a snapshot, blocking (stream_snapshot) or
+// incremental, reads existing documents: only then can a lost or uncertain
+// stream position be recovered without skipping changes.
+func (m *mongoCDC) readsSnapshot() bool {
+	return m.snapshotParallelism > 0 || m.incremental
 }
 
 type mongoBatch struct {
@@ -665,9 +663,9 @@ type mongoCDC struct {
 	collectionSchemas   map[string]*cachedSchema
 	collectionSchemasMu sync.RWMutex
 
-	// incremental selects snapshot_mode: incremental, which needs
-	// snapshotParallelism > 0 (stream_snapshot) but never runs the blocking
-	// snapshot.
+	// incremental is incremental_snapshot.enabled. It excludes
+	// stream_snapshot, so snapshotParallelism is 0 with it; use
+	// readsSnapshot to ask whether either kind of snapshot is configured.
 	incremental      bool
 	incChunkSize     int
 	incRetryCooldown time.Duration
@@ -904,7 +902,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	// needs a token: without a snapshot there is nothing to checkpoint early,
 	// and when a checkpoint already exists the stream resumes from it.
 	var initialResumeToken bson.Raw = nil
-	if resumeToken == nil && (m.snapshotParallelism > 0 || !hasTS) {
+	if resumeToken == nil && (m.readsSnapshot() || !hasTS) {
 		token, err := m.getCurrentResumeToken(ctx)
 		switch {
 		case err == nil:
@@ -1210,7 +1208,7 @@ const (
 func (m *mongoCDC) planUnresumableRecovery() (unresumableRecoveryPlan, int) {
 	m.resumeTokenMu.Lock()
 	defer m.resumeTokenMu.Unlock()
-	if m.snapshotParallelism == 0 {
+	if !m.readsSnapshot() {
 		if m.onUnresumablePosition == onUnresumablePositionFail {
 			return unresumableRecoveryRefuseGap, m.unresumableRecoveries
 		}
@@ -1299,8 +1297,8 @@ func (m *mongoCDC) recoverFromUnresumablePosition(ctx context.Context, cause err
 		}
 		return
 	}
-	if m.snapshotParallelism == 0 {
-		m.logger.Warnf("Change stream position is no longer resumable and stream_snapshot is disabled; clearing the checkpoint and restarting from the current oplog position — changes since the lost position will be skipped: %v", cause)
+	if !m.readsSnapshot() {
+		m.logger.Warnf("Change stream position is no longer resumable and no snapshot is enabled; clearing the checkpoint and restarting from the current oplog position — changes since the lost position will be skipped: %v", cause)
 	} else {
 		m.logger.Warnf("Change stream position is no longer resumable, clearing the checkpoint to re-run the snapshot: %v", cause)
 	}
@@ -1339,7 +1337,7 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	m.logger.Infof("Discarding the incremental snapshot progress stored under %s: only %s: %s keeps it current", m.incStateStore.cacheKey, fieldSnapshotMode, snapshotModeIncremental)
+	m.logger.Infof("Discarding the incremental snapshot progress stored under %s: only %s.%s: true keeps it current", m.incStateStore.cacheKey, fieldIncSnapshot, fieldIncSnapshotEnabled)
 	if err := m.incStateStore.Delete(ctx); err != nil {
 		return fmt.Errorf("unable to discard incremental snapshot progress: %w", err)
 	}
@@ -1352,7 +1350,7 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 // Progress is only meaningful against the stream position it was recorded
 // with. Without a position the stream starts afresh, so every collection is
 // read again and any stored progress is ignored. A position without progress
-// is a pipeline switching from the blocking snapshot, which has already read
+// is a pipeline switching from stream_snapshot, which has already read
 // every configured collection, so they are all marked done.
 //
 // Undecodable progress follows the corrupt checkpoint policy: clearing both
@@ -1641,7 +1639,7 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 		// so returning its token would silently skip a change; error instead,
 		// which the sharded no-snapshot caller turns into a retried Connect
 		// failure - loud and recoverable rather than silently lossy.
-		if m.snapshotParallelism == 0 {
+		if !m.readsSnapshot() {
 			return nil, errors.New("unable to determine start position prior to streaming: the change stream returned an event while capturing the start position and no snapshot is configured to cover it; retrying, or enable `stream_snapshot` to make first starts robust on busy clusters")
 		}
 		m.logger.Debugf("change stream returned an event while capturing the start position, adopting its resume token as the pre-snapshot position")

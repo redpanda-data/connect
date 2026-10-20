@@ -668,6 +668,21 @@ func TestUnresumableRecoveryBreaksAfterConsecutiveRecoveries(t *testing.T) {
 	require.Equal(t, maxConsecutiveUnresumableRecoveries, f.m.recoveryCount())
 }
 
+// TestUnresumableRecoveryIncrementalCountsAsSnapshot pins that
+// incremental_snapshot.enabled, which excludes stream_snapshot and so leaves
+// snapshotParallelism at 0, still recovers by clearing the position and reading
+// every collection again, rather than applying on_unresumable_position: fail.
+func TestUnresumableRecoveryIncrementalCountsAsSnapshot(t *testing.T) {
+	f := newRecoveryFixture(t, 0, onUnresumablePositionFail)
+	f.m.incremental = true
+	cause := mongo.CommandError{Code: codeChangeStreamHistoryLost, Name: "ChangeStreamHistoryLost"}
+
+	f.seed(t)
+	f.m.recoverFromUnresumablePosition(t.Context(), cause)
+	require.Nil(t, f.stored(t), "recovery must clear the dead position so the incremental snapshot reads everything again")
+	require.NoError(t, f.reportedError(t), "on_unresumable_position must not apply while an incremental snapshot is enabled")
+}
+
 // TestUnresumableRecoveryCounterResetsOnStreamProgress is the other half of the
 // breaker: it may only fire on *consecutive* recoveries, so a run where the
 // stream genuinely advanced must not count towards it. Streaming progress is
@@ -835,42 +850,41 @@ func TestIncrementalSnapshotConfigRejected(t *testing.T) {
 	}{
 		{
 			name: "signal collection is a streamed collection",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
+			extra: `incremental_snapshot:
+  enabled: true
 signal_collection_name: bar
 `,
 			errContains: "field signal_collection_name must not name one of the streamed collections",
 		},
 		{
 			name: "progress key equals checkpoint_key",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
-checkpoint_key: same
+			extra: `checkpoint_key: same
 incremental_snapshot:
+  enabled: true
   checkpoint_cache_key: same
 `,
 			errContains: "field incremental_snapshot.checkpoint_cache_key must differ from checkpoint_key",
 		},
 		{
-			name: "incremental without stream_snapshot",
-			extra: `snapshot_mode: incremental
+			name: "incremental with stream_snapshot",
+			extra: `stream_snapshot: true
+incremental_snapshot:
+  enabled: true
 `,
-			errContains: "field snapshot_mode: incremental requires stream_snapshot: true",
+			errContains: "stream_snapshot and incremental_snapshot.enabled are mutually exclusive snapshot modes",
 		},
 		{
 			name: "chunk_size below one",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
-incremental_snapshot:
+			extra: `incremental_snapshot:
+  enabled: true
   chunk_size: 0
 `,
 			errContains: "field incremental_snapshot.chunk_size must be greater or equal to 1",
 		},
 		{
 			name: "negative retry_cooldown",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
-incremental_snapshot:
+			extra: `incremental_snapshot:
+  enabled: true
   retry_cooldown: -1s
 `,
 			errContains: "field incremental_snapshot.retry_cooldown must not be negative",
@@ -900,8 +914,8 @@ func TestIncrementalSnapshotConfigAccepted(t *testing.T) {
 	}{
 		{
 			name: "defaults derive the progress key from checkpoint_key",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
+			extra: `incremental_snapshot:
+  enabled: true
 `,
 			wantIncremental: true,
 			wantKey:         "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
@@ -910,8 +924,8 @@ snapshot_mode: incremental
 		},
 		{
 			name: "custom checkpoint_key carries into the derived key",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
+			extra: `incremental_snapshot:
+  enabled: true
 checkpoint_key: mine
 `,
 			wantIncremental: true,
@@ -921,10 +935,9 @@ checkpoint_key: mine
 		},
 		{
 			name: "explicit settings",
-			extra: `stream_snapshot: true
-snapshot_mode: incremental
-signal_collection_name: signals
+			extra: `signal_collection_name: signals
 incremental_snapshot:
+  enabled: true
   chunk_size: 10
   checkpoint_cache_key: progress
   retry_cooldown: 0s
@@ -936,7 +949,7 @@ incremental_snapshot:
 			wantSignal:      "signals",
 		},
 		{
-			name: "blocking keeps the store so it can discard stale progress",
+			name: "stream_snapshot keeps the store so it can discard stale progress",
 			extra: `stream_snapshot: true
 `,
 			wantKey: "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,

@@ -118,7 +118,7 @@ func (m *mongoCDC) handleSignal(event bson.Raw, run *incSnapshotRun) {
 		log.Infof("%s", sig.Message)
 	case replication.SnapshotSignalType:
 		if run == nil {
-			log.Warnf("%v: set %s: %s", replication.ErrSnapshotDisabled, fieldSnapshotMode, snapshotModeIncremental)
+			log.Warnf("%v: set %s.%s: true", replication.ErrSnapshotDisabled, fieldIncSnapshot, fieldIncSnapshotEnabled)
 			return
 		}
 		collections, err := parseSnapshotCollections(data)
