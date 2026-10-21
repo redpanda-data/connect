@@ -189,9 +189,18 @@ func (l *Lock) sealLocked(cause error) {
 // It cannot happen later: as soon as t is marked, the holder before t can
 // call Release, skip t, and give the turn to t+1. A seal after that is too
 // late, because t+1 already passed the gap.
+//
+// If a Wait of t is parked, abandonLocked wakes it, and the Wait returns an
+// error. This happens when a copy of t is released on another goroutine.
+// Nothing else can wake that Wait: advanceLocked skips t and wakes only the
+// new holder.
 func (l *Lock) abandonLocked(t Ticket, cause error) {
 	if t.sealOnAbandon {
 		l.sealLocked(cause)
+	}
+	if ch, parked := l.waiters[t.n]; parked {
+		close(ch)
+		delete(l.waiters, t.n)
 	}
 	if l.serving == t.n {
 		l.advanceLocked()
@@ -272,7 +281,8 @@ type Ticket struct {
 // ctx. After an error, Release is still safe to call, and does nothing.
 //
 // Call Wait at most once for each ticket. A Wait after the Release of t
-// returns an error at once.
+// returns an error at once. If a copy of t is released while Wait is
+// parked, Wait returns that error too.
 func (t Ticket) Wait(ctx context.Context) error {
 	l := t.l
 	l.mu.Lock()
@@ -308,10 +318,11 @@ func (t Ticket) Wait(ctx context.Context) error {
 	// Blocking section: wait for our turn or the lock to be sealed.
 	select {
 	case <-ch:
-		// We were woken up. Check why: a seal, or our turn.
+		// We were woken up. Check why: a seal, our turn, or a Release of a
+		// copy of t.
 		l.mu.Lock()
 		defer l.mu.Unlock()
-		return l.wokenLocked()
+		return l.wokenLocked(t)
 	case <-ctx.Done():
 		// We were cancelled, but we can be too late to abandon. Between
 		// ctx.Done and l.mu.Lock, a Release can give us the turn, or a Seal
@@ -322,7 +333,9 @@ func (t Ticket) Wait(ctx context.Context) error {
 		case <-ch:
 			// The wake came first. If it was our turn, we hold it and
 			// return nil, the same as when the turn is ours at the start.
-			return l.wokenLocked()
+			// If a Release of a copy woke us, t is already abandoned: do
+			// not abandon it again.
+			return l.wokenLocked(t)
 		default:
 		}
 
@@ -333,12 +346,17 @@ func (t Ticket) Wait(ctx context.Context) error {
 	}
 }
 
-// wokenLocked is the result of a parked Wait after its channel was closed.
-// The channel is closed by a seal, or because it is the turn of the ticket.
-// The caller must hold mu.
-func (l *Lock) wokenLocked() error {
+// wokenLocked is the result of a parked Wait of t after its channel was
+// closed. The channel is closed by a seal, because it is the turn of t, or
+// because a Release of a copy of t abandoned it. The caller must hold mu.
+func (l *Lock) wokenLocked(t Ticket) error {
 	if l.err != nil {
 		return l.err
+	}
+	// After an abandon, serving is before t (t is in abandoned) or after t
+	// (the turn of t came and went). Only the turn of t makes them equal.
+	if l.serving != t.n {
+		return fmt.Errorf("ticket %d is already released", t.n)
 	}
 	l.held = true
 	return nil
@@ -352,7 +370,7 @@ func (l *Lock) wokenLocked() error {
 //     abandoned.
 //   - Waiting or Turn: Release abandons t. The lock skips t when its turn
 //     comes. For a Take ticket, the abandon also seals the lock, because
-//     the work of t is lost.
+//     the work of t is lost. A parked Wait of t returns an error.
 //   - Done: Release does nothing.
 //
 // If a ticket is never released, no later ticket ever gets a turn.
@@ -372,6 +390,13 @@ func (t Ticket) Release() {
 	}
 	// t was abandoned by a cancelled Wait.
 	if _, abandoned := l.abandoned[t.n]; abandoned {
+		return
+	}
+	// The lock is sealed and t is after the current turn. t never gets a
+	// turn, so the lock never has to skip it. If we record t as abandoned,
+	// the record stays until the current holder releases. A holder can
+	// block for long, and each refused ticket adds a record.
+	if l.err != nil && t.n > l.serving {
 		return
 	}
 	// t never held the turn. Abandon it.

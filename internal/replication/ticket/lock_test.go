@@ -351,6 +351,80 @@ func TestReleaseAfterCancelledWait(t *testing.T) {
 	assert.NoError(t, l.err)
 }
 
+func TestReleaseWakesParkedWait(t *testing.T) {
+	// A copy of t1 is released while the Wait of t1 is parked on another
+	// goroutine. The parked Wait must wake and return an error. If it stays
+	// parked, nothing wakes it later: the lock skips t1 when its turn comes.
+	tests := []struct {
+		name       string
+		skippable  bool
+		wantSealed bool
+	}{
+		{
+			name:       "take seals",
+			skippable:  false,
+			wantSealed: true,
+		},
+		{
+			name:       "take skippable is skipped",
+			skippable:  true,
+			wantSealed: false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var l Lock
+			t0 := l.Take()
+			t1 := takeFor(&l, tc.skippable)
+			t2 := l.TakeSkippable()
+			require.NoError(t, t0.Wait(t.Context()))
+			r1 := waitAsync(t.Context(), t1)
+			waitParked(t, &l, 1)
+
+			t1.Release()
+			err := requireResult(t, r1)
+			require.Error(t, err)
+			assert.Equal(t, tc.wantSealed, errors.Is(err, ErrSealed))
+
+			t0.Release()
+			err = t2.Wait(t.Context())
+			if tc.wantSealed {
+				require.ErrorIs(t, err, ErrSealed)
+			} else {
+				require.NoError(t, err, "the released ticket must be skipped")
+				t2.Release()
+			}
+
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			assert.Empty(t, l.waiters)
+			assert.Empty(t, l.abandoned)
+		})
+	}
+}
+
+func TestReleaseAfterSealKeepsNoState(t *testing.T) {
+	// t0 holds the turn when the lock is sealed. Each later ticket is
+	// refused, and then released, as the deferred Release of a caller does.
+	// These releases must not record the tickets as abandoned: only the end
+	// of the turn of t0 removes such records.
+	var l Lock
+	t0 := l.Take()
+	require.NoError(t, t0.Wait(t.Context()))
+	l.Seal(errTestSeal)
+
+	for range 100 {
+		tkt := l.Take()
+		require.ErrorIs(t, tkt.Wait(t.Context()), ErrSealed)
+		tkt.Release()
+	}
+
+	l.mu.Lock()
+	assert.Empty(t, l.abandoned)
+	l.mu.Unlock()
+	t0.Release()
+}
+
 func TestWaitAfterRelease(t *testing.T) {
 	tests := []struct {
 		name    string
