@@ -223,7 +223,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		}
 		creds, err = credentials.DetectDefault(&credentials.DetectOptions{
 			Scopes:           []string{"https://www.googleapis.com/auth/cloud-vertex-ai.firstparty.predict"},
-			CredentialsJSON:  []byte(jsonObject),
+			CredentialsJSON:  []byte(jsonObject), //nolint:staticcheck // credentials_json accepts any credential type; switching to NewCredentialsFromJSON needs a type field
 			UseSelfSignedJWT: true,
 		})
 		if err != nil {
