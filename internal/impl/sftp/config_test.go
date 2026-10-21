@@ -481,7 +481,7 @@ credentials:
 				c, chans, reqs, err := ssh.NewClientConn(clientConn, "localhost:22", clientConf)
 				if err != nil {
 					clientConn.Close()
-					<-serverErr
+					<-serverErr //nolint:errcheck // the client error is the one worth reporting
 					return err
 				}
 				go ssh.DiscardRequests(reqs)
