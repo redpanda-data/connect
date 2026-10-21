@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -48,6 +50,15 @@ func TestIsStreamsResourceNotFoundError(t *testing.T) {
 	assert.False(t, isStreamsResourceNotFoundError(&dynamodbtypes.ResourceNotFoundException{}))
 	assert.True(t, isStreamsResourceNotFoundError(&types.ResourceNotFoundException{}))
 	assert.True(t, isStreamsResourceNotFoundError(fmt.Errorf("refreshing: %w", &types.ResourceNotFoundException{})))
+}
+
+func TestIsIteratorThrottlingError(t *testing.T) {
+	assert.False(t, isIteratorThrottlingError(nil))
+	assert.False(t, isIteratorThrottlingError(errors.New("boom")))
+	assert.False(t, isIteratorThrottlingError(&types.InternalServerError{}))
+	assert.True(t, isIteratorThrottlingError(&types.LimitExceededException{}))
+	assert.True(t, isIteratorThrottlingError(fmt.Errorf("wrapped: %w", &smithy.GenericAPIError{Code: "LimitExceededException"})))
+	assert.True(t, isIteratorThrottlingError(&smithy.GenericAPIError{Code: "ThrottlingException"}))
 }
 
 func TestResolveResumeIterator(t *testing.T) {
@@ -187,9 +198,9 @@ const testStreamArn = "arn:aws:dynamodb:us-east-1:123456789012:table/test/stream
 
 // TestStartShardReader_ExpiredIteratorShardGone: when a shard's iterator
 // expires AND the shard has since been permanently deleted (GetShardIterator
-// during refresh fails with ResourceNotFoundException), the reader must mark
-// the shard exhausted, signal the coordinator, and return promptly instead of
-// retrying the refresh forever.
+// during refresh fails with ResourceNotFoundException), the reader must hand
+// the shard back to discovery (unregister its reader), signal the
+// coordinator, and return promptly instead of retrying the refresh forever.
 func TestStartShardReader_ExpiredIteratorShardGone(t *testing.T) {
 	transport := &stubStreamsTransport{
 		getRecordsErrorType:       "ExpiredIteratorException",
@@ -233,10 +244,10 @@ func TestStartShardReader_ExpiredIteratorShardGone(t *testing.T) {
 	}
 
 	d.mu.RLock()
-	exhausted := d.shardReaders["shard-001"].exhausted
+	_, registered := d.shardReaders["shard-001"]
 	d.mu.RUnlock()
-	require.True(t, exhausted,
-		"shard should be marked exhausted once refresh confirms it is permanently gone")
+	require.False(t, registered,
+		"the reader must unregister itself so discovery decides whether the shard still exists")
 
 	select {
 	case <-d.shardRefreshCh:
@@ -293,10 +304,10 @@ func TestStartTableShardReader_ExpiredIteratorShardGone(t *testing.T) {
 	}
 
 	ts.mu.RLock()
-	exhausted := ts.shardReaders["shard-001"].exhausted
+	_, registered := ts.shardReaders["shard-001"]
 	ts.mu.RUnlock()
-	require.True(t, exhausted,
-		"shard should be marked exhausted once refresh confirms it is permanently gone")
+	require.False(t, registered,
+		"the reader must unregister itself so discovery decides whether the shard still exists")
 
 	select {
 	case <-ts.shardRefreshCh:
@@ -757,4 +768,148 @@ func TestShardReaderClosedShardFinalPageDelivered(t *testing.T) {
 			}
 		})
 	}
+}
+
+// scriptedStreamsTransport answers GetRecords and GetShardIterator from
+// per-operation scripts: each call pops the next response, and the last one
+// repeats. A response is either an AWS error type or a success body.
+type scriptedStreamsTransport struct {
+	mu               sync.Mutex
+	getRecords       []scriptedResponse
+	getShardIterator []scriptedResponse
+	calls            map[string]int
+}
+
+type scriptedResponse struct {
+	errType string
+	body    string
+}
+
+func (s *scriptedStreamsTransport) callCount(op string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls[op]
+}
+
+func (s *scriptedStreamsTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	op := target[strings.LastIndex(target, ".")+1:]
+
+	s.mu.Lock()
+	if s.calls == nil {
+		s.calls = map[string]int{}
+	}
+	var script *[]scriptedResponse
+	switch op {
+	case "GetRecords":
+		script = &s.getRecords
+	case "GetShardIterator":
+		script = &s.getShardIterator
+	default:
+		s.mu.Unlock()
+		return nil, fmt.Errorf("scriptedStreamsTransport: unexpected operation %q", target)
+	}
+	s.calls[op]++
+	resp := (*script)[0]
+	if len(*script) > 1 {
+		*script = (*script)[1:]
+	}
+	s.mu.Unlock()
+
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	status, body := 200, resp.body
+	if resp.errType != "" {
+		status = 400
+		hdr.Set("X-Amzn-ErrorType", resp.errType)
+		body = fmt.Sprintf(`{"__type":%q,"message":"stubbed for test"}`, resp.errType)
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+// TestShardReaderTrimmedIteratorRefreshThrottledRetries (CON-599): a
+// throttled GetShardIterator while recovering from TrimmedDataAccessException
+// is transient: the reader backs off and retries instead of giving the shard
+// up.
+func TestShardReaderTrimmedIteratorRefreshThrottledRetries(t *testing.T) {
+	var transport *scriptedStreamsTransport
+	mk := func() aws.HTTPClient {
+		transport = &scriptedStreamsTransport{
+			getRecords: []scriptedResponse{
+				{errType: "TrimmedDataAccessException"},
+				{errType: "TrimmedDataAccessException"},
+				{body: fmt.Sprintf(`{"Records":%s,"NextShardIterator":"iter-next"}`, twoRecordsPage)},
+				{body: `{"Records":[],"NextShardIterator":"iter-next"}`},
+			},
+			getShardIterator: []scriptedResponse{
+				{errType: "LimitExceededException"},
+				{body: `{"ShardIterator":"iter-fresh"}`},
+			},
+		}
+		return transport
+	}
+	for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mkHarness()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			select {
+			case am := <-h.d.msgChan:
+				assert.Len(t, am.msg, 2)
+			case <-time.After(5 * time.Second):
+				t.Fatalf("the reader must recover after a throttled iterator refresh (calls: %v)", transport.calls)
+			}
+			assert.Equal(t, 2, transport.callCount("GetShardIterator"))
+		})
+	}
+}
+
+// TestShardReaderGiveUpReRegisteredByNextRefresh (CON-599): a reader that
+// gives up on its shard (iterator refresh failed) must unregister itself, so
+// the refresh it triggers re-registers a still-listed shard from its
+// checkpoint right away. Marking it exhausted instead kept the shard known to
+// discovery until the next cleanup tick, stalling it for up to five minutes.
+func TestShardReaderGiveUpReRegisteredByNextRefresh(t *testing.T) {
+	readerTransport := &scriptedStreamsTransport{
+		getRecords:       []scriptedResponse{{errType: "TrimmedDataAccessException"}},
+		getShardIterator: []scriptedResponse{{errType: "InternalServerError"}},
+	}
+	refreshTransport := &refreshStubTransport{shardIDs: []string{"shard-001"}}
+
+	d := newRefreshTestInput(t, refreshTransport)
+	d.conf.batchSize = 10
+	d.conf.pollInterval = 20 * time.Millisecond
+	d.conf.throttleBackoff = 20 * time.Millisecond
+	d.shardReaders["shard-001"] = &dynamoDBShardReader{shardID: "shard-001", iterator: aws.String("initial-iterator")}
+	d.streamsClient = newStubStreamsClient(readerTransport)
+
+	done := make(chan struct{})
+	go func() {
+		d.startShardReader(t.Context(), "shard-001")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reader should give up on a failed iterator refresh")
+	}
+	assert.Empty(t, registeredShards(d), "the reader must unregister itself when giving up")
+	select {
+	case <-d.shardRefreshCh:
+	default:
+		t.Fatal("giving up must trigger an immediate refresh")
+	}
+
+	// The triggered refresh, with no cleanup tick in between.
+	d.streamsClient = newStubStreamsClient(refreshTransport)
+	require.NoError(t, d.refreshShards(t.Context()))
+	assert.ElementsMatch(t, []string{"shard-001"}, registeredShards(d),
+		"a still-listed shard must be re-registered by the refresh the give-up triggered")
 }
