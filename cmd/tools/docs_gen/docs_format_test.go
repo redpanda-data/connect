@@ -111,7 +111,7 @@ func TestDocStringsRenderAsMarkdownInEveryDistribution(t *testing.T) {
 				url = schema.CloudDocumentationURL
 				require.Equal(t, []string{service.DocsAttributeCloud}, s.DocsAttributes(), "Cloud distributions declare env-cloud so their readers see the Cloud text")
 			}
-			out, err := s.MarshalJSONV0Markdown(service.DocsMarkdownOptions{DocumentationURL: url, ComponentURLs: schema.DocsComponentURLs})
+			out, err := s.MarshalJSONV0Markdown(service.DocsMarkdownOptions{DocumentationURL: url, ComponentURLs: schema.DocsComponentURLs, HasComponent: schema.DocsHasComponent(s.Environment())})
 			require.NoError(t, err)
 			var doc map[string]any
 			require.NoError(t, json.Unmarshal(out, &doc))
@@ -155,4 +155,39 @@ func TestWalkDocStringsVisitsFieldDescriptions(t *testing.T) {
 	})
 	assert.Equal(t, []string{"/inputs/0/zz_probe/config/children/0/probe_field/description"}, lintHits, "the field description is checked")
 	assert.Empty(t, exampleHits, "field examples are values, not prose")
+}
+
+// The Cloud binary compiles out the components Cloud does not ship, so a link
+// to one of them must render as text, while a link to a component Cloud has,
+// or to a docs page under components/ that is not a component, stays a link.
+func TestDocsHasComponentKeepsPagesAndShippedComponents(t *testing.T) {
+	cloud := schema.Cloud("0.0.0", "now")
+	has := schema.DocsHasComponent(cloud.Environment())
+	assert.True(t, has("inputs", "generate"), "Cloud ships generate")
+	assert.False(t, has("inputs", "file"), "Cloud does not ship the file input")
+	assert.True(t, has("outputs", "bigquery_cdc_migration"), "a guide page under components/ is not a component")
+	assert.True(t, has("inputs", "about"), "the about page is not a component")
+	assert.True(t, schema.DocsHasComponent(schema.Standard("0.0.0", "now").Environment())("inputs", "file"), "self-managed ships the file input")
+
+	out, err := cloud.MarshalJSONV0Markdown(service.DocsMarkdownOptions{
+		DocumentationURL: schema.CloudDocumentationURL,
+		ComponentURLs:    schema.DocsComponentURLs,
+		HasComponent:     has,
+	})
+	require.NoError(t, err)
+	var doc struct {
+		Outputs []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"outputs"`
+	}
+	require.NoError(t, json.Unmarshal(out, &doc))
+	var desc string
+	for _, o := range doc.Outputs {
+		if o.Name == "gcp_bigquery_write_api" {
+			desc = o.Description
+		}
+	}
+	require.NotEmpty(t, desc, "Cloud ships gcp_bigquery_write_api")
+	assert.Contains(t, desc, "[CDC migration guide]("+schema.CloudDocumentationURL+"/components/outputs/bigquery_cdc_migration/)")
 }

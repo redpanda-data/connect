@@ -56,5 +56,6 @@ func main() {
 		),
 		service.CLIOptSetDocumentationURL(schema.DocumentationURL),
 		service.CLIOptSetDocsComponentURLs(schema.DocsComponentURLs),
+		service.CLIOptSetDocsHasComponent(schema.DocsHasComponent(service.GlobalEnvironment())),
 	)
 }

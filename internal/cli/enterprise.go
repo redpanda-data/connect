@@ -43,6 +43,14 @@ func DocsOpts() []service.CLIOptFunc {
 	}
 }
 
+// docsHasComponent keeps links in Markdown doc strings to the components env
+// ships and to docs pages that are not components. It is a function so that
+// InitEnterpriseCLI, whose schema parameter shadows the schema package, can
+// call it.
+func docsHasComponent(env *service.Environment) func(typeDir, name string) bool {
+	return schema.DocsHasComponent(env)
+}
+
 // CloudDocsOpts points the CLI at the Cloud copy of the Connect docs instead.
 func CloudDocsOpts() []service.CLIOptFunc {
 	return []service.CLIOptFunc{
@@ -116,6 +124,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			return schema
 		}),
 		service.CLIOptSetEnvironment(schema.Environment()),
+		service.CLIOptSetDocsHasComponent(docsHasComponent(schema.Environment())),
 		service.CLIOptOnLoggerInit(func(l *service.Logger) {
 			fbLogger = l
 			if cListApplied {
