@@ -132,3 +132,24 @@ func TestRenderDescriptionPartial(t *testing.T) {
 		assert.Contains(t, emptyDescriptionPartial, "// tag::"+tag+"[]\n// end::"+tag+"[]\n")
 	}
 }
+
+// The Metadata section moves into its own partial. A conditional around it
+// must stay whole on one side of the cut, or the description and metadata
+// partials each get half of it.
+func TestMetadataSectionKeepsConditionalsBalanced(t *testing.T) {
+	d := "Reads messages.\n\nifndef::env-cloud[]\n\n== Metadata\n\nThis input adds the following metadata fields:\n\n- foo\n\nendif::[]"
+	body := renderDescriptionBody(d, "inputs", "probe")
+	meta := extractMetadata(d)
+	assert.NotContains(t, meta, "endif::[]", "the closing directive stays with its opener")
+	assert.Contains(t, body, "ifndef::env-cloud[]\n\ninclude::connect:components:partial$metadata/inputs/probe.adoc[]\n\nendif::[]")
+
+	// A conditional the section opens without closing is not split: the
+	// section stays in the description.
+	open := "Reads messages.\n\n== Metadata\n\nifndef::env-cloud[]\n\n- foo\n\n== Next\n\nendif::[]"
+	assert.Empty(t, extractMetadata(open))
+	assert.Equal(t, open, descriptionWithMetadataInclude(open, "inputs", "probe"))
+
+	// A balanced conditional inside the section moves with it.
+	inside := "Reads messages.\n\n== Metadata\n\n- foo\n\nifndef::env-cloud[]\n- bar\nendif::[]"
+	assert.Contains(t, extractMetadata(inside), "ifndef::env-cloud[]\n- bar\nendif::[]")
+}

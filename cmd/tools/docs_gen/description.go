@@ -168,12 +168,33 @@ func locateMetadata(lines []annotatedLine) (first, last int, ok bool) {
 	if first == -1 {
 		return 0, 0, false
 	}
+	// The section ends at the next heading, or at a directive that closes a
+	// conditional opened before the heading: that directive must stay in the
+	// description, around the include, or the opener and its endif::[] land in
+	// different partials. A conditional the section opens and does not close
+	// would be split the same way, so the section is then left in place.
 	end := len(lines)
+	depth := 0
 	for i := first + 1; i < len(lines); i++ {
-		if !lines[i].verbatim && sectionEnd.MatchString(lines[i].text) {
+		if lines[i].verbatim {
+			continue
+		}
+		if sectionEnd.MatchString(lines[i].text) {
 			end = i
 			break
 		}
+		if conditionalOpen.MatchString(lines[i].text) {
+			depth++
+		} else if conditionalClose.MatchString(lines[i].text) {
+			if depth == 0 {
+				end = i
+				break
+			}
+			depth--
+		}
+	}
+	if depth > 0 {
+		return 0, 0, false
 	}
 	last = end - 1
 	for last > first && strings.TrimSpace(lines[last].text) == "" {
@@ -181,6 +202,11 @@ func locateMetadata(lines []annotatedLine) (first, last int, ok bool) {
 	}
 	return first, last, true
 }
+
+var (
+	conditionalOpen  = regexp.MustCompile(`^ifn?def::[^\[]*\[\]$`)
+	conditionalClose = regexp.MustCompile(`^endif::[^\[]*\[\]$`)
+)
 
 func extractMetadata(description string) string {
 	lines := annotateLines(description)

@@ -355,3 +355,23 @@ func TestCategoryVariantsRenderEachCategorysText(t *testing.T) {
 	assert.Nil(t, categoryVariants(same), "a method with one text needs no variants")
 	assert.Contains(t, renderMethodsList([]bloblangSpec{same}, map[string]bool{"upper": true}), "partial$bloblang-methods/upper.adoc[")
 }
+
+// A period or a default after a closing endif::[] makes the line text instead
+// of a directive, so the conditional never closes and every later line of the
+// page is hidden.
+func TestBloblangConditionalEndsAreKept(t *testing.T) {
+	var spec bloblangSpec
+	spec.Name = "probe_fn"
+	spec.Description = "Hashes a value.\n\nifndef::env-cloud[]\nSelf-managed only: reads local files.\nendif::[]"
+	spec.Params = &struct {
+		Named    []bloblangParam `json:"named"`
+		Variadic bool            `json:"variadic"`
+	}{Named: []bloblangParam{{Name: "path", Type: "string", Description: "The path.\n\nifndef::env-cloud[]\nSM-only param note.\nendif::[]", Default: json.RawMessage(`"x"`)}}}
+
+	out := renderBloblangSpec(spec, "function")
+	assert.NotContains(t, out, "endif::[].")
+	assert.Contains(t, out, "reads local files.\nendif::[]\n")
+	assert.Contains(t, out, "SM-only param note.\nendif::[]\n\nDefault: ")
+	assert.Equal(t, "Ends here.\nendif::[]", ensurePeriod("Ends here.\nendif::[]"))
+	assert.Equal(t, "Plain text.", ensurePeriod("Plain text"))
+}

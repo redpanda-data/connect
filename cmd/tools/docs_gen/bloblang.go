@@ -42,7 +42,24 @@ func ensurePeriod(text string) string {
 	if trimmed == "" || strings.HasSuffix(trimmed, ".") || strings.HasSuffix(trimmed, "!") || strings.HasSuffix(trimmed, "?") {
 		return text
 	}
+	// A period after a closing endif::[] makes the line text, not a directive,
+	// so the conditional never closes and the rest of the page disappears.
+	if endsWithDirective(trimmed) {
+		return trimmed
+	}
 	return trimmed + "."
+}
+
+var trailingDirective = regexp.MustCompile(`(?m)^(ifn?def|endif)::[^\n]*\[\]$`)
+
+// endsWithDirective reports whether the last line of text is an AsciiDoc
+// conditional directive.
+func endsWithDirective(text string) bool {
+	last := text
+	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+		last = text[i+1:]
+	}
+	return trailingDirective.MatchString(last)
 }
 
 func renderBloblangExample(ex bloblangExample) string {
@@ -167,7 +184,13 @@ func renderBloblangSpec(spec bloblangSpec, kind string) string {
 			}
 			desc := p.Description
 			if d, ok := bloblangDefault(p.Default); ok {
-				desc = strings.TrimFunc(ensurePeriod(desc)+" Default: "+d+".", jsIsSpace)
+				sep := " "
+				if endsWithDirective(strings.TrimFunc(desc, jsIsSpace)) {
+					// After a closing directive the default starts its own
+					// paragraph, so the directive stays on a line of its own.
+					sep = "\n\n"
+				}
+				desc = strings.TrimFunc(ensurePeriod(desc)+sep+"Default: "+d+".", jsIsSpace)
 			}
 			b.WriteString("\n| `" + htmlEscaper.Replace(p.Type) + "`\n" + tableCell(desc) + "\n\n")
 		}
