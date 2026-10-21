@@ -769,7 +769,12 @@ func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
 	// serialise access to the shared fake.
 	var storeMu sync.Mutex
 	api := sharedStoreAPI(map[string]map[string]dynamodbtypes.AttributeValue{})
-	putItem, getItem := api.putItem, api.getItem
+	putItem, updateItem, getItem := api.putItem, api.updateItem, api.getItem
+	api.updateItem = func(ctx context.Context, in *dynamodb.UpdateItemInput, o ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+		storeMu.Lock()
+		defer storeMu.Unlock()
+		return updateItem(ctx, in, o...)
+	}
 	api.putItem = func(ctx context.Context, in *dynamodb.PutItemInput, o ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
 		storeMu.Lock()
 		defer storeMu.Unlock()

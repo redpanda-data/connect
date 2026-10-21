@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +48,7 @@ type checkpointDynamoAPI interface {
 	UpdateTable(context.Context, *dynamodb.UpdateTableInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateTableOutput, error)
 	GetItem(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
 	PutItem(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	UpdateItem(context.Context, *dynamodb.UpdateItemInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error)
 	Query(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
 }
 
@@ -330,26 +332,8 @@ func isShardCompletedRow(item map[string]types.AttributeValue) bool {
 // ApproximateCreationDateTime of the checkpointed record (empty if unknown); it
 // is persisted only in global mode, where it drives time-based failover resume.
 func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
-	return c.putShardRow(ctx, shardID, sequenceNumber, approxCreationTime, false)
-}
-
-// MarkShardCompleted stores a shard's final checkpoint together with the
-// completion marker: the closed shard was read to the end and every record
-// read from it was acknowledged, so a restart must not read it again (see
-// resumeCompleted). sequenceNumber may be empty when no record was read from
-// the shard during this run; the marker alone then suffices.
-func (c *Checkpointer) MarkShardCompleted(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
-	return c.putShardRow(ctx, shardID, sequenceNumber, approxCreationTime, true)
-}
-
-func (c *Checkpointer) putShardRow(ctx context.Context, shardID, sequenceNumber, approxCreationTime string, completed bool) error {
 	item := c.checkpointKey(shardID)
-	if sequenceNumber != "" || !completed {
-		item["SequenceNumber"] = &types.AttributeValueMemberS{Value: sequenceNumber}
-	}
-	if completed {
-		item[checkpointShardCompletedAttr] = &types.AttributeValueMemberBOOL{Value: true}
-	}
+	item["SequenceNumber"] = &types.AttributeValueMemberS{Value: sequenceNumber}
 	if c.globalTable {
 		item["StreamArn"] = &types.AttributeValueMemberS{Value: c.streamArn}
 		if approxCreationTime != "" {
@@ -361,8 +345,55 @@ func (c *Checkpointer) putShardRow(ctx context.Context, shardID, sequenceNumber,
 		Item:      item,
 	})
 	if err != nil {
-		return fmt.Errorf("setting checkpoint for table=%s key=%s shard=%s seq=%s completed=%t: %w",
-			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, completed, err)
+		return fmt.Errorf("setting checkpoint for table=%s key=%s shard=%s seq=%s: %w",
+			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, err)
+	}
+	return nil
+}
+
+// MarkShardCompleted stores a shard's final checkpoint together with the
+// completion marker: the closed shard was read to the end and every record
+// read from it was acknowledged, so a restart must not read it again (see
+// resumeCompleted). sequenceNumber may be empty when no record was read from
+// the shard during this run; the marker alone then suffices.
+//
+// The row is updated in place rather than replaced: attributes that are not
+// passed (an empty sequenceNumber or approxCreationTime) keep their stored
+// values. In global mode the failover cutoff is derived from every row's
+// ApproximateCreationTime, so dropping it when marking a shard that delivered
+// nothing during this run would move the other region's cutoff past records
+// it has not read.
+func (c *Checkpointer) MarkShardCompleted(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
+	sets := []string{"#completed = :completed"}
+	names := map[string]string{"#completed": checkpointShardCompletedAttr}
+	values := map[string]types.AttributeValue{
+		":completed": &types.AttributeValueMemberBOOL{Value: true},
+	}
+	if sequenceNumber != "" {
+		sets = append(sets, "#seq = :seq")
+		names["#seq"] = "SequenceNumber"
+		values[":seq"] = &types.AttributeValueMemberS{Value: sequenceNumber}
+	}
+	if c.globalTable {
+		sets = append(sets, "#stream = :stream")
+		names["#stream"] = "StreamArn"
+		values[":stream"] = &types.AttributeValueMemberS{Value: c.streamArn}
+		if approxCreationTime != "" {
+			sets = append(sets, "#act = :act")
+			names["#act"] = "ApproximateCreationTime"
+			values[":act"] = &types.AttributeValueMemberS{Value: approxCreationTime}
+		}
+	}
+	_, err := c.svc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(c.tableName),
+		Key:                       c.checkpointKey(shardID),
+		UpdateExpression:          aws.String("SET " + strings.Join(sets, ", ")),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	if err != nil {
+		return fmt.Errorf("marking shard completed for table=%s key=%s shard=%s seq=%s: %w",
+			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, err)
 	}
 	return nil
 }
