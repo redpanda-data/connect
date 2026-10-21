@@ -29,7 +29,10 @@ type shardMark struct {
 // but never loses or stales a key (see PageWindow).
 //
 // The tracker starts unsettled and reports nothing caught up until the first
-// RefreshDone that lists only known shards.
+// RefreshDone that lists only known shards, or until it has stayed unsettled
+// for idleGrace; after that, CaughtUpPast judges the shards it knows.
+// Releasing then is safe for the same reason a wrong idle guess is: it can
+// only cost ordering, never a stale value.
 type ShardProgress struct {
 	mu     sync.Mutex
 	margin time.Duration
@@ -42,6 +45,11 @@ type ShardProgress struct {
 	now       func() time.Time
 	shards    map[string]*shardMark
 	unsettled bool
+	// unsettledSince is when the tracker last went from settled to
+	// unsettled (or was created). Unsettled state is bounded by idleGrace:
+	// a described shard that never gets a reader (for example one whose
+	// iterator keeps failing) would otherwise hold every page forever.
+	unsettledSince time.Time
 }
 
 // NewShardProgress returns an unsettled tracker. margin is subtracted from
@@ -55,6 +63,15 @@ func NewShardProgress(margin, idleGrace time.Duration, now func() time.Time) *Sh
 		now:       now,
 		shards:    map[string]*shardMark{},
 		unsettled: true, // until the first refresh completes
+
+		unsettledSince: now(),
+	}
+}
+
+func (p *ShardProgress) unsettleLocked() {
+	if !p.unsettled {
+		p.unsettled = true
+		p.unsettledSince = p.now()
 	}
 }
 
@@ -118,7 +135,7 @@ func (p *ShardProgress) Exhausted(id string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.markLocked(id).exhausted = true
-	p.unsettled = true
+	p.unsettleLocked()
 }
 
 // RefreshDone settles the tracker if every described shard is known, and
@@ -128,19 +145,19 @@ func (p *ShardProgress) RefreshDone(described []string) {
 	defer p.mu.Unlock()
 	for _, id := range described {
 		if _, exists := p.shards[id]; !exists {
-			p.unsettled = true
+			p.unsettleLocked()
 			return
 		}
 	}
 	p.unsettled = false
 }
 
-// CaughtUpPast reports whether the tracker is settled and every live shard
-// has been read past t.
+// CaughtUpPast reports whether the tracker is settled (or has been unsettled
+// for at least idleGrace) and every live shard has been read past t.
 func (p *ShardProgress) CaughtUpPast(t time.Time) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.unsettled {
+	if p.unsettled && p.now().Sub(p.unsettledSince) < p.idleGrace {
 		return false
 	}
 	for _, m := range p.shards {

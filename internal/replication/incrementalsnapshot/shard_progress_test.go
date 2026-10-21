@@ -91,3 +91,44 @@ func TestShardProgressReRegisterKeepsExhausted(t *testing.T) {
 	p.RefreshDone([]string{"s1"})
 	assert.True(t, p.CaughtUpPast(t0.Add(time.Hour)))
 }
+
+// TestShardProgressUnsettledBoundedByIdleGrace: a described shard that never
+// gets a reader (its iterator keeps failing to prepare) must not hold pages
+// forever. After idleGrace of continuous unsettled state the tracker judges
+// the shards it knows; a later settle and re-unsettle restarts the clock.
+func TestShardProgressUnsettledBoundedByIdleGrace(t *testing.T) {
+	now := t0
+	p := NewShardProgress(0, testIdleGrace, func() time.Time { return now })
+	p.Register("s1")
+	p.Observe("s1", t0.Add(time.Hour))
+
+	for range 3 {
+		p.RefreshDone([]string{"s1", "never-prepared"})
+		now = now.Add(testIdleGrace / 4)
+	}
+	assert.False(t, p.CaughtUpPast(t0), "within grace the unknown shard still blocks")
+
+	now = t0.Add(testIdleGrace)
+	p.RefreshDone([]string{"s1", "never-prepared"})
+	assert.True(t, p.CaughtUpPast(t0), "unsettled past idleGrace judges the known shards")
+	assert.False(t, p.CaughtUpPast(t0.Add(2*time.Hour)), "known shards must still be caught up")
+
+	// Settling and then unsettling again restarts the grace clock.
+	p.RefreshDone([]string{"s1"})
+	p.Exhausted("s1")
+	p.Register("s2")
+	assert.False(t, p.CaughtUpPast(t0), "a fresh unsettle waits a full grace again")
+	now = now.Add(testIdleGrace)
+	p.Observe("s2", t0.Add(time.Hour))
+	assert.True(t, p.CaughtUpPast(t0))
+}
+
+// TestShardProgressInitialUnsettledBoundedByIdleGrace: a first refresh that
+// never succeeds also stops blocking after idleGrace.
+func TestShardProgressInitialUnsettledBoundedByIdleGrace(t *testing.T) {
+	now := t0
+	p := NewShardProgress(0, testIdleGrace, func() time.Time { return now })
+	assert.False(t, p.CaughtUpPast(t0))
+	now = now.Add(testIdleGrace)
+	assert.True(t, p.CaughtUpPast(t0))
+}

@@ -401,7 +401,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["snapshot_watermark_margin must not be negative"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotIdleShardGrace).
-				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.").Version("4.115.0").
+				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.").Version("4.115.0").
 				ShortDescription("Incremental snapshot only: how long a shard with no records holds back snapshot pages.").
 				Default("1m").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_idle_shard_grace must be greater than 0"] }`).
@@ -2046,6 +2046,22 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		SequenceNumber:    sequenceNumber,
 	})
 	cancel()
+	if err != nil && isTrimmedDataAccessError(err) && iteratorType == types.ShardIteratorTypeAfterSequenceNumber {
+		// The checkpointed sequence is older than the stream's 24h retention,
+		// so AFTER_SEQUENCE_NUMBER can never succeed: retrying it every
+		// refresh would leave the shard unread forever (and hold incremental
+		// snapshot pages, since the shard stays listed but unregistered).
+		// Resume from the oldest record still retained, as the readers do on
+		// a mid-read TrimmedDataAccessException.
+		d.log.Warnf("Checkpoint %s for shard %s%s is beyond the stream's retention, resuming from trim horizon; records in between have expired", aws.ToString(sequenceNumber), shardID, tableSuffix)
+		iterCtx, cancel = context.WithTimeout(ctx, defaultAPICallTimeout)
+		iter, err = d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
+			StreamArn:         streamArn,
+			ShardId:           &shardID,
+			ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
+		})
+		cancel()
+	}
 	if err != nil {
 		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 	}
@@ -2709,25 +2725,36 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Success - reset backoff
 		boff.Reset()
 
-		// Update iterator
+		// Update iterator. A nil NextShardIterator means the shard is closed,
+		// but that final response can still carry records: they are delivered
+		// below first, and only then is the shard marked exhausted (doing it
+		// here would also let cleanup cancel this reader before the send).
 		ts.mu.Lock()
+		closed := false
 		if reader, ok := ts.shardReaders[shardID]; ok {
 			reader.iterator = getRecords.NextShardIterator
-			if reader.iterator == nil {
-				reader.exhausted = true
-				inc.Exhausted(shardID)
-				d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
-				ts.mu.Unlock()
-				ts.recordBatcher.Release(shardID, reserve)
-				return
-			}
+			closed = reader.iterator == nil
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
 				reader.lastSequenceNumber = seq
 			}
 		}
 		ts.mu.Unlock()
+		markExhausted := func() {
+			ts.mu.Lock()
+			if reader, ok := ts.shardReaders[shardID]; ok {
+				reader.exhausted = true
+				inc.Exhausted(shardID)
+			}
+			ts.mu.Unlock()
+			d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
+		}
 
 		if len(getRecords.Records) == 0 {
+			if closed {
+				ts.recordBatcher.Release(shardID, reserve)
+				markExhausted()
+				return
+			}
 			// No records available: wait before polling again
 			inc.ObserveIdle(shardID, pollStart)
 			ts.recordBatcher.Release(shardID, reserve)
@@ -2748,6 +2775,10 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
 		if len(batch) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
+			if closed {
+				markExhausted()
+				return
+			}
 			continue
 		}
 
@@ -2828,6 +2859,10 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
 			inc.ObserveRecords(shardID, getRecords.Records)
+		}
+		if closed {
+			markExhausted()
+			return
 		}
 	}
 }
@@ -3202,25 +3237,36 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Success - reset backoff
 		boff.Reset()
 
-		// Update iterator
+		// Update iterator. A nil NextShardIterator means the shard is closed,
+		// but that final response can still carry records: they are delivered
+		// below first, and only then is the shard marked exhausted (doing it
+		// here would also let cleanup cancel this reader before the send).
 		d.mu.Lock()
+		closed := false
 		if reader, ok := d.shardReaders[shardID]; ok {
 			reader.iterator = getRecords.NextShardIterator
-			if reader.iterator == nil {
-				reader.exhausted = true
-				inc.Exhausted(shardID)
-				d.log.Infof("Shard %s exhausted", shardID)
-				d.mu.Unlock()
-				d.recordBatcher.Release(shardID, reserve)
-				return
-			}
+			closed = reader.iterator == nil
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
 				reader.lastSequenceNumber = seq
 			}
 		}
 		d.mu.Unlock()
+		markExhausted := func() {
+			d.mu.Lock()
+			if reader, ok := d.shardReaders[shardID]; ok {
+				reader.exhausted = true
+				inc.Exhausted(shardID)
+			}
+			d.mu.Unlock()
+			d.log.Infof("Shard %s exhausted", shardID)
+		}
 
 		if len(getRecords.Records) == 0 {
+			if closed {
+				d.recordBatcher.Release(shardID, reserve)
+				markExhausted()
+				return
+			}
 			// No records available: wait before polling again
 			inc.ObserveIdle(shardID, pollStart)
 			d.recordBatcher.Release(shardID, reserve)
@@ -3237,6 +3283,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
 		if len(batch) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
+			if closed {
+				markExhausted()
+				return
+			}
 			continue
 		}
 
@@ -3306,6 +3356,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
 			inc.ObserveRecords(shardID, getRecords.Records)
+		}
+		if closed {
+			markExhausted()
+			return
 		}
 	}
 }
