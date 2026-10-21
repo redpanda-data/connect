@@ -1773,19 +1773,35 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		d.log.Infof("Starting shard %s%s from %s", shardID, tableSuffix, iteratorType)
 	}
 
-	iterCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
-	iter, err := d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
-		StreamArn:         streamArn,
-		ShardId:           &shardID,
-		ShardIteratorType: iteratorType,
-		SequenceNumber:    sequenceNumber,
-	})
-	cancel()
+	iter, err := d.acquireShardIterator(ctx, streamArn, shardID, iteratorType, sequenceNumber)
+	if err != nil && iteratorType == types.ShardIteratorTypeAfterSequenceNumber && isTrimmedDataAccessError(err) {
+		// The checkpoint points at records the stream has already trimmed
+		// (the pipeline was down beyond the 24h retention window). Retrying
+		// the same position fails forever, which would leave the shard, and
+		// every child shard held back behind it, unread until it ages out of
+		// the listing. Everything still retained is newer than the
+		// checkpoint, so read it from TRIM_HORIZON, as a running reader does
+		// when GetRecords hits trimmed data.
+		d.log.Warnf("Checkpoint for shard %s%s points at trimmed stream data, records between it and the trim horizon were lost; resuming from TRIM_HORIZON", shardID, tableSuffix)
+		iter, err = d.acquireShardIterator(ctx, streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
+	}
 	if err != nil {
 		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 	}
 
 	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
+}
+
+// acquireShardIterator calls GetShardIterator under its own timeout.
+func (d *dynamoDBCDCInput) acquireShardIterator(ctx context.Context, streamArn *string, shardID string, iteratorType types.ShardIteratorType, sequenceNumber *string) (*dynamodbstreams.GetShardIteratorOutput, error) {
+	iterCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	defer cancel()
+	return d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
+		StreamArn:         streamArn,
+		ShardId:           &shardID,
+		ShardIteratorType: iteratorType,
+		SequenceNumber:    sequenceNumber,
+	})
 }
 
 // shardStatus is what shard discovery knows about a shard: known means it has
@@ -1811,7 +1827,9 @@ type shardStatus struct {
 // updates (child) before its older ones (parent backlog). An unlisted parent
 // has aged out of the stream and counts as done. Shards the checkpoint store
 // marks completed come back with completed set, which also releases their
-// children within the same cycle.
+// children within the same cycle. A parent whose checkpoint has been trimmed
+// is resumed from TRIM_HORIZON by prepareShardReader rather than failing every
+// cycle, so it cannot hold its descendants back indefinitely.
 //
 // The ordering does not apply while start_from: latest is still honored (the
 // first discovery of a fresh pipeline): every shard then starts at LATEST, so

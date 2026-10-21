@@ -58,8 +58,11 @@ type refreshStubTransport struct {
 	mu       sync.Mutex
 	shardIDs []string
 	// parents maps a shard to its ParentShardId in the DescribeStream listing.
-	parents       map[string]string
-	failShards    map[string]bool
+	parents    map[string]string
+	failShards map[string]bool
+	// trimmedShards fail AFTER_SEQUENCE_NUMBER requests with
+	// TrimmedDataAccessException (a checkpoint older than the retention window).
+	trimmedShards map[string]bool
 	iteratorCalls []string
 	// iteratorTypes records the ShardIteratorType of the latest
 	// GetShardIterator call per shard.
@@ -168,10 +171,16 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 		}
 		s.iteratorTypes[in.ShardId] = in.ShardIteratorType
 		fail := s.failShards[in.ShardId]
+		trimmed := s.trimmedShards[in.ShardId] && in.ShardIteratorType == "AFTER_SEQUENCE_NUMBER"
 		hook := s.onGetShardIterator
 		s.mu.Unlock()
 		if hook != nil {
 			hook(in.ShardId)
+		}
+		if trimmed {
+			resp := jsonResponse(req, 400, `{"__type":"TrimmedDataAccessException","message":"stubbed for test"}`)
+			resp.Header.Set("X-Amzn-ErrorType", "TrimmedDataAccessException")
+			return resp, nil
 		}
 		if fail {
 			resp := jsonResponse(req, 400, `{"__type":"LimitExceededException","message":"stubbed for test"}`)
@@ -836,4 +845,79 @@ func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
 		"the child must not start before the parent's final page was read")
 	assert.Zero(t, d.recordBatcher.TrackedShardCount(), "the completed shard's tracker state must be forgotten")
 	assert.Empty(t, d.msgChan, "no batch may be redelivered")
+}
+
+// checkpointedCheckpointer returns a checkpointer whose store holds an exact
+// resume sequence number for each of the given shards.
+func checkpointedCheckpointer(t *testing.T, seqs map[string]string) *Checkpointer {
+	t.Helper()
+	cp := newTestCheckpointer(t)
+	cp.svc = &fakeCheckpointAPI{
+		getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			shard := in.Key[checkpointRangeKey].(*dynamodbtypes.AttributeValueMemberS).Value
+			seq, ok := seqs[shard]
+			if !ok {
+				return &dynamodb.GetItemOutput{}, nil
+			}
+			return &dynamodb.GetItemOutput{Item: map[string]dynamodbtypes.AttributeValue{
+				"SequenceNumber": &dynamodbtypes.AttributeValueMemberS{Value: seq},
+			}}, nil
+		},
+	}
+	return cp
+}
+
+// TestRefreshShardsTrimmedParentCheckpointDoesNotStallChildren (CON-599): in
+// CDC-only mode a pipeline restarted after more than 24h down holds a
+// checkpoint the stream has trimmed, so GetShardIterator AFTER_SEQUENCE_NUMBER
+// fails with TrimmedDataAccessException on every cycle. The parent must be
+// resumed from TRIM_HORIZON instead of failing forever: otherwise its whole
+// descendant chain is held back until it ages out of the listing, and a
+// single-lineage table ends up with no readers at all.
+func TestRefreshShardsTrimmedParentCheckpointDoesNotStallChildren(t *testing.T) {
+	newTransport := func() *refreshStubTransport {
+		return &refreshStubTransport{
+			shardIDs:      []string{"shard-child", "shard-parent"},
+			parents:       map[string]string{"shard-child": "shard-parent"},
+			trimmedShards: map[string]bool{"shard-parent": true},
+		}
+	}
+	newCheckpointer := func(t *testing.T) *Checkpointer {
+		return checkpointedCheckpointer(t, map[string]string{"shard-parent": "00001"})
+	}
+	assertParentResumedFromTrimHorizon := func(t *testing.T, transport *refreshStubTransport, registered []string) {
+		t.Helper()
+		assert.ElementsMatch(t, []string{"shard-parent"}, registered,
+			"the parent with a trimmed checkpoint must get a reader; the child still waits for it")
+		assert.Equal(t, "TRIM_HORIZON", transport.iteratorTypeFor("shard-parent"))
+		assert.Equal(t, 2, transport.iteratorCallsFor("shard-parent"),
+			"one AFTER_SEQUENCE_NUMBER attempt, then one TRIM_HORIZON fallback")
+		assert.Zero(t, transport.iteratorCallsFor("shard-child"))
+	}
+
+	t.Run("single-table", func(t *testing.T) {
+		transport := newTransport()
+		d := newRefreshTestInput(t, transport)
+		d.checkpointer = newCheckpointer(t)
+
+		require.NoError(t, d.refreshShards(t.Context()))
+		assertParentResumedFromTrimHorizon(t, transport, registeredShards(d))
+
+		d.completeShard(t.Context(), "shard-parent")
+		require.NoError(t, d.refreshShards(t.Context()))
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, registeredShards(d),
+			"the child must be released once the parent's retained tail is read")
+	})
+
+	t.Run("multi-table", func(t *testing.T) {
+		transport := newTransport()
+		d, ts, tableShards := tableRefreshHarness(t, transport, newCheckpointer(t))
+
+		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+		assertParentResumedFromTrimHorizon(t, transport, tableShards())
+
+		d.completeTableShard(t.Context(), "test", ts, "shard-parent")
+		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
+	})
 }
