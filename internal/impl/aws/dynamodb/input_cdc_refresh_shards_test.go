@@ -58,9 +58,12 @@ type refreshStubTransport struct {
 	mu       sync.Mutex
 	shardIDs []string
 	// parents maps a shard to its ParentShardId in the DescribeStream listing.
-	parents            map[string]string
-	failShards         map[string]bool
-	iteratorCalls      []string
+	parents       map[string]string
+	failShards    map[string]bool
+	iteratorCalls []string
+	// iteratorTypes records the ShardIteratorType of the latest
+	// GetShardIterator call per shard.
+	iteratorTypes      map[string]string
 	onGetShardIterator func(shardID string)
 	// missingDeadlines records operations whose request context carried no
 	// deadline: every AWS call in a discovery cycle must be individually
@@ -87,6 +90,12 @@ func (s *refreshStubTransport) iteratorCallCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.iteratorCalls)
+}
+
+func (s *refreshStubTransport) iteratorTypeFor(shardID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.iteratorTypes[shardID]
 }
 
 func (s *refreshStubTransport) iteratorCallsFor(shardID string) int {
@@ -148,12 +157,16 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		var in struct{ ShardId string }
+		var in struct{ ShardId, ShardIteratorType string }
 		if err := json.Unmarshal(payload, &in); err != nil {
 			return nil, err
 		}
 		s.mu.Lock()
 		s.iteratorCalls = append(s.iteratorCalls, in.ShardId)
+		if s.iteratorTypes == nil {
+			s.iteratorTypes = map[string]string{}
+		}
+		s.iteratorTypes[in.ShardId] = in.ShardIteratorType
 		fail := s.failShards[in.ShardId]
 		hook := s.onGetShardIterator
 		s.mu.Unlock()
@@ -485,6 +498,61 @@ func TestRefreshShardsChildHeldBackUntilParentCompleted(t *testing.T) {
 		}
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child", "shard-orphan"}, tableShards())
+	})
+}
+
+// TestRefreshShardsLatestDoesNotHoldBackChildren (CON-599): on a fresh
+// pipeline with start_from: latest every shard starts at LATEST, so a closed
+// parent has no backlog to drain and parent-before-child ordering must not
+// apply. Holding the child back would clear honorStartFrom after the parents
+// commit and start the child at TRIM_HORIZON on the next cycle, replaying up
+// to 24h of records the user asked to skip.
+func TestRefreshShardsLatestDoesNotHoldBackChildren(t *testing.T) {
+	newTransport := func() *refreshStubTransport {
+		return &refreshStubTransport{
+			shardIDs: []string{"shard-child", "shard-parent"},
+			parents:  map[string]string{"shard-child": "shard-parent"},
+		}
+	}
+	assertLatest := func(t *testing.T, transport *refreshStubTransport) {
+		t.Helper()
+		for _, id := range []string{"shard-parent", "shard-child"} {
+			assert.Equal(t, "LATEST", transport.iteratorTypeFor(id), "shard %s", id)
+		}
+	}
+
+	t.Run("single-table", func(t *testing.T) {
+		transport := newTransport()
+		d := newRefreshTestInput(t, transport)
+		d.conf.startFrom = "latest"
+		d.honorStartFrom.Store(true)
+
+		require.NoError(t, d.refreshShards(t.Context()))
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, registeredShards(d))
+		assertLatest(t, transport)
+		assert.False(t, d.honorStartFrom.Load())
+	})
+
+	t.Run("multi-table", func(t *testing.T) {
+		transport := newTransport()
+		d, ts, tableShards := tableRefreshHarness(t, transport, newTestCheckpointer(t))
+		d.conf.startFrom = "latest"
+		ts.honorStartFrom.Store(true)
+
+		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
+		assertLatest(t, transport)
+		assert.False(t, ts.honorStartFrom.Load())
+	})
+
+	t.Run("restart with state still orders lineage", func(t *testing.T) {
+		transport := newTransport()
+		d := newRefreshTestInput(t, transport)
+		d.conf.startFrom = "latest"
+
+		require.NoError(t, d.refreshShards(t.Context()))
+		assert.ElementsMatch(t, []string{"shard-parent"}, registeredShards(d))
+		assert.Equal(t, "TRIM_HORIZON", transport.iteratorTypeFor("shard-parent"))
 	})
 }
 
