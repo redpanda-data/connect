@@ -20,9 +20,7 @@ jobs:
       - name: Free disk space if low
         uses: ./.github/actions/free-disk-space-if-low
       - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
+        uses: ./.github/actions/setup-go
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
@@ -51,9 +49,7 @@ jobs:
       - name: Free disk space if low
         uses: ./.github/actions/free-disk-space-if-low
       - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
+        uses: ./.github/actions/setup-go
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
@@ -176,9 +172,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
+        uses: ./.github/actions/setup-go
 
       - name: Set version env variables
         run: cat .versions >> $GITHUB_ENV
