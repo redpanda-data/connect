@@ -663,7 +663,9 @@ func TestRefreshShardsForgetsAgedOutShardTrackerState(t *testing.T) {
 	tb := d.recordBatcher.AddMessages(createTestMessages(2, "shard-closed", 1), "shard-closed")
 	require.NoError(t, d.recordBatcher.CloseShard(t.Context(), cp, "shard-closed"))
 	require.Error(t, d.recordBatcher.AckBatch(t.Context(), cp, tb))
-	d.completeShard(t.Context(), "shard-closed")
+	d.mu.Lock()
+	markShardCompleted(d.shardReaders, &d.completedShards, "shard-closed")
+	d.mu.Unlock()
 	require.Equal(t, 1, d.recordBatcher.TrackedShardCount())
 
 	transport.mu.Lock()
@@ -671,6 +673,63 @@ func TestRefreshShardsForgetsAgedOutShardTrackerState(t *testing.T) {
 	transport.mu.Unlock()
 	require.NoError(t, d.refreshShards(t.Context()))
 	assert.Zero(t, d.recordBatcher.TrackedShardCount())
+}
+
+// TestRefreshShardsRetriesFailedCompletionWrite (CON-601): a closed shard
+// whose completion write failed is finalized again on the next refresh
+// cycle while it is still listed, instead of lingering against
+// max_tracked_shards until it ages out of the stream.
+func TestRefreshShardsRetriesFailedCompletionWrite(t *testing.T) {
+	transport := &refreshStubTransport{shardIDs: []string{"shard-closed"}}
+	d := newRefreshTestInput(t, transport)
+	d.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: errors.New("boom")}
+
+	require.NoError(t, d.refreshShards(t.Context()))
+	tb := d.recordBatcher.AddMessages(createTestMessages(2, "shard-closed", 1), "shard-closed")
+	require.NoError(t, d.recordBatcher.CloseShard(t.Context(), cp, "shard-closed"))
+	require.Error(t, d.recordBatcher.AckBatch(t.Context(), cp, tb))
+	d.mu.Lock()
+	markShardCompleted(d.shardReaders, &d.completedShards, "shard-closed")
+	d.mu.Unlock()
+	require.Equal(t, 1, d.recordBatcher.TrackedShardCount())
+
+	require.NoError(t, d.refreshShards(t.Context()), "a failed retry must not fail the refresh cycle")
+	require.Equal(t, 1, d.recordBatcher.TrackedShardCount())
+
+	cp.setErrors(nil, nil)
+	require.NoError(t, d.refreshShards(t.Context()))
+	seq, completed := cp.completedAt("shard-closed")
+	assert.True(t, completed, "the refresh cycle must retry the completion write")
+	assert.Equal(t, "00002", seq)
+	assert.Zero(t, d.recordBatcher.TrackedShardCount())
+	assert.Equal(t, 1, transport.iteratorCallCount(), "no new iterator may be acquired for the completed shard")
+}
+
+// TestRefreshTableShardsRetriesFailedCompletionWrite (CON-601): the
+// multi-table coordinator retries failed completion writes the same way.
+func TestRefreshTableShardsRetriesFailedCompletionWrite(t *testing.T) {
+	transport := &refreshStubTransport{shardIDs: []string{"shard-closed"}}
+	d, ts, _ := tableRefreshHarness(t, transport, newTestCheckpointer(t))
+	ts.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: errors.New("boom")}
+
+	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+	tb := ts.recordBatcher.AddMessages(createTestMessages(2, "shard-closed", 1), "shard-closed")
+	require.NoError(t, ts.recordBatcher.CloseShard(t.Context(), cp, "shard-closed"))
+	require.Error(t, ts.recordBatcher.AckBatch(t.Context(), cp, tb))
+	ts.mu.Lock()
+	markShardCompleted(ts.shardReaders, &ts.completedShards, "shard-closed")
+	ts.mu.Unlock()
+	require.Equal(t, 1, ts.recordBatcher.TrackedShardCount())
+
+	cp.setErrors(nil, nil)
+	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+	seq, completed := cp.completedAt("shard-closed")
+	assert.True(t, completed, "the table refresh cycle must retry the completion write")
+	assert.Equal(t, "00002", seq)
+	assert.Zero(t, ts.recordBatcher.TrackedShardCount())
+	assert.Equal(t, 1, transport.iteratorCallCount(), "no new iterator may be acquired for the completed shard")
 }
 
 // TestUpdateActiveShardsMetricSumsTables: each table coordinator publishes

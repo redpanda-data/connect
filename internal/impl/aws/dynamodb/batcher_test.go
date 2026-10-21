@@ -44,9 +44,17 @@ type mockCheckpointer struct {
 	checkpointLimit int
 	setCallCount    int
 	// completed records shards marked completed, with the sequence the
-	// completion carried. completeErr, when set, fails MarkShardCompleted.
+	// completion carried. completeErr, when set, fails MarkShardCompleted;
+	// setErr, when set, fails Set.
 	completed   map[string]string
 	completeErr error
+	setErr      error
+}
+
+func (m *mockCheckpointer) setErrors(completeErr, setErr error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.completeErr, m.setErr = completeErr, setErr
 }
 
 func (m *mockCheckpointer) MarkShardCompleted(_ context.Context, shardID, sequenceNumber, _ string) error {
@@ -72,6 +80,9 @@ func (m *mockCheckpointer) completedAt(shardID string) (string, bool) {
 func (m *mockCheckpointer) Set(_ context.Context, shardID, sequenceNumber, approxCreationTime string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.setErr != nil {
+		return m.setErr
+	}
 	if m.checkpoints == nil {
 		m.checkpoints = make(map[string]string)
 	}
@@ -1226,7 +1237,8 @@ func TestBatcherRemoveBatchFinalizeUsesCallerContext(t *testing.T) {
 
 // TestBatcherCloseShardWriteFailureKeepsState: when the completion write
 // fails the tracker entry stays, so the shutdown flush still persists the
-// frontier.
+// frontier, and the completion is retried by RetryFinalize (CON-601): the
+// shard is closed and fully settled, so no ack will ever trigger it again.
 func TestBatcherCloseShardWriteFailureKeepsState(t *testing.T) {
 	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
 	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: fmt.Errorf("boom")}
@@ -1237,6 +1249,88 @@ func TestBatcherCloseShardWriteFailureKeepsState(t *testing.T) {
 
 	assert.Equal(t, 1, b.TrackedShardCount())
 	assert.Equal(t, "00002", b.PendingCheckpoints()["shard-a"].SequenceNumber)
+
+	require.Error(t, b.RetryFinalize(t.Context()), "a retry against a failing store must report the failure")
+	assert.Equal(t, 1, b.TrackedShardCount(), "the entry must survive until the completion lands")
+
+	cp.setErrors(nil, nil)
+	require.NoError(t, b.RetryFinalize(t.Context()))
+	seq, completed := cp.completedAt("shard-a")
+	assert.True(t, completed, "the completion must be written once the store recovers")
+	assert.Equal(t, "00002", seq)
+	assert.Zero(t, b.TrackedShardCount(), "the entry must be forgotten after the retried write")
+	assert.Empty(t, b.PendingCheckpoints())
+
+	require.NoError(t, b.RetryFinalize(t.Context()), "nothing left to retry")
+	assert.Zero(t, b.TrackedShardCount())
+}
+
+// TestBatcherRetryFinalizeAfterFailedCloseShardWrite (CON-601): the same
+// retry covers a completion write that failed from CloseShard itself (every
+// batch was already acked when the shard closed).
+func TestBatcherRetryFinalizeAfterFailedCloseShardWrite(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000}
+
+	tb := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	require.NoError(t, b.AckBatch(t.Context(), cp, tb))
+	cp.setErrors(fmt.Errorf("boom"), nil)
+	require.Error(t, b.CloseShard(t.Context(), cp, "shard-a"))
+	require.Equal(t, 1, b.TrackedShardCount())
+
+	cp.setErrors(nil, nil)
+	require.NoError(t, b.RetryFinalize(t.Context()))
+	seq, completed := cp.completedAt("shard-a")
+	assert.True(t, completed)
+	assert.Equal(t, "00002", seq)
+	assert.Zero(t, b.TrackedShardCount())
+}
+
+// TestBatcherRetryFinalizePinnedFrontier (CON-601): a closed shard whose
+// pinned frontier (a dropped batch) failed to persist is retried too, and
+// still is not marked completed: the dropped records must be redelivered.
+func TestBatcherRetryFinalizePinnedFrontier(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000, setErr: fmt.Errorf("boom")}
+
+	first := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	second := b.AddMessages(createTestMessages(2, "shard-a", 3), "shard-a")
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-a"))
+	require.NoError(t, b.AckBatch(t.Context(), cp, first))
+	b.RemoveBatch(t.Context(), second)
+	require.Equal(t, 1, b.TrackedShardCount(), "the failed frontier write must keep the entry")
+	require.Empty(t, cp.get("shard-a"))
+
+	cp.setErrors(nil, nil)
+	require.NoError(t, b.RetryFinalize(t.Context()))
+	_, completed := cp.completedAt("shard-a")
+	assert.False(t, completed, "a shard with a dropped batch must never be marked completed")
+	assert.Equal(t, "00002", cp.get("shard-a"), "the pinned frontier must be persisted on retry")
+	assert.Zero(t, b.TrackedShardCount())
+}
+
+// TestBatcherRetryFinalizeLeavesUnsettledShardsAlone (CON-601): the retry
+// only touches closed shards with nothing in flight; an open shard, or a
+// closed one still waiting on acks, is finalized by its last ack as usual.
+func TestBatcherRetryFinalizeLeavesUnsettledShardsAlone(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000}
+
+	open := b.AddMessages(createTestMessages(2, "shard-open", 1), "shard-open")
+	closing := b.AddMessages(createTestMessages(2, "shard-closing", 1), "shard-closing")
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-closing"))
+
+	require.NoError(t, b.RetryFinalize(t.Context()))
+	assert.Equal(t, 2, b.TrackedShardCount())
+	_, completed := cp.completedAt("shard-closing")
+	assert.False(t, completed, "completion must still wait for the in-flight batch")
+	assert.Zero(t, cp.calls())
+
+	require.NoError(t, b.AckBatch(t.Context(), cp, closing))
+	_, completed = cp.completedAt("shard-closing")
+	assert.True(t, completed)
+	require.NoError(t, b.AckBatch(t.Context(), cp, open))
+	assert.Equal(t, 1, b.TrackedShardCount(), "the open shard keeps its entry")
 }
 
 // TestBatcherCloseShardWithoutTrackedBatches: a closed shard that delivered

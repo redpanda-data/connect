@@ -186,8 +186,9 @@ type shardAckTracker struct {
 	lastTracked string
 	// closed is set by CloseShard once the shard's reader has dispatched its
 	// final batch; closeCP is the store the completion is persisted to.
-	// finalizing flips once, when the last batch of a closed shard settles
-	// and finalization (completion write, then forgetting the entry) starts.
+	// finalizing is set while finalization (completion write, then forgetting
+	// the entry) is in progress, so only one caller runs it; a failed write
+	// clears it again so the next shard refresh can retry (RetryFinalize).
 	closed     bool
 	closeCP    checkpointer
 	finalizing bool
@@ -452,8 +453,10 @@ type checkpointer interface {
 //     records;
 //
 // and the shard's tracker entry is forgotten. A failed write leaves the entry
-// in place so the shutdown flush still persists the frontier. cp may be nil
-// (no checkpoint store), in which case the entry is simply forgotten.
+// in place so the shutdown flush still persists the frontier, and the write
+// is retried on every shard refresh (RetryFinalize) until it lands or the
+// shard ages out of the stream. cp may be nil (no checkpoint store), in which
+// case the entry is simply forgotten.
 func (b *RecordBatcher) CloseShard(ctx context.Context, cp checkpointer, shardID string) error {
 	if b == nil {
 		return nil
@@ -494,8 +497,35 @@ func (b *RecordBatcher) claimFinalizeLocked(shardID string) bool {
 	return true
 }
 
+// RetryFinalize finalizes every closed, fully settled shard whose earlier
+// finalization failed (see CloseShard). Nothing else triggers finalization
+// on such a shard - it is closed, so no batch is added, and settled, so no
+// ack arrives - and without this its entry would linger against
+// maxTrackedShards until the shard aged out of the stream (up to 24 hours).
+// Shard discovery calls it once per refresh cycle.
+func (b *RecordBatcher) RetryFinalize(ctx context.Context) error {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	var claimed []string
+	for shardID := range b.shards {
+		if b.claimFinalizeLocked(shardID) {
+			claimed = append(claimed, shardID)
+		}
+	}
+	b.mu.Unlock()
+
+	var errs error
+	for _, shardID := range claimed {
+		errs = errors.Join(errs, b.finalizeShard(ctx, shardID))
+	}
+	return errs
+}
+
 // finalizeShard persists a closed, fully settled shard's final position (see
-// CloseShard) and forgets its tracker entry.
+// CloseShard) and forgets its tracker entry. On a failed write the claim
+// taken by claimFinalizeLocked is released so RetryFinalize can try again.
 func (b *RecordBatcher) finalizeShard(ctx context.Context, shardID string) error {
 	b.mu.Lock()
 	st, exists := b.shards[shardID]
@@ -526,6 +556,9 @@ func (b *RecordBatcher) finalizeShard(ctx context.Context, shardID string) error
 		}
 		cancel()
 		if err != nil {
+			b.mu.Lock()
+			st.finalizing = false
+			b.mu.Unlock()
 			return err
 		}
 	}
