@@ -56,14 +56,14 @@ func binlogPositionToString(pos position) string {
 }
 
 func parseBinlogPosition(str string) (pos position, err error) {
-	idx := strings.LastIndexByte(str, '@')
-	if idx == -1 {
+	before, after, ok := strings.CutLast(str, "@")
+	if !ok {
 		err = fmt.Errorf("invalid binlog string: %s", str)
 		return
 	}
-	pos.Name = str[:idx]
+	pos.Name = before
 	var offset uint64
-	offset, err = strconv.ParseUint(str[idx+1:], 16, 32)
+	offset, err = strconv.ParseUint(after, 16, 32)
 	pos.Pos = uint32(offset)
 	if err != nil {
 		err = fmt.Errorf("invalid binlog string offset: %w", err)
