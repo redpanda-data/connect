@@ -91,8 +91,12 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 		}
 	}
 
-	// wait for stream to exist
-	waiter := kinesis.NewStreamExistsWaiter(client)
+	// Wait for the stream to exist. The SDK default MinDelay is 10s, and every
+	// test pays it once. LocalStack makes a stream active in less than 1s.
+	waiter := kinesis.NewStreamExistsWaiter(client, func(o *kinesis.StreamExistsWaiterOptions) {
+		o.MinDelay = 100 * time.Millisecond
+		o.MaxDelay = time.Second
+	})
 	err = waiter.Wait(ctx, &kinesis.DescribeStreamInput{
 		StreamName: &strmID,
 	}, time.Second*30)
