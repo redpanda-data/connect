@@ -2692,14 +2692,14 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			if d.closed.Load() {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveBatch(tb)
+					recordBatcher.RemoveBatch(ackCtx, tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s (table %s): %v", shardID, tableName, err)
-				recordBatcher.RemoveBatch(tb)
+				recordBatcher.RemoveBatch(ackCtx, tb)
 				return err
 			}
 
@@ -2717,7 +2717,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		case <-ctx.Done():
 			// The batch was never dispatched: untrack it (and its pending
 			// ack) or its messages would pin the tracker budget forever.
-			recordBatcher.RemoveBatch(tb)
+			recordBatcher.RemoveBatch(ctx, tb)
 			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
@@ -3243,14 +3243,14 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			if d.closed.Load() {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveBatch(tb)
+					recordBatcher.RemoveBatch(ackCtx, tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s: %v", shardID, err)
-				recordBatcher.RemoveBatch(tb)
+				recordBatcher.RemoveBatch(ackCtx, tb)
 				return err // Propagate nack error
 			}
 
@@ -3268,7 +3268,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		case <-ctx.Done():
 			// The batch was never dispatched: untrack it (and its pending
 			// ack) or its messages would pin the tracker budget forever.
-			recordBatcher.RemoveBatch(tb)
+			recordBatcher.RemoveBatch(ctx, tb)
 			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:

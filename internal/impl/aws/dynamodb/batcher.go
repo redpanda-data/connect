@@ -417,7 +417,7 @@ func (b *RecordBatcher) settleLocked(tb *trackedBatch) bool {
 // are nacked, acked after close, or never dispatched). The shard's checkpoint
 // frontier stays pinned before this batch, so later acks cannot persist past
 // it and a restart redelivers the dropped records.
-func (b *RecordBatcher) RemoveBatch(tb *trackedBatch) {
+func (b *RecordBatcher) RemoveBatch(ctx context.Context, tb *trackedBatch) {
 	if b == nil || tb == nil {
 		return
 	}
@@ -425,9 +425,10 @@ func (b *RecordBatcher) RemoveBatch(tb *trackedBatch) {
 	finalize := b.settleLocked(tb) && b.claimFinalizeLocked(tb.shardID)
 	b.mu.Unlock()
 	if finalize {
-		// The last batch of a closed shard was dropped: nothing ties this to
-		// a caller context, so the store write is bounded on its own.
-		if err := b.finalizeShard(context.Background(), tb.shardID); err != nil {
+		// The last batch of a closed shard was dropped. A write that fails
+		// (for example because ctx is already cancelled at shutdown) leaves
+		// the entry in place for the shutdown flush.
+		if err := b.finalizeShard(ctx, tb.shardID); err != nil {
 			b.log.Errorf("Failed to persist final checkpoint for closed shard %s: %v", tb.shardID, err)
 		}
 	}
