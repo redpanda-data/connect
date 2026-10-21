@@ -378,8 +378,7 @@ func (w *writer) cowKeyFields(tableSchema *iceberg.Schema) ([]iceberg.NestedFiel
 func (w *writer) lookupKeyValue(msg *service.Message, field iceberg.NestedField, idx int) (any, error) {
 	row, err := w.messageRow(msg)
 	if err != nil {
-		var notObj notObjectError
-		if errors.As(err, &notObj) {
+		if notObj, ok := errors.AsType[notObjectError](err); ok {
 			return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", idx, notObj.got)
 		}
 		return nil, fmt.Errorf("reading structured message %d for merge key: %w", idx, err)
@@ -556,8 +555,7 @@ func (w *writer) cowDetectNewColumns(tableSchema *iceberg.Schema, rows service.M
 	for i, msg := range rows {
 		row, err := w.messageRow(msg)
 		if err != nil {
-			var notObj notObjectError
-			if errors.As(err, &notObj) {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
 				return fmt.Errorf("message %d must be an object, got %T", i, notObj.got)
 			}
 			return fmt.Errorf("reading structured message %d: %w", i, err)
@@ -610,8 +608,7 @@ func (w *writer) buildCOWRecordFactory(tableSchema *iceberg.Schema, rows service
 	for i, msg := range rows {
 		row, err := w.messageRow(msg)
 		if err != nil {
-			var notObj notObjectError
-			if errors.As(err, &notObj) {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
 				return nil, fmt.Errorf("message %d must be an object, got %T", i, notObj.got)
 			}
 			return nil, fmt.Errorf("reading structured message %d: %w", i, err)

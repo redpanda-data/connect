@@ -530,8 +530,7 @@ func (w *writer) dedupKeyer(batch service.MessageBatch) func(msg *service.Messag
 	return func(msg *service.Message) (string, error) {
 		row, err := w.messageRow(msg)
 		if err != nil {
-			var notObj notObjectError
-			if errors.As(err, &notObj) {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
 				return "", fmt.Errorf("message for upsert/delete must be an object, got %T", notObj.got)
 			}
 			return "", fmt.Errorf("reading structured message for delete key: %w", err)
@@ -660,8 +659,7 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 	for i, msg := range msgs {
 		row, err := w.messageRow(msg)
 		if err != nil {
-			var notObj notObjectError
-			if errors.As(err, &notObj) {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
 				return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", i, notObj.got)
 			}
 			return nil, fmt.Errorf("reading structured message %d for delete key: %w", i, err)
@@ -820,8 +818,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		for _, msg := range batch {
 			row, err := w.messageRow(msg)
 			if err != nil {
-				var notObj notObjectError
-				if errors.As(err, &notObj) {
+				if notObj, ok := errors.AsType[notObjectError](err); ok {
 					return nil, fmt.Errorf("message is not an object, got %T", notObj.got)
 				}
 				return nil, fmt.Errorf("parsing message as structured: %w", err)
@@ -863,8 +860,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	for _, msg := range batch {
 		row, err := w.messageRow(msg)
 		if err != nil {
-			var notObj notObjectError
-			if errors.As(err, &notObj) {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
 				return nil, fmt.Errorf("message is not an object, got %T", notObj.got)
 			}
 			return nil, fmt.Errorf("parsing message as structured: %w", err)
