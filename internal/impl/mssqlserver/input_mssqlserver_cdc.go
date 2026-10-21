@@ -81,7 +81,7 @@ Use ` + "`operation`" + ` to tell them apart: ` + "`update_before`" + ` is alway
 
 == Permissions
 
-When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to <<` + fieldCheckpointCacheTableName + `,` + "`" + fieldCheckpointCacheTableName + "`" + `>> for more information.
 
 == Performance
 
