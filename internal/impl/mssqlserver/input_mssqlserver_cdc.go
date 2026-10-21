@@ -479,10 +479,8 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, ctx := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
-			}
-			return nil
+			// ReadChangeTables only returns once it hits an error.
+			return fmt.Errorf("streaming from change tables: %w", streaming.ReadChangeTables(ctx, i.db, maxLSN))
 		})
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
