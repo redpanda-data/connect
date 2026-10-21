@@ -352,9 +352,9 @@ func TestReleaseAfterCancelledWait(t *testing.T) {
 }
 
 func TestReleaseWakesParkedWait(t *testing.T) {
-	// A copy of t1 is released while the Wait of t1 is parked on another
-	// goroutine. The parked Wait must wake and return an error. If it stays
-	// parked, nothing wakes it later: the lock skips t1 when its turn comes.
+	// t1 is released on one goroutine while its Wait is parked on another.
+	// The parked Wait must wake and return an error. If it stays parked,
+	// nothing wakes it later: the lock skips t1 when its turn comes.
 	tests := []struct {
 		name       string
 		skippable  bool

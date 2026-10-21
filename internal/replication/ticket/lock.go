@@ -81,8 +81,10 @@ type Lock struct {
 	// cannot tell the two states apart.
 	held bool
 	// waiters holds one channel for each parked Wait, by ticket number.
-	// advanceLocked closes the channel when it is that ticket's turn, and
-	// sealLocked closes all of them.
+	// advanceLocked closes the channel when it is that ticket's turn,
+	// sealLocked closes all of them, and abandonLocked closes the channel of
+	// the ticket it abandons. Each way that ends the chance of a ticket to
+	// get its turn must close its channel, or its Wait stays parked.
 	waiters map[uint64]chan struct{}
 	// abandoned holds the numbers of the tickets that were abandoned before
 	// their turn. advanceLocked skips each one when its turn comes, and
@@ -189,15 +191,12 @@ func (l *Lock) sealLocked(cause error) {
 // It cannot happen later: as soon as t is marked, the holder before t can
 // call Release, skip t, and give the turn to t+1. A seal after that is too
 // late, because t+1 already passed the gap.
-//
-// If a Wait of t is parked, abandonLocked wakes it, and the Wait returns an
-// error. This happens when a copy of t is released on another goroutine.
-// Nothing else can wake that Wait: advanceLocked skips t and wakes only the
-// new holder.
 func (l *Lock) abandonLocked(t Ticket, cause error) {
 	if t.sealOnAbandon {
 		l.sealLocked(cause)
 	}
+	// A Wait of t can be parked only if Release ran on another goroutine.
+	// advanceLocked skips t, so wake the Wait here: nothing else will.
 	if ch, parked := l.waiters[t.n]; parked {
 		close(ch)
 		delete(l.waiters, t.n)
@@ -281,8 +280,8 @@ type Ticket struct {
 // ctx. After an error, Release is still safe to call, and does nothing.
 //
 // Call Wait at most once for each ticket. A Wait after the Release of t
-// returns an error at once. If a copy of t is released while Wait is
-// parked, Wait returns that error too.
+// returns an error at once. If Release runs on another goroutine while
+// Wait is parked, Wait returns that error too.
 func (t Ticket) Wait(ctx context.Context) error {
 	l := t.l
 	l.mu.Lock()
@@ -307,7 +306,8 @@ func (t Ticket) Wait(ctx context.Context) error {
 
 	// It's not our turn yet, so we need to "park".
 	// Parking here means registering a channel that advanceLocked closes when
-	// it's our turn, or sealLocked closes when the lock is sealed.
+	// it's our turn, sealLocked closes when the lock is sealed, or
+	// abandonLocked closes when Release runs on another goroutine.
 	if l.waiters == nil {
 		l.waiters = make(map[uint64]chan struct{})
 	}
@@ -318,8 +318,8 @@ func (t Ticket) Wait(ctx context.Context) error {
 	// Blocking section: wait for our turn or the lock to be sealed.
 	select {
 	case <-ch:
-		// We were woken up. Check why: a seal, our turn, or a Release of a
-		// copy of t.
+		// We were woken up. Check why: a seal, our turn, or a Release on
+		// another goroutine.
 		l.mu.Lock()
 		defer l.mu.Unlock()
 		return l.wokenLocked(t)
@@ -333,8 +333,8 @@ func (t Ticket) Wait(ctx context.Context) error {
 		case <-ch:
 			// The wake came first. If it was our turn, we hold it and
 			// return nil, the same as when the turn is ours at the start.
-			// If a Release of a copy woke us, t is already abandoned: do
-			// not abandon it again.
+			// If a Release on another goroutine woke us, t is already
+			// abandoned: do not abandon it again.
 			return l.wokenLocked(t)
 		default:
 		}
@@ -348,7 +348,8 @@ func (t Ticket) Wait(ctx context.Context) error {
 
 // wokenLocked is the result of a parked Wait of t after its channel was
 // closed. The channel is closed by a seal, because it is the turn of t, or
-// because a Release of a copy of t abandoned it. The caller must hold mu.
+// because a Release on another goroutine abandoned t. The caller must hold
+// mu.
 func (l *Lock) wokenLocked(t Ticket) error {
 	if l.err != nil {
 		return l.err
