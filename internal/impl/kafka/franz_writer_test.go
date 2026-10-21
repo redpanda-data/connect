@@ -308,3 +308,24 @@ func TestBatchWriterDispatchSignalForSkippedAndFailedRecords(t *testing.T) {
 	assert.Equal(t, int32(0), dispatched[idxFailed].Load(), "record that failed decoration must not signal dispatch")
 	assert.Equal(t, int32(1), dispatched[idxReal].Load(), "produced record must signal dispatch")
 }
+
+func TestFranzWriterMetadataSkipsInternalHeaders(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzWriterConfigFields()...)
+	pConf, err := spec.ParseYAML(`
+topic: foo
+metadata:
+  include_patterns: [ ".*" ]
+`, nil)
+	require.NoError(t, err)
+
+	w, err := NewFranzWriterFromConfig(pConf, franzWriterHooks{})
+	require.NoError(t, err)
+
+	msg := service.NewMessage([]byte("hello"))
+	AddHeaders(msg, []kgo.RecordHeader{{Key: "trace", Value: []byte("abc")}})
+
+	records, err := w.messageBatchToFranzRecords(service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Equal(t, []kgo.RecordHeader{{Key: "trace", Value: []byte("abc")}}, records[0].Headers)
+}
