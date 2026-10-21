@@ -26,13 +26,20 @@ import (
 
 // RedpandaInputDescription returns the description shared by the Redpanda
 // inputs that consume with the franz-go readers. The fallbackExample is a YAML
-// config that routes failed deliveries to a DLQ topic, batchTuningFields names
+// config that routes failed deliveries to a DLQ topic. When cloudFallbackExample
+// is not empty, the docs show it in Redpanda Cloud instead of fallbackExample,
+// for an input whose Cloud config needs different connection fields.
+// batchTuningFields names
 // the config fields that tune batch sizes, and orderingNote, when not empty,
 // is a paragraph added to the Ordering section for an input whose ordering
 // can be turned off.
-func RedpandaInputDescription(fallbackExample, batchTuningFields, orderingNote string) string {
+func RedpandaInputDescription(fallbackExample, cloudFallbackExample, batchTuningFields, orderingNote string) string {
 	if orderingNote != "" {
 		orderingNote += "\n\n"
+	}
+	example := "```yaml" + fallbackExample + "```"
+	if cloudFallbackExample != "" {
+		example = "ifndef::env-cloud[]\n" + example + "\nendif::[]\n\nifdef::env-cloud[]\n```yaml" + cloudFallbackExample + "```\nendif::[]"
 	}
 	return `
 When a consumer group is specified this input consumes one or more topics, and partitions automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified, topics can either be consumed in their entirety or with explicit partitions.
@@ -51,7 +58,7 @@ For example, a batch of records may have been sent to an output broker and only 
 
 To avoid this scenario you must specify in your configuration an alternative way to handle delivery errors in the form of a ` + "xref:components:outputs/fallback.adoc[`fallback`] output" + `. It is good practice to also disable the field ` + "`auto_retry_nacks` by setting it to `false`" + ` when you've added an explicit fallback output as this improves the throughput of your pipeline. For example, the following config avoids ordering issues by specifying a fallback output into a DLQ topic, which is also retried indefinitely as a way to apply back pressure during connectivity issues:
 
-` + "```yaml" + fallbackExample + "```" + `
+` + example + `
 
 == Batching
 
@@ -96,6 +103,29 @@ output:
           redpanda:
             seed_brokers: [ localhost:9092 ]
             topic: foo_dlq
+`, `
+output:
+  fallback:
+    - redpanda:
+        seed_brokers: [ "${REDPANDA_BROKERS}" ]
+        topic: foo
+        tls:
+          enabled: true
+        sasl:
+          - mechanism: SCRAM-SHA-256
+            username: "<username>"
+            password: "${secrets.PASSWORD}"
+    - retry:
+        output:
+          redpanda:
+            seed_brokers: [ "${REDPANDA_BROKERS}" ]
+            topic: foo_dlq
+            tls:
+              enabled: true
+            sasl:
+              - mechanism: SCRAM-SHA-256
+                username: "<username>"
+                password: "${secrets.PASSWORD}"
 `, "`fetch_max_bytes`, `fetch_max_partition_bytes`, and `max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled", "If `unordered_processing.enabled` is `true`, this does not apply. Messages of the same partition are processed in parallel, up to `unordered_processing.checkpoint_limit`, and can be delivered out of order.")).
 		Fields(redpandaInputConfigFields()...).
 		LintRule(FranzConsumerFieldLintRules)
