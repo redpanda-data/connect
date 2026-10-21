@@ -563,10 +563,8 @@ func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
 		}
 
 		stack = append(stack, stackItem{
-			SubjectSchema: sr.SubjectSchema{
-				Subject: subject,
-				Version: version,
-			},
+			Subject: subject,
+			Version: version,
 		})
 	}
 
