@@ -331,6 +331,13 @@ func isShardCompletedRow(item map[string]types.AttributeValue) bool {
 // Set stores a checkpoint for a shard. approxCreationTime is the RFC3339Nano
 // ApproximateCreationDateTime of the checkpointed record (empty if unknown); it
 // is persisted only in global mode, where it drives time-based failover resume.
+//
+// The write never replaces a row that carries the completion marker (see
+// MarkShardCompleted): a checkpoint write that timed out client-side can still
+// land server-side after the shard was marked completed, and the plain row it
+// would leave behind makes a restart read the shard again. Such a late write is
+// rejected by DynamoDB and reported as success here, since the completed row
+// already records the shard's final position.
 func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
 	item := c.checkpointKey(shardID)
 	item["SequenceNumber"] = &types.AttributeValueMemberS{Value: sequenceNumber}
@@ -341,10 +348,16 @@ func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber, approxC
 		}
 	}
 	_, err := c.svc.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(c.tableName),
-		Item:      item,
+		TableName:                aws.String(c.tableName),
+		Item:                     item,
+		ConditionExpression:      aws.String("attribute_not_exists(#completed)"),
+		ExpressionAttributeNames: map[string]string{"#completed": checkpointShardCompletedAttr},
 	})
 	if err != nil {
+		if _, rejected := errors.AsType[*types.ConditionalCheckFailedException](err); rejected {
+			c.log.Debugf("Skipped checkpoint write for shard %s at sequence %s: the shard is already marked completed", shardID, sequenceNumber)
+			return nil
+		}
 		return fmt.Errorf("setting checkpoint for table=%s key=%s shard=%s seq=%s: %w",
 			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, err)
 	}
@@ -363,6 +376,9 @@ func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber, approxC
 // ApproximateCreationTime, so dropping it when marking a shard that delivered
 // nothing during this run would move the other region's cutoff past records
 // it has not read.
+//
+// Unlike Set, the write is unconditional: it is the one that establishes the
+// completion marker, and it always carries the shard's final position.
 func (c *Checkpointer) MarkShardCompleted(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
 	sets := []string{"#completed = :completed"}
 	names := map[string]string{"#completed": checkpointShardCompletedAttr}
