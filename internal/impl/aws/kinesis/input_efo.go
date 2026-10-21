@@ -336,8 +336,7 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 				// routine handoff (e.g. two pipelines sharing a consumer name,
 				// or a client that cannot renew its lease) and is surfaced at
 				// warn level once per episode.
-				var inUse *types.ResourceInUseException
-				if errors.As(err, &inUse) {
+				if _, ok := errors.AsType[*types.ResourceInUseException](err); ok {
 					if contentionSince.IsZero() {
 						contentionSince = time.Now()
 					}
@@ -408,12 +407,11 @@ func (e *efoRecordSource) run(sub efoSubscription, pos types.StartingPosition, l
 		// would resubscribe at the one-second floor forever, saturating the
 		// SubscribeToShard limit rather than backing off.
 		if streamErr != nil || !sawEvent {
-			var inUse *types.ResourceInUseException
 			if streamErr != nil {
 				// A live subscription terminated with ResourceInUseException is
 				// how the losing side of a shard steal observes the takeover —
 				// expected contention, same as the resubscribe case above.
-				if errors.As(streamErr, &inUse) {
+				if _, ok := errors.AsType[*types.ResourceInUseException](streamErr); ok {
 					e.log.Debugf("Enhanced fan-out subscription for shard '%v' was taken over by another consumer: %v", e.shardID, streamErr)
 				} else {
 					e.log.Errorf("Enhanced fan-out subscription for shard '%v' failed: %v", e.shardID, streamErr)

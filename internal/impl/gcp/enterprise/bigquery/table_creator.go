@@ -135,8 +135,7 @@ func (tc *tableCreator) Ensure(ctx context.Context, client *bigquery.Client, dat
 	if err := client.Dataset(datasetID).Table(tableID).Create(ctx, tc.buildMetadata()); err != nil {
 		// Extract googleapi diagnostics (HTTP status + GCP-side error details)
 		// for a richer error message; fall back to the bare error otherwise.
-		var apiErr *googleapi.Error
-		if errors.As(err, &apiErr) {
+		if apiErr, ok := errors.AsType[*googleapi.Error](err); ok {
 			if apiErr.Code == http.StatusConflict {
 				// Another writer created the table first — that's the contract.
 				return nil

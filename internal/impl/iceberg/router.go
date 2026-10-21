@@ -286,16 +286,14 @@ func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service
 				continue
 			}
 
-			var schemaErr *BatchSchemaEvolutionError
-			if errors.As(err, &schemaErr) {
+			if schemaErr, ok := errors.AsType[*BatchSchemaEvolutionError](err); ok {
 				if evolveErr := r.evolveSchema(ctx, key, schemaErr, batch, entry); evolveErr != nil {
 					return fmt.Errorf("evolving schema for %s.%s: %w", key.namespace, key.table, evolveErr)
 				}
 				continue
 			}
 
-			var reqNullErr *shredder.RequiredFieldNullError
-			if errors.As(err, &reqNullErr) {
+			if reqNullErr, ok := errors.AsType[*shredder.RequiredFieldNullError](err); ok {
 				if optErr := r.makeColumnOptional(ctx, key, reqNullErr, entry); optErr != nil {
 					return fmt.Errorf("making column optional for %s.%s: %w", key.namespace, key.table, optErr)
 				}
