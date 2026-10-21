@@ -158,7 +158,7 @@ You can specify an optional rate limit resource using the `+"`rate_limit`"+` fie
 			).Description("TLS configuration for HTTP.").
 				Advanced(),
 			service.NewStringField(hiFieldAuthToken).
-				Description("Optional bearer token for authentication. When set, requests must include 'Authorization: Bearer <token>' header.").
+				Description("Optional bearer token for authentication. When set, requests must include the `Authorization: Bearer <token>` header.").
 				Default("").
 				Secret().
 				Advanced(),

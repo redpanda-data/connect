@@ -55,6 +55,7 @@ func configSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
 		Footnotes(`
+[[timing-metrics]]
 == Timing metrics
 
 Timing metrics such as `+"`processor_latency_ns`"+` are exported as a summary by default, or as a histogram when `+"`use_histogram_timing`"+` is `+"`true`"+`. Both variants are exported under the same metric name unless `+"`histogram_timing_seconds_suffix`"+` is also `+"`true`"+`.
