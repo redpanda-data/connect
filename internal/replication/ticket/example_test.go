@@ -29,8 +29,8 @@ func ExampleLock() {
 	for range 4 {
 		wg.Go(func() {
 			// Step 1: flush and draw a ticket in the same critical section.
-			// The ticket holds a batch, so it comes from Take: an abandon
-			// must seal the lock.
+			// The ticket holds a batch, so it is drawn via Take (rather than
+			// TakeSkippable): an abandon must seal the lock.
 			batcherMu.Lock()
 			batch := nextBatch
 			nextBatch++
@@ -61,8 +61,8 @@ func ExampleLock() {
 }
 
 // This example shows an abandoned ticket. The Wait of t1 is cancelled, so
-// the lock skips t1 and gives the turn to t2. t1 is from TakeSkippable, so
-// the abandon does not seal the lock.
+// the lock skips t1 and gives the turn to t2. t1 is obtained via TakeSkippable
+// (rather than Take), so abandoning it does not seal the lock.
 func ExampleTicket_Wait_abandon() {
 	var queue ticket.Lock
 	t0, t1, t2 := queue.Take(), queue.TakeSkippable(), queue.Take()
