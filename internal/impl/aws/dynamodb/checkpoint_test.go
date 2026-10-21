@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -566,4 +567,65 @@ func TestPrepareResume_UsesNamespacedHashValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "dev-alice#t", queryIn.ExpressionAttributeValues[":hash"].(*types.AttributeValueMemberS).Value,
 		"global-mode resume partition query must use the namespaced hash value")
+}
+
+// TestCheckpointerShardCompletionMarkerRoundTrip (CON-599): a shard marked
+// completed resolves to resumeCompleted after a restart, with or without a
+// final sequence number, while ordinary rows keep resolving to an exact
+// resume.
+func TestCheckpointerShardCompletionMarkerRoundTrip(t *testing.T) {
+	store := map[string]map[string]types.AttributeValue{}
+	c, err := NewCheckpointer(t.Context(), sharedStoreAPI(store), CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+	}, checkpointTestLogger())
+	require.NoError(t, err)
+
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", ""))
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-empty", "", ""))
+	require.NoError(t, c.Set(t.Context(), "shard-open", "seq-5", ""))
+
+	for _, shardID := range []string{"shard-done", "shard-empty"} {
+		d, err := c.ResolveResume(t.Context(), shardID)
+		require.NoError(t, err)
+		assert.Equal(t, resumeCompleted, d.Mode, shardID)
+	}
+	seq, err := c.Get(t.Context(), "shard-done")
+	require.NoError(t, err)
+	assert.Equal(t, "seq-9", seq, "the completion row still carries the final checkpoint")
+
+	d, err := c.ResolveResume(t.Context(), "shard-open")
+	require.NoError(t, err)
+	assert.Equal(t, resumeExact, d.Mode)
+	assert.Equal(t, "seq-5", d.SequenceNumber)
+
+	// A later plain checkpoint write replaces the row and clears the marker.
+	require.NoError(t, c.Set(t.Context(), "shard-done", "seq-10", ""))
+	d, err = c.ResolveResume(t.Context(), "shard-done")
+	require.NoError(t, err)
+	assert.Equal(t, resumeExact, d.Mode)
+}
+
+// TestResolveResume_GlobalCompletedRows: in global mode completed rows of the
+// current stream resolve to resumeCompleted and count as own state, so an
+// unknown shard still starts by default instead of a failover replay.
+func TestResolveResume_GlobalCompletedRows(t *testing.T) {
+	completedRow := shardRow("arn:A", "shard-done", "seq-9", "2026-06-16T10:00:00Z")
+	completedRow[checkpointShardCompletedAttr] = &types.AttributeValueMemberBOOL{Value: true}
+	emptyCompletedRow := map[string]types.AttributeValue{
+		"TableId":                    &types.AttributeValueMemberS{Value: "t"},
+		"ShardID":                    &types.AttributeValueMemberS{Value: "shard-empty"},
+		"StreamArn":                  &types.AttributeValueMemberS{Value: "arn:A"},
+		checkpointShardCompletedAttr: &types.AttributeValueMemberBOOL{Value: true},
+	}
+	c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{completedRow, emptyCompletedRow})
+
+	for _, shardID := range []string{"shard-done", "shard-empty"} {
+		d, err := c.ResolveResume(t.Context(), shardID)
+		require.NoError(t, err)
+		assert.Equal(t, resumeCompleted, d.Mode, shardID)
+	}
+	d, err := c.ResolveResume(t.Context(), "shard-new")
+	require.NoError(t, err)
+	assert.Equal(t, resumeDefault, d.Mode)
+	assert.False(t, cdcCheckpointProbeNeeded(resumeCompleted), "a completed shard has nothing to probe")
 }
