@@ -291,10 +291,20 @@ mongodb_cdc:
 	// Change the collection while it is being read: updates and deletes land
 	// in chunks not yet read, in the chunk being read, and in ones already
 	// emitted; inserts land both below and above the captured max _id.
+	//
+	// Writes go on for at least minWrite, and then until a snapshot read has
+	// been emitted after a streamed change: on a loaded runner the input can
+	// connect so late that a fixed window ends before streaming overlaps the
+	// snapshot. maxWrite bounds a run where they never overlap.
+	const minWrite, maxWrite = 3 * time.Second, 30 * time.Second
 	rng := rand.New(rand.NewPCG(1, 2))
-	deadline := time.Now().Add(3 * time.Second)
+	start := time.Now()
 	nextID := initial
-	for time.Now().Before(deadline) {
+	for i := 0; ; i++ {
+		if elapsed := time.Since(start); elapsed >= maxWrite ||
+			(elapsed >= minWrite && i%20 == 0 && replay(output).interleaved) {
+			break
+		}
 		id := rng.IntN(initial)
 		switch rng.IntN(10) {
 		case 0:
