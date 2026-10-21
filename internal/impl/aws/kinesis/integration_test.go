@@ -37,6 +37,7 @@ import (
 
 func TestIntegrationKinesis(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	kinesisIntegrationSuite(t, servicePort)
@@ -184,6 +185,7 @@ func kinesisIntegrationSuite(t *testing.T, lsPort string) {
 	)
 
 	t.Run("with static shards", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -207,6 +209,7 @@ func kinesisIntegrationSuite(t *testing.T, lsPort string) {
 	})
 
 	t.Run("with balanced shards", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -221,6 +224,7 @@ func kinesisIntegrationSuite(t *testing.T, lsPort string) {
 	})
 
 	t.Run("single shard", func(t *testing.T) {
+		t.Parallel()
 		integration.StreamTests(
 			integration.StreamTestCheckpointCapture(),
 		).Run(
@@ -239,6 +243,7 @@ func kinesisIntegrationSuite(t *testing.T, lsPort string) {
 
 func TestIntegrationKinesisPollPeriod(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 
@@ -265,6 +270,7 @@ func TestIntegrationKinesisPollPeriod(t *testing.T) {
 
 func TestIntegrationKinesisEFO(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 
@@ -284,6 +290,7 @@ func TestIntegrationKinesisEFO(t *testing.T) {
 	)
 
 	t.Run("with balanced shards", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -298,6 +305,7 @@ func TestIntegrationKinesisEFO(t *testing.T) {
 	})
 
 	t.Run("single shard checkpointing", func(t *testing.T) {
+		t.Parallel()
 		integration.StreamTests(
 			integration.StreamTestCheckpointCapture(),
 		).Run(
