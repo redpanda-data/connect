@@ -348,7 +348,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				Advanced(),
 			service.NewObjectField(fieldIncSnapshot,
 				service.NewBoolField(fieldIncSnapshotEnabled).
-					Description("Streams changes from the start and reads the collections in chunks alongside them, as described in <<incremental-snapshots,Incremental snapshots>>. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay streaming. The two are mutually exclusive: both read the same documents, so enabling both would deliver everything twice.").
+					Description("Streams changes from the start and reads the collections in `"+fieldIncSnapshotChunkSize+"` chunks, in `_id` order, alongside them. Each chunk is released once the change stream has caught up with the moment it was read, and progress is stored in `"+fieldCheckpointCache+"`, so a restart continues from the last acknowledged chunk. Unlike `"+fieldStreamSnapshot+"` this needs no up-front snapshot phase and does not delay streaming. The two are mutually exclusive: both read the same documents, so enabling both would deliver everything twice.").
 					ShortDescription("Read the collections in chunks, alongside change streaming.").
 					Default(false),
 				service.NewIntField(fieldIncSnapshotChunkSize).
@@ -369,7 +369,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				Version("4.115.0").
 				Advanced(),
 			service.NewStringField(fieldSignalCollection).
-				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Refer to <<signals,Signals>>. Documents inserted into it are consumed as signals and never emitted.").
+				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` incrementally, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, which requires `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`. Documents inserted into it are consumed as signals and never emitted.").
 				ShortDescription("A collection watched for signal documents that control the input at runtime.").
 				Optional().
 				Version("4.115.0"),
