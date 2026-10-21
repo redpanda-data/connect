@@ -11,6 +11,7 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -422,6 +423,9 @@ func sharedStoreAPI(store map[string]map[string]types.AttributeValue) *fakeCheck
 			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
 		},
 		putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			if err := checkAttributeNotExistsCondition(in, store[keyOf(in.Item)]); err != nil {
+				return nil, err
+			}
 			store[keyOf(in.Item)] = in.Item
 			return &dynamodb.PutItemOutput{}, nil
 		},
@@ -453,6 +457,33 @@ func applySetExpression(in *dynamodb.UpdateItemInput) map[string]types.Attribute
 		out[name] = in.ExpressionAttributeValues[value]
 	}
 	return out
+}
+
+// checkAttributeNotExistsCondition evaluates the only ConditionExpression the
+// Checkpointer writes, "attribute_not_exists(<#alias>)", against the row a
+// PutItem would replace, the way DynamoDB does: the write is rejected with
+// ConditionalCheckFailedException when the existing row has the attribute.
+func checkAttributeNotExistsCondition(in *dynamodb.PutItemInput, existing map[string]types.AttributeValue) error {
+	cond := aws.ToString(in.ConditionExpression)
+	if cond == "" {
+		return nil
+	}
+	const prefix, suffix = "attribute_not_exists(", ")"
+	if !strings.HasPrefix(cond, prefix) || !strings.HasSuffix(cond, suffix) {
+		return fmt.Errorf("fake PutItem: unsupported ConditionExpression %q", cond)
+	}
+	attr := strings.TrimSuffix(strings.TrimPrefix(cond, prefix), suffix)
+	if strings.HasPrefix(attr, "#") {
+		resolved, ok := in.ExpressionAttributeNames[attr]
+		if !ok {
+			return fmt.Errorf("fake PutItem: ConditionExpression alias %q has no ExpressionAttributeNames entry", attr)
+		}
+		attr = resolved
+	}
+	if _, has := existing[attr]; has {
+		return &types.ConditionalCheckFailedException{Message: aws.String("The conditional request failed")}
+	}
+	return nil
 }
 
 func TestCheckpointer_NamespacePrefixesHashKeyValue(t *testing.T) {
@@ -641,11 +672,126 @@ func TestCheckpointerShardCompletionMarkerRoundTrip(t *testing.T) {
 	assert.Equal(t, resumeExact, d.Mode)
 	assert.Equal(t, "seq-5", d.SequenceNumber)
 
-	// A later plain checkpoint write replaces the row and clears the marker.
+	// A later plain checkpoint write must not clear the marker (CON-600).
 	require.NoError(t, c.Set(t.Context(), "shard-done", "seq-10", ""))
 	d, err = c.ResolveResume(t.Context(), "shard-done")
 	require.NoError(t, err)
-	assert.Equal(t, resumeExact, d.Mode)
+	assert.Equal(t, resumeCompleted, d.Mode)
+}
+
+// TestCheckpointerSetKeepsCompletionMarker (CON-600): a plain checkpoint
+// write landing after the completion marker (a maybePersist Set that timed
+// out client-side but still reaches the server, or the shutdown flush) must
+// leave the completed row intact, so a restart still skips the shard. The
+// write is conditional on the marker being absent and a rejected write is not
+// an error: the row already records the shard's final position.
+func TestCheckpointerSetKeepsCompletionMarker(t *testing.T) {
+	t.Run("default mode", func(t *testing.T) {
+		store := map[string]map[string]types.AttributeValue{}
+		c, err := NewCheckpointer(t.Context(), sharedStoreAPI(store), CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", ""))
+		require.NoError(t, c.Set(t.Context(), "shard-done", "seq-7", ""), "a late plain write is not an error")
+		require.NoError(t, c.FlushCheckpoints(t.Context(), map[string]CheckpointValue{
+			"shard-done": {SequenceNumber: "seq-8"},
+		}), "the shutdown flush goes through the same guarded write")
+
+		d, err := c.ResolveResume(t.Context(), "shard-done")
+		require.NoError(t, err)
+		assert.Equal(t, resumeCompleted, d.Mode)
+		seq, err := c.Get(t.Context(), "shard-done")
+		require.NoError(t, err)
+		assert.Equal(t, "seq-9", seq, "the final checkpoint must not step backwards either")
+
+		// Rows without the marker keep accepting plain writes.
+		require.NoError(t, c.Set(t.Context(), "shard-open", "seq-1", ""))
+		require.NoError(t, c.Set(t.Context(), "shard-open", "seq-2", ""))
+		seq, err = c.Get(t.Context(), "shard-open")
+		require.NoError(t, err)
+		assert.Equal(t, "seq-2", seq)
+	})
+
+	t.Run("global mode", func(t *testing.T) {
+		store := map[string]map[string]types.AttributeValue{}
+		api := sharedStoreAPI(store)
+		api.describeTable = func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
+				TableStatus: types.TableStatusActive,
+				KeySchema:   globalTableKeySchema(),
+				Replicas:    []types.ReplicaDescription{{RegionName: aws.String("us-east-1")}, {RegionName: aws.String("us-west-2")}},
+			}}, nil
+		}
+		c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+			GlobalTable: true, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", "2026-06-16T10:09:00Z"))
+		require.NoError(t, c.Set(t.Context(), "shard-done", "seq-7", "2026-06-16T10:07:00Z"))
+
+		row := store["t|shard-done"]
+		require.NotNil(t, row)
+		assert.True(t, isShardCompletedRow(row))
+		assert.Equal(t, "seq-9", row["SequenceNumber"].(*types.AttributeValueMemberS).Value)
+		assert.Equal(t, "2026-06-16T10:09:00Z", row["ApproximateCreationTime"].(*types.AttributeValueMemberS).Value,
+			"the failover watermark must not step backwards")
+	})
+
+	t.Run("only plain writes are conditional", func(t *testing.T) {
+		var puts []*dynamodb.PutItemInput
+		var updates []*dynamodb.UpdateItemInput
+		api := &fakeCheckpointAPI{
+			describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+				return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+			},
+			putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+				puts = append(puts, in)
+				return &dynamodb.PutItemOutput{}, nil
+			},
+			updateItem: func(_ context.Context, in *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+				updates = append(updates, in)
+				return &dynamodb.UpdateItemOutput{}, nil
+			},
+		}
+		c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		require.NoError(t, c.Set(t.Context(), "shard-1", "seq-1", ""))
+		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-1", "seq-2", ""))
+		require.Len(t, puts, 1)
+		require.Len(t, updates, 1)
+
+		assert.Equal(t, "attribute_not_exists(#completed)", aws.ToString(puts[0].ConditionExpression))
+		assert.Equal(t, checkpointShardCompletedAttr, puts[0].ExpressionAttributeNames["#completed"])
+		assert.Nil(t, updates[0].ConditionExpression, "the completion write itself is unconditional")
+	})
+
+	t.Run("other write errors still surface", func(t *testing.T) {
+		api := &fakeCheckpointAPI{
+			describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+				return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+			},
+			putItem: func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+				return nil, &types.ProvisionedThroughputExceededException{}
+			},
+		}
+		c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		err = c.Set(t.Context(), "shard-1", "seq-1", "")
+		require.Error(t, err)
+		_, isThrottle := errors.AsType[*types.ProvisionedThroughputExceededException](err)
+		assert.True(t, isThrottle, "the original error must stay unwrapped")
+	})
 }
 
 // TestResolveResume_GlobalCompletedRows: in global mode completed rows of the
