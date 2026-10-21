@@ -93,10 +93,10 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
-			{Group: groupFoo2, State: "Empty", Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
-			{Group: groupBar, State: "Empty", Offset: kadm.Offset{Topic: topicBar, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 0, At: 2},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 1, At: 3},
+			{Group: groupFoo2, State: "Empty", Topic: topicFoo2, Partition: 0, At: 1},
+			{Group: groupBar, State: "Empty", Topic: topicBar, Partition: 0, At: 2},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -104,14 +104,16 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 	t.Run("include pattern", func(t *testing.T) {
 		t.Parallel()
 
-		conf := migrator.GroupsMigratorConfig{Enabled: true}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)}
+		conf := migrator.GroupsMigratorConfig{
+			Enabled: true,
+			Include: []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)},
+		}
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
-			{Group: groupFoo2, State: "Empty", Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 0, At: 2},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 1, At: 3},
+			{Group: groupFoo2, State: "Empty", Topic: topicFoo2, Partition: 0, At: 1},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -119,14 +121,16 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 	t.Run("include exclude pattern", func(t *testing.T) {
 		t.Parallel()
 
-		conf := migrator.GroupsMigratorConfig{Enabled: true}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)}
-		conf.Exclude = []*regexp.Regexp{regexp.MustCompile(`^foo-group-2$`)}
+		conf := migrator.GroupsMigratorConfig{
+			Enabled: true,
+			Include: []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)},
+			Exclude: []*regexp.Regexp{regexp.MustCompile(`^foo-group-2$`)},
+		}
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 0, At: 2},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 1, At: 3},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -134,14 +138,16 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 	t.Run("exclude pattern only", func(t *testing.T) {
 		t.Parallel()
 
-		conf := migrator.GroupsMigratorConfig{Enabled: true}
-		conf.Exclude = []*regexp.Regexp{regexp.MustCompile(`^bar-.*$`)}
+		conf := migrator.GroupsMigratorConfig{
+			Enabled: true,
+			Exclude: []*regexp.Regexp{regexp.MustCompile(`^bar-.*$`)},
+		}
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
-			{Group: groupFoo2, State: "Empty", Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 0, At: 2},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 1, At: 3},
+			{Group: groupFoo2, State: "Empty", Topic: topicFoo2, Partition: 0, At: 1},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -153,8 +159,8 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 0, At: 2},
+			{Group: groupFoo1, State: "Empty", Topic: topicFoo1, Partition: 1, At: 3},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -355,8 +361,9 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 	syncWithMapping := func(t *testing.T, group string, mapping migrator.TopicMapping) []TopicPartitionAt {
 		conf := migrator.GroupsMigratorConfig{
 			Enabled: true,
+
+			Include: []*regexp.Regexp{regexp.MustCompile(fmt.Sprintf("^%s$", group))},
 		}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(fmt.Sprintf("^%s$", group))}
 		gm := migrator.NewGroupsMigratorForTesting(t, conf, src.Client, dst.Client, src.Admin, dst.Admin)
 
 		ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)

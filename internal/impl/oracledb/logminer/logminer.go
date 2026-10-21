@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -972,8 +973,8 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			claimed, empty, event.TransactionID, event.SCN, schema, table)
 	}
 
-	for i := len(txn.Events) - 1; i >= 0; i-- {
-		ev := txn.Events[i]
+	for _, ev := range slices.Backward(txn.Events) {
+
 		if ev.Schema != schema || ev.Table != table {
 			continue
 		}

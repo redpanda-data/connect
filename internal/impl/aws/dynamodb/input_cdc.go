@@ -1079,8 +1079,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 		TableName: &tableName,
 	})
 	if err != nil {
-		var aerr *types.ResourceNotFoundException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return fmt.Errorf("table %s does not exist", tableName)
 		}
 		return fmt.Errorf("describing table %s: %w", tableName, err)

@@ -185,7 +185,7 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 		if len(seedBrokers) != 1 {
 			mgr.Logger().Warn("ockam_kafka input only supports one seed broker")
 		}
-		bootstrapServer := strings.Split(seedBrokers[0], ",")[0]
+		bootstrapServer, _, _ := strings.Cut(seedBrokers[0], ",")
 		// TODO: Handle more that one seed brokers
 
 		kafkaOutletName := "redpanda-connect-kafka-outlet"

@@ -563,10 +563,8 @@ func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
 		}
 
 		stack = append(stack, stackItem{
-			SubjectSchema: sr.SubjectSchema{
-				Subject: subject,
-				Version: version,
-			},
+			Subject: subject,
+			Version: version,
 		})
 	}
 
@@ -1113,8 +1111,7 @@ func (e *fixedIDError) Unwrap() error { return e.err }
 // isSubjectError reports whether err is a schema registry rejection of a single
 // subject or version, as opposed to a failure of the registry as a whole.
 func isSubjectError(err error) bool {
-	var fe *fixedIDError
-	if errors.As(err, &fe) {
+	if _, ok := errors.AsType[*fixedIDError](err); ok {
 		return false
 	}
 	var re *sr.ResponseError

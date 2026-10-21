@@ -582,7 +582,7 @@ func TestShutdownUnwindsWedgedTicketChain(t *testing.T) {
 	cancelProducer()
 
 	select {
-	case <-blocked:
+	case <-blocked: //nolint:errcheck // only unwinding matters, the shutdown error is incidental
 	case <-time.After(5 * time.Second):
 		t.Fatal("the wedged flusher never unwound after shutdown")
 	}
