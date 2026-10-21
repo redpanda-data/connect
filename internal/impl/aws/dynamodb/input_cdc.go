@@ -1812,6 +1812,12 @@ type shardStatus struct {
 // has aged out of the stream and counts as done. Shards the checkpoint store
 // marks completed come back with completed set, which also releases their
 // children within the same cycle.
+//
+// The ordering does not apply while start_from: latest is still honored (the
+// first discovery of a fresh pipeline): every shard then starts at LATEST, so
+// a parent has no backlog for its child to overtake, and deferring the child
+// would start it at TRIM_HORIZON on a later cycle once honorStartFrom is
+// cleared, replaying records the user asked to skip.
 func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, status func(string) shardStatus, tableSuffix string, honorStartFrom bool) []preparedShard {
 	var (
 		prepared     []preparedShard
@@ -1824,9 +1830,10 @@ func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointe
 		listed[*shard.ShardId] = struct{}{}
 	}
 	completedNow := map[string]struct{}{}
+	orderLineage := initialIteratorType(d.conf.startFrom, honorStartFrom) != types.ShardIteratorTypeLatest
 	parentDone := func(shard types.Shard) bool {
 		parentID := aws.ToString(shard.ParentShardId)
-		if parentID == "" {
+		if parentID == "" || !orderLineage {
 			return true
 		}
 		if _, isListed := listed[parentID]; !isListed {
