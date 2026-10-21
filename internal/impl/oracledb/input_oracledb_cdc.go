@@ -209,7 +209,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			ShortDescription("Maximum events buffered for a single transaction. Exceeding it discards the transaction. Set to 0 to disable.").
 			Default(logminer.DefaultMaxTransactionEvents),
 		service.NewBoolField(ociFieldLOBEnabled).
-			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").Version("4.84.1").
+			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements. While a transaction that changed a LOB stays open, every mining window re-reads redo back to the start of that transaction, because LogMiner can only rebuild a LOB from a session that starts before it. Long-running transactions with LOB changes therefore increase mining work, and a window can read more redo than the scn_window_size and redo_volume settings imply.").Version("4.84.1").
 			ShortDescription("Include large object (CLOB, BLOB) columns in snapshot and change events. They are empty when disabled.").
 			Default(logminer.DefaultLOBEnabled),
 		service.NewStringField(ociFieldTransactionCache).

@@ -505,10 +505,10 @@ func (b *blockingCheckpointer) Set(ctx context.Context, shardID, sequenceNumber,
 func TestBatcherCheckpointWriteDoesNotBlockOtherShards(t *testing.T) {
 	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
 	cp := &blockingCheckpointer{
-		mockCheckpointer: mockCheckpointer{checkpointLimit: 1},
-		blockShard:       "shard-001",
-		entered:          make(chan struct{}),
-		release:          make(chan struct{}),
+		checkpointLimit: 1,
+		blockShard:      "shard-001",
+		entered:         make(chan struct{}),
+		release:         make(chan struct{}),
 	}
 
 	batch1 := createTestMessages(3, "shard-001", 1)

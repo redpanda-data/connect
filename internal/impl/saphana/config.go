@@ -82,9 +82,9 @@ var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
-- `+"`bulk`"+`: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
-- `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows.
-- `+"`query`"+`: executes a user-supplied SQL statement once and emits one message per result row, then the input terminates.
+- `+"`bulk`"+`: reads all rows once then the input terminates (wrap it in xref:components:inputs/read_until.adoc[read_until] with `+"`restart_input: true`"+` for periodic re-reads).
+- `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows. Values from an `+"`IDENTITY`"+` column or a sequence are assigned when a row is inserted, not when it commits: with concurrent writers a lower value can commit after a higher one has been read, and that row is never emitted. Use `+"`timestamp+incrementing`"+` with a `+"`timestamp_delay`"+` longer than your longest write transaction when the table has concurrent writers.
+- `+"`query`"+`: executes a user-supplied SQL statement and emits one message per result row.
 - `+"`timestamp`"+`: polls for rows where `+"`timestamp_column`"+` falls within `+"`(last_hwm, database_now - timestamp_delay]`"+`. The bound is read from the database clock (see `+"`timestamp_clock`"+`) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed, so a restart mid-window re-reads that window from its start (rows sharing a timestamp cannot be split, hence no finer checkpoint).
 - `+"`timestamp+incrementing`"+`: like `+"`timestamp`"+` but orders by `+"`(timestamp_column, incrementing_column)`"+` and resumes after the exact `+"`(timestamp, incrementing)`"+` pair of the last delivered row, so rows sharing a timestamp are neither duplicated nor missed and a restart mid-window continues from the last acknowledged batch rather than the window start.
 
@@ -101,7 +101,22 @@ Messages produced in `+"`bulk`, `incrementing`, `timestamp`, and `timestamp+incr
 
 The connecting user needs `+"`SELECT`"+` on the source table, or on the statement's tables in `+"`query`"+` mode. When `+"`schema_name`"+` is set, the user also needs read access to the `+"`SYS.TABLE_COLUMNS`"+`, `+"`SYS.INDEX_COLUMNS`"+`, and `+"`SYS.INDEXES`"+` system views, which the input reads to build the `+"`schema`"+` and `+"`primary_key_columns`"+` metadata. Granting `+"`CATALOG READ`"+` covers these views.
 
+== Known limitations
+
+- Polling only: deleted rows are never seen, and `+"`incrementing`"+` mode never sees updates to existing rows. The timestamp modes see an update only when the application also updates `+"`timestamp_column`"+`.
+- Rows whose `+"`incrementing_column`"+` or `+"`timestamp_column`"+` is NULL are never emitted.
+- `+"`timestamp_column`"+` must be a TIMESTAMP, LONGDATE or SECONDDATE column. Change times stored as `+"`DEC(15,0)`"+` UTC timestamps or as separate date and time character columns, as in many SAP application tables, cannot drive the timestamp modes.
+- `+"`schema`"+` and `+"`primary_key_columns`"+` metadata come from `+"`SYS.TABLE_COLUMNS`"+`, which does not describe views or calculation views, so those are read without schema metadata.
+- `+"`schema_registry_encode`"+` derives Avro field names from column names. Column names that are not valid Avro names, such as SAP's `+"`/BIC/`"+` namespaced columns, fail to encode; register the schema yourself and rename the columns in a `+"`mapping`"+` instead of using `+"`schema_metadata`"+`. Table names are sanitised automatically.
+- `+"`bulk`"+` and `+"`query`"+` have no position to resume from: an error part-way through a read restarts it from the first row, re-sending the rows already delivered.
+- `+"`query`"+` runs its statement once and then the input ends, like `+"`bulk`"+`, and attaches no metadata. Calculation views with input parameters can only be read this way.
+- The cursor stays open while downstream components apply backpressure. On a busy HANA system a long-open cursor holds back MVCC garbage collection, so index the `+"`incrementing_column`"+` or `+"`timestamp_column`"+` and avoid outputs that stall for long periods. The first poll of a polling mode without an initial value reads the whole table in key order; set `+"`incrementing_initial_value`"+` or `+"`timestamp_initial_value`"+` to skip history you do not need. Raise `+"`fetch_size`"+` (for example to 1000 to 5000) on high-latency links, together with `+"`checkpoint_limit`"+`.
+
 == Troubleshooting
+
+*`+"`checkpoint key ... holds the position of ...`"+` on connect.* Two `+"`sap_hana`"+` inputs share a `+"`checkpoint_cache`"+` and `+"`checkpoint_cache_key`"+`. Give each input its own `+"`checkpoint_cache_key`"+`. The error also appears when `+"`schema_name`"+` or `+"`table`"+` changed for an existing input: the stored position is for the old reference, so delete the key to start over or set `+"`incrementing_initial_value`"+`/`+"`timestamp_initial_value`"+` under a new key.
+
+*Cannot connect to SAP HANA Cloud.* HANA Cloud accepts TLS connections only, on port 443. go-hdb enables TLS when a TLS parameter is present, so add `+"`TLSServerName=<host>`"+` to the DSN (and `+"`TLSRootCAFile=<path>`"+` if the CA is not in the system trust store).
 
 *`+"`schema`"+` and `+"`primary_key_columns`"+` metadata are missing.* The input reads them from `+"`SYS.TABLE_COLUMNS`"+` and `+"`SYS.INDEX_COLUMNS`"+`; when that read fails it logs a warning and carries on without them, and `+"`incrementing_initial_value`"+` falls back to a guessed bind type. Check the warning in the logs and grant the connecting user `+"`CATALOG READ`"+` (or `+"`SELECT`"+` on the table's schema), and make sure `+"`schema_name`"+` is set.
 
@@ -123,6 +138,7 @@ input:
     incrementing_column: ORDER_ID
     poll_interval: 30s
     checkpoint_cache: hana_checkpoints
+    checkpoint_cache_key: sales_orders
 
 cache_resources:
   - label: hana_checkpoints
@@ -144,6 +160,7 @@ input:
     timestamp_delay: 30s
     poll_interval: 10s
     checkpoint_cache: hana_checkpoints
+    checkpoint_cache_key: sales_orders_changes
 
 pipeline:
   processors:
@@ -178,8 +195,10 @@ input:
       WHERE STATUS = 'PENDING'
 `).
 	Field(service.NewStringField(shFieldDSN).
-		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
+		Description("SAP HANA connection DSN in `hdb://user:password@host:port[?param=value&...]` form. URL-encode reserved characters in the user name and password (`#` as `%23`, `@` as `%40`, `%` as `%25`). Useful parameters: `databaseName` selects a tenant database when connecting through the system database port, `defaultSchema` sets the schema unqualified names resolve against, and `TLSServerName`, `TLSRootCAFile` and `TLSInsecureSkipVerify` configure TLS, which SAP HANA Cloud requires.").
 		Example("hdb://user:password@host:39017").
+		Example("hdb://user:password@host:30013?databaseName=HXE").
+		Example("hdb://user:password@<instance-id>.hana.prod-eu10.hanacloud.ondemand.com:443?TLSServerName=<instance-id>.hana.prod-eu10.hanacloud.ondemand.com").
 		Secret(),
 	).
 	Field(service.NewIntField(shFieldFetchSize).
@@ -241,7 +260,7 @@ input:
 		Default(shNumericMappingNone),
 	).
 	Field(service.NewIntField(shFieldMaxRetries).
-		Description("Maximum number of times to retry a failed query before returning an error. Set to `0` to disable retries.").
+		Description("Maximum number of times to retry a failed query before returning an error. Set to `0` to disable retries; negative values are rejected.").
 		Default(3).
 		Advanced(),
 	).
@@ -256,7 +275,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldCheckpointCacheKey).
-		Description("Key used to store the checkpoint in `checkpoint_cache`. Change this when multiple `sap_hana` inputs share the same cache resource to avoid key collisions.").
+		Description("Key used to store the checkpoint in `checkpoint_cache`. Every `sap_hana` input sharing a cache resource needs its own key: the stored checkpoint records its table, and an input refuses to start from another table's checkpoint.").
 		Default(shDefaultCheckpointCacheKey).
 		Advanced(),
 	).
@@ -425,6 +444,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if c.maxRetries, err = conf.FieldInt(shFieldMaxRetries); err != nil {
 		return nil, err
+	}
+	if c.maxRetries < 0 {
+		return nil, fmt.Errorf("field %q must be zero or more", shFieldMaxRetries)
 	}
 	if c.retryBackoff, err = conf.FieldDuration(shFieldRetryBackoff); err != nil {
 		return nil, err

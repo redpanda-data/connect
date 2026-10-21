@@ -20,8 +20,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/postgresql/incrementalsnapshot"
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	replincsnapshot "github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -307,76 +305,64 @@ func TestCommitCheckpointAcksWhenThereIsNoState(t *testing.T) {
 	require.NoError(t, p.commitCheckpoint(t.Context(), nil, checkpointOffset{seq: 1}))
 }
 
-func TestFlushBatchLSNFromMixedBatch(t *testing.T) {
-	change := func(lsn string) *service.Message {
-		msg := service.NewMessage([]byte(`{}`))
-		msg.MetaSet("lsn", lsn)
-		return msg
-	}
-	// A backfill read, which carries no lsn.
-	read := func() *service.Message { return service.NewMessage([]byte(`{}`)) }
+// TestFlushBatchChecksTheStampOfTheLastChangeRow: the checkpoint payload of
+// a batch is the reader's stamp for its last change row (see
+// StreamMessage.AckLSN), carried by pendingRows as rows are added to the
+// batcher. An incremental snapshot chunk shares the batcher with change rows,
+// so a batch can end on a read, which carries no position; the last change
+// row's stamp still stands, and the batch is in stream order so that stamp is
+// the greatest in the batch. A batch of reads alone has nothing to checkpoint.
+func TestFlushBatchChecksTheStampOfTheLastChangeRow(t *testing.T) {
+	stamp := func(s string) *string { return &s }
 
 	for _, test := range []struct {
 		name     string
-		enabled  bool
-		batch    service.MessageBatch
+		stamps   []*string
 		wantLSN  string
 		wantNone bool
 	}{
 		{
 			name:    "mixed batch ending on a read reaches past the tail",
-			enabled: true,
-			batch:   service.MessageBatch{change("1/AAAA"), read(), change("1/BBBB"), read()},
-			// The batch is in stream order, so the last message carrying an
-			// lsn holds the greatest one in the batch.
+			stamps:  []*string{stamp("1/AAAA"), nil, stamp("1/BBBB"), nil},
 			wantLSN: "1/BBBB",
 		},
 		{
 			name:    "mixed batch ending on a change uses that change",
-			enabled: true,
-			batch:   service.MessageBatch{change("1/AAAA"), read(), change("1/BBBB")},
+			stamps:  []*string{stamp("1/AAAA"), nil, stamp("1/BBBB")},
 			wantLSN: "1/BBBB",
 		},
 		{
-			name:     "a batch of reads alone has no lsn to checkpoint",
-			enabled:  true,
-			batch:    service.MessageBatch{read(), read()},
+			name:     "a batch of reads alone has no position to checkpoint",
+			stamps:   []*string{nil, nil},
 			wantNone: true,
 		},
 		{
-			name:    "with the snapshot disabled the last message is enough",
-			enabled: false,
-			batch:   service.MessageBatch{change("1/AAAA"), change("1/BBBB")},
-			wantLSN: "1/BBBB",
-		},
-		{
-			// The blocking snapshot drains the batcher and waits for its
-			// acknowledgements before streaming starts, so with the snapshot
-			// disabled no batch mixes the two and this batch cannot occur.
-			// Asserted only to record that the cheap path is in force.
-			name:     "with the snapshot disabled a trailing read wins",
-			enabled:  false,
-			batch:    service.MessageBatch{change("1/AAAA"), read()},
-			wantNone: true,
+			// The reader stamps the last row of a transaction with its commit
+			// record, so that is what the batch confirms, not the row's LSN.
+			name:    "a change row stamped with its commit confirms the commit",
+			stamps:  []*string{stamp("1/AAAA"), stamp("1/BBC0")},
+			wantLSN: "1/BBC0",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			p := &pgStreamInput{
-				streamConfig: &pglogicalstream.Config{
-					IncrementalSnapshot: incsnapshot.Cfg{Enabled: test.enabled},
-				},
 				// Buffered, so flushBatch's send completes without a reader.
 				msgChan: make(chan asyncMessage, 1),
 			}
 			tracker := newCheckpointTracker(10, new(atomic.Uint64))
 
+			var pending pendingRows
+			for _, st := range test.stamps {
+				pending.add(service.NewMessage([]byte(`{}`)), st)
+			}
+
 			// pgStream is only reached through the acknowledgement, which
 			// this test never runs, and blockingSnapshotComplete keeps
 			// flushBatch off the snapshot-barrier bookkeeping.
-			require.NoError(t, p.flushBatch(t.Context(), nil, tracker, test.batch, nil, true))
+			require.NoError(t, p.flushBatch(t.Context(), nil, tracker, pending.msgs, pending.ackLSN, nil, true))
 
 			if test.wantNone {
-				assert.Nil(t, tracker.last.lsn, "a batch with no lsn must checkpoint none")
+				assert.Nil(t, tracker.last.lsn, "a batch with no position must checkpoint none")
 				return
 			}
 			require.NotNil(t, tracker.last.lsn)

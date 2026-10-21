@@ -165,7 +165,21 @@ When downloading large files it's often necessary to process it in streamed part
 
 == S3-compatible storage
 
-To consume from an S3-compatible storage service, such as MinIO or Cloudflare R2, set `+"`endpoint`"+` to the URL of the service. Many of these services also require `+"`force_path_style_urls`"+` to be `+"`true`"+`.
+To consume from an S3-compatible storage service, such as Cloudflare R2, MinIO, or DigitalOcean Spaces, set `+"`endpoint`"+` to the URL of the service. Many of these services also require `+"`force_path_style_urls`"+` to be `+"`true`"+`. For example, to consume from Cloudflare R2, set `+"`endpoint`"+` to your account's R2 endpoint URL, set `+"`region`"+` to `+"`auto`"+`, and enable `+"`force_path_style_urls`"+`:
+
+`+"```yaml"+`
+input:
+  aws_s3:
+    bucket: r2-bucket
+    endpoint: https://<account-id>.r2.cloudflarestorage.com
+    force_path_style_urls: true
+    region: auto
+    credentials:
+      id: <r2-access-key-id>
+      secret: <r2-secret-access-key>
+`+"```"+`
+
+To find your account ID and generate R2 API credentials, see https://developers.cloudflare.com/r2/api/tokens/[Cloudflare R2 authentication^].
 
 == Credentials
 
@@ -564,8 +578,8 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		QueueUrl:            &s.conf.SQS.URL,
 		MaxNumberOfMessages: int32(s.conf.SQS.MaxMessages),
 		WaitTimeSeconds:     int32(s.conf.SQS.WaitTimeSeconds),
-		AttributeNames: []sqstypes.QueueAttributeName{
-			sqstypes.QueueAttributeName(sqstypes.MessageSystemAttributeNameSentTimestamp),
+		MessageSystemAttributeNames: []sqstypes.MessageSystemAttributeName{
+			sqstypes.MessageSystemAttributeNameSentTimestamp,
 		},
 		MessageAttributeNames: []string{
 			string(sqstypes.MessageSystemAttributeNameSentTimestamp),

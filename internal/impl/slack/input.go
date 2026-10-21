@@ -33,7 +33,7 @@ func inputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.51.0").
 		Summary("Connects to Slack using Socket Mode and receives events, interactions, and slash commands.").
-		Description(`This input connects to Slack using https://api.slack.com/apis/socket-mode[Socket Mode^].
+		Description(`This input connects to Slack using https://api.slack.com/apis/socket-mode[Socket Mode^]. Use it to build bots that respond to Slack activity, or to stream Slack events into other systems, such as a data warehouse.
 
 == Metadata
 
@@ -85,8 +85,7 @@ func (i *input) Connect(context.Context) error {
 		defer shutSig.TriggerHasStopped()
 		ctx, cancel := shutSig.HardStopCtx(context.Background())
 		defer cancel()
-		err := client.RunContext(ctx)
-		if err != nil && !errors.Is(err, ctx.Err()) {
+		if err := client.RunContext(ctx); !errors.Is(err, ctx.Err()) {
 			i.log.Warnf("error running: %v", err)
 		}
 	}()

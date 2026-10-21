@@ -135,7 +135,7 @@ When the input streams from more than one table, it reads from all matching tabl
 
 == Prerequisites
 
-The source DynamoDB table(s) must have streams enabled. You can enable streams with one of these view types:
+The source DynamoDB table(s) must have https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html[DynamoDB Streams^] enabled. You can enable streams with one of these view types:
 
 - `+"`KEYS_ONLY`"+` - Only the key attributes of the modified item
 - `+"`NEW_IMAGE`"+` - The entire item as it appears after the modification
@@ -160,7 +160,11 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
 
+Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
+
 Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Namespaces do not coordinate consumers: two pipelines sharing the _same_ namespace still overwrite each other's checkpoints.
+
+The namespace is prefixed to the checkpoint key. When a pipeline restarts under a namespace that has no checkpoints yet, it starts from `+"`start_from`"+`. With `+"`start_from: trim_horizon`"+`, this replays all records still available in the stream's 24-hour retention window. Switching back to a previously used namespace resumes from that namespace's last checkpoints.
 
 == Alternative
 
@@ -357,6 +361,19 @@ input:
     table_discovery_interval: 5m
     region: us-east-1
     # Matches tables with: (environment=prod OR environment=staging) AND (team=data OR team=analytics)
+`,
+		).
+		Example(
+			"Share a checkpoint table across pipelines",
+			"Give each pipeline that reads the same stream its own `checkpoint_namespace` so that they can share one checkpoint table without overwriting each other's positions. A second pipeline uses the same configuration with a different namespace, such as `dev-bob`.",
+			`
+input:
+  aws_dynamodb_cdc:
+    tables: [orders]
+    checkpoint_table: shared_dynamodb_checkpoints
+    checkpoint_namespace: dev-alice
+    start_from: trim_horizon
+    region: us-east-1
 `,
 		).
 		Example(
@@ -1079,8 +1096,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 		TableName: &tableName,
 	})
 	if err != nil {
-		var aerr *types.ResourceNotFoundException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return fmt.Errorf("table %s does not exist", tableName)
 		}
 		return fmt.Errorf("describing table %s: %w", tableName, err)

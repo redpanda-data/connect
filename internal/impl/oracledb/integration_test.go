@@ -2487,6 +2487,118 @@ oracledb_cdc:
 
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
+
+	t.Run("Preserves writes across window boundaries", func(t *testing.T) {
+		const (
+			chunks    = 100
+			chunkSize = 500
+		)
+		// Deterministic, non-repeating bytes so truncation or reordering is detectable.
+		var (
+			want   []byte
+			writes strings.Builder
+		)
+		for i := range chunks {
+			chunk := make([]byte, chunkSize)
+			for j := range chunk {
+				chunk[j] = byte(i*31 + j*7 + i*j)
+			}
+			want = append(want, chunk...)
+			fmt.Fprintf(&writes, "DBMS_LOB.WRITEAPPEND(loc, %d, HEXTORAW('%X')); %s.lobwindow_bump_scn;\n", chunkSize, chunk, db.Schema)
+		}
+
+		for _, test := range []struct {
+			name string
+			pk   string
+		}{
+			{name: "with primary key", pk: " PRIMARY KEY"},
+			{name: "without primary key"},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				table := db.Schema + ".lobwindow"
+				scratch := db.Schema + ".lobscratch"
+				if test.pk == "" {
+					table += "nopk"
+				}
+				include := strings.ToUpper(strings.TrimPrefix(table, db.Schema+"."))
+
+				// SECUREFILE with DISABLE STORAGE IN ROW makes every write produce LOB_WRITE redo.
+				require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), table,
+					`CREATE TABLE `+table+` (id NUMBER`+test.pk+`, note VARCHAR2(20), payload BLOB)
+				LOB(payload) STORE AS SECUREFILE (DISABLE STORAGE IN ROW)`))
+				// lobwindow_bump_scn commits in its own transaction, advancing the SCN without ending the LOB transaction.
+				db.MustExec(`CREATE TABLE ` + scratch + `_` + include + ` (n NUMBER)`)
+				db.MustExec(`CREATE OR REPLACE PROCEDURE ` + db.Schema + `.lobwindow_bump_scn IS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN
+				INSERT INTO ` + scratch + `_` + include + ` VALUES (1); COMMIT; END;`)
+				db.MustExec("INSERT INTO " + table + " (id, note, payload) VALUES (1, 'seed', HEXTORAW('00'))")
+				db.MustExec("INSERT INTO " + table + " (id, note, payload) VALUES (2, 'barrier', HEXTORAW('00'))")
+
+				// Own checkpoint table per subtest: a shared one would resume the second pipeline from the first one's SCN.
+				// A fixed one-SCN window puts a boundary at every SCN of the transaction, whatever the timing.
+				cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.Schema + `.ckpt_` + include + `
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 1
+    min_scn_window_size: 0
+    max_scn_window_size: 1
+    mining_interval: 10ms
+    backoff_interval: 100ms
+  include: ["` + db.Schema + `.` + include + `"]`
+
+				var (
+					batch  oracledbtest.Batch
+					logBuf oracledbtest.SyncBuffer
+				)
+				logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelDebug}))
+				stream := oracledbtest.StartPipelineWithLogger(t, cfg, logger, batch.Consumer(t))
+				oracledbtest.WaitForStreaming(t, &logBuf)
+
+				db.MustExec(`DECLARE loc BLOB; BEGIN
+				SELECT payload INTO loc FROM ` + table + ` WHERE id = 1 FOR UPDATE;
+				DBMS_LOB.TRIM(loc, 0);
+				` + writes.String() + `
+				UPDATE ` + table + ` SET note = 'rewritten' WHERE id = 1;
+				COMMIT; END;`)
+				// Later transaction, so its message arrives after every message of the LOB transaction.
+				db.MustExec("UPDATE " + table + " SET note = 'done' WHERE id = 2")
+
+				type row struct {
+					ID      json.Number `json:"ID"`
+					Payload string      `json:"PAYLOAD"`
+				}
+				var rows []row
+				require.Eventually(t, func() bool {
+					for _, m := range batch.Clone() {
+						var r row
+						if json.Unmarshal([]byte(m), &r) == nil && r.ID == "2" {
+							return true
+						}
+					}
+					return false
+				}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the barrier change")
+				for _, m := range batch.Clone() {
+					var r row
+					require.NoError(t, json.Unmarshal([]byte(m), &r))
+					if r.ID == "1" {
+						rows = append(rows, r)
+					}
+				}
+
+				// Exactly one message for the row, not an extra UPDATE ... AND ROWID emitted for INTERNAL rows.
+				require.Len(t, rows, 1, "expected one message for the rewritten row")
+				got, err := base64.StdEncoding.DecodeString(rows[0].Payload)
+				require.NoError(t, err)
+				assert.Truef(t, bytes.Equal(want, got), "BLOB mismatch: want %d bytes, got %d bytes", len(want), len(got))
+
+				assert.Contains(t, logBuf.String(), "Re-mining", "no mining window boundary fell inside the open LOB transaction")
+				require.NoError(t, stream.StopWithin(time.Second*10))
+			})
+		}
+	})
 }
 
 // TestIntegrationOracleDBCDCLOBUpdateSurvivesRestart verifies that a LOB update

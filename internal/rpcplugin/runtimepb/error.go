@@ -63,8 +63,7 @@ func ErrorToProto(err error) *Error {
 			Detail:  &Error_EndOfInput_{EndOfInput: &Error_EndOfInput{}},
 		}
 	}
-	var backoffErr *service.ErrBackOff
-	if errors.As(err, &backoffErr) {
+	if backoffErr, ok := errors.AsType[*service.ErrBackOff](err); ok {
 		return &Error{
 			Message: backoffErr.Error(),
 			Detail:  &Error_Backoff{Backoff: durationpb.New(backoffErr.Wait)},

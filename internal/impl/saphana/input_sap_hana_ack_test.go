@@ -719,3 +719,45 @@ checkpoint_cache: %s
 	require.True(t, resumed)
 	require.Equal(t, k2, s2.hwm)
 }
+
+// Two inputs that share a checkpoint cache and the default key would resume
+// from each other's HWM, skipping rows or failing every poll on a type
+// mismatch. The persisted state names its table, so a different table must
+// refuse it on connect.
+func TestSAPHANAInputCheckpointRejectsAnotherTablesState(t *testing.T) {
+	res := enterpriseResourcesWithCache()
+	s1, mock := newTestIncInput(t, res, 10)
+	mock.ExpectQuery(testIncQuery).WithArgs(int64(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"ID"}).AddRow(int64(1)))
+
+	_, ack, err := s1.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, ack(t.Context(), nil))
+	require.Equal(t, `"T"`, readCheckpoint(t, res).Source)
+
+	conf := parseInputConf(t, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: OTHER
+incrementing_column: ID
+checkpoint_cache: %s
+`, testCacheName))
+	s2, err := newSAPHANAInput(conf, res)
+	require.NoError(t, err)
+	_, err = s2.loadCheckpoint(t.Context())
+	require.ErrorContains(t, err, "checkpoint_cache_key")
+}
+
+// A checkpoint written before the state carried its table (v4.114.0) has no
+// source; it must still load so upgrading never loses progress.
+func TestSAPHANAInputCheckpointAcceptsStateWithoutSource(t *testing.T) {
+	res := enterpriseResourcesWithCache()
+	require.NoError(t, res.AccessCache(t.Context(), testCacheName, func(c service.Cache) {
+		require.NoError(t, c.Set(t.Context(), "sap_hana_hwm", []byte(`{"incr_hwm_int":7}`), nil))
+	}))
+	s, _ := newTestIncInput(t, res, 10)
+	resumed, err := s.loadCheckpoint(t.Context())
+	require.NoError(t, err)
+	require.True(t, resumed)
+	require.Equal(t, int64(7), s.hwm)
+}

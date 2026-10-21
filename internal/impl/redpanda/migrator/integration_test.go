@@ -1312,9 +1312,9 @@ func TestIntegrationMigratorOutputCustomHeaders(t *testing.T) {
 	integration.CheckSkip(t)
 
 	getHeader := func(headers []kgo.RecordHeader, key string) ([]byte, bool) {
-		for i := len(headers) - 1; i >= 0; i-- {
-			if headers[i].Key == key {
-				return headers[i].Value, true
+		for _, header := range slices.Backward(headers) {
+			if header.Key == key {
+				return header.Value, true
 			}
 		}
 		return nil, false

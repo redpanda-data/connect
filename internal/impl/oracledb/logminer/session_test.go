@@ -451,6 +451,13 @@ type fakeConn struct {
 	currentSCN uint64
 	// contentRows, when set, serves V$LOGMNR_CONTENTS queries instead of an empty result.
 	contentRows func() driver.Rows
+	// contentCalls records every V$LOGMNR_CONTENTS query with its bound args.
+	contentCalls []contentCall
+}
+
+type contentCall struct {
+	query string
+	args  []any
 }
 
 func newFakeSQLConn(t *testing.T, files []*LogFile) (*sql.Conn, *fakeConn) {
@@ -539,10 +546,17 @@ func (*fakeConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("fakeConn: transactions not supported")
 }
 
-func (c *fakeConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.queries = append(c.queries, query)
+	if strings.Contains(query, "V$LOGMNR_CONTENTS") {
+		call := contentCall{query: query}
+		for _, a := range args {
+			call.args = append(call.args, a.Value)
+		}
+		c.contentCalls = append(c.contentCalls, call)
+	}
 	switch {
 	case strings.Contains(query, "CURRENT_SCN"):
 		return &fakeSCNRow{scn: c.currentSCN}, nil

@@ -205,8 +205,7 @@ func (p *pollingRecordSource) Fetch(ctx context.Context) ([]types.Record, bool, 
 		ShardIterator: &p.iter,
 	})
 	if err != nil {
-		var aerr *types.ExpiredIteratorException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ExpiredIteratorException](err); ok {
 			p.log.Warn("Shard iterator expired, attempting to refresh")
 			newIter, ierr := p.getIter(ctx, p.resumeSequence())
 			if ierr != nil {
