@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcredpanda "github.com/testcontainers/testcontainers-go/modules/redpanda"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
 var (
@@ -65,6 +67,7 @@ func sharedRedpanda(t testing.TB) (brokerAddr, port string) {
 		ctx := context.Background()
 		ctr, err := tcredpanda.Run(ctx,
 			"docker.redpanda.com/redpandadata/redpanda:latest",
+			redpandatest.WithLowAIOUsage(),
 		)
 		if err != nil {
 			sharedRedpandaErr = err
@@ -103,6 +106,7 @@ func startRedpandaWithSASL(t testing.TB) (brokerAddr, port string) {
 		"docker.redpanda.com/redpandadata/redpanda:latest",
 		tcredpanda.WithEnableSASL(),
 		tcredpanda.WithSuperusers("admin"),
+		redpandatest.WithLowAIOUsage(),
 	)
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
