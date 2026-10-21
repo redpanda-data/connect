@@ -44,8 +44,11 @@ var markdownLeftovers = map[string]*regexp.Regexp{
 	"bold":        regexp.MustCompile(`(^|\s)\*[^*\s][^*\n]*[^*\s]\*(\s|$)`),
 }
 
-// Code carried as data, not prose.
-var docCodeKeys = map[string]bool{"config": true, "mapping": true, "results": true, "default": true}
+// Code carried as data, not prose. A component's field tree also sits under a
+// "config" key, as an object, so only a "config" string (an example's YAML
+// snippet) is skipped: field descriptions must still be checked. A field's
+// "examples" are values, not prose, so they are skipped too.
+var docCodeKeys = map[string]bool{"mapping": true, "results": true, "default": true, "linter": true}
 
 func walkDocStrings(v any, path, key string, fn func(path, key, s string)) {
 	if docCodeKeys[key] {
@@ -53,6 +56,9 @@ func walkDocStrings(v any, path, key string, fn func(path, key, s string)) {
 	}
 	switch x := v.(type) {
 	case string:
+		if key == "config" {
+			return
+		}
 		fn(path, key, x)
 	case []any:
 		for i, e := range x {
@@ -63,7 +69,11 @@ func walkDocStrings(v any, path, key string, fn func(path, key, s string)) {
 		if name != "" {
 			path += "/" + name
 		}
+		_, isField := x["kind"]
 		for k, e := range x {
+			if isField && k == "examples" {
+				continue
+			}
 			walkDocStrings(e, path+"/"+k, k, fn)
 		}
 	}
@@ -114,4 +124,35 @@ func TestDocStringsRenderAsMarkdownInEveryDistribution(t *testing.T) {
 			})
 		})
 	}
+}
+
+// The checks above only protect what walkDocStrings visits. A field's
+// description sits inside the component's "config" object, so a probe with
+// mistakes only in a field description must still be caught.
+func TestWalkDocStringsVisitsFieldDescriptions(t *testing.T) {
+	env := service.NewEmptyEnvironment()
+	spec := service.NewConfigSpec().
+		Summary("Probe.").
+		Field(service.NewStringField("probe_field").
+			Description("Starts here.\n\nifndef::env-cloud[]\nNever closed.").
+			Example("<<not prose>>"))
+	require.NoError(t, env.RegisterInput("zz_probe", spec,
+		func(*service.ParsedConfig, *service.Resources) (service.Input, error) { return nil, nil }))
+
+	raw, err := env.FullConfigSchema("0.0.0", "now").MarshalJSONV0()
+	require.NoError(t, err)
+	var doc any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+
+	var lintHits, exampleHits []string
+	walkDocStrings(doc, "", "", func(path, _ string, s string) {
+		if len(service.LintDocsConditionals(s)) > 0 {
+			lintHits = append(lintHits, path)
+		}
+		if strings.Contains(s, "<<not prose>>") {
+			exampleHits = append(exampleHits, path)
+		}
+	})
+	assert.Equal(t, []string{"/inputs/0/zz_probe/config/children/0/probe_field/description"}, lintHits, "the field description is checked")
+	assert.Empty(t, exampleHits, "field examples are values, not prose")
 }
