@@ -112,7 +112,7 @@ When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input cr
 
 == Data types
 
-Column values keep their PostgreSQL types where an equivalent exists. The following table shows how each PostgreSQL type is represented in a message:
+This input encodes each row as JSON, so each column value becomes the closest JSON type. The PostgreSQL types stay in the ` + "`schema`" + ` metadata. The following table shows how each PostgreSQL type is represented in a message:
 
 |===
 | PostgreSQL type | Value in the message
@@ -124,10 +124,10 @@ Column values keep their PostgreSQL types where an equivalent exists. The follow
 | Number
 
 | ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
-| Timestamp
+| String in RFC 3339 format
 
 | ` + "`BYTEA`" + `
-| Byte array
+| Base64-encoded string
 
 | ` + "`JSON`" + `, ` + "`JSONB`" + `
 | Structured value
