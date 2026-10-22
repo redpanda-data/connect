@@ -882,6 +882,15 @@ incremental_snapshot:
 			errContains: "field incremental_snapshot.chunk_size must be greater or equal to 1",
 		},
 		{
+			name: "chunk_size above checkpoint_limit",
+			extra: `checkpoint_limit: 100
+incremental_snapshot:
+  enabled: true
+  chunk_size: 101
+`,
+			errContains: "field incremental_snapshot.chunk_size (101) must not exceed checkpoint_limit (100)",
+		},
+		{
 			name: "negative retry_cooldown",
 			extra: `incremental_snapshot:
   enabled: true
@@ -970,10 +979,13 @@ incremental_snapshot:
 			require.NoError(t, err)
 			collections, err := parsed.FieldStringList(fieldCollections)
 			require.NoError(t, err)
+			limit, err := parsed.FieldInt(fieldCheckpointLimit)
+			require.NoError(t, err)
 			m := &mongoCDC{
-				logger:      res.Logger(),
-				collections: collections,
-				checkpoint:  &checkpointCache{resources: res, cacheName: "baz", cacheKey: key},
+				logger:          res.Logger(),
+				collections:     collections,
+				checkpointLimit: limit,
+				checkpoint:      &checkpointCache{resources: res, cacheName: "baz", cacheKey: key},
 			}
 			require.NoError(t, m.parseIncrementalSnapshot(parsed, streamSnapshot, "baz"))
 			require.Equal(t, tc.wantIncremental, m.incremental)

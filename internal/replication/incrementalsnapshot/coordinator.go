@@ -244,6 +244,16 @@ func (c *Coordinator[P, W]) Snapshotting(table TableID) bool {
 	return c.current != nil && table == *c.current
 }
 
+// CurrentTable reports the table being read, the live one as Snapshotting
+// does. Watermarks are read with it set, so Deps can address the table the
+// chunk read targets.
+func (c *Coordinator[P, W]) CurrentTable() (TableID, bool) {
+	if c.current == nil {
+		return TableID{}, false
+	}
+	return *c.current, true
+}
+
 // OnStreamedRow must be cheap and do no I/O. It removes pk from the buffer
 // only while that table is being snapshotted; otherwise it is a no-op.
 //

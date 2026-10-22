@@ -58,7 +58,7 @@ func TestIntegrationIncSnapshotDeps(t *testing.T) {
 
 	deps := &incSnapshotDeps{
 		db:                  db,
-		watermarkCollection: "mixed",
+		watermarkCollection: func() string { return "mixed" },
 		streamedThrough:     func() bson.Timestamp { return bson.Timestamp{} },
 	}
 	table := incrementalsnapshot.TableID{Schema: db.Name(), Table: "mixed"}

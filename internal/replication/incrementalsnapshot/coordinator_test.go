@@ -1636,6 +1636,59 @@ func TestCoordinatorSnapshotting(t *testing.T) {
 
 	assert.False(t, idle.Snapshotting(tableA), "a finished table must not be gated in")
 	assert.False(t, idle.Snapshotting(tableB))
+	_, ok := idle.CurrentTable()
+	assert.False(t, ok, "an idle coordinator reads no table")
+}
+
+// currentTableRecorder records the table the coordinator reports as current
+// whenever a watermark is read.
+type currentTableRecorder struct {
+	*scriptedMockDeps
+	coord *Coordinator[uint64, testWatermark]
+	seen  []TableID
+}
+
+func (r *currentTableRecorder) ResolveWatermark(ctx context.Context) (testWatermark, error) {
+	table, _ := r.coord.CurrentTable()
+	r.seen = append(r.seen, table)
+	return r.scriptedMockDeps.ResolveWatermark(ctx)
+}
+
+// TestCoordinatorCurrentTableDuringWatermarks pins what Deps can rely on: both
+// watermarks of a chunk are read with CurrentTable naming the chunk's table,
+// so an implementation can address the watermark read to it.
+func TestCoordinatorCurrentTableDuringWatermarks(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+		tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+	rec := &currentTableRecorder{scriptedMockDeps: mock}
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: rec}, nil)
+	require.NoError(t, err)
+	rec.coord = coord
+	coord.AddTables([]TableID{tableA, tableB})
+	require.NoError(t, coord.Start(t.Context()))
+	current, ok := coord.CurrentTable()
+	require.True(t, ok)
+	assert.Equal(t, tableA, current)
+
+	var chunks [][]Row
+	for i := uint64(2); !coord.Idle() && i < 20; i++ {
+		_, err := coord.OnCommit(t.Context(), i, collect(&chunks))
+		require.NoError(t, err)
+	}
+	require.True(t, coord.Idle())
+	require.NotEmpty(t, rec.seen)
+	for _, table := range rec.seen {
+		assert.Contains(t, []TableID{tableA, tableB}, table, "a watermark was read with no current table")
+	}
+	assert.Equal(t, tableA, rec.seen[0])
+	assert.Equal(t, tableB, rec.seen[len(rec.seen)-1])
 }
 
 // TestCoordinatorRetryableFetchChunkRecovers pins the point of the retry

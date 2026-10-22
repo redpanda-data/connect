@@ -23,6 +23,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readconcern"
+	"go.mongodb.org/mongo-driver/v2/x/mongo/driver/topology"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -260,9 +261,12 @@ func fetchChunk(ctx context.Context, r chunkReader, table incrementalsnapshot.Ta
 // streamedThrough, so the position read while planning is stable.
 type incSnapshotDeps struct {
 	db *mongo.Database
-	// watermarkCollection is any watched collection: the watermark read only
-	// needs a namespace to address, not its contents.
-	watermarkCollection string
+	// watermarkCollection reports the collection a watermark read addresses:
+	// the one whose chunk is being read. On a sharded cluster the read is
+	// routed to the shards owning that collection, so its operationTime
+	// covers the writes the chunk read can see, rather than relying on
+	// mongos gossiping a cluster time from a shard the read never touched.
+	watermarkCollection func() string
 	// streamedThrough reports how far the change stream has been consumed.
 	streamedThrough func() bson.Timestamp
 }
@@ -278,6 +282,26 @@ func (d *incSnapshotDeps) collection(coll string) *mongo.Collection {
 	return d.db.Collection(coll, options.Collection().SetReadConcern(readconcern.Majority()))
 }
 
+// transientServerCodes are the server errors a later read can be expected to
+// clear: an election or a member shutting down or still catching up. They are
+// the codes the driver's own retryable reads retry on.
+var transientServerCodes = []int{
+	6,     // HostUnreachable
+	7,     // HostNotFound
+	89,    // NetworkTimeout
+	91,    // ShutdownInProgress
+	134,   // ReadConcernMajorityNotAvailableYet
+	189,   // PrimarySteppedDown
+	262,   // ExceededTimeLimit
+	9001,  // SocketException
+	10058, // LegacyNotPrimary
+	10107, // NotWritablePrimary
+	11600, // InterruptedAtShutdown
+	11602, // InterruptedDueToReplStateChange
+	13435, // NotPrimaryNoSecondaryOk
+	13436, // NotPrimaryOrSecondary
+}
+
 // retryable marks failures that a later attempt can be expected to clear, such
 // as an election or a dropped connection, so the coordinator defers the read
 // instead of failing the stream.
@@ -289,10 +313,25 @@ func retryable(err error) error {
 		// The input is stopping, which no retry outlives.
 		return err
 	}
-	if mongo.IsNetworkError(err) || mongo.IsTimeout(err) {
+	if isTransient(err) {
 		return fmt.Errorf("%w: %w", incrementalsnapshot.ErrRetryable, err)
 	}
 	return err
+}
+
+func isTransient(err error) bool {
+	if mongo.IsNetworkError(err) || mongo.IsTimeout(err) {
+		return true
+	}
+	// No member was selectable, typically while a replica set elects a new
+	// primary.
+	if _, ok := errors.AsType[topology.ServerSelectionError](err); ok {
+		return true
+	}
+	if se, ok := errors.AsType[mongo.ServerError](err); ok {
+		return slices.ContainsFunc(transientServerCodes, se.HasErrorCode)
+	}
+	return false
 }
 
 // ResolvePrimaryKey reports _id, the only key every document is guaranteed to
@@ -336,7 +375,7 @@ func (d *incSnapshotDeps) ResolveWatermark(ctx context.Context) (clusterTimeWate
 	streamed := d.streamedThrough()
 	var reply bson.Raw
 	err := d.db.RunCommand(ctx, bson.D{
-		{Key: "find", Value: d.watermarkCollection},
+		{Key: "find", Value: d.watermarkCollection()},
 		{Key: "limit", Value: 1},
 		{Key: "projection", Value: bson.D{{Key: "_id", Value: 1}}},
 		{Key: "readConcern", Value: bson.D{{Key: "level", Value: "majority"}}},
@@ -445,43 +484,158 @@ type incSnapshotRun struct {
 	// encodedState caches state's encoding until stateDirty.
 	encodedState []byte
 	stateDirty   bool
+
+	// reading is the collection whose chunks are being released, for the
+	// start and finish logs, and readDocs how many of its documents have been
+	// released so far.
+	reading  string
+	readDocs int64
+	metrics  incSnapshotMetrics
+}
+
+// Metric names for the incremental snapshot, so operators can tell a slow
+// backfill from a stuck one.
+const (
+	metricIncSnapshotRemaining = "mongodb_cdc_incremental_snapshot_collections_remaining"
+	metricIncSnapshotDocuments = "mongodb_cdc_incremental_snapshot_documents_released"
+	metricIncSnapshotChunks    = "mongodb_cdc_incremental_snapshot_chunks_released"
+	metricIncSnapshotDeferred  = "mongodb_cdc_incremental_snapshot_chunks_deferred"
+)
+
+type incSnapshotMetrics struct {
+	// remaining counts the collections still to read, the one being read
+	// included.
+	remaining *service.MetricGauge
+	documents *service.MetricCounter
+	chunks    *service.MetricCounter
+	deferred  *service.MetricCounter
+}
+
+func newIncSnapshotMetrics(m *service.Metrics) incSnapshotMetrics {
+	return incSnapshotMetrics{
+		remaining: m.NewGauge(metricIncSnapshotRemaining),
+		documents: m.NewCounter(metricIncSnapshotDocuments, "collection"),
+		chunks:    m.NewCounter(metricIncSnapshotChunks, "collection"),
+		deferred:  m.NewCounter(metricIncSnapshotDeferred),
+	}
 }
 
 // newIncSnapshotRun builds the coordinator for one connection. resume is the
-// stored progress, nil on a fresh start; every configured collection is then
-// queued, and on a resume only those the progress does not know about.
-func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, retryCooldown time.Duration, resume *incrementalsnapshot.State, logger *service.Logger) (*incSnapshotRun, error) {
-	run := &incSnapshotRun{
-		dbName:     db.Name(),
+// stored progress, nil on a fresh start or once corrupt progress was cleared;
+// every configured collection is then queued, and on a resume only those the
+// progress does not know about.
+func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, retryCooldown time.Duration, resume *incrementalsnapshot.State, logger *service.Logger, metrics *service.Metrics) (*incSnapshotRun, error) {
+	run := newIncSnapshotRunBase(db.Name(), logger, metrics)
+	run.deps = &incSnapshotDeps{
+		db: db,
+		watermarkCollection: func() string {
+			if table, ok := run.coord.CurrentTable(); ok {
+				return table.Table
+			}
+			// Unreachable: the coordinator only reads watermarks for a
+			// chunk of its current table.
+			return collections[0]
+		},
+		streamedThrough: func() bson.Timestamp { return run.through },
+	}
+	deps := &watermarkRecorder{incSnapshotDeps: run.deps, run: run}
+	if err := run.setUp(deps, collections, chunkSize, retryCooldown, resume); err != nil {
+		return nil, err
+	}
+	return run, nil
+}
+
+func newIncSnapshotRunBase(dbName string, logger *service.Logger, metrics *service.Metrics) *incSnapshotRun {
+	return &incSnapshotRun{
+		dbName:     dbName,
 		logger:     logger,
 		now:        time.Now,
 		stateDirty: true,
+		metrics:    newIncSnapshotMetrics(metrics),
 	}
-	run.deps = &incSnapshotDeps{
-		db:                  db,
-		watermarkCollection: collections[0],
-		streamedThrough:     func() bson.Timestamp { return run.through },
-	}
+}
 
+// setUp builds the coordinator over deps and queues the collections.
+func (r *incSnapshotRun) setUp(deps incrementalsnapshot.Deps[clusterTimeWatermark], collections []string, chunkSize int, retryCooldown time.Duration, resume *incrementalsnapshot.State) error {
 	coord, err := incrementalsnapshot.NewCoordinator(incCoordinatorConfig{
 		ChunkSize: chunkSize,
-		Deps:      &watermarkRecorder{incSnapshotDeps: run.deps, run: run},
+		Deps:      deps,
 		OnTableDropped: func(table incrementalsnapshot.TableID, err error) {
-			logger.Warnf("Skipping incremental snapshot of collection %s: %v", table.Table, err)
+			r.logger.Warnf("Skipping incremental snapshot of collection %s: %v", table.Table, err)
 		},
 		OnPlanDeferred: func(err error) {
-			run.heldOffUntil = run.now().Add(retryCooldown)
-			logger.Warnf("Incremental snapshot chunk read failed, retrying in %v: %v", retryCooldown, err)
+			r.metrics.deferred.Incr(1)
+			r.heldOffUntil = r.now().Add(retryCooldown)
+			r.logger.Warnf("Incremental snapshot chunk read failed, retrying in %v: %v", retryCooldown, err)
 		},
-	}, pruneResume(resume, run.tables(collections), logger))
+	}, pruneResume(resume, r.tables(collections), r.logger))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	run.coord = coord
-	if added := coord.AddTables(run.tables(collections)); len(added) > 0 {
-		logger.Infof("Incremental snapshot queued collections %v", tableNames(added))
+	r.coord = coord
+	if added := coord.AddTables(r.tables(collections)); len(added) > 0 {
+		r.logger.Infof("Incremental snapshot queued collections %v", tableNames(added))
 	}
-	return run, nil
+	return nil
+}
+
+// start starts the coordinator, which reads the first chunk.
+func (r *incSnapshotRun) start(ctx context.Context) error {
+	if err := r.coord.Start(ctx); err != nil {
+		return err
+	}
+	r.updateRemaining()
+	return nil
+}
+
+// updateRemaining sets the remaining-collections gauge from the committed
+// progress, which still names the last collection read until the next chunk
+// is released, so an idle snapshot reports none.
+func (r *incSnapshotRun) updateRemaining() {
+	if r.coord.Idle() {
+		r.metrics.remaining.Set(0)
+		return
+	}
+	state := r.coord.State()
+	remaining := int64(len(state.RemainingTables))
+	if state.CurrentTable != nil {
+		remaining++
+	}
+	r.metrics.remaining.Set(remaining)
+}
+
+// startReading logs a collection's read starting, and the previous one's
+// finishing, as its first chunk is released. Several chunks can be released
+// in one advance, so the coordinator's current table alone would miss a
+// collection read in full between two.
+func (r *incSnapshotRun) startReading(coll string) {
+	r.finishReading()
+	r.logger.Infof("Incremental snapshot reading collection %s", coll)
+	r.reading = coll
+}
+
+// finishReading logs the collection being read as finished.
+func (r *incSnapshotRun) finishReading() {
+	if r.reading != "" {
+		r.logger.Infof("Incremental snapshot finished reading collection %s, %d documents", r.reading, r.readDocs)
+	}
+	r.reading, r.readDocs = "", 0
+}
+
+// countingEmit counts each released chunk before handing it on.
+func (r *incSnapshotRun) countingEmit(emit incrementalsnapshot.EmitFunc) incrementalsnapshot.EmitFunc {
+	return func(rows []incrementalsnapshot.Row) error {
+		if len(rows) > 0 {
+			coll := rows[0].Table.Table
+			if coll != r.reading {
+				r.startReading(coll)
+			}
+			r.readDocs += int64(len(rows))
+			r.metrics.chunks.Incr(1, coll)
+			r.metrics.documents.Incr(int64(len(rows)), coll)
+		}
+		return emit(rows)
+	}
 }
 
 // watermarkRecorder remembers each high watermark, so emitted documents can
@@ -556,9 +710,10 @@ func (r *incSnapshotRun) advance(ctx context.Context, pos bson.Timestamp, emit i
 	if r.now().Before(r.heldOffUntil) {
 		return nil
 	}
-	changed, err := r.coord.OnCommit(ctx, r.through, emit)
+	changed, err := r.coord.OnCommit(ctx, r.through, r.countingEmit(emit))
 	if changed {
 		r.stateDirty = true
+		r.updateRemaining()
 	}
 	if err != nil {
 		return err
@@ -566,6 +721,8 @@ func (r *incSnapshotRun) advance(ctx context.Context, pos bson.Timestamp, emit i
 	if idle := r.coord.Idle(); idle != r.idle {
 		r.idle = idle
 		if idle {
+			r.finishReading()
+			r.updateRemaining()
 			r.logger.Infof("Incremental snapshot complete, every queued collection has been read")
 		}
 	}
@@ -594,6 +751,7 @@ func (r *incSnapshotRun) request(collections []string) []string {
 	added := r.coord.RequeueTables(r.tables(collections))
 	if len(added) > 0 {
 		r.stateDirty = true
+		r.updateRemaining()
 	}
 	return tableNames(added)
 }

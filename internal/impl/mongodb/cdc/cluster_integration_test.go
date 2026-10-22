@@ -250,7 +250,7 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 
 	deps := &incSnapshotDeps{
 		db:                  db,
-		watermarkCollection: "c",
+		watermarkCollection: func() string { return "c" },
 		streamedThrough:     func() bson.Timestamp { return bson.Timestamp{} },
 	}
 	table := incrementalsnapshot.TableID{Schema: db.Name(), Table: "c"}
@@ -277,4 +277,81 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 		maxKey, err := deps.ResolveMaxKey(ctx, table, nil)
 		return err == nil && assert.ObjectsAreEqual(want, maxKey)
 	}, time.Minute, 250*time.Millisecond)
+}
+
+// TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection
+// reads a collection living on one shard while the first configured
+// collection lives, quiet, on the other, and writes to the busy shard only.
+// A watermark read against the quiet collection could trail the writes the
+// chunk read saw on the busy shard, releasing the chunk before they stream and
+// sending documents backwards. Watermarks address the collection being read;
+// on mongo:7 a watermark from the quiet collection passes too, as mongos
+// reports the gossiped cluster time, so this guards the behaviour rather than
+// reproducing a failure.
+func TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection(t *testing.T) {
+	integration.CheckSkipExact(t)
+	// Each run starts its own containers on its own network.
+	t.Parallel()
+	mongos := startShardedCluster(t)
+	uri := mongos.uri(false)
+	client := connectTo(t, uri)
+
+	h := newIncrementalHarnessOn(t, uri, client)
+	ctx := t.Context()
+	admin := client.Database("admin")
+	// The quiet collection is unsharded, so it lives on the primary shard.
+	require.NoError(t, admin.RunCommand(ctx, bson.D{{Key: "enableSharding", Value: h.db.Name()}, {Key: "primaryShard", Value: "sh2"}}).Err())
+	h.db.CreateCollection(t, "quiet")
+	h.db.InsertOne(t, "quiet", bson.M{"_id": 0, "v": 0})
+
+	// The busy collection is range sharded with its only chunk on the other
+	// shard.
+	ns := h.db.Name() + ".busy"
+	h.db.CreateCollection(t, "busy")
+	require.NoError(t, admin.RunCommand(ctx, bson.D{{Key: "shardCollection", Value: ns}, {Key: "key", Value: bson.M{"_id": 1}}}).Err())
+	require.NoError(t, admin.RunCommand(ctx, bson.D{{Key: "moveChunk", Value: ns}, {Key: "find", Value: bson.M{"_id": 0}}, {Key: "to", Value: "sh1"}}).Err())
+
+	const initial = 1000
+	docs := make([]any, 0, initial)
+	for i := range initial {
+		docs = append(docs, bson.M{"_id": i, "v": 0})
+	}
+	h.db.InsertMany(t, "busy", docs...)
+
+	input := strings.NewReplacer(
+		"  username: mongoadmin\n", "",
+		"  password: secret\n", "",
+		"chunk_size: 20", "chunk_size: 100",
+		"    - 'foo'\n    - 'bar'\n", "    - 'quiet'\n    - 'busy'\n",
+		"  signal_collection_name: signals\n", "",
+	).Replace(incrementalInput)
+	stream := h.stream(input)
+	wait := stream.RunAsync(t)
+
+	// Update the busy shard only while the snapshot reads it. A quiet shard
+	// releases about one chunk per no-op interval (10 s), so this spans a few
+	// chunks. Writes are paced so the stream keeps up.
+	waitForLog := func(sub string, within time.Duration) {
+		t.Helper()
+		require.Eventually(t, func() bool { return len(h.logs.matching(sub)) > 0 }, within, 100*time.Millisecond, "waiting for log %q", sub)
+	}
+	waitForLog("Incremental snapshot reading collection busy", 2*time.Minute)
+	rng := rand.New(rand.NewPCG(5, 6))
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
+		h.db.UpdateOne(t, "busy", rng.IntN(initial), bson.M{"$inc": bson.M{"v": 1}})
+		time.Sleep(20 * time.Millisecond)
+	}
+	want := dbState(t, h.db, "busy")
+	waitForLog("Incremental snapshot complete", 5*time.Minute)
+	assert.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual(want, replay(h.output).of("busy"))
+	}, time.Minute, 500*time.Millisecond)
+	stream.Stop(t)
+	wait()
+
+	got := replayChecked(t, h.output)
+	assert.Empty(t, got.regressed, "documents went backwards")
+	assert.Equal(t, want, got.of("busy"))
+	assert.Positive(t, got.readByColl["busy"])
+	t.Logf("snapshot read %d documents, %d updates streamed", got.readByColl["busy"], got.ops["update"])
 }
