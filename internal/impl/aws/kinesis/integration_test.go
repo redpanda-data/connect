@@ -71,10 +71,13 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 
 	for {
 		t.Logf("Creating stream '%v'", id)
+		// One SDK attempt per call: this loop does the retries. With SDK
+		// retries, the deadline often expires during a call, and the
+		// deadline error replaces the real cause.
 		_, err := client.CreateStream(createCtx, &kinesis.CreateStreamInput{
 			ShardCount: &numShards,
 			StreamName: &strmID,
-		})
+		}, func(o *kinesis.Options) { o.RetryMaxAttempts = 1 })
 		if err == nil {
 			t.Logf("Created stream '%v'", id)
 			break
@@ -125,7 +128,8 @@ func TestCreateKinesisShardsReturnsLastError(t *testing.T) {
 
 	_, err = createKinesisShards(ctx, t, port, "dead", 1)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Contains(t, err.Error(), "last error:")
+	// The error must keep the real cause, not only the deadline.
+	assert.Contains(t, err.Error(), "connection refused")
 }
 
 func kinesisIntegrationTemplate(inputExtra string) string {
