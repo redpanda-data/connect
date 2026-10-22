@@ -770,21 +770,11 @@ func (s *coordinatorStubTransport) Do(req *http.Request) (*http.Response, error)
 	}
 }
 
-// TestShardCoordinatorReadsClosedShardOnce (CON-599) drives the real
-// single-table coordinator with millisecond refresh and cleanup intervals,
-// so the reader itself (not the test) reaches the end of the closed shard,
-// and many refresh/cleanup cycles run. The closed parent must be read exactly
-// once, its child must start only after the parent's final page, the
-// completion must be persisted once the final batch is acked, and no tracker
-// state may be left behind.
-func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
-	transport := &coordinatorStubTransport{
-		shards:  []string{"shard-parent", "shard-child"},
-		parents: map[string]string{"shard-child": "shard-parent"},
-		closed:  map[string]string{"shard-parent": twoRecordsPage},
-	}
-	// The store is written from ack goroutines and read by the test, so
-	// serialise access to the shared fake.
+// lockedStoreCheckpointer returns a checkpointer over an in-memory store. The
+// store is written from ack goroutines and read by the test, so access to the
+// shared fake is serialised.
+func lockedStoreCheckpointer(t *testing.T) *Checkpointer {
+	t.Helper()
 	var storeMu sync.Mutex
 	api := sharedStoreAPI(map[string]map[string]dynamodbtypes.AttributeValue{})
 	putItem, updateItem, getItem := api.putItem, api.updateItem, api.getItem
@@ -807,6 +797,23 @@ func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
 		TableName: "cps", SourceTable: "test", StreamArn: testStreamArn, CheckpointLimit: 1000,
 	}, service.MockResources().Logger())
 	require.NoError(t, err)
+	return cp
+}
+
+// TestShardCoordinatorReadsClosedShardOnce (CON-599) drives the real
+// single-table coordinator with millisecond refresh and cleanup intervals,
+// so the reader itself (not the test) reaches the end of the closed shard,
+// and many refresh/cleanup cycles run. The closed parent must be read exactly
+// once, its child must start only after the parent's final page, the
+// completion must be persisted once the final batch is acked, and no tracker
+// state may be left behind.
+func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
+	transport := &coordinatorStubTransport{
+		shards:  []string{"shard-parent", "shard-child"},
+		parents: map[string]string{"shard-child": "shard-parent"},
+		closed:  map[string]string{"shard-parent": twoRecordsPage},
+	}
+	cp := lockedStoreCheckpointer(t)
 
 	d := &dynamoDBCDCInput{
 		conf: dynamoDBCDCConfig{
@@ -943,6 +950,115 @@ func TestRefreshShardsTrimmedParentCheckpointDoesNotStallChildren(t *testing.T) 
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
 	})
+}
+
+// TestShardCoordinatorReadsClosedShardOnceMultiTable is the multi-table form
+// of TestShardCoordinatorReadsClosedShardOnce, driving the real table stream
+// coordinator.
+func TestShardCoordinatorReadsClosedShardOnceMultiTable(t *testing.T) {
+	transport := &coordinatorStubTransport{
+		shards:  []string{"shard-parent", "shard-child"},
+		parents: map[string]string{"shard-child": "shard-parent"},
+		closed:  map[string]string{"shard-parent": twoRecordsPage},
+	}
+	cp := lockedStoreCheckpointer(t)
+
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			startFrom:       "trim_horizon",
+			batchSize:       10,
+			pollInterval:    2 * time.Millisecond,
+			throttleBackoff: 2 * time.Millisecond,
+		},
+		log:             service.MockResources().Logger(),
+		metrics:         newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		streamsClient:   newStubStreamsClient(transport),
+		msgChan:         make(chan asyncMessage, 10),
+		shutSig:         shutdown.NewSignaller(),
+		refreshInterval: 3 * time.Millisecond,
+		cleanupInterval: 5 * time.Millisecond,
+	}
+	ts := &tableStream{
+		tableName:      "test",
+		streamArn:      testStreamArn,
+		checkpointer:   cp,
+		recordBatcher:  NewRecordBatcher(100, 1000, service.MockResources().Logger()),
+		shardReaders:   map[string]*dynamoDBShardReader{},
+		shardRefreshCh: make(chan struct{}, 1),
+	}
+	d.tableStreams = map[string]*tableStream{"test": ts}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	coordinatorDone := make(chan struct{})
+	go func() {
+		d.startTableStreamCoordinator(ctx, "test", ts)
+		close(coordinatorDone)
+	}()
+	defer func() {
+		cancel()
+		<-coordinatorDone
+	}()
+
+	var am asyncMessage
+	select {
+	case am = <-d.msgChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected the closed shard's final batch")
+	}
+	require.Len(t, am.msg, 2)
+	require.NoError(t, am.ackFn(t.Context(), nil))
+
+	require.Eventually(t, func() bool {
+		_, done, err := cp.getShardRow(t.Context(), "shard-parent")
+		return err == nil && done
+	}, 5*time.Second, time.Millisecond, "acking the closed shard's final batch must persist its completion")
+
+	// Let many refresh and cleanup cycles run.
+	time.Sleep(100 * time.Millisecond)
+
+	assert.Equal(t, 1, transport.count("GetShardIterator:shard-parent"), "a completed shard must not be re-read after cleanup")
+	assert.Equal(t, 1, transport.count("GetRecords:shard-parent"))
+	assert.Equal(t, 1, transport.count("GetShardIterator:shard-child"), "the child must start exactly once")
+	callLog := transport.log()
+	assert.Less(t, slices.Index(callLog, "GetRecords:shard-parent"), slices.Index(callLog, "GetShardIterator:shard-child"),
+		"the child must not start before the parent's final page was read")
+	assert.Zero(t, ts.recordBatcher.TrackedShardCount(), "the completed shard's tracker state must be forgotten")
+	assert.Empty(t, d.msgChan, "no batch may be redelivered")
+}
+
+// TestSyncShardReadersRestartsReregisteredReader: a reader that gave up
+// (unregistering itself) and was re-registered by discovery under the same
+// shard ID before the coordinator noticed is a new reader. Its stale
+// goroutine must be canceled and a fresh one started for the new reader.
+func TestSyncShardReadersRestartsReregisteredReader(t *testing.T) {
+	oldReader := &dynamoDBShardReader{shardID: "shard-1"}
+	newReader := &dynamoDBShardReader{shardID: "shard-1"}
+
+	oldCtx, oldCancel := context.WithCancel(t.Context())
+	defer oldCancel()
+	activeShards := map[string]context.CancelFunc{"shard-1": oldCancel}
+	startedFor := map[string]*dynamoDBShardReader{"shard-1": oldReader}
+	readers := map[string]shardReaderState{"shard-1": {reader: newReader}}
+
+	var started []string
+	var newCtx context.Context
+	syncShardReaders(t.Context(), readers, activeShards, startedFor, func(shardCtx context.Context, shardID string) {
+		started = append(started, shardID)
+		newCtx = shardCtx
+	})
+
+	assert.ErrorIs(t, oldCtx.Err(), context.Canceled, "the old reader's goroutine must be canceled")
+	assert.Equal(t, []string{"shard-1"}, started, "a goroutine must be started for the re-registered reader")
+	require.NotNil(t, newCtx)
+	assert.NoError(t, newCtx.Err(), "the new goroutine's context must be live")
+	assert.Same(t, newReader, startedFor["shard-1"])
+	assert.Contains(t, activeShards, "shard-1")
+
+	// The next sync sees the same reader and leaves its goroutine alone.
+	syncShardReaders(t.Context(), readers, activeShards, startedFor, func(context.Context, string) {
+		t.Fatal("a running reader must not be restarted")
+	})
+	assert.NoError(t, newCtx.Err())
 }
 
 // TestRefreshShardsGoneParentReleasesChildren (CON-599): a listed parent
