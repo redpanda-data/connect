@@ -2009,6 +2009,9 @@ type preparedShard struct {
 	shardID  string
 	iterator *string
 	cutoff   time.Time
+	// trimmed reports that the checkpoint was beyond the stream's retention
+	// and the iterator fell back to TRIM_HORIZON.
+	trimmed bool
 }
 
 // prepareShardReader resolves where a shard should start (global-table
@@ -2027,6 +2030,7 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		iteratorType   types.ShardIteratorType
 		sequenceNumber *string
 		cutoff         time.Time
+		trimmed        bool
 	)
 	switch decision.Mode {
 	case resumeExact:
@@ -2059,6 +2063,7 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		// Resume from the oldest record still retained, as the readers do on
 		// a mid-read TrimmedDataAccessException.
 		d.log.Warnf("Checkpoint %s for shard %s%s is beyond the stream's retention, resuming from trim horizon; records in between have expired", aws.ToString(sequenceNumber), shardID, tableSuffix)
+		trimmed = true
 		iterCtx, cancel = context.WithTimeout(ctx, defaultAPICallTimeout)
 		iter, err = d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
 			StreamArn:         streamArn,
@@ -2071,7 +2076,7 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 	}
 
-	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
+	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff, trimmed: trimmed}, nil
 }
 
 // prepareNewShards resolves and acquires iterators for every discovered shard
@@ -2446,6 +2451,14 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
+		// A reader that falls back to TRIM_HORIZON checkpoints past the
+		// trimmed gap, after which a pending prepare's probe no longer sees
+		// the stale checkpoint: record it first so the prepare still resets.
+		for _, s := range newShards {
+			if s.trimmed {
+				d.backfillRetries.markTrimmed(tableName)
+			}
+		}
 		ts.mu.Lock()
 		for _, s := range newShards {
 			if _, exists := ts.shardReaders[s.shardID]; !exists {

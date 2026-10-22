@@ -103,6 +103,10 @@ type backfillDeps struct {
 var _ incsnapshot.Deps[*SnapshotCheckpoint] = (*backfillDeps)(nil)
 
 func (b *backfillDeps) CDCCheckpointStale(ctx context.Context) (bool, error) {
+	if b.d.backfillRetries.trimmedWhilePreparing(b.table) {
+		b.d.log.Warnf("CDC checkpoint for table %s is stale: a shard resumed from trim horizon while its prepare was pending", b.table)
+		return true, nil
+	}
 	return b.d.isCDCCheckpointStaleFor(ctx, b.Checkpointer, b.streamArn)
 }
 
@@ -258,7 +262,8 @@ func (d *dynamoDBCDCInput) runIncrementalSingleUntilDone(ctx context.Context, tg
 // in-progress snapshot whose stream checkpoint is stale. It must run before
 // the table's coordinator starts: once readers checkpoint, the shards that
 // prove the checkpoint stale age out and the trimmed changes are never
-// backfilled. A table whose stream view rules out a backfill is logged and
+// backfilled. A retry runs after the coordinator has started, so a shard that
+// resumed from trim horizon meanwhile counts as stale (see markTrimmed). A table whose stream view rules out a backfill is logged and
 // reported as not needing one; a failed checkpoint read or reset is returned
 // for prepareOrRetryTableBackfill to retry. With signal_table_name set,
 // backfills are signal-only: see signalOnlyBackfillPending.
@@ -354,9 +359,17 @@ func (d *dynamoDBCDCInput) signalOnlyBackfillPending(ctx context.Context, table 
 type backfillRetries struct {
 	mu    sync.Mutex
 	boffs map[string]backoff.BackOff
-	// preparing holds the prepare-pending tables. A value is true once
-	// runBackfillQueue has skipped a push of the table while it was pending.
-	preparing map[string]bool
+	// preparing holds the prepare-pending tables.
+	preparing map[string]*pendingPrepare
+}
+
+// pendingPrepare is the state of a prepare-pending table.
+type pendingPrepare struct {
+	// skipped is set once runBackfillQueue has skipped a push of the table.
+	skipped bool
+	// trimmed is set once one of the table's shards resumed from trim
+	// horizon because its checkpoint was beyond the stream's retention.
+	trimmed bool
 }
 
 // next returns table's next retry delay, starting a backoff from newBoff on
@@ -387,10 +400,10 @@ func (r *backfillRetries) beginPrepare(table string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.preparing == nil {
-		r.preparing = map[string]bool{}
+		r.preparing = map[string]*pendingPrepare{}
 	}
 	if _, exists := r.preparing[table]; !exists {
-		r.preparing[table] = false
+		r.preparing[table] = &pendingPrepare{}
 	}
 }
 
@@ -399,7 +412,9 @@ func (r *backfillRetries) beginPrepare(table string) {
 func (r *backfillRetries) endPrepare(table string) (skipped bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	skipped = r.preparing[table]
+	if p, exists := r.preparing[table]; exists {
+		skipped = p.skipped
+	}
 	delete(r.preparing, table)
 	delete(r.boffs, table)
 	return skipped
@@ -410,11 +425,34 @@ func (r *backfillRetries) endPrepare(table string) (skipped bool) {
 func (r *backfillRetries) skipIfPreparing(table string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, exists := r.preparing[table]; !exists {
+	p, exists := r.preparing[table]
+	if !exists {
 		return false
 	}
-	r.preparing[table] = true
+	p.skipped = true
 	return true
+}
+
+// markTrimmed records that one of table's shards resumed from trim horizon,
+// if table is prepare-pending: its prepare must then treat the checkpoint as
+// stale, because the reader checkpoints past the trimmed gap before the
+// prepare's probe can see it. Once the prepare has succeeded it already
+// probed the old checkpoint, so nothing is recorded.
+func (r *backfillRetries) markTrimmed(table string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if p, exists := r.preparing[table]; exists {
+		p.trimmed = true
+	}
+}
+
+// trimmedWhilePreparing reports whether markTrimmed recorded a trim horizon
+// fallback for table since it became prepare-pending.
+func (r *backfillRetries) trimmedWhilePreparing(table string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, exists := r.preparing[table]
+	return exists && p.trimmed
 }
 
 // retryInBackground calls attempt once wait has passed, and again after
