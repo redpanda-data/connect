@@ -158,7 +158,9 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 == Checkpointing
 
-Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
+Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses.
+
+A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits; the exception is the first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged.
 
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
@@ -264,7 +266,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(1000).
 				Advanced(),
 			service.NewIntField(dciFieldMaxTrackedShards).
-				Description("Maximum number of shards holding acknowledgement state at once. A shard is forgotten once it has been read to the end and its last batch has been acknowledged, so this bounds the shards being read concurrently, not the shards seen over the pipeline's lifetime. Past this limit acknowledgements return an error.").
+				Description("Maximum number of shards holding acknowledgement state at once. A shard is normally forgotten once it has been read to the end and its last batch has been acknowledged, so this bounds the shards being read concurrently, not the shards seen over the pipeline's lifetime. Past this limit acknowledgements return an error.").
 				Default(10000).
 				Advanced(),
 			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
