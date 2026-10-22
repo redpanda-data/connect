@@ -163,8 +163,8 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			esoutput.URLsField(),
 			esoutput.IndexField("OpenSearch"),
 			service.NewInterpolatedStringField(esoFieldAction).
-				Description(`The action to take on the document. This field must resolve to one of the following action types: `+"`"+`index`+"`"+`, `+"`"+`update`+"`"+` or `+"`"+`delete`+"`"+`.`).
-				ShortDescription("The action to take on the document: index, update or delete."),
+				Description(`The action to take on the document. This field must resolve to one of the following action types: `+"`"+`index`+"`"+`, `+"`"+`create`+"`"+`, `+"`"+`update`+"`"+` or `+"`"+`delete`+"`"+`. The `+"`"+`create`+"`"+` action fails for documents that already exist and is required when writing to data streams.`).
+				ShortDescription("The action to take on the document: index, create, update or delete."),
 			esoutput.IDField(),
 			esoutput.PipelineField(),
 			esoutput.RoutingField(),
@@ -376,6 +376,18 @@ func buildBulkableRequest(p *pendingBulkIndex, onError func(err error)) (r *open
 		r = &opensearchutil.BulkIndexerItem{
 			Index:  p.Index,
 			Action: "index",
+			Body:   bytes.NewReader(p.Payload),
+		}
+		if p.ID != "" {
+			r.DocumentID = p.ID
+		}
+		if p.Routing != "" {
+			r.Routing = &p.Routing
+		}
+	case "create":
+		r = &opensearchutil.BulkIndexerItem{
+			Index:  p.Index,
+			Action: "create",
 			Body:   bytes.NewReader(p.Payload),
 		}
 		if p.ID != "" {

@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.115.0 - TBD
+
+### Added
+
+- opensearch: Added support for the `create` action in the opensearch output, required for writing to data streams. ([@highlyavailable](https://github.com/highlyavailable), [#4598](https://github.com/redpanda-data/connect/pull/4598))
+
 ## 4.114.0 - 2026-10-16
 
 ### Added
