@@ -27,6 +27,9 @@ type IngestChannel interface {
 	AppendRows(ctx context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (sent bool, payloadBytes int, err error)
 	// LatestOffsetToken is the last committed token; "" means none yet.
 	LatestOffsetToken(ctx context.Context) (string, error)
+	// CommittedAtOpen is the last committed token as reported when the
+	// channel was opened; "" means none had. No request is made.
+	CommittedAtOpen() string
 	// WaitUntilCommitted blocks until the committed token is at or beyond
 	// offsetToken, or timeout elapses (<= 0 means no limit). Rejected rows
 	// do not fail it; see RowsRejected.

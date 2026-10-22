@@ -602,9 +602,7 @@ func newSnowflakeStreamerPipe(
 			return client.OpenChannel(ctx, name)
 		},
 	}
-	indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (v2.IngestChannel, error) {
-		return indexed.openChannelFn(ctx, name)
-	})
+	indexed.channelPool = pool.NewIndexed(indexed.openChannel)
 	return indexed, nil
 }
 
@@ -637,11 +635,6 @@ type snowpipeIndexedOutputPipe struct {
 	// mode-switch guards depend on that.
 	noDedupCommitToken atomic.Int64
 	syntheticSeedOnce  sync.Once
-
-	// checkedTokenSpaces holds channels already vetted by
-	// checkSyntheticTokenSpace, so its status call runs once per channel.
-	checkedTokenSpaces   map[string]struct{}
-	checkedTokenSpacesMu sync.Mutex
 
 	// committedFloors is the start token of the first range this process
 	// acked per channel; see checkSubmissionOrder.
@@ -717,24 +710,21 @@ func (o *snowpipeIndexedOutputPipe) nextSyntheticCommitToken() string {
 	return v2.FormatSyntheticToken(o.noDedupCommitToken.Add(1))
 }
 
-// checkSyntheticTokenSpace runs once per channel in at-least-once mode. It
+// syncSyntheticTokens runs at every channel open in at-least-once mode. It
 // bumps the counter past any synthetic token already committed on the
-// channel, and refuses a channel whose committed real token would compare at
-// or above our synthetic ones (every commit wait would then succeed before
-// its append was confirmed). A failed status fetch leaves the channel
-// unchecked so the next batch retries.
-func (o *snowpipeIndexedOutputPipe) checkSyntheticTokenSpace(ctx context.Context, channel v2.IngestChannel) error {
-	name := channel.Name()
-	o.checkedTokenSpacesMu.Lock()
-	_, done := o.checkedTokenSpaces[name]
-	o.checkedTokenSpacesMu.Unlock()
-	if done {
-		return nil
-	}
-	latest, err := channel.LatestOffsetToken(ctx)
-	if err != nil {
-		return err
-	}
+// channel, and refuses a channel whose committed real token would compare
+// at or above our synthetic ones (every commit wait would then succeed
+// before its append was confirmed). It runs on every open, not once per
+// name: a channel can be reopened after another process (a consumer-group
+// member that took the partition for a while) committed higher synthetic
+// tokens on it, and a check cached from before that would let a commit
+// wait return before its own append committed. It reads the token from
+// the open response, so it adds no request and nothing can fail between
+// the open and the sync.
+func (o *snowpipeIndexedOutputPipe) syncSyntheticTokens(channel v2.IngestChannel) error {
+	// The open response carries the committed token, so this costs no
+	// request and cannot fail after a successful open.
+	latest := channel.CommittedAtOpen()
 	o.seedSyntheticTokens()
 	if prev, ok := v2.ParseSyntheticToken(latest); ok {
 		// CAS to the max: another channel's check may race with a
@@ -754,21 +744,28 @@ func (o *snowpipeIndexedOutputPipe) checkSyntheticTokenSpace(ctx context.Context
 					"compares at or above the synthetic tokens this output uses when %s is unset -- every commit wait on "+
 					"this channel would succeed before its own append was confirmed. This will not resolve itself on "+
 					"retry: give this pipeline a fresh %s so it starts from an empty channel",
-				name, ssopFieldOffsetToken, latest, ssopFieldOffsetToken, ssopFieldChannelName)
+				channel.Name(), ssopFieldOffsetToken, latest, ssopFieldOffsetToken, ssopFieldChannelName)
 		}
 	}
-	o.checkedTokenSpacesMu.Lock()
-	if o.checkedTokenSpaces == nil {
-		o.checkedTokenSpaces = map[string]struct{}{}
-	}
-	o.checkedTokenSpaces[name] = struct{}{}
-	o.checkedTokenSpacesMu.Unlock()
 	return nil
 }
 
+// openChannel opens (or reopens) a channel and, in at-least-once mode,
+// re-syncs the synthetic token counter against what the channel has
+// committed. Every open path goes through here: the pool's first open,
+// reopenAfterFailure, and the one-shot reopen of an invalidated channel.
 func (o *snowpipeIndexedOutputPipe) openChannel(ctx context.Context, name string) (v2.IngestChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for `%s.%s`: %s", o.db, o.schema, name)
-	return o.openChannelFn(ctx, name)
+	channel, err := o.openChannelFn(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if o.offsetToken == nil {
+		if err := o.syncSyntheticTokens(channel); err != nil {
+			return nil, err
+		}
+	}
+	return channel, nil
 }
 
 // logReopenFailure warns that a reopen failed, calling out the
@@ -1188,14 +1185,10 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 			}
 			return tok, err
 		}
-	} else {
-		// At-least-once: no dedup, but the commit wait still needs a
-		// call-unique token (see noDedupCommitToken).
-		if err = o.checkSyntheticTokenSpace(ctx, channel); err != nil {
-			o.channelPool.Release(channel.Name(), channel)
-			return err
-		}
 	}
+	// At-least-once needs no dedup; the commit wait's call-unique synthetic
+	// token is minted per request in tokensFor, and the counter was synced
+	// against the channel when it was opened.
 	var dropped droppedBodies
 	rowsByMsg, emptyRows, err := prepareRows(batch, delivered, &dropped)
 	if err != nil {

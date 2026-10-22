@@ -69,9 +69,9 @@ type fakeChannel struct {
 	lastErrorMessage          string
 	lastErrorOffsetUpperBound string
 
-	// latestCalls counts LatestOffsetToken calls, so a test can assert that
-	// checkSyntheticTokenSpace's control-plane lookup happens once per
-	// channel per process rather than once per batch.
+	// latestCalls counts LatestOffsetToken calls, so a test can assert how
+	// many status round trips a path costs (the exactly-once dedup reads it
+	// once per batch; at-least-once reads nothing, it syncs from the open).
 	latestCalls int
 }
 
@@ -109,6 +109,8 @@ func (f *fakeChannel) AppendRows(_ context.Context, rows [][]byte, startOffsetTo
 	// was attempted, not whether it succeeded.
 	return true, payload, f.appendErr
 }
+
+func (f *fakeChannel) CommittedAtOpen() string { return f.committed }
 
 func (f *fakeChannel) LatestOffsetToken(context.Context) (string, error) {
 	f.latestCalls++
@@ -207,7 +209,7 @@ func testOutput(t *testing.T, ch *fakeChannel) *snowpipeIndexedOutputPipe {
 		},
 	}
 	o.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (v2.IngestChannel, error) {
-		return o.openChannelFn(ctx, name)
+		return o.openChannel(ctx, name)
 	})
 	return o
 }
@@ -252,7 +254,7 @@ func testOutputMultiChannel(t *testing.T) (*snowpipeIndexedOutputPipe, map[strin
 		},
 	}
 	o.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (v2.IngestChannel, error) {
-		return o.openChannelFn(ctx, name)
+		return o.openChannel(ctx, name)
 	})
 	return o, channels
 }
@@ -796,8 +798,8 @@ func TestNoDedupProceedsOnChannelPreviouslyWrittenWithRealTokens(t *testing.T) {
 					t.Errorf("synthetic token %q does not compare newer than the channel's real committed token %q", tok, committed)
 				}
 			}
-			if ch.latestCalls != 1 {
-				t.Errorf("LatestOffsetToken called %d times across two batches, want exactly 1 (checked once per channel per process)", ch.latestCalls)
+			if ch.latestCalls != 0 {
+				t.Errorf("LatestOffsetToken called %d times across two batches, want 0: at-least-once syncs from the open response", ch.latestCalls)
 			}
 		})
 	}
@@ -2276,5 +2278,38 @@ func TestWriteBatchCompressibleOversizeMessageIsNotDropped(t *testing.T) {
 	}
 	if len(ch.appends) != 1 {
 		t.Errorf("expected the compressible message to be sent, got %d appends", len(ch.appends))
+	}
+}
+
+// TestNoDedupResyncsSyntheticTokensOnReopen: in at-least-once mode the
+// synthetic counter is re-synced against the channel's committed token at
+// every open, not once per channel name. Otherwise, after another process
+// committed higher synthetic tokens on the channel (a partition that moved
+// away and back), a commit wait here could return before its own append
+// committed.
+func TestNoDedupResyncsSyntheticTokensOnReopen(t *testing.T) {
+	ch := &fakeChannel{name: "c", waitErr: fmt.Errorf("commit wait failed")}
+	o := testOutputNoDedup(t, ch)
+
+	if err := o.WriteBatch(t.Context(), service.MessageBatch{msg("row-1")}); err == nil {
+		t.Fatal("expected the first commit wait to fail and the channel to be reopened")
+	}
+	// While the channel is away, another process commits far higher
+	// synthetic tokens on it; the next failure reopens it again and the
+	// reopen must re-sync against that.
+	other := v2.FormatSyntheticToken(o.noDedupCommitToken.Load() + 1_000_000)
+	ch.committed = other
+	ch.waitErr = fmt.Errorf("commit wait failed again")
+	_ = o.WriteBatch(t.Context(), service.MessageBatch{msg("row-2")})
+	ch.waitErr = nil
+	if err := o.WriteBatch(t.Context(), service.MessageBatch{msg("row-3")}); err != nil {
+		t.Fatalf("WriteBatch after the reopen: %v", err)
+	}
+	last := ch.waited[len(ch.waited)-1]
+	if v2.CompareOffsetTokens(last, other) != 1 {
+		t.Errorf("after reopening, the commit wait used %q, which is not above the channel's committed %q: the wait would return before the append committed", last, other)
+	}
+	if ch.latestCalls != 0 {
+		t.Errorf("LatestOffsetToken called %d times, want 0: the re-sync reads the open response", ch.latestCalls)
 	}
 }
