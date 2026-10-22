@@ -32,6 +32,10 @@ type ChannelStatus struct {
 	RowsParsed               int64  `json:"rows_parsed"`
 	RowsErrorCount           int64  `json:"rows_error_count"`
 	LastError                string `json:"last_error_message"`
+	// LastErrorOffsetUpperBound is the end token of the last rowset (one
+	// append request) that contained errors, so it names the batch the
+	// latest error belongs to.
+	LastErrorOffsetUpperBound string `json:"last_error_offset_upper_bound"`
 }
 
 // Channel is one SSv2 channel on a pipe. Appends are serialised.
@@ -44,11 +48,12 @@ type Channel struct {
 	c    *Client
 	name string
 
-	mu                     sync.Mutex
-	continuation           string
-	rowsErrorCount         int64
-	rowsErrorCountBaseline int64
-	lastErrorMessage       string
+	mu                        sync.Mutex
+	continuation              string
+	rowsErrorCount            int64
+	rowsErrorCountBaseline    int64
+	lastErrorMessage          string
+	lastErrorOffsetUpperBound string
 }
 
 func (c *Client) pipePath() string {
@@ -183,15 +188,16 @@ func (c *Client) openChannelOnce(ctx context.Context, name string) (*Channel, er
 		return nil, fmt.Errorf("decode open-channel response: %w", err)
 	}
 	if out.ChannelStatus.StatusCode != "SUCCESS" {
-		return nil, fmt.Errorf("channel %q opened with status %q: %s", name, out.ChannelStatus.StatusCode, out.ChannelStatus.LastError)
+		return nil, &ChannelStatusError{Channel: name, Code: out.ChannelStatus.StatusCode, Message: out.ChannelStatus.LastError, OnOpen: true}
 	}
 	return &Channel{
-		c:                      c,
-		name:                   name,
-		continuation:           out.NextContinuationToken,
-		rowsErrorCount:         out.ChannelStatus.RowsErrorCount,
-		rowsErrorCountBaseline: out.ChannelStatus.RowsErrorCount,
-		lastErrorMessage:       out.ChannelStatus.LastError,
+		c:                         c,
+		name:                      name,
+		continuation:              out.NextContinuationToken,
+		rowsErrorCount:            out.ChannelStatus.RowsErrorCount,
+		rowsErrorCountBaseline:    out.ChannelStatus.RowsErrorCount,
+		lastErrorMessage:          out.ChannelStatus.LastError,
+		lastErrorOffsetUpperBound: out.ChannelStatus.LastErrorOffsetUpperBound,
 	}, nil
 }
 
@@ -239,17 +245,19 @@ type appendResponse struct {
 // (an invalid pipe accepts and discards); confirm with WaitUntilCommitted.
 // startOffsetToken/endOffsetToken are the batch's first and last row tokens
 // (equal for one row) and both are always sent, matching the reference SDK.
-// The continuation token is read, sent and updated under mu so concurrent
-// callers serialise instead of presenting an interleaved chain.
-func (ch *Channel) AppendRows(ctx context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (sent bool, err error) {
+// payloadBytes is the size of the body sent (compressed when compression is
+// on), for metrics; it is zero when nothing was sent. The continuation token
+// is read, sent and updated under mu so concurrent callers serialise instead
+// of presenting an interleaved chain.
+func (ch *Channel) AppendRows(ctx context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (sent bool, payloadBytes int, err error) {
 	body, uncompressed, err := EncodeRows(rows, ch.c.cfg.Compress)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	// Uncompressed length, not len(body): zstd emits a non-empty frame for
 	// empty input.
 	if uncompressed == 0 {
-		return false, nil
+		return false, 0, nil
 	}
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
@@ -259,10 +267,10 @@ func (ch *Channel) AppendRows(ctx context.Context, rows [][]byte, startOffsetTok
 		url.QueryEscape(startOffsetToken), url.QueryEscape(endOffsetToken), url.QueryEscape(ch.continuation))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	if err := ch.c.authorise(ctx, req); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-ndjson")
 	if ch.c.cfg.Compress {
@@ -271,17 +279,17 @@ func (ch *Channel) AppendRows(ctx context.Context, rows [][]byte, startOffsetTok
 	}
 	respBody, err := ch.c.do(req)
 	if err != nil {
-		return false, fmt.Errorf("append rows to channel %q: %w", ch.name, err)
+		return false, 0, fmt.Errorf("append rows to channel %q: %w", ch.name, err)
 	}
 	var out appendResponse
 	if err := json.Unmarshal(respBody, &out); err != nil {
-		return false, fmt.Errorf("decode append response: %w", err)
+		return false, 0, fmt.Errorf("decode append response: %w", err)
 	}
 	if out.StatusCode != 0 {
-		return false, fmt.Errorf("append rejected on channel %q: status_code=%d message=%q", ch.name, out.StatusCode, out.Message)
+		return false, 0, fmt.Errorf("append rejected on channel %q: status_code=%d message=%q", ch.name, out.StatusCode, out.Message)
 	}
 	ch.continuation = out.NextContinuationToken
-	return true, nil
+	return true, len(body), nil
 }
 
 func (ch *Channel) status(ctx context.Context) (ChannelStatus, error) {
@@ -359,9 +367,10 @@ func (ch *Channel) WaitUntilCommitted(ctx context.Context, offsetToken string, t
 		ch.mu.Lock()
 		ch.rowsErrorCount = st.RowsErrorCount
 		ch.lastErrorMessage = st.LastError
+		ch.lastErrorOffsetUpperBound = st.LastErrorOffsetUpperBound
 		ch.mu.Unlock()
 		if st.StatusCode != "" && st.StatusCode != "SUCCESS" {
-			return fmt.Errorf("channel %q status %s while waiting for offset %q: %s", ch.name, st.StatusCode, offsetToken, st.LastError)
+			return &ChannelStatusError{Channel: ch.name, Code: st.StatusCode, Message: st.LastError, OffsetToken: offsetToken}
 		}
 		if st.LastCommittedOffsetToken != "" &&
 			CompareOffsetTokens(st.LastCommittedOffsetToken, offsetToken) >= 0 {
@@ -410,4 +419,12 @@ func (ch *Channel) LastErrorMessage() string {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	return ch.lastErrorMessage
+}
+
+// LastErrorOffsetUpperBound is the end token of the last append that
+// contained rejected rows, as of the last status poll ("" if none).
+func (ch *Channel) LastErrorOffsetUpperBound() string {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	return ch.lastErrorOffsetUpperBound
 }

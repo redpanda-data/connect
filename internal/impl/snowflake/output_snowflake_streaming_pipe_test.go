@@ -55,9 +55,10 @@ type fakeChannel struct {
 
 	// rowsRejected (delta) and rowsErrorCount (lifetime total) are
 	// independent so a test can simulate pre-existing errors at open.
-	rowsRejected     int64
-	rowsErrorCount   int64
-	lastErrorMessage string
+	rowsRejected              int64
+	rowsErrorCount            int64
+	lastErrorMessage          string
+	lastErrorOffsetUpperBound string
 
 	// latestCalls counts LatestOffsetToken calls, so a test can assert that
 	// checkSyntheticTokenSpace's control-plane lookup happens once per
@@ -69,28 +70,29 @@ func (f *fakeChannel) Name() string { return f.name }
 
 // AppendRows mirrors the real Channel: empty/whitespace-only rows are
 // skipped, and an all-empty batch records nothing and reports sent=false.
-func (f *fakeChannel) AppendRows(_ context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (bool, error) {
+func (f *fakeChannel) AppendRows(_ context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (bool, int, error) {
 	anyNonEmpty := false
+	payload := 0
 	for _, r := range rows {
 		if len(bytes.TrimSpace(r)) > 0 {
 			anyNonEmpty = true
-			break
 		}
+		payload += len(r) + 1
 	}
 	if !anyNonEmpty {
-		return false, nil
+		return false, 0, nil
 	}
 	if errors.Is(f.appendErr, v2.ErrLocalEncoding) {
 		// The real client fails before any request when it cannot encode
 		// the rows, so nothing is recorded as appended.
-		return false, f.appendErr
+		return false, 0, f.appendErr
 	}
 	f.appends = append(f.appends, rows)
 	f.startOffsets = append(f.startOffsets, startOffsetToken)
 	f.endOffsets = append(f.endOffsets, endOffsetToken)
 	// A request was made either way from here -- sent reports whether one
 	// was attempted, not whether it succeeded.
-	return true, f.appendErr
+	return true, payload, f.appendErr
 }
 
 func (f *fakeChannel) LatestOffsetToken(context.Context) (string, error) {
@@ -114,8 +116,9 @@ func (f *fakeChannel) RowsRejected() int64 {
 	f.rowsRejected = 0
 	return d
 }
-func (f *fakeChannel) RowsErrorCount() int64    { return f.rowsErrorCount }
-func (f *fakeChannel) LastErrorMessage() string { return f.lastErrorMessage }
+func (f *fakeChannel) RowsErrorCount() int64             { return f.rowsErrorCount }
+func (f *fakeChannel) LastErrorMessage() string          { return f.lastErrorMessage }
+func (f *fakeChannel) LastErrorOffsetUpperBound() string { return f.lastErrorOffsetUpperBound }
 
 var _ v2.IngestChannel = (*fakeChannel)(nil)
 
@@ -1406,7 +1409,7 @@ func realAppendError(t *testing.T, appendStatus int, appendBody string) error {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	_, err = ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1")
+	_, _, err = ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1")
 	if err == nil {
 		t.Fatalf("expected AppendRows to fail against a %d append response, got nil error", appendStatus)
 	}

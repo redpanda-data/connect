@@ -94,7 +94,7 @@ func TestInsertRowsURLMatchesSDKShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "10", "12"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "10", "12"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	raw := rowsQuery(t, seen)
@@ -115,7 +115,7 @@ func TestInsertRowsURLRendersEmptyStartTokenAsPresentButEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "", "12"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "", "12"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	raw := rowsQuery(t, seen)
@@ -136,7 +136,7 @@ func TestInsertRowsURLSendsEqualTokensForSingleRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "7", "7"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "7", "7"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	raw := rowsQuery(t, seen)
@@ -162,7 +162,7 @@ func TestOffsetTokensAreEscapedDeliberatelyUnlikeTheSDK(t *testing.T) {
 		t.Fatalf("OpenChannel: %v", err)
 	}
 	// A token an operator's interpolation could plausibly produce.
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "a b&c=d", "a b&c=d"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "a b&c=d", "a b&c=d"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	raw := rowsQuery(t, seen)
@@ -195,7 +195,7 @@ func TestAppendRowsWithAllEmptyBatchMakesNoRequestAndLeavesTokenUntouched(t *tes
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	sent, err := ch.AppendRows(t.Context(), [][]byte{{}, []byte("   "), []byte("\n\t")}, "1", "1")
+	sent, _, err := ch.AppendRows(t.Context(), [][]byte{{}, []byte("   "), []byte("\n\t")}, "1", "1")
 	if err != nil {
 		t.Fatalf("all-empty append: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestAppendRowsWithAllEmptyBatchMakesNoRequestAndLeavesTokenUntouched(t *tes
 	}
 	// A subsequent real append must present the token set at channel open
 	// (ct-0), proving the all-empty append above never touched ch.continuation.
-	sent, err = ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "2", "2")
+	sent, _, err = ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "2", "2")
 	if err != nil {
 		t.Fatalf("real append: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestEndpointsUseTheCorrectPlane(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 
@@ -354,7 +354,7 @@ func TestRequestHeadersMatchProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 

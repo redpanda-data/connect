@@ -11,6 +11,8 @@ package streamingv2
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -238,5 +240,55 @@ func TestSplitRowRejectsMultiLineInvalidJSON(t *testing.T) {
 		if !errors.Is(err, ErrLocalEncoding) || rows != nil {
 			t.Errorf("SplitRow(%q) = %q, %v; want ErrLocalEncoding and no rows", body, rows, err)
 		}
+	}
+}
+
+// TestEncodeRowsCompressedLimitIsOnTheSentBody: the 4 MB limit is measured
+// after compression, so a highly compressible body far over the limit
+// uncompressed is accepted.
+func TestEncodeRowsCompressedLimitIsOnTheSentBody(t *testing.T) {
+	row := []byte(`{"k":"` + strings.Repeat("a", 1000) + `"}`)
+	rows := make([][]byte, 0, 12*1024)
+	for range 12 * 1024 { // ~12 MiB uncompressed
+		rows = append(rows, row)
+	}
+	body, n, err := EncodeRows(rows, true)
+	if err != nil {
+		t.Fatalf("EncodeRows: %v", err)
+	}
+	if n <= MaxRequestBytes {
+		t.Fatalf("test setup: uncompressed %d should exceed the limit %d", n, MaxRequestBytes)
+	}
+	if len(body) > MaxRequestBytes {
+		t.Fatalf("compressed body %d is over the limit; test data should compress well", len(body))
+	}
+}
+
+func TestEncodeRowsCompressedOversizeIsPayloadTooLarge(t *testing.T) {
+	// Random bytes, hex-encoded (two characters per byte, so zstd gets the
+	// hex back to about half): 160 x 32 KiB = 5 MiB of entropy stays over
+	// 4 MiB however it is compressed.
+	rng := rand.New(rand.NewPCG(1, 2))
+	rows := make([][]byte, 0, 160)
+	for range 160 {
+		raw := make([]byte, 32*1024)
+		for i := range raw {
+			raw[i] = byte(rng.Uint32())
+		}
+		rows = append(rows, []byte(fmt.Sprintf(`{"k":"%x"}`, raw)))
+	}
+	_, _, err := EncodeRows(rows, true)
+	if !errors.Is(err, ErrPayloadTooLarge) {
+		t.Fatalf("expected ErrPayloadTooLarge for an incompressible oversize body, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "after zstd compression") {
+		t.Errorf("error should say the compressed size was measured, got %v", err)
+	}
+}
+
+func TestEncodeRowsUncompressedOversizeIsPayloadTooLarge(t *testing.T) {
+	_, _, err := EncodeRows([][]byte{bytes.Repeat([]byte("x"), MaxRequestBytes+1)}, false)
+	if !errors.Is(err, ErrPayloadTooLarge) || !errors.Is(err, ErrLocalEncoding) {
+		t.Errorf("error = %v, want ErrPayloadTooLarge wrapping ErrLocalEncoding", err)
 	}
 }

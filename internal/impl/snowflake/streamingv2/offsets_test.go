@@ -48,13 +48,13 @@ func TestSyntheticTokensOrderLikeTheirCounter(t *testing.T) {
 // at-least-once leaves the commit wait waiting for its own append.
 func TestSyntheticTokensCompareAboveRealTokens(t *testing.T) {
 	synthetic := FormatSyntheticToken(1)
-	for _, real := range []string{
+	for _, tok := range []string{
 		"0", "9", "10", "5000", "9223372036854775807",
 		"postgres-0/16B3748", "mysql-bin.000001:1234", "scn-98765", "zzz",
 		"ABC", "0000002a:00000138:0003", "a b&c=d",
 	} {
-		if got := CompareOffsetTokens(real, synthetic); got != -1 {
-			t.Errorf("CompareOffsetTokens(%q, synthetic) = %d, want -1", real, got)
+		if got := CompareOffsetTokens(tok, synthetic); got != -1 {
+			t.Errorf("CompareOffsetTokens(%q, synthetic) = %d, want -1", tok, got)
 		}
 	}
 }
@@ -81,9 +81,9 @@ func TestIsSyntheticToken(t *testing.T) {
 	if !IsSyntheticToken(FormatSyntheticToken(time.Now().UnixNano())) {
 		t.Error("IsSyntheticToken(FormatSyntheticToken(...)) = false, want true")
 	}
-	for _, real := range []string{"", "1", "postgres-1", "rpcn-at-least-once-1", "~"} {
-		if IsSyntheticToken(real) {
-			t.Errorf("IsSyntheticToken(%q) = true, want false", real)
+	for _, tok := range []string{"", "1", "postgres-1", "rpcn-at-least-once-1", "~"} {
+		if IsSyntheticToken(tok) {
+			t.Errorf("IsSyntheticToken(%q) = true, want false", tok)
 		}
 	}
 }

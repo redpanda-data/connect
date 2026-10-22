@@ -237,7 +237,7 @@ func TestAppendRowsSendsNDJSONOnTheDataPlane(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "42", "42"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "42", "42"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	if got := f.rowsSeenAt(0); got != "{\"a\":1}\n" {
@@ -270,7 +270,7 @@ func TestAppendRowsSendsStartEndOffsetTokenPair(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`), []byte(`{"a":2}`)}, "5", "6"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`), []byte(`{"a":2}`)}, "5", "6"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	if f.lastQueryValue("startOffsetToken") != "5" {
@@ -301,7 +301,7 @@ func TestAppendRowsSendsEqualStartEndOffsetTokenForSingleRowBatch(t *testing.T) 
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "7", "7"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "7", "7"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	if f.lastQueryValue("startOffsetToken") != "7" || f.lastQueryValue("endOffsetToken") != "7" {
@@ -318,7 +318,7 @@ func TestAppendRowsSendsEmptyStartOffsetTokenPresentNotOmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "", "9"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "", "9"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	q := f.lastRawQueryStr()
@@ -335,10 +335,10 @@ func TestAppendRowsThreadsContinuationToken(t *testing.T) {
 	defer srv.Close()
 	ch, _ := connectedClient(t, srv, false).OpenChannel(t.Context(), "ch1")
 	ctx := t.Context()
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":2}`)}, "2", "2"); err != nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":2}`)}, "2", "2"); err != nil {
 		t.Fatalf("second: %v", err)
 	}
 	if f.lastQueryValue("continuationToken") != "ct-x" {
@@ -354,16 +354,16 @@ func TestAppendRowsLeavesContinuationTokenIntactOnRejectedAppend(t *testing.T) {
 	defer srv.Close()
 	ch, _ := connectedClient(t, srv, false).OpenChannel(t.Context(), "ch1")
 	ctx := t.Context()
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
 		t.Fatalf("first: %v", err)
 	}
 	f.overrideRowsResponse(2, `{"status_code":5,"message":"rejected","next_continuation_token":"ct-should-not-be-used"}`)
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":2}`)}, "2", "2"); err == nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":2}`)}, "2", "2"); err == nil {
 		t.Fatal("expected an error for a rejected append (non-zero status_code), got nil")
 	}
 	// The third append must present the token set by the FIRST append, not
 	// the rejected response's next_continuation_token.
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":3}`)}, "3", "3"); err != nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":3}`)}, "3", "3"); err != nil {
 		t.Fatalf("third: %v", err)
 	}
 	if got := f.lastQueryValue("continuationToken"); got != "ct-x" {
@@ -378,14 +378,14 @@ func TestAppendRowsLeavesContinuationTokenIntactOnMalformedResponse(t *testing.T
 	defer srv.Close()
 	ch, _ := connectedClient(t, srv, false).OpenChannel(t.Context(), "ch1")
 	ctx := t.Context()
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
 		t.Fatalf("first: %v", err)
 	}
 	f.overrideRowsResponse(2, "not valid json")
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":2}`)}, "2", "2"); err == nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":2}`)}, "2", "2"); err == nil {
 		t.Fatal("expected a decode error for a malformed response, got nil")
 	}
-	if _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":3}`)}, "3", "3"); err != nil {
+	if _, _, err := ch.AppendRows(ctx, [][]byte{[]byte(`{"a":3}`)}, "3", "3"); err != nil {
 		t.Fatalf("third: %v", err)
 	}
 	if got := f.lastQueryValue("continuationToken"); got != "ct-x" {
@@ -397,7 +397,7 @@ func TestAppendRowsSetsCompressionHeaders(t *testing.T) {
 	f, srv := newFakeServer(t)
 	defer srv.Close()
 	ch, _ := connectedClient(t, srv, true).OpenChannel(t.Context(), "ch1")
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "1", "1"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	if f.lastHdr("Content-Encoding") != "zstd" {
@@ -513,7 +513,7 @@ func TestAppendRowsWithAllEmptyBatchAndCompressionMakesNoRequest(t *testing.T) {
 	defer srv.Close()
 	ch, _ := connectedClient(t, srv, true).OpenChannel(t.Context(), "ch1")
 	before := f.appendCalls()
-	sent, err := ch.AppendRows(t.Context(), [][]byte{{}, []byte(" \n")}, "1", "1")
+	sent, _, err := ch.AppendRows(t.Context(), [][]byte{{}, []byte(" \n")}, "1", "1")
 	if err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestRowsRejectedReportsDeltaNotAbsolute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenChannel: %v", err)
 	}
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "3", "3"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, "3", "3"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	f.setCommitted("3")
@@ -589,7 +589,7 @@ func TestRowsRejectedReportsDeltaNotAbsolute(t *testing.T) {
 	}
 
 	// A new error on a later batch must still be reported.
-	if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":2}`)}, "4", "4"); err != nil {
+	if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":2}`)}, "4", "4"); err != nil {
 		t.Fatalf("AppendRows: %v", err)
 	}
 	f.setRowErrorStats(3, 1, 2, "Failed to cast variant value <redacted> to <redacted>")
@@ -724,7 +724,7 @@ func TestAppendRowsSerializesConcurrentCallsOnOneChannel(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			if _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, strconv.Itoa(i), strconv.Itoa(i)); err != nil {
+			if _, _, err := ch.AppendRows(t.Context(), [][]byte{[]byte(`{"a":1}`)}, strconv.Itoa(i), strconv.Itoa(i)); err != nil {
 				errCh <- err
 			}
 		}(i)

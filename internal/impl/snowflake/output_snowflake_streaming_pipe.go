@@ -970,7 +970,7 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 	}
 	o.logger.Debugf("inserting %d rows using channel %s at offset tokens: start=%s end=%s", len(rows), channel.Name(), startOffsetToken, endOffsetToken)
 	appendStart := time.Now()
-	sent, err := channel.AppendRows(ctx, rows, startOffsetToken, endOffsetToken)
+	sent, _, err := channel.AppendRows(ctx, rows, startOffsetToken, endOffsetToken)
 	if err != nil {
 		if v2.IsBackpressure(err) || errors.Is(err, v2.ErrLocalEncoding) {
 			// Backpressure leaves the channel usable; reopening would only

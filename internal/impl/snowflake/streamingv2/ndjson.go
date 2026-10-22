@@ -15,14 +15,45 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 )
 
-// MaxRequestBytes is the documented per-request limit for the rows endpoint.
-// The uncompressed body is checked against it: the server cares about what it
-// receives after decompression.
-const MaxRequestBytes = 4 << 20
+// zstdEncoder is shared by every EncodeRows call: EncodeAll is safe for
+// concurrent use and takes one of the encoder's internal states per call,
+// so building an encoder per request would allocate that state each time
+// while a single shared one still compresses in-flight batches in
+// parallel. The state count is capped: each one keeps buffers sized to the
+// largest input it saw, and more than a handful of batches are rarely
+// being compressed at once.
+var (
+	zstdEncoder     *zstd.Encoder
+	zstdEncoderOnce sync.Once
+	zstdEncoderErr  error
+)
+
+func sharedZstdEncoder() (*zstd.Encoder, error) {
+	zstdEncoderOnce.Do(func() {
+		zstdEncoder, zstdEncoderErr = zstd.NewWriter(nil, zstd.WithEncoderConcurrency(min(runtime.GOMAXPROCS(0), 8)))
+	})
+	return zstdEncoder, zstdEncoderErr
+}
+
+// MaxRequestBytes is the documented per-request limit for the rows endpoint:
+// "a 4 MB payload limit (the payload size sent over the network, after
+// compression if used)". Snowflake writes MB, not MiB, so the decimal value
+// is used; the 4.6% left on the table is cheaper than a body in the gap
+// being rejected server-side. The body that would go on the wire is checked
+// against it, so with compression on a batch may be far larger than this
+// uncompressed.
+const MaxRequestBytes = 4_000_000
+
+// ErrPayloadTooLarge is returned, wrapping ErrLocalEncoding, when the body
+// to send is over MaxRequestBytes. Callers that can split the batch should
+// do so; nothing has been sent.
+var ErrPayloadTooLarge = fmt.Errorf("%w: payload over the %d byte request limit", ErrLocalEncoding, MaxRequestBytes)
 
 // ErrLocalEncoding wraps every EncodeRows failure. Nothing has reached the
 // server when it is returned, so the channel is still healthy and a caller
@@ -80,8 +111,9 @@ func SplitRow(body []byte) ([][]byte, error) {
 // so it is an error: callers compact such rows first (json.Compact).
 //
 // It returns the body to send, the uncompressed byte count (needed for the
-// x-snowflake-uncompressed-content-length header), and an error if the batch is
-// over MaxRequestBytes. Oversize batches are rejected, never truncated.
+// x-snowflake-uncompressed-content-length header), and ErrPayloadTooLarge if
+// the body to send is over MaxRequestBytes. Oversize batches are rejected,
+// never truncated.
 func EncodeRows(rows [][]byte, compress bool) ([]byte, int, error) {
 	var plain bytes.Buffer
 	for i, r := range rows {
@@ -96,23 +128,19 @@ func EncodeRows(rows [][]byte, compress bool) ([]byte, int, error) {
 		plain.WriteByte('\n')
 	}
 	uncompressed := plain.Len()
-	if uncompressed > MaxRequestBytes {
-		return nil, 0, fmt.Errorf("%w: batch is %d bytes uncompressed, over the %d byte limit; reduce the batching policy", ErrLocalEncoding, uncompressed, MaxRequestBytes)
-	}
 	if !compress {
+		if uncompressed > MaxRequestBytes {
+			return nil, 0, fmt.Errorf("%w: batch is %d bytes uncompressed", ErrPayloadTooLarge, uncompressed)
+		}
 		return plain.Bytes(), uncompressed, nil
 	}
-	var out bytes.Buffer
-	enc, err := zstd.NewWriter(&out)
+	enc, err := sharedZstdEncoder()
 	if err != nil {
-		return nil, 0, fmt.Errorf("%w: zstd writer: %w", ErrLocalEncoding, err)
+		return nil, 0, fmt.Errorf("%w: zstd encoder: %w", ErrLocalEncoding, err)
 	}
-	if _, err := enc.Write(plain.Bytes()); err != nil {
-		enc.Close()
-		return nil, 0, fmt.Errorf("%w: zstd write: %w", ErrLocalEncoding, err)
+	out := enc.EncodeAll(plain.Bytes(), make([]byte, 0, uncompressed/4+64))
+	if len(out) > MaxRequestBytes {
+		return nil, 0, fmt.Errorf("%w: batch is %d bytes after zstd compression (%d uncompressed)", ErrPayloadTooLarge, len(out), uncompressed)
 	}
-	if err := enc.Close(); err != nil {
-		return nil, 0, fmt.Errorf("%w: zstd close: %w", ErrLocalEncoding, err)
-	}
-	return out.Bytes(), uncompressed, nil
+	return out, uncompressed, nil
 }

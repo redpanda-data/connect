@@ -244,9 +244,9 @@ func TestScopedTokenSurfacesExchangeFailure(t *testing.T) {
 // concurrent exchange cannot hide behind scheduling.
 func TestScopedTokenThunderingHerd(t *testing.T) {
 	const n = 8
-	var calls int64
+	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt64(&calls, 1)
+		calls.Add(1)
 		time.Sleep(50 * time.Millisecond)
 		_, _ = io.WriteString(w, "herd-token")
 	}))
@@ -283,7 +283,7 @@ func TestScopedTokenThunderingHerd(t *testing.T) {
 			t.Errorf("goroutine %d: token = %q, want %q (same token as goroutine 0)", i, tokens[i], tokens[0])
 		}
 	}
-	if got := atomic.LoadInt64(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("exchange calls = %d, want exactly 1 (thundering herd not collapsed to one exchange)", got)
 	}
 }

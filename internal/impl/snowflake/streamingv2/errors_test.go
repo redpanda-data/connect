@@ -219,3 +219,43 @@ func TestHTTP404NeverClassifiesAsRetryable(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyChannelStatusFamilies(t *testing.T) {
+	cases := map[string]Kind{
+		"ERR_CHANNEL_MUST_BE_REOPENED":                                       KindChannelReopen,
+		"ERR_CHANNEL_MUST_BE_REOPENED_DUE_TO_ROW_SEQ_GAP":                    KindChannelReopen,
+		"ERR_CHANNEL_HAS_INVALID_ROW_SEQUENCER":                              KindChannelReopen,
+		"ERR_CHANNEL_HAS_INVALID_CLIENT_SEQUENCER":                           KindChannelReopen,
+		"ERR_PIPE_DOES_NOT_EXIST_OR_NOT_AUTHORIZED":                          KindChannelOperator,
+		"ERR_TABLE_DOES_NOT_EXIST_NOT_AUTHORIZED":                            KindChannelOperator,
+		"ERR_CHANNEL_SCHEMA_EVOLUTION_ICEBERG_TIME_TYPE_SCALE_NOT_SUPPORTED": KindChannelOperator,
+		"ERR_SOMETHING_NEW":                                                  KindChannelReopen,
+	}
+	for code, want := range cases {
+		err := fmt.Errorf("wrapped: %w", &ChannelStatusError{Channel: "c", Code: code, Message: "m", OffsetToken: "5"})
+		if got := Classify(err); got != want {
+			t.Errorf("Classify(%s) = %s, want %s", code, got, want)
+		}
+	}
+}
+
+func TestClassifyOtherKinds(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want Kind
+	}{
+		{"nil", nil, KindOther},
+		{"transport", errors.New("dial tcp: connection refused"), KindOther},
+		{"429", &httpStatusError{statusCode: 429}, KindBackpressure},
+		{"retry code", &httpStatusError{statusCode: 500, body: `{"error_code":"ERR_GENERAL_EXCEPTION_RETRY_REQUEST"}`}, KindBackpressure},
+		{"open collision", &httpStatusError{statusCode: 409, body: `{"error_code":"ERR_OPEN_CHANNEL_IN_PROGRESS"}`}, KindOpenCollision},
+		{"uncommitted", &httpStatusError{statusCode: 409, body: `{"error_code":"ERR_CHANNEL_HAS_UNCOMMITTED_DATA"}`}, KindUncommittedData},
+		{"local encoding", fmt.Errorf("x: %w", ErrPayloadTooLarge), KindLocalEncoding},
+	}
+	for _, tc := range cases {
+		if got := Classify(tc.err); got != tc.want {
+			t.Errorf("%s: Classify = %s, want %s", tc.name, got, tc.want)
+		}
+	}
+}

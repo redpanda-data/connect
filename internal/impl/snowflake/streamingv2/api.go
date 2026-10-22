@@ -22,7 +22,9 @@ type IngestChannel interface {
 	// sent is false, with a nil err, when every row was empty or
 	// whitespace-only and no request was made; callers must not wait for
 	// such a token to commit, since nothing will ever commit it.
-	AppendRows(ctx context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (sent bool, err error)
+	// payloadBytes is the size of the body sent over the wire (zero when
+	// nothing was sent).
+	AppendRows(ctx context.Context, rows [][]byte, startOffsetToken, endOffsetToken string) (sent bool, payloadBytes int, err error)
 	// LatestOffsetToken is the last committed token; "" means none yet.
 	LatestOffsetToken(ctx context.Context) (string, error)
 	// WaitUntilCommitted blocks until the committed token is at or beyond
@@ -37,4 +39,7 @@ type IngestChannel interface {
 	RowsErrorCount() int64
 	// LastErrorMessage is the latest last_error_message, for logging.
 	LastErrorMessage() string
+	// LastErrorOffsetUpperBound is the end token of the last append that
+	// contained rejected rows ("" if none), for logging and attribution.
+	LastErrorOffsetUpperBound() string
 }
