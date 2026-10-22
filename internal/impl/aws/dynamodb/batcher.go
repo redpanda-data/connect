@@ -505,7 +505,10 @@ func (b *RecordBatcher) finalizeShard(ctx context.Context, shardID string) error
 	}
 
 	// Wait out any checkpoint write an earlier ack still has in flight, so
-	// the final write is the last one to land on the shard's row.
+	// the final write is the last one to land on the shard's row. A write
+	// abandoned on timeout can still arrive later; the store then rejects it
+	// rather than letting it clear the completion marker (see
+	// Checkpointer.Set).
 	st.persistMu.Lock()
 	defer st.persistMu.Unlock()
 
@@ -690,7 +693,10 @@ func (b *RecordBatcher) maybePersist(ctx context.Context, cp checkpointer, st *s
 		// variable-length numeric strings, so a lexicographic
 		// ConditionExpression guarding forward-only movement could wrongly
 		// reject legitimate newer writes forever - a frozen checkpoint,
-		// strictly worse than the race it would close.
+		// strictly worse than the race it would close. What the write can
+		// never do is replace the shard's completion marker once
+		// finalizeShard has written it: the store rejects a plain write on
+		// a completed row (see Checkpointer.Set).
 		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
 		err := cp.Set(setCtx, shardID, persistSeq, persistTime)
 		cancel()
