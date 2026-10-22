@@ -573,7 +573,7 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 	require.Len(t, c2.Children, 3)
 }
 
-func TestSeedFromColumnMetaIdentitySkip(t *testing.T) {
+func TestSeedFromColumnMetaSkip(t *testing.T) {
 	newMeta := func() []replication.ColumnMeta {
 		return []replication.ColumnMeta{
 			{Name: "A", TypeName: "VARCHAR2"},
@@ -596,7 +596,7 @@ func TestSeedFromColumnMetaIdentitySkip(t *testing.T) {
 			"re-seeding with the same slice must skip the rebuild and leave the cached schema untouched")
 	})
 
-	t.Run("different slice with equal content still rebuilds", func(t *testing.T) {
+	t.Run("different slice with equal content skips rebuild", func(t *testing.T) {
 		sc := testSchemaCache(t)
 		tbl := replication.UserTable{Schema: "S", Name: "T"}
 		meta := newMeta()
@@ -609,8 +609,24 @@ func TestSeedFromColumnMetaIdentitySkip(t *testing.T) {
 		freshCopy := make([]replication.ColumnMeta, len(meta))
 		copy(freshCopy, meta)
 		sc.seedFromColumnMeta(tbl, freshCopy)
+		assert.Same(t, first, sc.schemas[tableKey],
+			"re-seeding with an equal-content slice, as each parallel snapshot chunk's page builds, must skip the rebuild")
+	})
+
+	t.Run("different content rebuilds", func(t *testing.T) {
+		sc := testSchemaCache(t)
+		tbl := replication.UserTable{Schema: "S", Name: "T"}
+
+		sc.seedFromColumnMeta(tbl, newMeta())
+		tableKey := tbl.Schema + "." + tbl.Name
+		first := sc.schemas[tableKey]
+		require.NotNil(t, first)
+
+		changed := newMeta()
+		changed[1].Precision = 10
+		sc.seedFromColumnMeta(tbl, changed)
 		assert.NotSame(t, first, sc.schemas[tableKey],
-			"re-seeding with a different (even if equal-content) slice must rebuild the cached schema")
+			"re-seeding with different column metadata must rebuild the cached schema")
 	})
 
 	t.Run("sameColumnMeta edge cases", func(t *testing.T) {
@@ -623,7 +639,7 @@ func TestSeedFromColumnMetaIdentitySkip(t *testing.T) {
 		assert.True(t, sameColumnMeta(a, sameSlice), "identical slice header must be reported as same")
 		assert.True(t, sameColumnMeta(nil, nil), "two nil slices must be reported as same")
 		assert.True(t, sameColumnMeta(emptyA, emptyB), "two nil/empty slices must be reported as same regardless of identity")
-		assert.False(t, sameColumnMeta(a, equalContent), "distinct slices with equal content must not be reported as same")
+		assert.True(t, sameColumnMeta(a, equalContent), "distinct slices with equal content must be reported as same")
 		assert.False(t, sameColumnMeta(a, nil), "non-nil vs nil must not be reported as same")
 		assert.False(t, sameColumnMeta(a, a[:1]), "different lengths must not be reported as same")
 	})
