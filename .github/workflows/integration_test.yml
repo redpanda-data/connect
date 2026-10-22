@@ -157,14 +157,24 @@ jobs:
       - name: Verify Integration Tests Registry
         run: task test:integration:verify
 
+      # A pull request that changes nothing under internal/impl/ (workflow, docs,
+      # tooling) has an empty filter, and an empty filter means every package:
+      # the full suite, which does not fit the 30-minute budget. Skip the run
+      # instead. A comment or a dispatch always carries its own filter.
       - name: Pull Latest Redpanda Image
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         run: task docker:pull-redpanda
 
       - name: Run Integration Tests
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         env:
           FILTER: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}
         timeout-minutes: 30
+
+      - name: No component package changed
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' }}
+        run: echo "No files under internal/impl/ changed; the filtered integration run was skipped." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Write Summary
         if: always()
