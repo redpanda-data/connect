@@ -56,7 +56,7 @@ const (
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
 	fieldSignalTableName           = "signal_table_name"
-	fieldManagePublication         = "manage_publication"
+	fieldSelfManagePublication     = "self_manage_publication"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
@@ -167,7 +167,7 @@ This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set 
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
-If left empty, and ` + "`" + fieldManagePublication + "`" + ` is ` + "`true`" + `, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+If left empty, and ` + "`" + fieldSelfManagePublication + "`" + ` is ` + "`true`" + `, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(replication.CheckpointLimitField("log sequence number (LSN)")).
 		Field(service.NewBoolField(fieldTemporarySlot).
@@ -181,12 +181,12 @@ If the pipeline is restarted and ` + "`" + `stream_snapshot` + "`" + ` is enable
 		Field(service.NewStringField(fieldSlotName).
 			Description(`The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention. Set ` + "`" + fieldManagePublication + "`" + ` to ` + "`false`" + ` so the input also never alters them.
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention. Set ` + "`" + fieldSelfManagePublication + "`" + ` to ` + "`false`" + ` so the input also never alters them.
 
 Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" + ` to the names of the replication slots it creates. To keep using a replication slot that an earlier version created, add the ` + "`rs_`" + ` prefix to this field yourself.`).
 			ShortDescription("The name of the PostgreSQL logical replication slot to use. The input creates the slot if it does not exist.").
 			Example("my_test_slot")).
-		Field(service.NewBoolField(fieldManagePublication).
+		Field(service.NewBoolField(fieldSelfManagePublication).
 			Description(`Whether this input creates and maintains the publication ` + "`pglog_stream_<slot_name>`" + `. When ` + "`true`" + `, on every connect the input creates the publication if it is missing, and otherwise adds and drops tables until it lists exactly ` + "`" + fieldTables + "`" + ` (plus ` + "`" + fieldSignalTableName + "`" + `, if set). A publication created ` + "`FOR ALL TABLES`" + ` is left as is when ` + "`" + fieldTables + "`" + ` is empty; when ` + "`" + fieldTables + "`" + ` is set, the input fails to start instead of streaming every table, since such a publication cannot be narrowed.
 
 Set this to ` + "`false`" + ` when the publication is owned outside the connector, for example by a DBA, so that the replication user needs no ownership of the replicated tables. The input then never runs ` + "`CREATE PUBLICATION`" + ` or ` + "`ALTER PUBLICATION`" + `. Instead, on every connect it checks that the publication exists, publishes inserts, updates and deletes (the default ` + "`publish`" + ` option), and includes every table in ` + "`" + fieldTables + "`" + ` and the signal table, and fails with an error naming whatever is missing. A partitioned table counts as included only when every one of its partitions is published, directly or through the partitioned table. This check requires PostgreSQL 12 or later. While the input runs, it repeats the table check every ` + "`" + fieldWalMonitorInterval + "`" + `, logging an error and reporting the count in the ` + "`postgres_publication_missing_tables`" + ` metric when a table has been removed from the publication.
@@ -505,7 +505,7 @@ func newPgStreamInputUnwrapped(conf *service.ParsedConfig, mgr *service.Resource
 		return nil, err
 	}
 
-	managePublication, err := conf.FieldBool(fieldManagePublication)
+	selfManagePublication, err := conf.FieldBool(fieldSelfManagePublication)
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +597,7 @@ func newPgStreamInputUnwrapped(conf *service.ParsedConfig, mgr *service.Resource
 		iamAuthEnabled: iamAuthEnabled,
 	}
 
-	i.streamConfig.ExternallyManagedPublication = !managePublication
+	i.streamConfig.ExternallyManagedPublication = !selfManagePublication
 
 	if incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, signalTableName, streamSnapshot); err != nil {
 		return nil, err

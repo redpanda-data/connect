@@ -343,7 +343,7 @@ var errAllTablesPublication = errors.New("publication is FOR ALL TABLES")
 func publicationSyncPlan(publicationName string, pub publicationInfo, pubTables, tables []TableFQN) (add, drop []TableFQN, err error) {
 	if pub.allTables {
 		if len(tables) > 0 {
-			return nil, nil, fmt.Errorf("%w: %s replicates every table and cannot be narrowed to the configured tables: drop it so it can be recreated for the configured tables, use a different publication, or set manage_publication to false to stream from it as is", errAllTablesPublication, publicationName)
+			return nil, nil, fmt.Errorf("%w: %s replicates every table and cannot be narrowed to the configured tables: drop it so it can be recreated for the configured tables, use a different publication, or set self_manage_publication to false to stream from it as is", errAllTablesPublication, publicationName)
 		}
 		return nil, nil, nil
 	}
@@ -474,7 +474,7 @@ func getPublicationMembers(ctx context.Context, conn *pgconn.PgConn, publication
 
 // errExternalPublicationVersion is returned when an externally managed
 // publication is used on a server older than PostgreSQL 12.
-var errExternalPublicationVersion = errors.New("manage_publication: false requires PostgreSQL 12 or later")
+var errExternalPublicationVersion = errors.New("self_manage_publication: false requires PostgreSQL 12 or later")
 
 // checkExternalPublicationVersion fails before PostgreSQL 12, since checking
 // an externally managed publication's coverage needs pg_partition_tree and

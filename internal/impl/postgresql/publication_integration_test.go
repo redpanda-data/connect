@@ -26,9 +26,9 @@ import (
 )
 
 // TestIntegrationExternallyManagedPublicationWithoutOwnership runs the input
-// with manage_publication: false as a replication role that owns no table,
+// with self_manage_publication: false as a replication role that owns no table,
 // may only read the replicated ones, and cannot create anything in the
-// database. That is the setup manage_publication exists for, so every
+// database. That is the setup self_manage_publication exists for, so every
 // statement the input issues on the way -- slot creation, the snapshot, the
 // signal table, heartbeats and an incremental snapshot -- must work with
 // those privileges alone.
@@ -130,7 +130,7 @@ postgres_cdc:
     dsn: %s
     slot_name: %s
     schema: public
-    manage_publication: false
+    self_manage_publication: false
     pg_wal_monitor_interval: 1s
     heartbeat_interval: 1s
     tables:

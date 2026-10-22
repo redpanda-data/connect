@@ -79,7 +79,7 @@ func TestPublicationSyncPlan(t *testing.T) {
 			add, drop, err := publicationSyncPlan("pub", test.pub, test.pubTables, test.tables)
 			if test.wantErr {
 				require.ErrorIs(t, err, errAllTablesPublication)
-				assert.ErrorContains(t, err, "manage_publication")
+				assert.ErrorContains(t, err, "self_manage_publication")
 			} else {
 				require.NoError(t, err)
 			}
