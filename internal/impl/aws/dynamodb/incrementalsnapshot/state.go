@@ -155,9 +155,28 @@ func (s *State) RefreshDone(described []string) {
 
 // CanRelease reports whether a page read up to high may be released.
 func (s *State) CanRelease(high time.Time) bool {
+	return s.ReleasePredicate()(high)
+}
+
+// ReleasePredicate returns CanRelease evaluated against the shard progress
+// as it is now, read once, for one release pass over many pages.
+func (s *State) ReleasePredicate() func(high time.Time) bool {
+	caughtUp := s.progress.CaughtUpPredicate()
+	return func(high time.Time) bool { return caughtUp(s.watermark(high)) }
+}
+
+// BlockingReason describes why a page read up to high cannot be released
+// yet, or returns "" when it can.
+func (s *State) BlockingReason(high time.Time) string {
+	return s.progress.BlockingReason(s.watermark(high))
+}
+
+// watermark is the time every shard must be read past before a page read up
+// to high is released.
+func (s *State) watermark(high time.Time) time.Time {
 	// The one second is a protocol constant, not a tuning knob: DynamoDB
 	// Streams rounds ApproximateCreationDateTime down to the second, so a
 	// shard seen up to second S may still deliver records from later in S.
 	// User-tunable slack is snapshot_watermark_margin.
-	return s.progress.CaughtUpPast(high.Add(time.Second + s.margin))
+	return high.Add(time.Second + s.margin)
 }

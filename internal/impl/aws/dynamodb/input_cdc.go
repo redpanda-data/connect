@@ -370,7 +370,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				ShortDescription("Snapshot behaviour: none, snapshot_only, snapshot_and_cdc, or incremental (backfill while streaming, multi-table capable).").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
-				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with.").Version("4.82.0").
+				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with. A snapshot that resumes from stored progress keeps the segment count it started with; a changed value applies to the next snapshot.").Version("4.82.0").
 				ShortDescription("Number of parallel scan segments, from 1 to 10. Higher parallelism scans faster but uses more RCUs.").
 				Default(1).
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
@@ -612,6 +612,10 @@ type dynamoDBCDCInput struct {
 	// backfillRetryBackoff overrides the backoff between retries of a failed
 	// incremental backfill; tests only, nil in production.
 	backfillRetryBackoff func() backoff.BackOff
+	// shardInitRetryBackoff overrides the backoff between retries of a
+	// table coordinator's first shard refresh; tests only, nil in
+	// production.
+	shardInitRetryBackoff func() backoff.BackOff
 	// backfillRetries paces multi-table incremental prepare and backfill
 	// retries per table.
 	backfillRetries backfillRetries
@@ -1764,12 +1768,13 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// break TrackBatch's scan-order contract and could persist positions or
 	// Complete=true past un-acked items) nor leave this attempt's gate
 	// permanently un-drainable via batches orphaned in a replaced msgChan.
-	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, d.log)
+	segments := resolveSnapshotSegments(snapshotCheckpoint, d.conf.snapshot.segments, tableName, d.log)
+	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, segments, d.log)
 	ackGate := new(sync.WaitGroup)
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
 		Client:    d.dynamoClient,
 		Table:     tableName,
-		Segments:  d.conf.snapshot.segments,
+		Segments:  segments,
 		BatchSize: d.conf.snapshot.batchSize,
 		Throttle:  d.conf.snapshot.throttle,
 		Logger:    d.log,
@@ -2702,6 +2707,44 @@ func (d *dynamoDBCDCInput) startDiscoveredTable(ctx context.Context, tableName s
 	}
 }
 
+// initTableShards runs a table coordinator's first shard refresh, retrying
+// with backoff until it succeeds or ctx ends: giving up would leave the table
+// unread until restart (and, in incremental mode, its backfill holding every
+// page). It reports false only when ctx ended.
+func (d *dynamoDBCDCInput) initTableShards(ctx context.Context, tableName string, ts *tableStream) bool {
+	var boff backoff.BackOff
+	if d.shardInitRetryBackoff != nil {
+		boff = d.shardInitRetryBackoff()
+	} else {
+		eb := backoff.NewExponentialBackOff()
+		eb.InitialInterval = time.Second
+		eb.MaxInterval = shardRefreshInterval
+		eb.MaxElapsedTime = 0 // Never give up
+		boff = eb
+	}
+	for {
+		err := d.refreshTableShards(ctx, tableName, ts)
+		if err == nil {
+			return true
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			wait = shardRefreshInterval
+		}
+		d.log.Errorf("Failed to initialize shards for table %s, retrying in %s: %v", tableName, wait, err)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
+}
+
 // startTableStreamCoordinator manages shard readers for a specific table stream
 func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tableName string, ts *tableStream) {
 	d.log.Infof("Starting coordinator for table stream: %s", tableName)
@@ -2712,11 +2755,8 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 	hasShards := len(ts.shardReaders) > 0
 	ts.mu.RUnlock()
 
-	if !hasShards {
-		if err := d.refreshTableShards(ctx, tableName, ts); err != nil {
-			d.log.Errorf("Failed to initialize shards for table %s: %v", tableName, err)
-			return
-		}
+	if !hasShards && !d.initTableShards(ctx, tableName, ts) {
+		return
 	}
 
 	// Track running shard readers for this table

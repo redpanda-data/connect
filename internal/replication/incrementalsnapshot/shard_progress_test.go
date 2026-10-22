@@ -154,3 +154,60 @@ func TestShardProgressInitialUnsettledBoundedByIdleGrace(t *testing.T) {
 	now = now.Add(testIdleGrace)
 	assert.True(t, p.CaughtUpPast(t0))
 }
+
+// TestShardProgressForgetsTrimmedExhaustedShards: an exhausted shard that a
+// refresh no longer describes is forgotten, so a long-running stream does
+// not keep, and scan on every release, every shard it has ever read. One
+// still described stays known, so the refresh still settles.
+func TestShardProgressForgetsTrimmedExhaustedShards(t *testing.T) {
+	p := NewShardProgress(0, testIdleGrace, time.Now)
+	settled(p, "old", "parent", "child")
+	p.Exhausted("old")
+	p.Exhausted("parent")
+	p.RefreshDone([]string{"parent", "child"})
+
+	p.mu.Lock()
+	_, hasOld := p.shards["old"]
+	_, hasParent := p.shards["parent"]
+	_, hasChild := p.shards["child"]
+	settledNow := !p.unsettled
+	p.mu.Unlock()
+	assert.False(t, hasOld, "a trimmed exhausted shard is forgotten")
+	assert.True(t, hasParent, "a described exhausted shard is kept")
+	assert.True(t, hasChild)
+	assert.True(t, settledNow)
+}
+
+func TestShardProgressKeepsUndescribedLiveShards(t *testing.T) {
+	p := NewShardProgress(0, testIdleGrace, time.Now)
+	settled(p, "s1")
+	p.RefreshDone(nil)
+	assert.False(t, p.CaughtUpPast(t0), "a live shard still blocks even if a refresh missed it")
+}
+
+func TestShardProgressCaughtUpPredicateMatchesCaughtUpPast(t *testing.T) {
+	p := NewShardProgress(0, testIdleGrace, time.Now)
+	assert.False(t, p.CaughtUpPredicate()(t0), "unsettled")
+	settled(p, "s1", "s2")
+	p.Observe("s1", t0.Add(10*time.Second))
+	p.Observe("s2", t0.Add(5*time.Second))
+	caughtUp := p.CaughtUpPredicate()
+	for _, at := range []time.Duration{0, 5 * time.Second, 6 * time.Second, 10 * time.Second} {
+		assert.Equal(t, p.CaughtUpPast(t0.Add(at)), caughtUp(t0.Add(at)), "at %s", at)
+	}
+	assert.True(t, caughtUp(t0.Add(5*time.Second)))
+	assert.False(t, caughtUp(t0.Add(6*time.Second)))
+}
+
+func TestShardProgressBlockingReason(t *testing.T) {
+	p := NewShardProgress(0, testIdleGrace, time.Now)
+	assert.Contains(t, p.BlockingReason(t0), "shard refresh", "unsettled")
+	settled(p, "s1", "s2")
+	p.Observe("s1", t0.Add(10*time.Second))
+	reason := p.BlockingReason(t0.Add(time.Second))
+	assert.Contains(t, reason, "1 shard(s)")
+	assert.Contains(t, reason, "s2")
+	assert.Contains(t, reason, "nothing yet")
+	p.Observe("s2", t0.Add(10*time.Second))
+	assert.Empty(t, p.BlockingReason(t0.Add(time.Second)), "nothing blocks")
+}

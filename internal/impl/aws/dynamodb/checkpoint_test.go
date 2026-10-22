@@ -608,7 +608,7 @@ func TestSnapshotCheckpoints_UseNamespacedHashValue(t *testing.T) {
 	require.Equal(t, "dev-alice#arn:A", queryIn.ExpressionAttributeValues[":hash"].(*types.AttributeValueMemberS).Value,
 		"snapshot segment query must use the namespaced hash value")
 
-	require.NoError(t, c.UpdateSnapshotProgress(context.Background(), 3, nil, 42))
+	require.NoError(t, c.UpdateSnapshotProgress(context.Background(), 3, 0, nil, 42))
 	require.Equal(t, "dev-alice#arn:A", putIn.Item["StreamArn"].(*types.AttributeValueMemberS).Value,
 		"snapshot segment writes must use the namespaced hash value")
 	require.Equal(t, "snapshot#segment#3", putIn.Item[checkpointRangeKey].(*types.AttributeValueMemberS).Value)

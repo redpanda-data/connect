@@ -52,9 +52,10 @@ type Deps[P Progress] interface {
 	// at data the stream has already trimmed.
 	CDCCheckpointStale(ctx context.Context) (bool, error)
 
-	// NewEmitter returns the emitter for one backfill run. Each run gets its
-	// own, so a failed run's unacked pages cannot hold up the next one.
-	NewEmitter() Emitter
+	// NewEmitter returns the emitter for one backfill run resuming from
+	// resume. Each run gets its own, so a failed run's unacked pages cannot
+	// hold up the next one.
+	NewEmitter(resume P) Emitter
 
 	// Scan reads the table from resume, calling hooks as it goes, and
 	// returns once every segment has finished or ctx ends.

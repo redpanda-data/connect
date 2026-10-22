@@ -83,3 +83,39 @@ func TestShardReaderClosedShardFinalPageTouchesWindow(t *testing.T) {
 		})
 	}
 }
+
+// TestShardReaderClosedShardRequestsRefresh: a shard that closes normally
+// must ask its coordinator for an immediate shard refresh. Waiting for the
+// next periodic refresh delays its children, and in incremental mode keeps
+// the shard progress tracker unsettled, holding every snapshot page, until
+// that refresh registers them.
+func TestShardReaderClosedShardRequestsRefresh(t *testing.T) {
+	mk := func() aws.HTTPClient { return &closedShardStubTransport{records: `[]`} }
+	for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mkHarness()
+			refresh := make(chan struct{}, 1)
+			if ts := h.tableStream(); ts != nil {
+				ts.shardRefreshCh = refresh
+			} else {
+				h.d.shardRefreshCh = refresh
+			}
+
+			done := make(chan struct{})
+			go func() {
+				h.start(t.Context())
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the reader should return once the closed shard is drained")
+			}
+			select {
+			case <-refresh:
+			default:
+				t.Fatal("a closed shard must request an immediate shard refresh")
+			}
+		})
+	}
+}

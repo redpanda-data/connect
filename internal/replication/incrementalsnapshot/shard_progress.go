@@ -9,6 +9,7 @@
 package incrementalsnapshot
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -151,10 +152,21 @@ func (p *ShardProgress) Release(id string) {
 }
 
 // RefreshDone settles the tracker if every described shard is known, and
-// unsettles it otherwise.
+// unsettles it otherwise. Exhausted shards the refresh no longer describes
+// (trimmed from the stream) are forgotten, so a long-running stream does not
+// accumulate every shard it has ever read.
 func (p *ShardProgress) RefreshDone(described []string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	listed := make(map[string]struct{}, len(described))
+	for _, id := range described {
+		listed[id] = struct{}{}
+	}
+	for id, m := range p.shards {
+		if _, ok := listed[id]; m.exhausted && !ok {
+			delete(p.shards, id)
+		}
+	}
 	for _, id := range described {
 		if _, exists := p.shards[id]; !exists {
 			p.unsettleLocked()
@@ -164,21 +176,73 @@ func (p *ShardProgress) RefreshDone(described []string) {
 	p.unsettled = false
 }
 
+// waitingLocked reports whether the tracker is unsettled and still within
+// idleGrace, so nothing counts as caught up.
+func (p *ShardProgress) waitingLocked() bool {
+	return p.unsettled && p.now().Sub(p.unsettledSince) < p.idleGrace
+}
+
 // CaughtUpPast reports whether the tracker is settled (or has been unsettled
 // for at least idleGrace) and every live shard has been read past t.
 func (p *ShardProgress) CaughtUpPast(t time.Time) bool {
+	return p.CaughtUpPredicate()(t)
+}
+
+// CaughtUpPredicate returns CaughtUpPast evaluated against the tracker's
+// current state, which it reads once under the lock: one release pass checks
+// many pages against a single walk of the shards.
+func (p *ShardProgress) CaughtUpPredicate() func(t time.Time) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.unsettled && p.now().Sub(p.unsettledSince) < p.idleGrace {
-		return false
+	if p.waitingLocked() {
+		return func(time.Time) bool { return false }
 	}
+	var (
+		oldest  time.Time
+		hasLive bool
+	)
 	for _, m := range p.shards {
 		if m.exhausted {
 			continue
 		}
-		if m.seen.Before(t) {
-			return false
+		if !hasLive || m.seen.Before(oldest) {
+			oldest = m.seen
+			hasLive = true
 		}
 	}
-	return true
+	return func(t time.Time) bool { return !hasLive || !oldest.Before(t) }
+}
+
+// BlockingReason describes why CaughtUpPast(t) is false, for logs, or
+// returns "" when it is true.
+func (p *ShardProgress) BlockingReason(t time.Time) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.waitingLocked() {
+		return fmt.Sprintf("waiting for a shard refresh to register every shard of the stream (unsettled for %s, judged anyway after %s)",
+			p.now().Sub(p.unsettledSince).Round(time.Second), p.idleGrace)
+	}
+	var (
+		behind  []string
+		laggard string
+		oldest  time.Time
+	)
+	for id, m := range p.shards {
+		if m.exhausted || !m.seen.Before(t) {
+			continue
+		}
+		behind = append(behind, id)
+		if laggard == "" || m.seen.Before(oldest) {
+			laggard, oldest = id, m.seen
+		}
+	}
+	if laggard == "" {
+		return ""
+	}
+	seen := "nothing yet"
+	if !oldest.IsZero() {
+		seen = oldest.UTC().Format(time.RFC3339)
+	}
+	return fmt.Sprintf("%d shard(s) not yet read past %s; furthest behind is %s, read through %s",
+		len(behind), t.UTC().Format(time.RFC3339), laggard, seen)
 }

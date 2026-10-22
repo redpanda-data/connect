@@ -25,6 +25,10 @@ import (
 // latency by at most one tick.
 const defaultReleaseTick = 250 * time.Millisecond
 
+// defaultHeldWarnAfter is how long the oldest held page waits before the
+// release loop warns why, and how often it repeats the warning.
+const defaultHeldWarnAfter = time.Minute
+
 // Backfill is one table's incremental backfill. P is the checkpoint store's
 // snapshot progress type.
 type Backfill[P Progress] struct {
@@ -42,6 +46,9 @@ type Backfill[P Progress] struct {
 	// ReleaseTick overrides the release poll interval, for tests. Zero
 	// means the 250ms default.
 	ReleaseTick time.Duration
+	// HeldWarnAfter overrides the held-page warning threshold, for tests.
+	// Zero means the one minute default.
+	HeldWarnAfter time.Duration
 }
 
 // Run scans the table page by page through its window, releasing each page
@@ -57,7 +64,7 @@ func (b *Backfill[P]) Run(ctx context.Context) (retErr error) {
 		return nil
 	}
 
-	emitter := b.Deps.NewEmitter()
+	emitter := b.Deps.NewEmitter(progress)
 	win := b.State.window
 	hooks := ScanHooks{
 		BeforeRequest: win.Begin,
@@ -107,6 +114,11 @@ func (b *Backfill[P]) Run(ctx context.Context) (retErr error) {
 		}
 		ticker := time.NewTicker(tick)
 		defer ticker.Stop()
+		warnAfter := b.HeldWarnAfter
+		if warnAfter == 0 {
+			warnAfter = defaultHeldWarnAfter
+		}
+		var lastWarn time.Time
 		for {
 			select {
 			case <-scanCtx.Done():
@@ -115,7 +127,7 @@ func (b *Backfill[P]) Run(ctx context.Context) (retErr error) {
 			case <-ticker.C:
 			case <-b.State.nudge:
 			}
-			err := win.ReleaseReady(b.State.CanRelease, func(p ReleasedPage) error {
+			err := win.ReleaseReady(b.State.ReleasePredicate(), func(p ReleasedPage) error {
 				b.Metrics.WindowWait.Timing(time.Since(p.High).Nanoseconds())
 				return emitter.Emit(scanCtx, p.Items, p.Segment, p.Cursor)
 			})
@@ -124,6 +136,12 @@ func (b *Backfill[P]) Run(ctx context.Context) (retErr error) {
 				releaseErr <- err
 				cancel()
 				return
+			}
+			if oldest, ok := win.OldestHeld(); ok && time.Since(oldest) >= warnAfter && time.Since(lastWarn) >= warnAfter {
+				if reason := b.State.BlockingReason(oldest); reason != "" {
+					lastWarn = time.Now()
+					b.Logger.Warnf("Incremental snapshot of table %s has held a page for %s: %s", b.Table, time.Since(oldest).Round(time.Second), reason)
+				}
 			}
 		}
 	}()
