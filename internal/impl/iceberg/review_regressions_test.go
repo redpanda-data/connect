@@ -133,13 +133,13 @@ func TestCOWTimeColumnOwnLocationRoundTrip(t *testing.T) {
 
 	t.Run("unit canonicalisation", func(t *testing.T) {
 		// Own-location wall clock: 14:30 EST encodes as 14:30, not 19:30 UTC.
-		got, err := jsonLeafValue(iceberg.PrimitiveTypes.Time, time.Date(2026, 3, 4, 14, 30, 0, 0, est), nil, false)
+		got, err := jsonLeafValue(iceberg.PrimitiveTypes.Time, time.Date(2026, 3, 4, 14, 30, 0, 0, est), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, "14:30:00", got,
 			"a TIME value must encode the wall clock in its own location, matching the insert path's storage")
 
 		// Nanosecond precision truncates to at most 6 fractional digits.
-		got, err = jsonLeafValue(iceberg.PrimitiveTypes.Time, time.Date(2000, 1, 1, 23, 59, 59, 123456789, time.UTC), nil, false)
+		got, err = jsonLeafValue(iceberg.PrimitiveTypes.Time, time.Date(2000, 1, 1, 23, 59, 59, 123456789, time.UTC), nil, false, "")
 		require.NoError(t, err)
 		assert.Equal(t, "23:59:59.123456", got,
 			"sub-microsecond precision must be truncated to 6 digits so Arrow's time64[us] parser accepts the value")

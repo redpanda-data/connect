@@ -141,6 +141,8 @@ type routerOpts struct {
 	caseSensitive bool
 	schemaEvoCfg  icebergimpl.SchemaEvolutionConfig
 	rowOpCfg      icebergimpl.RowOpConfig
+	messageFormat icebergimpl.MessageFormat
+	tsLayout      string
 }
 
 // WithSchemaEvolution enables schema evolution on the test router.
@@ -163,6 +165,20 @@ func WithRowOperation(cfg icebergimpl.RowOpConfig) RouterOption {
 func WithCaseSensitive(caseSensitive bool) RouterOption {
 	return func(o *routerOpts) {
 		o.caseSensitive = caseSensitive
+	}
+}
+
+// WithMessageFormat sets the message format (object or array) on the test router.
+func WithMessageFormat(f icebergimpl.MessageFormat) RouterOption {
+	return func(o *routerOpts) {
+		o.messageFormat = f
+	}
+}
+
+// WithTimestampLayout sets the time.Parse layout used to parse timestamp strings.
+func WithTimestampLayout(layout string) RouterOption {
+	return func(o *routerOpts) {
+		o.tsLayout = layout
 	}
 }
 
@@ -196,6 +212,12 @@ func (infra *testInfrastructure) NewRouter(
 		MaxRetries:           3,
 	}
 	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, o.rowOpCfg, nil, logger)
+	if o.messageFormat != "" {
+		router.SetMessageFormat(o.messageFormat)
+	}
+	if o.tsLayout != "" {
+		router.SetTimestampLayout(o.tsLayout)
+	}
 	t.Cleanup(func() { router.Close() })
 	return router
 }

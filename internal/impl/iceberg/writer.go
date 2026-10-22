@@ -141,6 +141,19 @@ type writer struct {
 	// never mix annotations. The zero value is the spec encoding.
 	tsEncoding icebergx.TimestampEncoding
 
+	// timestampLayout is the timestamp_format layout used to parse string
+	// values for timestamp columns, identically on the insert path (the
+	// shredder) and every mutation path (jsonLeafValue). Empty means
+	// [shredder.DefaultTimestampLayout]. Set by the router after NewWriter.
+	timestampLayout string
+
+	// messageFormat is the message_format setting, and arrayColumns the
+	// table's top-level column names in schema order, which array-mode
+	// messages are matched against by position. Both are set by the router
+	// after NewWriter, before the writer is published, and only read after.
+	messageFormat MessageFormat
+	arrayColumns  []string
+
 	// coerceLoggedFieldIDs tracks the iceberg field IDs we have already
 	// logged a coerce-on-write notice for, so that a long-running writer
 	// emits the divergence between schema metadata and existing column
@@ -515,13 +528,12 @@ func (w *writer) dedupKeyer(batch service.MessageBatch) func(msg *service.Messag
 		commons = w.resolveFieldCommons(tableSchema, batch)
 	}
 	return func(msg *service.Message) (string, error) {
-		structured, err := msg.AsStructured()
+		row, err := w.messageRow(msg)
 		if err != nil {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
+				return "", fmt.Errorf("message for upsert/delete must be an object, got %T", notObj.got)
+			}
 			return "", fmt.Errorf("reading structured message for delete key: %w", err)
-		}
-		row, ok := structured.(map[string]any)
-		if !ok {
-			return "", fmt.Errorf("message for upsert/delete must be an object, got %T", structured)
 		}
 		values := make([]any, len(w.rowOpCfg.IdentifierFields))
 		for i, name := range w.rowOpCfg.IdentifierFields {
@@ -531,14 +543,15 @@ func (w *writer) dedupKeyer(batch service.MessageBatch) func(msg *service.Messag
 			}
 			values[i] = v
 			if f := fields[i]; f != nil {
-				if jv, err := jsonLeafValue(f.Type, v, commons[f.ID], w.requireSchemaMetadata); err == nil {
+				if jv, err := jsonLeafValue(f.Type, v, commons[f.ID], w.requireSchemaMetadata, w.timestampLayout); err == nil {
 					values[i] = jv
 				} else {
 					// The write path will reject this value; keep it visible to
 					// that authoritative error by NOT collapsing it away. The
 					// fallback identity must be DISJOINT from the canonical
-					// space — a raw string "42" marshals identically to the
-					// canonical form of int 42, and colliding there would let
+					// space — an RFC 3339 string rejected under a custom
+					// timestamp_format marshals identically to the canonical
+					// form of the instant it names, and colliding there would let
 					// last-writer-wins silently swallow the invalid spelling
 					// (order-dependently) instead of failing the batch as the
 					// docs promise. Canonical leaf outputs are never JSON
@@ -644,13 +657,12 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 	// schema field name so the JSON keys line up with the Arrow schema.
 	rows := make([]map[string]any, 0, len(msgs))
 	for i, msg := range msgs {
-		structured, err := msg.AsStructured()
+		row, err := w.messageRow(msg)
 		if err != nil {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
+				return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", i, notObj.got)
+			}
 			return nil, fmt.Errorf("reading structured message %d for delete key: %w", i, err)
-		}
-		row, ok := structured.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("message %d for upsert/delete must be an object, got %T", i, structured)
 		}
 		key := make(map[string]any, len(delFields))
 		for _, field := range delFields {
@@ -658,7 +670,7 @@ func (w *writer) writeEqualityDeletes(ctx context.Context, msgs service.MessageB
 			if !ok || v == nil {
 				return nil, fmt.Errorf("%s %q is missing or null in message %d", ioFieldIdentifierFields, field.Name, i)
 			}
-			jv, err := jsonLeafValue(field.Type, v, fieldCommons[field.ID], w.requireSchemaMetadata)
+			jv, err := jsonLeafValue(field.Type, v, fieldCommons[field.ID], w.requireSchemaMetadata, w.timestampLayout)
 			if err != nil {
 				return nil, fmt.Errorf("%s %q in message %d: %w", ioFieldIdentifierFields, field.Name, i, err)
 			}
@@ -788,6 +800,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	// extended to per-message metadata lookup with a small cache.
 	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
 	rs.StrictTemporalMode = w.requireSchemaMetadata
+	rs.TimestampLayout = w.timestampLayout
 	if w.resolver != nil && len(batch) > 0 {
 		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
 			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)
@@ -803,14 +816,12 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		sink := newParquetSink(pqSchema, fieldToCol, w.caseSensitive, w.writerOpts...)
 
 		for _, msg := range batch {
-			structured, err := msg.AsStructured()
+			row, err := w.messageRow(msg)
 			if err != nil {
+				if notObj, ok := errors.AsType[notObjectError](err); ok {
+					return nil, fmt.Errorf("message is not an object, got %T", notObj.got)
+				}
 				return nil, fmt.Errorf("parsing message as structured: %w", err)
-			}
-
-			row, ok := structured.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("message is not an object, got %T", structured)
 			}
 
 			if err := rs.Shred(row, sink); err != nil {
@@ -847,14 +858,12 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	bufferSink := newBufferingSink(partitionSourceIDs, numPartitionFields, w.caseSensitive)
 
 	for _, msg := range batch {
-		structured, err := msg.AsStructured()
+		row, err := w.messageRow(msg)
 		if err != nil {
+			if notObj, ok := errors.AsType[notObjectError](err); ok {
+				return nil, fmt.Errorf("message is not an object, got %T", notObj.got)
+			}
 			return nil, fmt.Errorf("parsing message as structured: %w", err)
-		}
-
-		row, ok := structured.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("message is not an object, got %T", structured)
 		}
 
 		// Shred to buffer (captures values and partition key in one pass)

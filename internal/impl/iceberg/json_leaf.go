@@ -20,7 +20,6 @@ import (
 	"github.com/apache/iceberg-go"
 	"github.com/google/uuid"
 
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
 	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
@@ -46,6 +45,14 @@ const dayMicros = 24 * 60 * 60 * 1_000_000
 // rewrite. TestJSONLeafValueMatchesInsertPath pins the agreement input shape by
 // input shape.
 //
+// A string bound for an integer, float or timestamp column is first parsed
+// with shredder.ParseStringValue — the same call the insert path makes, with
+// the same timestampLayout (the timestamp_format field) — so "42" into a long
+// column, or a timestamp string in the configured layout, is stored and
+// matched identically on every path, and a string that does not parse is
+// rejected with the same error. Map keys go through this too, so map columns
+// with integer KEY types are writable (Go map keys arrive as strings).
+//
 // common carries the field's upstream schema metadata (or nil) and
 // requireSchemaMetadata mirrors the shredder's StrictTemporalMode; together
 // they make a bare numeric value in a temporal column — including a temporal
@@ -58,13 +65,6 @@ const dayMicros = 24 * 60 * 60 * 1_000_000
 //
 // Deliberate strictness (divergences from what the Arrow JSON readers would
 // happily accept):
-//   - integer columns reject numeric STRINGS ("42"): the insert path rejects
-//     them, so accepting them here would let mutating batches commit values the
-//     equivalent insert loudly refuses (a flip-flopping pipeline). This
-//     intentionally removes an accidental leniency of the old mutation-path
-//     encoder. A consequence is that map columns with integer KEY types are
-//     rejected (Go map keys arrive as strings) — the insert path can never
-//     write such a map either.
 //   - boolean columns accept only bool: Arrow's boolean builder would parse
 //     "true"/"1", which the insert path rejects.
 //
@@ -75,7 +75,12 @@ const dayMicros = 24 * 60 * 60 * 1_000_000
 // truncates (UnixMicro). A time.Time bound for a STRING column is NOT
 // truncated: the insert path stores the full-nanosecond RFC 3339 text, so
 // truncating would silently change the stored text on a rewrite.
-func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMetadata bool) (any, error) {
+func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMetadata bool, timestampLayout string) (any, error) {
+	v, err := shredder.ParseStringValue(v, t, timestampLayout)
+	if err != nil {
+		return nil, err
+	}
+
 	// Resolve a bare numeric in a temporal column to a time.Time using the
 	// shredder's unit-aware conversion (honouring the field's schema metadata
 	// and require_schema_metadata) so the encoded value matches what the
@@ -125,10 +130,9 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 			}
 			return strconv.FormatInt(int64(n), 10), nil
 		default:
-			// Deliberately includes string — see the doc comment. The value is
-			// included (bounded) so the operator can see WHAT arrived, not just
-			// its Go type — "42" vs "forty-two" need different upstream fixes.
-			return nil, fmt.Errorf("unsupported value type %T (%.64v) for integer column; convert stringified numbers upstream (e.g. bloblang .number())", v, v)
+			// The value is included (bounded) so the operator can see WHAT
+			// arrived, not just its Go type.
+			return nil, fmt.Errorf("unsupported value type %T (%.64v) for integer column", v, v)
 		}
 	case iceberg.DecimalType:
 		// Emitted as a string at the column's exact scale so the encoded value
@@ -294,18 +298,9 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 			return nil, fmt.Errorf("time column requires a time value, got %T", v)
 		}
 	case iceberg.TimestampType, iceberg.TimestampTzType:
-		// A string timestamp is accepted by the insert path (the shredder's
-		// convertTimestamp falls back to bloblang.ValueAsTimestamp for
-		// non-numeric values, parsing RFC 3339), so the mutation paths must
-		// accept it identically — rejecting it here would deterministically
-		// fail every mutating batch over data the table already holds.
-		if s, ok := v.(string); ok {
-			tm, err := bloblang.ValueAsTimestamp(s)
-			if err != nil {
-				return nil, fmt.Errorf("timestamp column given unparseable string %q: %w", s, err)
-			}
-			v = tm
-		}
+		// A string never reaches here: ParseStringValue above has already
+		// parsed it with the timestamp_format layout, exactly as the insert
+		// path does.
 		if tm, ok := v.(time.Time); ok {
 			// Truncate to the column's microsecond resolution BEFORE
 			// formatting: the insert path stores UnixMicro (identical

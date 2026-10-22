@@ -9,6 +9,8 @@
 package iceberg
 
 import (
+	"time"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -36,6 +38,10 @@ const (
 	ioFieldNamespace            = "namespace"
 	ioFieldTable                = "table"
 	ioFieldCaseSensitiveColumns = "case_sensitive_columns"
+
+	// Value parsing fields
+	ioFieldTimestampFormat = "timestamp_format"
+	ioFieldMessageFormat   = "message_format"
 
 	// Row-operation fields for row-level mutations (insert / upsert / delete).
 	// `row_operation` is named to avoid colliding with Iceberg's snapshot-level
@@ -146,9 +152,9 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"`upsert` and `delete` require `identifier_fields`. How those mutations are materialised on disk, and, critically, which query engines can then read the table, is controlled by `merge_strategy`. See <<merge-strategies,Merge strategies: merge-on-read vs copy-on-write>> below for the decision guide, support matrix, and maintenance guidance.\n" +
 	"\n" +
-	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) are interpreted exactly like their data columns: time values and RFC 3339 strings are unambiguous, and a bare numeric epoch is interpreted using the batch's schema metadata when present, falling back to the same default units the insert path applies (the key is interpreted by the identical rules as the insert path, so it encodes what the insert stored whenever both batches carry the same unit declaration). Beware feeding numeric epochs *without* schema metadata in a unit other than that default: the key would silently match nothing; set `require_schema_metadata: true` to make an undeclared unit fail loudly instead, or convert to a timestamp upstream. If the table is partitioned, `merge-on-read` additionally requires every partition source column to be one of the `identifier_fields`, since equality deletes are partition-scoped; `copy-on-write` carries no such restriction (it rewrites whole files by filter and routes new rows by value, and can even move a key across partitions). See the support matrix for the merge-key types each strategy accepts.\n" +
+	"*Identifier fields.* `identifier_fields` must reference existing table columns of a primitive, non-floating-point type. A static `upsert`/`delete` is validated at startup; an interpolated `row_operation` is validated per message at write time, so an empty `identifier_fields` is not caught until the first `upsert`/`delete` message arrives. Identifier columns of a temporal type (`timestamp`, `timestamptz`, `date`, `time`) are interpreted exactly like their data columns: time values and timestamp strings in the `timestamp_format` layout are unambiguous, and a bare numeric epoch is interpreted using the batch's schema metadata when present, falling back to the same default units the insert path applies (the key is interpreted by the identical rules as the insert path, so it encodes what the insert stored whenever both batches carry the same unit declaration). Beware feeding numeric epochs *without* schema metadata in a unit other than that default: the key would silently match nothing; set `require_schema_metadata: true` to make an undeclared unit fail loudly instead, or convert to a timestamp upstream. If the table is partitioned, `merge-on-read` additionally requires every partition source column to be one of the `identifier_fields`, since equality deletes are partition-scoped; `copy-on-write` carries no such restriction (it rewrites whole files by filter and routes new rows by value, and can even move a key across partitions). See the support matrix for the merge-key types each strategy accepts.\n" +
 	"\n" +
-	"*Strict key and value typing.* Merge keys and row values on the `upsert`/`delete` paths are validated as strictly as the insert path has always been: a string-typed integer or boolean (for example `{\"id\": \"42\"}` into a `long` column, or `\"true\"` into a `boolean` column) previously worked by accident on the mutation paths and now fails the batch with an actionable error, matching the insert path's rejections. Convert such values upstream (for example with Bloblang's `.number()` or `.bool()`) if a source emits stringified scalars.\n" +
+	"*Key and value typing.* Merge keys and row values on the `upsert`/`delete` paths are converted by the same rules as the insert path, so identical inputs store identical values on every path. A numeric string (for example `{\"id\": \"42\"}` into a `long` column) is parsed as a number, and a string bound for a `timestamp` or `timestamptz` column is parsed with `timestamp_format`; a string that does not parse fails the batch. A string-typed boolean (for example `\"true\"` into a `boolean` column) fails the batch on every path; convert it upstream (for example with Bloblang's `.bool()`).\n" +
 	"\n" +
 	"Under `merge-on-read`, when this output auto-creates a table (via `schema_evolution`), the `identifier_fields` columns are created as *required* and registered as the table's Iceberg identifier-field-ids, so downstream engines and other writers see the primary key. A consequence is that a null or missing value in an identifier column is rejected on write, even for `insert`; identifier columns must therefore be present at creation: in the first message or declared via `schema_metadata`. Under `copy-on-write` the identifier fields are used only as the connector-side merge key and are *not* registered as identifier-field-ids, so auto-created columns are not forced required (this is also what lets engine-backed catalogs such as the Databricks Unity Catalog, which rejects identifier-field-ids at table creation, accept the `CREATE TABLE`). Pre-existing tables are never modified.\n" +
 	"\n" +
@@ -349,6 +355,28 @@ array:list
 				ShortDescription("Whether message field names must match table column names exactly.").
 				Default(true).
 				Advanced(),
+
+			service.NewStringField(ioFieldTimestampFormat).
+				Description("The format to parse string values for `timestamp` and `timestamptz` columns. Should be a layout for https://pkg.go.dev/time#Parse[time.Parse^] in Go. Layouts without a time zone are read as UTC. Sub-microsecond digits are truncated, because the output writes microsecond timestamps.").Version("4.115.0").
+				ShortDescription("Format used to parse string values for timestamp columns, as a Go time.Parse layout.").
+				Default(time.RFC3339Nano).
+				Advanced(),
+
+			service.NewStringAnnotatedEnumField(ioFieldMessageFormat, map[string]string{
+				string(MessageFormatObject): "Messages are objects whose keys are column names.",
+				string(MessageFormatArray):  "Messages are arrays of values, written by position into the table's top-level columns in schema order. The table must already exist, and `schema_evolution.enabled` must be `false`.",
+			}).
+				Description(`The format to expect incoming messages from the rest of the pipeline.
+
+In `+"`array`"+` mode, positions follow the table's current schema order, so a table whose columns are reordered, or dropped and re-added, remaps positions onto different columns. A warning is logged when that order changes. Only an array longer than the table is detected as a shape change; a shorter one leaves its trailing columns unset, which writes null to an optional column and fails a required one.
+
+For delimited text, use a mapping such as `+"`root = content().string().split(\"\\x01\", true)`"+`. The `+"`.string()`"+` call yields text elements, and `+"`true`"+` (`+"`empty_as_null`"+`) turns empty fields into nulls, because an empty string cannot be parsed into an int, long, decimal or timestamp column.
+
+The interpolated `+"`namespace`"+`, `+"`table`"+` and `+"`row_operation`"+` fields see the array as `+"`this`"+`, so reference elements with `+"`this.index(N)`"+` or use metadata.`).Version("4.115.0").
+				ShortDescription("Whether messages are objects keyed by column name or arrays written by position.").
+				Default(string(MessageFormatObject)).
+				Advanced().
+				Example(string(MessageFormatArray)),
 
 			// Row-level operation mapping (insert / upsert / delete).
 			service.NewInterpolatedStringField(ioFieldRowOperation).
@@ -551,15 +579,25 @@ See the Row-level operations section above for the full constraints, including t
 			service.NewBatchPolicyField(ioFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 		).
+		// A spec holds a single lint rule, so each check below yields an array
+		// of lint messages and the rule merges them.
+		//
 		// Keyed (upsert/delete) writes rely on per-key ordering. With more than
 		// one batch in flight, concurrent batches can commit out of order and
 		// corrupt the last-writer-wins result, so require max_in_flight: 1 for
 		// any non-insert row_operation. A static `insert` (the default) is
 		// append-only and unaffected; an interpolated row_operation is treated
 		// conservatively as potentially mutating.
-		LintRule(`root = if this.row_operation.or("insert") != "insert" && this.max_in_flight.or(4) > 1 {
+		//
+		// Arrays carry no column names, so they cannot drive table creation or
+		// schema evolution; array mode writes only into a pre-created table.
+		LintRule(`let ordering = if this.row_operation.or("insert") != "insert" && this.max_in_flight.or(4) > 1 {
   [ "row_operation can resolve to upsert/delete, which rely on per-key write ordering; with max_in_flight > 1 concurrent batches may commit out of order and corrupt the last-writer-wins result. Set max_in_flight: 1 for keyed (change-data-capture) workloads, or use a static row_operation: insert for append-only writes." ]
-}`).
+} else { [] }
+let message_format = if this.message_format.or("object") == "array" && this.schema_evolution.enabled.or(false) {
+  [ "`+arraySchemaEvolutionConflict+`" ]
+} else { [] }
+root = $ordering.merge($message_format)`).
 		Example(
 			"Change-data-capture upsert/delete",
 			"Materialize a change-data-capture stream into an Iceberg table. A mapping derives the row operation from the source's operation field (here Debezium's `op`: `c`reate / `r`ead / `u`pdate map to `upsert`, `d`elete maps to `delete`) and selects the row image, while `identifier_fields` is the primary key. Note that creates map to `upsert`, never `insert`, so re-delivered or snapshot rows do not duplicate.",

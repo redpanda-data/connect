@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -210,4 +211,151 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
 		})
 	}
+}
+
+// TestTimestampFormatParsed pins the timestamp_format plumbing from the YAML
+// field onto the router, which copies it onto every writer it creates.
+func TestTimestampFormatParsed(t *testing.T) {
+	build := func(t *testing.T, extra string) *icebergOutput {
+		t.Helper()
+		conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+extra, nil)
+		require.NoError(t, err)
+		out, err := newIcebergOutputFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+		return out
+	}
+
+	t.Run("configured", func(t *testing.T) {
+		out := build(t, `timestamp_format: "2006-01-02 15:04:05"`+"\n")
+		assert.Equal(t, "2006-01-02 15:04:05", out.router.timestampLayout)
+	})
+
+	t.Run("default", func(t *testing.T) {
+		out := build(t, "")
+		assert.Equal(t, time.RFC3339Nano, out.router.timestampLayout)
+	})
+}
+
+// TestMessageFormatConfig pins the message_format plumbing onto the router and
+// the rule that array mode cannot be combined with schema evolution, which is
+// enforced both by linting and by the constructor.
+func TestMessageFormatConfig(t *testing.T) {
+	const base = `
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`
+	const ruleText = "message_format: array requires schema_evolution.enabled: false, because arrays carry no column names to create or evolve a table from"
+
+	build := func(t *testing.T, extra string) (*icebergOutput, error) {
+		t.Helper()
+		conf, err := icebergOutputConfig().ParseYAML(base+extra, nil)
+		require.NoError(t, err)
+		return newIcebergOutputFromConfig(conf, service.MockResources())
+	}
+
+	t.Run("array", func(t *testing.T) {
+		out, err := build(t, "message_format: array\n")
+		require.NoError(t, err)
+		assert.Equal(t, MessageFormatArray, out.router.messageFormat)
+	})
+
+	t.Run("default", func(t *testing.T) {
+		out, err := build(t, "")
+		require.NoError(t, err)
+		assert.Equal(t, MessageFormatObject, out.router.messageFormat)
+	})
+
+	t.Run("unknown value", func(t *testing.T) {
+		_, err := build(t, "message_format: csv\n")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `message_format "csv"`)
+	})
+
+	t.Run("array with schema evolution", func(t *testing.T) {
+		extra := "message_format: array\nschema_evolution:\n  enabled: true\n"
+		_, err := build(t, extra)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ruleText)
+
+		lints, err := service.GlobalEnvironment().NewComponentConfigLinter().LintOutputYAML([]byte(`
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+  storage:
+    aws_s3:
+      bucket: bucket
+  message_format: array
+  schema_evolution:
+    enabled: true
+`))
+		require.NoError(t, err)
+		var found bool
+		for _, l := range lints {
+			if strings.Contains(l.Error(), ruleText) {
+				found = true
+			}
+		}
+		assert.True(t, found, "expected the message_format lint, got lints: %v", lints)
+	})
+
+	// The spec holds one lint rule, so this pins that it still reports the
+	// max_in_flight ordering lint alongside the message_format one.
+	t.Run("both lint checks fire together", func(t *testing.T) {
+		lints, err := service.GlobalEnvironment().NewComponentConfigLinter().LintOutputYAML([]byte(`
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+  storage:
+    aws_s3:
+      bucket: bucket
+  message_format: array
+  schema_evolution:
+    enabled: true
+  row_operation: upsert
+  identifier_fields: [id]
+`))
+		require.NoError(t, err)
+		var all []string
+		for _, l := range lints {
+			all = append(all, l.Error())
+		}
+		joined := strings.Join(all, "\n")
+		assert.Contains(t, joined, ruleText)
+		assert.Contains(t, joined, "max_in_flight > 1")
+	})
+
+	t.Run("array without schema evolution lints clean", func(t *testing.T) {
+		lints, err := service.GlobalEnvironment().NewComponentConfigLinter().LintOutputYAML([]byte(`
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+  storage:
+    aws_s3:
+      bucket: bucket
+  message_format: array
+`))
+		require.NoError(t, err)
+		for _, l := range lints {
+			assert.NotContains(t, l.Error(), "message_format")
+		}
+	})
 }

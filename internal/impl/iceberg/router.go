@@ -99,6 +99,11 @@ type tableEntry struct {
 	// commit per generation. Created lazily in createWriter under mu; the set
 	// carries its own lock, so committers share it race-safely.
 	prohibitedProps *prohibitedKeySet
+
+	// arrayColumns is the column order the previous array-mode writer used,
+	// kept so a rebuilt writer can warn when an external schema change has
+	// moved array positions onto different columns. Guarded by mu.
+	arrayColumns []string
 }
 
 // cachedProbeErr returns the negative-cached probe-bound error when it was
@@ -160,6 +165,15 @@ type Router struct {
 	// resolveParquetCompression.
 	parquetCompression string
 
+	// timestampLayout is the configured `timestamp_format` layout, copied onto
+	// every writer. Set after construction by the output, like
+	// parquetCompression, so NewRouter's signature stays put.
+	timestampLayout string
+
+	// messageFormat is the configured `message_format`, copied onto every
+	// writer. Set after construction by the output, like timestampLayout.
+	messageFormat MessageFormat
+
 	// metrics is optional (nil in some tests); set after construction by the
 	// output. Writers and committers inherit it.
 	metrics *opMetrics
@@ -194,6 +208,19 @@ func NewRouter(
 		resolver:      newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, caseSensitive, logger),
 		logger:        logger,
 	}
+}
+
+// SetTimestampLayout sets the time.Parse layout that writers use to parse
+// string values for timestamp columns. Call it before the first write; writers
+// already created keep their layout.
+func (r *Router) SetTimestampLayout(layout string) {
+	r.timestampLayout = layout
+}
+
+// SetMessageFormat sets the shape writers expect incoming messages to have.
+// Call it before the first write; writers already created keep their format.
+func (r *Router) SetMessageFormat(f MessageFormat) {
+	r.messageFormat = f
 }
 
 // getOrCreateEntry returns the entry for a table, creating one if needed.
@@ -307,6 +334,9 @@ func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service
 		if i == 0 {
 			r.logger.Debugf("Write failed for %s.%s, retrying with fresh writer: %v", key.namespace, key.table, err)
 			continue
+		}
+		if r.messageFormat == MessageFormatArray && errors.Is(err, catalog.ErrNoSuchTable) {
+			return fmt.Errorf("writing to %s.%s: message_format is array, so the table must be created before writing: %w", key.namespace, key.table, err)
 		}
 		return fmt.Errorf("writing to %s.%s: %w", key.namespace, key.table, err)
 	}
@@ -995,6 +1025,15 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 
 	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(key, writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
+	w.timestampLayout = r.timestampLayout
+	w.messageFormat = r.messageFormat
+	if r.messageFormat == MessageFormatArray {
+		w.arrayColumns = topLevelColumnNames(writerTbl.Schema())
+		if arrayColumnsRemapped(entry.arrayColumns, w.arrayColumns) {
+			r.logger.Warnf("Table %s.%s column order changed from %v to %v; message_format: array writes by position, so array elements now land in different columns", key.namespace, key.table, entry.arrayColumns, w.arrayColumns)
+		}
+		entry.arrayColumns = w.arrayColumns
+	}
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

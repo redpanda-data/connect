@@ -12,6 +12,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -56,12 +58,15 @@ func (s *parityCaptureSink) EmitValue(sv shredder.ShreddedValue) error {
 func (*parityCaptureSink) OnNewField(icebergx.Path, string, any) {}
 
 // shredSingleLeaf runs the real insert-path conversion (RecordShredder over a
-// single-column schema) and returns the parquet value it would store.
-func shredSingleLeaf(t *testing.T, typ iceberg.Type, in any) parquet.Value {
+// single-column schema) and returns the parquet value it would store. layout is
+// the timestamp_format layout; "" means the default.
+func shredSingleLeaf(t *testing.T, typ iceberg.Type, in any, layout string) parquet.Value {
 	t.Helper()
 	sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "v", Type: typ})
 	sink := &parityCaptureSink{}
-	require.NoError(t, shredder.NewRecordShredder(sc, true).Shred(map[string]any{"v": in}, sink))
+	rs := shredder.NewRecordShredder(sc, true)
+	rs.TimestampLayout = layout
+	require.NoError(t, rs.Shred(map[string]any{"v": in}, sink))
 	require.Len(t, sink.values, 1)
 	return sink.values[0].Value
 }
@@ -91,6 +96,8 @@ func canonicalFromParquet(t *testing.T, typ iceberg.Type, pv parquet.Value) any 
 		return pv.Int64()
 	case iceberg.Int32Type:
 		return int64(pv.Int32())
+	case iceberg.Float64Type:
+		return pv.Double()
 	case iceberg.DecimalType:
 		return twosComplementBigInt(pv.ByteArray()).String()
 	case iceberg.BooleanType:
@@ -128,6 +135,8 @@ func canonicalFromArrow(t *testing.T, col arrow.Array) any {
 		return int64(col.Value(0))
 	case *array.Int64:
 		return col.Value(0)
+	case *array.Float64:
+		return col.Value(0)
 	case *array.Decimal128:
 		return col.Value(0).BigInt().String()
 	case *array.Boolean:
@@ -140,10 +149,10 @@ func canonicalFromArrow(t *testing.T, col arrow.Array) any {
 // mutationLeafViaArrow drives the mutation-path encoding end to end:
 // jsonLeafValue, then the same JSON -> Arrow round trip the copy-on-write
 // rewrite and the equality-delete writer perform, returning the decoded cell's
-// canonical form.
-func mutationLeafViaArrow(t *testing.T, typ iceberg.Type, in any) any {
+// canonical form. layout is the timestamp_format layout; "" means the default.
+func mutationLeafViaArrow(t *testing.T, typ iceberg.Type, in any, layout string) any {
 	t.Helper()
-	jv, err := jsonLeafValue(typ, in, nil, false)
+	jv, err := jsonLeafValue(typ, in, nil, false, layout)
 	require.NoError(t, err)
 
 	sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "v", Type: typ})
@@ -174,39 +183,47 @@ func TestJSONLeafValueMatchesInsertPath(t *testing.T) {
 	}
 
 	cases := []struct {
-		name string
-		typ  iceberg.Type
-		in   func() any // fresh value per path ([]byte must not be shared)
+		name   string
+		typ    iceberg.Type
+		in     func() any // fresh value per path ([]byte must not be shared)
+		layout string     // timestamp_format layout; "" means the default
 	}{
-		{"string from []byte", iceberg.PrimitiveTypes.String, func() any { return []byte("raw-bytes") }},
-		{"string from ns time.Time keeps full precision", iceberg.PrimitiveTypes.String, func() any { return nsWallEST }},
-		{"binary from string", iceberg.PrimitiveTypes.Binary, func() any { return "hello!" }},
-		{"binary from base64-looking string", iceberg.PrimitiveTypes.Binary, func() any { return "deadbeef" }},
-		{"binary from non-utf8 bytes", iceberg.PrimitiveTypes.Binary, func() any { return []byte{0x00, 0xFF, 0x10} }},
-		{"uuid from canonical string", iceberg.PrimitiveTypes.UUID, func() any { return uid.String() }},
-		{"uuid from 16 bytes", iceberg.PrimitiveTypes.UUID, func() any { return append([]byte(nil), uid[:]...) }},
+		{"string from []byte", iceberg.PrimitiveTypes.String, func() any { return []byte("raw-bytes") }, ""},
+		{"string from ns time.Time keeps full precision", iceberg.PrimitiveTypes.String, func() any { return nsWallEST }, ""},
+		{"binary from string", iceberg.PrimitiveTypes.Binary, func() any { return "hello!" }, ""},
+		{"binary from base64-looking string", iceberg.PrimitiveTypes.Binary, func() any { return "deadbeef" }, ""},
+		{"binary from non-utf8 bytes", iceberg.PrimitiveTypes.Binary, func() any { return []byte{0x00, 0xFF, 0x10} }, ""},
+		{"uuid from canonical string", iceberg.PrimitiveTypes.UUID, func() any { return uid.String() }, ""},
+		{"uuid from 16 bytes", iceberg.PrimitiveTypes.UUID, func() any { return append([]byte(nil), uid[:]...) }, ""},
 		{"time from duration (avro time-micros decode)", iceberg.PrimitiveTypes.Time, func() any {
 			return 4*time.Hour + 5*time.Minute + 6*time.Second + 7*time.Millisecond
-		}},
-		{"time from ns own-location time.Time", iceberg.PrimitiveTypes.Time, func() any { return nsWallEST }},
-		{"timestamp from ns time.Time truncates alike", iceberg.PrimitiveTypes.Timestamp, func() any { return nsInstant }},
-		{"timestamptz from ns time.Time truncates alike", iceberg.PrimitiveTypes.TimestampTz, func() any { return nsInstant }},
-		{"decimal float tie rounds away from zero", dec10p2, func() any { return 0.125 }},
-		{"decimal negative float tie", dec10p2, func() any { return -0.125 }},
-		{"decimal scale-0 float tie", iceberg.DecimalTypeOf(10, 0), func() any { return 8.5 }},
-		{"decimal non-tie float control", dec10p2, func() any { return 123.45 }},
-		{"decimal from float32", dec10p2, func() any { return float32(1.5) }},
-		{"decimal from exact-width bytes", dec10p2, func() any { return decBytes(12345) }},
-		{"decimal from negative exact-width bytes", dec10p2, func() any { return decBytes(-13) }},
-		{"decimal from uint64", dec10p2, func() any { return uint64(7) }},
-		{"int64 from json.Number beyond 2^53", iceberg.PrimitiveTypes.Int64, func() any { return json.Number("9007199254740993") }},
-		{"int32 from int64", iceberg.PrimitiveTypes.Int32, func() any { return int64(-123) }},
-		{"boolean from bool", iceberg.PrimitiveTypes.Bool, func() any { return true }},
+		}, ""},
+		{"time from ns own-location time.Time", iceberg.PrimitiveTypes.Time, func() any { return nsWallEST }, ""},
+		{"timestamp from ns time.Time truncates alike", iceberg.PrimitiveTypes.Timestamp, func() any { return nsInstant }, ""},
+		{"timestamptz from ns time.Time truncates alike", iceberg.PrimitiveTypes.TimestampTz, func() any { return nsInstant }, ""},
+		{"decimal float tie rounds away from zero", dec10p2, func() any { return 0.125 }, ""},
+		{"decimal negative float tie", dec10p2, func() any { return -0.125 }, ""},
+		{"decimal scale-0 float tie", iceberg.DecimalTypeOf(10, 0), func() any { return 8.5 }, ""},
+		{"decimal non-tie float control", dec10p2, func() any { return 123.45 }, ""},
+		{"decimal from float32", dec10p2, func() any { return float32(1.5) }, ""},
+		{"decimal from exact-width bytes", dec10p2, func() any { return decBytes(12345) }, ""},
+		{"decimal from negative exact-width bytes", dec10p2, func() any { return decBytes(-13) }, ""},
+		{"decimal from uint64", dec10p2, func() any { return uint64(7) }, ""},
+		{"int64 from json.Number beyond 2^53", iceberg.PrimitiveTypes.Int64, func() any { return json.Number("9007199254740993") }, ""},
+		{"int32 from int64", iceberg.PrimitiveTypes.Int32, func() any { return int64(-123) }, ""},
+		{"boolean from bool", iceberg.PrimitiveTypes.Bool, func() any { return true }, ""},
+		{"int64 from numeric string", iceberg.PrimitiveTypes.Int64, func() any { return "42" }, ""},
+		{"int64 from numeric []byte", iceberg.PrimitiveTypes.Int64, func() any { return []byte("42") }, ""},
+		{"int64 from string beyond 2^53", iceberg.PrimitiveTypes.Int64, func() any { return "9007199254740993" }, ""},
+		{"int32 from numeric string", iceberg.PrimitiveTypes.Int32, func() any { return "-123" }, ""},
+		{"double from numeric string", iceberg.PrimitiveTypes.Float64, func() any { return "45.67" }, ""},
+		{"timestamp from custom-layout string", iceberg.PrimitiveTypes.Timestamp, func() any { return "2025-05-29 11:54:26.721451319" }, "2006-01-02 15:04:05.999999999"},
+		{"timestamptz zone-less string is UTC", iceberg.PrimitiveTypes.TimestampTz, func() any { return "2025-05-29 11:54:26" }, "2006-01-02 15:04:05"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			inserted := canonicalFromParquet(t, c.typ, shredSingleLeaf(t, c.typ, c.in()))
-			mutated := mutationLeafViaArrow(t, c.typ, c.in())
+			inserted := canonicalFromParquet(t, c.typ, shredSingleLeaf(t, c.typ, c.in(), c.layout))
+			mutated := mutationLeafViaArrow(t, c.typ, c.in(), c.layout)
 			assert.Equal(t, inserted, mutated,
 				"the mutation paths must store exactly what the insert path stores for %T input", c.in())
 		})
@@ -385,38 +402,92 @@ func TestStringTimestampMergeKeyEndToEnd(t *testing.T) {
 	})
 }
 
-// TestIntegerStringRejectedOnMutationPaths pins the deliberate removal of the
-// numeric-string leniency: the insert path rejects "42" into an int/long
-// column, so every mutation path must reject it identically instead of letting
-// mutating batches commit values that the equivalent insert refuses (a
-// flip-flopping pipeline that only progresses on keyed batches).
-func TestIntegerStringRejectedOnMutationPaths(t *testing.T) {
+// TestNumericStringsAcceptedOnMutationPaths pins that every mutation path
+// parses a numeric string into an integer column exactly as the insert path
+// does (shredder.ParseStringValue), so a source that stringifies numbers can
+// upsert and delete rows it inserted. A string that is not a number is still
+// rejected, with the same error, on every path.
+func TestNumericStringsAcceptedOnMutationPaths(t *testing.T) {
 	ctx := t.Context()
-	const wantErr = "unsupported value type string"
+	keySchema := func() *iceberg.Schema {
+		return iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int64, Required: true})
+	}
 
 	t.Run("copy-on-write filter literal", func(t *testing.T) {
-		sc := iceberg.NewSchema(0, iceberg.NestedField{ID: 1, Name: "k", Type: iceberg.PrimitiveTypes.Int64, Required: true})
-		tbl := newTypedKeyTableFromSchema(t, sc)
-		w := cowWriter(t, tbl, "k")
-		_, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": "42"})})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), wantErr)
+		sc := keySchema()
+		w := cowWriter(t, newTypedKeyTableFromSchema(t, sc), "k")
+		got, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": "42"})})
+		require.NoError(t, err)
+		want, err := w.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": int64(42)})})
+		require.NoError(t, err)
+		assert.True(t, want.Equals(got), "the filter for \"42\" must select key 42: got %s, want %s", got, want)
 	})
 
 	t.Run("copy-on-write data column", func(t *testing.T) {
 		w := &writer{}
-		_, err := w.cowMassage(iceberg.PrimitiveTypes.Int64, 1, "42", nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), wantErr)
+		got, err := w.cowMassage(iceberg.PrimitiveTypes.Int64, 1, "42", nil)
+		require.NoError(t, err)
+		// Integers are emitted as JSON strings so Arrow parses them without
+		// float64 precision loss.
+		assert.Equal(t, "42", got)
 	})
 
 	t.Run("merge-on-read equality-delete key", func(t *testing.T) {
 		tbl, _ := newTestTable(t) // schema: id int64
 		w := newDeleteWriter(t, tbl)
-		_, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": "42"})})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), wantErr)
+		dels, err := w.writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": "42"})})
+		require.NoError(t, err)
+		require.Len(t, dels, 1)
+		assert.Equal(t, []int64{42}, readInt64Column(t, dels[0].FilePath(), "id"))
 	})
+
+	t.Run("non-numeric string rejected on every path", func(t *testing.T) {
+		const wantErr = `cannot parse "forty-two" as long`
+		sc := keySchema()
+		cw := cowWriter(t, newTypedKeyTableFromSchema(t, sc), "k")
+		_, err := cw.buildCOWFilter(sc, service.MessageBatch{structuredMsg(t, map[string]any{"k": "forty-two"})})
+		require.ErrorContains(t, err, wantErr, "copy-on-write filter literal")
+
+		_, err = (&writer{}).cowMassage(iceberg.PrimitiveTypes.Int64, 1, "forty-two", nil)
+		require.ErrorContains(t, err, wantErr, "copy-on-write data column")
+
+		tbl, _ := newTestTable(t)
+		_, err = newDeleteWriter(t, tbl).writeEqualityDeletes(ctx, service.MessageBatch{structuredMsg(t, map[string]any{"id": "forty-two"})})
+		require.ErrorContains(t, err, wantErr, "merge-on-read equality-delete key")
+
+		err = shredder.NewRecordShredder(sc, true).Shred(map[string]any{"k": "forty-two"}, &parityCaptureSink{})
+		require.ErrorContains(t, err, wantErr, "insert")
+	})
+}
+
+// readInt64Column reads every value of the named int64 column from the parquet
+// file at path.
+func readInt64Column(t *testing.T, path, column string) []int64 {
+	t.Helper()
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	defer f.Close()
+	info, err := f.Stat()
+	require.NoError(t, err)
+	pf, err := parquet.OpenFile(f, info.Size())
+	require.NoError(t, err)
+	leaf, ok := pf.Schema().Lookup(column)
+	require.True(t, ok, "column %q not in the file schema", column)
+
+	var out []int64
+	for _, rg := range pf.RowGroups() {
+		rows := rg.Rows()
+		buf := make([]parquet.Row, rg.NumRows())
+		n, err := rows.ReadRows(buf)
+		if err != nil && !errors.Is(err, io.EOF) {
+			require.NoError(t, err)
+		}
+		require.NoError(t, rows.Close())
+		for _, row := range buf[:n] {
+			out = append(out, row[leaf.ColumnIndex].Int64())
+		}
+	}
+	return out
 }
 
 // TestMORNsTimestampIdentifierRejected pins the merge-on-read gate on V3
@@ -442,19 +513,25 @@ func TestMORNsTimestampIdentifierRejected(t *testing.T) {
 	}
 }
 
-// TestCOWMapIntegerKeyColumnRejected pins the map<int, ·> consequence of
-// removing the integer string leniency: Go map keys arrive as strings, the
-// insert path can never write such a map (its key conversion rejects strings),
-// and now the copy-on-write rewrite rejects it identically instead of quietly
-// storing what inserts refuse.
-func TestCOWMapIntegerKeyColumnRejected(t *testing.T) {
-	w := &writer{}
-	mt := &iceberg.MapType{
+// TestCOWMapIntegerKeyColumnRoundTrips pins that a map<long, ·> column is
+// writable by copy-on-write. Go map keys always arrive as strings; both the
+// insert path and the copy-on-write rewrite parse a numeric key string with
+// shredder.ParseStringValue, so the integer key is stored and read back as an
+// integer. checkCOWSchemaSupported accepts the column too, because its long
+// key and string value are both supported leaves.
+func TestCOWMapIntegerKeyColumnRoundTrips(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0, cowIDField(), iceberg.NestedField{ID: 2, Name: "v", Type: &iceberg.MapType{
 		KeyID: 3, KeyType: iceberg.PrimitiveTypes.Int64,
 		ValueID: 4, ValueType: iceberg.PrimitiveTypes.String, ValueRequired: false,
-	}
-	_, err := w.cowMassage(mt, 2, map[string]any{"5": "x"}, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `map key "5"`, "the error must name the offending key")
-	assert.Contains(t, err.Error(), "unsupported value type string")
+	}})
+	require.NoError(t, checkCOWSchemaSupported(sc))
+
+	seed := []map[string]any{{"id": int64(1), "v": map[string]any{"0": "old"}}}
+	upsert := []map[string]any{{"id": int64(1), "v": map[string]any{"5": "x"}}}
+	final, err := cowMutateDirect(t, ctx, sc, seed, upsert)
+	require.NoError(t, err)
+	got, present := cowReadColJSON(t, ctx, final, "v", 1)
+	require.True(t, present)
+	assert.JSONEq(t, `[{"key":5,"value":"x"}]`, got)
 }

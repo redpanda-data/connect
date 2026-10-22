@@ -116,6 +116,9 @@ type RecordShredder struct {
 	// cannot guarantee schema metadata flows end-to-end flip this on to
 	// fail loudly instead of silently corrupting dates by ~50,000 years.
 	StrictTemporalMode bool
+	// TimestampLayout is the [time.Parse] layout used for string values
+	// written into timestamp columns. Empty means [DefaultTimestampLayout].
+	TimestampLayout string
 }
 
 // NewRecordShredder creates a new shredder for the given schema.
@@ -410,6 +413,10 @@ func (rs *RecordShredder) shredValue(
 
 	default:
 		// Leaf/primitive type.
+		value, err := ParseStringValue(value, typ, rs.TimestampLayout)
+		if err != nil {
+			return err
+		}
 		pqVal, err := convertLeafValue(value, typ, rs.commonForField(fieldID), rs.StrictTemporalMode)
 		if err != nil {
 			return err
@@ -524,7 +531,11 @@ func (rs *RecordShredder) shredMap(
 
 		// Shred the key. Map keys are always leaf primitives, never time
 		// types, so the schema-metadata lookup never fires for them.
-		keyVal, err := convertLeafValue(k, mapType.KeyType, nil, false)
+		parsedKey, err := ParseStringValue(k, mapType.KeyType, rs.TimestampLayout)
+		if err != nil {
+			return fmt.Errorf("map key: %w", err)
+		}
+		keyVal, err := convertLeafValue(parsedKey, mapType.KeyType, nil, false)
 		if err != nil {
 			return fmt.Errorf("map key: %w", err)
 		}
