@@ -84,7 +84,8 @@ func TestRunWarnsWhyPageIsHeld(t *testing.T) {
 
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		assert.ErrorIs(t, err, context.Canceled, "the run ends with the ctx error")
 	case <-time.After(5 * time.Second):
 		t.Fatal("the run should return once ctx ends")
 	}
