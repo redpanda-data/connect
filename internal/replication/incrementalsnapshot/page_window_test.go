@@ -190,3 +190,50 @@ func TestPageWindowReleaseCarriesCursorAndHigh(t *testing.T) {
 	assert.Equal(t, t0, got[0].High)
 	assert.Equal(t, []string{"a"}, got[0].Items)
 }
+
+// TestPageWindowFullyTouchedPageIsNotHeld: a page whose every item was
+// touched while its read was in flight has nothing left to order, so it must
+// not wait for the release predicate.
+func TestPageWindowFullyTouchedPageIsNotHeld(t *testing.T) {
+	w := newTestWindow()
+	w.Begin(0)
+	w.Touch("a")
+	released, dropped := w.Hold(0, []string{"a"}, []string{"a"}, t0, nil)
+	assert.Equal(t, 1, dropped)
+	select {
+	case <-released:
+	default:
+		t.Fatal("a page with no surviving items must be released at once")
+	}
+	_, held := w.OldestHeld()
+	assert.False(t, held)
+	assert.NotPanics(t, func() { w.Begin(0) }, "the segment can open its next page")
+	sent := 0
+	require.NoError(t, w.ReleaseReady(always, func(ReleasedPage[string, any]) error { sent++; return nil }))
+	assert.Equal(t, 0, sent, "the discarded page is never sent")
+}
+
+func TestPageWindowEmptyPageIsNotHeld(t *testing.T) {
+	w := newTestWindow()
+	w.Begin(0)
+	released, _ := w.Hold(0, nil, nil, t0, nil)
+	select {
+	case <-released:
+	default:
+		t.Fatal("an empty page must be released at once")
+	}
+}
+
+func TestPageWindowOldestHeld(t *testing.T) {
+	w := newTestWindow()
+	_, ok := w.OldestHeld()
+	assert.False(t, ok)
+	w.Begin(0)
+	w.Hold(0, []string{"a"}, []string{"a"}, t0.Add(time.Second), nil)
+	w.Begin(1)
+	w.Hold(1, []string{"b"}, []string{"b"}, t0, nil)
+	w.Begin(2) // open, not held: not counted
+	oldest, ok := w.OldestHeld()
+	require.True(t, ok)
+	assert.Equal(t, t0, oldest)
+}

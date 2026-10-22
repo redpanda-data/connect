@@ -91,7 +91,9 @@ func (w *PageWindow[T, C]) Begin(segment int) {
 // ReleasedPage. A held page stops recording
 // touches and instead drops touched items. The returned channel closes once
 // the page is released or the window is reset; the int is the number of
-// items skipped. Hold panics if the segment has no open, unheld page.
+// items skipped. A page with no items left after the skip is not held: it is
+// discarded at once and the returned channel is already closed, since it
+// has nothing to order. Hold panics if the segment has no open, unheld page.
 func (w *PageWindow[T, C]) Hold(segment int, items []T, keys []string, high time.Time, cursor C) (<-chan struct{}, int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -116,6 +118,10 @@ func (w *PageWindow[T, C]) Hold(segment int, items []T, keys []string, high time
 		p.live++
 	}
 	p.touched = nil // touched is dead state after Hold; free memory
+	if p.live == 0 {
+		delete(w.pages, segment)
+		close(p.released)
+	}
 	return p.released, dropped
 }
 
@@ -188,6 +194,23 @@ func (w *PageWindow[T, C]) HeldItems() int {
 		}
 	}
 	return n
+}
+
+// OldestHeld returns the earliest read time among held pages, and false
+// when no page is held.
+func (w *PageWindow[T, C]) OldestHeld() (time.Time, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var (
+		oldest time.Time
+		found  bool
+	)
+	for _, p := range w.pages {
+		if p.held && (!found || p.high.Before(oldest)) {
+			oldest, found = p.high, true
+		}
+	}
+	return oldest, found
 }
 
 // Reset discards every page, closing held pages' released channels, so a

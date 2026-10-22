@@ -106,11 +106,12 @@ func (b *backfillDeps) CDCCheckpointStale(ctx context.Context) (bool, error) {
 	return b.d.isCDCCheckpointStaleFor(ctx, b.Checkpointer, b.streamArn)
 }
 
-func (b *backfillDeps) NewEmitter() incsnapshot.Emitter {
+func (b *backfillDeps) NewEmitter(resume *SnapshotCheckpoint) incsnapshot.Emitter {
+	segments, _ := resume.ScanSegments(b.d.conf.snapshot.segments)
 	return &snapshotEmitter{
 		d:       b.d,
 		table:   b.table,
-		tracker: newSnapshotAckTracker(b.Checkpointer, defaultSnapshotCheckpointBatchInterval, b.d.log),
+		tracker: newSnapshotAckTracker(b.Checkpointer, defaultSnapshotCheckpointBatchInterval, segments, b.d.log),
 		ackGate: new(sync.WaitGroup),
 	}
 }
@@ -119,7 +120,7 @@ func (b *backfillDeps) Scan(ctx context.Context, resume *SnapshotCheckpoint, hoo
 	scanner := NewSnapshotScanner(SnapshotScannerConfig{
 		Client:         b.d.dynamoClient,
 		Table:          b.table,
-		Segments:       b.d.conf.snapshot.segments,
+		Segments:       resolveSnapshotSegments(resume, b.d.conf.snapshot.segments, b.table, b.d.log),
 		BatchSize:      b.d.conf.snapshot.batchSize,
 		Throttle:       b.d.conf.snapshot.throttle,
 		ConsistentRead: true,

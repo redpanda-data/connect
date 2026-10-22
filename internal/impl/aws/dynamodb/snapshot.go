@@ -325,7 +325,11 @@ func isStreamsResourceNotFoundError(err error) bool {
 type SnapshotCheckpoint struct {
 	Complete        bool
 	SegmentProgress map[int]*SegmentState
-	mu              sync.RWMutex
+	// TotalSegments is the segment count the stored positions were scanned
+	// with, or zero when unknown (no progress, or rows written before the
+	// count was stored).
+	TotalSegments int
+	mu            sync.RWMutex
 }
 
 // SegmentState holds the state of a single scan segment.
@@ -356,6 +360,33 @@ func (c *SnapshotCheckpoint) SegmentStartKey(segment int) map[string]dynamodbtyp
 		return state.LastKey
 	}
 	return nil
+}
+
+// ScanSegments returns the segment count a scan resuming from c must use.
+// A Scan segment's key range depends on the total segment count, so stored
+// positions are only valid under the count they were read with: when c
+// carries progress under another count than configured, the stored count
+// wins and resumed reports true. Otherwise it returns configured.
+func (c *SnapshotCheckpoint) ScanSegments(configured int) (segments int, resumed bool) {
+	if c == nil {
+		return configured, false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Complete || len(c.SegmentProgress) == 0 || c.TotalSegments <= 0 || c.TotalSegments == configured {
+		return configured, false
+	}
+	return c.TotalSegments, true
+}
+
+// resolveSnapshotSegments returns the segment count for a scan resuming from
+// resume, warning when stored progress overrides the configured count.
+func resolveSnapshotSegments(resume *SnapshotCheckpoint, configured int, table string, log *service.Logger) int {
+	segments, resumed := resume.ScanSegments(configured)
+	if resumed {
+		log.Warnf("Resuming the snapshot of table %s with the %d segments its progress was stored under, not the configured snapshot_segments %d; the configured count applies to the next snapshot", table, segments, configured)
+	}
+	return segments
 }
 
 // SegmentComplete returns true if the given segment has already finished scanning.

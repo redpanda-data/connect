@@ -61,7 +61,7 @@ func (d *prepareDeps) CDCCheckpointStale(context.Context) (bool, error) {
 	return d.stale, d.staleErr
 }
 
-func (*prepareDeps) NewEmitter() Emitter { panic("Prepare must not emit") }
+func (*prepareDeps) NewEmitter(fakeProgress) Emitter { panic("Prepare must not emit") }
 
 func (*prepareDeps) Scan(context.Context, fakeProgress, ScanHooks) error {
 	panic("Prepare must not scan")
@@ -155,7 +155,7 @@ type runDeps struct {
 	release chan struct{}
 }
 
-func (d *runDeps) NewEmitter() Emitter { return &gateEmitter{d: d} }
+func (d *runDeps) NewEmitter(fakeProgress) Emitter { return &gateEmitter{d: d} }
 
 func (*runDeps) Scan(context.Context, fakeProgress, ScanHooks) error {
 	return errors.New("stubbed scan failure")
