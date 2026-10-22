@@ -275,9 +275,15 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
+// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
+// existing one so that it lists exactly those tables. An empty list means FOR ALL TABLES: a new publication is
+// created that way, and an existing FOR TABLE publication is recreated as FOR ALL TABLES, since PostgreSQL has no
+// ALTER PUBLICATION form that switches between the two.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
-	// Check if publication exists
+	// Check if publication exists. puballtables must be read from here:
+	// pg_publication_tables lists every table for a FOR ALL TABLES publication
+	// and nothing for a FOR TABLE publication that has had all of its tables
+	// dropped, so the table list alone cannot tell them apart.
 	pubQuery, err := sanitize.SQLQuery(`
 			SELECT pubname, puballtables
 			FROM pg_publication
@@ -323,16 +329,32 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	}
 
 	// assuming publication already exists
-	// get a list of tables in the publication
-	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
-	if err != nil {
-		return fmt.Errorf("getting publication tables: %w", err)
+	allTables := len(rows[0].Rows[0]) > 1 && string(rows[0].Rows[0][1]) == "t"
+
+	if len(tables) == 0 {
+		// Every table is wanted. A FOR ALL TABLES publication already covers
+		// them, so nothing to do. A FOR TABLE publication cannot be widened
+		// with ALTER PUBLICATION, and dropping its members one by one would
+		// only leave an empty publication that streams nothing, so recreate
+		// it. Both statements run in one implicit transaction, so the
+		// publication never goes missing for a concurrent reader.
+		if allTables {
+			return nil
+		}
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES;", publicationName, publicationName))
+		if err != nil {
+			return fmt.Errorf("sanitizing publication recreation query: %w", err)
+		}
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+			return fmt.Errorf("recreating publication for all tables: %w", err)
+		}
+		return nil
 	}
 
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
-		return nil
+	// get a list of tables in the publication
+	pubTables, _, err := GetPublicationTables(ctx, conn, publicationName)
+	if err != nil {
+		return fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	tablesToRemoveFromPublication := []TableFQN{}
