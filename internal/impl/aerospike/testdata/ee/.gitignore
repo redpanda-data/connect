@@ -1,0 +1,4 @@
+features.conf
+certs/*
+!certs/.gitkeep
+smd/
