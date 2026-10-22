@@ -593,11 +593,14 @@ func TestBatcherAckOverShardCapStillDrainsTracker(t *testing.T) {
 	assert.Equal(t, "00002", cp.get("shard-002"))
 }
 
+// TestPinClock runs one pinClock through a fixed sequence of checks. Each
+// step depends on the state the previous step left, so the steps are not
+// subtests.
 func TestPinClock(t *testing.T) {
 	now := time.Now()
 	var clock pinClock
 
-	tests := []struct {
+	steps := []struct {
 		name      string
 		at        time.Time
 		wantSince time.Duration
@@ -635,23 +638,19 @@ func TestPinClock(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			since, shouldWarn := clock.check(tc.at)
-			assert.Equal(t, tc.wantSince, since)
-			assert.Equal(t, tc.wantWarn, shouldWarn)
-		})
+	for _, step := range steps {
+		since, shouldWarn := clock.check(step.at)
+		assert.Equal(t, step.wantSince, since, step.name)
+		assert.Equal(t, step.wantWarn, shouldWarn, step.name)
 	}
 
-	t.Run("clear resets throttling", func(t *testing.T) {
-		clock.clear()
-
-		// Next check starts fresh at t2 instead of measuring from now
-		t2 := now.Add(1 * time.Hour)
-		since, warn := clock.check(t2)
-		assert.Equal(t, time.Duration(0), since)
-		assert.False(t, warn)
-	})
+	// clear resets throttling: the next check starts a new pin at t2 instead
+	// of measuring from now.
+	clock.clear()
+	t2 := now.Add(1 * time.Hour)
+	since, shouldWarn := clock.check(t2)
+	assert.Equal(t, time.Duration(0), since, "check after clear starts a new pin")
+	assert.False(t, shouldWarn, "check after clear does not warn")
 }
 
 // TestBatcherWarnsWhenThrottlePinned: a throttle that never releases is an
