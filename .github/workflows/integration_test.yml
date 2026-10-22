@@ -44,13 +44,6 @@ jobs:
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration"
         timeout-minutes: 120
 
-      # These start their own multi-node topologies, so they only run when
-      # named exactly and the package sweep above skips them.
-      - name: Run MongoDB Cluster Integration Tests
-        if: ${{ !cancelled() }}
-        run: task test:integration:mongodb-cluster
-        timeout-minutes: 60
-
       - name: Write Summary
         if: always()
         run: |

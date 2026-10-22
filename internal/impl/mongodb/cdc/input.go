@@ -254,7 +254,16 @@ When `+"`signal_collection_name`"+` is set, documents inserted into that collect
 - `+"`"+replication.LogSignalType+"`"+`: logs `+"`data.message`"+` at info level, for example `+"`{\"type\": \""+replication.LogSignalType+"\", \"data\": {\"message\": \"hello\"}}`"+`.
 - `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`incremental_snapshot.enabled: true`"+`. Each named collection must also be in `+"`collections`"+`, because the input only watches those for changes. If a signal names any other collection, the input skips the whole signal and logs an error. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
 
-Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored, and signals are never emitted.
+Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored.
+
+Signal inserts are emitted as regular messages (`+"`operation=insert`"+`, `+"`collection=<signal_collection_name>`"+`), the same as `+"`postgres_cdc`"+` and `+"`aws_dynamodb_cdc`"+` emit their signals. To keep them out of the output, filter on the `+"`collection`"+` metadata field:
+
+`+"```yaml"+`
+pipeline:
+  processors:
+    - mapping: |
+        root = if @collection == "rpcn_signals" { deleted() } else { this }
+`+"```"+`
 
 == Scaling
 
@@ -376,7 +385,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				Version("4.115.0").
 				Advanced(),
 			service.NewStringField(fieldSignalCollection).
-				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` incrementally, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, which requires `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`. Documents inserted into it are consumed as signals and never emitted.").
+				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` incrementally, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, which requires `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`. Signal inserts are also emitted as regular messages with the `collection` metadata set to this collection, so filter them out downstream if they are not wanted.").
 				ShortDescription("A collection watched for signal documents that control the input at runtime.").
 				Optional().
 				Version("4.115.0"),
@@ -562,7 +571,7 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 			return err
 		}
 		if slices.Contains(m.collections, m.signalCollection) {
-			return fmt.Errorf("field %s must not name one of the streamed collections: its documents are consumed as signals, never emitted", fieldSignalCollection)
+			return fmt.Errorf("field %s must not name one of the streamed collections: its inserts are read as signals", fieldSignalCollection)
 		}
 	}
 	key, err := inc.FieldString(fieldIncSnapshotKey)
@@ -1869,19 +1878,20 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 			return fmt.Errorf("unable to extract operation type from change string, got: %s", data)
 		}
 		if coll, _ := bsonGetPath(data, "ns", "coll").(string); m.signalCollection != "" && coll == m.signalCollection {
-			// Signals are consumed, never emitted. Only an insert is one: an
-			// update or delete of a signal document requests nothing.
-			if opType == "insert" {
-				m.handleSignal(stream.Current, run)
+			// Only an insert is a signal, and it is then emitted like any other
+			// insert, as postgres_cdc and aws_dynamodb_cdc do. An update or
+			// delete of a signal document requests nothing and is dropped.
+			if opType != "insert" {
+				ct, ok := data["clusterTime"].(bson.Timestamp)
+				if !ok {
+					return fmt.Errorf("unable to extract optime from change stream, got: %T", data["clusterTime"])
+				}
+				if err := afterEvent(ct); err != nil {
+					return err
+				}
+				continue
 			}
-			ct, ok := data["clusterTime"].(bson.Timestamp)
-			if !ok {
-				return fmt.Errorf("unable to extract optime from change stream, got: %T", data["clusterTime"])
-			}
-			if err := afterEvent(ct); err != nil {
-				return err
-			}
-			continue
+			m.handleSignal(stream.Current, run)
 		}
 		var doc any
 		var keyOnly bool // true when doc is documentKey-only or synthetic partial update

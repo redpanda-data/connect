@@ -147,6 +147,9 @@ type replayed struct {
 	// interleaved records, per collection, a snapshot read of it emitted
 	// after a streamed change.
 	interleaved map[string]bool
+	// signals counts signal inserts emitted from the signal collection,
+	// which are otherwise left out of the replay.
+	signals int
 	// problems records messages that could not be replayed. replay runs
 	// inside Eventually conditions, off the test goroutine, so it must not
 	// fail the test itself: replayChecked does that.
@@ -165,6 +168,14 @@ func replay(o *outputHelper) replayed {
 		for _, m := range b {
 			op, _ := m.MetaGet("operation")
 			coll, _ := m.MetaGet("collection")
+			if coll == "signals" {
+				if op == "insert" {
+					r.signals++
+				} else {
+					r.problems = append(r.problems, fmt.Sprintf("unexpected %s message from the signal collection", op))
+				}
+				continue
+			}
 			r.ops[op]++
 			body, err := m.AsStructured()
 			if err != nil {
@@ -517,9 +528,8 @@ mongodb_cdc:
 	assert.Equal(t, 150, got.readByColl["bar"], "bar read by the blocking snapshot and once per signal")
 	assert.Equal(t, 30, got.readByColl["foo"])
 	assert.NotEmpty(t, h.logs.matching("are not in collections"))
-	for _, m := range h.output.Metadata(t) {
-		assert.NotEqual(t, "signals", m["collection"], "a signal was emitted")
-	}
+	// Every signal insert is emitted, the rejected one included.
+	assert.Equal(t, 4, got.signals, "signal inserts emitted")
 }
 
 func TestIntegrationMongoCDCIncrementalSnapshotMixedIDTypes(t *testing.T) {
@@ -622,6 +632,8 @@ func TestIntegrationMongoCDCSignalCollectionWithPrePostImages(t *testing.T) {
 	stream.Stop(t)
 	wait()
 	assert.Empty(t, h.logs.matching("error watching MongoDB change stream"))
+	// The insert is emitted; the update and delete of it are not.
+	assert.Equal(t, 1, replayChecked(t, h.output).signals)
 }
 
 func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {

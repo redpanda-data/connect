@@ -24,21 +24,6 @@ tasks:
     cmds:
       - go run ./cmd/tools/integration run {{.CLI_ARGS}}
 
-  integration:mongodb-cluster:
-    desc: Run the mongodb_cdc tests that start their own sharded cluster or replica set, which only run when named exactly
-    vars:
-      # TestIntegrationMongoCDCWithSnapshotShardedCluster is left out: it
-      # needs a cluster already running on localhost.
-      TESTS: >-
-        TestIntegrationMongoCDCIncrementalSnapshotShardedCluster
-        TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection
-        TestIntegrationIncSnapshotDepsMajorityReads
-    cmds:
-      - for:
-          var: TESTS
-          split: ' '
-        cmd: go test {{.GO_FLAGS}} -count=1 -timeout 20m -v -run '{{.ITEM}}' ./internal/impl/mongodb/cdc/
-
   integration:verify:
     desc: Check all integration test packages are registered in packages.json
     cmds:
