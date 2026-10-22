@@ -816,14 +816,10 @@ func samplePercent(numSamples int, total int64) float64 {
 	return min(maxSamplePercent, max(0.0001, 100.0*float64(numSamples)/float64(max(total, 1))))
 }
 
-// sampleTableKeyspace returns sorted primary-key samples as of scn, used by planChunkRanges
-// as candidate chunk boundaries. SAMPLE must precede AS OF SCN (ORA-03049 otherwise) and
-// can't target a view or subquery, so chunking only applies to unfiltered base tables.
-//
-// The sample is sorted and then thinned to every k-th key, returning at most maxKeys keys
-// spread evenly across it. Capping with ROWNUM instead would apply before the sort and keep
-// only the first sampled blocks in storage order, skewing the chunk boundaries. Too few
-// samples just means a single range.
+// sampleTableKeyspace returns up to maxKeys sorted primary key samples as of scn, thinned
+// to every k-th key so they spread evenly across the sample. A ROWNUM cap would apply
+// before the sort and keep only the first rows in storage order, skewing the boundaries.
+// SAMPLE must precede AS OF SCN (ORA-03049) and can't target a view or subquery.
 func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, scn SCN, sampleClause string, maxKeys int) ([]map[string]any, error) {
 	quoted := make([]string, len(pkCols))
 	for i, col := range pkCols {
