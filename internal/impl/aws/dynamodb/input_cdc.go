@@ -460,6 +460,9 @@ type tableStream struct {
 	completedShards map[string]struct{}
 	snapshot        *snapshotState
 	shardRefreshCh  chan struct{} // Signal coordinator to refresh shards immediately
+	// parentFailures tracks shards discovery fails to prepare across refresh
+	// cycles, so an unreadable parent cannot hold its children back forever.
+	parentFailures parentPrepareFailures
 
 	// activeShards is the number of running shard readers, published by this
 	// table's coordinator and summed across tables into the shards_active
@@ -509,6 +512,9 @@ type dynamoDBCDCInput struct {
 	completedShards map[string]struct{}
 	snapshot        *snapshotState // nil if snapshot mode is "none"
 	shardRefreshCh  chan struct{}  // Signal coordinator to refresh shards immediately
+	// parentFailures tracks shards discovery fails to prepare across refresh
+	// cycles, so an unreadable parent cannot hold its children back forever.
+	parentFailures parentPrepareFailures
 
 	// refreshInterval and cleanupInterval override shardRefreshInterval and
 	// shardCleanupInterval when non-zero (tests drive coordinators with
@@ -1814,6 +1820,86 @@ type shardStatus struct {
 	completed bool
 }
 
+// parentReleaseAfterFailures is how many consecutive refresh cycles a listed
+// parent shard may fail to prepare before its children are read anyway.
+const parentReleaseAfterFailures = 5
+
+// parentPrepareFailures remembers, across refresh cycles, the listed shards
+// that discovery failed to prepare. A child is normally held back until its
+// parent is read to the end, but a parent that can never be prepared would
+// then stall its whole lineage until it ages out of the listing (up to 24h).
+// A parent whose GetShardIterator reports ResourceNotFoundException is gone
+// and releases its children right away; a parent failing for any other
+// reason releases them after parentReleaseAfterFailures consecutive cycles.
+// Neither persists a completion marker: the parent is still retried and read
+// if it becomes readable. The zero value is ready to use.
+type parentPrepareFailures struct {
+	mu       sync.Mutex
+	failures map[string]int      // consecutive failed prepares per shard
+	gone     map[string]struct{} // shards GetShardIterator reported not found
+	released map[string]struct{} // shards whose children were released (logged once)
+}
+
+// recordFailure counts a failed prepare of shardID.
+func (p *parentPrepareFailures) recordFailure(shardID string, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if isStreamsResourceNotFoundError(err) {
+		if p.gone == nil {
+			p.gone = map[string]struct{}{}
+		}
+		p.gone[shardID] = struct{}{}
+	}
+	if p.failures == nil {
+		p.failures = map[string]int{}
+	}
+	p.failures[shardID]++
+}
+
+// recordSuccess clears shardID's failure history once it prepares.
+func (p *parentPrepareFailures) recordSuccess(shardID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.failures, shardID)
+	delete(p.gone, shardID)
+	delete(p.released, shardID)
+}
+
+// release reports whether the children of parentID may be read although
+// parentID is listed and not read to the end. firstRelease is true the first
+// time a parent is released for repeated failures, so the caller warns once.
+func (p *parentPrepareFailures) release(parentID string) (release, firstRelease bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, gone := p.gone[parentID]; gone {
+		return true, false
+	}
+	if p.failures[parentID] < parentReleaseAfterFailures {
+		return false, false
+	}
+	if _, logged := p.released[parentID]; logged {
+		return true, false
+	}
+	if p.released == nil {
+		p.released = map[string]struct{}{}
+	}
+	p.released[parentID] = struct{}{}
+	return true, true
+}
+
+// prune forgets shards that are no longer listed.
+func (p *parentPrepareFailures) prune(listed map[string]struct{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for shardID := range p.failures {
+		if _, ok := listed[shardID]; !ok {
+			delete(p.failures, shardID)
+			delete(p.gone, shardID)
+			delete(p.released, shardID)
+		}
+	}
+}
+
 // prepareNewShards resolves and acquires iterators for every discovered shard
 // not already known (per status). A shard that fails to prepare is skipped,
 // counted, and retried on a later cycle rather than aborting the batch, and
@@ -1831,14 +1917,16 @@ type shardStatus struct {
 // marks completed come back with completed set, which also releases their
 // children within the same cycle. A parent whose checkpoint has been trimmed
 // is resumed from TRIM_HORIZON by prepareShardReader rather than failing every
-// cycle, so it cannot hold its descendants back indefinitely.
+// cycle, so it cannot hold its descendants back indefinitely; a parent that
+// fails to prepare for another reason is handled by parents (see
+// parentPrepareFailures).
 //
 // The ordering does not apply while start_from: latest is still honored (the
 // first discovery of a fresh pipeline): every shard then starts at LATEST, so
 // a parent has no backlog for its child to overtake, and deferring the child
 // would start it at TRIM_HORIZON on a later cycle once honorStartFrom is
 // cleared, replaying records the user asked to skip.
-func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, status func(string) shardStatus, tableSuffix string, honorStartFrom bool) []preparedShard {
+func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, status func(string) shardStatus, parents *parentPrepareFailures, tableSuffix string, honorStartFrom bool) []preparedShard {
 	var (
 		prepared     []preparedShard
 		failedShards int
@@ -1849,6 +1937,7 @@ func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointe
 	for _, shard := range shards {
 		listed[*shard.ShardId] = struct{}{}
 	}
+	parents.prune(listed)
 	completedNow := map[string]struct{}{}
 	orderLineage := initialIteratorType(d.conf.startFrom, honorStartFrom) != types.ShardIteratorTypeLatest
 	parentDone := func(shard types.Shard) bool {
@@ -1862,7 +1951,14 @@ func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointe
 		if _, done := completedNow[parentID]; done {
 			return true
 		}
-		return status(parentID).completed
+		if status(parentID).completed {
+			return true
+		}
+		release, firstRelease := parents.release(parentID)
+		if firstRelease {
+			d.log.Warnf("Parent shard %s%s failed to prepare on %d consecutive refresh cycles; reading its child shards without waiting for it, so their changes may be delivered before older changes still in the parent", parentID, tableSuffix, parentReleaseAfterFailures)
+		}
+		return release
 	}
 
 	var pending []types.Shard
@@ -1891,6 +1987,7 @@ func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointe
 			shardID := *shard.ShardId
 			p, err := d.prepareShardReader(ctx, cp, streamArn, shardID, tableSuffix, honorStartFrom)
 			if err != nil {
+				parents.recordFailure(shardID, err)
 				failedShards++
 				if firstErr == nil {
 					firstErr = err
@@ -1898,6 +1995,7 @@ func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointe
 				d.log.Debugf("Failed to prepare shard %s%s, will retry on the next refresh cycle: %v", shardID, tableSuffix, err)
 				continue
 			}
+			parents.recordSuccess(shardID)
 			if p.completed {
 				completedNow[shardID] = struct{}{}
 			}
@@ -1935,7 +2033,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.mu.RLock()
 		defer d.mu.RUnlock()
 		return lookupShard(d.shardReaders, d.completedShards, shardID)
-	}, "", d.honorStartFrom.Load())
+	}, &d.parentFailures, "", d.honorStartFrom.Load())
 
 	// Add all new shard readers in a single critical section
 	if len(newShards) > 0 {
@@ -2318,7 +2416,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		ts.mu.RLock()
 		defer ts.mu.RUnlock()
 		return lookupShard(ts.shardReaders, ts.completedShards, shardID)
-	}, " (table "+tableName+")", ts.honorStartFrom.Load())
+	}, &ts.parentFailures, " (table "+tableName+")", ts.honorStartFrom.Load())
 
 	// Add all new shard readers
 	if len(newShards) > 0 {

@@ -63,7 +63,9 @@ type refreshStubTransport struct {
 	// trimmedShards fail AFTER_SEQUENCE_NUMBER requests with
 	// TrimmedDataAccessException (a checkpoint older than the retention window).
 	trimmedShards map[string]bool
-	iteratorCalls []string
+	// notFoundShards fail with ResourceNotFoundException (the shard is gone).
+	notFoundShards map[string]bool
+	iteratorCalls  []string
 	// iteratorTypes records the ShardIteratorType of the latest
 	// GetShardIterator call per shard.
 	iteratorTypes      map[string]string
@@ -172,6 +174,7 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 		s.iteratorTypes[in.ShardId] = in.ShardIteratorType
 		fail := s.failShards[in.ShardId]
 		trimmed := s.trimmedShards[in.ShardId] && in.ShardIteratorType == "AFTER_SEQUENCE_NUMBER"
+		notFound := s.notFoundShards[in.ShardId]
 		hook := s.onGetShardIterator
 		s.mu.Unlock()
 		if hook != nil {
@@ -180,6 +183,11 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 		if trimmed {
 			resp := jsonResponse(req, 400, `{"__type":"TrimmedDataAccessException","message":"stubbed for test"}`)
 			resp.Header.Set("X-Amzn-ErrorType", "TrimmedDataAccessException")
+			return resp, nil
+		}
+		if notFound {
+			resp := jsonResponse(req, 400, `{"__type":"ResourceNotFoundException","message":"stubbed for test"}`)
+			resp.Header.Set("X-Amzn-ErrorType", "ResourceNotFoundException")
 			return resp, nil
 		}
 		if fail {
@@ -924,5 +932,81 @@ func TestRefreshShardsTrimmedParentCheckpointDoesNotStallChildren(t *testing.T) 
 		d.completeTableShard(t.Context(), "test", ts, "shard-parent")
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
+	})
+}
+
+// TestRefreshShardsGoneParentReleasesChildren (CON-599): a listed parent
+// whose GetShardIterator reports ResourceNotFoundException can never be read,
+// so it must not hold its children back. It is not recorded as completed:
+// nothing was read from it.
+func TestRefreshShardsGoneParentReleasesChildren(t *testing.T) {
+	newTransport := func() *refreshStubTransport {
+		return &refreshStubTransport{
+			shardIDs:       []string{"shard-child", "shard-parent"},
+			parents:        map[string]string{"shard-child": "shard-parent"},
+			notFoundShards: map[string]bool{"shard-parent": true},
+		}
+	}
+
+	t.Run("single-table", func(t *testing.T) {
+		d := newRefreshTestInput(t, newTransport())
+
+		require.NoError(t, d.refreshShards(t.Context()))
+		assert.ElementsMatch(t, []string{"shard-child"}, registeredShards(d))
+		assert.False(t, lookupShard(d.shardReaders, d.completedShards, "shard-parent").completed,
+			"a gone parent must not be marked completed")
+	})
+
+	t.Run("multi-table", func(t *testing.T) {
+		d, ts, tableShards := tableRefreshHarness(t, newTransport(), newTestCheckpointer(t))
+
+		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+		assert.ElementsMatch(t, []string{"shard-child"}, tableShards())
+		assert.False(t, lookupShard(ts.shardReaders, ts.completedShards, "shard-parent").completed)
+	})
+}
+
+// TestRefreshShardsFailingParentReleasesChildrenAfterRetries (CON-599): a
+// listed parent that keeps failing to prepare (for a reason other than
+// trimmed data or a missing shard) holds its children back only for
+// parentReleaseAfterFailures consecutive refresh cycles; after that the
+// children are read anyway so the lineage cannot stall until the parent ages
+// out of the listing.
+func TestRefreshShardsFailingParentReleasesChildrenAfterRetries(t *testing.T) {
+	newTransport := func() *refreshStubTransport {
+		transport := &refreshStubTransport{
+			shardIDs: []string{"shard-child", "shard-parent"},
+			parents:  map[string]string{"shard-child": "shard-parent"},
+		}
+		transport.setFailShards("shard-parent")
+		return transport
+	}
+	run := func(t *testing.T, refresh func() error, registered func() []string, transport *refreshStubTransport) {
+		t.Helper()
+		for cycle := 1; cycle < parentReleaseAfterFailures; cycle++ {
+			require.NoError(t, refresh())
+			assert.Empty(t, registered(), "cycle %d: the child must still wait for its parent", cycle)
+		}
+		require.NoError(t, refresh())
+		assert.ElementsMatch(t, []string{"shard-child"}, registered(),
+			"the child must be released after %d failed parent prepares", parentReleaseAfterFailures)
+		assert.Equal(t, parentReleaseAfterFailures, transport.iteratorCallsFor("shard-parent"))
+
+		// The parent is still retried, and read once it recovers.
+		transport.setFailShards()
+		require.NoError(t, refresh())
+		assert.ElementsMatch(t, []string{"shard-child", "shard-parent"}, registered())
+	}
+
+	t.Run("single-table", func(t *testing.T) {
+		transport := newTransport()
+		d := newRefreshTestInput(t, transport)
+		run(t, func() error { return d.refreshShards(t.Context()) }, func() []string { return registeredShards(d) }, transport)
+	})
+
+	t.Run("multi-table", func(t *testing.T) {
+		transport := newTransport()
+		d, ts, tableShards := tableRefreshHarness(t, transport, newTestCheckpointer(t))
+		run(t, func() error { return d.refreshTableShards(t.Context(), "test", ts) }, tableShards, transport)
 	})
 }
