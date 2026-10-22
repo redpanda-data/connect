@@ -77,26 +77,36 @@ Unlike `+"`snowflake_streaming`"+`, which opens channels on a table, this output
 
 This is an Enterprise feature and requires a valid Redpanda Enterprise Edition license that includes Connect (https://docs.redpanda.com/redpanda-connect/get-started/licensing/[licensing docs^]).
 
-The `+"`"+ssopFieldPipe+"`"+` (and its table) must already exist; this output never issues `+"`CREATE PIPE`"+` or `+"`CREATE TABLE`"+`. A missing pipe is reported when the output connects, before any message is written.
+The `+"`"+ssopFieldPipe+"`"+` (and its table) must already exist; this output never issues `+"`CREATE PIPE`"+` or `+"`CREATE TABLE`"+`. A missing pipe is reported when the output connects, before any message is written. Fields with no matching column are dropped by Snowflake unless the table has `+"`ENABLE_SCHEMA_EVOLUTION = TRUE`"+` and the pipe uses `+"`MATCH_BY_COLUMN_NAME`"+`, in which case new fields become columns.
 
 Moving an existing `+"`snowflake_streaming`"+` pipeline across is not a rename: several fields are removed and `+"`"+ssopFieldCommitTimeout+"`"+` changes meaning. See the xref:guides:migrating-to-snowflake-streaming-pipe.adoc[migration guide].
 
+== Data types
+
+Each message is sent to Snowflake as one JSON row and Snowflake maps its fields to columns server-side; this output performs no type conversion of its own. What each column type accepts is therefore Snowflake's rule, documented with the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-high-performance-limitations[high-performance architecture's limitations^]. Verified against a live account:
+
 [%header,format=dsv]
 |===
-Snowflake column type:Allowed format in Redpanda Connect
+Snowflake column type:JSON value
+NUMBER, FLOAT:number, or a string holding one
+BOOLEAN:boolean
 CHAR, VARCHAR:string
-BINARY:[]byte
-NUMBER:any numeric type, string
-FLOAT:any numeric type
-BOOLEAN:bool,any numeric type,string parsable according to `+"`strconv.ParseBool`"+`
-TIME,DATE,TIMESTAMP:unix or RFC 3339 with nanoseconds timestamps
-VARIANT,ARRAY,OBJECT:any data type is converted into JSON
-GEOGRAPHY,GEOMETRY: Not supported
+TIMESTAMP_NTZ(9), TIMESTAMP_LTZ, DATE, TIME:RFC 3339 string; nanosecond precision is kept
+VARIANT, OBJECT, ARRAY, MAP:any JSON value, including nested objects and arrays
 |===
+
+A JSON `+"`null`"+` into a VARIANT column lands as a VARIANT null, not SQL NULL. GEOGRAPHY and GEOMETRY are not supported by Snowpipe Streaming.
 
 Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
 
-There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.
+== Iceberg tables
+
+Snowflake-managed Iceberg tables are supported as a target: Snowflake writes the Iceberg files server-side, so nothing in this output is table-type-specific, and partitioned tables work through a pipe whose `+"`COPY INTO`"+` reads `+"`FROM TABLE(DATA_SOURCE(TYPE => 'STREAMING'))`"+`. Externally managed Iceberg catalogs are not supported by Snowpipe Streaming. Caveats seen on live tables:
+
+- `+"`VARCHAR(n)`"+` is not allowed on Iceberg tables; use `+"`VARCHAR`"+`.
+- VARIANT columns need an Iceberg v3 table (`+"`ICEBERG_VERSION = 3`"+`).
+- With server-side schema evolution, a new field holding a timestamp-like string can put the channel into `+"`ERR_CHANNEL_SCHEMA_EVOLUTION_ICEBERG_TIME_TYPE_SCALE_NOT_SUPPORTED`"+`. This output reports that as a permanent error naming the fix; pre-create timestamp columns with the type you want.
+- Each committed batch writes one file per table partition it touched, so a low-volume pipeline into a partitioned table produces many small files. Larger batches (see <<request-size-and-throughput,Request size and throughput>>) and a `+"`"+ssopFieldChannelName+"`"+` per source partition help.
 
 Messages with an empty or whitespace-only body (Kafka/Redpanda tombstones, typically) are not sent: a Snowflake row has no representation for them. They are acknowledged upstream, counted in the `+"`snowflake_empty_rows_skipped`"+` metric and logged at debug level. If `+"`"+ssopFieldOffsetToken+"`"+` is set it is still evaluated for them, so use a metadata-based expression such as `+"`${! @kafka_offset }`"+`, not one derived from the body. To land tombstones as rows, map them with a processor first.
 
@@ -123,9 +133,14 @@ This is safe at any `+"`max_in_flight`"+` only if the input dispatches one batch
 NOTE: There is a limit of 10,000 streams per table -- if using more than 10k streams please reach out to Snowflake support.
 `+service.OutputPerformanceDocs(true, true)+`
 
-*Despite the general advice above, don't set a `+"`batching`"+` policy on this output.* Batch size is governed by the input's `+"`max_yield_batch_bytes`"+` (default `+"`32KB`"+`, well below what this output can carry); raise that instead. An output batching policy pools every partition's yields into one request, serializing partitions and risking the 4MiB limit.
+[[request-size-and-throughput]]
+== Request size and throughput
 
-Requests are capped at 4MiB uncompressed. An oversized batch is rejected rather than split, and identically on every retry, so exceeding the limit wedges that channel; keep `+"`max_yield_batch_bytes`"+` under it and under the input's `+"`partition_buffer_bytes`"+`.
+Each batch is one request per channel. Request bodies are zstd-compressed by default (`+"`"+ssopFieldCompression+"`"+`), and Snowflake's 4 MB per-request limit applies to the body as sent, after compression. A batch whose body is still over the limit is sent as several requests, split by message, each with its own offset-token range, so a large batch never fails for size; only a single message over the limit on its own cannot be sent (see `+"`"+ssopFieldTolerateRowErrors+"`"+`). Typical JSON compresses 5–8×, so 16–20 MB of messages usually fits in one request, and anything under about 3.5 MB always does. Memory per in-flight batch is roughly twice the uncompressed messages (the batch and the encoded body) plus the compressed body. Watch `+"`snowflake_compressed_output_size_bytes`"+` against the message bytes to see your ratio. Without `+"`"+ssopFieldOffsetToken+"`"+`, a batch sent as several requests can be duplicated if a later request fails after an earlier one committed: the whole batch is redelivered and the committed requests are sent again, so for large at-least-once batches prefer sizes that fit one request.
+
+*With the `+"`redpanda`"+` input, size batches at the input*, through `+"`max_yield_batch_bytes`"+` (default `+"`32KB`"+`, far below what one request carries), rather than with an output `+"`batching`"+` policy: an output policy pools every partition's messages into one request, which serialises the partitions.
+
+*A channel carries one batch at a time.* The next batch for a channel waits until the previous one has committed, so per-channel throughput is bounded by request size over commit latency (typically a few seconds in-region). Spread load across channels with a per-partition `+"`"+ssopFieldChannelName+"`"+`. Pipelining appends within a channel is planned.
 `).
 		Fields(
 			service.NewStringField(ssopFieldAccount).
@@ -144,7 +159,7 @@ Requests are capped at 4MiB uncompressed. An oversized batch is rejected rather 
 				ShortDescription("The role to ingest as; sent as a session-scoped token, so it does constrain ingestion privileges.").Example("SNOWPIPE_STREAMING_ROLE"),
 			service.NewStringField(ssopFieldDB).Description("The Snowflake database to ingest data into.").Example("MY_DATABASE"),
 			service.NewStringField(ssopFieldSchema).Description("The Snowflake schema to ingest data into.").Example("PUBLIC"),
-			service.NewStringField(ssopFieldPipe).Description("The Snowflake pipe to ingest data into. It must already exist; a missing pipe is reported when the output connects. Unlike `database` and `schema` this value is not upper-cased, so match the stored identifier exactly (`MY_PIPE` for a pipe created as `CREATE PIPE my_pipe`).").Example("MY_PIPE"),
+			service.NewStringField(ssopFieldPipe).Description("The Snowflake pipe to ingest data into. It must already exist; a missing pipe is reported when the output connects. Unlike `database` and `schema` this value is not upper-cased, so match the stored identifier exactly (`MY_PIPE` for a pipe created as `CREATE PIPE my_pipe`). Snowflake's managed default pipes (`<TABLE>-STREAMING`) only exist once a channel has been opened on the table through the table endpoint, which this output does not use, so a default pipe fails the connect-time check with `ERR_PIPE_DOES_NOT_EXIST_OR_NOT_AUTHORIZED` until something else has created it; create a named pipe instead.").Example("MY_PIPE"),
 			service.NewStringField(ssopFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").
 				ShortDescription("PEM encoded private RSA key for authenticating with Snowflake. Either this or private_key_file is required.").Optional().Secret(),
 			service.NewStringField(ssopFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").
@@ -209,9 +224,9 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 				Description("Retry schedule for opening a channel and for the pipe pre-flight at connect time. The defaults allow about 22s of backoff. A channel open blocks this output's other channels, so keep the budget modest.").
 				Advanced(),
 			service.NewBoolField(ssopFieldTolerateRowErrors).
-				Description(`Whether to tolerate rows Snowflake rejects after a batch is appended (malformed or uncastable values, reported asynchronously in the channel status). `+"`false`"+` (the default, matching the Kafka Connector's `+"`errors.tolerance=none`"+`) fails the batch with an error naming the channel and Snowflake's last error; `+"`true`"+` only logs a warning. Either way `+"`snowflake_rows_error_count`"+` is incremented and the rejected rows never reach a dead-letter queue. Failing the batch does not retry the rejected rows (Snowflake has already refused them and the redelivery dedupes to nothing); it exists to alert an operator. When `+"`"+ssopFieldOffsetToken+"`"+` is unset such a rejection never fails the batch even with `+"`false`"+`, since without dedup a retry would only re-insert the good rows as duplicates.
+				Description(`Whether to tolerate rows Snowflake rejects after a batch is appended (malformed or uncastable values, reported asynchronously in the channel status). `+"`false`"+` (the default, matching the Kafka Connector's `+"`errors.tolerance=none`"+`) fails the batch with an error naming the channel and Snowflake's last error; `+"`true`"+` only logs a warning. Either way `+"`snowflake_rows_error_count`"+` is incremented and this output does not retry the rejected rows: Snowflake has already refused them and the redelivery dedupes to nothing, so failing the batch exists to alert an operator. To keep the rejected rows themselves, turn on error logging on the target table and Snowflake captures them in its error table; `+"`SNOWPIPE_STREAMING_CHANNEL_HISTORY`"+` has the error history with offsets (see https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-high-performance-error-handling[error handling^]). When `+"`"+ssopFieldOffsetToken+"`"+` is unset such a rejection never fails the batch even with `+"`false`"+`, since without dedup a retry would only re-insert the good rows as duplicates.
 
-The same policy applies to a message that spans several lines but is not valid JSON. Multi-line bodies are compacted to one NDJSON row each (a body holding several newline-separated documents becomes that many rows), so they must parse; one that does not is dropped by this output rather than sent, and treated like a row Snowflake rejected: the batch's good rows land, `+"`snowflake_rows_error_count`"+` is incremented, and with `+"`"+ssopFieldOffsetToken+"`"+` set and `+"`false`"+` the batch fails once with the message number and parse error, after which its redelivery dedupes to nothing.`).
+The same policy applies to a message this output cannot send at all: one that spans several lines but is not valid JSON (multi-line bodies are compacted to one NDJSON row each, so they must parse; a body holding several newline-separated documents becomes that many rows), or one whose body alone is over the 4 MB request limit after compression. Such a message is dropped rather than sent, and treated like a row Snowflake rejected: the batch's good rows land, `+"`snowflake_rows_error_count`"+` is incremented, and with `+"`"+ssopFieldOffsetToken+"`"+` set and `+"`false`"+` the batch fails once with the message number and parse error, after which its redelivery dedupes to nothing.`).
 				ShortDescription("Whether to tolerate rows Snowflake rejects (equivalent to the Kafka Connector's `errors.tolerance`); false (default) fails the batch, true only warns.").
 				Default(false).
 				Advanced(),
@@ -258,8 +273,8 @@ input:
     schema: "public"
     slot_name: "my_repl_slot"
     tables: ["my_pg_table"]
-    # Large batches perform best, but count is not byte-aware: size it so a
-    # batch stays under this output's 4MiB per-request limit.
+    # Large batches perform best. A batch over the 4 MB compressed request
+    # limit is sent as several requests, so count only needs to fit memory.
     batching:
       count: 50000
       period: 45s
@@ -314,7 +329,7 @@ output:
         channel_name: "MYDB.PUBLIC.BETS_PIPE-p${!@kafka_partition}"
         # No batching policy here: batch size is governed by the input's
         # max_yield_batch_bytes. An output policy would pool partitions into
-        # one request and risk the 4MiB limit.
+        # one request and serialise them.
         offset_token: ${! @kafka_offset }
         account: "MYSNOW-ACCOUNT"
         user: MYUSER
@@ -347,9 +362,9 @@ buffer:
   memory:
     # Max inflight data before applying backpressure
     limit: 524288000 # 50MiB
-    # Keep each flush well under this output's 4MiB per-request limit: an
-    # oversized batch is rejected identically on every retry and wedges
-    # the pipeline. 2MiB leaves headroom.
+    # Each flush is one batch. A batch over the 4 MB compressed request
+    # limit is split into several requests, so this is a latency and
+    # memory choice, not a hard cap.
     batch_policy:
       enabled: true
       byte_size: 2097152 # 2MiB

@@ -218,6 +218,9 @@ func (c *Client) Connect(ctx context.Context) error {
 		}
 		lastErr = err
 		if !IsBackpressure(err) {
+			if code, _ := statusCodeOf(err); code == 404 && strings.HasSuffix(strings.ToUpper(c.cfg.Pipe), "-STREAMING") {
+				return fmt.Errorf("pipe pre-flight for %s.%s.%s: %w (a managed default pipe only exists once a channel has been opened on its table through the table endpoint, which this client does not use; create a named pipe instead)", c.cfg.Database, c.cfg.Schema, c.cfg.Pipe, err)
+			}
 			return fmt.Errorf("pipe pre-flight for %s.%s.%s: %w", c.cfg.Database, c.cfg.Schema, c.cfg.Pipe, err)
 		}
 	}
