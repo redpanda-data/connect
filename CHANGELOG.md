@@ -3,6 +3,24 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.115.0 - 2026-10-22
+
+### Added
+
+- snowflake: Added snowflake_streaming_pipe output connector with Snowpipe Streaming v2 support, including compression, request splitting, and improved error handling. ([@Jeffail](https://github.com/Jeffail), [#4834](https://github.com/redpanda-data/connect/pull/4834))
+
+### Fixed
+
+- docs_gen: Fixed YAML parsing of hex values in generated documentation examples by properly quoting them. ([@abhilashmandaliya](https://github.com/abhilashmandaliya), [#4978](https://github.com/redpanda-data/connect/pull/4978))
+- deps: Update dependencies to address recent eMudhra vulnerability ([@josephwoodward](https://github.com/josephwoodward), [#5003](https://github.com/redpanda-data/connect/pull/5003))
+
+### Changed
+
+- oracledb_cdc: Improve performance by skipping schema cache rebuild when column metadata is unchanged. ([@josephwoodward](https://github.com/josephwoodward), [#5007](https://github.com/redpanda-data/connect/pull/5007))
+- cli: The --rpc-plugins flag now merges values from root and subcommand levels, allowing plugins to be registered at both levels; also added to dry-run command. ([@Leward](https://github.com/Leward), [#4976](https://github.com/redpanda-data/connect/pull/4976))
+- postgres_cdc: PostgreSQL CDC streaming now batches rows per transaction over a buffered channel with a configurable batch_transactions option, improving throughput while maintaining per-row failure semantics by default. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
+- sap_hana: SAP HANA source now rejects negative max_retries, records table reference in checkpoints to prevent cross-table state sharing, and sanitizes record names for Iceberg targets. ([@squiidz](https://github.com/squiidz), [#4983](https://github.com/redpanda-data/connect/pull/4983))
+
 ## 4.114.0 - 2026-10-16
 
 ### Added
