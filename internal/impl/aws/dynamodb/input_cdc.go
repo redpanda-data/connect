@@ -2028,6 +2028,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	pruned := pruneCompletedShards(d.completedShards, shards)
 	d.mu.Unlock()
 	forgetShards(d.recordBatcher, pruned)
+	d.retryShardFinalization(ctx, d.recordBatcher, "")
 
 	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) shardStatus {
 		d.mu.RLock()
@@ -2108,11 +2109,21 @@ func pruneCompletedShards(completed map[string]struct{}, listed []types.Shard) [
 // forgetShards drops the batcher's tracker state for completed shards that
 // aged out of the stream. Normally that state is already gone once the
 // shard's last batch settled (RecordBatcher.CloseShard); this catches entries
-// left behind when the final checkpoint write failed. The shard can no longer
-// be read, so its unpersisted frontier is worthless and is dropped too.
+// whose final checkpoint write kept failing (see retryShardFinalization). The
+// shard can no longer be read, so its unpersisted frontier is worthless and
+// is dropped too.
 func forgetShards(batcher *RecordBatcher, shardIDs []string) {
 	for _, shardID := range shardIDs {
 		batcher.forgetShard(shardID, false)
+	}
+}
+
+// retryShardFinalization retries the final checkpoint write of closed shards
+// whose earlier attempt failed (see RecordBatcher.RetryFinalize), once per
+// shard refresh cycle. A failure is logged and retried on the next cycle.
+func (d *dynamoDBCDCInput) retryShardFinalization(ctx context.Context, batcher *RecordBatcher, tableSuffix string) {
+	if err := batcher.RetryFinalize(ctx); err != nil {
+		d.log.Warnf("Failed to persist completion of closed shards%s; retrying on the next shard refresh: %v", tableSuffix, err)
 	}
 }
 
@@ -2411,6 +2422,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	pruned := pruneCompletedShards(ts.completedShards, shards)
 	ts.mu.Unlock()
 	forgetShards(ts.recordBatcher, pruned)
+	d.retryShardFinalization(ctx, ts.recordBatcher, " (table "+tableName+")")
 
 	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) shardStatus {
 		ts.mu.RLock()
