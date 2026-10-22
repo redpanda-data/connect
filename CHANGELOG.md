@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - docs_gen: Fixed YAML parsing of hex values in generated documentation examples by properly quoting them. ([@abhilashmandaliya](https://github.com/abhilashmandaliya), [#4978](https://github.com/redpanda-data/connect/pull/4978))
+- deps: Update dependencies to address recent eMudhra vulnerability ([@josephwoodward](https://github.com/josephwoodward), [#5003](https://github.com/redpanda-data/connect/pull/5003))
 
 ### Changed
 
