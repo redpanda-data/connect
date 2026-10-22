@@ -515,11 +515,13 @@ type fakeQueryDriver struct {
 	// the incremental snapshot can dedup by -- so a test that only cares
 	// about the key columns needs to say nothing about their types.
 	keyTypes [][]driver.Value
-	// partitioned and pubViaRoot answer the partition query. The zero values
-	// describe an ordinary table, which is what most tests want.
-	partitioned bool
-	pubViaRoot  bool
-	// notInPublication answers the publication membership query. The zero
+	// notPublishedAsItself and filtered answer the query asking whether the
+	// publication streams a table under its own name, unfiltered. The zero
+	// values describe a table published as itself, which is what most tests
+	// want.
+	notPublishedAsItself bool
+	filtered             bool
+	// notInPublication answers the publication coverage query. The zero
 	// value reports the table as covered.
 	notInPublication bool
 }
@@ -557,20 +559,24 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	if err := s.conn.driver.queryErr; err != nil {
 		return nil, err
 	}
-	// The publication membership query also names pg_publication, so it is
-	// matched first.
+	// The publication queries all name pg_publication, so they are told apart
+	// by what else they read, before the generic match below.
 	if strings.Contains(s.query, "pg_partition_tree") {
 		return &fakeQueryRows{
 			columns: []string{"exists"},
 			rows:    [][]driver.Value{{!s.conn.driver.notInPublication}},
 		}, nil
 	}
-	// The partition query has its own shape, so it needs its own result.
-	if strings.Contains(s.query, "pg_publication") {
+	if strings.Contains(s.query, "to_jsonb(pt)") {
 		return &fakeQueryRows{
-			columns: []string{"partitioned", "pubviaroot"},
-			rows:    [][]driver.Value{{s.conn.driver.partitioned, s.conn.driver.pubViaRoot}},
+			columns: []string{"listed", "filtered"},
+			rows:    [][]driver.Value{{!s.conn.driver.notPublishedAsItself, s.conn.driver.filtered}},
 		}, nil
+	}
+	// The undedupable tables query has its own shape, so it needs its own
+	// result: no partitioned tables.
+	if strings.Contains(s.query, "pg_publication") {
+		return &fakeQueryRows{columns: []string{"relname"}}, nil
 	}
 	// The key type query has its own shape, so it needs its own result.
 	if strings.Contains(s.query, "pg_type") {
@@ -800,8 +806,12 @@ func TestIntegrationIncrementalSnapshotRejectsUnbindableKey(t *testing.T) {
 		_, err := db.Exec(ddl)
 		require.NoError(t, err, ddl)
 	}
+	// A backfill also needs the table published under its own name.
+	_, err = db.Exec(`CREATE PUBLICATION pglog_stream_unbindable_slot FOR ALL TABLES`)
+	require.NoError(t, err)
 
 	stream := &Stream{
+		slotName: "unbindable_slot",
 		incSnapshot: incrementalSnapshot{
 			conn:    db,
 			pkCache: map[string][]string{},
@@ -947,13 +957,13 @@ func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
 	signalTable := incrementalsnapshot.TableID{Schema: "public", Table: "rpcn_signal"}
 	events := incrementalsnapshot.TableID{Schema: "public", Table: "events"}
 
-	newStream := func(partitioned, pubViaRoot bool) *Stream {
+	newStream := func(notPublishedAsItself, filtered bool) *Stream {
 		name := fmt.Sprintf("fake_pglog_part_%d", fakeQueryDriverSeq.Add(1))
 		sql.Register(name, &fakeQueryDriver{
-			columns:     []string{"attname"},
-			rows:        [][]driver.Value{{"id"}},
-			partitioned: partitioned,
-			pubViaRoot:  pubViaRoot,
+			columns:              []string{"attname"},
+			rows:                 [][]driver.Value{{"id"}},
+			notPublishedAsItself: notPublishedAsItself,
+			filtered:             filtered,
 		})
 		db, err := sql.Open(name, "")
 		require.NoError(t, err)
@@ -972,7 +982,10 @@ func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
 		}
 	}
 
-	t.Run("a partitioned parent is rejected", func(t *testing.T) {
+	t.Run("a table not published under its own name is rejected", func(t *testing.T) {
+		// A partitioned parent published through its partitions, a partition
+		// published through its root, or a table missing from the
+		// publication.
 		s := newStream(true, false)
 
 		_, err := s.incrementalPKColumns(t.Context(), events)
@@ -988,18 +1001,18 @@ func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
 		assert.ErrorIs(t, s.checkBackfillable(t.Context(), events), errSignalRejected)
 	})
 
-	t.Run("a partitioned parent published via the root is accepted", func(t *testing.T) {
-		// Changes then arrive under the parent's name, so dedup works and the
-		// guard must not fire -- it releases itself once the publication
-		// carries the option, with no change here.
-		s := newStream(true, true)
+	t.Run("a filtered table is rejected", func(t *testing.T) {
+		s := newStream(false, true)
 
-		cols, err := s.incrementalPKColumns(t.Context(), events)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"id"}, cols)
+		_, err := s.incrementalPKColumns(t.Context(), events)
+		require.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
+		assert.Contains(t, err.Error(), "row filter or a column list")
+		assert.ErrorIs(t, s.checkBackfillable(t.Context(), events), errSignalRejected)
 	})
 
-	t.Run("an ordinary table is accepted", func(t *testing.T) {
+	t.Run("a table published as itself is accepted", func(t *testing.T) {
+		// Including a partitioned parent published via the root: changes
+		// then arrive under the parent's name, so dedup works.
 		s := newStream(false, false)
 
 		cols, err := s.incrementalPKColumns(t.Context(), events)

@@ -189,7 +189,9 @@ Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" +
 		Field(service.NewBoolField(fieldManagePublication).
 			Description(`Whether this input creates and maintains the publication ` + "`pglog_stream_<slot_name>`" + `. When ` + "`true`" + `, on every connect the input creates the publication if it is missing, and otherwise adds and drops tables until it lists exactly ` + "`" + fieldTables + "`" + ` (plus ` + "`" + fieldSignalTableName + "`" + `, if set). A publication created ` + "`FOR ALL TABLES`" + ` is left as is when ` + "`" + fieldTables + "`" + ` is empty; when ` + "`" + fieldTables + "`" + ` is set, the input fails to start instead of streaming every table, since such a publication cannot be narrowed.
 
-Set this to ` + "`false`" + ` when the publication is owned outside the connector, for example by a DBA, so that the replication user needs no ownership of the replicated tables. The input then never runs ` + "`CREATE PUBLICATION`" + ` or ` + "`ALTER PUBLICATION`" + `. Instead, on every connect it checks that the publication exists and includes every table in ` + "`" + fieldTables + "`" + ` and the signal table, and fails with an error naming any that are missing. A partitioned table counts as included only when every one of its partitions is published, directly or through the partitioned table. This check requires PostgreSQL 12 or later.
+Set this to ` + "`false`" + ` when the publication is owned outside the connector, for example by a DBA, so that the replication user needs no ownership of the replicated tables. The input then never runs ` + "`CREATE PUBLICATION`" + ` or ` + "`ALTER PUBLICATION`" + `. Instead, on every connect it checks that the publication exists, publishes inserts, updates and deletes (the default ` + "`publish`" + ` option), and includes every table in ` + "`" + fieldTables + "`" + ` and the signal table, and fails with an error naming whatever is missing. A partitioned table counts as included only when every one of its partitions is published, directly or through the partitioned table. This check requires PostgreSQL 12 or later. While the input runs, it repeats the table check every ` + "`" + fieldWalMonitorInterval + "`" + `, logging an error and reporting the count in the ` + "`postgres_publication_missing_tables`" + ` metric when a table has been removed from the publication.
+
+A table the publication streams with a row filter or a column list (PostgreSQL 15 or later) is logged as a warning at connect, since only the rows and columns it selects are streamed. An incremental snapshot is only accepted for a table the publication streams under the table's own name, with no row filter or column list. That excludes a partitioned table whose partitions are published without ` + "`publish_via_partition_root`" + `, and a partition published through its root with that option, since their changes stream under another name and could not be deduplicated against the backfill. The check is repeated before each chunk, and a backfill whose table no longer qualifies fails.
 
 With ` + "`false`" + `, the publication decides what is streamed: every table it includes is replicated, whether or not it is listed in ` + "`" + fieldTables + "`" + `, and a table added with ` + "`ALTER PUBLICATION ... ADD TABLE`" + ` starts streaming without a restart. ` + "`" + fieldTables + "`" + ` then lists the tables that must be in the publication, the tables ` + "`" + fieldStreamSnapshot + "`" + ` reads, and the tables an incremental snapshot signal may name; leave it empty to accept whatever the publication includes. To add a table, add it to the publication first, then to ` + "`" + fieldTables + "`" + `, and request an incremental snapshot to backfill it if needed. To remove one, remove it from ` + "`" + fieldTables + "`" + ` first, then from the publication. An incremental snapshot signal naming a table the publication does not include is rejected.`).
 			Advanced().
@@ -383,7 +385,23 @@ To change this:
 If the policy's ` + "`processors`" + ` fail on a batch, its rows are published as the batcher held them, with their error set, rather than dropped or retried, so error-handling components can route them. A processor earlier in the chain may already have altered them. If the processors drop every row of a batch, the position those rows reached is still acknowledged.`))
 }
 
-func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
+func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+	i, err := newPgStreamInputUnwrapped(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
+	if err != nil {
+		return nil, err
+	}
+
+	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+}
+
+// newPgStreamInputUnwrapped builds the input without the nack retry and
+// tracing wrappers newPgStreamInput adds.
+func newPgStreamInputUnwrapped(conf *service.ParsedConfig, mgr *service.Resources) (i *pgStreamInput, err error) {
 	var (
 		dsn                       string
 		dbSlotName                string
@@ -538,8 +556,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
+	publicationMissingTables := mgr.Metrics().NewGauge("postgres_publication_missing_tables")
 
-	i := &pgStreamInput{
+	i = &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
@@ -568,11 +587,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		checkpointLimit:    checkpointLimit,
 		msgChan:            make(chan asyncMessage),
 
-		mgr:             mgr,
-		logger:          mgr.Logger(),
-		snapshotMetrics: snapshotMetrics,
-		replicationLag:  replicationLag,
-		stopSig:         shutdown.NewSignaller(),
+		mgr:                      mgr,
+		logger:                   mgr.Logger(),
+		snapshotMetrics:          snapshotMetrics,
+		publicationMissingTables: publicationMissingTables,
+		replicationLag:           replicationLag,
+		stopSig:                  shutdown.NewSignaller(),
 
 		iamAuthEnabled: iamAuthEnabled,
 	}
@@ -594,12 +614,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
 
-	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
-	if err != nil {
-		return nil, err
-	}
-
-	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+	return i, nil
 }
 
 // validateSimpleString ensures we aren't vuln to SQL injection.
@@ -665,9 +680,12 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
-	controlSig      controlSignaller
-	stopSig         *shutdown.Signaller
-	iamAuthEnabled  bool
+	// publicationMissingTables counts the configured tables an externally
+	// managed publication has stopped covering since the input connected.
+	publicationMissingTables *service.MetricGauge
+	controlSig               controlSignaller
+	stopSig                  *shutdown.Signaller
+	iamAuthEnabled           bool
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
 	// snapshot batch (nil LSN) is enqueued and decremented when it is
@@ -736,6 +754,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			p.snapshotMetrics.SetFloat64(progress, name.String())
 		}
 		p.replicationLag.Set(report.WalLagInBytes)
+		if p.streamConfig.ExternallyManagedPublication {
+			p.publicationMissingTables.Set(report.TablesMissingFromPublication)
+		}
 	})
 	monitorLoop.Start()
 	defer monitorLoop.Stop()

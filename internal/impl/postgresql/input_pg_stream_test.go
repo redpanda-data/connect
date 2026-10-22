@@ -673,6 +673,16 @@ tables:
 
 	mgr := service.MockResources()
 	license.InjectTestService(mgr)
+	in, err := newPgStreamInputUnwrapped(pConf, mgr)
+	require.NoError(t, err)
+	require.True(t, in.streamConfig.ExternallyManagedPublication, "manage_publication: false must reach the stream")
+
+	pConf, err = newPostgresCDCConfig().ParseYAML(base, env)
+	require.NoError(t, err)
+	in, err = newPgStreamInputUnwrapped(pConf, mgr)
+	require.NoError(t, err)
+	require.False(t, in.streamConfig.ExternallyManagedPublication)
+
 	_, err = newPgStreamInput(pConf, mgr)
 	require.NoError(t, err)
 }

@@ -97,8 +97,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 	// A signal may only ask for a replicated table. An empty DBTables means
 	// the publication decides, so leave the set nil to accept any:
-	// checkInPublication covers an externally managed publication, and a
-	// connector-managed one is then FOR ALL TABLES.
+	// checkDedupReachable checks the table is in the publication.
 	if len(config.DBTables) > 0 {
 		s.incSnapshot.replicated = make(map[incrementalsnapshot.TableID]struct{}, len(config.DBTables))
 		for _, name := range config.DBTables {
@@ -258,8 +257,12 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	if err := s.checkKeyTypesBindable(ctx, table); err != nil {
 		return nil, err
 	}
-	if err := s.checkDedupReachable(ctx, table); err != nil {
-		return nil, err
+	// An externally managed publication can change mid-run, so its check is
+	// not cached here: refer to checkBackfillable and FetchChunk.
+	if !s.externallyManagedPublication {
+		if err := s.checkDedupReachable(ctx, table); err != nil {
+			return nil, err
+		}
 	}
 
 	s.incSnapshot.pkCache[key] = cols
@@ -342,32 +345,45 @@ func (s *Stream) warnToastFidelity(ctx context.Context, table incrementalsnapsho
 
 // checkDedupReachable rejects a table whose streamed changes would arrive
 // under a different name than its backfilled rows are buffered under, leaving
-// the window buffer no way to deduplicate them.
+// the window buffer no way to deduplicate them, and a table the publication
+// streams only partly.
 //
 // PostgreSQL publishes a partitioned table's changes under its leaf
 // partitions' identities unless the publication sets
-// publish_via_partition_root. OnStreamedRow is then never called for the
-// parent, so a row updated while its chunk is buffered is followed by the
-// stale snapshot copy -- silently reverting a committed write.
+// publish_via_partition_root, and with that option set, a partition's changes
+// under the topmost published ancestor's. OnStreamedRow is then never called
+// for the backfilled name, so a row updated while its chunk is buffered is
+// followed by the stale snapshot copy -- silently reverting a committed
+// write. A table missing from the publication is the same case with no
+// streamed name at all. pg_publication_tables lists each table under the name
+// its changes are published with, so requiring the table to appear there as
+// itself covers all of them.
 //
-// The result is cached with the key columns, so flipping the publication
-// option takes effect on the next restart rather than mid-run.
+// A row filter or a column list means the stream carries only some rows or
+// columns, which a backfill would then emit anyway.
+//
+// For a connector-managed publication the result is cached with the key
+// columns, so flipping the publication option takes effect on the next
+// restart rather than mid-run. An externally managed one is checked on every
+// signal and every chunk instead.
 func (s *Stream) checkDedupReachable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	publication := "pglog_stream_" + s.slotName
-	q, err := partitionDedupQuery(tableFQN(table).String(), publication)
+	q, err := publishedAsItselfQuery(publication, table.Schema, table.Table, tableFQN(table).String())
 	if err != nil {
-		return fmt.Errorf("sanitizing partition query: %w", err)
+		return fmt.Errorf("sanitizing publication query: %w", err)
 	}
 
-	var partitioned, viaRoot bool
-	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&partitioned, &viaRoot); err != nil {
-		return fmt.Errorf("reading partition state for table %s: %w", table, err)
+	var listed, filtered bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&listed, &filtered); err != nil {
+		return fmt.Errorf("reading publication state for table %s: %w", table, err)
 	}
-	// Gated on the publication rather than on being partitioned at all, so
-	// this releases itself once the publication carries the option.
-	if partitioned && !viaRoot {
-		return fmt.Errorf("%w: table %s is partitioned and publication %s does not set publish_via_partition_root, so its changes stream under the partition names and cannot be deduplicated against the backfill",
-			incrementalsnapshot.ErrTableUnusable, table, publication)
+	if !listed {
+		return fmt.Errorf("%w: publication %s does not stream table %s under its own name, so its changes cannot be deduplicated against the backfill: the table is missing from the publication, or it is partitioned and the publication does not set publish_via_partition_root, or it is a partition and the publication streams it through a published ancestor with publish_via_partition_root. Add the table itself to the publication, or backfill the table whose name its changes stream under",
+			incrementalsnapshot.ErrTableUnusable, publication, table)
+	}
+	if filtered {
+		return fmt.Errorf("%w: publication %s streams table %s with a row filter or a column list, so a backfill would emit rows or columns the stream never carries",
+			incrementalsnapshot.ErrTableUnusable, publication, table)
 	}
 	return nil
 }
@@ -547,13 +563,37 @@ func (d incrementalSnapshotDeps) FetchChunk(ctx context.Context, table increment
 	}
 	readCtx, cancel := context.WithTimeout(ctx, incSnapshotReadTimeout)
 	defer cancel()
+	// An externally managed publication can drop the table mid-backfill, and
+	// its writes would then stop streaming and could no longer be
+	// deduplicated, so each chunk checks first. A table no longer streamed
+	// fails the backfill rather than emitting rows that may revert writes.
+	if d.stream.externallyManagedPublication {
+		if err := d.stream.checkDedupReachable(readCtx, table); err != nil {
+			if errors.Is(err, incrementalsnapshot.ErrTableUnusable) {
+				return nil, fmt.Errorf("aborting the backfill of table %s: %w", table, err)
+			}
+			return nil, d.stream.incSnapshotNoteRead(retryableReadErr(err, readCtx, ctx))
+		}
+	}
 	rows, err := d.stream.fetchIncrementalChunk(readCtx, table, pkColumnsUnquoted, query, args)
 	return rows, d.stream.incSnapshotNoteRead(retryableReadErr(err, readCtx, ctx))
 }
 
-// resolveIncrementalPK backs Deps.ResolvePrimaryKey.
+// resolveIncrementalPK backs Deps.ResolvePrimaryKey. It is what checks a
+// table resumed from a checkpoint, which no signal checked this run, so an
+// externally managed publication is checked here too: a table it no longer
+// streams as itself is then dropped from the queue rather than backfilled.
 func (s *Stream) resolveIncrementalPK(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
-	return s.incrementalPKColumns(ctx, table)
+	cols, err := s.incrementalPKColumns(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+	if s.externallyManagedPublication {
+		if err := s.checkDedupReachable(ctx, table); err != nil {
+			return nil, err
+		}
+	}
+	return cols, nil
 }
 
 // incrementalStreamedRowPK makes the PrimaryKey that OnStreamedRow matches
@@ -890,11 +930,13 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 	if err := s.checkReplicated(table); err != nil {
 		return fmt.Errorf("%w: %w", errSignalRejected, err)
 	}
-	if err := s.checkInPublication(ctx, table); err != nil {
-		return err
-	}
 	// The backfill pages by key, so a table without one can never be read.
-	if _, err := s.incrementalPKColumns(ctx, table); err != nil {
+	// For a connector-managed publication this also runs checkDedupReachable.
+	_, err := s.incrementalPKColumns(ctx, table)
+	if err == nil && s.externallyManagedPublication {
+		err = s.checkDedupReachable(ctx, table)
+	}
+	if err != nil {
 		if errors.Is(err, incrementalsnapshot.ErrTableUnusable) {
 			return fmt.Errorf("%w: %w", errSignalRejected, err)
 		}
@@ -916,34 +958,6 @@ func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 		"table %s is not replicated, so a write during its backfill could not be deduplicated and would be lost: add it to the input's tables",
 		table,
 	)
-}
-
-// checkInPublication rejects a table an externally managed publication does
-// not replicate: its writes during the backfill would never stream, so they
-// could not be deduplicated and would be lost. A connector-managed
-// publication lists exactly the input's tables, which checkReplicated already
-// covers. An externally managed one can change while the stream runs, so it
-// is read on every signal rather than once at startup.
-func (s *Stream) checkInPublication(ctx context.Context, table incrementalsnapshot.TableID) error {
-	if !s.externallyManagedPublication {
-		return nil
-	}
-	publication := "pglog_stream_" + s.slotName
-	q, err := publicationCoversTableQuery(publication, tableFQN(table).String())
-	if err != nil {
-		return fmt.Errorf("sanitizing publication membership query: %w", err)
-	}
-	var covered bool
-	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&covered); err != nil {
-		// Whether the table is replicated is still unknown. Propagate, and
-		// the redelivered row asks again.
-		return fmt.Errorf("checking whether publication %s includes table %s: %w", publication, table, err)
-	}
-	if !covered {
-		return fmt.Errorf("%w: table %s is not in publication %s, so a write during its backfill could not be deduplicated and would be lost: add it with ALTER PUBLICATION %s ADD TABLE",
-			errSignalRejected, table, publication, publication)
-	}
-	return nil
 }
 
 // snapshotSignalTables reads a snapshot signal's table list, or nil when the

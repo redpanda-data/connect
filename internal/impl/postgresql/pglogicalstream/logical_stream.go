@@ -233,9 +233,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		// Checked on every connect, so a table dropped from the publication
 		// since the last one fails here rather than going silently missing.
 		stream.logger.Infof("Validating externally managed publication %s for tables: %s", pubName, tablesRequiredInPublication)
-		if err = ValidatePublication(ctx, stream.pgConn, pubName, tablesRequiredInPublication); err != nil {
+		filtered, err := ValidatePublication(ctx, stream.pgConn, pubName, tablesRequiredInPublication)
+		if err != nil {
 			return nil, fmt.Errorf("validating publication: %w", err)
 		}
+		if len(filtered) > 0 {
+			stream.logger.Warnf("Publication %s streams table(s) %s with a row filter or a column list, so only the rows and columns it selects are replicated. The initial snapshot still reads every row and column, and an incremental snapshot signal naming one of them will be rejected.",
+				pubName, filtered)
+		}
+		// Watched while the stream runs, since an externally managed
+		// publication can change at any time and a table dropped from it
+		// simply stops streaming.
+		stream.monitor.WatchPublication(pubName, tablesRequiredInPublication)
 	} else {
 		stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
 		if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
@@ -1043,18 +1052,6 @@ func toastFidelityQuery(table string) (string, error) {
         FROM   pg_class c
         WHERE  c.oid = $1::regclass;
     `, table)
-}
-
-// partitionDedupQuery reports whether a table is a partitioned parent, and
-// whether the publication republishes its partitions' changes under the
-// parent's name.
-func partitionDedupQuery(table, publication string) (string, error) {
-	return sanitize.SQLQuery(`
-        SELECT c.relkind = 'p',
-               COALESCE((SELECT p.pubviaroot FROM pg_publication p WHERE p.pubname = $2), false)
-        FROM   pg_class c
-        WHERE  c.oid = $1::regclass;
-    `, table, publication)
 }
 
 // primaryKeyColumnsQuery returns the query used to resolve table's primary
