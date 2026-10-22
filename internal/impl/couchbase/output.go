@@ -32,7 +32,7 @@ func outputConfig() *service.ConfigSpec {
 		Version("4.37.0").
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or delete data.").
-		Description("When inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
+		Description("This output turns each message into one operation on a https://docs.couchbase.com/home/index.html[Couchbase database^]. It sends the operations of a batch concurrently and waits for all of them to complete.\n\nWhen inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewInterpolatedStringField("id").Description(`The document ID to use.`).Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("The document content to update. When inserting, replacing, or upserting documents, you must set a `content` value.").Optional()).
 		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Version("4.73.0").Optional().Advanced()).

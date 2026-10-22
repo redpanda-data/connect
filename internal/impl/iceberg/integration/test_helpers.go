@@ -275,23 +275,21 @@ func startTestInfrastructure(ctx context.Context) (*testInfrastructure, error) {
 
 	// Start MinIO
 	minioContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "pgsty/silo:latest",
-			ExposedPorts: []string{minioInternalPort + "/tcp"},
-			Env: map[string]string{
-				"MINIO_ROOT_USER":     "admin",
-				"MINIO_ROOT_PASSWORD": "password",
-				"MINIO_REGION":        "us-east-1",
-			},
-			Cmd:      []string{"server", "/data", "--address", ":" + minioInternalPort},
-			Networks: []string{networkName},
-			NetworkAliases: map[string][]string{
-				networkName: {"minio"},
-			},
-			WaitingFor: wait.ForHTTP("/minio/health/live").
-				WithPort(minioInternalPort + "/tcp").
-				WithStartupTimeout(time.Minute),
+		Image:        "pgsty/silo:latest",
+		ExposedPorts: []string{minioInternalPort + "/tcp"},
+		Env: map[string]string{
+			"MINIO_ROOT_USER":     "admin",
+			"MINIO_ROOT_PASSWORD": "password",
+			"MINIO_REGION":        "us-east-1",
 		},
+		Cmd:      []string{"server", "/data", "--address", ":" + minioInternalPort},
+		Networks: []string{networkName},
+		NetworkAliases: map[string][]string{
+			networkName: {"minio"},
+		},
+		WaitingFor: wait.ForHTTP("/minio/health/live").
+			WithPort(minioInternalPort + "/tcp").
+			WithStartupTimeout(time.Minute),
 		Started: true,
 	})
 	if err != nil {
@@ -321,27 +319,25 @@ func startTestInfrastructure(ctx context.Context) (*testInfrastructure, error) {
 
 	// Start iceberg-rest-fixture
 	restContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "apache/iceberg-rest-fixture",
-			ExposedPorts: []string{restInternalPort + "/tcp"},
-			Env: map[string]string{
-				"CATALOG_REST_PORT":              restInternalPort,
-				"CATALOG_WAREHOUSE":              "s3://warehouse/",
-				"CATALOG_IO__IMPL":               "org.apache.iceberg.aws.s3.S3FileIO",
-				"CATALOG_S3_ENDPOINT":            infra.MinioInternalURL,
-				"CATALOG_S3_PATH__STYLE__ACCESS": "true",
-				"CATALOG_S3_ACCESS__KEY__ID":     "admin",
-				"CATALOG_S3_SECRET__ACCESS__KEY": "password",
-				"AWS_REGION":                     "us-east-1",
-			},
-			Networks: []string{networkName},
-			NetworkAliases: map[string][]string{
-				networkName: {"rest"},
-			},
-			WaitingFor: wait.ForHTTP("/v1/config").
-				WithPort(restInternalPort + "/tcp").
-				WithStartupTimeout(time.Minute),
+		Image:        "apache/iceberg-rest-fixture",
+		ExposedPorts: []string{restInternalPort + "/tcp"},
+		Env: map[string]string{
+			"CATALOG_REST_PORT":              restInternalPort,
+			"CATALOG_WAREHOUSE":              "s3://warehouse/",
+			"CATALOG_IO__IMPL":               "org.apache.iceberg.aws.s3.S3FileIO",
+			"CATALOG_S3_ENDPOINT":            infra.MinioInternalURL,
+			"CATALOG_S3_PATH__STYLE__ACCESS": "true",
+			"CATALOG_S3_ACCESS__KEY__ID":     "admin",
+			"CATALOG_S3_SECRET__ACCESS__KEY": "password",
+			"AWS_REGION":                     "us-east-1",
 		},
+		Networks: []string{networkName},
+		NetworkAliases: map[string][]string{
+			networkName: {"rest"},
+		},
+		WaitingFor: wait.ForHTTP("/v1/config").
+			WithPort(restInternalPort + "/tcp").
+			WithStartupTimeout(time.Minute),
 		Started: true,
 	})
 	if err != nil {
@@ -371,13 +367,11 @@ func startTestInfrastructure(ctx context.Context) (*testInfrastructure, error) {
 
 	// Start DuckDB
 	duckdbContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:      "datacatering/duckdb:v1.4.4",
-			Entrypoint: []string{"sleep"},
-			Cmd:        []string{"infinity"},
-			Networks:   []string{networkName},
-		},
-		Started: true,
+		Image:      "datacatering/duckdb:v1.4.4",
+		Entrypoint: []string{"sleep"},
+		Cmd:        []string{"infinity"},
+		Networks:   []string{networkName},
+		Started:    true,
 	})
 	if err != nil {
 		_ = infra.Terminate(ctx)

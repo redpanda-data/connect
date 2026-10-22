@@ -355,8 +355,7 @@ func (d *dynamodbCache) add(ctx context.Context, key string, value []byte, ttl *
 	input.ConditionExpression = expr.Condition()
 
 	if _, err = d.client.PutItem(ctx, input); err != nil {
-		var derr *types.ConditionalCheckFailedException
-		if errors.As(err, &derr) {
+		if _, ok := errors.AsType[*types.ConditionalCheckFailedException](err); ok {
 			return service.ErrKeyAlreadyExists
 		}
 		return err

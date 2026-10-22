@@ -151,8 +151,10 @@ func TestIntegrationSchemaRegistryMigratorListSubjectSchemas(t *testing.T) {
 	t.Run("latest include", func(t *testing.T) {
 		t.Parallel()
 
-		conf := migrator.SchemaRegistryMigratorConfig{Versions: migrator.VersionsLatest}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)}
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Versions: migrator.VersionsLatest,
+			Include:  []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)},
+		}
 		got := list(t, conf)
 		exp := []sv{
 			{Subject: subjFoo1, Version: 1},
@@ -164,9 +166,11 @@ func TestIntegrationSchemaRegistryMigratorListSubjectSchemas(t *testing.T) {
 	t.Run("latest include exclude", func(t *testing.T) {
 		t.Parallel()
 
-		conf := migrator.SchemaRegistryMigratorConfig{Versions: migrator.VersionsLatest}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)}
-		conf.Exclude = []*regexp.Regexp{regexp.MustCompile(`^foo-2$`)}
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Versions: migrator.VersionsLatest,
+			Include:  []*regexp.Regexp{regexp.MustCompile(`^foo-.*$`)},
+			Exclude:  []*regexp.Regexp{regexp.MustCompile(`^foo-2$`)},
+		}
 		got := list(t, conf)
 		exp := []sv{
 			{Subject: subjFoo1, Version: 1},
@@ -904,8 +908,9 @@ func TestIntegrationSchemaRegistryMigratorServerlessImportModeDynamicReference(t
 			TestingOnSetSubjectMode: func(subject string, mode sr.Mode) {
 				modeCalls[subject] = append(modeCalls[subject], mode)
 			},
+
+			Include: []*regexp.Regexp{regexp.MustCompile(`^leaf-`)},
 		}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(`^leaf-`)}
 		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
 
 		syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
@@ -973,8 +978,9 @@ func TestIntegrationSchemaRegistryMigratorServerlessImportModeDynamicReference(t
 			Enabled:    true,
 			Versions:   migrator.VersionsAll,
 			Serverless: true,
+
+			Include: []*regexp.Regexp{regexp.MustCompile(`^leaf-`)},
 		}
-		conf.Include = []*regexp.Regexp{regexp.MustCompile(`^leaf-`)}
 		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
 
 		syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)

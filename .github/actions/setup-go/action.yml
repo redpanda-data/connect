@@ -1,0 +1,30 @@
+name: 'Setup Go'
+description: 'Install the Go version from go.mod and cache the Go build and module caches'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: 'go.mod'
+        cache: false
+
+    - name: Get Go cache paths
+      id: go-env
+      shell: bash
+      run: |
+        gocache=$(go env GOCACHE)
+        gomodcache=$(go env GOMODCACHE)
+        echo "gocache=$gocache" >> "$GITHUB_OUTPUT"
+        echo "gomodcache=$gomodcache" >> "$GITHUB_OUTPUT"
+
+    # CGO_ENABLED is in the key: a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    - name: Cache Go
+      uses: actions/cache@v6
+      with:
+        path: |
+          ${{ steps.go-env.outputs.gocache }}
+          ${{ steps.go-env.outputs.gomodcache }}
+        key: go-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}-cgo${{ env.CGO_ENABLED }}-${{ hashFiles('go.mod') }}

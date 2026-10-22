@@ -81,7 +81,7 @@ Use ` + "`operation`" + ` to tell them apart: ` + "`update_before`" + ` is alway
 
 == Permissions
 
-When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to <<` + fieldCheckpointCacheTableName + `,` + "`" + fieldCheckpointCacheTableName + "`" + `>> for more information.
 
 == Performance
 
@@ -479,10 +479,8 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, ctx := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
-			}
-			return nil
+			// ReadChangeTables only returns once it hits an error.
+			return fmt.Errorf("streaming from change tables: %w", streaming.ReadChangeTables(ctx, i.db, maxLSN))
 		})
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)

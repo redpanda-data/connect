@@ -578,8 +578,8 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		QueueUrl:            &s.conf.SQS.URL,
 		MaxNumberOfMessages: int32(s.conf.SQS.MaxMessages),
 		WaitTimeSeconds:     int32(s.conf.SQS.WaitTimeSeconds),
-		AttributeNames: []sqstypes.QueueAttributeName{
-			sqstypes.QueueAttributeName(sqstypes.MessageSystemAttributeNameSentTimestamp),
+		MessageSystemAttributeNames: []sqstypes.MessageSystemAttributeName{
+			sqstypes.MessageSystemAttributeNameSentTimestamp,
 		},
 		MessageAttributeNames: []string{
 			string(sqstypes.MessageSystemAttributeNameSentTimestamp),

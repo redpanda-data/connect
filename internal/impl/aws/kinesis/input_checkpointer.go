@@ -161,8 +161,7 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 		},
 	})
 	if err != nil {
-		var aerr *types.ResourceNotFoundException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return nil, nil
 		}
 		return nil, err
@@ -296,8 +295,7 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 		},
 	})
 	if err != nil {
-		var aerr *types.ConditionalCheckFailedException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ConditionalCheckFailedException](err); ok {
 			return "", ErrLeaseNotAcquired
 		}
 		return "", err
@@ -387,8 +385,7 @@ func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shard
 		TableName: aws.String(k.conf.Table),
 		Item:      item,
 	}); err != nil {
-		var aerr *types.ConditionalCheckFailedException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ConditionalCheckFailedException](err); ok {
 			return false, nil
 		}
 		return false, err

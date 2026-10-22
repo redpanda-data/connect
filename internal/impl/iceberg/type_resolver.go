@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -181,7 +182,7 @@ func rejectNanosecondTimestampsRec(t iceberg.Type, path icebergx.Path, nested bo
 // appendPath returns path extended by seg without aliasing path's backing
 // array, so sibling branches of a walk never overwrite each other.
 func appendPath(path icebergx.Path, seg icebergx.PathSegment) icebergx.Path {
-	return append(path[:len(path):len(path)], seg)
+	return append(slices.Clip(path), seg)
 }
 
 // parseSchemaMetadata reads the schema.Common from message metadata. Returns

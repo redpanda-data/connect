@@ -477,12 +477,12 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 
 	getMsgs := func() {
 		res, err := a.sqs.ReceiveMessage(closeAtLeisureCtx, &sqs.ReceiveMessageInput{
-			QueueUrl:              aws.String(a.conf.URL),
-			MaxNumberOfMessages:   int32(a.conf.MaxNumberOfMessages),
-			WaitTimeSeconds:       int32(a.conf.WaitTimeSeconds),
-			AttributeNames:        []types.QueueAttributeName{types.QueueAttributeNameAll},
-			VisibilityTimeout:     int32(a.conf.MessageTimeout.Seconds()),
-			MessageAttributeNames: []string{"All"},
+			QueueUrl:                    aws.String(a.conf.URL),
+			MaxNumberOfMessages:         int32(a.conf.MaxNumberOfMessages),
+			WaitTimeSeconds:             int32(a.conf.WaitTimeSeconds),
+			MessageSystemAttributeNames: []types.MessageSystemAttributeName{types.MessageSystemAttributeNameAll},
+			VisibilityTimeout:           int32(a.conf.MessageTimeout.Seconds()),
+			MessageAttributeNames:       []string{"All"},
 		})
 		if err != nil {
 			if !awsErrIsTimeout(err) {
