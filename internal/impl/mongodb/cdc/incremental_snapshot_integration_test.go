@@ -144,8 +144,9 @@ type replayed struct {
 	ops map[string]int
 	// reads counts how often each _id was read by the snapshot.
 	reads map[string]int
-	// interleaved records a snapshot read emitted after a streamed change.
-	interleaved bool
+	// interleaved records, per collection, a snapshot read of it emitted
+	// after a streamed change.
+	interleaved map[string]bool
 	// problems records messages that could not be replayed. replay runs
 	// inside Eventually conditions, off the test goroutine, so it must not
 	// fail the test itself: replayChecked does that.
@@ -158,7 +159,7 @@ type replayed struct {
 func replay(o *outputHelper) replayed {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	r := replayed{docs: map[string]float64{}, readByColl: map[string]int{}, ops: map[string]int{}, reads: map[string]int{}}
+	r := replayed{docs: map[string]float64{}, readByColl: map[string]int{}, ops: map[string]int{}, reads: map[string]int{}, interleaved: map[string]bool{}}
 	streamed := false
 	for _, b := range o.batches {
 		for _, m := range b {
@@ -181,7 +182,7 @@ func replay(o *outputHelper) replayed {
 				r.readCount++
 				r.readByColl[coll]++
 				r.reads[id]++
-				r.interleaved = r.interleaved || streamed
+				r.interleaved[coll] = r.interleaved[coll] || streamed
 			} else {
 				streamed = true
 			}
@@ -302,7 +303,7 @@ mongodb_cdc:
 	nextID := initial
 	for i := 0; ; i++ {
 		if elapsed := time.Since(start); elapsed >= maxWrite ||
-			(elapsed >= minWrite && i%20 == 0 && replay(output).interleaved) {
+			(elapsed >= minWrite && i%20 == 0 && replay(output).interleaved["foo"]) {
 			break
 		}
 		id := rng.IntN(initial)
@@ -323,7 +324,7 @@ mongodb_cdc:
 	}, time.Minute, 250*time.Millisecond)
 
 	got := replayChecked(t, output)
-	assert.True(t, got.interleaved, "the snapshot never overlapped streaming, so nothing was deduplicated")
+	assert.True(t, got.interleaved["foo"], "the snapshot never overlapped streaming, so nothing was deduplicated")
 	assert.Empty(t, got.regressed, "documents went backwards")
 	assert.Equal(t, want, got.docs)
 	assert.Positive(t, got.readCount, "nothing came from the snapshot")

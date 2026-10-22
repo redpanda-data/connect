@@ -465,7 +465,7 @@ func TestCommitResumeTokenDropsSupersededEpoch(t *testing.T) {
 	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 	m := &mongoCDC{logger: res.Logger(), checkpoint: cp}
 
 	// An ack from the live generation is honoured, and with no flusher it writes
@@ -511,7 +511,7 @@ func TestCommitResumeTokenDefersToFlusher(t *testing.T) {
 	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 	m := &mongoCDC{
 		logger:            res.Logger(),
 		checkpoint:        cp,
@@ -533,7 +533,7 @@ func TestCheckpointCacheRoundTripAndRecoverableFailures(t *testing.T) {
 	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 
 	// A missing checkpoint is not an error, it just means "start fresh".
 	loaded, err := cp.Load(ctx)
@@ -591,7 +591,7 @@ func newRecoveryFixture(t *testing.T, snapshotParallelism int, onUnresumable str
 	t.Helper()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 	m := &mongoCDC{
 		logger:                 res.Logger(),
 		checkpoint:             cp,
@@ -985,7 +985,7 @@ incremental_snapshot:
 				logger:          res.Logger(),
 				collections:     collections,
 				checkpointLimit: limit,
-				checkpoint:      &checkpointCache{resources: res, cacheName: "baz", cacheKey: key},
+				checkpoint:      &checkpointCache{cacheEntry{resources: res, cacheName: "baz", cacheKey: key}},
 			}
 			require.NoError(t, m.parseIncrementalSnapshot(parsed, streamSnapshot, "baz"))
 			require.Equal(t, tc.wantIncremental, m.incremental)

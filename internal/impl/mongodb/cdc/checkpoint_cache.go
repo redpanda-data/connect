@@ -28,22 +28,26 @@ import (
 // as a reason to keep failing Connect.
 var errCorruptCheckpoint = errors.New("stored checkpoint could not be decoded")
 
-type checkpointCache struct {
+// cacheEntry is one key in a cache resource. checkpointCache and incStateCache
+// embed it and add their own encoding on top.
+type cacheEntry struct {
 	resources *service.Resources
 	cacheName string
 	cacheKey  string
 }
+
+type checkpointCache struct{ cacheEntry }
 
 func (c *checkpointCache) Store(ctx context.Context, resumeToken bson.Raw) error {
 	b, err := bson.MarshalExtJSON(resumeToken, true, false)
 	if err != nil {
 		return err
 	}
-	return setCacheKey(ctx, c.resources, c.cacheName, c.cacheKey, b)
+	return c.set(ctx, b)
 }
 
 func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
-	cVal, err := getCacheKey(ctx, c.resources, c.cacheName, c.cacheKey)
+	cVal, err := c.get(ctx)
 	if cVal == nil || err != nil {
 		return nil, err
 	}
@@ -57,37 +61,34 @@ func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
 // Delete removes the stored checkpoint, so that the next start behaves as if one
 // had never been written.
 func (c *checkpointCache) Delete(ctx context.Context) error {
-	return deleteCacheKey(ctx, c.resources, c.cacheName, c.cacheKey)
+	return c.delete(ctx)
 }
 
 // incStateCache stores the incremental snapshot's progress, in the same cache
 // as the resume token but under its own key, so the token's format is
 // untouched and either can be cleared alone.
-type incStateCache struct {
-	resources *service.Resources
-	cacheName string
-	cacheKey  string
-}
+type incStateCache struct{ cacheEntry }
 
 // Store writes state, already JSON-encoded by the caller.
 func (c *incStateCache) Store(ctx context.Context, state []byte) error {
-	return setCacheKey(ctx, c.resources, c.cacheName, c.cacheKey, state)
+	return c.set(ctx, state)
 }
 
 // Load returns the stored state, or nil when there is none. An entry that does
 // not decode, or was written with another State layout, wraps
 // errCorruptCheckpoint: retrying cannot fix it.
 func (c *incStateCache) Load(ctx context.Context) (*incrementalsnapshot.State, error) {
-	b, err := getCacheKey(ctx, c.resources, c.cacheName, c.cacheKey)
+	b, err := c.get(ctx)
 	if b == nil || err != nil {
 		return nil, err
 	}
 	var state incrementalsnapshot.State
+	// State.UnmarshalJSON rejects any other layout with ErrUnsupportedStateVersion.
 	if err := json.Unmarshal(b, &state); err != nil {
 		if errors.Is(err, incrementalsnapshot.ErrUnsupportedStateVersion) {
-			// Written by another build, most likely a newer one being rolled
-			// back: valid, just not readable here. Clearing it would also
-			// clear a good stream position, so fail and keep both.
+			// Valid progress from another build, most likely a newer one being
+			// rolled back. Clearing it would also clear a good stream position,
+			// so fail and keep both.
 			return nil, fmt.Errorf("incremental snapshot progress under %s was written by an incompatible version: %w", c.cacheKey, err)
 		}
 		return nil, fmt.Errorf("%w: incremental snapshot state: %w", errCorruptCheckpoint, err)
@@ -97,13 +98,13 @@ func (c *incStateCache) Load(ctx context.Context) (*incrementalsnapshot.State, e
 
 // Delete removes the stored state.
 func (c *incStateCache) Delete(ctx context.Context) error {
-	return deleteCacheKey(ctx, c.resources, c.cacheName, c.cacheKey)
+	return c.delete(ctx)
 }
 
-func setCacheKey(ctx context.Context, res *service.Resources, cacheName, key string, value []byte) error {
+func (e cacheEntry) set(ctx context.Context, value []byte) error {
 	var cErr error
-	err := res.AccessCache(ctx, cacheName, func(cache service.Cache) {
-		cErr = cache.Set(ctx, key, value, nil)
+	err := e.resources.AccessCache(ctx, e.cacheName, func(cache service.Cache) {
+		cErr = cache.Set(ctx, e.cacheKey, value, nil)
 	})
 	if err == nil {
 		err = cErr
@@ -111,12 +112,12 @@ func setCacheKey(ctx context.Context, res *service.Resources, cacheName, key str
 	return err
 }
 
-// getCacheKey returns nil, nil for a key that is not set.
-func getCacheKey(ctx context.Context, res *service.Resources, cacheName, key string) ([]byte, error) {
+// get returns nil, nil for a key that is not set.
+func (e cacheEntry) get(ctx context.Context) ([]byte, error) {
 	var cVal []byte
 	var cErr error
-	err := res.AccessCache(ctx, cacheName, func(cache service.Cache) {
-		cVal, cErr = cache.Get(ctx, key)
+	err := e.resources.AccessCache(ctx, e.cacheName, func(cache service.Cache) {
+		cVal, cErr = cache.Get(ctx, e.cacheKey)
 	})
 	if err == nil {
 		err = cErr
@@ -130,17 +131,17 @@ func getCacheKey(ctx context.Context, res *service.Resources, cacheName, key str
 	return cVal, nil
 }
 
-// deleteCacheKey removes key from the cache.
+// delete removes the key from the cache.
 //
 // A key that is already absent is success, since the caller's goal is that no
 // entry remains. Both spellings of that condition are accepted: the
 // documented service.ErrKeyNotFound, and fs.ErrNotExist for cache
 // implementations that surface a filesystem error instead (the `file` cache
 // returns os.Remove's error unwrapped).
-func deleteCacheKey(ctx context.Context, res *service.Resources, cacheName, key string) error {
+func (e cacheEntry) delete(ctx context.Context) error {
 	var cErr error
-	err := res.AccessCache(ctx, cacheName, func(cache service.Cache) {
-		cErr = cache.Delete(ctx, key)
+	err := e.resources.AccessCache(ctx, e.cacheName, func(cache service.Cache) {
+		cErr = cache.Delete(ctx, e.cacheKey)
 	})
 	if err == nil {
 		err = cErr

@@ -350,7 +350,7 @@ func TestPruneResumeDropsUnconfiguredCollections(t *testing.T) {
 
 func TestIncStateCacheVersionMismatchIsNotCorrupt(t *testing.T) {
 	res := service.MockResources(service.MockResourcesOptAddCache("c"))
-	cache := &incStateCache{resources: res, cacheName: "c", cacheKey: "k"}
+	cache := &incStateCache{cacheEntry{resources: res, cacheName: "c", cacheKey: "k"}}
 
 	require.NoError(t, cache.Store(t.Context(), []byte(`{"version":999}`)))
 	_, err := cache.Load(t.Context())

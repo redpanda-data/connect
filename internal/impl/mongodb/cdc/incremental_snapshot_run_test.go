@@ -268,10 +268,10 @@ func newLoadFixture(t *testing.T) *loadFixture {
 			db:          client.Database("db"),
 			collections: []string{"foo", "bar"},
 			incremental: true,
-			checkpoint:  &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"},
-			incStateStore: &incStateCache{
+			checkpoint:  &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}},
+			incStateStore: &incStateCache{cacheEntry{
 				resources: res, cacheName: cacheName, cacheKey: "key" + incSnapshotKeySuffix,
-			},
+			}},
 		},
 		token: bson.Raw(raw),
 		res:   res,
@@ -382,7 +382,7 @@ func TestCommitPositionStoresProgressBeforeToken(t *testing.T) {
 	f.m.incStateStore.cacheName = "checkpoints"
 	require.NoError(t, f.m.commitPosition(t.Context(), epoch, streamPosition{token: f.token, incState: []byte(`{"version":1}`)}))
 	assert.Equal(t, f.token, f.storedToken(t))
-	stored, err := getCacheKey(t.Context(), f.res, "checkpoints", f.m.incStateStore.cacheKey)
+	stored, err := f.m.incStateStore.get(t.Context())
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"version":1}`, string(stored))
 }

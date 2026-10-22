@@ -10,10 +10,12 @@ package cdc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,11 +36,52 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
-// The tests here each start a multi-container MongoDB topology the shared
-// single-node replica set cannot stand in for, so like
-// TestIntegrationMongoCDCWithSnapshotShardedCluster they only run when named.
+// The tests here need multi-container MongoDB topologies the shared
+// single-node replica set cannot stand in for.
 
-// mongoNode is one mongod or mongos container on a test network.
+// runMongoNode starts one mongod or mongos container on nw. The container is
+// returned even with an error, so the caller can still remove it.
+func runMongoNode(ctx context.Context, nw *testcontainers.DockerNetwork, alias string, cmd ...string) (*testcontainers.DockerContainer, error) {
+	return testcontainers.Run(ctx, "mongo:7",
+		network.WithNetwork([]string{alias}, nw),
+		testcontainers.WithCmd(cmd...),
+		testcontainers.WithExposedPorts("27017/tcp"),
+		testcontainers.WithWaitStrategy(wait.ForListeningPort("27017/tcp").WithStartupTimeout(2*time.Minute)),
+	)
+}
+
+// evalOn runs JavaScript in mongosh on ctr and returns its output.
+func evalOn(ctx context.Context, ctr testcontainers.Container, js string) (string, error) {
+	code, out, err := ctr.Exec(ctx, []string{"mongosh", "--quiet", "--port", "27017", "--eval", js}, tcexec.Multiplexed())
+	if err != nil {
+		return "", err
+	}
+	b, err := io.ReadAll(out)
+	if err != nil {
+		return "", err
+	}
+	if code != 0 {
+		return "", fmt.Errorf("mongosh %q exited with %d: %s", js, code, b)
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// awaitEvalOn polls js on ctr until it prints want.
+func awaitEvalOn(ctx context.Context, ctr testcontainers.Container, js, want string) error {
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		got, err := evalOn(ctx, ctr, js)
+		if err == nil && got == want {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("waiting for %q to print %q: last output %q, error %v", js, want, got, err)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// mongoNode is one mongod container on a test network, owned by one test.
 type mongoNode struct {
 	t         *testing.T
 	container testcontainers.Container
@@ -46,12 +89,7 @@ type mongoNode struct {
 
 func startMongoNode(t *testing.T, nw *testcontainers.DockerNetwork, alias string, cmd ...string) *mongoNode {
 	t.Helper()
-	ctr, err := testcontainers.Run(t.Context(), "mongo:7",
-		network.WithNetwork([]string{alias}, nw),
-		testcontainers.WithCmd(cmd...),
-		testcontainers.WithExposedPorts("27017/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForListeningPort("27017/tcp").WithStartupTimeout(2*time.Minute)),
-	)
+	ctr, err := runMongoNode(t.Context(), nw, alias, cmd...)
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 	return &mongoNode{t: t, container: ctr}
@@ -60,25 +98,15 @@ func startMongoNode(t *testing.T, nw *testcontainers.DockerNetwork, alias string
 // eval runs JavaScript in mongosh on the node and returns its output.
 func (n *mongoNode) eval(js string) string {
 	n.t.Helper()
-	code, out, err := n.container.Exec(n.t.Context(), []string{"mongosh", "--quiet", "--port", "27017", "--eval", js}, tcexec.Multiplexed())
+	out, err := evalOn(n.t.Context(), n.container, js)
 	require.NoError(n.t, err)
-	b, err := io.ReadAll(out)
-	require.NoError(n.t, err)
-	require.Zero(n.t, code, "mongosh %q: %s", js, b)
-	return strings.TrimSpace(string(b))
+	return out
 }
 
 // awaitEval polls js until it prints want.
 func (n *mongoNode) awaitEval(js, want string) {
 	n.t.Helper()
-	require.Eventually(n.t, func() bool {
-		code, out, err := n.container.Exec(n.t.Context(), []string{"mongosh", "--quiet", "--port", "27017", "--eval", js}, tcexec.Multiplexed())
-		if err != nil || code != 0 {
-			return false
-		}
-		b, _ := io.ReadAll(out)
-		return strings.TrimSpace(string(b)) == want
-	}, 2*time.Minute, 500*time.Millisecond, "waiting for %q to print %q", js, want)
+	require.NoError(n.t, awaitEvalOn(n.t.Context(), n.container, js, want))
 }
 
 // uri returns a host-reachable connection string for the node.
@@ -106,38 +134,108 @@ func connectTo(t *testing.T, uri string) *mongo.Client {
 	return client
 }
 
-// startShardedCluster starts a config server, two single-node shards and a
-// mongos, returning the mongos.
-func startShardedCluster(t *testing.T) *mongoNode {
-	t.Helper()
-	nw, err := network.New(t.Context())
-	require.NoError(t, err)
-	testcontainers.CleanupNetwork(t, nw)
+// sharedSharded is the package-wide sharded cluster: a config server, two
+// single-node shards and a mongos. It boots on first use and TestMain removes
+// it. Tests share it safely because each uses its own database, and the only
+// cluster-wide commands they run (enableSharding, shardCollection) are scoped
+// to that database.
+var sharedSharded sharedShardedCluster
 
-	cfg := startMongoNode(t, nw, "cfg", "mongod", "--configsvr", "--replSet", "cfg", "--port", "27017", "--bind_ip_all")
-	cfg.eval(`rs.initiate({_id: "cfg", configsvr: true, members: [{_id: 0, host: "cfg:27017"}]})`)
+type sharedShardedCluster struct {
+	once  sync.Once
+	uri   string
+	err   error
+	nodes []*testcontainers.DockerContainer
+	nw    *testcontainers.DockerNetwork
+}
+
+// start boots the cluster on first use and returns the mongos URI.
+func (s *sharedShardedCluster) start() (string, error) {
+	s.once.Do(func() {
+		s.uri, s.err = s.boot(context.Background()) // not t.Context(): the cluster outlives individual tests
+	})
+	return s.uri, s.err
+}
+
+func (s *sharedShardedCluster) boot(ctx context.Context) (string, error) {
+	nw, err := network.New(ctx)
+	if err != nil {
+		return "", err
+	}
+	s.nw = nw
+	run := func(alias string, cmd ...string) (*testcontainers.DockerContainer, error) {
+		ctr, err := runMongoNode(ctx, nw, alias, cmd...)
+		if ctr != nil {
+			s.nodes = append(s.nodes, ctr)
+		}
+		return ctr, err
+	}
+
+	cfg, err := run("cfg", "mongod", "--configsvr", "--replSet", "cfg", "--port", "27017", "--bind_ip_all")
+	if err != nil {
+		return "", err
+	}
+	if _, err := evalOn(ctx, cfg, `rs.initiate({_id: "cfg", configsvr: true, members: [{_id: 0, host: "cfg:27017"}]})`); err != nil {
+		return "", err
+	}
 	shards := []string{"sh1", "sh2"}
 	for _, name := range shards {
-		shard := startMongoNode(t, nw, name, "mongod", "--shardsvr", "--replSet", name, "--port", "27017", "--bind_ip_all")
-		shard.eval(fmt.Sprintf(`rs.initiate({_id: %q, members: [{_id: 0, host: "%s:27017"}]})`, name, name))
-		shard.awaitEval(`db.hello().isWritablePrimary`, "true")
+		shard, err := run(name, "mongod", "--shardsvr", "--replSet", name, "--port", "27017", "--bind_ip_all")
+		if err != nil {
+			return "", err
+		}
+		if _, err := evalOn(ctx, shard, fmt.Sprintf(`rs.initiate({_id: %q, members: [{_id: 0, host: "%s:27017"}]})`, name, name)); err != nil {
+			return "", err
+		}
+		if err := awaitEvalOn(ctx, shard, `db.hello().isWritablePrimary`, "true"); err != nil {
+			return "", err
+		}
 	}
-	cfg.awaitEval(`db.hello().isWritablePrimary`, "true")
+	if err := awaitEvalOn(ctx, cfg, `db.hello().isWritablePrimary`, "true"); err != nil {
+		return "", err
+	}
 
-	mongos := startMongoNode(t, nw, "mongos", "mongos", "--configdb", "cfg/cfg:27017", "--port", "27017", "--bind_ip_all")
-	for _, name := range shards {
-		mongos.eval(fmt.Sprintf(`sh.addShard("%s/%s:27017")`, name, name))
+	mongos, err := run("mongos", "mongos", "--configdb", "cfg/cfg:27017", "--port", "27017", "--bind_ip_all")
+	if err != nil {
+		return "", err
 	}
-	mongos.awaitEval(`db.adminCommand({listShards: 1}).shards.length`, "2")
-	return mongos
+	for _, name := range shards {
+		if _, err := evalOn(ctx, mongos, fmt.Sprintf(`sh.addShard("%s/%s:27017")`, name, name)); err != nil {
+			return "", err
+		}
+	}
+	if err := awaitEvalOn(ctx, mongos, `db.adminCommand({listShards: 1}).shards.length`, "2"); err != nil {
+		return "", err
+	}
+	return mongos.PortEndpoint(ctx, "27017/tcp", "mongodb")
+}
+
+// terminate removes the cluster's containers and network, if any were
+// started. It is called from TestMain once every test has finished.
+func (s *sharedShardedCluster) terminate() error {
+	ctx := context.Background()
+	var errs []error
+	for _, ctr := range s.nodes {
+		errs = append(errs, ctr.Terminate(ctx))
+	}
+	if s.nw != nil {
+		errs = append(errs, s.nw.Remove(ctx))
+	}
+	return errors.Join(errs...)
+}
+
+// startShardedCluster returns the URI of the shared sharded cluster's mongos.
+func startShardedCluster(t *testing.T) string {
+	t.Helper()
+	uri, err := sharedSharded.start()
+	require.NoError(t, err)
+	return uri
 }
 
 func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
-	integration.CheckSkipExact(t)
-	// Each run starts its own containers on its own network.
+	integration.CheckSkip(t)
 	t.Parallel()
-	mongos := startShardedCluster(t)
-	uri := mongos.uri(false)
+	uri := startShardedCluster(t)
 	client := connectTo(t, uri)
 
 	h := newIncrementalHarnessOn(t, uri, client)
@@ -158,11 +256,19 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
 	stream := h.stream(input)
 	wait := stream.RunAsync(t)
 
-	// Change both shards' documents while they are read.
+	// Change both shards' documents while they are read: for at least
+	// minWrite, then until a read of foo has been emitted after a streamed
+	// change, as in TestIntegrationMongoCDCIncrementalSnapshotConcurrentWrites.
+	// bar is read after foo, so only foo's reads count.
+	const minWrite, maxWrite = 3 * time.Second, 30 * time.Second
 	rng := rand.New(rand.NewPCG(3, 4))
-	deadline := time.Now().Add(3 * time.Second)
+	start := time.Now()
 	nextID := initial
-	for time.Now().Before(deadline) {
+	for i := 0; ; i++ {
+		if elapsed := time.Since(start); elapsed >= maxWrite ||
+			(elapsed >= minWrite && i%20 == 0 && replay(h.output).interleaved["foo"]) {
+			break
+		}
 		id := rng.IntN(initial)
 		switch rng.IntN(10) {
 		case 0:
@@ -182,7 +288,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
 	}, 3*time.Minute, 500*time.Millisecond)
 
 	// Signals work through mongos too.
-	start := time.Now()
+	start = time.Now()
 	h.waitReads("bar", 40)
 	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"bar"}}})
 	h.waitReads("bar", 80)
@@ -191,6 +297,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedCluster(t *testing.T) {
 	wait()
 
 	got := replayChecked(t, h.output)
+	assert.True(t, got.interleaved["foo"], "the snapshot of foo never overlapped streaming, so nothing was deduplicated")
 	assert.Empty(t, got.regressed, "documents went backwards")
 	assert.Equal(t, want, got.of("foo"))
 	assert.Positive(t, got.readByColl["foo"])
@@ -220,8 +327,8 @@ func startTwoNodeReplicaSet(t *testing.T) (primary, secondary *mongoNode) {
 // local read would hand it to a chunk released before its change streams, or
 // before a failover rolls it back.
 func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
-	integration.CheckSkipExact(t)
-	// Each run starts its own containers on its own network.
+	integration.CheckSkip(t)
+	// Starts its own containers on its own network.
 	t.Parallel()
 	primary, secondary := startTwoNodeReplicaSet(t)
 	client := connectTo(t, primary.uri(true))
@@ -289,11 +396,9 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 // reports the gossiped cluster time, so this guards the behaviour rather than
 // reproducing a failure.
 func TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection(t *testing.T) {
-	integration.CheckSkipExact(t)
-	// Each run starts its own containers on its own network.
+	integration.CheckSkip(t)
 	t.Parallel()
-	mongos := startShardedCluster(t)
-	uri := mongos.uri(false)
+	uri := startShardedCluster(t)
 	client := connectTo(t, uri)
 
 	h := newIncrementalHarnessOn(t, uri, client)

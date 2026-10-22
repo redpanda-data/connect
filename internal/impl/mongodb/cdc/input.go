@@ -40,15 +40,16 @@ import (
 )
 
 // awsSessionDurationSnapshotNote extends the shared MongoDB `session_duration`
-// description with the part that only applies to this input: the snapshot has
-// no checkpoint, so a credential expiry part-way through costs the whole
-// snapshot. The other MongoDB components have no snapshot phase, which is why
+// description with the part that only applies to this input: `stream_snapshot`
+// has no checkpoint, so a credential expiry part-way through costs the whole
+// snapshot, while an incremental snapshot continues from its last acknowledged
+// chunk. The other MongoDB components have no snapshot phase, which is why
 // this is passed in rather than living on the shared field.
 //
 // The shared half already recommends the ambient credential chain for
 // long-running pipelines, so this note states only the snapshot-specific
 // reasoning and does not repeat the recommendation.
-const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. The snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot."
+const awsSessionDurationSnapshotNote = "When using role assumption with this input, credentials are freshly resolved after the initial snapshot completes, so the streaming phase starts with a full session. With `stream_snapshot`, the snapshot itself must still complete within a single session duration: snapshot progress is not checkpointed, so a credential expiry mid-snapshot restarts the snapshot from scratch after reconnecting. With `incremental_snapshot.enabled`, snapshot progress is checkpointed, so a credential expiry does not restart the snapshot: after reconnecting, the input continues from the last acknowledged chunk. Once the snapshot completes and is fully acknowledged, its position is checkpointed, so later restarts resume the stream without re-running the snapshot."
 
 const (
 	fieldClientURL              = "url"
@@ -218,7 +219,7 @@ func spec() *service.ConfigSpec {
 
 If a stored resume position can no longer be resumed (for example it has aged out of the oplog), the input clears its checkpoint and re-runs the snapshot rather than retrying a dead position. After `+strconv.Itoa(maxConsecutiveUnresumableRecoveries-1)+` such recoveries in a row without the change stream ever advancing in between - which usually means the snapshot is taking longer than the oplog window - the next failure keeps the checkpoint and the input fails on every reconnect with an actionable error instead of re-snapshotting forever; after addressing the cause, restart the pipeline (or delete the checkpoint cache entry) to resume recovery.
 
-With `+"`stream_snapshot`"+` disabled there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it fails with an error on every reconnect and preserves the checkpoint, and skipping the gap has to be opted into with `+"`on_unresumable_position: reset`"+`.
+With neither `+"`stream_snapshot`"+` nor `+"`incremental_snapshot.enabled`"+` set, there is no snapshot to re-run, so recovery would have to skip the changes between the lost position and now. The input refuses to do that silently: by default it fails with an error on every reconnect and preserves the checkpoint, and skipping the gap has to be opted into with `+"`on_unresumable_position: reset`"+`.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the <<collections,collections>> also need to enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[MongoDB documentation^] and the <<document_mode,`+"`document_mode`"+`>> options.
 
@@ -233,13 +234,13 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 [[incremental-snapshots]]
 == Incremental snapshots
 
-With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart continues from the last acknowledged chunk rather than starting over, and a credential expiry costs at most one chunk.
+With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart, for example after a credential expiry, continues from the last acknowledged chunk rather than starting over.
 
-A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. A pipeline switched from `+"`stream_snapshot: true`"+` to `+"`incremental_snapshot.enabled: true`"+` with a stream position already stored reads nothing again. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
+A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. Turning on `+"`incremental_snapshot.enabled`"+` in a pipeline that already has a stream position stored, whether it ran with `+"`stream_snapshot`"+` or without it, reads nothing: with a stored position and no stored snapshot progress, every collection counts as read. To backfill such a pipeline, set `+"`signal_collection_name`"+` and send a `+"`"+replication.SnapshotSignalType+"`"+` signal. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
 
 Documents from a chunk have the operation set to "read" and the operation time of the chunk read. Collections are read one at a time, so `+"`snapshot_parallelism`"+` and `+"`snapshot_auto_bucket_sharding`"+` do not apply. Chunks are bounded by index ranges rather than comparisons, so a collection whose `+"`_id`"+` values mix BSON types is read in full.
 
-A document can be delivered twice, once streamed and once in a chunk: when it is inserted with an `+"`_id`"+` below the collection's largest before its chunk is read. Treat documents as idempotent upserts keyed by `+"`_id`"+`, as is standard CDC practice. With `+"`document_mode: partial_update`"+`, an update streamed while its document is buffered replaces the chunk's full document with the update description alone, so a consumer that has not seen the document before receives only the delta; prefer `+"`update_lookup`"+` or `+"`pre_and_post_images`"+` with incremental snapshots. On sharded collections documents are matched on `+"`_id`"+` alone, which MongoDB requires to be unique across shards for this to hold.
+A document can be delivered twice, once streamed and once in a chunk: when it is inserted after streaming starts and before its chunk is read. Treat documents as idempotent upserts keyed by `+"`_id`"+`, as is standard CDC practice. With `+"`document_mode: partial_update`"+`, an update streamed while its document is buffered replaces the chunk's full document with the update description alone, so a consumer that has not seen the document before receives only the delta; prefer `+"`update_lookup`"+` or `+"`pre_and_post_images`"+` with incremental snapshots. On sharded collections documents are matched on `+"`_id`"+` alone. MongoDB does not enforce a unique `+"`_id`"+` across shards unless `+"`_id`"+` is the shard key, so make sure your application keeps it unique. Otherwise the snapshot can skip documents that share an `+"`_id`"+`.
 
 A chunk can only be released once the change stream has passed the moment it was read. On a busy deployment that happens almost at once, and on a quiet replica set the input releases several chunks per poll. A quiet sharded cluster is slower: its change stream only advances as far as its least active shard, which moves on with its periodic no-op write, every 10 seconds by default (the shards' `+"`periodicNoopIntervalSecs`"+`). Expect about one chunk per interval there, and raise `+"`incremental_snapshot.chunk_size`"+` to compensate, with `+"`checkpoint_limit`"+` raised to at least twice that.
 
@@ -251,7 +252,7 @@ Progress is reported through metrics: `+"`"+metricIncSnapshotRemaining+"`"+` cou
 When `+"`signal_collection_name`"+` is set, documents inserted into that collection control the input while it runs. Each signal has a `+"`type`"+` and a `+"`data`"+` field, which may be an embedded document or a JSON string:
 
 - `+"`"+replication.LogSignalType+"`"+`: logs `+"`data.message`"+` at info level, for example `+"`{\"type\": \""+replication.LogSignalType+"\", \"data\": {\"message\": \"hello\"}}`"+`.
-- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`incremental_snapshot.enabled: true`"+`. Each named collection must also be in `+"`collections`"+`. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
+- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`incremental_snapshot.enabled: true`"+`. Each named collection must also be in `+"`collections`"+`, because the input only watches those for changes. If a signal names any other collection, the input skips the whole signal and logs an error. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
 
 Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored, and signals are never emitted.
 
@@ -265,7 +266,7 @@ Size the oplog for consumer lag: a change stream resumes from a position in the 
 
 Each message emitted by this plugin has the following metadata:
 
-- operation: either "insert", "replace", "delete" or "update" for changes streamed. Documents from the initial snapshot have the operation set to "read".
+- operation: either "insert", "replace", "delete" or "update" for changes streamed. Documents from a snapshot have the operation set to "read".
 - collection: the collection the document was written to.
 - operation_time: the oplog time for when this operation occurred.
 - schema: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
@@ -319,7 +320,7 @@ Schema metadata is discovered using a two-tier strategy:
 				Default(defaultCheckpointWriteTimeout.String()).
 				Advanced(),
 			service.NewStringEnumField(fieldOnUnresumablePosition, onUnresumablePositionFail, onUnresumablePositionReset).
-				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and no snapshot is enabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` or `incremental_snapshot.enabled` is enabled this field has no effect: recovery re-runs the snapshot, which loses nothing.").Version("4.106.0").
+				Description("What to do when the stored stream position can no longer be resumed from (for example it has aged out of the oplog) and no snapshot is enabled, so there is no snapshot to recover with: `fail` stops the input with an error, preserving the checkpoint for inspection; `reset` clears the checkpoint and restarts streaming from the current oplog position, skipping the changes between the lost position and now. When `stream_snapshot` or `incremental_snapshot.enabled` is enabled this field has no effect: recovery re-runs the snapshot. This recovers the current state of every document, but not the deletes between the lost position and now.").Version("4.106.0").
 				ShortDescription("What to do when the stored position is unresumable and there is no snapshot to recover with.").
 				Default(onUnresumablePositionFail).
 				Advanced(),
@@ -364,7 +365,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
   this < 1 => ["field chunk_size must be greater or equal to 1."],
 }`),
 				service.NewStringField(fieldIncSnapshotKey).
-					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nClearing it while a stream position is stored discards the record of which collections have been read, so a restart reads none of them again: a `"+replication.SnapshotSignalType+"` signal re-reads one on request. While `"+fieldIncSnapshotEnabled+"` is `false`, the input discards progress left under this key, so enabling it again later never resumes a read the stream has long since moved past.").
+					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nIf you delete the stored progress, or change this key, while a stream position is stored, a restart treats every collection as read. To read a collection again, send a `"+replication.SnapshotSignalType+"` signal. Unlike `postgres_cdc`, a new key does not cause a new read. While `"+fieldIncSnapshotEnabled+"` is `false`, the input discards progress left under this key, so enabling it again later never resumes a read the stream has long since moved past.").
 					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from `"+fieldCheckpointKey+"`.").
 					Default(""),
 				service.NewDurationField(fieldIncSnapshotRetryCool).
@@ -495,11 +496,11 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	if checkpointInterval, err = conf.FieldDuration(fieldCheckpointInterval); err != nil {
 		return
 	}
-	cdc.checkpoint = &checkpointCache{
+	cdc.checkpoint = &checkpointCache{cacheEntry{
 		resources: res,
 		cacheName: cacheName,
 		cacheKey:  cacheKey,
-	}
+	}}
 	if checkpointInterval.Seconds() > 0 {
 		cdc.checkpointFlusher = asyncroutine.NewPeriodicWithContext(
 			checkpointInterval,
@@ -575,7 +576,7 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 		return fmt.Errorf("field %s.%s must differ from %s: the stream position and the snapshot progress are stored separately", fieldIncSnapshot, fieldIncSnapshotKey, fieldCheckpointKey)
 	}
 	// Needed when disabled too, to discard stale progress.
-	m.incStateStore = &incStateCache{resources: m.checkpoint.resources, cacheName: cacheName, cacheKey: key}
+	m.incStateStore = &incStateCache{cacheEntry{resources: m.checkpoint.resources, cacheName: cacheName, cacheKey: key}}
 
 	if !enabled {
 		return nil
@@ -1346,7 +1347,7 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 	if m.incStateStore == nil {
 		return nil
 	}
-	b, err := getCacheKey(ctx, m.incStateStore.resources, m.incStateStore.cacheName, m.incStateStore.cacheKey)
+	b, err := m.incStateStore.get(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to check for incremental snapshot progress: %w", err)
 	}
@@ -1366,8 +1367,9 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 // Progress is only meaningful against the stream position it was recorded
 // with. Without a position the stream starts afresh, so every collection is
 // read again and any stored progress is ignored. A position without progress
-// is a pipeline switching from stream_snapshot, which has already read
-// every configured collection, so they are all marked done.
+// is a pipeline that ran before incremental snapshots were enabled, with or
+// without stream_snapshot, so every configured collection is marked done; a
+// signal reads one again.
 //
 // Undecodable progress is cleared and every configured collection read again
 // while the stream resumes from its position, which loses nothing. The token
