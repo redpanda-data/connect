@@ -17,6 +17,7 @@ package kinesis
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -40,6 +42,14 @@ func TestIntegrationKinesis(t *testing.T) {
 	kinesisIntegrationSuite(t, servicePort)
 }
 
+const (
+	// createStreamTimeout is the time budget for all CreateStream attempts of
+	// one stream.
+	createStreamTimeout = 30 * time.Second
+	// createStreamRetryDelay is the pause between two CreateStream attempts.
+	createStreamRetryDelay = time.Second
+)
+
 func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int32) ([]string, error) {
 	endpoint := fmt.Sprintf("http://localhost:%v", awsPort)
 
@@ -53,12 +63,21 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	client := kinesis.NewFromConfig(conf)
 
 	strmID := "stream-" + id
+
+	// Bound the retries. If LocalStack is dead, the test fails after
+	// createStreamTimeout instead of waiting for the package timeout.
+	createCtx, cancel := context.WithTimeout(ctx, createStreamTimeout)
+	defer cancel()
+
 	for {
 		t.Logf("Creating stream '%v'", id)
-		_, err := client.CreateStream(ctx, &kinesis.CreateStreamInput{
+		// One SDK attempt per call: this loop does the retries. With SDK
+		// retries, the deadline often expires during a call, and the
+		// deadline error replaces the real cause.
+		_, err := client.CreateStream(createCtx, &kinesis.CreateStreamInput{
 			ShardCount: &numShards,
 			StreamName: &strmID,
-		})
+		}, func(o *kinesis.Options) { o.RetryMaxAttempts = 1 })
 		if err == nil {
 			t.Logf("Created stream '%v'", id)
 			break
@@ -66,9 +85,9 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 
 		t.Logf("Failed to create stream '%v': %v", id, err)
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(time.Second):
+		case <-createCtx.Done():
+			return nil, fmt.Errorf("creating stream '%v': %w (last error: %v)", id, createCtx.Err(), err)
+		case <-time.After(createStreamRetryDelay):
 		}
 	}
 
@@ -92,6 +111,25 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 		shards = append(shards, *shard.ShardId)
 	}
 	return shards, nil
+}
+
+func TestCreateKinesisShardsReturnsLastError(t *testing.T) {
+	// A closed port acts as a dead LocalStack.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	_, port, err := net.SplitHostPort(ln.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, ln.Close())
+
+	// The 1s deadline stands in for createStreamTimeout, so that the test
+	// does not wait 30s.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	_, err = createKinesisShards(ctx, t, port, "dead", 1)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	// The error must keep the real cause, not only the deadline.
+	assert.Contains(t, err.Error(), "connection refused")
 }
 
 func kinesisIntegrationTemplate(inputExtra string) string {
