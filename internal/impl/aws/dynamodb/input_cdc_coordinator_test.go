@@ -51,8 +51,8 @@ func (s *flakyDescribeTransport) Do(req *http.Request) (*http.Response, error) {
 // the table unread until restart, with no error surfaced beyond one log line.
 func TestTableCoordinatorRetriesInitialRefresh(t *testing.T) {
 	transport := &flakyDescribeTransport{
-		refreshStubTransport: refreshStubTransport{shardIDs: []string{"shard-001"}},
-		failures:             2,
+		shardIDs: []string{"shard-001"},
+		failures: 2,
 	}
 	d := &dynamoDBCDCInput{
 		conf: dynamoDBCDCConfig{
