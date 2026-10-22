@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,9 +45,18 @@ type fakeServer struct {
 	rowsOverride   map[int]string // 1-indexed append-call number -> raw /rows response body
 
 	statusCall      int // how many :bulk-channel-status requests have arrived
+	statusDropFirst int // hijack and close the connection for this many leading status calls
 	statusFailFirst int // fail this many leading status calls with statusFailCode
 	statusFailCode  int // HTTP status to return while statusFailFirst is unmet
 	statusFailBody  string
+}
+
+// dropFirstStatusConns makes the given number of leading status calls close
+// the TCP connection without a response, standing in for a transport fault.
+func (f *fakeServer) dropFirstStatusConns(n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.statusDropFirst = n
 }
 
 // statusCalls reports how many :bulk-channel-status requests have arrived.
@@ -169,6 +179,16 @@ func newFakeServer(t *testing.T) (*fakeServer, *httptest.Server) {
 		case strings.HasSuffix(r.URL.Path, ":bulk-channel-status"):
 			f.mu.Lock()
 			f.statusCall++
+			if f.statusCall <= f.statusDropFirst {
+				f.mu.Unlock()
+				if hj, ok := w.(http.Hijacker); ok {
+					if conn, _, err := hj.Hijack(); err == nil {
+						_ = conn.Close()
+						return
+					}
+				}
+				panic("fake server: response writer cannot hijack")
+			}
 			if f.statusCall <= f.statusFailFirst {
 				code, body := f.statusFailCode, f.statusFailBody
 				f.mu.Unlock()
@@ -1148,6 +1168,53 @@ func TestCommitBackpressureDelayDoublesAndCaps(t *testing.T) {
 	} {
 		if got := commitBackpressureDelay(tc.streak, pollInterval); got != tc.want {
 			t.Errorf("commitBackpressureDelay(%d) = %s, want %s", tc.streak, got, tc.want)
+		}
+	}
+}
+
+// TestWaitUntilCommittedRetriesTransportFailuresOnStatusPoll: a dropped
+// connection while polling is not a commit failure. Polling is read-only,
+// so the wait keeps polling within its deadline and succeeds once the
+// server answers again.
+func TestWaitUntilCommittedRetriesTransportFailuresOnStatusPoll(t *testing.T) {
+	f, srv := newFakeServer(t)
+	defer srv.Close()
+	ch, _ := connectedClient(t, srv, false).OpenChannel(t.Context(), "ch1")
+	f.setCommitted("42")
+	f.dropFirstStatusConns(f.statusCalls() + 2)
+	if err := ch.WaitUntilCommitted(t.Context(), "42", 10*time.Second); err != nil {
+		t.Fatalf("a transport failure during the wait must be retried, not returned: %v", err)
+	}
+}
+
+// TestIsTransientPollError pins the policy table: backpressure and
+// transport faults retry; a definite server answer and a cancelled ctx do
+// not.
+func TestIsTransientPollError(t *testing.T) {
+	cases := []struct {
+		name      string
+		cancelled bool
+		err       error
+		want      bool
+	}{
+		{"429", false, &httpStatusError{statusCode: 429}, true},
+		{"502 gateway", false, &httpStatusError{statusCode: 502}, true},
+		{"transport", false, fmt.Errorf("channel status: %w", &url.Error{Op: "Post", URL: "https://x", Err: errors.New("connection reset by peer")}), true},
+		{"400", false, &httpStatusError{statusCode: 400, body: "nope"}, false},
+		{"decode", false, errors.New("decode channel status: unexpected end of JSON input"), false},
+		{"missing channel", false, errors.New(`channel "c" missing from status response`), false},
+		{"local jwt failure", false, errors.New("sign jwt: boom"), false},
+		{"ctx cancelled", true, fmt.Errorf("channel status: %w", &url.Error{Op: "Post", URL: "https://x", Err: errors.New("connection reset by peer")}), false},
+	}
+	for _, tc := range cases {
+		ctx, cancel := context.WithCancel(t.Context())
+		if tc.cancelled {
+			cancel()
+		}
+		got := isTransientPollError(ctx, tc.err)
+		cancel()
+		if got != tc.want {
+			t.Errorf("%s: isTransientPollError = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

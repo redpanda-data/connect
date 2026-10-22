@@ -50,6 +50,7 @@ type Channel struct {
 
 	mu                        sync.Mutex
 	continuation              string
+	committedAtOpen           string
 	rowsErrorCount            int64
 	rowsErrorCountBaseline    int64
 	lastErrorMessage          string
@@ -194,6 +195,7 @@ func (c *Client) openChannelOnce(ctx context.Context, name string) (*Channel, er
 		c:                         c,
 		name:                      name,
 		continuation:              out.NextContinuationToken,
+		committedAtOpen:           out.ChannelStatus.LastCommittedOffsetToken,
 		rowsErrorCount:            out.ChannelStatus.RowsErrorCount,
 		rowsErrorCountBaseline:    out.ChannelStatus.RowsErrorCount,
 		lastErrorMessage:          out.ChannelStatus.LastError,
@@ -304,6 +306,11 @@ func (ch *Channel) status(ctx context.Context) (ChannelStatus, error) {
 	return st, nil
 }
 
+// CommittedAtOpen is the channel's last committed offset token as reported
+// in the open-channel response, so callers that only need the value at open
+// avoid a status round trip. Empty means nothing had committed.
+func (ch *Channel) CommittedAtOpen() string { return ch.committedAtOpen }
+
 // LatestOffsetToken is the last token Snowflake reports as committed. Empty
 // means nothing has committed yet.
 func (ch *Channel) LatestOffsetToken(ctx context.Context) (string, error) {
@@ -330,6 +337,34 @@ func commitBackpressureDelay(streak int, pollInterval time.Duration) time.Durati
 	return d
 }
 
+// isTransientPollError reports whether a status-poll failure should be
+// retried within the commit deadline. Polling is read-only, so anything
+// that says nothing about the commit is retried: backpressure (429/503 and
+// the retry codes), any other 5xx (a gateway in front of the account host),
+// and a transport failure from the HTTP client (connection reset, EOF, a
+// request timeout). A 4xx, a malformed body, a channel missing from the
+// response, or a local failure such as signing the JWT is definite and
+// ends the wait. A done ctx always ends it.
+func isTransientPollError(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	if IsBackpressure(err) {
+		return true
+	}
+	if code, ok := statusCodeOf(err); ok {
+		return code >= 500
+	}
+	var ue *url.Error
+	return errors.As(err, &ue)
+}
+
+// maxPollOutage bounds how long WaitUntilCommitted keeps retrying transient
+// poll failures when it has no deadline of its own (timeout <= 0). Without
+// it, a dead control plane would hang the batch silently for as long as the
+// ctx lives.
+const maxPollOutage = 2 * time.Minute
+
 // WaitUntilCommitted blocks until the committed offset token is at or beyond
 // offsetToken. A non-SUCCESS channel status fails immediately. It does not
 // fail on RowsErrorCount > 0: that counter is cumulative and never resets
@@ -340,14 +375,26 @@ func (ch *Channel) WaitUntilCommitted(ctx context.Context, offsetToken string, t
 	deadline := time.Now().Add(timeout)
 	expired := func() bool { return timeout > 0 && time.Now().After(deadline) }
 	var lastRetryableErr error
+	var outageSince time.Time
 	backpressureStreak := 0
 	for {
 		st, err := ch.status(ctx)
 		if err != nil {
+			if outageSince.IsZero() {
+				outageSince = time.Now()
+			}
+			if timeout <= 0 && time.Since(outageSince) > maxPollOutage && isTransientPollError(ctx, err) {
+				return fmt.Errorf("channel %q: offset %q not confirmed: status polling has failed for %s, last error: %w",
+					ch.name, offsetToken, maxPollOutage, err)
+			}
 			// A retryable poll failure is not a commit failure: keep polling
 			// within the same deadline, and name the last such failure if
-			// the wait ultimately times out.
-			if !IsBackpressure(err) {
+			// the wait ultimately times out. Status polling is read-only, so
+			// a transport error (connection reset, EOF, a timeout on the
+			// request itself) is retried too; only a definite answer from
+			// the server (a 4xx, a malformed body) or the caller's ctx ends
+			// the wait early.
+			if !isTransientPollError(ctx, err) {
 				return err
 			}
 			lastRetryableErr = err
@@ -364,6 +411,7 @@ func (ch *Channel) WaitUntilCommitted(ctx context.Context, offsetToken string, t
 			continue
 		}
 		backpressureStreak = 0
+		outageSince = time.Time{}
 		ch.mu.Lock()
 		ch.rowsErrorCount = st.RowsErrorCount
 		ch.lastErrorMessage = st.LastError
