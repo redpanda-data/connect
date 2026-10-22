@@ -20,8 +20,6 @@ All notable changes to this project will be documented in this file.
 - postgres_cdc: PostgreSQL CDC streaming now batches rows per transaction over a buffered channel with a configurable batch_transactions option, improving throughput while maintaining per-row failure semantics by default. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
 - sap_hana: SAP HANA source now rejects negative max_retries, records table reference in checkpoints to prevent cross-table state sharing, and sanitizes record names for Iceberg targets. ([@squiidz](https://github.com/squiidz), [#4983](https://github.com/redpanda-data/connect/pull/4983))
 
-
-
 ## 4.114.0 - 2026-10-16
 
 ### Added
