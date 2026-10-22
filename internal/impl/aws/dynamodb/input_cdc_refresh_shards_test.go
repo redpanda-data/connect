@@ -65,7 +65,10 @@ type refreshStubTransport struct {
 	trimmedShards map[string]bool
 	// notFoundShards fail with ResourceNotFoundException (the shard is gone).
 	notFoundShards map[string]bool
-	iteratorCalls  []string
+	// nilIteratorShards succeed without a ShardIterator, as GetShardIterator
+	// does for a closed shard with nothing left to read.
+	nilIteratorShards map[string]bool
+	iteratorCalls     []string
 	// iteratorTypes records the ShardIteratorType of the latest
 	// GetShardIterator call per shard.
 	iteratorTypes      map[string]string
@@ -175,6 +178,7 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 		fail := s.failShards[in.ShardId]
 		trimmed := s.trimmedShards[in.ShardId] && in.ShardIteratorType == "AFTER_SEQUENCE_NUMBER"
 		notFound := s.notFoundShards[in.ShardId]
+		nilIterator := s.nilIteratorShards[in.ShardId]
 		hook := s.onGetShardIterator
 		s.mu.Unlock()
 		if hook != nil {
@@ -194,6 +198,9 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 			resp := jsonResponse(req, 400, `{"__type":"LimitExceededException","message":"stubbed for test"}`)
 			resp.Header.Set("X-Amzn-ErrorType", "LimitExceededException")
 			return resp, nil
+		}
+		if nilIterator {
+			return jsonResponse(req, 200, `{}`), nil
 		}
 		return jsonResponse(req, 200, fmt.Sprintf(`{"ShardIterator":"iter-%s"}`, in.ShardId)), nil
 
@@ -1008,5 +1015,88 @@ func TestRefreshShardsFailingParentReleasesChildrenAfterRetries(t *testing.T) {
 		transport := newTransport()
 		d, ts, tableShards := tableRefreshHarness(t, transport, newTestCheckpointer(t))
 		run(t, func() error { return d.refreshTableShards(t.Context(), "test", ts) }, tableShards, transport)
+	})
+}
+
+// markRecordingCheckpointer returns a checkpointer over an empty store that
+// records the shards MarkShardCompleted is called for, failing each call with
+// markErr(ctx) when set.
+func markRecordingCheckpointer(t *testing.T, markErr func(context.Context) error) (*Checkpointer, func() []string) {
+	t.Helper()
+	var (
+		mu     sync.Mutex
+		marked []string
+	)
+	cp := newTestCheckpointer(t)
+	cp.svc.(*fakeCheckpointAPI).updateItem = func(ctx context.Context, in *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+		if markErr != nil {
+			if err := markErr(ctx); err != nil {
+				return nil, err
+			}
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		marked = append(marked, in.Key[checkpointRangeKey].(*dynamodbtypes.AttributeValueMemberS).Value)
+		return &dynamodb.UpdateItemOutput{}, nil
+	}
+	return cp, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), marked...)
+	}
+}
+
+// TestShardReaderNilIteratorCompletesClosedShard (CON-599): GetShardIterator
+// returns no iterator for a closed shard with nothing left to read. The
+// reader must take the closed-shard path (completion marker, child release)
+// instead of returning silently and leaving the shard registered but unread,
+// which would hold its children back until the shard ages out.
+func TestShardReaderNilIteratorCompletesClosedShard(t *testing.T) {
+	newTransport := func() *refreshStubTransport {
+		return &refreshStubTransport{
+			shardIDs:          []string{"shard-child", "shard-parent"},
+			parents:           map[string]string{"shard-child": "shard-parent"},
+			nilIteratorShards: map[string]bool{"shard-parent": true},
+		}
+	}
+
+	t.Run("single-table", func(t *testing.T) {
+		d := newRefreshTestInput(t, newTransport())
+		d.conf.batchSize = 10
+		d.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
+		cp, marked := markRecordingCheckpointer(t, nil)
+		d.checkpointer = cp
+
+		require.NoError(t, d.refreshShards(t.Context()))
+		require.ElementsMatch(t, []string{"shard-parent"}, registeredShards(d))
+
+		d.startShardReader(t.Context(), "shard-parent")
+
+		assert.Equal(t, []string{"shard-parent"}, marked(), "the closed shard must be marked completed")
+		assert.True(t, lookupShard(d.shardReaders, d.completedShards, "shard-parent").completed)
+		select {
+		case <-d.shardRefreshCh:
+		default:
+			t.Fatal("completing the shard must trigger an immediate refresh for its children")
+		}
+		require.NoError(t, d.refreshShards(t.Context()))
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, registeredShards(d))
+	})
+
+	t.Run("multi-table", func(t *testing.T) {
+		cp, marked := markRecordingCheckpointer(t, nil)
+		d, ts, tableShards := tableRefreshHarness(t, newTransport(), cp)
+		d.conf.batchSize = 10
+		ts.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
+
+		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+		require.ElementsMatch(t, []string{"shard-parent"}, tableShards())
+
+		d.startTableShardReader(t.Context(), "test", ts, "shard-parent")
+
+		assert.Equal(t, []string{"shard-parent"}, marked())
+		assert.True(t, lookupShard(ts.shardReaders, ts.completedShards, "shard-parent").completed)
+		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
 	})
 }
