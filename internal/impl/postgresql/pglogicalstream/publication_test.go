@@ -120,6 +120,17 @@ func TestPublicationCoversTableQuery(t *testing.T) {
 	assert.Contains(t, q, "leaf.isleaf")
 }
 
+func TestCheckExternalPublicationVersion(t *testing.T) {
+	for _, v := range []int{10, 11} {
+		err := checkExternalPublicationVersion(v)
+		require.ErrorIs(t, err, errExternalPublicationVersion, "PostgreSQL %d lacks pg_partition_tree", v)
+		assert.Contains(t, err.Error(), fmt.Sprintf("PostgreSQL %d", v))
+	}
+	for _, v := range []int{12, 16} {
+		require.NoError(t, checkExternalPublicationVersion(v))
+	}
+}
+
 func TestPublicationMissingOperations(t *testing.T) {
 	assert.Empty(t, publicationInfo{exists: true, insert: true, update: true, delete: true}.missingOperations())
 	assert.Equal(t, []string{"update", "delete"}, publicationInfo{exists: true, insert: true}.missingOperations())

@@ -472,6 +472,20 @@ func getPublicationMembers(ctx context.Context, conn *pgconn.PgConn, publication
 	return tables, nil
 }
 
+// errExternalPublicationVersion is returned when an externally managed
+// publication is used on a server older than PostgreSQL 12.
+var errExternalPublicationVersion = errors.New("manage_publication: false requires PostgreSQL 12 or later")
+
+// checkExternalPublicationVersion fails before PostgreSQL 12, since checking
+// an externally managed publication's coverage needs pg_partition_tree and
+// pg_partition_ancestors, which earlier versions lack.
+func checkExternalPublicationVersion(pgVersion int) error {
+	if pgVersion < 12 {
+		return fmt.Errorf("%w, the server runs PostgreSQL %d", errExternalPublicationVersion, pgVersion)
+	}
+	return nil
+}
+
 // errPublicationOperations is returned by ValidatePublication when the
 // publication does not stream inserts, updates and deletes.
 var errPublicationOperations = errors.New("publication does not publish every operation")
@@ -679,7 +693,16 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 	if err != nil {
 		return nil, false, err
 	}
+	tables, err := publicationTables(ctx, conn, publicationName)
+	if err != nil {
+		return nil, false, err
+	}
+	return tables, pub.allTables, nil
+}
 
+// publicationTables returns the tables pg_publication_tables lists for a
+// publication, without reading the publication itself.
+func publicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		tablename as table_name,
@@ -689,13 +712,13 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {
-		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+		return nil, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	// Get specific tables in the publication
 	rows, err := conn.Exec(ctx, query).ReadAll()
 	if err != nil {
-		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+		return nil, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	var tables []TableFQN
@@ -710,7 +733,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		}
 	}
 
-	return tables, pub.allTables, nil
+	return tables, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.

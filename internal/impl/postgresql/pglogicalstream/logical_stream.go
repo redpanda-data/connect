@@ -182,6 +182,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if stream.pgVersion, err = getPostgresVersion(config); err != nil {
 		return nil, err
 	}
+	if config.ExternallyManagedPublication {
+		if err := checkExternalPublicationVersion(stream.pgVersion); err != nil {
+			return nil, err
+		}
+	}
 
 	pluginArguments := []string{
 		"proto_version '1'",
