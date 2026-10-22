@@ -102,6 +102,7 @@ func newCountingProxy(t *testing.T, targetURL string) *countingProxy {
 // limit.
 func TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Number of source subjects sharing one identical schema body. Large
 	// enough to make quadratic growth unambiguous while keeping runtime low.
