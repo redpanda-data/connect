@@ -137,20 +137,20 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 		s.snapshotStatusMetric.Set(0, table.FullName())
 	}
 
-	var tasks []func(context.Context) error
+	var snapshotTasks []func(context.Context) error
 	for _, table := range s.tables {
 		tableTasks, err := s.planTableTasks(ctx, table, maxWorkers, maxBatchSize)
 		if err != nil {
 			return fmt.Errorf("planning snapshot for table '%s': %w", table.FullName(), err)
 		}
-		tasks = append(tasks, tableTasks...)
+		snapshotTasks = append(snapshotTasks, tableTasks...)
 	}
 
-	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(tasks), len(s.tables), min(len(tasks), maxWorkers), maxWorkers)
+	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(snapshotTasks), len(s.tables), min(len(snapshotTasks), maxWorkers), maxWorkers)
 
 	wg, ctx := errgroup.WithContext(ctx)
 	wg.SetLimit(maxWorkers)
-	for _, task := range tasks {
+	for _, task := range snapshotTasks {
 		wg.Go(func() error { return task(ctx) })
 	}
 
@@ -161,11 +161,9 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 	return nil
 }
 
-// tableCompletionTracker counts down the outstanding tasks for a single table so the
-// "done" gauge and rows-processed log line fire exactly once, right after that table's own
-// last chunk finishes - even though every table's tasks now share one flattened, global
-// worker pool rather than each table getting its own goroutine. Tasks only report in when
-// they succeed, so a table with a failed task is never marked as complete.
+// tableCompletionTracker counts down a table's outstanding tasks, which run in the shared
+// worker pool, so the "done" gauge and completion log fire once, after its last task.
+// Only successful tasks report in, so a table with a failed task is never marked complete.
 type tableCompletionTracker struct {
 	remaining atomic.Int32
 	rows      atomic.Int64
@@ -219,8 +217,7 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 		return []func(context.Context) error{s.snapshotTableFullScanTask(table, maxBatchSize, tracker)}
 	}
 
-	// With a single worker there's no parallelism to gain from chunking, so skip the PK
-	// lookup and keyspace sampling entirely.
+	// Skip PK lookup and keyspace sampling entirely for single worker
 	if maxWorkers <= 1 {
 		return fullScan(), nil
 	}
