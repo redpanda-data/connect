@@ -532,8 +532,8 @@ jobs:
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream]
-    # always() is required because update-bundles/update-downstream may be skipped
+    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream, update-cloud-docs]
+    # always() is required because update-bundles/update-downstream/update-cloud-docs may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
     permissions:
@@ -552,6 +552,7 @@ jobs:
           DOCS_ASSET_RESULT: ${{ needs.docs-asset.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
+          CLOUD_DOCS_RESULT: ${{ needs.update-cloud-docs.result }}
         run: |
           # Build follow-up PR links and failure notices
           LINKS=""
@@ -579,6 +580,9 @@ jobs:
           fi
           if [ "$DOWNSTREAM_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-downstream failed  "
+          fi
+          if [ "$CLOUD_DOCS_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-cloud-docs failed, so cloud-docs did not sync its Connect stubs  "
           fi
 
           HEADER_ICON=":green_alert:"
