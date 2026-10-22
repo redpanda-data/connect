@@ -50,15 +50,15 @@ jobs:
     if: >-
       !github.event.pull_request.draft &&
       github.event.pull_request.head.repo.full_name == github.repository
-    # v5.52.0 (2026-10-05): the connect surface covers helper constructors,
+    # v5.55.0 (2026-10-19): the connect surface covers helper constructors,
     # cross-file constants, Bloblang, ShortDescription, and rpk connect
-    # help. The review reads a pre-saved diff, so PRs over 300 files no
-    # longer fail on gh pr diff, and the doc-impact dispatch sends the PR's
-    # base and default branch.
+    # help. The review diffs a merge checkout against its first parent, so
+    # changes that reached main after the PR's base are not attributed to
+    # the PR, and it saves the docs MCP answers it saw as an artifact.
     # The reusable workflow resolves the doc-tools CLI version from its own
     # ref, so this SHA pins the review logic and the CLI together and a bump
     # moves both.
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@269d2901d12be258c311107256d45bc494774b4d # v5.52.0
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@560c4301d2f98c2e5e158daa70fa2d3760859bda # v5.55.0
     permissions:
       contents: read
       pull-requests: write
@@ -77,7 +77,7 @@ jobs:
       # up as a review that silently does not appear. Read the job log, not
       # the check color.
       use_adp_gateway: true
-      # Sonnet 5, about a fifth of Opus 5's cost. On the review's own eval
+      # Sonnet 5, about 0.4x Opus 5's cost per run. On the review's own eval
       # suite (docs-extensions-and-macros evals/doc-strings, production
       # prompt) it matched Opus except for one C++ line over the 80-column
       # limit, which connect's Go strings do not have. It is on the
