@@ -331,7 +331,7 @@ func consume(cluster EmbeddedRedpandaCluster, topic, group string, numMessages i
 
 // ListTopics lists all topics.
 func (e *EmbeddedRedpandaCluster) ListTopics() []string {
-	metadata, err := e.Admin.Metadata(e.t.Context())
+	metadata, err := e.Admin.Metadata(kadm.WithAuthorizedOps(e.t.Context()))
 	require.NoError(e.t, err)
 
 	topics := make([]string, 0, len(metadata.Topics))
@@ -580,16 +580,12 @@ func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 	admin := kadm.NewClient(client)
 
 	return EmbeddedConfluentCluster{
-		EmbeddedRedpandaCluster: EmbeddedRedpandaCluster{
-			Endpoints: redpandatest.Endpoints{
-				BrokerAddr:        brokerAddr,
-				SchemaRegistryURL: schemaRegistryURL,
-			},
-			Client: client,
-			Admin:  admin,
-			t:      t,
-		},
-		ConnectURL: connectURL,
+		BrokerAddr:        brokerAddr,
+		SchemaRegistryURL: schemaRegistryURL,
+		Client:            client,
+		Admin:             admin,
+		t:                 t,
+		ConnectURL:        connectURL,
 	}
 }
 

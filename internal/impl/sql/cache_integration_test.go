@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sql
+package sql_test
 
 import (
 	"context"
@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -32,22 +30,9 @@ import (
 func TestIntegrationCache(t *testing.T) {
 	integration.CheckSkip(t)
 
-	ctr, err := testcontainers.Run(t.Context(), "postgres:latest",
-		testcontainers.WithExposedPorts("5432/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"POSTGRES_USER":     "testuser",
-			"POSTGRES_PASSWORD": "testpass",
-			"POSTGRES_DB":       "testdb",
-		}),
-		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort("5432/tcp").WithStartupTimeout(3*time.Minute),
-		),
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	require.NoError(t, err)
+	t.Parallel()
 
-	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
-	require.NoError(t, err)
+	dsn := sharedPostgres(t)
 
 	var db *sql.DB
 	t.Cleanup(func() {
@@ -65,7 +50,7 @@ func TestIntegrationCache(t *testing.T) {
 		return name, err
 	}
 
-	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", mp.Port())
+	var err error
 	require.Eventually(t, func() bool {
 		if db != nil {
 			db.Close()

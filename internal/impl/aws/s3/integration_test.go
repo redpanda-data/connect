@@ -15,9 +15,13 @@
 package s3
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +29,8 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -93,6 +99,238 @@ input:
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
 		)
+	})
+
+	t.Run("via_sqs_test_event_deleted", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+
+		id := fmt.Sprintf("testevent%d", time.Now().UnixNano())
+		require.NoError(t, awstest.CreateBucketQueue(ctx, lsPort, lsPort, id))
+
+		sqsClient := newLocalStackSQSClient(t, lsPort)
+		queueURL := fmt.Sprintf("http://localhost:%s/000000000000/queue-%s", lsPort, id)
+
+		testEventBody := fmt.Sprintf(
+			`{"Service":"Amazon S3","Event":"s3:TestEvent","Time":"%s","Bucket":"bucket-%s","RequestId":"N99ABJ6Q","HostId":"+3DhJHKGDGBwqSTufMSS1UgAMIoRovmGa9vkZwWIb1="}`,
+			time.Now().UTC().Format(time.RFC3339), id,
+		)
+		_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+			QueueUrl:    aws.String(queueURL),
+			MessageBody: aws.String(testEventBody),
+		})
+		require.NoError(t, err)
+
+		yaml := fmt.Sprintf(`
+input:
+  aws_s3:
+    bucket: bucket-%s
+    endpoint: http://localhost:%s
+    force_path_style_urls: true
+    region: eu-west-1
+    delete_objects: true
+    sqs:
+      url: %s
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:%s
+      wait_time_seconds: 1
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`, id, lsPort, queueURL, lsPort)
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.SetYAML(yaml))
+
+		var (
+			unexpectedMu   sync.Mutex
+			unexpectedMsgs [][]byte
+		)
+		require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+			b, err := m.AsBytes()
+			if err != nil {
+				b = fmt.Appendf(nil, "<failed to read message bytes: %v>", err)
+			}
+			unexpectedMu.Lock()
+			unexpectedMsgs = append(unexpectedMsgs, b)
+			unexpectedMu.Unlock()
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+
+		runErr := make(chan error, 1)
+		runCtx, runCancel := context.WithCancel(ctx)
+		defer runCancel()
+		go func() { runErr <- stream.Run(runCtx) }()
+
+		// The test event should be deleted from the queue rather than left
+		// to be received again indefinitely.
+		assert.Eventually(t, func() bool {
+			out, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+				QueueUrl: aws.String(queueURL),
+				AttributeNames: []sqstypes.QueueAttributeName{
+					sqstypes.QueueAttributeNameApproximateNumberOfMessages,
+					sqstypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+				},
+			})
+			if err != nil {
+				return false
+			}
+			return out.Attributes[string(sqstypes.QueueAttributeNameApproximateNumberOfMessages)] == "0" &&
+				out.Attributes[string(sqstypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible)] == "0"
+		}, 15*time.Second, 500*time.Millisecond, "test event message should have been deleted from the queue")
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		select {
+		case err := <-runErr:
+			if err != nil && !errors.Is(err, context.Canceled) {
+				require.NoError(t, err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("stream did not exit after StopWithin returned")
+		}
+
+		unexpectedMu.Lock()
+		assert.Empty(t, unexpectedMsgs, "did not expect any message to be emitted for an s3:TestEvent")
+		unexpectedMu.Unlock()
+	})
+
+	t.Run("via_sqs_zero_key_non_test_event_warns", func(t *testing.T) {
+		// Valid JSON, not an s3:TestEvent, but missing the object key at the
+		// configured key_path - simulates a key_path/bucket_path
+		// misconfiguration (or an unrecognised event type) rather than a
+		// test event, which should be handled differently: warned about and
+		// left on the queue, not silently deleted.
+		cases := []struct {
+			name             string
+			warnIntervalYAML string
+			minWarnCount     int
+			expectExactlyOne bool
+		}{
+			{
+				name:             "default interval throttles to one warning",
+				expectExactlyOne: true,
+			},
+			{
+				name:             "zero interval disables throttling",
+				warnIntervalYAML: "      zero_key_warn_interval: 0s\n",
+				minWarnCount:     3,
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+				defer cancel()
+
+				id := fmt.Sprintf("zerokey%d", time.Now().UnixNano())
+				require.NoError(t, awstest.CreateBucketQueue(ctx, lsPort, lsPort, id))
+
+				sqsClient := newLocalStackSQSClient(t, lsPort)
+				queueURL := fmt.Sprintf("http://localhost:%s/000000000000/queue-%s", lsPort, id)
+
+				misconfiguredBody := fmt.Sprintf(
+					`{"Records":[{"eventName":"ObjectCreated:Put","s3":{"bucket":{"name":"bucket-%s"}}}]}`, id,
+				)
+				_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+					QueueUrl:    aws.String(queueURL),
+					MessageBody: aws.String(misconfiguredBody),
+				})
+				require.NoError(t, err)
+
+				yaml := fmt.Sprintf(`
+input:
+  aws_s3:
+    bucket: bucket-%s
+    endpoint: http://localhost:%s
+    force_path_style_urls: true
+    region: eu-west-1
+    delete_objects: true
+    sqs:
+      url: %s
+      key_path: Records.*.s3.object.key
+      endpoint: http://localhost:%s
+      wait_time_seconds: 1
+%s    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+`, id, lsPort, queueURL, lsPort, tc.warnIntervalYAML)
+
+				var logBuf syncBuffer
+				builder := service.NewStreamBuilder()
+				builder.SetLogger(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+				require.NoError(t, builder.SetYAML(yaml))
+				require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+					b, _ := m.AsBytes()
+					t.Errorf("did not expect any message to be emitted for a zero-key notification, got: %s", b)
+					return nil
+				}))
+
+				stream, err := builder.Build()
+				require.NoError(t, err)
+
+				runErr := make(chan error, 1)
+				runCtx, runCancel := context.WithCancel(ctx)
+				defer runCancel()
+				go func() { runErr <- stream.Run(runCtx) }()
+
+				// A non-test-event, zero-key message should be warned
+				// about, identifying the likely key_path misconfiguration,
+				// and - unlike an s3:TestEvent - left on the queue for
+				// redelivery rather than deleted.
+				const zeroKeyWarnMsg = "Extracted zero target keys from SQS message using key_path"
+
+				assert.Eventually(t, func() bool {
+					return strings.Contains(logBuf.String(), zeroKeyWarnMsg)
+				}, 15*time.Second, 500*time.Millisecond, "expected a WARN log identifying a key_path misconfiguration, got logs: %s", &logBuf)
+
+				if tc.expectExactlyOne {
+					// The message is redelivered roughly every 500ms (Pop's
+					// empty-read backoff) for as long as it stays
+					// misconfigured, so without throttling this would emit
+					// a fresh WARN with the full body on every cycle. Give
+					// it several more cycles and confirm the WARN stays at
+					// a single occurrence.
+					time.Sleep(3 * time.Second)
+					assert.Equal(t, 1, strings.Count(logBuf.String(), zeroKeyWarnMsg),
+						"expected the misconfiguration warning to be throttled to a single occurrence, got logs: %s", logBuf.String())
+				} else {
+					// zero_key_warn_interval: 0s disables the throttle, so
+					// the same ~500ms redelivery cycle should produce
+					// multiple WARNs instead of just one.
+					assert.Eventually(t, func() bool {
+						return strings.Count(logBuf.String(), zeroKeyWarnMsg) >= tc.minWarnCount
+					}, 15*time.Second, 500*time.Millisecond, "expected at least %d WARN logs with throttling disabled, got logs: %s", tc.minWarnCount, &logBuf)
+				}
+
+				out, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+					QueueUrl: aws.String(queueURL),
+					AttributeNames: []sqstypes.QueueAttributeName{
+						sqstypes.QueueAttributeNameApproximateNumberOfMessages,
+						sqstypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+					},
+				})
+				require.NoError(t, err)
+				visible := out.Attributes[string(sqstypes.QueueAttributeNameApproximateNumberOfMessages)]
+				notVisible := out.Attributes[string(sqstypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible)]
+				assert.False(t, visible == "0" && notVisible == "0", "misconfigured message should remain on the queue for redelivery, not be deleted")
+
+				require.NoError(t, stream.StopWithin(10*time.Second))
+				select {
+				case err := <-runErr:
+					if err != nil && !errors.Is(err, context.Canceled) {
+						require.NoError(t, err)
+					}
+				case <-time.After(10 * time.Second):
+					t.Fatal("stream did not exit after StopWithin returned")
+				}
+			})
+		}
 	})
 
 	t.Run("via_sqs_lines", func(t *testing.T) {
@@ -391,4 +629,35 @@ func newLocalStackS3Client(t *testing.T, port string) *s3.Client {
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
+}
+
+// newLocalStackSQSClient builds an SQS client pointed at the LocalStack
+// instance on the supplied port, with dummy credentials.
+func newLocalStackSQSClient(t *testing.T, port string) *sqs.Client {
+	t.Helper()
+	endpoint := fmt.Sprintf("http://localhost:%s", port)
+	cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
+		awsconfig.WithRegion("eu-west-1"),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+	)
+	require.NoError(t, err)
+	cfg.BaseEndpoint = &endpoint
+	return sqs.NewFromConfig(cfg)
+}
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

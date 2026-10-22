@@ -7,10 +7,10 @@ The image has a [default config][default.config] but it's not particularly usefu
 
 ```shell
 # Using a config file
-docker run --rm -v /path/to/your/config.yaml:/connect.yaml ghcr.io/redpanda-data/connect
+docker run --rm -v /path/to/your/config.yaml:/connect.yaml docker.redpanda.com/redpandadata/connect
 
 # Using a series of -s flags
-docker run --rm -p 4195:4195 ghcr.io/redpanda-data/connect \
+docker run --rm -p 4195:4195 docker.redpanda.com/redpandadata/connect \
   -s "input.type=http_server" \
   -s "output.type=kafka" \
   -s "output.kafka.addresses=kafka-server:9092" \

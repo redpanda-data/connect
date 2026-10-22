@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,11 @@
 package kafka_test
 
 import (
+	"context"
 	"io"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,22 +28,70 @@ import (
 	tcredpanda "github.com/testcontainers/testcontainers-go/modules/redpanda"
 )
 
-// startRedpanda starts a single-node Redpanda container via the testcontainers
-// redpanda module and returns the broker address (host:port) and just the port.
-func startRedpanda(t testing.TB) (brokerAddr, port string) {
+var (
+	sharedRedpandaOnce sync.Once
+	sharedRedpandaCtr  *tcredpanda.Container
+	sharedRedpandaErr  error
+	sharedBrokerAddr   string
+	sharedBrokerPort   string
+)
+
+// sharedRedpanda returns the broker address (host:port) and port of a single
+// package-wide, single-node Redpanda container, starting it on first use.
+//
+// Sharing one container across the many plain-broker integration tests — rather
+// than starting a fresh container per test — keeps the package comfortably
+// within its `go test -timeout` budget. The benthos stream-test harness derives
+// each test's context timeout from the time remaining until the *package*
+// deadline (stream_test_helpers.go: `time.Until(deadline) - 5s`), so a package
+// full of per-test container starts can starve tests that happen to run late
+// under `-shuffle=on`, producing the uniform ~4s "context deadline exceeded"
+// failures (CON-445) and, at the limit, package-level timeouts (CON-453).
+//
+// The container is terminated in TestMain once all tests finish. Tests that need
+// a differently-configured cluster — SASL (startRedpandaWithSASL), multi-broker
+// (startRedpandaCluster), or a source/destination pair (redpandatest) — still
+// start their own containers.
+//
+// Callers must use unique per-test topic and consumer-group names (the stream
+// harness already does, via its generated $ID); createKafkaTopic tolerates a
+// pre-existing topic so shared-cluster readiness probes remain safe.
+func sharedRedpanda(t testing.TB) (brokerAddr, port string) {
 	t.Helper()
 
-	ctr, err := tcredpanda.Run(t.Context(),
-		"docker.redpanda.com/redpandadata/redpanda:latest",
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	require.NoError(t, err)
+	sharedRedpandaOnce.Do(func() {
+		// context.Background(), not t.Context(): the container outlives the
+		// first test that happens to trigger startup.
+		ctx := context.Background()
+		ctr, err := tcredpanda.Run(ctx,
+			"docker.redpanda.com/redpandadata/redpanda:latest",
+		)
+		if err != nil {
+			sharedRedpandaErr = err
+			return
+		}
+		sharedRedpandaCtr = ctr
 
-	brokerAddr, err = ctr.KafkaSeedBroker(t.Context())
-	require.NoError(t, err)
+		addr, err := ctr.KafkaSeedBroker(ctx)
+		if err != nil {
+			sharedRedpandaErr = err
+			return
+		}
+		sharedBrokerAddr, sharedBrokerPort = brokerAddrPort(addr)
+	})
+	require.NoError(t, sharedRedpandaErr)
 
-	brokerAddr, port = brokerAddrPort(brokerAddr)
-	return brokerAddr, port
+	return sharedBrokerAddr, sharedBrokerPort
+}
+
+// TestMain terminates the shared Redpanda container (if one was started) after
+// the package's tests complete.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if sharedRedpandaCtr != nil {
+		_ = sharedRedpandaCtr.Terminate(context.Background())
+	}
+	os.Exit(code)
 }
 
 // startRedpandaWithSASL starts a single-node Redpanda container with SASL

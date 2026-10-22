@@ -15,12 +15,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/snowflakedb/gosnowflake/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,13 +36,15 @@ const (
 type MockDB struct {
 	Queries      []string
 	QueriesCount int
+	// ExecErr, when set, is returned from every ExecContext call.
+	ExecErr error
 }
 
 func (db *MockDB) ExecContext(_ context.Context, query string, _ ...any) (sql.Result, error) {
 	db.Queries = append(db.Queries, query)
 	db.QueriesCount++
 
-	return nil, nil
+	return nil, db.ExecErr
 }
 
 func (*MockDB) Close() error { return nil }
@@ -108,6 +112,7 @@ func TestSnowflakeOutput(t *testing.T) {
 		compression               string
 		snowflakeHTTPResponseCode int
 		snowflakeResponseCode     string
+		dbExecErr                 error
 		wantPUTQuery              string
 		wantPUTQueriesCount       int
 		wantSnowpipeQuery         string
@@ -258,6 +263,17 @@ snowpipe: '` + tc.snowpipe + `'
 			errContains:               "received unexpected Snowpipe response status: 418",
 		},
 		{
+			name:           "returns the PUT error so the batch is not acknowledged",
+			privateKeyPath: "resources/ssh_keys/snowflake_rsa_key.pem",
+			stage:          "@test_stage",
+			compression:    "NONE",
+			dbExecErr: &gosnowflake.SnowflakeError{
+				Number:  gosnowflake.ErrFailedToUploadToStage,
+				Message: "open /tmp/data.json: permission denied",
+			},
+			errContains: "running query: 264003: open /tmp/data.json: permission denied",
+		},
+		{
 			name:                "handles stage interpolation and runs a query for each sub-batch",
 			privateKeyPath:      "resources/ssh_keys/snowflake_rsa_key.pem",
 			stage:               `@test_stage_${! json("id") }`,
@@ -324,7 +340,7 @@ snowpipe: '` + tc.snowpipe + `'
 			}
 			s.httpClient = &mockHTTPClient
 
-			mockDB := MockDB{}
+			mockDB := MockDB{ExecErr: test.dbExecErr}
 			s.db = &mockDB
 
 			s.nowFn = func() time.Time { return time.Time{} }
@@ -362,4 +378,16 @@ snowpipe: '` + tc.snowpipe + `'
 			}
 		})
 	}
+}
+
+// TestGosnowflakeHasNoRaisePutGetErrorOptIn guards the assumption behind the
+// PUT call in WriteBatch: gosnowflake v2 removed RaisePutGetError and always
+// raises PUT/GET failures from ExecContext. If a future driver version
+// reintroduces an opt-in for surfacing upload errors, this test fails and the
+// option must be set again, otherwise a failed PUT would be acknowledged
+// silently (gosnowflake#701).
+func TestGosnowflakeHasNoRaisePutGetErrorOptIn(t *testing.T) {
+	typ := reflect.TypeFor[gosnowflake.SnowflakeFileTransferOptions]()
+	_, found := typ.FieldByName("RaisePutGetError")
+	assert.False(t, found, "gosnowflake reintroduced RaisePutGetError; set it to true in WriteBatch")
 }

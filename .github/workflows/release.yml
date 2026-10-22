@@ -7,9 +7,15 @@ on:
   schedule:
     - cron: '0 2 * * *' # run at 2 AM UTC
   workflow_dispatch:
+    inputs:
+      docs_tag:
+        description: 'Regenerate and attach the reference docs asset for this existing release tag (for example v4.113.0), and skip the snapshot build'
+        required: false
+        default: ''
 
 jobs:
   goreleaser:
+    if: github.event_name != 'workflow_dispatch' || inputs.docs_tag == ''
     runs-on: ubuntu-latest-32
     permissions:
       id-token: write
@@ -32,7 +38,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Configure AWS credentials for access to AWS Secrets Manager
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
@@ -41,13 +47,12 @@ jobs:
         uses: aws-actions/aws-secretsmanager-get-secrets@v3
         with:
           secret-ids: |
-            ,sdlc/prod/github/cloudsmith
             ,sdlc/prod/github/dockerhub
             ,sdlc/prod/github/rpm_signing_key
           parse-json-secrets: true
 
       - name: Configure AWS credentials for access to Amazon ECR Public
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
@@ -78,10 +83,6 @@ jobs:
       - name: Release Notes
         run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
       - name: Authenticate to GCP
         if: ${{ github.event_name == 'push' }}
         uses: google-github-actions/auth@v3
@@ -96,9 +97,6 @@ jobs:
       - name: Exclude GCP credentials from git state
         if: ${{ github.event_name == 'push' }}
         run: echo 'gha-creds-*.json' >> .git/info/exclude
-
-      - name: Install cloudsmith CLI (for publishing Linux packages)
-        run: pip install cloudsmith-cli
 
       - name: Login to Docker Hub
         uses: docker/login-action@v4
@@ -136,7 +134,6 @@ jobs:
           args: release --release-notes=./release_notes.md --timeout 120m --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
       - name: Upload rpk connect plugin to S3
         if: ${{ github.event_name == 'push' && (matrix.variant == 'connect' || matrix.variant == 'connect-fips') }}
@@ -165,7 +162,6 @@ jobs:
           args: release --timeout 120m --snapshot --skip archive,nfpm --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
       - name: GoReleaser Edge push docker
         if: ${{ github.event_name == 'schedule' && (matrix.variant == 'connect' || matrix.variant == 'connect-ai' || matrix.variant == 'connect-cloud') }}
@@ -189,6 +185,101 @@ jobs:
           format: table
           ignore-unfixed: true
           exit-code: 1
+
+  # Attaches the generated reference docs to the release. On a tag push it runs
+  # after goreleaser publishes the release. To regenerate the asset for an
+  # existing release, run this workflow with the docs_tag input.
+  docs-generate:
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    if: >-
+      !cancelled() && (
+        (github.event_name == 'push' && needs.goreleaser.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.docs_tag != '')
+      )
+    permissions:
+      contents: read
+    env:
+      DOCS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.DOCS_TAG }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+      - name: Generate the reference docs
+        run: CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen
+      # Releases from before the generator wrote partials produce full pages
+      # instead. Their asset must stay missing, so the docs build falls back
+      # to a release that has real partials.
+      - name: Check the layout of the generated docs
+        run: |
+          set -euo pipefail
+          c=docs/modules/components
+          if [ -d "$c/pages" ]; then
+            echo "::error::$DOCS_TAG predates the generated partials (docs_gen wrote $c/pages), so it gets no docs asset."
+            exit 1
+          fi
+          for d in partials/fields partials/descriptions partials/availability examples/common examples/advanced; do
+            if [ -z "$(find "$c/$d" -type f -name '*.*' 2>/dev/null | head -1)" ]; then
+              echo "::error::The generated docs have no files in $c/$d."
+              exit 1
+            fi
+          done
+      - name: Upload the generated docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect-docs-release
+          path: docs/modules
+          retention-days: 30
+
+  # The docs site publishes the asset of the latest release, so a release
+  # whose generated docs break the docs build must not get one: the site
+  # then keeps the previous release's asset. Rerun this job, or the release
+  # workflow with docs_tag, after fixing the docs.
+  docs-check:
+    needs: docs-generate
+    if: ${{ !cancelled() && needs.docs-generate.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
+      pull-requests: write
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/connect-docs-check.yml@6e379ad378f61c710f9c29bde8eaf15054f78135 # main after #383
+    with:
+      docs_artifact: connect-docs-release
+      aws_region: ${{ vars.RP_AWS_CRED_REGION }}
+      aws_role_name_prefix: ${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}
+    secrets:
+      aws_cred_account_id: ${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}
+
+  docs-asset:
+    runs-on: ubuntu-latest
+    needs: [docs-generate, docs-check]
+    if: ${{ !cancelled() && needs.docs-check.result == 'success' }}
+    permissions:
+      contents: write
+    env:
+      DOCS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_tag || github.ref_name }}
+    steps:
+      - name: Download the generated docs
+        uses: actions/download-artifact@v4
+        with:
+          name: connect-docs-release
+          path: modules
+      # The docs site reads the reference partials and examples from this
+      # asset, so it always matches a released version. See docs/README.md.
+      - name: Attach the reference docs to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tar -czf redpanda-connect-docs.tar.gz modules
+          gh release upload "${DOCS_TAG}" redpanda-connect-docs.tar.gz --clobber
 
   update-bundles:
     runs-on: ubuntu-latest
@@ -226,16 +317,26 @@ jobs:
           git checkout -B "${BRANCH}"
           git add -A
           git commit -m "chore: update bundle dependencies for ${{ github.ref_name }}"
+
+          # On a re-run the branch already exists; fetch it so --force-with-lease
+          # has a tracking ref to compare against.
+          git fetch --depth=1 origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" || true
           git push --force-with-lease origin "HEAD:refs/heads/${BRANCH}"
 
-          PR_URL=$(gh pr create \
-            --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
-            --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
-
-          gh pr merge --auto --rebase "${PR_URL}"
+          PR_URL=$(gh pr list --head "${BRANCH}" --state open --json url --jq '.[0].url // empty')
+          if [ -z "${PR_URL}" ]; then
+            PR_URL=$(gh pr create \
+              --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
+              --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
+          fi
 
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":package: Update Bundles PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+
+          if ! gh pr merge --auto --rebase "${PR_URL}"; then
+            echo "::warning::Auto-merge unavailable; merge ${PR_URL} manually"
+            echo ":warning: Auto-merge could not be enabled; merge [${PR_URL##*/}](${PR_URL}) manually." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   update-downstream:
     runs-on: ubuntu-latest
@@ -246,8 +347,9 @@ jobs:
       contents: read
     outputs:
       helm_pr_url: ${{ steps.helm.outputs.url }}
+      operator_pr_url: ${{ steps.operator.outputs.url }}
     steps:
-      - uses: aws-actions/configure-aws-credentials@v6
+      - uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
@@ -315,10 +417,80 @@ jobs:
 
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":helm: Update Helm Chart PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+      - name: Update operator default image and create PR
+        id: operator
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BRANCH="auto/bump-connect"
+
+          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/redpanda-data/redpanda-operator.git" redpanda-operator
+          cd redpanda-operator
+
+          CONST="operator/api/redpanda/v1alpha2/pipeline_types.go"
+          CURRENT=$(sed -nE 's|.*PipelineDefaultImage *= *".*connect:([0-9]+\.[0-9]+\.[0-9]+)".*|\1|p' "$CONST")
+          if [ -z "$CURRENT" ]; then
+            echo "::error::PipelineDefaultImage not found in $CONST"
+            exit 1
+          fi
+          # A patch release on an older line must not downgrade the default.
+          if [ "$(printf '%s\n' "$CURRENT" "$VERSION" | sort -V | tail -n1)" = "$CURRENT" ]; then
+            echo "Operator default Connect image is already $CURRENT, skipping"
+            exit 0
+          fi
+
+          sed -Ei "s|connect:[0-9]+\.[0-9]+\.[0-9]+|connect:${VERSION}|g" \
+            "$CONST" \
+            operator/chart/values.yaml \
+            operator/internal/controller/pipeline/README.md \
+            operator/internal/controller/pipeline/testdata/controller-tests.golden.txtar
+          sed -Ei "/redpandadata\/connect\$/,/tag:/ s|tag: \"[0-9]+\.[0-9]+\.[0-9]+\"|tag: \"${VERSION}\"|" \
+            operator/chart/values.yaml
+
+          # Reuse a bump entry that hasn't shipped in an operator release yet,
+          # so consecutive bumps produce one changelog line.
+          ENTRY=$(grep -lF 'Bumped the default Redpanda Connect image' .changes/unreleased/operator-*.yaml 2>/dev/null | head -n1 || true)
+          if [ -n "$ENTRY" ]; then
+            sed -Ei "s|resources to [0-9]+\.[0-9]+\.[0-9]+|resources to ${VERSION}|" "$ENTRY"
+          else
+            printf 'project: operator\nkind: Changed\nbody: Bumped the default Redpanda Connect image for `Pipeline` resources to %s.\ntime: %s\n' \
+              "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              > ".changes/unreleased/operator-Changed-$(date -u +%Y%m%d-%H%M%S).yaml"
+          fi
+
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -A
+          git commit -m "operator: bump default Connect image to $VERSION"
+          git push -f origin "$BRANCH"
+
+          TITLE="operator: bump default Connect image to $VERSION"
+          BODY=$(printf 'Automated bump of `PipelineDefaultImage` (the default Redpanda Connect image for `Pipeline` resources) from `connect:%s` to `connect:%s`.\n' \
+            "$CURRENT" "$VERSION")
+
+          EXISTING_PR=$(gh pr list --repo redpanda-data/redpanda-operator --head "$BRANCH" --json number,url -q '.[0]')
+          if [ -n "$EXISTING_PR" ]; then
+            PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
+            PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
+            gh pr edit "$PR_NUMBER" --repo redpanda-data/redpanda-operator \
+              --title "$TITLE" \
+              --body "$BODY"
+          else
+            PR_URL=$(gh pr create --repo redpanda-data/redpanda-operator \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --base main \
+              --head "$BRANCH")
+          fi
+
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          echo ":gear: Update Operator PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, update-bundles, update-downstream]
+    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream]
     # always() is required because update-bundles/update-downstream may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
@@ -331,7 +503,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
           HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
+          OPERATOR_PR: ${{ needs.update-downstream.outputs.operator_pr_url }}
           GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          DOCS_GENERATE_RESULT: ${{ needs.docs-generate.result }}
+          DOCS_CHECK_RESULT: ${{ needs.docs-check.result }}
+          DOCS_ASSET_RESULT: ${{ needs.docs-asset.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
         run: |
@@ -344,8 +520,17 @@ jobs:
           if [ -n "$HELM_PR" ]; then
             LINKS="${LINKS}:helm: <${HELM_PR}|Helm Chart PR>  "
           fi
+          if [ -n "$OPERATOR_PR" ]; then
+            LINKS="${LINKS}:gear: <${OPERATOR_PR}|Operator PR>  "
+          fi
           if [ "$GORELEASER_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: goreleaser failed  "
+          fi
+          if [ "$DOCS_GENERATE_RESULT" = "failure" ] || [ "$DOCS_ASSET_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: docs-asset failed (rerun it, or run the release workflow with docs_tag)  "
+          fi
+          if [ "$DOCS_CHECK_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: docs-check failed, so this release has no docs asset and the docs site keeps the previous one (fix the docs, then run the release workflow with docs_tag)  "
           fi
           if [ "$BUNDLES_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-bundles failed  "
@@ -375,6 +560,9 @@ jobs:
           VERSION="${{ github.ref_name }}"
           COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
           STATUS="${FAILURES}${LINKS}"
+          # Slack rejects section blocks whose text exceeds 3000 chars, so the
+          # release body is split across multiple section blocks. Empty
+          # sections are dropped (Slack rejects those too).
           jq -n \
             --arg body "$BODY" \
             --arg release_url "$RELEASE_URL" \
@@ -382,21 +570,35 @@ jobs:
             --arg compare_url "$COMPARE_URL" \
             --arg header_icon "$HEADER_ICON" \
             --arg status "$STATUS" \
-            '{
+            'def chunk_lines(limit):
+              split("\n") | reduce .[] as $line ([];
+                if length > 0 and ((.[-1] + "\n" + $line) | length) <= limit
+                then .[0:-1] + [.[-1] + "\n" + $line]
+                else . + [$line]
+                end)
+              # a single line longer than limit lands above as an oversized
+              # chunk; hard-split those so every emitted chunk is bounded
+              | map(. as $chunk | ($chunk | length) as $len |
+                  if $len <= limit then [$chunk]
+                  else [range(0; $len; limit) as $i | $chunk[$i:$i+limit]]
+                  end)
+              | add // [];
+            {
               text: ("New Redpanda Connect release: " + $version),
               unfurl_links: false,
               unfurl_media: false,
-              blocks: [
+              blocks: ([
                 {type: "header", text: {type: "plain_text", text: ($header_icon + " Redpanda Connect " + $version), emoji: true}},
                 {type: "section", text: {type: "mrkdwn", text: ("*Release:* <" + $release_url + "|" + $version + ">")}},
-                {type: "divider"},
-                {type: "section", text: {type: "mrkdwn", text: $body}},
-                {type: "section", text: {type: "mrkdwn", text: $status}},
-                {type: "actions", elements: [
+                {type: "divider"}
+              ]
+              + ($body | chunk_lines(3000) | map(select(length > 0) | {type: "section", text: {type: "mrkdwn", text: .}}))
+              + (if $status == "" then [] else [{type: "section", text: {type: "mrkdwn", text: $status}}] end)
+              + [{type: "actions", elements: [
                   {type: "button", text: {type: "plain_text", text: ":github: View Release", emoji: true}, url: $release_url},
                   {type: "button", text: {type: "plain_text", text: ":page_facing_up: Full Changelog", emoji: true}, url: $compare_url}
-                ]}
-              ]
+                ]}]
+              )
             }' > "$RUNNER_TEMP/slack_payload.json"
 
       - name: Post changelog to Slack
@@ -405,3 +607,6 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload-file-path: ${{ runner.temp }}/slack_payload.json
+          # Fail the job when the webhook post fails; the default silently
+          # swallows errors and reports success.
+          errors: true

@@ -1,0 +1,998 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package kinesis
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+type mockConsumerAPI struct {
+	describe func(ctx context.Context, in *kinesis.DescribeStreamConsumerInput, opts ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error)
+	register func(ctx context.Context, in *kinesis.RegisterStreamConsumerInput, opts ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error)
+}
+
+func (m *mockConsumerAPI) DescribeStreamConsumer(ctx context.Context, in *kinesis.DescribeStreamConsumerInput, opts ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+	return m.describe(ctx, in, opts...)
+}
+
+func (m *mockConsumerAPI) RegisterStreamConsumer(ctx context.Context, in *kinesis.RegisterStreamConsumerInput, opts ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error) {
+	return m.register(ctx, in, opts...)
+}
+
+func fastEFOWaits(t *testing.T) {
+	t.Helper()
+	oldInterval := efoConsumerPollInterval
+	efoConsumerPollInterval = time.Millisecond
+	t.Cleanup(func() {
+		efoConsumerPollInterval = oldInterval
+	})
+}
+
+func TestEnsureEFOConsumerExistingActive(t *testing.T) {
+	fastEFOWaits(t)
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, in *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			assert.Equal(t, "my-app", *in.ConsumerName)
+			assert.Equal(t, "stream-arn", *in.StreamARN)
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    aws.String("consumer-arn"),
+					ConsumerStatus: types.ConsumerStatusActive,
+				},
+			}, nil
+		},
+		register: func(_ context.Context, _ *kinesis.RegisterStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error) {
+			t.Fatal("register must not be called for an existing consumer")
+			return nil, nil
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "consumer-arn", arn)
+}
+
+func TestEnsureEFOConsumerRegistersMissing(t *testing.T) {
+	fastEFOWaits(t)
+	registered := false
+	describes := 0
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			describes++
+			if !registered || describes < 3 {
+				return nil, &types.ResourceNotFoundException{}
+			}
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    aws.String("new-arn"),
+					ConsumerStatus: types.ConsumerStatusActive,
+				},
+			}, nil
+		},
+		register: func(_ context.Context, in *kinesis.RegisterStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error) {
+			assert.Equal(t, "my-app", *in.ConsumerName)
+			registered = true
+			return &kinesis.RegisterStreamConsumerOutput{Consumer: &types.Consumer{
+				ConsumerARN:    aws.String("new-arn"),
+				ConsumerStatus: types.ConsumerStatusCreating,
+			}}, nil
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "new-arn", arn)
+	assert.True(t, registered)
+}
+
+func TestEnsureEFOConsumerWaitsForCreating(t *testing.T) {
+	fastEFOWaits(t)
+	describes := 0
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			describes++
+			status := types.ConsumerStatusCreating
+			if describes >= 3 {
+				status = types.ConsumerStatusActive
+			}
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    aws.String("consumer-arn"),
+					ConsumerStatus: status,
+				},
+			}, nil
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "consumer-arn", arn)
+	assert.GreaterOrEqual(t, describes, 3)
+}
+
+func TestEnsureEFOConsumerPermissionError(t *testing.T) {
+	fastEFOWaits(t)
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			return nil, errors.New("AccessDeniedException")
+		},
+	}
+
+	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kinesis:DescribeStreamConsumer")
+}
+
+func TestEnsureEFOConsumerConcurrentRegistration(t *testing.T) {
+	fastEFOWaits(t)
+	describes := 0
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			describes++
+			if describes == 1 {
+				return nil, &types.ResourceNotFoundException{}
+			}
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    aws.String("consumer-arn"),
+					ConsumerStatus: types.ConsumerStatusActive,
+				},
+			}, nil
+		},
+		register: func(_ context.Context, _ *kinesis.RegisterStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error) {
+			// Another instance won the race.
+			return nil, &types.ResourceInUseException{}
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "consumer-arn", arn)
+}
+
+// Describe (20 TPS per stream) and Register (5 TPS) throttling must be retried
+// within the activation window rather than failing Connect with an IAM hint
+// pointing the wrong way.
+func TestEnsureEFOConsumerToleratesThrottling(t *testing.T) {
+	fastEFOWaits(t)
+	describes, registers := 0, 0
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			describes++
+			switch {
+			case describes == 1:
+				return nil, &types.LimitExceededException{}
+			case registers < 2:
+				return nil, &types.ResourceNotFoundException{}
+			default:
+				return &kinesis.DescribeStreamConsumerOutput{
+					ConsumerDescription: &types.ConsumerDescription{
+						ConsumerARN:    aws.String("consumer-arn"),
+						ConsumerStatus: types.ConsumerStatusActive,
+					},
+				}, nil
+			}
+		},
+		register: func(_ context.Context, _ *kinesis.RegisterStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.RegisterStreamConsumerOutput, error) {
+			registers++
+			if registers == 1 {
+				return nil, &types.LimitExceededException{}
+			}
+			return &kinesis.RegisterStreamConsumerOutput{Consumer: &types.Consumer{
+				ConsumerARN:    aws.String("consumer-arn"),
+				ConsumerStatus: types.ConsumerStatusCreating,
+			}}, nil
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "consumer-arn", arn)
+	assert.Equal(t, 2, registers, "throttled registration must be retried")
+}
+
+func TestEnsureEFOConsumerDeletingFails(t *testing.T) {
+	fastEFOWaits(t)
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    aws.String("consumer-arn"),
+					ConsumerStatus: types.ConsumerStatusDeleting,
+				},
+			}, nil
+		},
+	}
+
+	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deleted")
+}
+
+func TestEnsureEFOConsumerNilDescription(t *testing.T) {
+	fastEFOWaits(t)
+	attempts := 0
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			attempts++
+			if attempts < 2 {
+				// First attempt: nil ConsumerDescription despite nil error (quirky API response)
+				return &kinesis.DescribeStreamConsumerOutput{
+					ConsumerDescription: nil,
+				}, nil
+			}
+			// Subsequent attempts: normal response with ACTIVE consumer
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    aws.String("consumer-arn"),
+					ConsumerStatus: types.ConsumerStatusActive,
+				},
+			}, nil
+		},
+	}
+
+	arn, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	assert.Equal(t, "consumer-arn", arn)
+	assert.GreaterOrEqual(t, attempts, 2)
+}
+
+func TestEnsureEFOConsumerActiveWithNilARN(t *testing.T) {
+	fastEFOWaits(t)
+	api := &mockConsumerAPI{
+		describe: func(_ context.Context, _ *kinesis.DescribeStreamConsumerInput, _ ...func(*kinesis.Options)) (*kinesis.DescribeStreamConsumerOutput, error) {
+			return &kinesis.DescribeStreamConsumerOutput{
+				ConsumerDescription: &types.ConsumerDescription{
+					ConsumerARN:    nil, // quirky API response: ACTIVE but no ARN
+					ConsumerStatus: types.ConsumerStatusActive,
+				},
+			}, nil
+		},
+	}
+
+	_, err := ensureEFOConsumer(t.Context(), api, "stream-arn", "my-app", time.Second, service.MockResources().Logger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil ARN")
+}
+
+type fakeSubscription struct {
+	events chan types.SubscribeToShardEventStream
+	err    error
+	closed chan struct{}
+}
+
+func newFakeSubscription() *fakeSubscription {
+	return &fakeSubscription{
+		events: make(chan types.SubscribeToShardEventStream, 16),
+		closed: make(chan struct{}),
+	}
+}
+
+func (f *fakeSubscription) Events() <-chan types.SubscribeToShardEventStream { return f.events }
+
+func (f *fakeSubscription) Close() error {
+	select {
+	case <-f.closed:
+	default:
+		close(f.closed)
+	}
+	return nil
+}
+
+func (f *fakeSubscription) Err() error { return f.err }
+
+func (f *fakeSubscription) send(continuation string, recs ...types.Record) {
+	f.events <- &types.SubscribeToShardEventStreamMemberSubscribeToShardEvent{
+		Value: types.SubscribeToShardEvent{
+			ContinuationSequenceNumber: aws.String(continuation),
+			MillisBehindLatest:         aws.Int64(0),
+			Records:                    recs,
+		},
+	}
+}
+
+// sendFinal emits the closed-shard terminator (nil continuation).
+func (f *fakeSubscription) sendFinal(recs ...types.Record) {
+	f.events <- &types.SubscribeToShardEventStreamMemberSubscribeToShardEvent{
+		Value: types.SubscribeToShardEvent{
+			MillisBehindLatest: aws.Int64(0),
+			Records:            recs,
+		},
+	}
+}
+
+func rec(seq string) types.Record {
+	return types.Record{SequenceNumber: aws.String(seq), Data: []byte(seq)}
+}
+
+type capturedLogEntry struct {
+	level slog.Level
+	msg   string
+}
+
+type capturingLogHandler struct {
+	mu      sync.Mutex
+	entries []capturedLogEntry
+}
+
+func (*capturingLogHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *capturingLogHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.entries = append(h.entries, capturedLogEntry{level: r.Level, msg: r.Message})
+	return nil
+}
+
+func (h *capturingLogHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *capturingLogHandler) WithGroup(string) slog.Handler      { return h }
+
+func (h *capturingLogHandler) messagesAtLeast(level slog.Level) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []string
+	for _, e := range h.entries {
+		if e.level >= level {
+			out = append(out, e.msg)
+		}
+	}
+	return out
+}
+
+// The losing side of a shard steal sees its live subscription terminated with
+// ResourceInUseException and its resubscribe attempts rejected with the same
+// error until the handoff completes. That contention is documented as expected
+// and self-healing, so it must not be logged at error level.
+func TestEFOSourceHandoffContentionLogsBelowError(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	handler := &capturingLogHandler{}
+	logger := service.NewLoggerFromSlog(slog.New(handler))
+
+	inUse := &types.ResourceInUseException{Message: aws.String("subscription already active")}
+
+	terminated := newFakeSubscription()
+	terminated.err = inUse
+	close(terminated.events)
+
+	good := newFakeSubscription()
+	resubscribed := make(chan struct{})
+	var calls atomic.Int32
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		switch calls.Add(1) {
+		case 1:
+			return terminated, nil
+		case 2:
+			return nil, inUse
+		case 3:
+			close(resubscribed)
+			fallthrough
+		default:
+			return good, nil
+		}
+	}, "shard-0", "", true, 20*time.Millisecond, time.Second, logger)
+	require.NoError(t, err)
+	defer src.Close()
+
+	select {
+	case <-resubscribed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("source never resubscribed past the contention")
+	}
+
+	assert.Empty(t, handler.messagesAtLeast(slog.LevelError), "shard-handoff contention should not be logged at error level")
+}
+
+func TestEFOSourceGenuineSubscribeFailureLogsError(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	handler := &capturingLogHandler{}
+	logger := service.NewLoggerFromSlog(slog.New(handler))
+
+	// First subscription ends immediately without an error or events so that
+	// the loop resubscribes; the retry then fails with a non-contention error.
+	dead := newFakeSubscription()
+	close(dead.events)
+
+	good := newFakeSubscription()
+	recovered := make(chan struct{})
+	var calls atomic.Int32
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		switch calls.Add(1) {
+		case 1:
+			return dead, nil
+		case 2:
+			return nil, errors.New("AccessDeniedException: not authorised")
+		case 3:
+			close(recovered)
+			fallthrough
+		default:
+			return good, nil
+		}
+	}, "shard-0", "", true, 20*time.Millisecond, time.Second, logger)
+	require.NoError(t, err)
+	defer src.Close()
+
+	select {
+	case <-recovered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("source never recovered past the failed subscribe")
+	}
+
+	assert.NotEmpty(t, handler.messagesAtLeast(slog.LevelError), "a non-contention subscribe failure should be logged at error level")
+}
+
+// fastEFOResubscribe shrinks the resubscribe floor (and therefore the
+// backoff's initial interval) so tests that exercise resubscription don't
+// have to wait out the real one-second-per-shard-per-consumer API limit.
+func fastEFOResubscribe(t *testing.T) {
+	t.Helper()
+	old := efoResubscribeFloor
+	efoResubscribeFloor = time.Millisecond
+	t.Cleanup(func() {
+		efoResubscribeFloor = old
+	})
+}
+
+func TestEFOSourceForwardsRecords(t *testing.T) {
+	sub := newFakeSubscription()
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		assert.Equal(t, types.ShardIteratorTypeTrimHorizon, pos.Type)
+		return sub, nil
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	sub.send("c1", rec("1"), rec("2"))
+
+	recs, done, err := src.Fetch(t.Context())
+	require.NoError(t, err)
+	assert.False(t, done)
+	require.Len(t, recs, 2)
+	assert.True(t, src.WaitsForData())
+}
+
+func TestEFOSourceFetchTimesOutEmpty(t *testing.T) {
+	sub := newFakeSubscription()
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		return sub, nil
+	}, "shard-0", "", true, 20*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	recs, done, err := src.Fetch(t.Context())
+	require.NoError(t, err)
+	assert.False(t, done)
+	assert.Empty(t, recs)
+}
+
+func TestEFOSourceResubscribesAtContinuation(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	subs := make(chan *fakeSubscription, 2)
+	first, second := newFakeSubscription(), newFakeSubscription()
+	subs <- first
+	subs <- second
+
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		positions = append(positions, pos)
+		mu.Unlock()
+		return <-subs, nil
+	}, "shard-0", "start-seq", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	first.send("cont-1", rec("1"))
+	close(first.events) // AWS ends the ~5 minute subscription
+
+	second.send("cont-2", rec("2"))
+
+	var got []string
+	for len(got) < 2 {
+		recs, done, err := src.Fetch(t.Context())
+		require.NoError(t, err)
+		require.False(t, done)
+		for _, r := range recs {
+			got = append(got, *r.SequenceNumber)
+		}
+	}
+	assert.Equal(t, []string{"1", "2"}, got)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, positions, 2)
+	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[0].Type)
+	assert.Equal(t, "start-seq", *positions[0].SequenceNumber)
+	assert.Equal(t, types.ShardIteratorTypeAtSequenceNumber, positions[1].Type)
+	assert.Equal(t, "cont-1", *positions[1].SequenceNumber)
+}
+
+func TestEFOSourceStreamErrorResubscribes(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	subs := make(chan *fakeSubscription, 2)
+	first, second := newFakeSubscription(), newFakeSubscription()
+	first.err = errors.New("stream error")
+	subs <- first
+	subs <- second
+
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		positions = append(positions, pos)
+		mu.Unlock()
+		return <-subs, nil
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	first.send("cont-1", rec("1"))
+	close(first.events) // stream ends with a non-nil Err()
+
+	second.send("cont-2", rec("2"))
+
+	var got []string
+	for len(got) < 2 {
+		recs, done, err := src.Fetch(t.Context())
+		require.NoError(t, err)
+		require.False(t, done)
+		for _, r := range recs {
+			got = append(got, *r.SequenceNumber)
+		}
+	}
+	assert.Equal(t, []string{"1", "2"}, got)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, positions, 2)
+	assert.Equal(t, types.ShardIteratorTypeAtSequenceNumber, positions[1].Type)
+	assert.Equal(t, "cont-1", *positions[1].SequenceNumber)
+}
+
+func TestEFOSourceAnchorsTimestampWhenNotOldest(t *testing.T) {
+	sub := newFakeSubscription()
+	before := time.Now()
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		assert.Equal(t, types.ShardIteratorTypeAtTimestamp, pos.Type)
+		if assert.NotNil(t, pos.Timestamp) {
+			assert.False(t, pos.Timestamp.Before(before))
+		}
+		return sub, nil
+	}, "shard-0", "", false, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+}
+
+func TestEFOSourceShardClosed(t *testing.T) {
+	sub := newFakeSubscription()
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		return sub, nil
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	sub.sendFinal(rec("1"))
+
+	recs, done, err := src.Fetch(t.Context())
+	require.NoError(t, err)
+	assert.False(t, done)
+	require.Len(t, recs, 1)
+
+	// The next fetch reports the closed shard.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		recs, done, err = src.Fetch(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, recs)
+		if done || time.Now().After(deadline) {
+			break
+		}
+	}
+	assert.True(t, done)
+}
+
+func TestEFOSourceInitialSubscribeErrorFailsFast(t *testing.T) {
+	_, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		return nil, errors.New("AccessDeniedException")
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.Error(t, err)
+}
+
+func TestEFOSourceInitialSubscribeNonResourceInUseFailsFastWithOneCall(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	calls := 0
+	_, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		calls++
+		return nil, errors.New("AccessDenied")
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.Error(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+// The stale-sequence fallback must respect the one-call-per-second
+// SubscribeToShard floor enforced everywhere else: the follow-up subscribe
+// after an InvalidArgumentException rejection belongs to the pump, spaced by
+// the floor, not fired immediately by the constructor.
+func TestEFOSourceStaleSequenceFallbackRespectsResubscribeFloor(t *testing.T) {
+	old := efoResubscribeFloor
+	efoResubscribeFloor = 60 * time.Millisecond
+	t.Cleanup(func() { efoResubscribeFloor = old })
+
+	sub := newFakeSubscription()
+	var mu sync.Mutex
+	var callTimes []time.Time
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		callTimes = append(callTimes, time.Now())
+		n := len(callTimes)
+		mu.Unlock()
+		if n == 1 {
+			return nil, &types.InvalidArgumentException{}
+		}
+		return sub, nil
+	}, "shard-0", "stale-seq", true, 20*time.Millisecond, time.Second, service.MockResources().Logger())
+	require.NoError(t, err, "a stale sequence must not fail the shard claim")
+	defer src.Close()
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(callTimes) >= 2
+	}, 5*time.Second, time.Millisecond, "fallback subscribe never happened")
+
+	mu.Lock()
+	gap := callTimes[1].Sub(callTimes[0])
+	mu.Unlock()
+	assert.GreaterOrEqual(t, gap, 50*time.Millisecond, "fallback subscribe must wait out the resubscribe floor")
+}
+
+// A half-open subscription (socket up, no events flowing) must be detected
+// and abandoned: Kinesis heartbeats every live subscription with an event
+// every few seconds even on an idle shard, so a prolonged silence means the
+// subscription is dead. Without a deadline the pump would block on the event
+// channel forever while the consumer loop keeps renewing the shard lease,
+// stalling the shard silently.
+func TestEFOSourceIdleSubscriptionResubscribes(t *testing.T) {
+	fastEFOResubscribe(t)
+	oldIdle := efoIdleSubscriptionTimeout
+	efoIdleSubscriptionTimeout = 30 * time.Millisecond
+	t.Cleanup(func() { efoIdleSubscriptionTimeout = oldIdle })
+
+	halfOpen := newFakeSubscription() // one heartbeat, then silence, never closed
+	second := newFakeSubscription()
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		positions = append(positions, pos)
+		if len(positions) == 1 {
+			return halfOpen, nil
+		}
+		return second, nil
+	}, "shard-0", "", true, 20*time.Millisecond, time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	halfOpen.send("cont-1") // heartbeat event with no records
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(positions) >= 2
+	}, 5*time.Second, time.Millisecond, "half-open subscription was never abandoned")
+
+	mu.Lock()
+	secondPos := positions[1]
+	mu.Unlock()
+	require.Equal(t, types.ShardIteratorTypeAtSequenceNumber, secondPos.Type, "resubscribe must resume at the last continuation")
+	require.NotNil(t, secondPos.SequenceNumber)
+	assert.Equal(t, "cont-1", *secondPos.SequenceNumber)
+}
+
+// A subscribe attempt rejected with ResourceInUseException means another
+// consumer actively holds the shard, and the rejection costs that holder
+// nothing. Retries must therefore stay at the one-second floor rather than
+// escalate, so the legitimate lease holder reacquires promptly once a handoff
+// completes, and contention that outlasts the backoff ceiling must surface as
+// a warning rather than stay at debug forever.
+func TestEFOSourceContentionRetriesAtFloorAndWarnsWhenPersistent(t *testing.T) {
+	old := efoResubscribeFloor
+	efoResubscribeFloor = 20 * time.Millisecond
+	t.Cleanup(func() { efoResubscribeFloor = old })
+
+	handler := &capturingLogHandler{}
+	logger := service.NewLoggerFromSlog(slog.New(handler))
+
+	inUse := &types.ResourceInUseException{Message: aws.String("held elsewhere")}
+	good := newFakeSubscription()
+	var mu sync.Mutex
+	var callTimes []time.Time
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		callTimes = append(callTimes, time.Now())
+		if len(callTimes) <= 9 {
+			return nil, inUse
+		}
+		return good, nil
+	}, "shard-0", "", true, 20*time.Millisecond, 100*time.Millisecond, logger)
+	require.NoError(t, err)
+	defer src.Close()
+
+	start := time.Now()
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(callTimes) >= 10
+	}, 5*time.Second, time.Millisecond, "source never resubscribed past the contention")
+	elapsed := time.Since(start)
+
+	// Eight floor-spaced retries after the constructor's attempt: roughly
+	// 8 * 20ms. The escalating backoff would put this near a second.
+	assert.Less(t, elapsed, 600*time.Millisecond, "contention retries must stay at the floor, not escalate")
+
+	// Contention outlasting max_resubscribe_interval (100ms here) must have
+	// been surfaced at warn level, and never at error level.
+	assert.NotEmpty(t, handler.messagesAtLeast(slog.LevelWarn), "persistent contention should be logged at warn level")
+	assert.Empty(t, handler.messagesAtLeast(slog.LevelError))
+}
+
+// staleSequenceFallbackPositions drives a source whose first subscribe is
+// rejected with InvalidArgumentException and returns the first two positions
+// attempted (the constructor's stale-sequence attempt and the pump's fallback).
+func staleSequenceFallbackPositions(t *testing.T, startFromOldest bool) []types.StartingPosition {
+	t.Helper()
+	fastEFOResubscribe(t)
+
+	sub := newFakeSubscription()
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		positions = append(positions, pos)
+		n := len(positions)
+		mu.Unlock()
+		if n == 1 {
+			return nil, &types.InvalidArgumentException{}
+		}
+		return sub, nil
+	}, "shard-0", "stale-seq", startFromOldest, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	t.Cleanup(src.Close)
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(positions) >= 2
+	}, 5*time.Second, time.Millisecond, "fallback subscribe never happened")
+
+	mu.Lock()
+	defer mu.Unlock()
+	return append([]types.StartingPosition(nil), positions[:2]...)
+}
+
+func TestEFOSourceInvalidSequenceFallsBackToConfiguredStart(t *testing.T) {
+	positions := staleSequenceFallbackPositions(t, true)
+
+	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[0].Type)
+	require.NotNil(t, positions[0].SequenceNumber)
+	assert.Equal(t, "stale-seq", *positions[0].SequenceNumber)
+	assert.Equal(t, types.ShardIteratorTypeTrimHorizon, positions[1].Type)
+}
+
+func TestEFOSourceInvalidSequenceFallsBackToTrimHorizonWhenNotOldest(t *testing.T) {
+	positions := staleSequenceFallbackPositions(t, false)
+
+	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[0].Type)
+	// This shard demonstrably had a committed position, so resuming at "now"
+	// would silently skip every record still retained ahead of the expired
+	// sequence: the fallback must be TRIM_HORIZON regardless of
+	// start_from_oldest.
+	assert.Equal(t, types.ShardIteratorTypeTrimHorizon, positions[1].Type)
+	assert.Nil(t, positions[1].Timestamp)
+}
+
+func TestEFOSourcePumpFallsBackOnInvalidSequence(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	var mu sync.Mutex
+	var positions []types.StartingPosition
+	sub := newFakeSubscription()
+
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, pos types.StartingPosition) (efoSubscription, error) {
+		mu.Lock()
+		positions = append(positions, pos)
+		n := len(positions)
+		mu.Unlock()
+		switch n {
+		case 1:
+			// The shard's previous owner still holds the one allowed
+			// subscription, so the pump takes over the retry loop.
+			return nil, &types.ResourceInUseException{}
+		case 2:
+			// The stored sequence has aged out of the retention window.
+			return nil, &types.InvalidArgumentException{}
+		}
+		return sub, nil
+	}, "shard-0", "stale-seq", false, 20*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	sub.send("c1", rec("1"))
+
+	var got int
+	deadline := time.Now().Add(5 * time.Second)
+	for got == 0 && time.Now().Before(deadline) {
+		recs, _, err := src.Fetch(t.Context())
+		require.NoError(t, err)
+		got = len(recs)
+	}
+	require.Equal(t, 1, got)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(positions), 3)
+	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[0].Type)
+	assert.Equal(t, types.ShardIteratorTypeAfterSequenceNumber, positions[1].Type)
+	// Without the fallback the pump would retry the rejected sequence forever.
+	assert.Equal(t, types.ShardIteratorTypeTrimHorizon, positions[2].Type)
+}
+
+func TestEFOSourceOtherErrorWithSequenceDoesNotFallBack(t *testing.T) {
+	calls := 0
+	_, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		calls++
+		return nil, errors.New("AccessDeniedException")
+	}, "shard-0", "stale-seq", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.Error(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestEFOSourceInitialSubscribeResourceInUseDoesNotBlock(t *testing.T) {
+	fastEFOResubscribe(t)
+
+	const failCount = 3
+	var calls atomic.Int32
+	sub := newFakeSubscription()
+
+	start := time.Now()
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		n := calls.Add(1)
+		if n <= failCount {
+			return nil, &types.ResourceInUseException{}
+		}
+		return sub, nil
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	// The constructor must not block synchronously retrying/waiting out the
+	// ResourceInUseException; it should return as soon as the pump goroutine
+	// is started.
+	assert.Less(t, time.Since(start), time.Second)
+
+	// Once the subscribe fn stops failing, the background pump picks it up
+	// and records flow normally.
+	sub.send("c1", rec("1"))
+
+	recs, done, err := src.Fetch(t.Context())
+	require.NoError(t, err)
+	assert.False(t, done)
+	require.Len(t, recs, 1)
+
+	assert.GreaterOrEqual(t, calls.Load(), int32(failCount+1))
+}
+
+func TestEFOSourceCloseStopsPump(t *testing.T) {
+	sub := newFakeSubscription()
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		return sub, nil
+	}, "shard-0", "", true, 100*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	src.Close() // must not hang
+	select {
+	case <-sub.closed:
+	default:
+		t.Fatal("expected the subscription to be closed")
+	}
+}
+
+// TestEFOSourceEscalatesBackoffWithoutEvents covers the case where a
+// subscription's event stream closes without ever delivering an event and
+// without sub.Err() being set (exactly how the subscription ping-pong from a
+// shard steal ends). Prior to the fix, boff was neither reset (sawEvent is
+// false) nor advanced (the escalation was gated on a non-nil stream error),
+// so the pump would resubscribe forever at the bare efoResubscribeFloor
+// cadence instead of escalating.
+func TestEFOSourceEscalatesBackoffWithoutEvents(t *testing.T) {
+	// A larger-than-1ms floor is used (rather than the fastEFOResubscribe
+	// helper's 1ms) so that the escalating backoff dominates measured gaps
+	// over fixed scheduling/timer overhead, keeping the elapsed-time
+	// assertion below deterministic rather than a tight, flake-prone bound.
+	old := efoResubscribeFloor
+	efoResubscribeFloor = 5 * time.Millisecond
+	t.Cleanup(func() {
+		efoResubscribeFloor = old
+	})
+
+	const wantSubscribes = 10
+
+	var (
+		mu    sync.Mutex
+		times []time.Time
+	)
+	allDone := make(chan struct{})
+
+	src, err := newEFORecordSource(t.Context(), func(_ context.Context, _ types.StartingPosition) (efoSubscription, error) {
+		sub := newFakeSubscription()
+		close(sub.events) // ends immediately: no events, no error
+
+		mu.Lock()
+		times = append(times, time.Now())
+		n := len(times)
+		mu.Unlock()
+
+		if n == wantSubscribes {
+			close(allDone)
+		}
+		return sub, nil
+	}, "shard-0", "", true, 20*time.Millisecond, 30*time.Second, service.MockResources().Logger())
+	require.NoError(t, err)
+	defer src.Close()
+
+	select {
+	case <-allDone:
+	case <-time.After(3 * time.Second):
+	}
+
+	mu.Lock()
+	got := append([]time.Time{}, times...)
+	mu.Unlock()
+
+	require.GreaterOrEqual(t, len(got), wantSubscribes,
+		"expected %d subscribe cycles within the deadline, got %d", wantSubscribes, len(got))
+
+	// Without escalation, every resubscribe would be spaced by roughly
+	// efoResubscribeFloor alone, so the total elapsed time across all the
+	// cycles would sit close to (n-1)*efoResubscribeFloor. With escalation,
+	// the exponentially growing backoff wait dominates, so require the
+	// actual elapsed time to clear that floor-only baseline by a wide,
+	// noise-tolerant margin.
+	elapsed := got[len(got)-1].Sub(got[0])
+	floorOnlyBaseline := time.Duration(len(got)-1) * efoResubscribeFloor
+	assert.Greater(t, elapsed, floorOnlyBaseline*3,
+		"expected resubscribe backoff to escalate when no events are delivered: elapsed=%v floorOnlyBaseline=%v", elapsed, floorOnlyBaseline)
+}

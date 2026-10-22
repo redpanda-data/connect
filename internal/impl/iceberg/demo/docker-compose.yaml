@@ -10,7 +10,7 @@
 
 services:
   minio:
-    image: minio/minio:latest
+    image: pgsty/silo:latest
     network_mode: host
     environment:
       MINIO_ROOT_USER: admin
@@ -25,7 +25,7 @@ services:
 
   # Creates the warehouse bucket on startup
   minio-setup:
-    image: minio/mc:latest
+    image: pgsty/mc:latest
     network_mode: host
     depends_on:
       minio:

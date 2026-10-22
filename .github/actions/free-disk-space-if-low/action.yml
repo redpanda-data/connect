@@ -1,0 +1,21 @@
+name: 'Free disk space if low'
+description: 'Delete preinstalled tools from the runner if the root disk has less than 40 GiB free'
+
+# The test build failed with "no space left on device" in January 2026 (#3906).
+# In October 2026 the runner starts with 86 to 92 GiB free.
+# At peak, the test job uses 11 to 14 GiB (#4927) and the docs job uses 14.4 GiB (#4999).
+# These numbers include the restored Go cache, which also keeps its 2.1 GB archive on disk until the extraction ends.
+# The 40 GiB limit covers this use with a large margin.
+# If free space is low, delete the directories with the fewest files per GiB: rm time follows the file count.
+# Do not delete /usr/local/lib/android: it has ~311k files and takes 70 s to 280 s to delete.
+runs:
+  using: "composite"
+  steps:
+    - name: Free disk space if low
+      shell: bash
+      run: |
+        df -h /
+        if [ "$(df -BG --output=avail / | tail -1 | tr -dc 0-9)" -lt 40 ]; then
+          sudo rm -rf /usr/share/swift /usr/local/share/powershell /usr/local/.ghcup /usr/share/dotnet
+          df -h /
+        fi

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,6 +46,34 @@ func (txID *TransactionID) Scan(src any) error {
 		return fmt.Errorf("cannot scan %T to transaction id", src)
 	}
 	return nil
+}
+
+// xidParts is the number of components in a "USN.SLOT.SEQ" transaction ID.
+const xidParts = 3
+
+// RawXID returns the original XID RAW bytes, inverting Scan. Unlike XIDUSN,
+// XIDSLT and XIDSQN, matching on them works on any host byte order.
+func (txID TransactionID) RawXID() ([]byte, error) {
+	parts := strings.Split(string(txID), ".")
+	if len(parts) != xidParts {
+		return nil, fmt.Errorf("transaction id %q is not of the form USN.SLOT.SEQ", string(txID))
+	}
+	var (
+		bitSizes = [xidParts]int{16, 16, 32}
+		nums     [xidParts]uint64
+	)
+	for i, part := range parts {
+		n, err := strconv.ParseUint(part, 10, bitSizes[i])
+		if err != nil {
+			return nil, fmt.Errorf("parsing transaction id %q: %w", string(txID), err)
+		}
+		nums[i] = n
+	}
+	raw := make([]byte, 8)
+	binary.LittleEndian.PutUint16(raw[0:2], uint16(nums[0]))
+	binary.LittleEndian.PutUint16(raw[2:4], uint16(nums[1]))
+	binary.LittleEndian.PutUint32(raw[4:8], uint32(nums[2]))
+	return raw, nil
 }
 
 // String returns the TransactionID in its "USN.SLOT.SEQ" string form.
@@ -163,6 +192,12 @@ type DMLEvent struct {
 	OldValues     map[string]any
 	Timestamp     time.Time
 	TransactionID TransactionID
+	Username      string
+	// RSID and SSN identify the redo record and the row change inside it
+	// (V$LOGMNR_CONTENTS.RS_ID and SSN). Empty RSID means unknown: snapshot
+	// rows, synthetic LOB-only updates, or events cached before this field existed.
+	RSID string
+	SSN  int64
 }
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
@@ -175,4 +210,7 @@ type RedoEvent struct {
 	SchemaName    sql.NullString
 	Timestamp     time.Time
 	TransactionID TransactionID
+	Username      sql.NullString
+	RSID          sql.NullString
+	SSN           sql.NullInt64
 }

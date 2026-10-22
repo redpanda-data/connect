@@ -13,6 +13,23 @@ The general approach:
 3. Run Redpanda Connect with the connector configured, using the built-in `benchmark` processor to measure throughput
 4. Record results (msg/sec, MB/sec) in the PR description
 
+## Real-Endpoint Benchmarks and Soaks (AWS)
+
+The local Docker path above is the first phase. The second phase — real
+endpoints on dedicated AWS infrastructure, including sustained soak runs
+with CloudWatch alarms and a rolling regression baseline — lives in
+[`benchmarking/aws/`](../benchmarking/aws/README.md):
+
+- [`benchmarking/aws/README.md`](../benchmarking/aws/README.md) — the
+  runner, scenarios, one-command sweeps (`task aws:bench`), and cost
+  controls.
+- [`benchmarking/aws/SOAK.md`](../benchmarking/aws/SOAK.md) — nightly and
+  PR-comparison soaks (`/soak`), alerting, and how to add a scenario.
+
+AWS results land in the auto-managed section of
+[`docs/benchmark-results/SUMMARY.md`](benchmark-results/SUMMARY.md)
+(regenerate with `task aws:summary`).
+
 ## Directory Structure
 
 Place benchmarking files in `internal/impl/<component>/bench/`:
@@ -316,6 +333,7 @@ For a non-technical overview suitable for sales, marketing, and other non-engine
 | SQL Server CDC | [`internal/impl/mssqlserver/bench/`](../internal/impl/mssqlserver/bench/) | [results](benchmark-results/mssqlserver-cdc.md) | ~135 MB/sec, 100K msg/sec | Single connection bottleneck |
 | Oracle CDC | [`internal/impl/oracledb/bench/`](../internal/impl/oracledb/bench/) | [results](benchmark-results/oracledb-cdc.md) | ~50K msg/sec (streaming) | LogMiner single-threaded limitation |
 | DynamoDB CDC | [`internal/impl/aws/dynamodb/bench/`](../internal/impl/aws/dynamodb/bench/) | [results](benchmark-results/dynamodb-cdc.md) | ~200 MB/sec, 100K msg/sec | DynamoDB Local, 3 tables x 150K items |
+| SAP HANA | [`internal/impl/saphana/bench/`](../internal/impl/saphana/bench/) | [results](benchmark-results/sap-hana.md) | ~49K msg/sec (bulk), ~42K msg/sec (incrementing) | 2M rows, WSL2/Docker |
 
 ## Keeping Results Up to Date
 

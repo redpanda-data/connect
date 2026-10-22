@@ -37,7 +37,9 @@ func TestIntegrationPulsar(t *testing.T) {
 			wait.ForHTTP("/admin/v2/brokers/ready").WithPort("8080/tcp").WithStartupTimeout(3*time.Minute),
 		),
 	)
-	testcontainers.CleanupContainer(t, ctr)
+	// Pulsar standalone needs about 8s to stop after SIGTERM. The container is
+	// removed after the test, so kill it at once.
+	testcontainers.CleanupContainer(t, ctr, testcontainers.StopTimeout(0))
 	require.NoError(t, err)
 
 	mappedPort, err := ctr.MappedPort(t.Context(), "6650/tcp")
@@ -99,14 +101,21 @@ input:
 		// benthos stream_test_definitions.go:571-584 (concurrent map read/write).
 	)
 
-	suite.Run(
-		t, template,
-		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
-		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-		integration.StreamTestOptPort(mappedPort.Port()),
-	)
+	// Each suite takes about 2 minutes, because the lossy tests wait for the
+	// default nack redelivery delay of the Pulsar client (1 minute). Run the
+	// suites as parallel subtests so that they wait at the same time.
+	t.Run("with topics", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+			integration.StreamTestOptPort(mappedPort.Port()),
+		)
+	})
 
 	t.Run("with topics pattern", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, patternTemplate,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),

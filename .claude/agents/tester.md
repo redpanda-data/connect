@@ -1,7 +1,7 @@
 ---
 name: tester
 description: PROACTIVELY writes and maintains unit and integration tests for Redpanda Connect using testify, table-driven patterns, testcontainers-go, and the benthos service API
-tools: bash, file_access, git
+tools: Bash, Read, Write, Edit, Grep, Glob
 model: sonnet
 ---
 
@@ -543,6 +543,11 @@ assert.Eventually(t, func() bool {
     return len(outBatches) >= expected
 }, 30*time.Second, 100*time.Millisecond)
 ```
+
+## Parallel Tests
+
+If the other integration tests in the package call `t.Parallel()`, a new or changed test calls it too.
+If it cannot run in parallel, put `// Not parallel: <reason>` in place of the call.
 
 ## Parallel Subtests
 

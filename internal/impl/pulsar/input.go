@@ -74,22 +74,18 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("A list of topics to subscribe to. This or topics_pattern must be set.").
 			Optional()).
 		Field(service.NewStringField("topics_pattern").
-			Description("A regular expression matching the topics to subscribe to. This or topics must be set.").
+			Description("A regular expression matching the topics to subscribe to. This or topics must be set.").Version("4.19.0").
 			Optional()).
 		Field(service.NewStringField("subscription_name").
 			Description("Specify the subscription name for this consumer.")).
 		Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
-			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement[Pulsar documentation^] and https://github.com/apache/pulsar/issues/12208[this Github issue^] for more details.").
+			Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See https://pulsar.apache.org/docs/concepts-messaging/#negative-acknowledgment[Pulsar documentation^] and https://github.com/apache/pulsar/issues/12208[this Github issue^] for more details.").
+			ShortDescription("The subscription type for this consumer. key_shared allows out-of-order delivery.").
 			Default(defaultSubscriptionType)).
 		Field(service.NewStringEnumField("subscription_initial_position", "latest", "earliest").
-			Description("Specify the subscription initial position for this consumer.").
+			Description("Specify the subscription initial position for this consumer.").Version("4.29.0").
 			Default(defaultSubscriptionInitialPosition)).
-		Field(service.NewObjectField("tls",
-			service.NewStringField("root_cas_file").
-				Description("An optional path of a root certificate authority file to use. This is a file, often with a .pem extension, containing a certificate chain from the parent trusted root certificate, to possible intermediate signing certificates, to the host certificate.").
-				Default("").
-				Example("./root_cas.pem")).
-			Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
+		Field(tlsField()).
 		Field(authField())
 }
 

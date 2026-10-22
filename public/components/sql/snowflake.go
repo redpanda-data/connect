@@ -18,5 +18,5 @@ package sql
 
 import (
 	// Import snowflake specifically.
-	_ "github.com/snowflakedb/gosnowflake"
+	_ "github.com/snowflakedb/gosnowflake/v2"
 )

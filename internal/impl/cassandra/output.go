@@ -67,7 +67,7 @@ output:
 		).
 		Example(
 			"Insert JSON Documents",
-			"The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cql/json.html#insert-json).",
+			"The following example inserts JSON documents into the table `footable` of the keyspace `foospace` using INSERT JSON (https://cassandra.apache.org/doc/latest/cassandra/developing/cql/json.html#insert-json).",
 			`
 output:
   cassandra:
@@ -80,12 +80,13 @@ output:
       period: 1s
 `,
 		).
-		Fields(clientFields()...).
+		Fields(clientFields("")...).
 		Fields(
 			service.NewStringField(coFieldQuery).
 				Description("A query to execute for each message."),
 			service.NewBloblangField(coFieldArgsMapping).
 				Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").
+				ShortDescription("A Bloblang mapping providing arguments to Cassandra queries, as an array matching the placeholders.").
 				Version("3.55.0").
 				Optional(),
 			service.NewStringEnumField(coFieldConsistency,
@@ -94,7 +95,8 @@ output:
 				Advanced().
 				Default("QUORUM"),
 			service.NewBoolField(coFieldLoggedBatch).
-				Description("If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.").
+				Description("If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.").Version("4.10.0").
+				ShortDescription("Perform a logged batch. Disable for unlogged batches, which are less efficient but more widely supported.").
 				Advanced().
 				Default(true),
 			service.NewOutputMaxInFlightField(),

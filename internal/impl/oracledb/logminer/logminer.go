@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ import (
 var (
 	// captures the time between DB commit and publish
 	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
-	// captures the time from query execution to the first row being returned by LogMiner
+	// captures the time from query execution to zero or more rows being returned by LogMiner
 	timeToFirstRowMetric = "oracledb_cdc_logminer_time_to_first_row_ns"
 	// https://docs.oracle.com/en/error-help/db/ora-01291/
 	errCodeMissingLogFile = 1291
@@ -45,6 +46,7 @@ type LogMiner struct {
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
+	redoVolume   *redoVolumeStrategy
 	sessionMgr   *SessionManager
 	db           *sql.DB
 	dmlParser    *sqlredo.Parser
@@ -52,6 +54,9 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
+
+	contentStmt    *sql.Stmt
+	currentSCNStmt *sql.Stmt
 
 	// Redo logs don't include data types so we have to find lob types up front.
 	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
@@ -63,6 +68,11 @@ type LogMiner struct {
 	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
 	// replayed after the INSERT is buffered so inferLOBLocator can find it.
 	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
+	// lobReplay is the in-flight window that re-mines open LOB transactions.
+	// It stays set until the window succeeds, so a retry resets them again.
+	lobReplay *lobReplay
+	// lobWarner warns once when one transaction has been re-mined for too long.
+	lobWarner lobReplayWarner
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -100,20 +110,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := fmt.Sprintf(`
-		SELECT
-			SCN,
-			SQL_REDO,
-			OPERATION_CODE,
-			TABLE_NAME,
-			SEG_OWNER,
-			TIMESTAMP,
-			XID,
-			COMMIT_SCN,
-			CSF
-		FROM V$LOGMNR_CONTENTS
-		WHERE SCN > :1 AND SCN <= :2%s
-	`, buf.String())
+	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME, RS_ID, SSN FROM V$LOGMNR_CONTENTS" + logMinerRangeClause + buf.String()
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -133,6 +130,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 		windowSize:       cfg.SCNWindowSize,
+		redoVolume:       newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -153,6 +151,12 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	defer func() {
 		if err := conn.Close(); err != nil && resErr == nil {
 			resErr = fmt.Errorf("closing connection: %w", err)
+		}
+	}()
+
+	defer func() {
+		if err := lm.Close(); err != nil {
+			lm.log.Errorf("closing prepared logminer statements: %v", err)
 		}
 	}()
 
@@ -177,25 +181,68 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		}
 	}()
 
+	timer := time.NewTimer(0) // reused timer, reduces memory allocations
+	defer timer.Stop()
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		caughtUp, err := lm.miningCycle(ctx, conn)
+		if err != nil {
+			return fmt.Errorf("mining logs: %w", err)
+		}
+
+		wait := lm.cfg.MiningInterval
+		if caughtUp {
+			wait = lm.cfg.MiningBackoffInterval
+			if !lm.caughtUpLogged {
+				lm.log.Debugf("Caught up with redo logs, backing off for %s...", wait)
+			}
+		}
+		lm.caughtUpLogged = caughtUp
+		timer.Reset(wait)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
-				return fmt.Errorf("mining logs: %w", err)
-			} else if caughtUp {
-				if !lm.caughtUpLogged {
-					lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
-					lm.caughtUpLogged = true
-				}
-				time.Sleep(lm.cfg.MiningBackoffInterval)
-			} else {
-				lm.caughtUpLogged = false
-				time.Sleep(lm.cfg.MiningInterval)
-			}
+		case <-timer.C:
 		}
 	}
+}
+
+// Close releases all statements prepared over the lifetime of a ReadChanges
+// call, along with those owned by the session manager and log file
+// collector. It must only be called once the dedicated connection those
+// statements were prepared on is no longer needed for LogMiner operations.
+func (lm *LogMiner) Close() error {
+	var errs []error
+
+	if lm.contentStmt != nil {
+		if err := lm.contentStmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing logminer contents statement: %w", err))
+		}
+		lm.contentStmt = nil
+	}
+
+	if lm.currentSCNStmt != nil {
+		if err := lm.currentSCNStmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing current SCN statement: %w", err))
+		}
+		lm.currentSCNStmt = nil
+	}
+
+	if err := lm.logCollector.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing log file collector statements: %w", err))
+	}
+
+	if err := lm.redoVolume.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing redo_volume statements: %w", err))
+	}
+
+	if err := lm.sessionMgr.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("closing session manager statements: %w", err))
+	}
+
+	return errors.Join(errs...)
 }
 
 // FindStartPos returns the database's current SCN so that streaming begins from
@@ -211,50 +258,135 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	return replication.SCN(currentPos), nil
 }
 
+func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
+	if !lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge) {
+		return
+	}
+	lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — ending idle session to release accumulated session memory",
+		lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
+	if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
+		lm.log.Errorf("Failed to end idle LogMiner session: %v", err)
+	}
+}
+
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
+	if lm.currentSCNStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE")
+		if err != nil {
+			return false, fmt.Errorf("preparing current SCN query: %w", err)
+		}
+		lm.currentSCNStmt = stmt
+	}
 	var dbCurrentSCN uint64
-	if err := conn.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
+	if err := lm.currentSCNStmt.QueryRowContext(ctx).Scan(&dbCurrentSCN); err != nil {
 		return false, fmt.Errorf("fetching current SCN: %w", err)
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
 	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
+		lm.endExpiredIdleSession(ctx, conn)
 		return true, nil
 	}
 
-	endSCN := dbCurrentSCN
-	hitCap := false
-	if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
-		endSCN = lm.currentSCN + maxRange
-		hitCap = true
+	var (
+		endSCN   uint64
+		logFiles []*LogFile
+
+		hitCap bool // scn_window specific
+	)
+
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyRedoVolume:
+		var consecutiveStalls int
+		if logFiles, endSCN, consecutiveStalls, err = lm.redoVolume.selectSession(ctx, conn, lm.logCollector, lm.currentSCN, dbCurrentSCN); err != nil {
+			return false, err
+		}
+		// Proven unreachable for the known failure modes (see
+		// logFileSelector.consecutiveStalls) - this should never fire, so
+		// treat it as a bug report rather than routine backoff.
+		if consecutiveStalls >= redoVolumeStallWarnThreshold {
+			lm.log.Warnf("redo_volume selector has made no forward progress for %d consecutive cycles at SCN %d - this should not happen and likely indicates a bug; please report it", consecutiveStalls, lm.currentSCN)
+		}
+	default:
+		endSCN = dbCurrentSCN
+		if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
+			endSCN = lm.currentSCN + maxRange
+			hitCap = true
+		}
 	}
 
-	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
-	// with ENDSCN=0 freezes the session's view at session start time, making events written
-	// after session start invisible. Per-window restart with explicit endSCN ensures all
-	// events in [currentSCN, endSCN] are visible.
-	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN); err != nil {
+	var (
+		sessionStart = lm.currentSCN
+		processEvent = lm.processRedoEvent
+	)
+	if lm.cfg.LOBEnabled {
+		replay, err := lm.planLOBReplay(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		lm.lobReplay = replay
+		warn, age := lm.lobWarner.observe(replay, time.Now())
+		if replay != nil {
+			sessionStart = replay.fromSCN - 1
+			// The preselected files start at currentSCN and may not cover fromSCN.
+			if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, sessionStart, endSCN); err != nil {
+				return false, fmt.Errorf("collecting redo logs for LOB replay: %w", err)
+			}
+			remined := replay.processedSCN - replay.fromSCN + 1
+			lm.log.Debugf("Re-mining %d open transaction(s) with LOB changes from SCN %d (%d SCNs re-mined); rows of other transactions up to SCN %d are skipped", len(replay.txns), replay.fromSCN, remined, replay.processedSCN)
+			if warn {
+				lm.log.Warnf("An open transaction with LOB changes since SCN %d has been re-mined in every mining window for %s so its LOB data is complete (%d SCNs re-read this window). Long-running transactions with LOB changes increase mining work and can increase lag until they commit or roll back", replay.fromSCN, age.Round(time.Second), remined)
+			}
+			processEvent = func(ctx context.Context, ev *sqlredo.RedoEvent) error {
+				if replay.skip(ev) {
+					return nil
+				}
+				return lm.processRedoEvent(ctx, ev)
+			}
+		}
+	}
+
+	if err := lm.prepareLogsAndStartSession(ctx, conn, sessionStart, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
+			var reduceWindowHint string
+			switch lm.cfg.WindowStrategy {
+			case WindowStrategyRedoVolume:
+				reduceWindowHint = fmt.Sprintf("Reduce logminer.redo_volume_min / logminer.redo_volume_growth_max (current budget: %d x %d bytes per thread)", lm.redoVolume.selector.count, lm.redoVolume.maxRedoLogSizeInBytes)
+			default:
+				reduceWindowHint = fmt.Sprintf("Reduce logminer.scn_window_size (current: %d SCN units)", lm.cfg.SCNWindowSize)
+			}
 			//nolint:staticcheck
 			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
 				"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
+				"This can also happen after a flashback and OPEN RESETLOGS on the source database: if this\n"+
+				"connector's last checkpoint predates the new incarnation's RESETLOGS_CHANGE#, no log file —\n"+
+				"old or new incarnation — covers that gap. This is not a retention issue, and increasing\n"+
+				"retention (below) will not help; only option 3 applies in that case.\n\n"+
 				"To fix this issue:\n"+
 				"1. Increase Oracle's archived log retention using RMAN:\n"+
 				"   CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
 				"2. Improve processing performance:\n"+
-				"   - Reduce logminer.scn_window_size (current: %d SCN units) to process smaller windows per cycle\n"+
+				"   - %s to process smaller windows per cycle\n"+
 				"   - Decrease logminer.backoff_interval (current: %v)\n"+
 				"   - Increase input batching.count for better throughput\n"+
 				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
 				"3. Restart the connector from the current database SCN to skip missing logs:\n"+
-				"   Note: This will result in data loss for events in the purged logs, so a snapshot may be required.",
-				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
+				"   - Delete the checkpoint cache entry at checkpoint_cache_key and restart. A flashback rolls\n"+
+				"     this row back rather than clearing it (with the default Oracle-based cache), so it will\n"+
+				"     still be present and must be deleted explicitly, or the connector resumes from the same\n"+
+				"     stale SCN and hits this error again.\n"+
+				"   - This loses events between the last checkpoint and the restart. To avoid that, delete the\n"+
+				"     checkpoint and set snapshot_mode to snapshot_and_stream at the same time — snapshot_mode\n"+
+				"     alone has no effect, since a checkpoint that is still present skips snapshotting entirely.",
+				lm.currentSCN, err, reduceWindowHint, lm.cfg.MiningBackoffInterval)
 		}
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			lm.log.Debugf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
@@ -265,23 +397,60 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, sessionStart, endSCN, len(logFiles), processEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
-			lm.log.Debugf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying — archived log will be used on next cycle", lm.currentSCN, endSCN)
+			// Resume just before the last processed SCN rather than from the start
+			// of the window, so each retry makes progress. Rows at lastSCN are
+			// processed again, as the query may have stopped part way through them.
+			startSCN := lm.currentSCN
+			if lastSCN > startSCN {
+				lm.currentSCN = lastSCN - 1 // last row may have stopped part way through
+			}
+			lm.log.Warnf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying from SCN %d — archived log will be used on next cycle", startSCN, endSCN, lm.currentSCN)
 			return false, nil
 		}
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
-	lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyRedoVolume:
+		lm.redoVolume.resetIfUncapped()
+	default:
+		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
+	}
+	lm.lobReplay = nil
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
 }
 
+// logMinerRangeClause is the SCN range every contents query starts with.
+const logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
+
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
+	// AddEvent creates a missing transaction only for a DML event. After a
+	// restart past its START, a transaction with only LOB events is not in the
+	// cache. Then the commit finds no transaction and drops the LOB data. To
+	// prevent this, start the transaction on its first LOB event.
+	// StartTransaction does nothing if the transaction exists or was discarded.
+	// This check is before the switch because each LOB case has early returns,
+	// and it must run before the case creates the LOB state.
+	op := redoEvent.Operation
+	isLOBEvent := op == sqlredo.OpSelectLobLocator || op == sqlredo.OpLobTrim || op == sqlredo.OpLobWrite
+	_, hasState := lm.lobStates[redoEvent.TransactionID]
+	if lm.cfg.LOBEnabled && isLOBEvent && !hasState && len(lm.pendingLOBWrites[redoEvent.TransactionID]) == 0 {
+		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
+			return fmt.Errorf("starting transaction %s on LOB event: %w", redoEvent.TransactionID, err)
+		}
+		// Hold the checkpoint below the START of this transaction. If the START
+		// was not mined, StartTransaction used this event SCN as the start SCN.
+		if err := lm.txnCache.IncludeInLowWatermark(ctx, redoEvent.TransactionID); err != nil {
+			return fmt.Errorf("holding checkpoint for transaction %s on LOB event: %w", redoEvent.TransactionID, err)
+		}
+	}
+
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
@@ -456,8 +625,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			safeCheckpointSCN := redoEvent.SCN
 
 			// If other transactions are still open, we must not advance the
-			// checkpoint past their start SCN - 1. Doing so would cause their
-			// already-seen DML events to be skipped on restart (the query resumes
+			// checkpoint past their oldest event SCN - 1. Doing so would cause their
+			// already-seen events to be skipped on restart (the query resumes
 			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
 			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
 				if lowestOpenSCN-1 < safeCheckpointSCN {
@@ -505,6 +674,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 							OldValues:     acc.PKValues,
 							TransactionID: redoEvent.TransactionID,
 							Timestamp:     redoEvent.Timestamp,
+							Username:      redoEvent.Username.String,
 						}
 						txn.Events = append(txn.Events, synthetic)
 						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
@@ -521,6 +691,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
+			// Tracks, per LOB-only UPDATE event, whether the pre-pass below actually
+			// found a matching INSERT to merge its values into. Keyed by pointer
+			// identity rather than schema.table: a table having *some* INSERT in the
+			// transaction doesn't mean *this row's* INSERT was found, so suppression
+			// must be decided per event, not per table.
+			mergedIntoInsert := make(map[*sqlredo.DMLEvent]bool)
+
 			if lm.cfg.LOBEnabled {
 				// Pre-pass: for each LOB-only UPDATE that accompanies an INSERT in this transaction,
 				// merge the actual LOB values into the INSERT before we start publishing.
@@ -535,20 +712,38 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; !hasInsert {
 						continue
 					}
-					sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, lm.log)
+					mergedIntoInsert[dmlEvent] = sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, lm.log)
 				}
 			}
 
+			txnFields := txnEventFields{
+				scn:             replication.SCN(redoEvent.SCN),
+				checkpointSCN:   replication.SCN(safeCheckpointSCN),
+				commitTimestamp: redoEvent.Timestamp,
+			}
+			var rowSeqs rowSeqCounter
 			for _, dmlEvent := range txn.Events {
-				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
-				// already been merged into the corresponding INSERT by the pre-pass above.
-				if dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
-					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
-						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
-						continue
+				// Suppress Oracle-internal LOB-initialisation UPDATEs. With LOBEnabled,
+				// only once confirmed merged: the table having some other row's INSERT
+				// is not enough - if the pre-pass found no matching INSERT for THIS row,
+				// the UPDATE is the only remaining record of its LOB data and must be
+				// published rather than silently dropped. Without LOBEnabled, no merge
+				// is ever attempted (mergedIntoInsert stays empty), so this instead
+				// falls back to the table-level check: the LOB values are being
+				// discarded either way, so there is no per-row content to lose.
+				suppress := dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent)
+				if suppress {
+					if lm.cfg.LOBEnabled {
+						suppress = mergedIntoInsert[dmlEvent]
+					} else {
+						_, suppress = insertTables[dmlEvent.Schema+"."+dmlEvent.Table]
 					}
 				}
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
+				if suppress {
+					lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s", dmlEvent.Schema, dmlEvent.Table)
+					continue
+				}
+				msg := toMessageEvent(dmlEvent, txnFields, rowSeqs.next(dmlEvent))
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -573,6 +768,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 			}
+			lm.lobReplay.end(redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
@@ -580,6 +776,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+			lm.lobReplay.end(redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
@@ -776,8 +973,8 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			claimed, empty, event.TransactionID, event.SCN, schema, table)
 	}
 
-	for i := len(txn.Events) - 1; i >= 0; i-- {
-		ev := txn.Events[i]
+	for _, ev := range slices.Backward(txn.Events) {
+
 		if ev.Schema != schema || ev.Table != table {
 			continue
 		}
@@ -907,26 +1104,144 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 	return false
 }
 
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
+// queryLogMinerContents streams the rows in (startSCN, endSCN] to processEvent.
+// lastSCN is the SCN of the last event processed, and is returned alongside
+// any error so a caller can resume from where the query stopped. selectedFileCount
+// is only used for logging, under WindowStrategyRedoVolume.
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, selectedFileCount int, processEvent func(context.Context, *sqlredo.RedoEvent) error) (lastSCN uint64, err error) {
 	if len(lm.tables) == 0 {
-		return nil
+		return lastSCN, nil
 	}
 
 	// Use the pre-built query from initialization
-	queryStart := time.Now()
-	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
-	if err != nil {
-		return fmt.Errorf("querying logminer: %w", err)
+	switch lm.cfg.WindowStrategy {
+	case WindowStrategyRedoVolume:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d, redo_volume budget=%d x %d bytes per thread, %d files selected)",
+			startSCN, endSCN, lm.redoVolume.selector.count, lm.redoVolume.maxRedoLogSizeInBytes, selectedFileCount)
+	default:
+		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	}
-	defer rows.Close()
 
+	stmt, queryArgs := lm.contentStmt, []any{startSCN, endSCN}
+	if replay := lm.lobReplay; replay != nil {
+		// The replay set changes per window, so this statement is not cached.
+		if pred, ok := replay.queryFilter(); ok {
+			query := strings.Replace(lm.logMinerQuery, logMinerRangeClause, logMinerRangeClause+pred, 1)
+			replayStmt, err := conn.PrepareContext(ctx, query)
+			if err != nil {
+				return lastSCN, fmt.Errorf("preparing logminer LOB replay query: %w", err)
+			}
+			defer replayStmt.Close()
+			stmt, queryArgs = replayStmt, append(queryArgs, replay.processedSCN)
+		} else {
+			lm.log.Debugf("Unparseable transaction ID in LOB replay set, querying without a transaction filter")
+		}
+	}
+	if stmt == nil {
+		var err error
+		if stmt, err = conn.PrepareContext(ctx, lm.logMinerQuery); err != nil {
+			return lastSCN, fmt.Errorf("preparing logminer contents query: %w", err)
+		}
+		lm.contentStmt = stmt
+	}
+	queryStart := time.Now()
+	// Cancelled on return so a failing consumer stops the reader, including a
+	// fetch blocked on the network.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	rows, err := stmt.QueryContext(ctx, queryArgs...) //nolint:rowserrcheck
+	if err != nil {
+		return lastSCN, fmt.Errorf("querying logminer: %w", err)
+	}
+
+	// The reader owns rows and closes it before closing batches, so once
+	// batches is drained or closed the cursor is released.
 	var (
-		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
-		firstRow = true
+		batches = make(chan []*sqlredo.RedoEvent, readAheadBatches(lm.cfg.PrefetchRows))
+		readErr error
 	)
+	go func() {
+		defer close(batches)
+		defer rows.Close()
+		readErr = lm.readLogMinerRows(ctx, rows, batches, queryStart, startSCN, endSCN)
+	}()
+	// On an early return, stop the reader and wait until it has closed rows.
+	defer func() {
+		cancel()
+		for range batches {
+		}
+	}()
+
+	for batch := range batches {
+		for _, event := range batch {
+			if err := processEvent(ctx, event); err != nil {
+				return lastSCN, fmt.Errorf("processing redo event: %w", err)
+			}
+			lastSCN = event.SCN
+		}
+	}
+
+	// batches is closed, so the reader has finished writing readErr.
+	if readErr != nil {
+		return lastSCN, fmt.Errorf("reading rows from logminer: %w", readErr)
+	}
+
+	return lastSCN, nil
+}
+
+const (
+	// logMinerReadBatchSize is the number of rows (including CSF fragments)
+	// read per channel send. It bounds a batch to ~2 MB of SQL_REDO (4000
+	// bytes per row) and keeps channel overhead negligible.
+	logMinerReadBatchSize = 500
+	// logMinerReadAheadBatches is the minimum read-ahead (2000 rows).
+	logMinerReadAheadBatches = 4
+)
+
+// readAheadBatches returns the read-ahead channel capacity, large enough to
+// buffer one whole fetch so the next round trip overlaps with processing.
+func readAheadBatches(prefetchRows int) int {
+	fetchBatches := (prefetchRows + logMinerReadBatchSize - 1) / logMinerReadBatchSize
+	return max(logMinerReadAheadBatches, fetchBatches)
+}
+
+// readLogMinerRows sends rows to batches as complete events, joining CSF
+// fragments. On error, it sends the complete events read so far.
+func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batches chan<- []*sqlredo.RedoEvent, queryStart time.Time, startSCN, endSCN uint64) error {
+	var (
+		rowsInBatch int // rows read for batch, including CSF fragments
+		firstRow    = true
+		pending     *sqlredo.RedoEvent // accumulates CSF continuation fragments
+
+		batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
+		flush = func() error {
+			if len(batch) == 0 {
+				return nil
+			}
+			select {
+			case batches <- batch:
+				batch = make([]*sqlredo.RedoEvent, 0, logMinerReadBatchSize)
+				rowsInBatch = 0
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		emit = func(ev *sqlredo.RedoEvent) error {
+			batch = append(batch, ev)
+			if rowsInBatch < logMinerReadBatchSize {
+				return nil
+			}
+			return flush()
+		}
+	)
+
 	for rows.Next() {
 		if firstRow {
-			lm.timeToFirstRowMetric.Timing(time.Since(queryStart).Nanoseconds())
+			elapsed := time.Since(queryStart)
+			lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
+			lm.log.Debugf("LogMiner query returned first row after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
 			firstRow = false
 		}
 		event := &sqlredo.RedoEvent{}
@@ -945,22 +1260,32 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&event.TransactionID,
 			&commitSCN,
 			&csf,
+			&event.Username,
+			&event.RSID,
+			&event.SSN,
 		); err != nil {
+			if ferr := flush(); ferr != nil {
+				return ferr
+			}
 			return err
 		}
+		rowsInBatch++
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
 		// Concatenate all fragments before emitting the event.
+		// All fragments of one change share the same RS_ID and SSN, so the first
+		// fragment (kept as the carrier below) identifies the record.
 		if pending != nil {
 			// Append this fragment's SQL to the accumulated SQL.
 			if event.SQLRedo.Valid {
 				pending.SQLRedo.String += event.SQLRedo.String
 			}
 			if csf == 0 {
-				// Final fragment — emit the accumulated event.
-				if err := processEvent(ctx, pending); err != nil {
-					return fmt.Errorf("processing redo event: %w", err)
+				// Final fragment — emit the accumulated event. The first
+				// fragment's SCN, so a retry re-reads the whole statement.
+				if err := emit(pending); err != nil {
+					return err
 				}
 				pending = nil
 			}
@@ -974,25 +1299,47 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			continue
 		}
 
-		if err := processEvent(ctx, event); err != nil {
-			return fmt.Errorf("processing redo event: %w", err)
+		if err := emit(event); err != nil {
+			return fmt.Errorf("emitting redo events: %w", err)
 		}
 	}
 
 	if err := rows.Err(); err != nil {
+		// Drop any incomplete pending statement; flush what is complete.
+		if ferr := flush(); ferr != nil {
+			return fmt.Errorf("flushing redo events: %w", ferr)
+		}
 		return err
 	}
 
-	// Flush any incomplete pending event (shouldn't happen in practice).
+	// Emit any incomplete pending event (shouldn't happen in practice).
 	if pending != nil {
 		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
-		if err := processEvent(ctx, pending); err != nil {
-			return fmt.Errorf("processing redo event: %w", err)
+		if err := emit(pending); err != nil {
+			return fmt.Errorf("emitting pending redo events: %w", err)
 		}
 	}
-
+	if err := flush(); err != nil {
+		return fmt.Errorf("flushing redo events: %w", err)
+	}
+	// capture timings if 0 rows
+	if firstRow {
+		elapsed := time.Since(queryStart)
+		lm.timeToFirstRowMetric.Timing(elapsed.Nanoseconds())
+		lm.log.Debugf("LogMiner query returned no rows after %s (scn=%d to %d)", elapsed, startSCN, endSCN)
+	}
 	return nil
 }
+
+const (
+	// logStatusArchived is the Status value GetLogsBySCNRange hardcodes for
+	// every archive log record (see the query below). Oracle's V$LOG.STATUS
+	// values (CURRENT/ACTIVE/INACTIVE/...) never take this value, so it
+	// reliably distinguishes a fully-archived, immutable copy from an online
+	// (still mutable) one, without depending on the Type/IsCurrent fields.
+	logStatusArchived = "ARCHIVED"
+	logStatusCurrent  = "CURRENT"
+)
 
 // LogFile represents a redo or archive log file
 type LogFile struct {
@@ -1003,10 +1350,31 @@ type LogFile struct {
 	Type      string // "ONLINE" or "ARCHIVED"
 	IsCurrent bool
 	Thread    int
+	Status    string
+	// SizeBytes is the file's on-disk size, budgeted by redo_volume
+	// instead of a flat file count (see logFileSelector).
+	SizeBytes uint64
+}
+
+// IsOpenCurrent reports whether this is the single open current redo log
+// (see logStatusCurrent) - the only file whose NextSCN keeps advancing.
+// Unlike IsCurrent, it is false for ACTIVE/INACTIVE logs that have already
+// switched away.
+func (lf *LogFile) IsOpenCurrent() bool {
+	return lf.Status == logStatusCurrent
+}
+
+// IsArchived reports whether this is a fully-archived, immutable log copy,
+// as opposed to an online one (CURRENT, ACTIVE, or INACTIVE) that Oracle
+// could still be writing to or hasn't archived yet.
+func (lf *LogFile) IsArchived() bool {
+	return lf.Status == logStatusArchived
 }
 
 // LogFileCollector finds relevant log files to mine
-type LogFileCollector struct{}
+type LogFileCollector struct {
+	stmt *sql.Stmt
+}
 
 // NewLogFileCollector creates a new *LogFileCollector which is responsible for
 // discovering the relevant log files to mine.
@@ -1015,9 +1383,9 @@ func NewLogFileCollector() *LogFileCollector {
 }
 
 // GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
-func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
+func (c *LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
-		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
+		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD, STATUS, BYTES
 		FROM (
 
 			-- Online redo logs that overlap [startSCN, endSCN]
@@ -1027,12 +1395,14 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 				L.NEXT_CHANGE# NEXT_CHANGE,
 				L.SEQUENCE# AS SEQ,
 				'ONLINE' AS TYPE,
-				L.THREAD# AS THREAD
+				L.THREAD# AS THREAD,
+				L.STATUS AS STATUS,
+				L.BYTES AS BYTES
 			FROM V$LOGFILE F, V$LOG L
 			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# >= :1)
 			AND L.FIRST_CHANGE# <= :2
 			AND F.GROUP# = L.GROUP#
-			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#
+			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#, L.STATUS, L.BYTES
 
 			UNION
 
@@ -1043,13 +1413,17 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 				A.NEXT_CHANGE# NEXT_CHANGE,
 				A.SEQUENCE# AS SEQ,
 				'ARCHIVED' AS TYPE,
-				A.THREAD# AS THREAD
-			FROM V$ARCHIVED_LOG A
+				A.THREAD# AS THREAD,
+				'ARCHIVED' AS STATUS,
+				A.BLOCKS * A.BLOCK_SIZE AS BYTES
+			FROM V$ARCHIVED_LOG A, V$DATABASE D
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
 			AND A.NEXT_CHANGE# >= :1
 			AND A.FIRST_CHANGE# <= :2
+			AND A.RESETLOGS_CHANGE# = D.RESETLOGS_CHANGE#
+			AND A.RESETLOGS_TIME = D.RESETLOGS_TIME
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
 				FROM V$ARCHIVE_DEST_STATUS
@@ -1058,7 +1432,15 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 		)
 		ORDER BY SEQ`
 
-	rows, err := conn.QueryContext(ctx, query, startSCN, endSCN)
+	if c.stmt == nil {
+		stmt, err := conn.PrepareContext(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("preparing logs by SCN range query: %w", err)
+		}
+		c.stmt = stmt
+	}
+
+	rows, err := c.stmt.QueryContext(ctx, startSCN, endSCN)
 	if err != nil {
 		return nil, fmt.Errorf("querying logs overlapping SCN range [%d, %d]: %w", startSCN, endSCN, err)
 	}
@@ -1067,7 +1449,7 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 	var archived, online []*LogFile
 	for rows.Next() {
 		lf := &LogFile{}
-		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread); err != nil {
+		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread, &lf.Status, &lf.SizeBytes); err != nil {
 			return nil, fmt.Errorf("scanning logs row: %w", err)
 		}
 		lf.IsCurrent = lf.Type == "ONLINE"
@@ -1081,6 +1463,18 @@ func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, 
 		return nil, err
 	}
 	return deduplicateLogs(archived, online), nil
+}
+
+// Close releases the prepared GetLogsBySCNRange statement, if any.
+func (c *LogFileCollector) Close() error {
+	var errs []error
+	if c.stmt != nil {
+		if err := c.stmt.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		c.stmt = nil
+	}
+	return errors.Join(errs...)
 }
 
 // deduplicateLogs merges archive and online log lists, preferring the archive
@@ -1113,15 +1507,30 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 // starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
 // (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
 // open across consecutive windows that cover the same log files.
-func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
-	logFiles, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN)
-	if err != nil {
-		return fmt.Errorf("collecting redo logs for logminer: %w", err)
+func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, preSelected []*LogFile) error {
+	logFiles := preSelected
+	if logFiles == nil {
+		var err error
+		if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN); err != nil {
+			return fmt.Errorf("collecting redo logs for logminer: %w", err)
+		}
 	}
-	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
+	types := make([]string, len(logFiles))
+	for i, f := range logFiles {
+		types[i] = f.Type
+	}
+	// On databases where redo log switches are infrequent, a LogMiner session can stay
+	// open for hours, accumulating server-side PGA (notably around online catalog
+	// dictionary lookups) until Oracle kills it outright with ORA-04036.
+	sessionExpired := lm.sessionMgr.IsExpired(lm.cfg.MaxSessionAge)
+	if sessionExpired {
+		lm.log.Debugf("LogMiner session has been open for %s, exceeding max_session_age of %s — forcing restart to release accumulated session memory",
+			lm.sessionMgr.Age(), lm.cfg.MaxSessionAge)
+	}
 
-	if lm.sessionMgr.logFilesChanged(logFiles) {
-		// Log files have changed (first start or log switch) — full reload required.
+	if lm.sessionMgr.logFilesChanged(logFiles) || sessionExpired {
+		// Log files have changed (first start or log switch), or the session has exceeded
+		// its maximum age — full reload required.
 		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
@@ -1141,7 +1550,61 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	return nil
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, commitTimestamp time.Time) *replication.MessageEvent {
+// rowSeqCounter assigns RowSeq to the events of one transaction.
+//
+// Oracle says (RS_ID, SSN) identifies one row change. That is not true for a
+// bulk DELETE: Oracle writes up to 255 rows into one redo record, and every row
+// gets the same RS_ID and SSN. RowSeq numbers those rows from 0 so that
+// (RS_ID, SSN, RowSeq) is unique again.
+//
+// LogMiner returns the rows of one redo record next to each other, so the
+// counter only has to remember the previous (RS_ID, SSN) and restart at 0 when
+// it changes. The zero value is ready to use.
+type rowSeqCounter struct {
+	rsID string
+	ssn  int64
+	seq  int
+}
+
+// next returns the RowSeq of ev. Call it for every published event of the
+// transaction, in redo order. An event without RS_ID belongs to no redo record,
+// so it gets 0 and does not change the counter.
+func (c *rowSeqCounter) next(ev *sqlredo.DMLEvent) int {
+	if ev.RSID == "" {
+		return 0
+	}
+	if ev.RSID != c.rsID || ev.SSN != c.ssn {
+		c.rsID, c.ssn, c.seq = ev.RSID, ev.SSN, 0
+	} else {
+		c.seq++
+	}
+	return c.seq
+}
+
+// txnEventFields holds the MessageEvent fields that are the same for every
+// event of one committed transaction. processRedoEvent builds it once per
+// COMMIT, and toMessageEvent copies it into each published event.
+type txnEventFields struct {
+	// scn is the SCN of the COMMIT redo row. It is the scn metadata of each
+	// event of the transaction.
+	scn replication.SCN
+
+	// checkpointSCN is the SCN to checkpoint after the events of this
+	// transaction are acked. It is the checkpoint_scn metadata.
+	//
+	// It is scn when no other transaction is open. Otherwise it is one below the
+	// start SCN of the oldest open transaction, so a restart reads that
+	// transaction again. TransactionCache.LowWatermarkSCN tells which open
+	// transactions count.
+	checkpointSCN replication.SCN
+
+	// commitTimestamp is the time of the COMMIT redo row
+	// (V$LOGMNR_CONTENTS.TIMESTAMP, not COMMIT_TIMESTAMP). It is the
+	// commit_ts_ms metadata.
+	commitTimestamp time.Time
+}
+
+func toMessageEvent(dml *sqlredo.DMLEvent, txnFields txnEventFields, rowSeq int) *replication.MessageEvent {
 	var data map[string]any
 	switch dml.Operation {
 	case sqlredo.OpDelete:
@@ -1157,14 +1620,18 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 	}
 
 	m := &replication.MessageEvent{
-		SCN:             replication.SCN(scn),
-		CheckpointSCN:   replication.SCN(checkpointSCN),
+		SCN:             txnFields.scn,
+		CheckpointSCN:   txnFields.checkpointSCN,
 		Schema:          dml.Schema,
 		Table:           dml.Table,
 		Data:            data,
 		Timestamp:       dml.Timestamp,
 		TransactionID:   dml.TransactionID.String(),
-		CommitTimestamp: commitTimestamp,
+		CommitTimestamp: txnFields.commitTimestamp,
+		Username:        dml.Username,
+		RSID:            dml.RSID,
+		SSN:             dml.SSN,
+		RowSeq:          rowSeq,
 	}
 
 	switch dml.Operation {

@@ -54,7 +54,7 @@ const (
 func FranzProducerLimitsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewDurationField(kfwFieldTimeout).
-			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
+			Description(kafkaOutputTimeoutDescription).Version("4.3.0").
 			Default("10s").
 			Advanced(),
 		service.NewStringField(kfwFieldMaxMessageBytes).
@@ -63,12 +63,14 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"This field maps to the `max.message.bytes` Kafka property. " +
 				"Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, " +
 				"see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes.").
+			ShortDescription("Maximum size of a produced record batch. Maps to the Kafka max.message.bytes property.").
 			Advanced().
 			Default("1MiB").
 			Example("100MB").
 			Example("50mib"),
 		service.NewStringField(kfwFieldBrokerWriteMaxBytes).
-			Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
+			Description("The maximum number of bytes this output can write to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").Version("4.35.0").
+			ShortDescription("Upper bound on bytes written to a broker connection in a single write.").
 			Advanced().
 			Default("100MiB").
 			Example("128MB").
@@ -76,29 +78,35 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 		service.NewIntField(kfwFieldMaxBufferedRecords).
 			Description("The maximum number of records the client will buffer in memory before blocking. " +
 				"When this limit is reached, `Produce()` calls will block until buffered records are delivered and space frees up. " +
-				"Increase this value for high-throughput pipelines to avoid back-pressure stalls.").
+				"Increase this value for high-throughput pipelines to avoid back-pressure stalls.").Version("4.92.0").
+			ShortDescription("Maximum records buffered in memory before producing blocks.").
 			Advanced().
 			Default(10000),
 		service.NewStringField(kfwFieldMaxBufferedBytes).
 			Description("The maximum number of bytes the client will buffer in memory before blocking. " +
 				"When this limit is reached, `Produce()` calls will block until buffered records are delivered. " +
 				"Set to `0` to disable the byte-level limit (only `max_buffered_records` applies). " +
-				"This limit is checked after `max_buffered_records`.").
+				"This limit is checked after `max_buffered_records`.").Version("4.92.0").
+			ShortDescription("Maximum bytes buffered in memory before producing blocks. Set to 0 to disable the byte limit.").
 			Advanced().
 			Default("0").
 			Example("256MB").
 			Example("50mib"),
 		service.NewIntField(kfwFieldMaxInFlightRequestsPerBrkr).
 			Description("The maximum number of produce requests in flight per broker connection. " +
-				"When `idempotent_write` is enabled, this is capped at 5 by the Kafka protocol (and at 1 for Kafka < v1.0.0). " +
-				"When `idempotent_write` is disabled, higher values improve throughput by pipelining requests but may cause out-of-order delivery.").
+				"While `idempotent_write` is enabled (the default) this must be `1`, as the client relies on a single in-flight request per broker to guarantee ordering. " +
+				"To use higher values you must set `idempotent_write` to `false`, which allows requests to be pipelined for throughput but may cause duplicate and out-of-order delivery on retries. " +
+				"Note that this is distinct from the output's `max_in_flight` field, which counts message batches being written in parallel rather than produce requests on the wire. " +
+				"A value of `1` is not a throughput ceiling: records from concurrent writes are coalesced into fewer, larger produce requests.").Version("4.92.0").
+			ShortDescription("Maximum produce requests in flight per broker connection. Must be 1 while idempotent_write is enabled.").
 			Advanced().
 			Default(1),
 		service.NewIntField(kfwFieldRecordRetries).
 			Description("The maximum number of times a record produce is retried on failure before the record is failed. " +
 				"When a record fails, all records buffered in the same partition are also failed to preserve gapless ordering. " +
 				"Set to `0` for unlimited retries (the default). " +
-				"With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.").
+				"With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.").Version("4.92.0").
+			ShortDescription("Maximum number of times a record produce is retried before the record fails.").
 			Advanced().
 			Default(0),
 		service.NewDurationField(kfwFieldRecordDeliveryTimeout).
@@ -106,7 +114,8 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 				"This is evaluated before writing a request or after a produce response. " +
 				"When a record times out, all records in the same partition are also failed. " +
 				"Set to `0s` for no timeout (the default). " +
-				"With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.").
+				"With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.").Version("4.92.0").
+			ShortDescription("Maximum time a record may sit in the producer buffer before failing. Equivalent to Kafka's delivery.timeout.ms.").
 			Advanced().
 			Default("0s"),
 	}
@@ -126,13 +135,8 @@ func FranzProducerFields() []*service.ConfigField {
 				Description("Override the default murmur2 hashing partitioner.").
 				Advanced().Optional(),
 			service.NewBoolField(kfwFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. " +
-					"When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). " +
-					"This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. " +
-					"If your cluster does not grant this permission or uses ACLs restrictively, disable this option. " +
-					"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
-					"(e.g., some managed Kafka services, Redpanda with strict ACLs). " +
-					"Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.").
+				Description("Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition, so retries do not produce duplicates. This option requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. Disable this option if the `IDEMPOTENT_WRITE` permission is unavailable, for example in some managed Kafka services or Redpanda clusters with strict ACLs. Disabling this option only affects retry behavior: duplicates may occur on producer retries, but the pipeline continues to function normally.").Version("4.24.0").
+				ShortDescription("Enable the idempotent write producer option for exactly-once semantics per partition. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(true).
 				Advanced(),
 			service.NewStringAnnotatedEnumField(kfwFieldAcks, map[string]string{
@@ -141,15 +145,17 @@ func FranzProducerFields() []*service.ConfigField {
 				"leader": "Wait for the leader broker to acknowledge (acks=1). Messages are lost if the leader fails before replication.",
 			}).
 				Description("The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. " +
-					"When `idempotent_write` is enabled this must be set to `all`.").
+					"When `idempotent_write` is enabled this must be set to `all`.").Version("4.92.0").
+				ShortDescription("Acknowledgements the leader must receive from ISR brokers before responding. Must be all when idempotent_write is enabled.").
 				Default("all").
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
-				Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
-				Optional().
+				Description("The compression codec for produced record batches. A batch that compression does not make smaller is sent uncompressed, whichever codec you choose.").
+				ShortDescription("Compression codec for produced record batches. A batch that compression does not shrink is sent uncompressed.").
+				Default("snappy").
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
-				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata. If set to `false`, the topic must already exist.").Version("4.58.0").
 				Default(true).
 				Advanced(),
 		},
@@ -263,22 +269,22 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 			return nil, err
 		}
 
-		var c kgo.CompressionCodec
 		switch cStr {
 		case "lz4":
-			c = kgo.Lz4Compression()
+			compressionPrefs = append(compressionPrefs, kgo.Lz4Compression())
 		case "gzip":
-			c = kgo.GzipCompression()
+			compressionPrefs = append(compressionPrefs, kgo.GzipCompression())
 		case "snappy":
-			c = kgo.SnappyCompression()
+			// The same preference list as the franz-go default, which the
+			// default value of this field stands for.
+			compressionPrefs = append(compressionPrefs, kgo.SnappyCompression(), kgo.NoCompression())
 		case "zstd":
-			c = kgo.ZstdCompression()
+			compressionPrefs = append(compressionPrefs, kgo.ZstdCompression())
 		case "none":
-			c = kgo.NoCompression()
+			compressionPrefs = append(compressionPrefs, kgo.NoCompression())
 		default:
 			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
 		}
-		compressionPrefs = append(compressionPrefs, c)
 	}
 	if len(compressionPrefs) > 0 {
 		opts = append(opts, kgo.ProducerBatchCompression(compressionPrefs...))
@@ -321,6 +327,19 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 		return nil, fmt.Errorf("idempotent_write requires acks to be \"all\", got %q", acksStr)
 	}
 
+	// The franz-go client rejects any value other than 1 here while idempotency
+	// is enabled, because it relies on a single in-flight request per broker to
+	// keep producer sequence numbers gapless. Without this check that rejection
+	// surfaces from within Connect() as a retryable connection error, so the
+	// pipeline starts, retries forever and silently produces nothing.
+	maxInFlightRequests, err := conf.FieldInt(kfwFieldMaxInFlightRequestsPerBrkr)
+	if err != nil {
+		return nil, err
+	}
+	if idempotentWrite && maxInFlightRequests != 1 {
+		return nil, fmt.Errorf("idempotent_write requires max_in_flight_requests to be 1, got %d (set idempotent_write to false to use higher values, at the cost of possible duplicate and out-of-order delivery on retries)", maxInFlightRequests)
+	}
+
 	if !idempotentWrite {
 		opts = append(opts, kgo.DisableIdempotentWrite())
 	}
@@ -357,6 +376,16 @@ const (
 	kfwFieldMetadata    = "metadata"
 	kfwFieldTimestamp   = "timestamp"
 	kfwFieldTimestampMs = "timestamp_ms"
+	kfwFieldTombstone   = "tombstone"
+)
+
+// Descriptions shared by the fields of the franz-go and Sarama based Kafka
+// outputs.
+const (
+	kafkaOutputKeyDescription         = "An optional key to populate for each message."
+	kafkaOutputTimeoutDescription     = "The maximum period of time to wait for message sends before abandoning the request and retrying."
+	kafkaOutputTimestampDescription   = "An optional timestamp to set for each message, in seconds since the Unix epoch. When left empty, the current timestamp is used."
+	kafkaOutputTimestampMsDescription = "An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`."
 )
 
 // FranzWriterConfigFields returns a slice of config fields specifically for
@@ -366,25 +395,33 @@ func FranzWriterConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(kfwFieldTopic).
 			Description("A topic to write messages to."),
 		service.NewInterpolatedStringField(kfwFieldKey).
-			Description("An optional key to populate for each message.").Optional(),
+			Description(kafkaOutputKeyDescription).Optional(),
 		service.NewInterpolatedStringField(kfwFieldPartition).
-			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
+			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").Version("4.13.0").
+			ShortDescription("An explicit partition for each message. Only relevant when partitioner is set to manual.").
 			Example(`${! meta("partition") }`).
 			Optional(),
 		service.NewMetadataFilterField(kfwFieldMetadata).
-			Description("Determine which (if any) metadata values should be added to messages as headers.").
+			Description("Determines which metadata values are added to messages as headers.").
 			Optional(),
 		service.NewInterpolatedStringField(kfwFieldTimestamp).
-			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+			Description(kafkaOutputTimestampDescription).
 			Example(`${! timestamp_unix() }`).
 			Example(`${! metadata("kafka_timestamp_unix") }`).
 			Optional().
 			Advanced().
 			Deprecated(),
 		service.NewInterpolatedStringField(kfwFieldTimestampMs).
-			Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+			Description(kafkaOutputTimestampMsDescription).Version("4.40.0").
 			Example(`${! timestamp_unix_milli() }`).
 			Example(`${! metadata("kafka_timestamp_ms") }`).
+			Optional().
+			Advanced(),
+		service.NewInterpolatedStringField(kfwFieldTombstone).
+			Description("An optional boolean that, when it resolves to `true` for a message, writes that message as a tombstone: a record with a null value. The message payload is ignored for tombstones. Use this to delete keys on compacted topics, or to keep tombstones intact when mirroring a topic. An empty payload is not a tombstone. The interpolation must resolve to a value that can be parsed as a boolean, otherwise the write fails.").
+			Version("4.114.0").
+			Example(`${! @kafka_tombstone_message }`).
+			Example(`${! @operation == "delete" }`).
 			Optional().
 			Advanced(),
 	}
@@ -396,7 +433,8 @@ func FranzWriterConfigLints() string {
   this.partitioner == "manual" && this.partition.or("") == "" => "a partition must be specified when the partitioner is set to manual"
   this.partitioner != "manual" && this.partition.or("") != "" => "a partition cannot be specified unless the partitioner is set to manual"
   this.timestamp.or("") != "" && this.timestamp_ms.or("") != "" => "both timestamp and timestamp_ms cannot be specified simultaneously"
-  this.idempotent_write == true && this.acks.or("all") != "all" => "idempotent_write requires acks to be set to all"
+  this.idempotent_write.or(true) == true && this.acks.or("all") != "all" => "idempotent_write requires acks to be set to all"
+  this.idempotent_write.or(true) == true && this.max_in_flight_requests.or(1) != 1 => "idempotent_write requires max_in_flight_requests to be 1, set idempotent_write to false to use higher values"
 }`
 }
 
@@ -423,6 +461,7 @@ type FranzWriter struct {
 	Partition     *service.InterpolatedString
 	Timestamp     *service.InterpolatedString
 	IsTimestampMs bool
+	Tombstone     *service.InterpolatedString
 	MetaFilter    *service.MetadataFilter
 	hooks         franzWriterHooks
 
@@ -491,6 +530,12 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks
 		w.IsTimestampMs = true
 	}
 
+	if conf.Contains(kfwFieldTombstone) {
+		if w.Tombstone, err = conf.FieldInterpolatedString(kfwFieldTombstone); err != nil {
+			return nil, err
+		}
+	}
+
 	return &w, nil
 }
 
@@ -513,10 +558,24 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 
 		var err error
 
-		// Required: Value
-		r.Value, err = msg.AsBytes()
-		if err != nil {
-			return nil, fmt.Errorf("message to bytes: %w", err)
+		// Optional: Tombstone
+		var tombstone bool
+		if w.Tombstone != nil {
+			tsStr, err := w.Tombstone.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("tombstone interpolation: %w", err)
+			}
+			if tombstone, err = strconv.ParseBool(tsStr); err != nil {
+				return nil, fmt.Errorf("parse tombstone: %w", err)
+			}
+		}
+
+		// Required: Value, left nil for tombstones so it is encoded as null.
+		if !tombstone {
+			r.Value, err = msg.AsBytes()
+			if err != nil {
+				return nil, fmt.Errorf("message to bytes: %w", err)
+			}
 		}
 
 		// Required: Topic

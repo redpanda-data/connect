@@ -75,11 +75,12 @@ func protobufProcessorSpec() *service.ConfigSpec {
 		Summary(`
 Performs conversions to or from a protobuf message. This processor uses reflection, meaning conversions can be made directly from the target .proto files.
 `).Description(`
-The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: [https://developers.google.com/protocol-buffers/docs/proto3#json](https://developers.google.com/protocol-buffers/docs/proto3#json)
+The main functionality of this processor is to map to and from JSON documents. For how protobuf messages map to JSON, see https://protobuf.dev/programming-guides/json/[ProtoJSON Format^] and <<examples,Examples>>.
 
-Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively, you can find an example of Redpanda Connect plugins at [https://github.com/redpanda-data/redpanda-connect-plugin-example](https://github.com/redpanda-data/redpanda-connect-plugin-example)
+Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively. For an example, see the https://github.com/redpanda-data/redpanda-connect-plugin-example[Redpanda Connect plugin example^].
 
-The processor will ignore any files that begin with a dot ("."g), a convention for hidden files, when loading protocol buffer definitions.
+The processor will ignore any files that begin with a dot ("."), a convention for hidden files, when loading protocol buffer definitions.
+
 == Operators
 
 === `+"`to_json`"+`
@@ -101,24 +102,29 @@ This differs from `+"`to_json`"+` in the following ways:
 This operator is also considerably faster in scenario where you manipulate the data as the data does not need to be serialized then deserialized like with the `+"`to_json`"+` operator.
 `).Fields(
 		service.NewStringEnumField(fieldOperator, "to_json", "from_json", "decode").
-			Description("The [operator](#operators) to execute"),
+			Description("The operator to execute.").
+			ShortDescription("The operator to execute."),
 		service.NewStringField(fieldMessage).
-			Description("The fully qualified name of the protobuf message to convert to/from."),
+			Description("The fully-qualified name of the protobuf message to convert from or to JSON."),
 		service.NewBoolField(fieldDiscardUnknown).
-			Description("If `true`, the `from_json` operator discards fields that are unknown to the schema.").
+			Description("When set to `true`, the `from_json` operator discards fields that are unknown to the schema.").Version("4.24.0").
+			ShortDescription("Discard fields that are unknown to the schema.").
 			Default(false),
 		service.NewBoolField(fieldUseProtoNames).
-			Description("If `true`, the `to_json` or `decode` operator deserializes fields exactly as named in schema file.").
+			Description("When set to `true`, the `to_json` or `decode` operator deserializes fields exactly as named in the schema file.").Version("4.24.0").
+			ShortDescription("Deserialize fields exactly as named in the schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
-			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported. Either this field or `bsr` must be populated.").
+			Description("A list of directories that contain `.proto` files, including all definitions required for parsing the target message. If left empty, the current directory is used. This processor walks each listed directory and imports all `.proto` files it finds. Either this field or `bsr` must be populated.").
+			ShortDescription("Directories containing the .proto files needed to parse the target message. Defaults to the current directory.").
 			Default([]string{}),
 		service.NewBoolField(fieldUseEnumNumbers).
-			Description("If `true`, the `to_json` or `decode` operator deserializes enums as numerical values instead of string names.").
+			Description("When set to `true`, the `to_json` or `decode` operator deserializes enumeration fields as their numerical values instead of their string names. For example, an enum field with a value of `ENUM_VALUE_ONE` is represented as `1` in the JSON output.").Version("4.53.0").
+			ShortDescription("Deserialize enums as numeric values rather than string names.").
 			Default(false),
 		service.NewObjectListField(fieldBSRConfig,
 			service.NewStringField(fieldBSRModule).
-				Description("Module to fetch from a Buf Schema Registry e.g. 'buf.build/exampleco/mymodule'."),
+				Description("Module to fetch from a Buf Schema Registry, for example, 'buf.build/exampleco/mymodule'."),
 			service.NewStringField(fieldBSRUrl).
 				Description("Buf Schema Registry URL, leave blank to extract from module.").
 				Default("").Advanced(),
@@ -129,7 +135,8 @@ This operator is also considerably faster in scenario where you manipulate the d
 			service.NewStringField(fieldBSRVersion).
 				Description("Version to retrieve from the Buf Schema Registry, leave blank for latest.").
 				Default("").Advanced(),
-		).Description("Buf Schema Registry configuration. Either this field or `import_paths` must be populated. Note that this field is an array, and multiple BSR configurations can be provided.").
+		).Description("Buf Schema Registry configuration. Either this field or `import_paths` must be populated. Note that this field is an array, and multiple BSR configurations can be provided.").Version("4.63.0").
+			ShortDescription("Buf Schema Registry configuration. Either this or import_paths must be populated.").
 			Default([]any{}),
 	).LintRule(`
 root = match {

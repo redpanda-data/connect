@@ -47,28 +47,20 @@ const (
 // Deprecated: Use the franz_reader_toggled variant instead.
 func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringField(kruFieldConsumerGroup).
-			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
-			Optional(),
-		service.NewIntField(kruFieldCheckpointLimit).
-			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
-			Default(1024).
-			Advanced(),
-		service.NewDurationField(kruFieldCommitPeriod).
-			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+		franzConsumerGroupField(kruFieldConsumerGroup),
+		franzCheckpointLimitField(kruFieldCheckpointLimit).Advanced(),
+		commitPeriodField(kruFieldCommitPeriod).Version("4.3.0").
 			Default("5s").
 			Advanced(),
 		service.NewBoolField(kruFieldMultiHeader).
-			Description("Decode headers into lists to allow handling of multiple values with the same key").
+			Description("Decode headers into lists to allow the handling of multiple values with the same key.").Version("4.10.0").
 			Default(false).
 			Advanced(),
 		service.NewBatchPolicyField(kruFieldBatching).
-			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+			Description("Configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions, so that the input batches messages together before flushing them for processing. Batching can improve performance and is useful for windowed processing. Batching this way preserves the ordering of topic partitions.").Version("4.15.0").
+			ShortDescription("Batching policy applied per topic partition, grouping messages before they are flushed for processing.").
 			Advanced(),
-		service.NewDurationField(kruFieldTopicLagRefreshPeriod).
-			Description("The period of time between each topic lag refresh cycle.").
-			Default("5s").
-			Advanced(),
+		franzTopicLagRefreshPeriodField(kruFieldTopicLagRefreshPeriod).Version("4.54.1"),
 	}
 }
 
@@ -94,6 +86,12 @@ type FranzReaderUnordered struct {
 	batchPolicy           service.BatchPolicy
 	topicLagRefreshPeriod time.Duration
 
+	// lagMetricName is the name of the consumer lag gauge emitted by this
+	// reader. It is owned by the input rather than the reader so that inputs
+	// which can be served by either reader implementation emit a consistent
+	// metric name.
+	lagMetricName string
+
 	batchChan atomic.Value
 	res       *service.Resources
 	log       *service.Logger
@@ -114,9 +112,10 @@ func (f *FranzReaderUnordered) storeBatchChan(c chan batchWithAckFn) {
 // Deprecated: Use the toggled variant in future.
 func NewFranzReaderUnorderedFromConfig(conf *service.ParsedConfig, res *service.Resources, opts ...kgo.Opt) (*FranzReaderUnordered, error) {
 	f := FranzReaderUnordered{
-		res:     res,
-		log:     res.Logger(),
-		shutSig: shutdown.NewSignaller(),
+		res:           res,
+		log:           res.Logger(),
+		shutSig:       shutdown.NewSignaller(),
+		lagMetricName: lagMetricNameKafka,
 	}
 	f.clientOpts = func() ([]kgo.Opt, error) {
 		return slices.Clone(opts), nil
@@ -577,7 +576,7 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	go func() {
 		var consumerLag *ConsumerLag
 		if f.consumerGroup != "" {
-			topicLagGauge := f.res.Metrics().NewGauge("kafka_lag", "topic", "partition")
+			topicLagGauge := f.res.Metrics().NewGauge(f.lagMetricName, "topic", "partition")
 			consumerLag = NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
 			consumerLag.Start()
 			defer consumerLag.Stop()

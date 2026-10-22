@@ -91,7 +91,7 @@ In order to set the `+"`table_name`"+`,  `+"`partition_key`"+` and `+"`row_key`"
 
 If the `+"`properties`"+` are not set in the config, all the `+"`json`"+` fields are marshalled and stored in the table, which will be created if it does not exist.
 
-The `+"`object`"+` and `+"`array`"+` fields are marshaled as strings. e.g.:
+The `+"`object`"+` and `+"`array`"+` fields are marshaled as strings. For example:
 
 The JSON message:
 
@@ -114,7 +114,7 @@ bar: '{ "baz": "a", "bez": "b" }'
 diz: '["a", "b"]'
 `+"```"+`
 
-It's also possible to use function interpolations to get or transform the properties values, e.g.:
+It's also possible to use function interpolations to get or transform the properties values. For example:
 
 `+"```yml"+`
 properties:
@@ -123,33 +123,34 @@ properties:
 `+"```"+``+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewInterpolatedStringField(tsoFieldTableName).
-				Description("The table to store messages into.").
+				Description(`The table to store messages into.`).
 				Example(`${! meta("kafka_topic") }`).Example(`${! json("table") }`),
 			service.NewInterpolatedStringField(tsoFieldPartitionKey).
-				Description("The partition key.").
+				Description(`The partition key.`).
 				Example(`${! json("date") }`).
 				Default(""),
 			service.NewInterpolatedStringField(tsoFieldRowKey).
-				Description("The row key.").
+				Description(`The row key.`).
 				Example(`${! json("device")}-${!uuid_v4() }`).
 				Default(""),
 			service.NewInterpolatedStringMapField(tsoFieldProperties).
-				Description("A map of properties to store into the table.").
+				Description(`A map of properties to store into the table.`).
 				Default(map[string]any{}),
 			service.NewInterpolatedStringEnumField(tsoFieldInsertType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`).
 				Description("Type of insert operation. Valid options are `INSERT`, `INSERT_MERGE` and `INSERT_REPLACE`").
+				ShortDescription("Type of insert operation: INSERT, INSERT_MERGE or INSERT_REPLACE.").
 				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
 				Advanced().Deprecated().
 				Default(""),
 			service.NewInterpolatedStringEnumField(tsoFieldTransactionType, `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE`, `DELETE`).
-				Description("Type of transaction operation.").
+				Description(`Type of transaction operation.`).Version("4.10.0").
 				Example(`${! json("operation") }`).Example(`${! meta("operation") }`).Example(`INSERT`).
 				Advanced().
 				Default("INSERT"),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of parallel message batches to have in flight at any given time."),
 			service.NewDurationField(tsoFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("This field has no effect. The output parses the value but does not apply it to write requests.").
 				Advanced().Default("5s"),
 			service.NewBatchPolicyField(tsoFieldBatching),
 		)

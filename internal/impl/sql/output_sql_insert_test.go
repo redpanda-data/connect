@@ -41,3 +41,30 @@ args_mapping: 'root = [ this.id ]'
 	require.NoError(t, err)
 	require.NoError(t, insertOutput.Close(t.Context()))
 }
+
+// SAP HANA rejects multi-row INSERT ... VALUES (?,?),(?,?), so the hana driver
+// must take the per-row prepared statement path like oracle and clickhouse.
+func TestSQLInsertHANAUsesPerRowStatements(t *testing.T) {
+	conf := `
+driver: hana
+dsn: hdb://user:pass@host:39017
+table: quack
+columns: [ foo ]
+args_mapping: 'root = [ this.id ]'
+`
+	env := service.NewEnvironment()
+
+	outConf, err := sqlInsertOutputConfig().ParseYAML(conf, env)
+	require.NoError(t, err)
+	insertOutput, err := newSQLInsertOutputFromConfig(outConf, service.MockResources())
+	require.NoError(t, err)
+	require.True(t, insertOutput.useTxStmt, "sql_insert output with driver: hana must use per-row statements")
+	require.NoError(t, insertOutput.Close(t.Context()))
+
+	procConf, err := InsertProcessorConfig().ParseYAML(conf, env)
+	require.NoError(t, err)
+	insertProc, err := NewSQLInsertProcessorFromConfig(procConf, service.MockResources())
+	require.NoError(t, err)
+	require.True(t, insertProc.useTxStmt, "sql_insert processor with driver: hana must use per-row statements")
+	require.NoError(t, insertProc.Close(t.Context()))
+}

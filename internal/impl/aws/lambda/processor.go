@@ -94,6 +94,7 @@ pipeline:
 			Description("The function to invoke.")).
 		Field(service.NewStringField("rate_limit").
 			Description("An optional xref:components:rate_limits/about.adoc[`rate_limit`] to throttle invocations by.").
+			ShortDescription("An optional rate_limit resource to throttle invocations by.").
 			Default("").
 			Advanced())
 

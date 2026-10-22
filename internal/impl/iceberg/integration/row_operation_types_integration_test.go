@@ -82,8 +82,8 @@ func keyRoundTrip(t *testing.T, infra *testInfrastructure, ns, tbl string, keyTy
 
 func TestRowOperationKeyTypesIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	t.Parallel()
+	infra := setupTestInfra(t)
 	const ns = "row_op_keytypes"
 	infra.CreateNamespace(t, ns)
 
@@ -102,9 +102,12 @@ func TestRowOperationKeyTypesIntegration(t *testing.T) {
 		{"decimal-float", "k_decimal_f", iceberg.DecimalTypeOf(12, 2), 123.45, 234.56},
 		{"decimal-string", "k_decimal_s", iceberg.DecimalTypeOf(12, 2), "123.45", "234.56"},
 		{"timestamp-time", "k_ts_time", iceberg.TimestampType{}, ts1, ts2},
-		// Note: a bare numeric timestamp key is deliberately rejected at write
-		// time (its unit is ambiguous and cannot be matched against the insert
-		// path) — covered by the deleteKeyJSONValue unit test, not here.
+		// A bare numeric timestamp key is interpreted with the same unit
+		// rules as the insert path (schema metadata when present, otherwise
+		// the seconds default), so it round-trips end-to-end; feeding a unit
+		// other than the declared/default one is the operator error
+		// require_schema_metadata guards against.
+		{"timestamp-numeric", "k_ts_num", iceberg.TimestampType{}, int64(1704067200), int64(1704153600)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -116,8 +119,9 @@ func TestRowOperationKeyTypesIntegration(t *testing.T) {
 // TestRowOperationCompositeKeyIntegration verifies a multi-column identifier.
 func TestRowOperationCompositeKeyIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns, tbl = "row_op_composite", "ck"
 	infra.CreateNamespace(t, ns)
 
@@ -167,8 +171,9 @@ func TestRowOperationCompositeKeyIntegration(t *testing.T) {
 // deletes route to the correct partition and match the intended rows.
 func TestRowOperationPartitionedIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns, tbl = "row_op_partitioned", "p"
 	infra.CreateNamespace(t, ns)
 
@@ -221,8 +226,9 @@ func TestRowOperationPartitionedIntegration(t *testing.T) {
 // upserts of the same key in one batch must leave a single (latest) row.
 func TestRowOperationBatchCollapseIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns, tbl = "row_op_collapse", "c"
 	infra.CreateNamespace(t, ns)
 

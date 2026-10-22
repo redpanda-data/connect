@@ -33,18 +33,22 @@ func schemaRegistryConfigFields() []*service.ConfigField {
 	fields = append(fields,
 		service.NewStringField(srFieldCommonSubject).
 			Description("Schema subject name for the common protobuf schema. Only used when encoding is 'protobuf'. Defaults to 'redpanda-otel-common' for protobuf encoding or 'redpanda-otel-common-json' for JSON encoding.").
+			ShortDescription("Schema subject name for the common protobuf schema. Only used when encoding is protobuf.").
 			Default("").
 			Advanced(),
 		service.NewStringField(srFieldTraceSubject).
 			Description("Schema subject name for trace data. Defaults to 'redpanda-otel-traces' for protobuf encoding or 'redpanda-otel-traces-json' for JSON encoding.").
+			ShortDescription("Schema subject name for trace data.").
 			Default("").
 			Advanced(),
 		service.NewStringField(srFieldLogSubject).
 			Description("Schema subject name for log data. Defaults to 'redpanda-otel-logs' for protobuf encoding or 'redpanda-otel-logs-json' for JSON encoding.").
+			ShortDescription("Schema subject name for log data.").
 			Default("").
 			Advanced(),
 		service.NewStringField(srFieldMetricSubject).
 			Description("Schema subject name for metric data. Defaults to 'redpanda-otel-metrics' for protobuf encoding or 'redpanda-otel-metrics-json' for JSON encoding.").
+			ShortDescription("Schema subject name for metric data.").
 			Default("").
 			Advanced(),
 	)

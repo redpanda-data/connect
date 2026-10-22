@@ -202,6 +202,7 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 			hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 		}),
 		testcontainers.WithEnv(map[string]string{
+			"ALLOW_EMPTY_PASSWORD":         "yes",
 			"REDIS_SENTINEL_ANNOUNCE_IP":   "127.0.0.1",
 			"REDIS_SENTINEL_ANNOUNCE_PORT": strconv.Itoa(sentinelPort),
 			"REDIS_SENTINEL_QUORUM":        "1",

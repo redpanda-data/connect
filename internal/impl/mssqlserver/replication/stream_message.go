@@ -83,7 +83,20 @@ func (op OpType) String() string {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	LSN       LSN    `json:"start_lsn"`
+	LSN LSN `json:"start_lsn"`
+	// CheckpointLSN is the start LSN of the most recent transaction whose rows
+	// have all been published — the only value safe to persist as a resume
+	// position (resume is exclusive and all rows of a transaction share a
+	// start LSN). Empty for snapshot rows and until the first transaction
+	// boundary is observed.
+	CheckpointLSN LSN `json:"-"`
+	// SeqVal is the change table __$seqval column: the position of the operation in
+	// the transaction log. It has the same varbinary(10) shape as LSN. Empty for
+	// snapshot rows.
+	SeqVal LSN `json:"seqval"`
+	// CommandID is the change table __$command_id column: the order of the operation
+	// in its transaction. Zero for snapshot rows.
+	CommandID int    `json:"command_id"`
 	Operation string `json:"operation"`
 	Schema    string `json:"schema"`
 	Table     string `json:"table"`

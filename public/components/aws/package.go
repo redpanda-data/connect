@@ -25,6 +25,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/sns"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/sqs"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/kafka/aws"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/mongodb/aws"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/mysql/aws"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/opensearch/aws"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/postgresql/aws"

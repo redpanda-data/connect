@@ -47,6 +47,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
@@ -334,7 +335,13 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	require.NoError(t, err)
 	txt, err := srDst.SchemaTextByVersion(t.Context(), subj, 1)
 	require.NoError(t, err)
-	assert.Equal(t, schema, txt)
+	// The schema registry canonicalizes a primitive Avro type object
+	// ({"type":"int"}) down to its bare string form ("int") on write, so
+	// compare against what the source registry stored rather than the
+	// literal schema submitted by the test.
+	srcTxt, err := srScr.SchemaTextByVersion(t.Context(), subj, 1)
+	require.NoError(t, err)
+	assert.Equal(t, srcTxt, txt)
 
 	t.Logf("And: %d schema-encoded messages are present in destination topic %s", numMessages, migratorTestTopic)
 	records := readTopicContent(dst, numMessages)
@@ -1299,4 +1306,225 @@ logger:
 		})
 		return emptyTotal == 0
 	}, 3*time.Second, 200*time.Millisecond, "Empty topic should have 0 messages on destination")
+}
+
+func TestIntegrationMigratorOutputCustomHeaders(t *testing.T) {
+	integration.CheckSkip(t)
+
+	getHeader := func(headers []kgo.RecordHeader, key string) ([]byte, bool) {
+		for _, header := range slices.Backward(headers) {
+			if header.Key == key {
+				return header.Value, true
+			}
+		}
+		return nil, false
+	}
+
+	t.Log("Given: Redpanda clusters without schema registry")
+	src, dst := startRedpandaSourceAndDestination(t)
+	src.SchemaRegistryURL = ""
+	dst.SchemaRegistryURL = ""
+
+	t.Log("When: Migrator is started with a custom header configured, including ones that collide with the default offset and provenance header names")
+	const yamlTmpl = `
+input:
+  redpanda_migrator:
+    seed_brokers:
+      - {{.Src.BrokerAddr}}
+    topics:
+      - {{.Topic}}
+    consumer_group: redpanda_migrator_cg
+output:
+  redpanda_migrator:
+    seed_brokers: [ {{.Dst.BrokerAddr}} ]
+    headers:
+      x-migration-source: 'test-pipeline'
+      {{.OffsetHeader}}: 'should-be-overridden'
+      {{.ProvenanceHeader}}: 'bogus-cluster-id'
+    consumer_groups:
+      interval: 1s
+logger:
+  level: DEBUG
+`
+	tmpl, err := template.New("migrator").Parse(yamlTmpl)
+	require.NoError(t, err)
+
+	data := struct {
+		Src              EmbeddedRedpandaCluster
+		Dst              EmbeddedRedpandaCluster
+		Topic            string
+		OffsetHeader     string
+		ProvenanceHeader string
+	}{
+		Src:              src,
+		Dst:              dst,
+		Topic:            migratorTestTopic,
+		OffsetHeader:     migrator.DefaultOffsetHeader,
+		ProvenanceHeader: migrator.DefaultProvenanceHeader,
+	}
+	var yamlBuf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlBuf.String()))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+		t.Log("Migrator pipeline shutdown")
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
+	})
+
+	t.Log("And: A message is produced to src")
+	src.Produce(migratorTestTopic, []byte("hello"))
+
+	t.Log("Then: The migrated record on dst carries the custom header with the configured value")
+	records := readTopicContent(dst, 1)
+	require.Len(t, records, 1)
+
+	val, ok := getHeader(records[0].Headers, "x-migration-source")
+	require.True(t, ok, "expected custom header %q to be present on migrated record", "x-migration-source")
+	assert.Equal(t, "test-pipeline", string(val))
+
+	t.Log("And: The offset header is not overridden by the colliding custom header value, protecting exact offset migration")
+	offsetVal, ok := getHeader(records[0].Headers, migrator.DefaultOffsetHeader)
+	require.True(t, ok, "expected offset header %q to be present on migrated record", migrator.DefaultOffsetHeader)
+	assert.NotEqual(t, []byte("should-be-overridden"), offsetVal)
+	assert.Equal(t, migrator.EncodeOffsetHeader(0), offsetVal, "offset header should carry the real source offset (0), not the colliding custom header value")
+
+	t.Log("And: The provenance header is not overridden by the colliding custom header value, protecting loop-prevention/data-corruption guards")
+	srcMetadata, err := src.Admin.Metadata(t.Context())
+	require.NoError(t, err)
+	provenanceVal, ok := getHeader(records[0].Headers, migrator.DefaultProvenanceHeader)
+	require.True(t, ok, "expected provenance header %q to be present on migrated record", migrator.DefaultProvenanceHeader)
+	assert.NotEqual(t, []byte("bogus-cluster-id"), provenanceVal)
+	assert.Equal(t, []byte(srcMetadata.Cluster), provenanceVal, "provenance header should carry the real source cluster ID, not the colliding custom header value")
+}
+
+// Regression test for CON-530: a schema subject that cannot be registered at
+// the destination used to fail the output connect, restarting the pipeline
+// forever so that no topic was ever created and no data was copied.
+func TestIntegrationMigratorIncompatibleSubjectDoesNotBlockTopics(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		topicPopulated = migratorTestTopic
+		topicEmpty     = "audit"
+		numMessages    = 3
+
+		badSubj = "bad-value"
+		badV1   = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
+		badV2   = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"int"}]}`
+		goodSub = "good-value"
+		good    = `{"type":"record","name":"Good","fields":[{"name":"g","type":"string"}]}`
+	)
+
+	t.Log("Given: Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+
+	srSrc, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
+	require.NoError(t, err)
+	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+	require.NoError(t, err)
+
+	t.Log("And: a subject evolved incompatibly at source, plus a healthy subject")
+	set := srSrc.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	for _, s := range []struct{ subj, schema string }{{badSubj, badV1}, {badSubj, badV2}, {goodSub, good}} {
+		_, err := srSrc.CreateSchema(t.Context(), s.subj, sr.Schema{Schema: s.schema})
+		require.NoError(t, err)
+	}
+
+	t.Log("And: destination holds only the old version of the subject under BACKWARD compatibility")
+	_, err = srDst.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
+	require.NoError(t, err)
+
+	t.Log("And: a populated topic and an empty topic at source")
+	src.CreateTopic(topicEmpty)
+	for i := range numMessages {
+		src.Produce(topicPopulated, []byte("msg-"+strconv.Itoa(i)))
+	}
+
+	t.Log("When: migrator is started with a one-shot schema sync")
+	const yamlTmpl = `
+input:
+  redpanda_migrator:
+    seed_brokers: [ {{.Src.BrokerAddr}} ]
+    topics: [ {{.TopicPopulated}}, {{.TopicEmpty}} ]
+    consumer_group: redpanda_migrator_cg
+    schema_registry:
+      url: {{.Src.SchemaRegistryURL}}
+output:
+  redpanda_migrator:
+    seed_brokers: [ {{.Dst.BrokerAddr}} ]
+    sync_topic_interval: 1s
+    schema_registry:
+      url: {{.Dst.SchemaRegistryURL}}
+      interval: 0s
+      versions: all
+      translate_ids: true
+logger:
+  level: DEBUG
+`
+	tmpl, err := template.New("migrator").Parse(yamlTmpl)
+	require.NoError(t, err)
+
+	data := struct {
+		Src            EmbeddedRedpandaCluster
+		Dst            EmbeddedRedpandaCluster
+		TopicPopulated string
+		TopicEmpty     string
+	}{
+		Src:            src,
+		Dst:            dst,
+		TopicPopulated: topicPopulated,
+		TopicEmpty:     topicEmpty,
+	}
+	var yamlBuf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlBuf.String()))
+	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
+	})
+
+	t.Log("Then: both topics are created at destination")
+	require.Eventually(t, func() bool {
+		topics := dst.ListTopics()
+		return slices.Contains(topics, topicPopulated) && slices.Contains(topics, topicEmpty)
+	}, redpandaTestWaitTimeout, 200*time.Millisecond)
+
+	t.Log("And: data is copied")
+	readCtx, readCancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer readCancel()
+	records := readTopicContentContext(readCtx, dst, numMessages)
+	require.Len(t, records, numMessages)
+	for i, r := range records {
+		assert.Equal(t, "msg-"+strconv.Itoa(i), string(r.Value))
+	}
+
+	t.Log("And: the healthy subject is registered while the incompatible version is not")
+	_, err = srDst.SchemaByVersion(t.Context(), goodSub, 1)
+	require.NoError(t, err)
+	_, err = srDst.SchemaByVersion(t.Context(), badSubj, 2)
+	require.Error(t, err)
 }

@@ -33,7 +33,7 @@ func CacheConfig() *service.ConfigSpec {
 		Version("4.12.0").
 		Summary(`Use a Couchbase instance as a cache.`).
 		Field(service.NewDurationField("default_ttl").
-			Description("An optional default TTL to set for items, calculated from the moment the item is cached.").
+			Description("An optional expiry applied to documents that are written without a TTL of their own, counted from the moment the document is written. When unset, such documents never expire.").
 			Optional().
 			Advanced())
 }

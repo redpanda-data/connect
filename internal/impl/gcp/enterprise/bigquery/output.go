@@ -104,7 +104,7 @@ Messages can be formatted as JSON (default) or raw protobuf bytes.
 When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
 WARNING: protojson encodes int64 and uint64 values as strings, bytes as base64-encoded strings, and timestamps as RFC 3339 strings.
-JSON messages must follow these conventions (e.g. `+"`"+`"age": "30"`+"`"+`, `+"`"+`"data": "aGVsbG8="`+"`"+`, `+"`"+`"created_at": "2026-01-02T15:04:05Z"`+"`"+`); otherwise the write will fail with an unmarshalling error.
+JSON messages must follow these conventions (for example, `+"`"+`"age": "30"`+"`"+`, `+"`"+`"data": "aGVsbG8="`+"`"+`, `+"`"+`"created_at": "2026-01-02T15:04:05Z"`+"`"+`); otherwise the write will fail with an unmarshalling error.
 
 When batching is enabled the table name is resolved from the first message in each batch.
 All messages in the same batch are written to that table.
@@ -129,7 +129,7 @@ The exactly-once guarantee of `+"`pending_stream`"+` is "exactly-once within a s
 
 == CDC migration
 
-When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode, see the xref:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
+When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode, see the xref:components:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
 `).
 		Fields(
 			service.NewStringField(bqwaFieldProject).
@@ -146,6 +146,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 				Description("The format of input messages."+
 					" Use 'json' to have the component convert JSON to proto automatically."+
 					" Use 'protobuf' to supply raw proto-encoded bytes.").
+				ShortDescription("Format of input messages: json to convert automatically, or protobuf for raw encoded bytes.").
 				Default("json"),
 			service.NewStringEnumField(bqwaFieldWriteMode, "default_stream", "pending_stream", "upsert", "upsert_delete").
 				Description("How the output writes to BigQuery."+
@@ -153,39 +154,45 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					" `pending_stream` allocates a per-batch pending stream that commits atomically,"+
 					" providing exactly-once semantics within a single committed batch."+
 					" `upsert` writes UPSERT-only rows to a BigQuery CDC-enabled table; the target table must have a PRIMARY KEY."+
-					" `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.").
+					" `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.").Version("4.94.0").
+				ShortDescription("How the output writes to BigQuery: default_stream, pending_stream, upsert or upsert_delete.").
 				Default("default_stream").
 				Advanced(),
 			service.NewInterpolatedStringField(bqwaFieldChangeType).
 				Description("Bloblang expression resolving to the `_CHANGE_TYPE` pseudo-column value for each row."+
 					" Must resolve to `UPSERT` or `DELETE` (case-insensitive)."+
 					" Required when `write_mode` is `upsert` or `upsert_delete`."+
-					" Example: `${! metadata(\"operation\") }`.").
+					" Example: `${! metadata(\"operation\") }`.").Version("4.96.0").
+				ShortDescription("Bloblang expression resolving to _CHANGE_TYPE. Must resolve to UPSERT or DELETE.").
 				Optional(),
 			service.NewInterpolatedStringField(bqwaFieldChangeSequenceNumber).
 				Description("Optional Bloblang expression resolving to the `_CHANGE_SEQUENCE_NUMBER` pseudo-column value."+
 					" Format: 1 to 4 sections of 1 to 16 hexadecimal characters each, separated by `/`."+
 					" Example: `${! metadata(\"scn\") }` or `${! \"0/0/0/0\" }`."+
-					" When unset, BigQuery resolves ordering by arrival time.").
+					" When unset, BigQuery resolves ordering by arrival time.").Version("4.96.0").
+				ShortDescription("Bloblang expression resolving to the _CHANGE_SEQUENCE_NUMBER pseudo-column value.").
 				Optional(),
 			service.NewStringListField(bqwaFieldPrimaryKeys).
 				Description("Optional list of primary-key column names."+
 					" Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`."+
-					" A pre-existing table must already declare its PRIMARY KEY — this field cannot add one;"+
+					" A pre-existing table must already declare its PRIMARY KEY: this field cannot add one;"+
 					" when both are set they must match exactly (same columns, same order)."+
-					" Up to 16 columns; composite keys are supported in the same order they are listed.").
+					" Up to 16 columns; composite keys are supported in the same order they are listed.").Version("4.96.0").
+				ShortDescription("Primary-key column names. Required when auto_create_table is true and write_mode is upsert or upsert_delete.").
 				Optional(),
 			service.NewBoolField(bqwaFieldAutoCreateTable).
 				Description("If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`."+
 					" AlreadyExists errors from concurrent creators are treated as success."+
-					" When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.").
+					" When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.").Version("4.94.0").
+				ShortDescription("Create the target table if it does not exist, using the configured schema, partitioning and clustering.").
 				Default(false).
 				Advanced(),
 			service.NewObjectListField(bqwaFieldSchema,
 				service.NewStringField(bqwaSchemaFieldName).
 					Description("Column name."),
 				service.NewStringField(bqwaSchemaFieldType).
-					Description("BigQuery column type (STRING, BYTES, INTEGER/INT64, FLOAT/FLOAT64, NUMERIC, BIGNUMERIC, BOOLEAN/BOOL, TIMESTAMP, DATE, TIME, DATETIME, GEOGRAPHY, JSON, RECORD)."),
+					Description("BigQuery column type (STRING, BYTES, INTEGER/INT64, FLOAT/FLOAT64, NUMERIC, BIGNUMERIC, BOOLEAN/BOOL, TIMESTAMP, DATE, TIME, DATETIME, GEOGRAPHY, JSON, RECORD).").
+					ShortDescription("BigQuery column type, such as STRING, INT64, NUMERIC, TIMESTAMP, DATE, JSON or RECORD."),
 				service.NewStringField(bqwaSchemaFieldMode).
 					Description("Column mode: NULLABLE (default), REQUIRED, or REPEATED.").
 					Default("NULLABLE"),
@@ -193,7 +200,8 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					Description("For RECORD columns, the list of nested fields. Same shape as the top-level schema list.").
 					Optional(),
 			).
-				Description("Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.").
+				Description("Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.").Version("4.94.0").
+				ShortDescription("Column definitions used by auto_create_table. Required when it is true.").
 				Default([]any{}).
 				Advanced(),
 			service.NewObjectField(bqwaFieldTimePartitioning,
@@ -207,6 +215,7 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 				service.NewStringField(bqwatpFieldField).
 					Description("Column to partition on. Must be of type DATE, TIMESTAMP, or DATETIME."+
 						" If empty, the table uses ingestion-time partitioning (`_PARTITIONTIME`).").
+					ShortDescription("Column to partition on, of type DATE, TIMESTAMP or DATETIME. Empty uses ingestion-time partitioning.").
 					Default(""),
 				service.NewDurationField(bqwatpFieldExpiration).
 					Description("Optional partition expiration. Zero means no expiration.").
@@ -216,12 +225,14 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					Default(false),
 			).
 				Description("Optional time-partitioning settings applied during `auto_create_table`."+
-					" Setting `type` is the trigger — when omitted, the block is treated as absent.").
+					" Setting `type` is the trigger: when omitted, the block is treated as absent.").Version("4.94.0").
+				ShortDescription("Time-partitioning settings applied during auto_create_table. Setting type activates the block.").
 				Advanced().
 				Optional(),
 			service.NewStringListField(bqwaFieldClustering).
 				Description("Optional clustering columns (up to 4) applied during `auto_create_table`."+
-					" All names must appear in `schema`.").
+					" All names must appear in `schema`.").Version("4.94.0").
+				ShortDescription("Clustering columns, up to 4, applied during auto_create_table. All must appear in schema.").
 				Default([]any{}).
 				Advanced(),
 			service.NewOutputMaxInFlightField().Default(4),
@@ -235,16 +246,19 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 				Description("Service account email to impersonate."+
 					" When set, the output obtains tokens acting as this service account."+
 					" Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.").
+				ShortDescription("Service account email to impersonate, so tokens are obtained as that account.").
 				Advanced().
 				Default(""),
 			service.NewStringListField(bqwaFieldDelegates).
 				Description("Optional delegation chain for chained service account impersonation."+
 					" Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.").
+				ShortDescription("Optional delegation chain for chained service account impersonation.").
 				Advanced().
 				Default([]any{}),
 			service.NewDurationField(bqwaFieldStreamIdleTimeout).
 				Description("How long a cached stream can remain unused before being closed."+
 					" Relevant when the table field uses interpolation to route to many tables.").
+				ShortDescription("How long a cached stream may remain unused before it is closed.").
 				Advanced().
 				Default("5m"),
 			service.NewDurationField(bqwaFieldStreamSweepInterval).
@@ -255,7 +269,8 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 				Description("Soft cap on the number of cached streams."+
 					" When the cache exceeds this size, the least-recently-used stream is evicted."+
 					" Set to 0 for unlimited (rely on idle-timeout sweeping only)."+
-					" Relevant when the table field uses interpolation to route to many tables.").
+					" Relevant when the table field uses interpolation to route to many tables.").Version("4.93.0").
+				ShortDescription("Soft cap on cached streams, evicting least-recently-used ones beyond it. Set to 0 for unlimited.").
 				Advanced().
 				Default(1024),
 			service.NewDurationField(bqwaFieldSchemaResolveTimeout).
@@ -263,13 +278,15 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 					" Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend"+
 					" can stall every batch routing to the same table. On the auto_create_table path"+
 					" the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend"+
-					" slowness on top of the metadata fetch itself.").
+					" slowness on top of the metadata fetch itself.").Version("4.93.0").
+				ShortDescription("How long a single BigQuery table-metadata fetch may run before being aborted.").
 				Advanced().
 				Default("15s"),
 			service.NewDurationField(bqwaFieldSchemaEvolutionTimeout).
 				Description("Total time budget for a single schema evolution attempt (Metadata + Update"+
 					" across all CAS retries on HTTP 412). Bounds how long the WriteBatch retry loop can be"+
-					" starved by a wedged backend.").
+					" starved by a wedged backend.").Version("4.93.0").
+				ShortDescription("Total time budget for a single schema evolution attempt, across all retries.").
 				Advanced().
 				Default("30s"),
 			service.NewObjectField(bqwaFieldEndpoint,

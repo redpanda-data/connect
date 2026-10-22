@@ -1,4 +1,9 @@
 -- PostgreSQL Benchmark Setup Script
+CREATE TABLE IF NOT EXISTS public.rpcn_signal_table (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
 
 CREATE TABLE IF NOT EXISTS public.users (
     id            SERIAL PRIMARY KEY,

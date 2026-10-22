@@ -10,9 +10,12 @@ package mssqlservertest
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -173,7 +176,7 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 		return err
 	}
 
-	if _, err := db.Exec(`ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;`); err != nil {
+	if _, err := db.Exec(`ALTER DATABASE CURRENT SET ALLOW_SNAPSHOT_ISOLATION ON;`); err != nil {
 		return err
 	}
 
@@ -227,94 +230,105 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	return nil
 }
 
-// SetupTestWithMicrosoftSQLServerVersion starts a Microsoft SQL Server Docker container with the specified version,
-// creates a testdb database, enables CDC, and returns the connection string and TestDB wrapper.
-// The container is automatically cleaned up when the test completes.
+// dropDatabaseMu makes the DROP DATABASE calls in createDatabase run one at a time.
+//
+// DROP DATABASE on a CDC database also removes its capture and cleanup SQL Server Agent jobs from msdb. Parallel drops
+// on the shared container deadlock (error 1205) in msdb.dbo.sp_delete_job, sys.sp_MScdc_db_ddl_event, or
+// sys.sp_cdc_cleanup_job_entries.
+var dropDatabaseMu sync.Mutex
+
+// State of the container that all tests in one test package share. Only sharedContainer writes it.
+var (
+	// sharedOnce makes sure that only the first sharedContainer call starts the container.
+	sharedOnce sync.Once
+	// sharedCtr is the running container, or nil if it did not start.
+	// TerminateSharedContainer stops it at the end of TestMain.
+	sharedCtr *tcmssql.MSSQLServerContainer
+	// sharedErr is the error of the last start attempt. sharedContainer returns it to every test,
+	// so that all tests fail with the same cause and no test tries to start the container again.
+	sharedErr error
+)
+
+// sharedContainer returns the Microsoft SQL Server container that all tests in the test package share.
+// The first call starts it. Tests isolate their state in their own database (see testDatabaseName).
+// Call TerminateSharedContainer from TestMain to stop it.
+//
+// Go runs each test package as its own process, so mssqlserver and mssqlserver/replication each start one container.
+// We do not share it across packages: no package could own its lifetime, and replication starts it for a single test.
+func sharedContainer(t *testing.T) *tcmssql.MSSQLServerContainer {
+	t.Helper()
+	sharedOnce.Do(func() {
+		// context.Background(), not t.Context(): the container outlives the test that starts it.
+		ctx := context.Background()
+		const maxAttempts = 3
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			sharedCtr, sharedErr = startMSSQLServerContainer(ctx)
+			if sharedErr == nil {
+				// The master database accepts connections only some time after the container is up.
+				if sharedErr = createDatabase(ctx, sharedCtr, ""); sharedErr == nil {
+					return
+				}
+			}
+			t.Logf("mssqlserver container start attempt %d/%d failed: %v", attempt, maxAttempts, sharedErr)
+			if sharedCtr != nil { // ensure we don't leak a running container
+				_ = sharedCtr.Terminate(context.Background())
+				sharedCtr = nil
+			}
+		}
+	})
+	require.NoError(t, sharedErr)
+	return sharedCtr
+}
+
+// TerminateSharedContainer stops the container that sharedContainer started, if there is one.
+// Call it from TestMain after m.Run in each package that uses this package.
+func TerminateSharedContainer() {
+	if sharedCtr != nil {
+		_ = sharedCtr.Terminate(context.Background())
+	}
+}
+
+// testDatabaseName returns a database name that is unique to the running test.
+//
+// Each test on the shared container gets its own database. The rules are the same as databaseNameForTest in the
+// mongodb/cdc tests: every character outside [A-Za-z0-9_] becomes an underscore, and a name longer than 63 bytes is
+// cut and gets a short hash of the full name, so two long names with the same prefix do not collide.
+// SQL Server permits 128 characters, but the CDC job names put the database name between a prefix and a suffix,
+// so a short name keeps them short too.
+func testDatabaseName(t *testing.T) string {
+	name := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
+			return r
+		}
+		return '_'
+	}, t.Name())
+	const maxLen = 63
+	if len(name) <= maxLen {
+		return name
+	}
+	sum := sha256.Sum256([]byte(t.Name()))
+	suffix := "_" + hex.EncodeToString(sum[:])[:8]
+	return name[:maxLen-len(suffix)] + suffix
+}
+
+// SetupTestWithMicrosoftSQLServerVersion creates a database for the test on the shared Microsoft SQL Server container,
+// enables CDC on it, and returns its connection string and a TestDB wrapper.
 func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
-	ctr, err := tcmssql.Run(t.Context(),
-		"mcr.microsoft.com/mssql/server:2025-latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		tcmssql.WithAcceptEULA(),
-		tcmssql.WithPassword("YourStrong!Passw0rd"),
-		testcontainers.WithEnv(map[string]string{
-			"MSSQL_AGENT_ENABLED": "true",
-		}),
-	)
-	testcontainers.CleanupContainer(t, ctr)
+	ctr := sharedContainer(t)
+	dbName := testDatabaseName(t)
+
+	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
+
+	db, connectionString, err := openAndEnableCDC(t.Context(), ctr, dbName)
 	require.NoError(t, err)
-
-	connectionString, err := ctr.ConnectionString(t.Context(), "database=master", "encrypt=disable")
-	require.NoError(t, err)
-
-	// Retry creating testdb and enabling CDC — the SQL Agent may not be ready immediately.
-	require.Eventually(t, func() bool {
-		db, err := sql.Open("mssql", connectionString)
-		if err != nil {
-			return false
-		}
-		defer db.Close()
-
-		if err = db.Ping(); err != nil {
-			return false
-		}
-
-		if _, err = db.Exec(`
-			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
-			BEGIN
-				CREATE DATABASE testdb;
-			END;`); err != nil {
-			return false
-		}
-
-		return true
-	}, 2*time.Minute, 2*time.Second)
-
-	connectionString, err = ctr.ConnectionString(t.Context(), "database=testdb", "encrypt=disable")
-	require.NoError(t, err)
-
-	var db *sql.DB
-	require.Eventually(t, func() bool {
-		if db != nil {
-			db.Close()
-		}
-		var openErr error
-		db, openErr = sql.Open("mssql", connectionString)
-		if openErr != nil {
-			return false
-		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
-
-		if openErr = db.Ping(); openErr != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-
-		// enable CDC on database
-		if _, openErr = db.Exec("EXEC sys.sp_cdc_enable_db;"); openErr != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-
-		return true
-	}, 2*time.Minute, 2*time.Second)
-
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})
 	return connectionString, &TestDB{db, t}
 }
 
-// MustSetupTestWithMicrosoftSQLServerVersion starts a Microsoft SQL Server Docker container with the specified version
-// and returns the connection string and raw sql.DB connected to the master database.
-// Unlike SetupTestWithMicrosoftSQLServerVersion, this does not create testdb or enable CDC.
-// The container is automatically cleaned up when the test completes.
-func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
-	ctr, err := tcmssql.Run(t.Context(),
+func startMSSQLServerContainer(ctx context.Context) (*tcmssql.MSSQLServerContainer, error) {
+	return tcmssql.Run(ctx,
 		"mcr.microsoft.com/mssql/server:2025-latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		tcmssql.WithAcceptEULA(),
@@ -323,37 +337,171 @@ func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) 
 			"MSSQL_AGENT_ENABLED": "true",
 		}),
 	)
-	testcontainers.CleanupContainer(t, ctr)
-	require.NoError(t, err)
+}
 
-	connectionString, err := ctr.ConnectionString(t.Context(), "database=master", "encrypt=disable")
-	require.NoError(t, err)
+// createDatabase waits until the master database accepts connections, then creates dbName. An empty dbName only waits.
+//
+// Notes:
+//   - It drops an existing dbName first, so the test starts empty.
+//   - Tests keep their database at the end: a CDC drop is slow, and the container is removed anyway.
+func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) error {
+	masterConn, err := ctr.ConnectionString(ctx, "database=master", "encrypt=disable")
+	if err != nil {
+		return fmt.Errorf("master connection string: %w", err)
+	}
 
-	var db *sql.DB
-	require.Eventually(t, func() bool {
+	var lastErr error
+	ok := eventually(ctx, 30*time.Second, 2*time.Second, func() bool {
+		masterDB, openErr := sql.Open("mssql", masterConn)
+		if openErr != nil {
+			lastErr = openErr
+			return false
+		}
+		defer masterDB.Close()
+
+		if openErr = masterDB.PingContext(ctx); openErr != nil {
+			lastErr = openErr
+			return false
+		}
+
+		if dbName == "" {
+			return true
+		}
+		// The database exists only with go test -count=N, where all tests drop it at about the same time and need
+		// dropDatabaseMu. The lock costs little when there is nothing to drop.
+		dropDatabaseMu.Lock()
+		_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf(`
+			IF DB_ID(N'%s') IS NOT NULL
+			BEGIN
+				ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+				DROP DATABASE [%s];
+			END;`, dbName, dbName, dbName))
+		dropDatabaseMu.Unlock()
+		if openErr != nil {
+			lastErr = openErr
+			return false
+		}
+		if _, openErr = masterDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE [%s];", dbName)); openErr != nil {
+			lastErr = openErr
+			return false
+		}
+
+		return true
+	})
+	if !ok {
+		return fmt.Errorf("create database %q: %w", dbName, lastErr)
+	}
+	return nil
+}
+
+func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) (*sql.DB, string, error) {
+	connStr, err := ctr.ConnectionString(ctx, "database="+dbName, "encrypt=disable")
+	if err != nil {
+		return nil, "", fmt.Errorf("connection string: %w", err)
+	}
+
+	var (
+		db      *sql.DB
+		lastErr error
+	)
+	ok := eventually(ctx, 30*time.Second, 2*time.Second, func() bool {
 		if db != nil {
 			db.Close()
 		}
 		var openErr error
-		if db, openErr = sql.Open("mssql", connectionString); openErr != nil {
+		db, openErr = sql.Open("mssql", connStr)
+		if openErr != nil {
+			lastErr = openErr
 			return false
 		}
 
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
+		db.SetConnMaxLifetime(5 * time.Minute)
 
-		if openErr = db.Ping(); openErr != nil {
+		if openErr = db.PingContext(ctx); openErr != nil {
+			lastErr = openErr
+			db.Close()
+			db = nil
+			return false
+		}
+
+		// Add the CDC jobs here, before sp_cdc_enable_table needs them. sp_cdc_enable_table adds them with
+		// @start_job = 1, which waits about 3.4s for each job to start. Adding them with @start_job = 0 and then
+		// starting the capture job takes about 1s in total.
+		//
+		// This does not take dropDatabaseMu. Parallel adds do not deadlock with each other or with a drop, and they
+		// are about 3 times faster than adds one at a time.
+		//
+		// The IF guards make a retry safe. They read msdb.dbo.sysjobs, because msdb.dbo.cdc_jobs does not exist
+		// before the first CDC job is added.
+		_, openErr = db.ExecContext(ctx, `
+			IF (SELECT is_cdc_enabled FROM sys.databases WHERE database_id = DB_ID()) = 0
+				EXEC sys.sp_cdc_enable_db;
+			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_capture')
+				EXEC sys.sp_cdc_add_job @job_type = N'capture', @start_job = 0;
+			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_cleanup')
+				EXEC sys.sp_cdc_add_job @job_type = N'cleanup', @start_job = 0;`)
+		// Start only the capture job. The cleanup job runs on a daily schedule, so it does not have to start.
+		if openErr == nil {
+			_, openErr = db.ExecContext(ctx, "EXEC sys.sp_cdc_start_job @job_type = N'capture';")
+			// A retry can find the job running from the attempt before.
+			if openErr != nil && strings.Contains(openErr.Error(), "already running") {
+				openErr = nil
+			}
+		}
+		if openErr != nil {
+			lastErr = openErr
 			db.Close()
 			db = nil
 			return false
 		}
 
 		return true
-	}, 2*time.Minute, 2*time.Second)
+	})
+	if !ok {
+		if db != nil {
+			db.Close()
+		}
+		return nil, "", fmt.Errorf("enable CDC on %q: %w", dbName, lastErr)
+	}
+	return db, connStr, nil
+}
 
+func eventually(ctx context.Context, timeout, tick time.Duration, fn func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if fn() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(tick):
+		}
+	}
+}
+
+// MustSetupTestWithMicrosoftSQLServerVersion creates a database for the test on the shared Microsoft SQL Server
+// container, and returns its connection string and a raw sql.DB connected to it.
+// Unlike SetupTestWithMicrosoftSQLServerVersion, this does not enable CDC.
+func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
+	ctr := sharedContainer(t)
+	dbName := testDatabaseName(t)
+
+	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
+
+	connectionString, err := ctr.ConnectionString(t.Context(), "database="+dbName, "encrypt=disable")
+	require.NoError(t, err)
+
+	db, err := sql.Open("mssql", connectionString)
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})
+	require.NoError(t, db.PingContext(t.Context()))
 	return connectionString, db
 }

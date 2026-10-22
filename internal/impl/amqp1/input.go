@@ -41,19 +41,8 @@ func amqp1InputSpec() *service.ConfigSpec {
 		Summary("Reads messages from an AMQP (1.0) server.").
 		Description(inputDescription).
 		Fields(
-			service.NewURLField(urlField).
-				Description("A URL to connect to.").
-				Example("amqp://localhost:5672/").
-				Example("amqps://guest:guest@localhost:5672/").
-				Deprecated().
-				Optional(),
-			service.NewURLListField(urlsField).
-				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"amqp://guest:guest@127.0.0.1:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"}).
-				Example([]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"}).
-				Optional().
-				Version("4.23.0"),
+			urlFieldSpec(),
+			urlsFieldSpec(),
 			service.NewStringField(sourceAddrField).
 				Description("The source address to consume from.").
 				Example("/foo").
@@ -66,10 +55,12 @@ func amqp1InputSpec() *service.ConfigSpec {
 				Advanced(),
 			service.NewBoolField(getMessageHeaderField).
 				Description("Read additional message header fields into `amqp_*` metadata properties.").
+				ShortDescription("Read additional message header fields into amqp_* metadata properties.").
 				Version("4.25.0").
 				Default(false).Advanced(),
 			service.NewIntField(creditField).
 				Description("Specifies the maximum number of unacknowledged messages the sender can transmit. Once this limit is reached, no more messages will arrive until messages are acknowledged and settled.").
+				ShortDescription("The maximum number of unacknowledged messages the sender may transmit.").
 				LintRule(`root = if this < 1 { [ "`+creditField+` must be at least 1" ] }`).
 				Version("4.26.0").
 				Default(64).

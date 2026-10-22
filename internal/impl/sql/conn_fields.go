@@ -27,17 +27,15 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks").
-	Description("A database <<drivers, driver>> to use.")
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks", "hana").
+	Description("The database driver to use.")
 
 var dsnField = service.NewStringField("dsn").
 	Description(`A Data Source Name to identify the target database.
 
 ==== Drivers
 
-:driver-support: mysql=certified, postgres=certified, pgx=community, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community, spanner=community
-
-The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
+The following table lists the supported drivers and their DSN formats:
 
 |===
 | Driver | Data Source Name Format
@@ -74,14 +72,18 @@ The following is a list of supported drivers, their placeholder style, and their
 
 ` + "| `databricks` " + `
 ` + "| `token:<access-token>@<server-hostname>:<port>/<http-path>` " + `
+
+` + "| `hana` " + `
+` + "| `hdb://[user[:password]@]host[:port][?param1=value1&...]` " + `
 |===
 
 Please note that the ` + "`postgres`" + ` and ` + "`pgx`" + ` drivers enforce SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
 The ` + "`pgx`" + ` driver is an alternative to the standard ` + "`postgres`" + ` (pq) driver and comes with extra functionality such as support for array insertion.
 
-The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String[the docs^] for more details. For https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[key pair authentication^], the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` instead of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
+The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult https://pkg.go.dev/github.com/snowflakedb/gosnowflake/v2#hdr-Connection_String[the docs^] for more details. For https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[key pair authentication^], the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` instead of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
 
 The ` + "https://pkg.go.dev/github.com/microsoft/gocosmos[`gocosmos`^]" + ` driver is still experimental, but it has support for https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys[hierarchical partition keys^] as well as https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query[cross-partition queries^]. Please refer to the https://github.com/microsoft/gocosmos/blob/main/SQL.md[SQL notes^] for details.`).
+	ShortDescription("A Data Source Name to identify the target database.").
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
 	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
@@ -98,6 +100,7 @@ Care should be taken to ensure that the statements are idempotent, and therefore
 
 If a statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
 `).
+			ShortDescription("File paths containing SQL statements to execute on the first connection to the database.").
 			Example([]any{`./init/*.sql`}).
 			Example([]any{`./foo.sql`, `./bar.sql`}).
 			Optional().
@@ -111,6 +114,7 @@ If both ` + "`init_statement` and `init_files` are specified the `init_statement
 
 If the statement fails for any reason a warning log will be emitted but the operation of this component will not be stopped.
 `).
+			ShortDescription("An optional SQL statement to execute on the first connection to the database.").
 			Example(`
 CREATE TABLE IF NOT EXISTS some_table (
   foo varchar(50) not null,
@@ -124,19 +128,23 @@ CREATE TABLE IF NOT EXISTS some_table (
 			Version("4.10.0"),
 		service.NewDurationField("conn_max_idle_time").
 			Description("An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If `value <= 0`, connections are not closed due to a connections idle time.").
+			ShortDescription("Maximum time a connection may be idle. Set to 0 or less to never close on idle time.").
 			Optional().
 			Advanced(),
 		service.NewDurationField("conn_max_life_time").
 			Description("An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If `value <= 0`, connections are not closed due to a connections age.").
+			ShortDescription("Maximum time a connection may be reused. Set to 0 or less to never close on age.").
 			Optional().
 			Advanced(),
 		service.NewIntField("conn_max_idle").
 			Description("An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If `value <= 0`, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.").
+			ShortDescription("Maximum number of connections in the idle connection pool.").
 			Default(2).
 			Optional().
 			Advanced(),
 		service.NewIntField("conn_max_open").
 			Description("An optional maximum number of open connections to the database. If conn_max_idle is greater than 0 and the new conn_max_open is less than conn_max_idle, then conn_max_idle will be reduced to match the new conn_max_open limit. If `value <= 0`, then there is no limit on the number of open connections. The default is 0 (unlimited).").
+			ShortDescription("Maximum number of open connections to the database.").
 			Optional().
 			Advanced(),
 	}
@@ -153,34 +161,150 @@ type rawQueryStatement struct {
 
 func rawQueryField() *service.ConfigField {
 	return service.NewStringField("query").
-		Description("The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:" + `
+		Description(`The query to execute.
 
-| Driver | Placeholder Style |
-|---|---|
-` + "| `clickhouse` | Dollar sign |" + `
-` + "| `mysql` | Question mark |" + `
-` + "| `postgres` | Dollar sign |" + `
-` + "| `pgx` | Dollar sign |" + `
-` + "| `mssql` | Question mark |" + `
-` + "| `sqlite` | Question mark |" + `
-` + "| `oracle` | Colon |" + `
-` + "| `snowflake` | Question mark |" + `
-` + "| `trino` | Question mark |" + `
-` + "| `gocosmos` | Colon |" + `
-`)
+You must include the correct placeholders for the specified database driver. Some drivers use question marks (` + "`" + `?` + "`" + `), whereas others expect incrementing dollar signs (` + "`" + `$1` + "`" + `, ` + "`" + `$2` + "`" + `, and so on) or colons (` + "`" + `:1` + "`" + `, ` + "`" + `:2` + "`" + `, and so on). The following table shows the placeholder style for each driver:
+
+|===
+| Driver | Placeholder style
+
+| ` + "`" + `clickhouse` + "`" + `
+| Dollar sign (` + "`" + `$` + "`" + `)
+
+| ` + "`" + `gocosmos` + "`" + `
+| Colon (` + "`" + `:` + "`" + `)
+
+| ` + "`" + `hana` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `mssql` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `mysql` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `oracle` + "`" + `
+| Colon (` + "`" + `:` + "`" + `)
+
+| ` + "`" + `pgx` + "`" + `
+| Dollar sign (` + "`" + `$` + "`" + `)
+
+| ` + "`" + `postgres` + "`" + `
+| Dollar sign (` + "`" + `$` + "`" + `)
+
+| ` + "`" + `snowflake` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `spanner` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `sqlite` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+
+| ` + "`" + `trino` + "`" + `
+| Question mark (` + "`" + `?` + "`" + `)
+|===`).
+		ShortDescription("The query to execute. Placeholder style depends on the driver.")
 }
 
 func rawQueryArgsMappingField() *service.ConfigField {
 	return service.NewBloblangField("args_mapping").
-		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that includes the same number of values in an array as the placeholder arguments in the `query` field.").
+		ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
 		Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 		Example(`root = [ meta("user.id") ]`).
 		Optional()
 }
 
+// queryFailureDescription is the component description shared by the SQL
+// processors, which leave a message unchanged when its query fails.
+const queryFailureDescription = "If the query fails to execute, the message remains unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods]."
+
+func unsafeDynamicQueryField() *service.ConfigField {
+	return service.NewBoolField("unsafe_dynamic_query").
+		Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Make sure your queries are defended against injection attacks.").
+		ShortDescription("Enable interpolation functions in the query. Take care to defend against injection attacks.").
+		Advanced().
+		Default(false)
+}
+
+// batchMaxInFlightField is the max_in_flight field of the sql and sql_insert
+// outputs, which bounds how many WriteBatch calls run at once.
+func batchMaxInFlightField() *service.ConfigField {
+	return service.NewIntField("max_in_flight").
+		Description("The maximum number of message batches to write in parallel.").
+		Default(64)
+}
+
+// selectWhereField is the where field of the sql_select input and processor.
+func selectWhereField() *service.ConfigField {
+	return service.NewStringField("where").
+		Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Always use question marks for placeholders. They are converted to dollar syntax (`$1`) when the `postgres`, `pgx`, or `clickhouse` driver is used, and to colon syntax (`:1`) when the `oracle` or `gocosmos` driver is used.").
+		ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
+		Optional()
+}
+
+// selectArgsMappingField is the args_mapping field of the sql_select input and
+// processor.
+func selectArgsMappingField() *service.ConfigField {
+	return service.NewBloblangField("args_mapping").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values, one for each placeholder in the `where` field, in order. The values are passed to the driver as query arguments.").
+		ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
+		Optional()
+}
+
+// selectPrefixField is the prefix field of the sql_select input and processor.
+func selectPrefixField() *service.ConfigField {
+	return service.NewStringField("prefix").
+		Description("Optional SQL text to add before the `SELECT` keyword, such as a `WITH` clause.").
+		Optional().
+		Advanced()
+}
+
+// selectSuffixField is the suffix field of the sql_select input and processor.
+func selectSuffixField() *service.ConfigField {
+	return service.NewStringField("suffix").
+		Description("Optional SQL text to append after the generated `SELECT` statement, such as an `ORDER BY`, `LIMIT`, or locking clause.").
+		Optional().
+		Advanced()
+}
+
+// insertFields returns the table and query-building fields shared by the
+// sql_insert output and processor.
+func insertFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewStringField("table").
+			Description("The table to insert to.").
+			Example("foo"),
+		service.NewStringListField("columns").
+			Description("A list of columns to insert.").
+			Example([]string{"foo", "bar", "baz"}),
+		service.NewBloblangField("args_mapping").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
+			ShortDescription("A Bloblang mapping evaluating to an array of values matching the number of columns specified.").
+			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
+			Example(`root = [ meta("user.id") ]`),
+		service.NewStringField("prefix").
+			Description("An optional prefix to prepend to the insert query (before INSERT).").
+			Optional().
+			Advanced(),
+		service.NewStringField("suffix").
+			Description("An optional suffix to append to the insert query.").
+			Optional().
+			Advanced().
+			Example("ON CONFLICT (name) DO NOTHING"),
+		service.NewStringListField("options").
+			Description("A list of keyword options to add before the INTO clause of the query.").Version("4.40.0").
+			Optional().
+			Advanced().
+			Example([]string{"DELAYED", "IGNORE"}),
+	}
+}
+
 func rawQueryWhenField() *service.ConfigField {
 	return service.NewBloblangField("when").
-		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether this query should be executed. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is the one that executes. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").Version("4.87.0").
+		ShortDescription("An optional Bloblang mapping evaluated per message to decide whether this query runs. Must return a boolean.").
 		Example(`root = meta("kafka_tombstone_message") == "true"`).
 		Example(`root = this.operation == "delete"`).
 		Optional()
@@ -307,6 +431,9 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 
 		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
 		dsn = newDSN
+	}
+	if driver == "hana" {
+		driver = "hdb"
 	}
 	return sql.Open(driver, dsn)
 }

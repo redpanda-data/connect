@@ -300,7 +300,8 @@ successful. It will emit an error otherwise.
 
 `).
 		Field(service.NewStringEnumField("codec", "none", "text", "json").
-			Description("A <<codecs,codec>> defines how messages should be inserted into the AWK program as variables. The codec does not change which <<awk-functions,custom Redpanda Connect functions>> are available. The `text` codec is the closest to a typical AWK use case.")).
+			Description("A <<codecs,codec>> defines how messages should be inserted into the AWK program as variables. The codec does not change which <<awk-functions,custom Redpanda Connect functions>> are available. The `text` codec is the closest to a typical AWK use case.").
+			ShortDescription("How messages are inserted into the AWK program as variables.")).
 		Field(service.NewStringField("program").
 			Description("An AWK program to execute")).
 		Example("JSON Mapping and Arithmetic", `

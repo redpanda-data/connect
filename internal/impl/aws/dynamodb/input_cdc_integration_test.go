@@ -533,6 +533,126 @@ credentials:
 	assert.NotEmpty(t, batch2, "Should read new events after resumption")
 }
 
+// TestIntegrationDynamoDBSnapshotAckGate verifies that snapshot progress and
+// completion are gated on downstream acks: a crash after the scan has read
+// (and emitted) everything but before acknowledgement must leave no snapshot
+// checkpoint state, so a restart re-delivers every item. See CON-504.
+func TestIntegrationDynamoDBSnapshotAckGate(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := context.Background()
+
+	ctr, err := testcontainers.Run(ctx,
+		"amazon/dynamodb-local:latest",
+		testcontainers.WithExposedPorts("8000/tcp"),
+		testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := ctr.Terminate(context.Background()); err != nil {
+			t.Logf("failed to terminate dynamodb container: %v", err)
+		}
+	})
+
+	mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
+
+	var client *dynamodb.Client
+	tableName := "test-snapshot-ack-gate-table"
+	checkpointTable := "test-snapshot-ack-gate-checkpoint"
+
+	require.Eventually(t, func() bool {
+		var cerr error
+		client, cerr = createTableWithStreams(ctx, t, port, tableName)
+		return cerr == nil
+	}, 60*time.Second, 500*time.Millisecond)
+
+	const itemCount = 5
+	for i := range itemCount {
+		require.NoError(t, putTestItem(ctx, client, tableName, fmt.Sprintf("gate-%d", i), fmt.Sprintf("value-%d", i)))
+	}
+
+	confStr := fmt.Sprintf(`
+tables: [%s]
+checkpoint_table: %s
+endpoint: http://localhost:%s
+region: us-east-1
+snapshot_mode: snapshot_only
+snapshot_segments: 1
+snapshot_batch_size: 10
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx
+`, tableName, checkpointTable, port)
+
+	countCheckpointRows := func() int {
+		out, err := client.Scan(ctx, &dynamodb.ScanInput{TableName: &checkpointTable})
+		if err != nil {
+			return -1 // table may not exist yet
+		}
+		return len(out.Items)
+	}
+
+	// Run 1: receive the snapshot batch but never acknowledge it, then
+	// simulate a crash. Nothing may be persisted.
+	{
+		spec := dynamoDBCDCInputConfig()
+		parsed, err := spec.ParseYAML(confStr, nil)
+		require.NoError(t, err)
+		input, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+		require.NoError(t, err)
+		require.NoError(t, input.Connect(ctx))
+
+		readCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		cancel()
+		require.NoError(t, err)
+		require.Len(t, batch, itemCount, "expected the whole snapshot in one batch")
+
+		// Give the input time to (wrongly) persist progress or the completion
+		// marker - the pre-fix code did both at read time.
+		time.Sleep(3 * time.Second)
+		require.Zero(t, countCheckpointRows(),
+			"no snapshot checkpoint state may be persisted before the batch is acknowledged")
+
+		// Simulated crash: abandon without acking.
+		_ = input.Close(ctx)
+	}
+
+	// Run 2: restart against the same checkpoint table. Since nothing was
+	// acked, the snapshot must re-run and deliver every item again.
+	{
+		spec := dynamoDBCDCInputConfig()
+		parsed, err := spec.ParseYAML(confStr, nil)
+		require.NoError(t, err)
+		input, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+		require.NoError(t, err)
+		require.NoError(t, input.Connect(ctx))
+		t.Cleanup(func() { _ = input.Close(ctx) })
+
+		seen := 0
+		readCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+		for seen < itemCount {
+			batch, ackFn, err := input.ReadBatch(readCtx)
+			if errors.Is(err, service.ErrEndOfInput) {
+				break
+			}
+			require.NoError(t, err)
+			seen += len(batch)
+			require.NoError(t, ackFn(ctx, nil))
+		}
+		require.Equal(t, itemCount, seen, "the snapshot should have re-run and re-delivered every item after the crash")
+
+		// With everything acked, completion must now persist.
+		require.Eventually(t, func() bool {
+			return countCheckpointRows() > 0
+		}, 30*time.Second, 500*time.Millisecond, "snapshot completion was never persisted after a fully-acked run")
+	}
+}
+
 // TestIntegrationDynamoDBSnapshot tests snapshot functionality.
 func TestIntegrationDynamoDBSnapshot(t *testing.T) {
 	integration.CheckSkip(t)

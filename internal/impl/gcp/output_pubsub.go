@@ -39,7 +39,7 @@ For information on how to set up credentials, see https://cloud.google.com/docs/
 
 == Troubleshooting
 
-If you're consistently seeing `+"`Failed to send message to gcp_pubsub: context deadline exceeded`"+` error logs without any further information it is possible that you are encountering https://github.com/benthosdev/benthos/issues/1042, which occurs when metadata values contain characters that are not valid utf-8. This can frequently occur when consuming from Kafka as the key metadata field may be populated with an arbitrary binary value, but this issue is not exclusive to Kafka.
+If you're consistently seeing `+"`Failed to send message to gcp_pubsub: context deadline exceeded`"+` error logs without any further information it is possible that you are encountering https://github.com/redpanda-data/connect/issues/1042, which occurs when metadata values contain characters that are not valid utf-8. This can frequently occur when consuming from Kafka as the key metadata field may be populated with an arbitrary binary value, but this issue is not exclusive to Kafka.
 
 If you are blocked by this issue then a work around is to delete either the specific problematic keys:
 
@@ -60,29 +60,25 @@ pipeline:
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
 			service.NewStringField("credentials_json").
-				Description("An optional field to set Google Service Account Credentials json.").
+				Description(credentialsJSONDescription).Version("4.33.0").
 				Default("").
 				Secret(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
-			service.NewStringField("endpoint").
-				Default("").
-				Example("us-central1-pubsub.googleapis.com:443").
-				Example("us-west3-pubsub.googleapis.com:443").
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^]."),
+			pubsubEndpointField("endpoint"),
 			service.NewInterpolatedStringField("ordering_key").
 				Optional().
-				Description("The ordering key to use for publishing messages.").
+				Description(`The ordering key to use for publishing messages.`).
 				Advanced(),
 			service.NewIntField("max_in_flight").Default(64).Description("The maximum number of messages to have in flight at a given time. Increasing this may improve throughput."),
 			service.NewIntField("count_threshold").
 				Default(defaults.CountThreshold).
-				Description("Publish a pubsub buffer when it has this many messages"),
+				Description("Publish a pubsub buffer when it has this many messages").Version("4.16.0"),
 			service.NewDurationField("delay_threshold").
 				Default(defaults.DelayThreshold.String()).
-				Description("Publish a non-empty pubsub buffer after this delay has passed."),
+				Description("Publish a non-empty pubsub buffer after this delay has passed.").Version("4.16.0"),
 			service.NewIntField("byte_threshold").
 				Default(defaults.ByteThreshold).
-				Description("Publish a batch when its size in bytes reaches this value."),
+				Description("Publish a batch when its size in bytes reaches this value.").Version("4.16.0"),
 			service.NewDurationField("publish_timeout").
 				Default(defaults.Timeout.String()).
 				Example("10s").
@@ -91,7 +87,8 @@ pipeline:
 				Description("The maximum length of time to wait before abandoning a publish attempt for a message.").
 				Advanced(),
 			service.NewBoolField("validate_topic").
-				Description("Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.").
+				Description("Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.").Version("4.59.0").
+				ShortDescription("Validate that the topic exists before publishing. Messages are lost if disabled and it does not.").
 				Default(true).
 				Advanced(),
 			service.NewMetadataExcludeFilterField("metadata").
@@ -107,12 +104,14 @@ pipeline:
 					Description("Maximum number of buffered messages to be published. If less than or equal to zero, this is disabled."),
 				service.NewStringEnumField("limit_exceeded_behavior", "ignore", "block", "signal_error").
 					Default("block").
-					Description("Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are block (default), ignore (disable), and signal_error (publish results will return an error)."),
+					Description("Configures the behavior when trying to publish additional messages while the flow controller is full. The available options are block (default), ignore (disable), and signal_error (publish results will return an error).").
+					ShortDescription("What to do when publishing while the flow controller is full: block, ignore or signal_error."),
 			).
-				Description("For a given topic, configures the PubSub client's internal buffer for messages to be published.").
+				Description("For a given topic, configures the PubSub client's internal buffer for messages to be published.").Version("4.12.0").
 				Advanced(),
 			service.NewBatchPolicyField("batching").
-				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput."),
+				Description("Configures a batching policy on this output. While the PubSub client maintains its own internal buffering mechanism, preparing larger batches of messages can further trade-off some latency for throughput.").Version("4.16.0").
+				ShortDescription("Batching policy for this output. Larger batches trade latency for throughput."),
 		)
 }
 

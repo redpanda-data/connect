@@ -35,11 +35,13 @@ func parquetInputConfig() *service.ConfigSpec {
 		Summary("Reads and decodes https://parquet.apache.org/docs/[Parquet files^] into a stream of structured messages.").
 		Field(service.NewStringListField("paths").
 			Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
+			ShortDescription("File paths to read from, in sequence until exhausted. Glob patterns are supported.").
 			Example("/tmp/foo.parquet").
 			Example("/tmp/bar/*.parquet").
 			Example("/tmp/data/**/*.parquet")).
 		Field(service.NewIntField("batch_count").
 			Description(`Optionally process records in batches. This can help to speed up the consumption of exceptionally large files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).
+			ShortDescription("Process records in batches, which can speed up consumption of very large files.").
 			Default(1).
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
@@ -49,7 +51,7 @@ This input uses https://github.com/parquet-go/parquet-go[https://github.com/parq
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (` + "`[]byte`" + `) unless the logical type is UTF8, in which case they are extracted as a string (` + "`string`" + `).
 
 When a value extracted as a byte slice exists within a document which is later JSON serialized by default it will be base 64 encoded into strings, which is the default for arbitrary data fields. It is possible to convert these binary values to strings (or other data types) using Bloblang transformations such as ` + "`root.foo = this.foo.string()` or `root.foo = this.foo.encode(\"hex\")`" + `, etc.`).
-		Version("4.8.0")
+		Version("4.9.0")
 }
 
 func init() {

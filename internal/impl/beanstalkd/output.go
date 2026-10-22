@@ -32,9 +32,7 @@ func beanstalkdOutputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("address").
 			Description("An address to connect to.").
 			Example("127.0.0.1:11300")).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase to improve throughput.").
-			Default(64))
+		Field(service.NewOutputMaxInFlightField())
 }
 
 func init() {

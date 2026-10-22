@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,20 +33,21 @@ import (
 )
 
 const (
-	pmFieldUseHistogramTiming          = "use_histogram_timing"
-	pmFieldHistogramBuckets            = "histogram_buckets"
-	pmFieldSummaryQuantilesObj         = "summary_quantiles_objectives"
-	pmFieldSummaryQuantilesObjQuantile = "quantile"
-	pmFieldSummaryQuantilesObjError    = "error"
-	pmFieldAddProcessMetrics           = "add_process_metrics"
-	pmFieldAddGoMetrics                = "add_go_metrics"
-	pmFieldPushURL                     = "push_url"
-	pmFieldPushBasicAuth               = "push_basic_auth"
-	pmFieldPushBasicAuthUsername       = "username"
-	pmFieldPushBasicAuthPassword       = "password"
-	pmFieldPushInterval                = "push_interval"
-	pmFieldPushJobName                 = "push_job_name"
-	pmFieldFileOutputPath              = "file_output_path"
+	pmFieldUseHistogramTiming           = "use_histogram_timing"
+	pmFieldHistogramTimingSecondsSuffix = "histogram_timing_seconds_suffix"
+	pmFieldHistogramBuckets             = "histogram_buckets"
+	pmFieldSummaryQuantilesObj          = "summary_quantiles_objectives"
+	pmFieldSummaryQuantilesObjQuantile  = "quantile"
+	pmFieldSummaryQuantilesObjError     = "error"
+	pmFieldAddProcessMetrics            = "add_process_metrics"
+	pmFieldAddGoMetrics                 = "add_go_metrics"
+	pmFieldPushURL                      = "push_url"
+	pmFieldPushBasicAuth                = "push_basic_auth"
+	pmFieldPushBasicAuthUsername        = "username"
+	pmFieldPushBasicAuthPassword        = "password"
+	pmFieldPushInterval                 = "push_interval"
+	pmFieldPushJobName                  = "push_job_name"
+	pmFieldFileOutputPath               = "file_output_path"
 )
 
 func configSpec() *service.ConfigSpec {
@@ -53,6 +55,14 @@ func configSpec() *service.ConfigSpec {
 		Stable().
 		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
 		Footnotes(`
+== Timing metrics
+
+Timing metrics such as `+"`processor_latency_ns`"+` are exported as a summary by default, or as a histogram when `+"`use_histogram_timing`"+` is `+"`true`"+`. Both variants are exported under the same metric name unless `+"`histogram_timing_seconds_suffix`"+` is also `+"`true`"+`.
+
+IMPORTANT: If several Redpanda Connect instances send metrics to the same destination, they must all use the same `+"`use_histogram_timing`"+` value. Otherwise, set `+"`histogram_timing_seconds_suffix: true`"+` on every instance that has `+"`use_histogram_timing: true`"+`. When a fleet mixes the setting without the suffix, one metric name is reported as a summary by some instances and as a histogram by others. Prometheus remote-write receivers such as Vector and Mimir reject the whole write request with an error like "multiple metric kinds given for metric name", so metrics from every instance in that request are dropped.
+
+The suffix only renames timing metrics whose names end in `+"`_ns`"+`. All built-in timing metrics do. Custom timing metrics from the `+"`metric`"+` processor with other names are not renamed, so give them an `+"`_ns`"+` suffix or keep `+"`use_histogram_timing`"+` consistent across the fleet.
+
 == Push gateway
 
 The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Redpanda Connect shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
@@ -62,8 +72,13 @@ The Push Gateway is useful for when Redpanda Connect instances are short lived. 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
 		Fields(
 			service.NewBoolField(pmFieldUseHistogramTiming).
-				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").
+				Description("Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/. Instances that report to the same destination must use the same value, unless `histogram_timing_seconds_suffix` is enabled. See <<timing-metrics, Timing metrics>>.").
 				Version("3.63.0").
+				Advanced().
+				Default(false),
+			service.NewBoolField(pmFieldHistogramTimingSecondsSuffix).
+				Description("Whether to rewrite a `_ns` timing metric name suffix to `_seconds` when `use_histogram_timing` is `true` (for example `processor_latency_ns` becomes `processor_latency_seconds`), reflecting that histogram timings are recorded in seconds. This also keeps the histogram series distinct from the summary series emitted when `use_histogram_timing` is `false`, which avoids Prometheus remote-write \"multiple metric kinds\" rejections when a fleet mixes the setting. Enabling this renames existing histogram timing series, so dashboards and alerts that query the `_ns` names must be updated. Has no effect when `use_histogram_timing` is `false`.").
+				Version("4.111.1").
 				Advanced().
 				Default(false),
 			service.NewFloatListField(pmFieldHistogramBuckets).
@@ -248,9 +263,10 @@ type metrics struct {
 
 	fileOutputPath string
 
-	useHistogramTiming bool
-	histogramBuckets   []float64
-	summaryQuantiles   map[float64]float64
+	useHistogramTiming           bool
+	histogramTimingSecondsSuffix bool
+	histogramBuckets             []float64
+	summaryQuantiles             map[float64]float64
 
 	pusher *push.Pusher
 	reg    *prometheus.Registry
@@ -292,6 +308,9 @@ func fromParsed(conf *service.ParsedConfig, log *service.Logger) (p *metrics, er
 	}
 
 	if p.useHistogramTiming, err = conf.FieldBool(pmFieldUseHistogramTiming); err != nil {
+		return
+	}
+	if p.histogramTimingSecondsSuffix, err = conf.FieldBool(pmFieldHistogramTimingSecondsSuffix); err != nil {
 		return
 	}
 
@@ -450,7 +469,26 @@ func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
+// histogramTimerName adjusts a timing metric name for histogram mode. Histogram
+// timings are recorded in seconds (see promTimingHistVec), so a `_ns` suffix is
+// rewritten to `_seconds` to reflect the actual unit. This also gives the
+// histogram a distinct series name from the summary variant (`_ns`) emitted by
+// nodes with use_histogram_timing disabled, which prevents remote-write targets
+// (e.g. Vector/Mimir) from rejecting a batch with "multiple metric kinds given"
+// when a fleet mixes the setting. See INC-1095. Only applied when
+// histogram_timing_seconds_suffix is enabled, as it renames existing series.
+func histogramTimerName(path string) string {
+	if base, ok := strings.CutSuffix(path, "_ns"); ok {
+		return base + "_seconds"
+	}
+	return path
+}
+
 func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+	if p.histogramTimingSecondsSuffix {
+		path = histogramTimerName(path)
+	}
+
 	var pv *promTimingHistVec
 
 	p.mut.Lock()
@@ -517,6 +555,36 @@ func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	}
 	return func(labelValues ...string) service.MetricsExporterGauge {
 		return pv.With(labelValues...)
+	}
+}
+
+// The stream manager discovers series deletion through an optional-interface
+// upcast, so bind the exporter to the named interface at compile time: if the
+// signature drifts on a benthos bump the purge would otherwise stop firing
+// silently.
+var _ service.MetricsExporterSeriesDeleter = (*metrics)(nil)
+
+// DeleteSeriesPartialMatch deletes all metric series containing labels
+// matching all of the provided label key/value pairs, e.g. all series of a
+// stream deleted in streams mode. Implements the optional
+// service.MetricsExporterSeriesDeleter interface.
+func (p *metrics) DeleteSeriesPartialMatch(labels map[string]string) {
+	promLabels := prometheus.Labels(labels)
+
+	p.mut.Lock()
+	defer p.mut.Unlock()
+
+	for _, pv := range p.counters {
+		pv.ctr.DeletePartialMatch(promLabels)
+	}
+	for _, pv := range p.gauges {
+		pv.ctr.DeletePartialMatch(promLabels)
+	}
+	for _, pv := range p.timers {
+		pv.sum.DeletePartialMatch(promLabels)
+	}
+	for _, pv := range p.timersHist {
+		pv.sum.DeletePartialMatch(promLabels)
 	}
 }
 

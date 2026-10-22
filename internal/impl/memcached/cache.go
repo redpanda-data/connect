@@ -39,10 +39,10 @@ func memcachedConfig() *service.ConfigSpec {
 		Field(service.NewStringListField("addresses").
 			Description("A list of addresses of memcached servers to use.")).
 		Field(service.NewStringField("prefix").
-			Description("An optional string to prefix item keys with in order to prevent collisions with similar services.").
+			Description("An optional string prepended to every item key, so that multiple caches can share one memcached cluster under different namespaces.").
 			Optional()).
 		Field(service.NewDurationField("default_ttl").
-			Description("A default TTL to set for items, calculated from the moment the item is cached.").
+			Description("The expiration applied to items that are written without a TTL of their own. Memcached expirations have a resolution of one second, so any fraction of a second is dropped.").
 			Default("300s")).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced())

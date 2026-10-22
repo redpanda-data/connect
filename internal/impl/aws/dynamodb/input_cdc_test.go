@@ -552,3 +552,67 @@ func TestTableTagMatching(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckpointNamespaceConfigParsing(t *testing.T) {
+	spec := dynamoDBCDCInputConfig()
+	env := service.NewEnvironment()
+
+	parsed, err := spec.ParseYAML(`
+tables: [mytable]
+checkpoint_namespace: dev-alice
+`, env)
+	require.NoError(t, err)
+	cfg, err := dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.Equal(t, "dev-alice", cfg.checkpointNamespace)
+
+	parsed, err = spec.ParseYAML(`
+tables: [mytable]
+`, env)
+	require.NoError(t, err)
+	cfg, err = dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.Empty(t, cfg.checkpointNamespace, "namespace must default to empty")
+}
+
+func TestCheckpointNamespaceValidation_RejectsDelimiter(t *testing.T) {
+	conf := dynamoDBCDCConfig{
+		tables:              []string{"t"},
+		checkpointTable:     "cps",
+		checkpointNamespace: "dev#alice",
+		startFrom:           "trim_horizon",
+		batchSize:           100,
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+	}
+	err := validateDynamoDBCDCConfig(conf)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "checkpoint_namespace")
+
+	conf.checkpointNamespace = "dev-alice"
+	require.NoError(t, validateDynamoDBCDCConfig(conf))
+}
+
+// TestBatchSizeValidation: batch_size is documented as 1-1000 (the DynamoDB
+// Streams GetRecords Limit range) but was previously unenforced. A value
+// above the tracker budget would make every TryReserve refuse even on an
+// empty batcher, silently hanging the input from startup.
+func TestBatchSizeValidation(t *testing.T) {
+	conf := dynamoDBCDCConfig{
+		tables:          []string{"t"},
+		checkpointTable: "cps",
+		startFrom:       "trim_horizon",
+		batchSize:       100,
+		snapshot:        snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+	}
+	require.NoError(t, validateDynamoDBCDCConfig(conf))
+
+	for _, bad := range []int{0, -1, 1001, 2000} {
+		conf.batchSize = bad
+		err := validateDynamoDBCDCConfig(conf)
+		require.Error(t, err, "batch_size %d must be rejected", bad)
+		require.Contains(t, err.Error(), "batch_size must be between 1 and 1000")
+	}
+
+	conf.batchSize = 1000
+	require.NoError(t, validateDynamoDBCDCConfig(conf))
+}

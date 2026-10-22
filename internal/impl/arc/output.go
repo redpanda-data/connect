@@ -99,23 +99,28 @@ NOTE: In columnar mode, all messages within a single batch must have the same se
 			Example(`${!json("type")}`),
 		service.NewStringEnumField(aoFieldFormat, "columnar", "row").
 			Default("columnar").
-			Description("The payload format. `columnar` transposes batch messages into column arrays for best performance. `row` sends each message as an individual record."),
+			Description("The payload format. `columnar` transposes batch messages into column arrays for best performance. `row` sends each message as an individual record.").
+			ShortDescription("The payload format. columnar transposes batches into column arrays; row sends each message alone."),
 		service.NewStringField(aoFieldTimestampField).
 			Default("").
 			Optional().
 			Advanced().
-			Description("The field name within each message containing the timestamp. If empty, the current time is used. Supports Unix timestamps and RFC3339 strings."),
+			Description("The field name within each message containing the timestamp. If empty, the current time is used. Supports Unix timestamps and RFC3339 strings.").
+			ShortDescription("Message field containing the timestamp. The current time is used if empty."),
 		service.NewStringEnumField(aoFieldTimestampUnit, "us", "ms", "s", "ns", "auto").
 			Default("auto").
 			Advanced().
-			Description("The unit of a numeric timestamp field. `auto` detects the unit based on magnitude. Ignored when `timestamp_field` is empty."),
+			Description("The unit of a numeric timestamp field. `auto` detects the unit based on magnitude. Ignored when `timestamp_field` is empty.").
+			ShortDescription("The unit of a numeric timestamp field. auto detects it by magnitude."),
 		service.NewBloblangField(aoFieldTagsMapping).
 			Optional().
 			Description("An optional Bloblang mapping to extract tags from each message. Only used in `row` format. The result must be a `map[string]string`.").
+			ShortDescription("An optional Bloblang mapping extracting tags from each message. Only used in row format.").
 			Example(`root = {"host": this.hostname, "region": this.region}`),
 		service.NewStringEnumField(aoFieldCompression, "zstd", "gzip", "none").
 			Default("zstd").
-			Description("Compression algorithm for the request body. `zstd` is recommended for best decompression performance in Arc."),
+			Description("Compression algorithm for the request body. `zstd` is recommended for best decompression performance in Arc.").
+			ShortDescription("Compression algorithm for the request body. zstd is recommended."),
 		service.NewOutputMaxInFlightField(),
 		service.NewBatchPolicyField(aoFieldBatching),
 	)

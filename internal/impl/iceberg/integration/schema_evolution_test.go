@@ -24,11 +24,15 @@ import (
 
 func TestSchemaEvolutionIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	t.Run("AutoCreateNamespaceAndTable", func(t *testing.T) {
+		// The router must create the namespace itself, so drop any leftover from
+		// an earlier run in the shared catalog.
+		infra.EnsureNamespaceAbsent(t, "auto_create_ns")
 		router := infra.NewRouter(t, "auto_create_ns", "auto_create_table",
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}))
 

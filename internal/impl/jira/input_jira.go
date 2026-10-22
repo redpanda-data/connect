@@ -1,16 +1,10 @@
 // Copyright 2026 Redpanda Data, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package jira
 
@@ -82,11 +76,11 @@ func pruneSeen(seen map[string]time.Time, cur time.Time, overlap time.Duration) 
 func newJiraInputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services").
-		Version("4.96.0").
+		Version("4.100.0").
 		Summary("Streams Jira issues, comments, or changelog entries via JQL with incremental polling.").
-		Description(`Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue ` + "`updated`" + ` timestamp, plus the set of issue versions already emitted at the boundary) is persisted via the configured cache resource after every fully-acknowledged page, so progress survives restarts — including mid-backfill — and boundary issues are not re-emitted on every poll.
+		Description(`Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue ` + "`updated`" + ` timestamp, plus the set of issue versions already emitted at the boundary) is persisted via the configured cache resource after every fully-acknowledged page, so progress survives restarts (including mid-backfill), and boundary issues are not re-emitted on every poll.
 
-Authentication uses API token (email + token) basic auth. The ` + "`backoff`" + ` settings govern the adaptive backoff applied to 429 responses; retries of 502/503/504 responses use a fixed three-attempt policy.
+Set ` + "`base_url`" + ` to the URL of your Jira instance, for example ` + "`https://your-domain.atlassian.net`" + `. Authentication uses API token (email + token) basic auth. The ` + "`backoff`" + ` settings govern the adaptive backoff applied to 429 responses; retries of 502/503/504 responses use a fixed three-attempt policy.
 
 Each message body is the raw JSON of the resource. Metadata fields:
 
@@ -97,7 +91,7 @@ Each message body is the raw JSON of the resource. Metadata fields:
 - ` + "`jira_event_type`" + ` - "issue" / "comment" / "changelog"
 - ` + "`jira_self`" + ` - Jira API URL of the resource
 
-Limitations (v1): OAuth and the worklogs resource are not yet supported. For resource=comments and resource=changelog, only the first page of child resources (up to ~50 comments or ~100 changelog entries per issue update) is emitted; a WARN is logged when truncation is detected. Use a downstream Jira processor to fetch the full child set if your issues exceed this limit.`).
+Limitations (v1): OAuth and the worklogs resource are not yet supported. For resource=comments and resource=changelog, only the first page of child resources (up to ~50 comments or ~100 changelog entries per issue update) is emitted; a WARN is logged when truncation is detected. To fetch the full child set for issues that exceed this limit, query the Jira REST API directly.`).
 		Field(service.NewObjectField("auth",
 			service.NewStringField("email").
 				Description("Email or username of the Jira account."),
@@ -110,12 +104,15 @@ Limitations (v1): OAuth and the worklogs resource are not yet supported. For res
 			Default(resourceIssues)).
 		Field(service.NewStringField("jql").
 			Description("Jira JQL filter. The input appends an `updated >= cursor` predicate and `ORDER BY updated ASC, key ASC`. Empty means all issues visible to the principal.").
+			ShortDescription("Jira JQL filter. An updated cursor predicate and ordering are appended automatically.").
 			Default("")).
 		Field(service.NewStringListField("fields").
 			Description("Jira `fields` query parameter - narrow this for throughput.").
+			ShortDescription("Jira fields query parameter. Narrow this for throughput.").
 			Default([]any{"*all"})).
 		Field(service.NewStringListField("expand").
 			Description("Jira `expand` query parameter. The input automatically adds `changelog` when resource=changelog.").
+			ShortDescription("Jira expand query parameter. changelog is added automatically when resource is changelog.").
 			Default([]any{})).
 		Field(service.NewIntField("page_size").
 			Description("Issues per Jira page (Jira max 100).").
@@ -128,9 +125,11 @@ Limitations (v1): OAuth and the worklogs resource are not yet supported. For res
 				Description("Name of a cache resource used to persist the cursor."),
 			service.NewStringField("key").
 				Description("Cache key. Defaults to `redpanda_connect_jira_input_<resource>`.").
+				ShortDescription("Cache key. Defaults to redpanda_connect_jira_input_<resource>.").
 				Default(""),
 			service.NewDurationField("overlap").
 				Description("Widens `updated >= cursor - overlap` to absorb minute-boundary effects. Jira JQL's `updated` operator has minute precision, so this should be set to at least 1m to have an effect.").
+				ShortDescription("Widens the updated cursor window to absorb minute-boundary effects. Set to at least 1m.").
 				Default("60s"),
 		).Description("Cursor checkpoint storage.")).
 		Field(service.NewAutoRetryNacksToggleField())

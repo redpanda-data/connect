@@ -34,8 +34,8 @@ func natsKVOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.12.0").
-		Summary("Put messages in a NATS key-value bucket.").
+		Version("4.13.0").
+		Summary("Puts messages in a NATS key-value bucket.").
 		Description(`
 The field ` + "`key`" + ` supports
 xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing
@@ -44,7 +44,7 @@ you to create a unique key for each message.
 ` + connectionNameDescription() + authDescription()).
 		Fields(kvDocs([]*service.ConfigField{
 			service.NewInterpolatedStringField(kvoFieldKey).
-				Description("The key for each message.").
+				Description(`The key for each message.`).
 				Example("foo").
 				Example("foo.bar.baz").
 				Example(`foo.${! json("meta.type") }`),

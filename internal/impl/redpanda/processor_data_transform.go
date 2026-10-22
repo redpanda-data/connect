@@ -48,14 +48,14 @@ const (
 func dataTransformProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Utility").
-		Summary("Executes a Redpanda Data Transform as a processor").
+		Summary("Executes a Redpanda Data Transform as a processor.").
 		Description(`
 This processor executes a Redpanda Data Transform WebAssembly module, calling OnRecordWritten for each message being processed.
 
 You can find out about how transforms work here: https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/[https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/^]
 `).
 		Field(service.NewStringField(dtpFieldModulePath).
-			Description("The path of the target WASM module to execute.")).
+			Description("The path of the compiled Redpanda Data Transform module to run, such as the `.wasm` file built by `rpk transform build`.")).
 		Field(service.NewInterpolatedStringField(dtpFieldInputKey).
 			Description("An optional key to populate for each message.").Optional()).
 		Field(service.NewStringField(dtpFieldOutputKey).
@@ -67,8 +67,8 @@ You can find out about how transforms work here: https://docs.redpanda.com/curre
 			Description("Determine which (if any) message headers should be added to the output as metadata.").
 			Optional()).
 		Field(service.NewInterpolatedStringField(dtpFieldTimestamp).
-			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
-			Example(`${! timestamp_unix() }`).
+			Description("An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used.").
+			Example(`${! timestamp_unix_milli() }`).
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().
 			Advanced()).

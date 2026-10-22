@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -133,6 +134,60 @@ kafka_franz:
   record_delivery_timeout: "30s"
 `,
 		},
+		{
+			name: "idempotent write with max_in_flight_requests above one",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: true
+  max_in_flight_requests: 5
+`,
+			errContains: "idempotent_write requires max_in_flight_requests to be 1",
+		},
+		{
+			// idempotent_write defaults to true, so omitting it must still be
+			// caught. This is the shape users actually write.
+			name: "default idempotent write with max_in_flight_requests above one",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  max_in_flight_requests: 5
+`,
+			errContains: "idempotent_write requires max_in_flight_requests to be 1",
+		},
+		{
+			name: "idempotent write with max_in_flight_requests of one",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: true
+  max_in_flight_requests: 1
+`,
+		},
+		{
+			name: "non-idempotent write with max_in_flight_requests above one",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: false
+  max_in_flight_requests: 5
+`,
+		},
+		{
+			// Same latent gap as above, on the pre-existing acks rule.
+			name: "default idempotent write with acks leader",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  acks: leader
+`,
+			errContains: "idempotent_write requires acks to be set to all",
+		},
 	}
 
 	for _, test := range testCases {
@@ -146,4 +201,119 @@ kafka_franz:
 			}
 		})
 	}
+}
+
+// The linter rules above are the first line of defence, but they can be bypassed
+// (--chilled, or configs built programmatically). Assert that opt construction
+// also rejects the combination, so it fails there rather than surfacing from
+// franz-go inside Connect() as an endlessly retried connection error.
+func TestFranzProducerOptsIdempotencyLimits(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzProducerFields()...)
+
+	testCases := []struct {
+		name        string
+		conf        string
+		errContains string
+	}{
+		{
+			name:        "default idempotent write with max_in_flight_requests above one",
+			conf:        `max_in_flight_requests: 5`,
+			errContains: "idempotent_write requires max_in_flight_requests to be 1, got 5",
+		},
+		{
+			name: "explicit idempotent write with max_in_flight_requests above one",
+			conf: `
+idempotent_write: true
+max_in_flight_requests: 2
+`,
+			errContains: "idempotent_write requires max_in_flight_requests to be 1, got 2",
+		},
+		{
+			name: "idempotent write with the default max_in_flight_requests",
+			conf: `idempotent_write: true`,
+		},
+		{
+			name: "non-idempotent write with max_in_flight_requests above one",
+			conf: `
+idempotent_write: false
+max_in_flight_requests: 5
+`,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(test.conf, nil)
+			require.NoError(t, err)
+
+			_, err = FranzProducerOptsFromConfig(conf)
+			if test.errContains == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			}
+		})
+	}
+}
+
+func TestFranzProducerOptsCompression(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzProducerFields()...)
+
+	clientCompression := func(t *testing.T, opts ...kgo.Opt) any {
+		t.Helper()
+		cl, err := kgo.NewClient(append([]kgo.Opt{kgo.SeedBrokers("localhost:9092")}, opts...)...)
+		require.NoError(t, err)
+		defer cl.Close()
+		return cl.OptValue(kgo.ProducerBatchCompression)
+	}
+	franzDefault := clientCompression(t)
+
+	testCases := []struct {
+		name string
+		conf string
+		want any
+	}{
+		{
+			name: "unset matches the franz-go default",
+			conf: `{}`,
+			want: franzDefault,
+		},
+		{
+			name: "explicit snappy matches the franz-go default",
+			conf: `compression: snappy`,
+			want: franzDefault,
+		},
+		{
+			name: "explicit gzip",
+			conf: `compression: gzip`,
+			want: []kgo.CompressionCodec{kgo.GzipCompression()},
+		},
+		{
+			name: "explicit none",
+			conf: `compression: none`,
+			want: []kgo.CompressionCodec{kgo.NoCompression()},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(test.conf, nil)
+			require.NoError(t, err)
+
+			opts, err := FranzProducerOptsFromConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, test.want, clientCompression(t, opts...))
+		})
+	}
+}
+
+func TestFranzProducerFieldsCompressionDefault(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzProducerFields()...)
+	conf, err := spec.ParseYAML(`{}`, nil)
+	require.NoError(t, err)
+
+	v, err := conf.FieldString("compression")
+	require.NoError(t, err)
+	assert.Equal(t, "snappy", v)
 }

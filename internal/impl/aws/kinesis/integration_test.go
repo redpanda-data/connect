@@ -17,6 +17,7 @@ package kinesis
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -35,10 +37,19 @@ import (
 
 func TestIntegrationKinesis(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	kinesisIntegrationSuite(t, servicePort)
 }
+
+const (
+	// createStreamTimeout is the time budget for all CreateStream attempts of
+	// one stream.
+	createStreamTimeout = 30 * time.Second
+	// createStreamRetryDelay is the pause between two CreateStream attempts.
+	createStreamRetryDelay = time.Second
+)
 
 func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int32) ([]string, error) {
 	endpoint := fmt.Sprintf("http://localhost:%v", awsPort)
@@ -53,12 +64,21 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	client := kinesis.NewFromConfig(conf)
 
 	strmID := "stream-" + id
+
+	// Bound the retries. If LocalStack is dead, the test fails after
+	// createStreamTimeout instead of waiting for the package timeout.
+	createCtx, cancel := context.WithTimeout(ctx, createStreamTimeout)
+	defer cancel()
+
 	for {
 		t.Logf("Creating stream '%v'", id)
-		_, err := client.CreateStream(ctx, &kinesis.CreateStreamInput{
+		// One SDK attempt per call: this loop does the retries. With SDK
+		// retries, the deadline often expires during a call, and the
+		// deadline error replaces the real cause.
+		_, err := client.CreateStream(createCtx, &kinesis.CreateStreamInput{
 			ShardCount: &numShards,
 			StreamName: &strmID,
-		})
+		}, func(o *kinesis.Options) { o.RetryMaxAttempts = 1 })
 		if err == nil {
 			t.Logf("Created stream '%v'", id)
 			break
@@ -66,14 +86,18 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 
 		t.Logf("Failed to create stream '%v': %v", id, err)
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(time.Second):
+		case <-createCtx.Done():
+			return nil, fmt.Errorf("creating stream '%v': %w (last error: %v)", id, createCtx.Err(), err)
+		case <-time.After(createStreamRetryDelay):
 		}
 	}
 
-	// wait for stream to exist
-	waiter := kinesis.NewStreamExistsWaiter(client)
+	// Wait for the stream to exist. The SDK default MinDelay is 10s, and every
+	// test pays it once. LocalStack makes a stream active in less than 1s.
+	waiter := kinesis.NewStreamExistsWaiter(client, func(o *kinesis.StreamExistsWaiterOptions) {
+		o.MinDelay = 100 * time.Millisecond
+		o.MaxDelay = time.Second
+	})
 	err = waiter.Wait(ctx, &kinesis.DescribeStreamInput{
 		StreamName: &strmID,
 	}, time.Second*30)
@@ -94,8 +118,27 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	return shards, nil
 }
 
-func kinesisIntegrationSuite(t *testing.T, lsPort string) {
-	template := `
+func TestCreateKinesisShardsReturnsLastError(t *testing.T) {
+	// A closed port acts as a dead LocalStack.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	_, port, err := net.SplitHostPort(ln.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, ln.Close())
+
+	// The 1s deadline stands in for createStreamTimeout, so that the test
+	// does not wait 30s.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	_, err = createKinesisShards(ctx, t, port, "dead", 1)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	// The error must keep the real cause, not only the deadline.
+	assert.Contains(t, err.Error(), "connection refused")
+}
+
+func kinesisIntegrationTemplate(inputExtra string) string {
+	return `
 output:
   aws_kinesis:
     endpoint: http://localhost:$PORT
@@ -115,6 +158,7 @@ input:
     endpoint: http://localhost:$PORT
     streams: [ stream-$ID$VAR1 ]
     checkpoint_limit: $VAR2
+` + inputExtra + `
     dynamodb:
       table: stream-$ID
       create: true
@@ -125,6 +169,10 @@ input:
       secret: xxxxx
       token: xxxxx
 `
+}
+
+func kinesisIntegrationSuite(t *testing.T, lsPort string) {
+	template := kinesisIntegrationTemplate("")
 
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
@@ -137,6 +185,7 @@ input:
 	)
 
 	t.Run("with static shards", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -160,6 +209,7 @@ input:
 	})
 
 	t.Run("with balanced shards", func(t *testing.T) {
+		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -174,6 +224,7 @@ input:
 	})
 
 	t.Run("single shard", func(t *testing.T) {
+		t.Parallel()
 		integration.StreamTests(
 			integration.StreamTestCheckpointCapture(),
 		).Run(
@@ -184,6 +235,87 @@ input:
 				vars.General["VAR1"] = ":" + shards[0]
 			}),
 			integration.StreamTestOptPort(lsPort),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarSet("VAR2", "10"),
+		)
+	})
+}
+
+func TestIntegrationKinesisPollPeriod(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	servicePort := awstest.GetLocalStack(t)
+
+	template := kinesisIntegrationTemplate(`
+    poll_period: 20ms
+`)
+
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestStreamSequential(50),
+	)
+	suite.Run(
+		t, template,
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			_, err := createKinesisShards(ctx, t, servicePort, vars.ID, 2)
+			require.NoError(t, err)
+		}),
+		integration.StreamTestOptPort(servicePort),
+		integration.StreamTestOptAllowDupes(),
+		integration.StreamTestOptVarSet("VAR1", ""),
+		integration.StreamTestOptVarSet("VAR2", "10"),
+	)
+}
+
+func TestIntegrationKinesisEFO(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	servicePort := awstest.GetLocalStack(t)
+
+	template := kinesisIntegrationTemplate(`
+    enhanced_fan_out:
+      enabled: true
+      consumer_name: rpcn-it-consumer
+`)
+
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamSequential(200),
+		integration.StreamTestStreamParallel(200),
+		integration.StreamTestStreamParallelLossy(200),
+		integration.StreamTestStreamParallelLossyThroughReconnect(200),
+	)
+
+	t.Run("with balanced shards", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				_, err := createKinesisShards(ctx, t, servicePort, vars.ID, 2)
+				require.NoError(t, err)
+			}),
+			integration.StreamTestOptPort(servicePort),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "10"),
+		)
+	})
+
+	t.Run("single shard checkpointing", func(t *testing.T) {
+		t.Parallel()
+		integration.StreamTests(
+			integration.StreamTestCheckpointCapture(),
+		).Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				shards, err := createKinesisShards(ctx, t, servicePort, vars.ID, 1)
+				require.NoError(t, err)
+				vars.General["VAR1"] = ":" + shards[0]
+			}),
+			integration.StreamTestOptPort(servicePort),
 			integration.StreamTestOptAllowDupes(),
 			integration.StreamTestOptVarSet("VAR2", "10"),
 		)

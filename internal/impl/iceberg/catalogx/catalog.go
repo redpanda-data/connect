@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -317,6 +317,25 @@ func (c *Client) refreshCatalog(ctx context.Context) error {
 
 func (c *Client) loadCatalog() catalog.Catalog {
 	return c.catalog.Load()
+}
+
+// TableIO returns a table.CatalogIO view of the client — the interface a
+// *table.Table binds its commits and refreshes to. It resolves the client's
+// current underlying REST catalog on every call, so the returned value stays
+// valid across the auth-driven catalog refreshes the client performs
+// internally.
+func (c *Client) TableIO() table.CatalogIO {
+	return clientTableIO{c}
+}
+
+type clientTableIO struct{ c *Client }
+
+func (t clientTableIO) LoadTable(ctx context.Context, ident table.Identifier) (*table.Table, error) {
+	return t.c.loadCatalog().LoadTable(ctx, ident)
+}
+
+func (t clientTableIO) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	return t.c.loadCatalog().CommitTable(ctx, ident, reqs, updates)
 }
 
 // isNamespaceAlreadyExists checks if the error indicates the namespace already exists.

@@ -33,7 +33,7 @@ func cosmosDBProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Azure").
-		Version("v4.25.0").
+		Version("4.25.0").
 		Summary("Creates or updates messages as JSON documents in https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^].").
 		Description(`
 When creating documents, each message must have the `+"`id`"+` property (case-sensitive) set (or use `+"`auto_id: true`"+`). It is the unique name that identifies the document, that is, no two documents share the same `+"`id`"+` within a logical partition. The `+"`id`"+` field must not exceed 255 characters. https://learn.microsoft.com/en-us/rest/api/cosmos-db/documents[See details^].
@@ -44,7 +44,8 @@ The `+"`partition_keys`"+` field must resolve to the same value(s) across the en
 		Fields(cosmosdb.ContainerClientConfigFields()...).
 		Field(cosmosdb.PartitionKeysField(false)).
 		Fields(cosmosdb.CRUDFields(true)...).
-		Field(service.NewBoolField(cdbpFieldEnableContentResponseOnWrite).Description("Enable content response on write operations. To save some bandwidth, set this to false if you don't need to receive the updated message(s) from the server, in which case the processor will not modify the content of the messages which are fed into it. Applies to every operation except Read.").Default(true).Advanced()).
+		Field(service.NewBoolField(cdbpFieldEnableContentResponseOnWrite).Description("Enable content response on write operations. To save some bandwidth, set this to false if you don't need to receive the updated message(s) from the server, in which case the processor will not modify the content of the messages which are fed into it. Applies to every operation except Read.").
+			ShortDescription("Enable content response on write operations. Disable to save bandwidth when the updated messages are not needed.").Default(true).Advanced()).
 		LintRule("root = []"+cosmosdb.CommonLintRules+cosmosdb.CRUDLintRules).
 		Example("Patch documents", "Query documents from a container and patch them.", `
 input:

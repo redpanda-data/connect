@@ -58,7 +58,7 @@ func redisStreamsInputConfig() *service.ConfigSpec {
 				Description("The maximum number of messages to consume from a single request.").
 				Default(10),
 			service.NewStringField(siFieldClientID).
-				Description("An identifier for the client connection.").
+				Description("The consumer name used within `consumer_group` when reading with `XREADGROUP`. Redis tracks pending messages for each consumer name.").
 				Default(""),
 			service.NewStringField(siFieldConsumerGroup).
 				Description("An identifier for the consumer group of the stream.").
@@ -69,14 +69,15 @@ func redisStreamsInputConfig() *service.ConfigSpec {
 				Default(true),
 			service.NewBoolField(siFieldStartFromOldest).
 				Description("If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").
+				ShortDescription("When no offset is found for a stream, consume from the oldest available offset rather than the latest.").
 				Advanced().
 				Default(true),
 			service.NewDurationField(siFieldCommitPeriod).
-				Description("The period of time between each commit of the current offset. Offsets are always committed during shutdown.").
+				Description("The period of time between each batch of `XACK` calls that acknowledge delivered message IDs to the consumer group. Pending acknowledgements are also sent during shutdown.").
 				Advanced().
 				Default("1s"),
 			service.NewDurationField(siFieldTimeout).
-				Description("The length of time to poll for new messages before reattempting.").
+				Description(pollTimeoutDescription).
 				Advanced().
 				Default("1s"),
 		)

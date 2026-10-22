@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,10 +52,10 @@ The processor sends a message to the agent and polls for task completion. The ag
 is returned as the processor output.
 
 For more information about the A2A protocol, see https://a2a-protocol.org/latest/specification`).
-		Version("4.40.0").
+		Version("4.68.0").
 		Fields(
 			service.NewURLField(ampFieldAgentCardURL).
-				Description("URL for the A2A agent card. Can be either a base URL (e.g., `https://example.com`) or a full path to the agent card (e.g., `https://example.com/.well-known/agent.json`). If no path is provided, defaults to `/.well-known/agent.json`. Authentication uses OAuth2 from environment variables."),
+				Description("URL for the A2A agent card. Can be either a base URL (for example, `https://example.com`) or a full path to the agent card (for example, `https://example.com/.well-known/agent.json`). If no path is provided, defaults to `/.well-known/agent.json`. Authentication uses OAuth2 from environment variables."),
 			service.NewInterpolatedStringField(ampFieldPrompt).
 				Description("The user prompt to send to the agent. By default, the processor submits the entire payload as a string.").
 				Optional(),
@@ -282,9 +283,9 @@ func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task)
 			p.logger.Debugf("  History[%d]: Role=%s, MessageID=%s, Parts=%d", i, histMsg.Role, histMsg.ID, len(histMsg.Parts))
 		}
 
-		for i := len(task.History) - 1; i >= 0; i-- {
-			if task.History[i].Role == a2a.MessageRoleAgent {
-				lastAgentMessage = task.History[i]
+		for i, v := range slices.Backward(task.History) {
+			if v.Role == a2a.MessageRoleAgent {
+				lastAgentMessage = v
 				p.logger.Debugf("Found last agent message at history index %d (MessageID=%s)", i, lastAgentMessage.ID)
 				break
 			}
