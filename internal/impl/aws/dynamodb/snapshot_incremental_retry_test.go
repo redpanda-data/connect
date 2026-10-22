@@ -613,3 +613,29 @@ func TestBackfillRetriesMarkTrimmedOnlyWhilePending(t *testing.T) {
 	assert.False(t, r.endPrepare("t1"), "a fallback is not a skipped push")
 	assert.False(t, r.trimmedWhilePreparing("t1"), "forgotten once the prepare succeeds")
 }
+
+// TestRetriedPrepareSeesTrimHorizonFallbackDuringProbe: a shard falls back to
+// trim horizon and checkpoints past the gap while the retried prepare's probe
+// runs, so the probe finds nothing stale. The fallback recorded meanwhile
+// still resets the completed snapshot.
+func TestRetriedPrepareSeesTrimHorizonFallbackDuringProbe(t *testing.T) {
+	var d *dynamoDBCDCInput
+	streams := &incStreamsStub{
+		describe: func(string) []string { return []string{"s1"} },
+		trimmed: func(string) bool {
+			d.backfillRetries.markTrimmed("t1")
+			return false
+		},
+	}
+	d = newIncConnectInput(t, &scanStubTransport{}, streams)
+	ts, api := newFlakyTableStream(t, d, "t1", 0)
+	arn := testArn("t1")
+	api.put(arn, snapshotRow(arn, "snapshot#complete", true, nil))
+	api.put(arn, memShardRow(arn, "s1", "100"))
+
+	d.backfillRetries.beginPrepare("t1")
+	need, err := d.prepareTableBackfill(t.Context(), "t1", ts)
+	require.NoError(t, err)
+	assert.True(t, need)
+	assert.False(t, api.has(arn, "snapshot#complete"))
+}

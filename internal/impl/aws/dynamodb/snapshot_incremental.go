@@ -103,11 +103,24 @@ type backfillDeps struct {
 var _ incsnapshot.Deps[*SnapshotCheckpoint] = (*backfillDeps)(nil)
 
 func (b *backfillDeps) CDCCheckpointStale(ctx context.Context) (bool, error) {
-	if b.d.backfillRetries.trimmedWhilePreparing(b.table) {
-		b.d.log.Warnf("CDC checkpoint for table %s is stale: a shard resumed from trim horizon while its prepare was pending", b.table)
+	if b.trimmedWhilePreparing() {
 		return true, nil
 	}
-	return b.d.isCDCCheckpointStaleFor(ctx, b.Checkpointer, b.streamArn)
+	stale, err := b.d.isCDCCheckpointStaleFor(ctx, b.Checkpointer, b.streamArn)
+	if err != nil || stale {
+		return stale, err
+	}
+	// A shard can fall back to trim horizon and checkpoint past the gap
+	// while the probe runs, so check the mark again.
+	return b.trimmedWhilePreparing(), nil
+}
+
+func (b *backfillDeps) trimmedWhilePreparing() bool {
+	if !b.d.backfillRetries.trimmedWhilePreparing(b.table) {
+		return false
+	}
+	b.d.log.Warnf("CDC checkpoint for table %s is stale: a shard resumed from trim horizon while its prepare was pending", b.table)
+	return true
 }
 
 func (b *backfillDeps) NewEmitter(resume *SnapshotCheckpoint) incsnapshot.Emitter {
