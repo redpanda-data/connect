@@ -137,7 +137,7 @@ func TestPublicationMissingOperations(t *testing.T) {
 }
 
 func TestPublishedAsItselfQuery(t *testing.T) {
-	q, err := publishedAsItselfQuery("pglog_stream_slot", "public", "it's", `"public"."it's"`)
+	q, err := publishedAsItselfQuery(15, "pglog_stream_slot", "public", "it's", `"public"."it's"`)
 	require.NoError(t, err)
 	// Matched on the exact name, since pg_publication_tables lists each table
 	// under the name its changes stream with.
@@ -147,6 +147,19 @@ func TestPublishedAsItselfQuery(t *testing.T) {
 	assert.Contains(t, q, "to_jsonb(pt) ->> 'rowfilter'")
 	assert.Contains(t, q, "to_jsonb(pt) -> 'attnames'")
 	assert.NotContains(t, q, "pt.rowfilter")
+	assert.Contains(t, q, "attgenerated")
+}
+
+func TestPublishedAsItselfQueryBeforeColumnLists(t *testing.T) {
+	// pg_attribute.attgenerated only exists from PostgreSQL 12, and a query
+	// naming it fails to parse on 10 and 11 even when the branch never runs.
+	for _, v := range []int{10, 11, 12, 14} {
+		q, err := publishedAsItselfQuery(v, "pglog_stream_slot", "public", "events", `"public"."events"`)
+		require.NoError(t, err)
+		assert.NotContains(t, q, "attgenerated", "PostgreSQL %d", v)
+		assert.NotContains(t, q, "pg_attribute", "PostgreSQL %d", v)
+		assert.Contains(t, q, "to_jsonb(pt) ->> 'rowfilter'", "PostgreSQL %d", v)
+	}
 }
 
 func TestPublicationFiltersTableQuery(t *testing.T) {

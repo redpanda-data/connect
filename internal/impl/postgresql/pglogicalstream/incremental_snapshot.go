@@ -368,7 +368,7 @@ func (s *Stream) warnToastFidelity(ctx context.Context, table incrementalsnapsho
 // signal and every chunk instead.
 func (s *Stream) checkDedupReachable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	publication := "pglog_stream_" + s.slotName
-	q, err := publishedAsItselfQuery(publication, table.Schema, table.Table, tableFQN(table).String())
+	q, err := publishedAsItselfQuery(s.pgVersion, publication, table.Schema, table.Table, tableFQN(table).String())
 	if err != nil {
 		return fmt.Errorf("sanitizing publication query: %w", err)
 	}

@@ -623,7 +623,17 @@ const (
 // set, or whose column list leaves out a column of its relation p.oid. With
 // no column list PostgreSQL reports every column, and generated columns are
 // left out of the comparison since they are only published on request.
-const publicationFilteredExpr = `(p.rowfilter IS NOT NULL
+//
+// The column list comparison is only built when columnLists is set: it names
+// pg_attribute.attgenerated, which PostgreSQL 10 and 11 lack, and a query
+// naming a missing column fails to parse even when that branch never runs.
+// Column lists only exist from PostgreSQL 15, so before that there is nothing
+// to compare.
+func publicationFilteredExpr(columnLists bool) string {
+	if !columnLists {
+		return `(p.rowfilter IS NOT NULL)`
+	}
+	return `(p.rowfilter IS NOT NULL
                OR (p.attnames IS NOT NULL AND EXISTS (
                    SELECT 1
                    FROM   pg_attribute a
@@ -633,11 +643,13 @@ const publicationFilteredExpr = `(p.rowfilter IS NOT NULL
                    AND    a.attgenerated = ''
                    AND    NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.attnames) e WHERE e.value = a.attname)
                )))`
+}
 
 // publicationFiltersTableQuery reports whether a publication streams a table,
 // anything in its partition tree, or one of its ancestors with a row filter
 // or a column list, so that some of the table's rows or columns never
-// stream.
+// stream. It only runs for an externally managed publication, which needs
+// PostgreSQL 12 or later.
 func publicationFiltersTableQuery(publication, table string) (string, error) {
 	return sanitize.SQLQuery(`
         WITH published AS (
@@ -656,7 +668,7 @@ func publicationFiltersTableQuery(publication, table string) (string, error) {
                        SELECT relid FROM pg_partition_ancestors(to_regclass($2))
                    )
         )
-        SELECT EXISTS (SELECT 1 FROM published p WHERE `+publicationFilteredExpr+`);
+        SELECT EXISTS (SELECT 1 FROM published p WHERE `+publicationFilteredExpr(true)+`);
     `, publication, table)
 }
 
@@ -667,8 +679,9 @@ func publicationFiltersTableQuery(publication, table string) (string, error) {
 // unless publish_via_partition_root is set, and the topmost published
 // ancestor when it is. So a partitioned table published through its
 // partitions, and a partition published through its root, are not listed as
-// themselves.
-func publishedAsItselfQuery(publication, schema, table, fqn string) (string, error) {
+// themselves. pgVersion is the server's major version, since it also runs
+// for connector-managed publications, which work before PostgreSQL 12.
+func publishedAsItselfQuery(pgVersion int, publication, schema, table, fqn string) (string, error) {
 	return sanitize.SQLQuery(`
         WITH published AS (
             SELECT to_regclass($4)::oid AS oid,
@@ -680,7 +693,7 @@ func publishedAsItselfQuery(publication, schema, table, fqn string) (string, err
             AND    pt.tablename = $3
         )
         SELECT EXISTS (SELECT 1 FROM published),
-               EXISTS (SELECT 1 FROM published p WHERE `+publicationFilteredExpr+`);
+               EXISTS (SELECT 1 FROM published p WHERE `+publicationFilteredExpr(pgVersion >= 15)+`);
     `, publication, schema, table, fqn)
 }
 

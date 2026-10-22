@@ -504,8 +504,13 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
 	exec("CREATE TABLE orders (id int PRIMARY KEY, note text);")
 
+	// The column list check is only built from PostgreSQL 15.
+	var versionNum int
+	require.NoError(t, db.QueryRowContext(ctx, "SHOW server_version_num").Scan(&versionNum))
+
 	newStream := func(slot string) *Stream {
 		return &Stream{
+			pgVersion:                    versionNum / 10000,
 			slotName:                     slot,
 			snapshotSchema:               "public",
 			externallyManagedPublication: true,
