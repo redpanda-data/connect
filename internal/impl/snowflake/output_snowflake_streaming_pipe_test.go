@@ -48,6 +48,15 @@ type fakeChannel struct {
 	// attempt (appends/offsets are still appended to first, matching the real
 	// Channel: a failed append still reached the server with these rows).
 	appendErr error
+	// maxPayload, if > 0, makes AppendRows reject a body larger than this
+	// with ErrPayloadTooLarge before recording anything, standing in for
+	// the request limit so splitting can be tested without 4 MB bodies.
+	maxPayload int
+	// failAppendNo, if > 0, makes the n-th AppendRows call (1-based) that
+	// would otherwise succeed fail with failAppendErr after recording it,
+	// standing in for a transient failure on a later part.
+	failAppendNo  int
+	failAppendErr error
 	// waitErr, if set, is returned by WaitUntilCommitted after it records
 	// the token, standing in for a commit-poll failure (non-backpressure
 	// status error, decode failure, timeout).
@@ -87,9 +96,15 @@ func (f *fakeChannel) AppendRows(_ context.Context, rows [][]byte, startOffsetTo
 		// the rows, so nothing is recorded as appended.
 		return false, 0, f.appendErr
 	}
+	if f.maxPayload > 0 && payload > f.maxPayload {
+		return false, 0, fmt.Errorf("%w: body is %d bytes", v2.ErrPayloadTooLarge, payload)
+	}
 	f.appends = append(f.appends, rows)
 	f.startOffsets = append(f.startOffsets, startOffsetToken)
 	f.endOffsets = append(f.endOffsets, endOffsetToken)
+	if f.failAppendNo > 0 && len(f.appends) == f.failAppendNo {
+		return false, 0, f.failAppendErr
+	}
 	// A request was made either way from here -- sent reports whether one
 	// was attempted, not whether it succeeded.
 	return true, payload, f.appendErr
@@ -289,22 +304,19 @@ func TestChannelNamePerPartitionInterpolation(t *testing.T) {
 func TestExactlyOnceDropsAlreadyCommittedRowsNumerically(t *testing.T) {
 	ch := &fakeChannel{name: "c", committed: "9"}
 	batch := offsetBatch(t, []int{8, 9, 10, 11})
-	filtered, first, last, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
+	filtered, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
 	if err != nil {
 		t.Fatalf("preprocess: %v", err)
 	}
 	if len(filtered) != 2 {
 		t.Fatalf("expected offsets 10 and 11 to survive, got %d rows", len(filtered))
 	}
-	if first != "10" || last != "11" {
-		t.Errorf("range = %q..%q, want 10..11", first, last)
-	}
 }
 
 func TestExactlyOnceKeepsEverythingWhenNothingCommitted(t *testing.T) {
 	ch := &fakeChannel{name: "c", committed: ""}
 	batch := offsetBatch(t, []int{0, 1})
-	filtered, _, _, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
+	filtered, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
 	if err != nil {
 		t.Fatalf("preprocess: %v", err)
 	}
@@ -316,7 +328,7 @@ func TestExactlyOnceKeepsEverythingWhenNothingCommitted(t *testing.T) {
 func TestExactlyOnceDropsWholeBatchWhenBehind(t *testing.T) {
 	ch := &fakeChannel{name: "c", committed: "100"}
 	batch := offsetBatch(t, []int{9, 10})
-	filtered, _, _, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
+	filtered, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
 	if err != nil {
 		t.Fatalf("preprocess: %v", err)
 	}
@@ -337,15 +349,12 @@ func TestExactlyOnceFallsBackToLexicographicForNonNumericTokens(t *testing.T) {
 	m1 := msg("row")
 	m1.MetaSetMut("custom_offset", "0/B")
 	batch := service.MessageBatch{m0, m1}
-	filtered, first, last, err := preprocessForExactlyOncePipe(t.Context(), ch, offsetTok, batch)
+	filtered, err := preprocessForExactlyOncePipe(t.Context(), ch, offsetTok, batch)
 	if err != nil {
 		t.Fatalf("preprocess: %v", err)
 	}
 	if len(filtered) != 1 {
 		t.Fatalf("expected only 0/B to survive, got %d rows", len(filtered))
-	}
-	if first != "0/B" || last != "0/B" {
-		t.Errorf("range = %q..%q, want 0/B..0/B", first, last)
 	}
 }
 
@@ -354,7 +363,7 @@ func TestExactlyOnceFailsLoudOnMissingOffsetMetadata(t *testing.T) {
 	// refused rather than used as a shared token for every such row.
 	ch := &fakeChannel{name: "c", committed: ""}
 	batch := service.MessageBatch{msg("row")} // no kafka_offset metadata set
-	_, _, _, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
+	_, err := preprocessForExactlyOncePipe(t.Context(), ch, kafkaOffsetTokenExpr(t), batch)
 	if err == nil {
 		t.Fatal("expected an error when the offset token has no @kafka_offset metadata to resolve")
 	}
@@ -373,7 +382,7 @@ func TestExactlyOnceFailsLoudOnEmptyOffsetToken(t *testing.T) {
 	m := msg("row")
 	m.MetaSetMut("custom_offset", "")
 	batch := service.MessageBatch{m}
-	_, _, _, err = preprocessForExactlyOncePipe(t.Context(), ch, offsetTok, batch)
+	_, err = preprocessForExactlyOncePipe(t.Context(), ch, offsetTok, batch)
 	if err == nil {
 		t.Fatal("expected an error when the offset token interpolates to an empty string")
 	}
@@ -1924,5 +1933,348 @@ func TestWriteBatchAllEmptyBatchAdvancesOrderingMark(t *testing.T) {
 	err := o.WriteBatch(t.Context(), offsetBatch(t, []int{5, 6}))
 	if err == nil || !strings.Contains(err.Error(), "out of order") {
 		t.Fatalf("expected 5..6 to be refused after 11..12 was acked, got %v", err)
+	}
+}
+
+// payloadBatch builds an exactly-once batch of bodies of the given sizes,
+// with kafka offsets 1..n.
+func payloadBatch(t *testing.T, sizes ...int) service.MessageBatch {
+	t.Helper()
+	batch := make(service.MessageBatch, len(sizes))
+	for i, size := range sizes {
+		m := msg(`{"k":"` + strings.Repeat("x", size) + `"}`)
+		m.MetaSetMut("kafka_offset", i+1)
+		batch[i] = m
+	}
+	return batch
+}
+
+// TestWriteBatchSplitsOversizeBatchIntoOrderedParts: a batch whose body is
+// over the request limit is sent as several requests, split by message,
+// each carrying its own token range, with one commit wait on the last
+// part's end token and the bytes sent counted.
+func TestWriteBatchSplitsOversizeBatchIntoOrderedParts(t *testing.T) {
+	ch := &fakeChannel{name: "c", maxPayload: 250}
+	o := testOutput(t, ch)
+	metrics, readCounter := newCountingMetrics(t)
+	o.metrics = newSnowpipePipeMetrics(metrics)
+
+	if err := o.WriteBatch(t.Context(), payloadBatch(t, 100, 100, 100, 100)); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if len(ch.appends) != 2 {
+		t.Fatalf("expected the batch to be sent as 2 requests, got %d: %v", len(ch.appends), ch.startOffsets)
+	}
+	if ch.startOffsets[0] != "1" || ch.endOffsets[0] != "2" || ch.startOffsets[1] != "3" || ch.endOffsets[1] != "4" {
+		t.Errorf("part token ranges = (%s..%s), (%s..%s); want (1..2), (3..4)", ch.startOffsets[0], ch.endOffsets[0], ch.startOffsets[1], ch.endOffsets[1])
+	}
+	if len(ch.waited) != 1 || ch.waited[0] != "4" {
+		t.Errorf("expected one commit wait on the last part's end token 4, got %v", ch.waited)
+	}
+	if got := readCounter("snowflake_compressed_output_size_bytes"); got <= 0 {
+		t.Errorf("snowflake_compressed_output_size_bytes = %d, want the bytes sent", got)
+	}
+}
+
+// TestWriteBatchSingleOversizeMessageFollowsRowErrorPolicy: a message whose
+// body is over the limit on its own cannot be split further. It is dropped
+// and counted like a rejected row; the rest of the batch lands.
+func TestWriteBatchSingleOversizeMessageFollowsRowErrorPolicy(t *testing.T) {
+	t.Run("tolerated", func(t *testing.T) {
+		ch := &fakeChannel{name: "c", maxPayload: 250}
+		o := testOutput(t, ch)
+		o.tolerateRowErrors = true
+		metrics, readCounter := newCountingMetrics(t)
+		o.metrics = newSnowpipePipeMetrics(metrics)
+
+		if err := o.WriteBatch(t.Context(), payloadBatch(t, 50, 400, 50)); err != nil {
+			t.Fatalf("WriteBatch: %v", err)
+		}
+		if len(ch.appends) != 2 || ch.endOffsets[0] != "1" || ch.startOffsets[1] != "3" {
+			t.Fatalf("expected messages 1 and 3 sent as two requests, got ranges %v..%v", ch.startOffsets, ch.endOffsets)
+		}
+		if len(ch.waited) != 1 || ch.waited[0] != "3" {
+			t.Errorf("expected one commit wait on token 3, got %v", ch.waited)
+		}
+		if got := readCounter("snowflake_rows_error_count"); got != 1 {
+			t.Errorf("snowflake_rows_error_count = %d, want 1 for the dropped message", got)
+		}
+	})
+	t.Run("strict exactly-once fails once", func(t *testing.T) {
+		ch := &fakeChannel{name: "c", maxPayload: 250}
+		o := testOutput(t, ch)
+
+		err := o.WriteBatch(t.Context(), payloadBatch(t, 50, 400, 50))
+		if err == nil || !strings.Contains(err.Error(), "message 2 of 3") || !strings.Contains(err.Error(), "request limit") {
+			t.Fatalf("expected a failure naming message 2 as over the limit, got %v", err)
+		}
+		if len(ch.appends) != 2 {
+			t.Errorf("the good messages must still be sent before the batch fails, got %d appends", len(ch.appends))
+		}
+		// The redelivery dedupes: committed covers the whole range.
+		ch.committed = "3"
+		if err := o.WriteBatch(t.Context(), payloadBatch(t, 50, 400, 50)); err != nil {
+			t.Fatalf("WriteBatch (redelivery): %v", err)
+		}
+		if len(ch.appends) != 2 {
+			t.Errorf("the redelivery must dedupe to nothing, got %d appends", len(ch.appends))
+		}
+	})
+}
+
+// TestWriteBatchTrailingDroppedMessageIsCoveredByLastEnd: a dropped or
+// empty message at the end of a group is folded into the previous part's
+// token range, so the committed token covers it and its redelivery dedupes
+// rather than being dropped and counted again.
+func TestWriteBatchTrailingDroppedMessageIsCoveredByLastEnd(t *testing.T) {
+	ch := &fakeChannel{name: "c"}
+	o := testOutput(t, ch)
+	o.tolerateRowErrors = true
+
+	batch := offsetBatch(t, []int{1, 2, 3})
+	batch[0].SetBytes([]byte(`{"a":1}`))
+	batch[1].SetBytes([]byte("{\n  \"bad\": \n}"))
+	batch[2].SetBytes(nil)
+	if err := o.WriteBatch(t.Context(), batch); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if len(ch.appends) != 1 || ch.startOffsets[0] != "1" || ch.endOffsets[0] != "3" {
+		t.Fatalf("expected one request covering tokens 1..3, got %v..%v", ch.startOffsets, ch.endOffsets)
+	}
+	if len(ch.waited) != 1 || ch.waited[0] != "3" {
+		t.Errorf("expected the commit wait on token 3, got %v", ch.waited)
+	}
+}
+
+// TestWriteBatchOperatorStatusCodeIsPermanentAndReopensOnNextBatch: a
+// channel status an operator must fix fails the batch with the action,
+// does not reopen the channel on the spot, and reopens it once when the
+// next batch arrives.
+func TestWriteBatchOperatorStatusCodeIsPermanentAndReopensOnNextBatch(t *testing.T) {
+	ch := &fakeChannel{name: "c", waitErr: &v2.ChannelStatusError{Channel: "c", Code: "ERR_CHANNEL_SCHEMA_EVOLUTION_ICEBERG_TIME_TYPE_SCALE_NOT_SUPPORTED", Message: "scale", OffsetToken: "1"}}
+	o, opens := testOutputCountingOpens(t, ch)
+
+	err := o.WriteBatch(t.Context(), offsetBatch(t, []int{1}))
+	if err == nil || !strings.Contains(err.Error(), "will not resolve itself on retry") || !strings.Contains(err.Error(), "pre-create the column") {
+		t.Fatalf("expected a permanent error with the operator action, got %v", err)
+	}
+	if *opens != 1 {
+		t.Fatalf("channel opened %d times, want 1: an operator-code status must not reopen on the spot", *opens)
+	}
+
+	// The operator fixed the table; the next batch reopens once and lands.
+	ch.waitErr = nil
+	if err := o.WriteBatch(t.Context(), offsetBatch(t, []int{2})); err != nil {
+		t.Fatalf("WriteBatch (after fix): %v", err)
+	}
+	if *opens != 2 {
+		t.Errorf("channel opened %d times, want 2: exactly one reopen on the next batch", *opens)
+	}
+	// And only once: a third batch does not reopen again.
+	if err := o.WriteBatch(t.Context(), offsetBatch(t, []int{3})); err != nil {
+		t.Fatalf("WriteBatch (third): %v", err)
+	}
+	if *opens != 2 {
+		t.Errorf("channel opened %d times after the third batch, want still 2", *opens)
+	}
+}
+
+// TestWriteBatchReopenStatusCodeReopensImmediately: a status code Snowflake
+// says a reopen fixes is handled as before -- reopen now, fail the batch,
+// let the redelivery go through the fresh channel.
+func TestWriteBatchReopenStatusCodeReopensImmediately(t *testing.T) {
+	ch := &fakeChannel{name: "c", waitErr: &v2.ChannelStatusError{Channel: "c", Code: "ERR_CHANNEL_MUST_BE_REOPENED_DUE_TO_ROW_SEQ_GAP", Message: "gap", OffsetToken: "1"}}
+	o, opens := testOutputCountingOpens(t, ch)
+
+	err := o.WriteBatch(t.Context(), offsetBatch(t, []int{1}))
+	if err == nil || strings.Contains(err.Error(), "will not resolve itself") {
+		t.Fatalf("expected a plain failure for a reopen-code, got %v", err)
+	}
+	if *opens != 2 {
+		t.Errorf("channel opened %d times, want 2: a reopen-code reopens on the spot", *opens)
+	}
+}
+
+// TestCompressionFieldParses: the compression field accepts zstd and none,
+// defaults to zstd, and the enum lint rejects anything else.
+func TestCompressionFieldParses(t *testing.T) {
+	base := "account: a\nuser: u\nrole: r\ndatabase: d\nschema: s\npipe: p\nprivate_key: k\n"
+	for _, tc := range []struct{ extra, want string }{
+		{"", "zstd"},
+		{"compression: none\n", "none"},
+		{"compression: zstd\n", "zstd"},
+	} {
+		conf, err := snowpipeStreamingPipeOutputConfig().ParseYAML(base+tc.extra, nil)
+		if err != nil {
+			t.Fatalf("ParseYAML(%q): %v", tc.extra, err)
+		}
+		got, err := conf.FieldString(ssopFieldCompression)
+		if err != nil || got != tc.want {
+			t.Errorf("compression with %q = %q, %v; want %q", tc.extra, got, err, tc.want)
+		}
+	}
+	linter := service.GlobalEnvironment().NewComponentConfigLinter()
+	lints, err := linter.LintYAML("output", []byte("snowflake_streaming_pipe:\n  "+strings.ReplaceAll(base+"compression: gzip\n", "\n", "\n  ")))
+	if err != nil {
+		t.Fatalf("LintYAML: %v", err)
+	}
+	found := false
+	for _, l := range lints {
+		if strings.Contains(l.Error(), "gzip") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a lint rejecting compression: gzip, got %v", lints)
+	}
+}
+
+// TestWriteBatchLaterPartFailureWaitsForSentParts: when a later part fails
+// after an earlier part was accepted, the output waits for the sent parts
+// to commit before failing the batch, so the exactly-once redelivery
+// dedupes them instead of appending them again.
+func TestWriteBatchLaterPartFailureWaitsForSentParts(t *testing.T) {
+	ch := &fakeChannel{name: "c", maxPayload: 250, failAppendNo: 2, failAppendErr: realAppendError(t, 429, `{"error_code":"ReceiverSaturated"}`)}
+	o, opens := testOutputCountingOpens(t, ch)
+
+	err := o.WriteBatch(t.Context(), payloadBatch(t, 100, 100, 100, 100))
+	if err == nil {
+		t.Fatal("expected the second part's failure to surface")
+	}
+	if *opens != 1 {
+		t.Errorf("channel opened %d times, want 1: backpressure must not reopen", *opens)
+	}
+	if len(ch.appends) != 2 {
+		t.Fatalf("expected two append attempts, got %d", len(ch.appends))
+	}
+	if len(ch.waited) != 1 || ch.waited[0] != "2" {
+		t.Fatalf("expected a commit wait on the first part's end token 2 before failing, got %v", ch.waited)
+	}
+	// Snowflake committed the first part; the redelivery skips it.
+	ch.committed = "2"
+	ch.failAppendNo = 0
+	if err := o.WriteBatch(t.Context(), payloadBatch(t, 100, 100, 100, 100)); err != nil {
+		t.Fatalf("WriteBatch (redelivery): %v", err)
+	}
+	if len(ch.appends) != 3 || ch.startOffsets[2] != "3" || ch.endOffsets[2] != "4" {
+		t.Errorf("the redelivery should append only 3..4, got appends %v..%v", ch.startOffsets, ch.endOffsets)
+	}
+}
+
+// httpStatusErrorStub is an unclassified error (v2.Classify sees KindOther),
+// standing in for a transport failure in the output tests.
+type httpStatusErrorStub struct{ code int }
+
+func (e *httpStatusErrorStub) Error() string { return fmt.Sprintf("HTTP %d", e.code) }
+
+// TestWriteBatchOversizeLastMessageIsCoveredByPreviousPart: a message over
+// the request limit uncompressed is dropped before the parts are built, so
+// when it is last its token folds into the previous part's range and the
+// redelivery dedupes rather than dropping and counting it again.
+func TestWriteBatchOversizeLastMessageIsCoveredByPreviousPart(t *testing.T) {
+	ch := &fakeChannel{name: "c"}
+	o := testOutput(t, ch)
+	o.tolerateRowErrors = true
+	o.compress = false // the limit is then on the raw body
+	metrics, readCounter := newCountingMetrics(t)
+	o.metrics = newSnowpipePipeMetrics(metrics)
+
+	batch := payloadBatch(t, 10, v2.MaxRequestBytes+1)
+	if err := o.WriteBatch(t.Context(), batch); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if len(ch.appends) != 1 || ch.startOffsets[0] != "1" || ch.endOffsets[0] != "2" {
+		t.Fatalf("expected one request covering tokens 1..2, got %v..%v", ch.startOffsets, ch.endOffsets)
+	}
+	if got := readCounter("snowflake_rows_error_count"); got != 1 {
+		t.Errorf("snowflake_rows_error_count = %d, want 1", got)
+	}
+	ch.committed = "2"
+	if err := o.WriteBatch(t.Context(), batch); err != nil {
+		t.Fatalf("WriteBatch (redelivery): %v", err)
+	}
+	if got := readCounter("snowflake_rows_error_count"); got != 1 {
+		t.Errorf("snowflake_rows_error_count = %d after the redelivery, want still 1", got)
+	}
+}
+
+// TestWriteBatchOpenFailureDoesNotDoubleOpenOnRecovery: a failed open
+// leaves nothing in the pool, so recovery opens exactly once.
+func TestWriteBatchOpenFailureDoesNotDoubleOpenOnRecovery(t *testing.T) {
+	ch := &fakeChannel{name: "c"}
+	o, opens := testOutputCountingOpens(t, ch)
+	counting := o.openChannelFn
+	failing := true
+	o.openChannelFn = func(ctx context.Context, name string) (v2.IngestChannel, error) {
+		if failing {
+			failing = false
+			*opens++
+			return nil, &v2.ChannelStatusError{Channel: name, Code: "ERR_PIPE_DOES_NOT_EXIST_OR_NOT_AUTHORIZED", Message: "no pipe", OnOpen: true}
+		}
+		return counting(ctx, name)
+	}
+
+	err := o.WriteBatch(t.Context(), offsetBatch(t, []int{1}))
+	if err == nil || !strings.Contains(err.Error(), "role has access") {
+		t.Fatalf("expected the operator action for a missing pipe, got %v", err)
+	}
+	if err := o.WriteBatch(t.Context(), offsetBatch(t, []int{2})); err != nil {
+		t.Fatalf("WriteBatch (after the pipe exists): %v", err)
+	}
+	if *opens != 2 {
+		t.Errorf("channel opened %d times, want 2 (the failed open and one successful one)", *opens)
+	}
+}
+
+// TestWriteBatchInvalidMarkSurvivesFailedReopen: if the one-shot reopen of
+// an invalidated channel fails for a transient reason, the mark stays and
+// the next batch tries the reopen again rather than using the dead channel.
+func TestWriteBatchInvalidMarkSurvivesFailedReopen(t *testing.T) {
+	ch := &fakeChannel{name: "c", waitErr: &v2.ChannelStatusError{Channel: "c", Code: "ERR_CHANNEL_SCHEMA_EVOLUTION_X", Message: "m", OffsetToken: "1"}}
+	o, opens := testOutputCountingOpens(t, ch)
+	counting := o.openChannelFn
+	reopenFailures := 1
+	o.openChannelFn = func(ctx context.Context, name string) (v2.IngestChannel, error) {
+		if *opens >= 1 && reopenFailures > 0 {
+			reopenFailures--
+			*opens++
+			return nil, &httpStatusErrorStub{429}
+		}
+		return counting(ctx, name)
+	}
+
+	if err := o.WriteBatch(t.Context(), offsetBatch(t, []int{1})); err == nil {
+		t.Fatal("expected the operator-code failure")
+	}
+	ch.waitErr = nil
+	// Reopen attempt fails transiently: batch fails, mark stays.
+	if err := o.WriteBatch(t.Context(), offsetBatch(t, []int{2})); err == nil {
+		t.Fatal("expected the failed reopen to fail the batch")
+	}
+	if len(ch.appends) != 1 {
+		t.Fatalf("the dead channel must not receive appends, got %d", len(ch.appends))
+	}
+	// Next batch retries the reopen, which succeeds, and lands.
+	if err := o.WriteBatch(t.Context(), offsetBatch(t, []int{2})); err != nil {
+		t.Fatalf("WriteBatch (reopen retried): %v", err)
+	}
+	if *opens != 3 {
+		t.Errorf("channel opened %d times, want 3 (initial, failed reopen, successful reopen)", *opens)
+	}
+}
+
+// TestWriteBatchCompressibleOversizeMessageIsNotDropped: the request limit
+// is on the body as sent, so a message over the limit uncompressed that
+// compresses under it is sent, not dropped.
+func TestWriteBatchCompressibleOversizeMessageIsNotDropped(t *testing.T) {
+	ch := &fakeChannel{name: "c"}
+	o := testOutput(t, ch)
+	o.compress = true
+
+	if err := o.WriteBatch(t.Context(), payloadBatch(t, v2.MaxRequestBytes+1)); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if len(ch.appends) != 1 {
+		t.Errorf("expected the compressible message to be sent, got %d appends", len(ch.appends))
 	}
 }

@@ -21,6 +21,7 @@ type snowpipePipeMetrics struct {
 	rowsErrorCount        *service.MetricCounter
 	outOfOrderSubmissions *service.MetricCounter
 	emptyRowsSkipped      *service.MetricCounter
+	compressedOutputSize  *service.MetricCounter
 }
 
 func newSnowpipePipeMetrics(m *service.Metrics) *snowpipePipeMetrics {
@@ -30,7 +31,15 @@ func newSnowpipePipeMetrics(m *service.Metrics) *snowpipePipeMetrics {
 		rowsErrorCount:        m.NewCounter("snowflake_rows_error_count"),
 		outOfOrderSubmissions: m.NewCounter("snowflake_out_of_order_submissions"),
 		emptyRowsSkipped:      m.NewCounter("snowflake_empty_rows_skipped"),
+		compressedOutputSize:  m.NewCounter("snowflake_compressed_output_size_bytes"),
 	}
+}
+
+// ReportPayloadSent counts the bytes sent to Snowflake as request bodies,
+// after compression when it is on, so the compression ratio and the fit
+// against the 4 MB request limit can be watched.
+func (m *snowpipePipeMetrics) ReportPayloadSent(bytes int64) {
+	m.compressedOutputSize.Incr(bytes)
 }
 
 // ReportEmptyRowsSkipped counts messages with an empty body (tombstones)

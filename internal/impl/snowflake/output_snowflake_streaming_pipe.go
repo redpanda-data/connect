@@ -48,6 +48,7 @@ const (
 	// tolerate_row_errors mirrors the Kafka Connector's errors.tolerance;
 	// false (fail the batch) matches its default.
 	ssopFieldTolerateRowErrors           = "tolerate_row_errors"
+	ssopFieldCompression                 = "compression"
 	ssopFieldCommitPollInterval          = "commit_poll_interval"
 	ssopFieldRequestTimeout              = "request_timeout"
 	ssopFieldChannelOpenRetry            = "channel_open_retry"
@@ -150,6 +151,11 @@ Requests are capped at 4MiB uncompressed. An oversized batch is rejected rather 
 				ShortDescription("File to load the private RSA key from, as a .p8 PEM file. Either this or private_key is required.").Optional(),
 			service.NewStringField(ssopFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
 			service.NewBatchPolicyField(ssopFieldBatching),
+			service.NewStringEnumField(ssopFieldCompression, "zstd", "none").
+				Description(`How to compress each request body. Snowflake's 4 MB per-request limit applies to the payload as sent, after compression, so `+"`zstd`"+` (Snowflake's recommendation) lets a request carry several times more rows than `+"`none`"+`. A batch whose body is still over the limit is sent as several requests, split by message; a single message whose body is over the limit on its own is treated like a row Snowflake rejected (see `+"`"+ssopFieldTolerateRowErrors+"`"+`). The bytes sent are counted in `+"`snowflake_compressed_output_size_bytes`"+`.`).
+				ShortDescription("Request body compression: zstd (default) or none. The 4 MB request limit applies after compression.").
+				Default("zstd").
+				Advanced(),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewInterpolatedStringField(ssopFieldChannelName).
 				Description(`The channel to write through. Resolved per message: a batch is grouped by channel name (preserving order within each group) and each group is appended, deduplicated when `+"`"+ssopFieldOffsetToken+"`"+` is set, and committed separately, so batch at the input so that a batch spans as few channels as possible. Two instances writing the same channel name conflict.
@@ -503,6 +509,10 @@ func newSnowflakeStreamerPipe(
 	if err != nil {
 		return nil, err
 	}
+	compression, err := conf.FieldString(ssopFieldCompression)
+	if err != nil {
+		return nil, err
+	}
 
 	// Role, database and schema are case-sensitive in the REST API paths.
 	role = strings.ToUpper(role)
@@ -550,6 +560,7 @@ func newSnowflakeStreamerPipe(
 		Schema:                schema,
 		Pipe:                  pipe,
 		CommitPollInterval:    commitPollInterval,
+		Compress:              compression == "zstd",
 		RequestTimeout:        requestTimeout,
 		OpenRetryMaxAttempts:  openRetryMaxAttempts,
 		OpenRetryInitialDelay: openRetryInitial,
@@ -569,6 +580,7 @@ func newSnowflakeStreamerPipe(
 		offsetToken:       offsetToken,
 		commitTimeout:     commitTimeout,
 		tolerateRowErrors: tolerateRowErrors,
+		compress:          compression == "zstd",
 		logger:            mgr.Logger(),
 		metrics:           newSnowpipePipeMetrics(mgr.Metrics()),
 		openChannelFn: func(ctx context.Context, name string) (v2.IngestChannel, error) {
@@ -596,6 +608,7 @@ type snowpipeIndexedOutputPipe struct {
 	offsetToken, channelName *service.InterpolatedString
 	commitTimeout            time.Duration
 	tolerateRowErrors        bool
+	compress                 bool
 	logger                   *service.Logger
 	metrics                  *snowpipePipeMetrics
 
@@ -619,6 +632,13 @@ type snowpipeIndexedOutputPipe struct {
 	// acked per channel; see checkSubmissionOrder.
 	committedFloors   map[string]string
 	committedFloorsMu sync.Mutex
+
+	// invalidChannels holds channels whose status named a condition an
+	// operator must fix (v2.KindChannelOperator). They are not reopened
+	// when the failure is seen; the next batch for the channel reopens it
+	// once, so the retry cadence is the input's redelivery, not a loop.
+	invalidChannels   map[string]struct{}
+	invalidChannelsMu sync.Mutex
 }
 
 // checkSubmissionOrder refuses a batch whose tokens start below the first
@@ -747,17 +767,24 @@ func (o *snowpipeIndexedOutputPipe) logReopenFailure(name string, reopenErr erro
 	o.logger.Warnf("unable to reopen channel %q after failure: %v", name, reopenErr)
 }
 
+// reportRejectedBeforeReopen counts and logs rows the channel rejected that
+// have not been reported yet. A reopen resets the channel's error baseline,
+// so this must run before one.
+func (o *snowpipeIndexedOutputPipe) reportRejectedBeforeReopen(channel v2.IngestChannel) {
+	if rejected := channel.RowsRejected(); rejected > 0 {
+		o.metrics.ReportRowsRejected(rejected)
+		o.logger.Warnf("channel %q has %d new row error(s) (total: %d) recorded before this batch failed. Last error message: %s%s",
+			channel.Name(), rejected, channel.RowsErrorCount(), channel.LastErrorMessage(), errorBoundNote(channel))
+	}
+}
+
 // reopenAfterFailure replaces a channel in the pool after an append or
 // commit-wait error, keeping the old one if the reopen fails. Rejected rows
 // are reported first: a reopen resets the channel's error baseline, and on
 // redelivery an already-committed batch dedupes to nothing before the
 // post-commit check, so this is the only place they would be counted.
 func (o *snowpipeIndexedOutputPipe) reopenAfterFailure(ctx context.Context, channel v2.IngestChannel) {
-	if rejected := channel.RowsRejected(); rejected > 0 {
-		o.metrics.ReportRowsRejected(rejected)
-		o.logger.Warnf("channel %q has %d new row error(s) (total: %d) recorded before this batch failed. Last error message: %s",
-			channel.Name(), rejected, channel.RowsErrorCount(), channel.LastErrorMessage())
-	}
+	o.reportRejectedBeforeReopen(channel)
 	reopened, reopenErr := o.openChannel(ctx, channel.Name())
 	if reopenErr == nil {
 		o.channelPool.Release(channel.Name(), reopened)
@@ -809,54 +836,148 @@ func groupMessagesByChannel(exec *service.MessageBatchInterpolationExecutor, bat
 	return groups, nil
 }
 
-// droppedBodies counts the multi-line bodies a channel group dropped
-// because they are not valid JSON, with the first for the log and error
-// text.
+// droppedBodies counts the messages a channel group dropped because they
+// cannot be sent (a multi-line body that is not JSON, or a single message
+// over the request limit), with the first for the log and error text.
 type droppedBodies struct {
 	count int
 	first string
 }
 
+func (d *droppedBodies) add(delivered service.MessageBatch, msg *service.Message, err error) {
+	if d.count == 0 {
+		d.first = fmt.Sprintf("message %d of %d: %v", slices.Index(delivered, msg)+1, len(delivered), err)
+	}
+	d.count++
+}
+
 // prepareRows renders the bodies of one channel group's surviving messages
-// as NDJSON rows. A body with a line break inside it (pretty-printed JSON)
-// would be split into several NDJSON rows, so v2.SplitRow compacts it; a
-// body holding several newline-separated documents becomes that many rows,
-// as before. Only those bodies are parsed: a single-line body that is not
-// JSON is left for Snowflake to reject, as before, so tolerate_row_errors
-// keeps its meaning.
+// as NDJSON rows, one slice per message, aligned with batch. A body with a
+// line break inside it (pretty-printed JSON) would be split into several
+// NDJSON rows, so v2.SplitRow compacts it; a body holding several
+// newline-separated documents becomes that many rows, as before. Only those
+// bodies are parsed: a single-line body that is not JSON is left for
+// Snowflake to reject, as before, so tolerate_row_errors keeps its meaning.
 //
 // A multi-line body that is not JSON is dropped and recorded in dropped;
 // writeChannelGroup then treats it like a row Snowflake rejected: the good
 // rows land, the drop is counted, and with offset_token set and
 // tolerate_row_errors false the batch fails once, so the redelivery dedupes
-// to nothing. Empty bodies (tombstones) are counted in emptyRows and
-// produce no row. delivered is the whole delivered batch, for positions in
-// log and error text.
-func prepareRows(batch, delivered service.MessageBatch, dropped *droppedBodies) (rows [][]byte, emptyRows int, err error) {
-	rows = make([][]byte, 0, len(batch))
-	for _, msg := range batch {
+// to nothing. Empty bodies (tombstones) are counted in emptyRows. Both
+// leave a nil entry. delivered is the whole delivered batch, for positions
+// in log and error text.
+func prepareRows(batch, delivered service.MessageBatch, dropped *droppedBodies) (rowsByMsg [][][]byte, emptyRows int, err error) {
+	rowsByMsg = make([][][]byte, len(batch))
+	for i, msg := range batch {
 		body, err := msg.AsBytes()
 		if err != nil {
 			return nil, 0, fmt.Errorf("unable to serialize message: %w", err)
 		}
 		split, err := v2.SplitRow(body)
 		if err != nil {
-			if dropped.count == 0 {
-				dropped.first = fmt.Sprintf("message %d of %d: %v", slices.Index(delivered, msg)+1, len(delivered), err)
-			}
-			dropped.count++
+			dropped.add(delivered, msg, err)
 			continue
 		}
 		if len(split) == 0 {
 			emptyRows++
 			continue
 		}
-		rows = append(rows, split...)
+		rowsByMsg[i] = split
 	}
-	return rows, emptyRows, nil
+	return rowsByMsg, emptyRows, nil
 }
 
-// reportDropped counts and logs a group's dropped bodies once the group is
+// sendUnit is a row-producing message's rows together with the range of
+// batch positions it covers. A message that produced no rows (empty or
+// dropped) is folded into a neighbour's range, so every message's token is
+// covered by some request's end token and the redelivery of such a message
+// dedupes. Tokens are interpolated only where a request boundary falls.
+type sendUnit struct {
+	msg      *service.Message
+	rows     [][]byte
+	from, to int // batch positions covered: [from, to]
+}
+
+// buildUnits pairs each row-producing message with the batch positions it
+// covers, folding rowless neighbours in.
+func buildUnits(batch service.MessageBatch, rowsByMsg [][][]byte) []sendUnit {
+	units := make([]sendUnit, 0, len(batch))
+	pendingFrom := -1
+	for i, msg := range batch {
+		if rowsByMsg[i] == nil {
+			if len(units) > 0 {
+				units[len(units)-1].to = i
+			} else if pendingFrom < 0 {
+				pendingFrom = i
+			}
+			continue
+		}
+		u := sendUnit{msg: msg, rows: rowsByMsg[i], from: i, to: i}
+		if len(units) == 0 && pendingFrom >= 0 {
+			u.from = pendingFrom
+		}
+		units = append(units, u)
+	}
+	return units
+}
+
+// appendOutcome summarises appendInParts.
+type appendOutcome struct {
+	sent         bool
+	parts        int
+	payloadBytes int
+	lastEnd      string // end token of the last request sent
+}
+
+// appendInParts appends units[from:to] as one request, splitting in half by
+// unit when the body to send is over the request limit (the limit applies
+// to the payload as sent, after compression, which is only known after
+// encoding). Parts are sent in order, so one commit wait on the last
+// part's end token covers them all. A single unit that is over the limit
+// on its own even after compression is dropped under the
+// tolerate_row_errors policy, like a row Snowflake rejected. (Units over
+// the limit uncompressed were dropped before the units were built, so
+// their tokens are covered by a neighbour; a unit that only crosses the
+// limit after compression and is last in the group is not, and is dropped
+// again on redelivery.) tokensFor supplies the request's start/end tokens
+// (real ones in exactly-once mode, a fresh synthetic one otherwise).
+func (o *snowpipeIndexedOutputPipe) appendInParts(ctx context.Context, channel v2.IngestChannel, units []sendUnit, from, to int,
+	tokensFor func(units []sendUnit) (start, end string, err error), dropped *droppedBodies, delivered service.MessageBatch, out *appendOutcome,
+) error {
+	part := units[from:to]
+	rows := make([][]byte, 0, len(part))
+	for _, u := range part {
+		rows = append(rows, u.rows...)
+	}
+	start, end, err := tokensFor(part)
+	if err != nil {
+		return err
+	}
+	sent, n, err := channel.AppendRows(ctx, rows, start, end)
+	if err != nil {
+		if !errors.Is(err, v2.ErrPayloadTooLarge) {
+			return err
+		}
+		if to-from == 1 {
+			dropped.add(delivered, part[0].msg, err)
+			return nil
+		}
+		mid := from + (to-from)/2
+		if err := o.appendInParts(ctx, channel, units, from, mid, tokensFor, dropped, delivered, out); err != nil {
+			return err
+		}
+		return o.appendInParts(ctx, channel, units, mid, to, tokensFor, dropped, delivered, out)
+	}
+	if sent {
+		out.sent = true
+		out.parts++
+		out.payloadBytes += n
+		out.lastEnd = end
+	}
+	return nil
+}
+
+// reportDropped counts and logs a group's dropped messages once the group is
 // acked or failed for them, so a redelivery after an unrelated failure does
 // not count them again. (A group whose commit wait fails after its rows
 // landed dedupes away on redelivery and is not counted then.) It returns
@@ -866,7 +987,7 @@ func (o *snowpipeIndexedOutputPipe) reportDropped(channelName string, dropped *d
 		return nil
 	}
 	o.metrics.ReportRowsRejected(int64(dropped.count))
-	msg := fmt.Sprintf("channel %q: dropped %d of %d messages that span several lines and are not valid JSON (first: %s)",
+	msg := fmt.Sprintf("channel %q: dropped %d of %d messages that cannot be sent (first: %s)",
 		channelName, dropped.count, batchLen, dropped.first)
 	switch {
 	case o.tolerateRowErrors:
@@ -887,6 +1008,78 @@ func (o *snowpipeIndexedOutputPipe) reportDropped(channelName string, dropped *d
 		return fmt.Errorf("%s. Set %s: true to only warn; the redelivery of this batch dedupes to nothing", msg, ssopFieldTolerateRowErrors)
 	}
 	return nil
+}
+
+// errorBoundNote renders the channel's last_error_offset_upper_bound for a
+// log line, or "" when Snowflake reported none.
+func errorBoundNote(channel v2.IngestChannel) string {
+	if b := channel.LastErrorOffsetUpperBound(); b != "" {
+		return fmt.Sprintf(" (last error at or before offset token %s)", b)
+	}
+	return ""
+}
+
+// markInvalid records that channel's status named a condition an operator
+// must fix, logging it once. The next batch for the channel reopens it.
+func (o *snowpipeIndexedOutputPipe) markInvalid(name string, err error) {
+	o.invalidChannelsMu.Lock()
+	defer o.invalidChannelsMu.Unlock()
+	if o.invalidChannels == nil {
+		o.invalidChannels = map[string]struct{}{}
+	}
+	if _, already := o.invalidChannels[name]; !already {
+		o.logger.Errorf("channel %q is invalid until an operator acts: %v", name, err)
+	}
+	o.invalidChannels[name] = struct{}{}
+}
+
+// isInvalid reports whether name is marked invalid.
+func (o *snowpipeIndexedOutputPipe) isInvalid(name string) bool {
+	o.invalidChannelsMu.Lock()
+	defer o.invalidChannelsMu.Unlock()
+	_, ok := o.invalidChannels[name]
+	return ok
+}
+
+// clearInvalid removes name's invalid mark after a successful reopen.
+func (o *snowpipeIndexedOutputPipe) clearInvalid(name string) {
+	o.invalidChannelsMu.Lock()
+	defer o.invalidChannelsMu.Unlock()
+	delete(o.invalidChannels, name)
+}
+
+// failCommitWait handles a failed commit wait by the error's family and
+// returns the error to fail the batch with. A status an operator must act
+// on (the table, not the channel, is the problem) marks the channel
+// invalid and holds it: reopening now would fail the same way, so the next
+// batch reopens it once. Anything else reopens the channel on the spot, as
+// Snowflake's guidance says for the reopen family.
+func (o *snowpipeIndexedOutputPipe) failCommitWait(ctx context.Context, channel v2.IngestChannel, err error) error {
+	if v2.Classify(err) == v2.KindChannelOperator {
+		o.markInvalid(channel.Name(), err)
+		o.channelPool.Release(channel.Name(), channel)
+		return describeChannelError(err)
+	}
+	o.reopenAfterFailure(ctx, channel)
+	return err
+}
+
+// describeChannelError adds the operator action to an error whose Kind is
+// KindChannelOperator, so the message that reaches the logs says what to do
+// and that retrying alone will not help. Other errors pass through.
+func describeChannelError(err error) error {
+	if v2.Classify(err) != v2.KindChannelOperator {
+		return err
+	}
+	action := "check that the pipe and its table exist and that the role has access to them"
+	cse, _ := errors.AsType[*v2.ChannelStatusError](err)
+	if cse != nil && strings.HasPrefix(cse.Code, "ERR_CHANNEL_SCHEMA_EVOLUTION_") {
+		action = "Snowflake could not evolve the table to fit this data (for example a column type or Iceberg time scale it does not support); pre-create the column with the right type, or disable schema evolution on the table"
+	}
+	if cse != nil && cse.OnOpen {
+		return fmt.Errorf("%w. This will not resolve itself on retry: %s", err, action)
+	}
+	return fmt.Errorf("%w. This will not resolve itself on retry or by reopening the channel: %s. The channel is reopened on the next batch once that is done", err, action)
 }
 
 func (o *snowpipeIndexedOutputPipe) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
@@ -914,10 +1107,30 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 	// because OpenChannel always names the channel as asked.
 	channel, err := o.channelPool.Acquire(ctx, group.name)
 	if err != nil {
-		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
+		// Nothing is pooled after a failed open, so the next Acquire opens
+		// afresh on its own; no invalid mark is needed.
+		return fmt.Errorf("unable to open snowflake streaming channel: %w", describeChannelError(err))
+	}
+	if o.isInvalid(group.name) {
+		// The channel was invalidated by a condition an operator had to
+		// fix; try once to reopen it now that a new batch has arrived. The
+		// mark stays until a reopen succeeds, so a transient reopen
+		// failure does not send the next batch to the dead channel.
+		o.reportRejectedBeforeReopen(channel)
+		reopened, rerr := o.openChannel(ctx, group.name)
+		if rerr != nil {
+			o.channelPool.Release(channel.Name(), channel)
+			return fmt.Errorf("unable to reopen snowflake streaming channel: %w", describeChannelError(rerr))
+		}
+		o.clearInvalid(group.name)
+		channel = reopened
 	}
 	batch := group.batch
-	var startOffsetToken, endOffsetToken, origFirst string
+	var origFirst string
+	// tokenAt interpolates offset_token for a position in the surviving
+	// batch, once; only request boundaries need it, so the common path
+	// costs two interpolations however large the batch.
+	var tokenAt func(i int) (string, error)
 	if o.offsetToken != nil {
 		// Ordering is checked on the unfiltered token range, so a violation
 		// is caught even when the filter would treat the group as a
@@ -936,7 +1149,7 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 			o.channelPool.Release(channel.Name(), channel)
 			return err
 		}
-		batch, startOffsetToken, endOffsetToken, err = preprocessForExactlyOncePipe(ctx, channel, o.offsetToken, batch)
+		batch, err = preprocessForExactlyOncePipe(ctx, channel, o.offsetToken, batch)
 		if err != nil {
 			o.channelPool.Release(channel.Name(), channel)
 			return err
@@ -948,6 +1161,18 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 			o.channelPool.Release(channel.Name(), channel)
 			return nil
 		}
+		exec = batch.InterpolationExecutor(o.offsetToken)
+		memo := make(map[int]string, 2)
+		tokenAt = func(i int) (string, error) {
+			if tok, ok := memo[i]; ok {
+				return tok, nil
+			}
+			tok, err := requireOffsetToken(exec, i)
+			if err == nil {
+				memo[i] = tok
+			}
+			return tok, err
+		}
 	} else {
 		// At-least-once: no dedup, but the commit wait still needs a
 		// call-unique token (see noDedupCommitToken).
@@ -955,11 +1180,9 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 			o.channelPool.Release(channel.Name(), channel)
 			return err
 		}
-		token := o.nextSyntheticCommitToken()
-		startOffsetToken, endOffsetToken = token, token
 	}
 	var dropped droppedBodies
-	rows, emptyRows, err := prepareRows(batch, delivered, &dropped)
+	rowsByMsg, emptyRows, err := prepareRows(batch, delivered, &dropped)
 	if err != nil {
 		o.channelPool.Release(channel.Name(), channel)
 		return err
@@ -968,22 +1191,74 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 		o.metrics.ReportEmptyRowsSkipped(int64(emptyRows))
 		o.logger.Debugf("channel %s: skipping %d of %d messages with an empty or whitespace-only body (e.g. tombstones); Snowflake has no row representation for them", channel.Name(), emptyRows, len(batch))
 	}
-	o.logger.Debugf("inserting %d rows using channel %s at offset tokens: start=%s end=%s", len(rows), channel.Name(), startOffsetToken, endOffsetToken)
+	// A message whose rows alone are over the request limit can never be
+	// sent. Find those here, before the units are built, so their tokens
+	// fold into a neighbour's range and the committed token still covers
+	// them on redelivery. The limit is on the body as sent, so with
+	// compression on a message over the limit uncompressed is encoded on
+	// its own to see whether it fits; that only happens for messages
+	// already over the limit raw, which is rare.
+	for i, msgRows := range rowsByMsg {
+		if msgRows == nil {
+			continue
+		}
+		raw := 0
+		for _, r := range msgRows {
+			raw += len(r) + 1
+		}
+		// zstd's frame overhead on incompressible input is small but not
+		// zero, so a message just under the limit raw can still cross it
+		// compressed; the margin keeps such a message in this pre-check.
+		if raw <= v2.MaxRequestBytes-4096 {
+			continue
+		}
+		if _, _, err := v2.EncodeRows(msgRows, o.compress); errors.Is(err, v2.ErrPayloadTooLarge) {
+			dropped.add(delivered, batch[i], err)
+			rowsByMsg[i] = nil
+		}
+	}
+	units := buildUnits(batch, rowsByMsg)
+	tokensFor := func(part []sendUnit) (string, string, error) {
+		if tokenAt == nil {
+			tok := o.nextSyntheticCommitToken()
+			return tok, tok, nil
+		}
+		start, err := tokenAt(part[0].from)
+		if err != nil {
+			return "", "", err
+		}
+		end, err := tokenAt(part[len(part)-1].to)
+		return start, end, err
+	}
+	var out appendOutcome
 	appendStart := time.Now()
-	sent, _, err := channel.AppendRows(ctx, rows, startOffsetToken, endOffsetToken)
-	if err != nil {
-		if v2.IsBackpressure(err) || errors.Is(err, v2.ErrLocalEncoding) {
-			// Backpressure leaves the channel usable; reopening would only
-			// add load to a saturated control plane. A local encoding
-			// failure never reached the server at all.
-			o.channelPool.Release(channel.Name(), channel)
+	if len(units) > 0 {
+		o.logger.Debugf("inserting %d messages using channel %s", len(units), channel.Name())
+		if err := o.appendInParts(ctx, channel, units, 0, len(units), tokensFor, &dropped, delivered, &out); err != nil {
+			if out.sent {
+				// Earlier parts reached the server. Let them commit before
+				// failing: in exactly-once mode so the redelivery dedupes
+				// against them, and in every mode so a reopen does not race
+				// their pending commit.
+				o.metrics.ReportPayloadSent(int64(out.payloadBytes))
+				if werr := channel.WaitUntilCommitted(ctx, out.lastEnd, o.commitTimeout); werr != nil {
+					return fmt.Errorf("%w (and the parts already sent did not commit: %w)", err, o.failCommitWait(ctx, channel, werr))
+				}
+			}
+			switch v2.Classify(err) {
+			case v2.KindBackpressure, v2.KindLocalEncoding:
+				// Backpressure leaves the channel usable; reopening would
+				// only add load to a saturated control plane. A local
+				// encoding failure never reached the server at all.
+				o.channelPool.Release(channel.Name(), channel)
+			default:
+				o.reopenAfterFailure(ctx, channel)
+			}
 			return err
 		}
-		o.reopenAfterFailure(ctx, channel)
-		return err
 	}
 	appendDuration := time.Since(appendStart)
-	if !sent {
+	if !out.sent {
 		// Nothing was sent (every body was empty or dropped), so there is
 		// no token to wait for; waiting would time out on every redelivery.
 		// The range is acked all the same, so it counts for the ordering
@@ -993,22 +1268,25 @@ func (o *snowpipeIndexedOutputPipe) writeChannelGroup(ctx context.Context, group
 		o.channelPool.Release(channel.Name(), channel)
 		return o.reportDropped(channel.Name(), &dropped, len(delivered), false)
 	}
-	o.logger.Debugf("done inserting %d rows using channel %s in %s", len(rows), channel.Name(), appendDuration)
+	o.metrics.ReportPayloadSent(int64(out.payloadBytes))
+	if out.parts > 1 {
+		o.logger.Debugf("channel %s: batch sent as %d requests (%d bytes) because one request would exceed the %d byte limit", channel.Name(), out.parts, out.payloadBytes, v2.MaxRequestBytes)
+	}
+	o.logger.Debugf("done inserting %d messages using channel %s in %s (%d request(s), %d bytes)", len(units), channel.Name(), appendDuration, out.parts, out.payloadBytes)
 	commitStart := time.Now()
-	if err := channel.WaitUntilCommitted(ctx, endOffsetToken, o.commitTimeout); err != nil {
-		o.reopenAfterFailure(ctx, channel)
-		return err
+	if err := channel.WaitUntilCommitted(ctx, out.lastEnd, o.commitTimeout); err != nil {
+		return o.failCommitWait(ctx, channel, err)
 	}
 	commitDuration := time.Since(commitStart)
-	o.logger.Debugf("batch of %d rows committed using channel %s in %s", len(rows), channel.Name(), commitDuration)
+	o.logger.Debugf("batch of %d messages committed using channel %s in %s", len(units), channel.Name(), commitDuration)
 	// RowsRejected is the delta since last reported; RowsErrorCount is the
 	// channel's lifetime total. The metric is incremented in every mode.
 	if rejected := channel.RowsRejected(); rejected > 0 {
 		total := channel.RowsErrorCount()
 		initial := total - rejected
 		o.metrics.ReportRowsRejected(rejected)
-		msg := fmt.Sprintf("channel %q has %d new errors (total: %d, initial: %d). Last error message: %s",
-			channel.Name(), rejected, total, initial, channel.LastErrorMessage())
+		msg := fmt.Sprintf("channel %q has %d new errors (total: %d, initial: %d). Last error message: %s%s",
+			channel.Name(), rejected, total, initial, channel.LastErrorMessage(), errorBoundNote(channel))
 		switch {
 		case o.tolerateRowErrors:
 			o.logger.Warnf("%s", msg)
@@ -1051,13 +1329,13 @@ func preprocessForExactlyOncePipe(
 	channel v2.IngestChannel,
 	offsetTokenMapping *service.InterpolatedString,
 	batch service.MessageBatch,
-) (service.MessageBatch, string, string, error) {
+) (service.MessageBatch, error) {
 	latest, err := channel.LatestOffsetToken(ctx)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
 	if v2.IsSyntheticToken(latest) {
-		return nil, "", "", fmt.Errorf(
+		return nil, fmt.Errorf(
 			"channel %q was last written with %s unset (its last committed offset token %q is a synthetic one this "+
 				"output minted for at-least-once delivery), so no real %s value can ever compare as newer than it -- "+
 				"every row would be dropped as an already-committed duplicate. This will not resolve itself on retry: "+
@@ -1067,14 +1345,13 @@ func preprocessForExactlyOncePipe(
 	exec := batch.InterpolationExecutor(offsetTokenMapping)
 	firstRawToken, err := requireOffsetToken(exec, 0)
 	if err != nil {
-		return nil, "", "", err
+		return nil, err
 	}
-	lastRawToken, err := requireOffsetToken(exec, len(batch)-1)
-	if err != nil {
-		return nil, "", "", err
+	if _, err := requireOffsetToken(exec, len(batch)-1); err != nil {
+		return nil, err
 	}
 	if latest != "" && v2.MixedNumericTokens(firstRawToken, latest) {
-		return nil, "", "", fmt.Errorf(
+		return nil, fmt.Errorf(
 			"channel %q's last committed offset token %q and this batch's %s value %q cannot be compared (one is a "+
 				"bare integer, the other is not), so exactly-once dedup would be arbitrary -- this usually means %s's "+
 				"expression was changed after the channel was already written to. This will not resolve itself on retry: "+
@@ -1083,14 +1360,14 @@ func preprocessForExactlyOncePipe(
 	}
 	// fast path: nothing committed yet, or the whole batch is ahead -> no filtering needed
 	if latest == "" || v2.CompareOffsetTokens(firstRawToken, latest) > 0 {
-		return batch, firstRawToken, lastRawToken, nil
+		return batch, nil
 	}
 	// We need to filter out data that is too old.
 	filteredBatch := make(service.MessageBatch, 0, len(batch))
 	for i := range batch {
 		rawToken, err := requireOffsetToken(exec, i)
 		if err != nil {
-			return nil, "", "", err
+			return nil, err
 		}
 		// per-row filter: at or below the committed token -> already landed, drop it
 		if v2.CompareOffsetTokens(rawToken, latest) <= 0 {
@@ -1098,11 +1375,7 @@ func preprocessForExactlyOncePipe(
 		}
 		filteredBatch = append(filteredBatch, batch[i])
 	}
-	if len(filteredBatch) == 0 {
-		return filteredBatch, "", "", nil
-	}
-	// This is a lazy way to compute the bounds, but filtering should be a rare operation.
-	return preprocessForExactlyOncePipe(ctx, channel, offsetTokenMapping, filteredBatch)
+	return filteredBatch, nil
 }
 
 // requireOffsetToken interpolates offset_token for message i and rejects an
