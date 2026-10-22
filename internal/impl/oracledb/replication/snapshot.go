@@ -39,49 +39,6 @@ const (
 	errCodeInsufficientPrivileges = 1031
 )
 
-// withFlashbackPrivilegeHint annotates an ORA-01031 raised by an AS OF SCN read with the
-// grant needed to fix it, since the error alone doesn't say which privilege is missing and
-// a user with SELECT on the table would reasonably expect the read to succeed.
-func withFlashbackPrivilegeHint(err error, table UserTable) error {
-	var oraErr *goora.OracleError
-	if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeInsufficientPrivileges {
-		return err
-	}
-	return fmt.Errorf("%w\n\nParallel snapshot chunks read table '%s' with flashback queries (AS OF SCN), which require the FLASHBACK privilege in addition to SELECT: "+
-		"GRANT FLASHBACK ON %s TO <user>, or GRANT FLASHBACK ANY TABLE TO <user>. Alternatively, set max_parallel_snapshot_tables to 1 to snapshot without flashback queries",
-		err, table.FullName(), table.FullName())
-}
-
-// withFlashbackRetry retries fn on ORA-01466, which AS OF SCN reads can hit transiently
-// just after Prepare captures the SCN. Other errors are returned immediately.
-func withFlashbackRetry[T any](ctx context.Context, fn func() (T, error)) (result T, err error) {
-	// flashbackRetryAttempts and flashbackRetryDelay bound the retry in withFlashbackRetry.
-	// These aren't exposed as config because they guard a narrow, internal-only race window
-	// (freshly-committed DML settling before it's safely flashback-readable) rather than
-	// anything a user would tune - by design the retry window closes within a few hundred
-	// milliseconds of the snapshot's SCN being captured.
-	const (
-		flashbackRetryAttempts = 5
-		flashbackRetryDelay    = 100 * time.Millisecond
-	)
-	for range flashbackRetryAttempts {
-		result, err = fn()
-		if err == nil {
-			return result, nil
-		}
-		var oraErr *goora.OracleError
-		if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeFlashbackTableChanged {
-			return result, err
-		}
-		select {
-		case <-time.After(flashbackRetryDelay):
-		case <-ctx.Done():
-			return result, ctx.Err()
-		}
-	}
-	return result, err
-}
-
 // errNoPrimaryKey indicates a table has no discoverable primary key. Snapshot planning
 // treats this as expected (not fatal) for unfiltered tables, falling back to a full
 // unordered scan - see planTableTasks.
@@ -319,20 +276,16 @@ type chunkRange struct {
 	max map[string]any
 }
 
-// planChunkRanges splits table's primary key keyspace into ranges that can be scanned in
-// parallel, returning a single unbounded range when the table can't be usefully split. It
-// also returns how the ranges were planned, for logging.
+// planChunkRanges splits table's primary key keyspace into ranges to scan in parallel, or
+// a single unbounded range if it can't be split, and returns the planning method for logs.
 //
-// A single-column NUMBER, FLOAT, DATE or TIMESTAMP key is split by interpolating between
-// its MIN and MAX, which reads only the two ends of the primary key index. Gaps and skew in
-// the key values make those ranges uneven, so the key range is split into
-// interpolatedRangesPerWorker ranges per worker and the shared worker pool evens out the
-// work. Other keys, such as strings or composite keys, can't be interpolated and are
-// sampled instead; see sampleChunkRanges.
+// A single-column NUMBER, FLOAT, DATE or TIMESTAMP key is interpolated between its MIN and
+// MAX, reading only the ends of the index. Gaps make those ranges uneven, so there are
+// interpolatedRangesPerWorker per worker for the shared pool to balance. Other keys are
+// sampled; see sampleChunkRanges.
 func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) (ranges []chunkRange, method string, err error) {
 	const interpolatedRangesPerWorker = 16
-
-	err = s.withSnapshotConn(ctx, func(db *sql.Conn) error {
+	plan := func(db *sql.Conn) error {
 		if len(pkCols) == 1 {
 			keyType, err := getInterpolableKeyType(ctx, db, table, pkCols[0])
 			if err != nil {
@@ -350,8 +303,9 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, maxWorkers)
 		method = "sampling its key range"
 		return err
-	})
-	if err != nil {
+	}
+
+	if err = s.withSnapshotConn(ctx, plan); err != nil {
 		return nil, "", fmt.Errorf("planning chunk ranges: %w", err)
 	}
 	return ranges, method, nil
@@ -1204,4 +1158,47 @@ func snapshotValueMapper[T any](v any) (any, error) {
 		return nil, nil
 	}
 	return s.V, nil
+}
+
+// withFlashbackPrivilegeHint annotates an ORA-01031 raised by an AS OF SCN read with the
+// grant needed to fix it, since the error alone doesn't say which privilege is missing and
+// a user with SELECT on the table would reasonably expect the read to succeed.
+func withFlashbackPrivilegeHint(err error, table UserTable) error {
+	var oraErr *goora.OracleError
+	if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeInsufficientPrivileges {
+		return err
+	}
+	return fmt.Errorf("%w\n\nParallel snapshot chunks read table '%s' with flashback queries (AS OF SCN), which require the FLASHBACK privilege in addition to SELECT: "+
+		"GRANT FLASHBACK ON %s TO <user>, or GRANT FLASHBACK ANY TABLE TO <user>. Alternatively, set max_parallel_snapshot_tables to 1 to snapshot without flashback queries",
+		err, table.FullName(), table.FullName())
+}
+
+// withFlashbackRetry retries fn on ORA-01466, which AS OF SCN reads can hit transiently
+// just after Prepare captures the SCN. Other errors are returned immediately.
+func withFlashbackRetry[T any](ctx context.Context, fn func() (T, error)) (result T, err error) {
+	// flashbackRetryAttempts and flashbackRetryDelay bound the retry in withFlashbackRetry.
+	// These aren't exposed as config because they guard a narrow, internal-only race window
+	// (freshly-committed DML settling before it's safely flashback-readable) rather than
+	// anything a user would tune - by design the retry window closes within a few hundred
+	// milliseconds of the snapshot's SCN being captured.
+	const (
+		flashbackRetryAttempts = 5
+		flashbackRetryDelay    = 100 * time.Millisecond
+	)
+	for range flashbackRetryAttempts {
+		result, err = fn()
+		if err == nil {
+			return result, nil
+		}
+		var oraErr *goora.OracleError
+		if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeFlashbackTableChanged {
+			return result, err
+		}
+		select {
+		case <-time.After(flashbackRetryDelay):
+		case <-ctx.Done():
+			return result, ctx.Err()
+		}
+	}
+	return result, err
 }

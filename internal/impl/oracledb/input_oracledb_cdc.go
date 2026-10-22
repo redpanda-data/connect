@@ -679,8 +679,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	}
 	var (
 		snapshotter *replication.Snapshot
-		// logminer processor
-		streaming streamProcessor
+		streaming   streamProcessor // logminer processor
 	)
 
 	// no cached SCN means we're not recovering from a restart
