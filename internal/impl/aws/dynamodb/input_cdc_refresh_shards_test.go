@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -26,6 +27,8 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/Jeffail/shutdown"
 
@@ -1099,4 +1102,170 @@ func TestShardReaderNilIteratorCompletesClosedShard(t *testing.T) {
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
 	})
+}
+
+// countingMetricsExporter is a metrics exporter recording counter totals by
+// name, so tests can observe the input's counters.
+type countingMetricsExporter struct {
+	mu       sync.Mutex
+	counters map[string]int64
+}
+
+type countingMetricsCounter struct {
+	e    *countingMetricsExporter
+	name string
+}
+
+func (c countingMetricsCounter) Incr(count int64) { c.e.add(c.name, count) }
+
+func (c countingMetricsCounter) IncrFloat64(count float64) { c.Incr(int64(count)) }
+
+type noopMetricsTimer struct{}
+
+func (noopMetricsTimer) Timing(int64) {}
+
+type noopMetricsGauge struct{}
+
+func (noopMetricsGauge) Set(int64)           {}
+func (noopMetricsGauge) SetFloat64(float64)  {}
+func (noopMetricsGauge) IncrFloat64(float64) {}
+func (noopMetricsGauge) DecrFloat64(float64) {}
+
+func (e *countingMetricsExporter) NewCounterCtor(name string, _ ...string) service.MetricsExporterCounterCtor {
+	return func(...string) service.MetricsExporterCounter { return countingMetricsCounter{e: e, name: name} }
+}
+
+func (*countingMetricsExporter) NewTimerCtor(string, ...string) service.MetricsExporterTimerCtor {
+	return func(...string) service.MetricsExporterTimer { return noopMetricsTimer{} }
+}
+
+func (*countingMetricsExporter) NewGaugeCtor(string, ...string) service.MetricsExporterGaugeCtor {
+	return func(...string) service.MetricsExporterGauge { return noopMetricsGauge{} }
+}
+
+func (*countingMetricsExporter) Close(context.Context) error { return nil }
+
+func (e *countingMetricsExporter) add(name string, count int64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.counters[name] += count
+}
+
+func (e *countingMetricsExporter) counter(name string) int64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.counters[name]
+}
+
+// newCountingMetrics returns service metrics backed by a counting exporter.
+func newCountingMetrics(t *testing.T) (*service.Metrics, *countingMetricsExporter) {
+	t.Helper()
+	exporter := &countingMetricsExporter{counters: map[string]int64{}}
+	env := service.NewEmptyEnvironment()
+	require.NoError(t, env.RegisterMetricsExporter("counting", service.NewConfigSpec(),
+		func(*service.ParsedConfig, *service.Logger) (service.MetricsExporter, error) { return exporter, nil }))
+	// The resource builder defaults to the "none" tracer, which lives in a
+	// plugin package this test binary does not import.
+	require.NoError(t, env.RegisterOtelTracerProvider("none", service.NewConfigSpec(),
+		func(*service.ParsedConfig) (trace.TracerProvider, error) { return noop.NewTracerProvider(), nil }))
+	builder := env.NewResourceBuilder()
+	require.NoError(t, builder.SetMetricsYAML("counting: {}"))
+	res, closeFn, err := builder.Build()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeFn(context.Background()) })
+	return res.Metrics(), exporter
+}
+
+// levelRecorder is a slog handler recording the level of every message that
+// mentions substr.
+type levelRecorder struct {
+	substr string
+	mu     *sync.Mutex
+	levels *[]slog.Level
+}
+
+func (levelRecorder) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h levelRecorder) Handle(_ context.Context, r slog.Record) error {
+	if strings.Contains(r.Message, h.substr) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		*h.levels = append(*h.levels, r.Level)
+	}
+	return nil
+}
+
+func (h levelRecorder) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h levelRecorder) WithGroup(string) slog.Handler      { return h }
+
+// TestCompleteShardCompletionWriteFailure (CON-599): a failed completion
+// write counts as a checkpoint failure and is logged at error, except when it
+// failed only because the reader's context was canceled (shutdown), which is
+// expected and logged at debug without being counted.
+func TestCompleteShardCompletionWriteFailure(t *testing.T) {
+	tests := []struct {
+		name      string
+		cancelCtx bool
+		markErr   func(context.Context) error
+		wantCount int64
+		wantLevel slog.Level
+	}{
+		{
+			name:      "store error",
+			markErr:   func(context.Context) error { return errors.New("stubbed store failure") },
+			wantCount: 1,
+			wantLevel: slog.LevelError,
+		},
+		{
+			name:      "shutdown",
+			cancelCtx: true,
+			markErr:   func(ctx context.Context) error { return ctx.Err() },
+			wantCount: 0,
+			wantLevel: slog.LevelDebug,
+		},
+	}
+	for _, tt := range tests {
+		for _, multiTable := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/multi-table=%v", tt.name, multiTable), func(t *testing.T) {
+				metrics, exporter := newCountingMetrics(t)
+				var (
+					mu     sync.Mutex
+					levels []slog.Level
+				)
+				logger := service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "shard-parent", mu: &mu, levels: &levels}))
+				cp, _ := markRecordingCheckpointer(t, tt.markErr)
+
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				if tt.cancelCtx {
+					cancel()
+				}
+
+				d, ts, _ := tableRefreshHarness(t, &refreshStubTransport{}, cp)
+				d.log = logger
+				d.metrics = newDynamoDBCDCMetrics(metrics)
+				if multiTable {
+					ts.recordBatcher = NewRecordBatcher(100, 1000, logger)
+					d.completeTableShard(ctx, "test", ts, "shard-parent")
+				} else {
+					d.checkpointer = cp
+					d.recordBatcher = NewRecordBatcher(100, 1000, logger)
+					d.shardReaders = map[string]*dynamoDBShardReader{}
+					d.shardRefreshCh = make(chan struct{}, 1)
+					d.completeShard(ctx, "shard-parent")
+				}
+
+				assert.Equal(t, tt.wantCount, exporter.counter(metricCheckpointFailures))
+				mu.Lock()
+				defer mu.Unlock()
+				var failureLevels []slog.Level
+				for _, l := range levels {
+					if l != slog.LevelInfo {
+						failureLevels = append(failureLevels, l)
+					}
+				}
+				assert.Equal(t, []slog.Level{tt.wantLevel}, failureLevels)
+			})
+		}
+	}
 }

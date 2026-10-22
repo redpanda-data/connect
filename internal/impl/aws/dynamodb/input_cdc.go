@@ -2855,7 +2855,7 @@ func (d *dynamoDBCDCInput) completeTableShard(ctx context.Context, tableName str
 		cp = ts.checkpointer
 	}
 	if err := ts.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
-		d.log.Errorf("Failed to persist completion of shard %s (table %s); a restart reads it again from its last checkpoint: %v", shardID, tableName, err)
+		d.logCompletionFailure(ctx, shardID, " (table "+tableName+")", err)
 	}
 }
 
@@ -3108,8 +3108,22 @@ func (d *dynamoDBCDCInput) completeShard(ctx context.Context, shardID string) {
 		cp = d.checkpointer
 	}
 	if err := d.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
-		d.log.Errorf("Failed to persist completion of shard %s; a restart reads it again from its last checkpoint: %v", shardID, err)
+		d.logCompletionFailure(ctx, shardID, "", err)
 	}
+}
+
+// logCompletionFailure reports a failed write of a shard's completion marker.
+// A write cut short by the reader's context being canceled (shutdown) is
+// expected and logged at debug; any other failure is counted as a checkpoint
+// failure. Either way a restart reads the shard again from its last
+// checkpoint.
+func (d *dynamoDBCDCInput) logCompletionFailure(ctx context.Context, shardID, tableSuffix string, err error) {
+	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+		d.log.Debugf("Completion of shard %s%s not persisted, shutting down; a restart reads it again from its last checkpoint: %v", shardID, tableSuffix, err)
+		return
+	}
+	d.metrics.checkpointFailures.Incr(1)
+	d.log.Errorf("Failed to persist completion of shard %s%s; a restart reads it again from its last checkpoint: %v", shardID, tableSuffix, err)
 }
 
 // releaseShardReader is called by a single-table reader giving up on its
