@@ -43,6 +43,8 @@ type pinClock struct {
 	lastPinWarn time.Time
 }
 
+// clear ends the current pin. It keeps lastPinWarn on purpose, so a pin that
+// flaps (clears and starts again) stays rate-limited.
 func (c *pinClock) clear() {
 	c.throttledSince = time.Time{}
 }
