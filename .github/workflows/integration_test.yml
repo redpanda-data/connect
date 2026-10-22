@@ -166,11 +166,12 @@ jobs:
       # On a pull request the filter is the list of changed internal/impl/
       # packages. An empty filter means every package in packages.json, which
       # does not fit the 30-minute budget, so a pull request never runs it:
-      # - No run-integration-tests label and no go.mod or go.sum change: skip
-      #   and say so in the summary (workflow, docs and tooling changes).
-      # - The label, or a go.mod or go.sum change: fail and ask for
-      #   /integration <packages>, so a run that was asked for or needed is not
-      #   silently dropped.
+      # - go.mod and go.sum unchanged: skip and say so in the summary
+      #   (workflow, docs and tooling changes).
+      # - go.mod or go.sum changed: fail and ask for /integration <packages>,
+      #   so a dependency change does not pass without any integration run.
+      # The run-integration-tests label is not checked: auto-label-integration
+      # adds it to every pull request from a write-access author.
       # A comment or a dispatch passes its own filter through unchanged. A bare
       # "/integration " or an empty dispatch filter still means every package.
       - name: Pull Latest Redpanda Image
@@ -185,11 +186,11 @@ jobs:
         timeout-minutes: 30
 
       - name: No component package changed
-        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && !contains(github.event.pull_request.labels.*.name, 'run-integration-tests') && steps.detect.outputs.go_mod != 'true' }}
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod != 'true' }}
         run: echo "No files under internal/impl/ changed; the filtered integration run was skipped." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require a package filter
-        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && (contains(github.event.pull_request.labels.*.name, 'run-integration-tests') || steps.detect.outputs.go_mod == 'true') }}
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod == 'true' }}
         run: |
           MSG="No files under internal/impl/ changed, so there is no package filter, and the full suite does not fit this job's 30-minute budget. Comment /integration <packages> on this PR (for example /integration kafka aws) to run the packages this change affects."
           echo "::error title=Integration filter required::${MSG}"
