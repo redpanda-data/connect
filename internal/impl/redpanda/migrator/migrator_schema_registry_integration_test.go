@@ -78,6 +78,7 @@ const (
 
 func TestIntegrationSchemaRegistryMigratorListSubjectSchemas(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -234,6 +235,7 @@ func TestIntegrationSchemaRegistryMigratorListSubjectSchemas(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorSyncNameResolver(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -275,6 +277,7 @@ func TestIntegrationSchemaRegistryMigratorSyncNameResolver(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -319,6 +322,7 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -419,6 +423,7 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorSyncTranslateIDs(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -548,6 +553,7 @@ func TestIntegrationSchemaRegistryMigratorSyncTranslateIDsSharedSchemaConcurrenc
 
 func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -613,6 +619,7 @@ func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorSyncNormalize(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -669,6 +676,7 @@ message R {
 
 func TestIntegrationSchemaRegistryMigratorSyncIdempotence(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	tests := []struct {
 		name      string
@@ -729,6 +737,7 @@ func TestIntegrationSchemaRegistryMigratorSyncIdempotence(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorCompatibilityFromSource(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -769,6 +778,7 @@ func TestIntegrationSchemaRegistryMigratorCompatibilityFromSource(t *testing.T) 
 
 func TestIntegrationSchemaRegistryMigratorServerlessImportMode(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Run("multi_version_subjects_with_shared_dependency", func(t *testing.T) {
 		t.Log("Given: source and destination Schema Registry")
@@ -963,6 +973,7 @@ func TestIntegrationSchemaRegistryMigratorServerlessImportMode(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorServerlessImportModeDynamicReference(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Run("reference_subject_outside_include_filter", func(t *testing.T) {
 		t.Log("Given: source and destination Schema Registry")
@@ -1104,6 +1115,7 @@ func TestIntegrationSchemaRegistryMigratorServerlessImportModeDynamicReference(t
 
 func TestIntegrationSchemaRegistryMigratorImportModeRestoreCallbacks(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -1152,6 +1164,7 @@ func TestIntegrationSchemaRegistryMigratorImportModeRestoreCallbacks(t *testing.
 
 func TestIntegrationSchemaRegistryMigratorDFS(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, _ := startSchemaRegistrySourceAndDestination(t)
 	ctx := t.Context()
@@ -1308,6 +1321,7 @@ func TestIntegrationSchemaRegistryMigratorDFS(t *testing.T) {
 // destination must not abort the sync of the remaining subjects.
 func TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		badSubj   = "bad-value"
@@ -1394,6 +1408,7 @@ func TestIntegrationSchemaRegistryMigratorSyncIncompatibleSubject(t *testing.T) 
 // reported as a partial failure, so that it keeps failing the output connect.
 func TestIntegrationSchemaRegistryMigratorSyncReadOnlyDestination(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t)
@@ -1430,6 +1445,7 @@ func TestIntegrationSchemaRegistryMigratorSyncReadOnlyDestination(t *testing.T) 
 // would take the failed version's place.
 func TestIntegrationSchemaRegistryMigratorSyncFailedVersionBlocksLaterVersions(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		subj = "evolving-value"
@@ -1483,6 +1499,7 @@ func TestIntegrationSchemaRegistryMigratorSyncFailedVersionBlocksLaterVersions(t
 // the wrong schema.
 func TestIntegrationSchemaRegistryMigratorSyncFixedIDCollision(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		srcSubj   = "foo-value"
@@ -1531,6 +1548,7 @@ func TestIntegrationSchemaRegistryMigratorSyncFixedIDCollision(t *testing.T) {
 // the referrer would bind to it.
 func TestIntegrationSchemaRegistryMigratorSyncFailedReferenceBlocksReferrer(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		addrSubj     = "addr-value"
@@ -1600,6 +1618,7 @@ func TestIntegrationSchemaRegistryMigratorSyncFailedReferenceBlocksReferrer(t *t
 // Subjects added at the source afterwards are still not migrated.
 func TestIntegrationSchemaRegistryMigratorSyncLoopRetriesFailedAtZeroInterval(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		badSubj  = "bad-value"
@@ -1676,6 +1695,7 @@ func TestIntegrationSchemaRegistryMigratorSyncLoopRetriesFailedAtZeroInterval(t 
 // worker keeps the order within a sync deterministic.
 func TestIntegrationSchemaRegistryMigratorSyncFailedVersionDoesNotBlockEarlierReference(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		baseSubj = "base-value"
@@ -1751,6 +1771,7 @@ func TestIntegrationSchemaRegistryMigratorSyncFailedVersionDoesNotBlockEarlierRe
 // referrer is listed first.
 func TestIntegrationSchemaRegistryMigratorSyncLatestNotBlockedByReferencedVersion(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		baseSubj = "base-value"
@@ -1822,6 +1843,7 @@ func TestIntegrationSchemaRegistryMigratorSyncLatestNotBlockedByReferencedVersio
 // latest version fails only that subject, not the whole sync.
 func TestIntegrationSchemaRegistryMigratorSyncSubjectDeletedAfterListing(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		okSubj   = "ok-value"
@@ -1879,6 +1901,7 @@ func TestIntegrationSchemaRegistryMigratorSyncSubjectDeletedAfterListing(t *test
 // one.
 func TestIntegrationSchemaRegistryMigratorSyncLoopSingleRetryLoop(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		badV1 = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
@@ -2003,6 +2026,7 @@ func writeSchemaRegistryError(w http.ResponseWriter, status, code int, msg strin
 // compatibility fails afterwards.
 func TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureKeepsMapping(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const subj = "compat-value"
 
@@ -2059,6 +2083,7 @@ func TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureKeepsMapping(t
 // versions of the subject, or the subjects that reference it.
 func TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureDoesNotBlockLaterVersions(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		subj    = "compat-value"
@@ -2129,6 +2154,7 @@ func TestIntegrationSchemaRegistryMigratorSyncCompatibilityFailureDoesNotBlockLa
 // only that root.
 func TestIntegrationSchemaRegistryMigratorSyncVersionsGoneDuringTraversal(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		goneSubj = "gone-value"
@@ -2188,6 +2214,7 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsGoneDuringTraversal(t *tes
 // subject version it failed for.
 func TestIntegrationSchemaRegistryMigratorSyncPrunesFailureDeletedAtSource(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		subj = "bad-value"
@@ -2242,6 +2269,7 @@ func TestIntegrationSchemaRegistryMigratorSyncPrunesFailureDeletedAtSource(t *te
 // pruned.
 func TestIntegrationSchemaRegistryMigratorSyncKeepsFailureStillAtSource(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		baseSubj = "base-value"
@@ -2303,6 +2331,7 @@ func TestIntegrationSchemaRegistryMigratorSyncKeepsFailureStillAtSource(t *testi
 // recorded by a full sync that ran during the retry backoff.
 func TestIntegrationSchemaRegistryMigratorSyncRetryKeepsOtherFailedRoots(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		v1 = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
