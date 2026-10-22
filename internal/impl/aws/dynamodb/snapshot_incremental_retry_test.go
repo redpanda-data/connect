@@ -550,3 +550,67 @@ func TestInitializeTableStreamExistingTableLeavesNoMark(t *testing.T) {
 	assert.False(t, isNew)
 	assert.False(t, d.backfillRetries.skipIfPreparing("t1"), "an existing table is not marked again")
 }
+
+// TestRetriedPrepareSeesTrimHorizonFallback: a multi-table prepare that
+// fails is retried after the table's coordinator has started. A shard whose
+// checkpoint was trimmed resumes from trim horizon meanwhile and checkpoints
+// past the gap, so the retried prepare's probe no longer finds it stale. The
+// fallback recorded while the prepare was pending still resets the
+// completed snapshot, so the trimmed changes are backfilled.
+func TestRetriedPrepareSeesTrimHorizonFallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		fellBack  bool
+		wantReset bool
+	}{
+		{name: "trim horizon fallback while pending resets", fellBack: true, wantReset: true},
+		{name: "no fallback keeps the completed snapshot"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var trimmed atomic.Bool
+			trimmed.Store(tt.fellBack)
+			streams := &incStreamsStub{
+				describe: func(string) []string { return []string{"s1"} },
+				trimmed:  func(string) bool { return trimmed.Load() },
+			}
+			d := newIncConnectInput(t, &scanStubTransport{}, streams)
+			ts, api := newFlakyTableStream(t, d, "t1", 0)
+			arn := testArn("t1")
+			api.put(arn, snapshotRow(arn, "snapshot#complete", true, nil))
+			api.put(arn, memShardRow(arn, "s1", "100"))
+
+			// The first prepare failed: the table is still prepare-pending
+			// while its coordinator discovers the shard.
+			d.backfillRetries.beginPrepare("t1")
+			require.NoError(t, d.refreshTableShards(t.Context(), "t1", ts))
+			iter, _ := ts.getShardIterator("s1")
+			require.NotNil(t, iter, "the shard is read")
+
+			// The reader has checkpointed past the trimmed gap.
+			trimmed.Store(false)
+
+			need, err := d.prepareTableBackfill(t.Context(), "t1", ts)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantReset, need)
+			assert.Equal(t, !tt.wantReset, api.has(arn, "snapshot#complete"))
+		})
+	}
+}
+
+// TestBackfillRetriesMarkTrimmedOnlyWhilePending: a trim horizon fallback is
+// recorded only for a prepare-pending table, and is forgotten once its
+// prepare succeeds.
+func TestBackfillRetriesMarkTrimmedOnlyWhilePending(t *testing.T) {
+	var r backfillRetries
+	r.markTrimmed("t1")
+	assert.False(t, r.trimmedWhilePreparing("t1"), "not pending: nothing recorded")
+
+	r.beginPrepare("t1")
+	r.markTrimmed("t1")
+	assert.True(t, r.trimmedWhilePreparing("t1"))
+	assert.False(t, r.trimmedWhilePreparing("t2"))
+
+	assert.False(t, r.endPrepare("t1"), "a fallback is not a skipped push")
+	assert.False(t, r.trimmedWhilePreparing("t1"), "forgotten once the prepare succeeds")
+}

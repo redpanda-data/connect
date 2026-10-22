@@ -2060,6 +2060,9 @@ type preparedShard struct {
 	// read to the end (resumeCompleted): no iterator is acquired and the
 	// caller records the shard as completed instead of registering a reader.
 	completed bool
+	// trimmed reports that the checkpoint was beyond the stream's retention
+	// and the iterator fell back to TRIM_HORIZON.
+	trimmed bool
 }
 
 // prepareShardReader resolves where a shard should start (global-table
@@ -2078,6 +2081,7 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		iteratorType   types.ShardIteratorType
 		sequenceNumber *string
 		cutoff         time.Time
+		trimmed        bool
 	)
 	switch decision.Mode {
 	case resumeCompleted:
@@ -2107,13 +2111,14 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		// checkpoint, so read it from TRIM_HORIZON, as a running reader does
 		// when GetRecords hits trimmed data.
 		d.log.Warnf("Checkpoint for shard %s%s points at trimmed stream data, records between it and the trim horizon were lost; resuming from TRIM_HORIZON", shardID, tableSuffix)
+		trimmed = true
 		iter, err = d.acquireShardIterator(ctx, streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
 	}
 	if err != nil {
 		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 	}
 
-	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
+	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff, trimmed: trimmed}, nil
 }
 
 // acquireShardIterator calls GetShardIterator under its own timeout.
@@ -2423,6 +2428,12 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.mu.RLock()
 		for id := range d.shardReaders {
 			inc.Register(id)
+		}
+		// A shard the checkpoint store already marks completed gets no
+		// reader but is still listed: count it as exhausted, or the tracker
+		// would never settle.
+		for id := range d.completedShards {
+			inc.Exhausted(id)
 		}
 		d.mu.RUnlock()
 		described := make([]string, 0, len(shards))
@@ -2847,6 +2858,14 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
+		// A reader that falls back to TRIM_HORIZON checkpoints past the
+		// trimmed gap, after which a pending prepare's probe no longer sees
+		// the stale checkpoint: record it first so the prepare still resets.
+		for _, s := range newShards {
+			if s.trimmed {
+				d.backfillRetries.markTrimmed(tableName)
+			}
+		}
 		ts.mu.Lock()
 		for _, s := range newShards {
 			if lookupShard(ts.shardReaders, ts.completedShards, s.shardID).known {
@@ -2881,6 +2900,12 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		ts.mu.RLock()
 		for id := range ts.shardReaders {
 			inc.Register(id)
+		}
+		// A shard the checkpoint store already marks completed gets no
+		// reader but is still listed: count it as exhausted, or the tracker
+		// would never settle.
+		for id := range ts.completedShards {
+			inc.Exhausted(id)
 		}
 		ts.mu.RUnlock()
 		described := make([]string, 0, len(shards))
