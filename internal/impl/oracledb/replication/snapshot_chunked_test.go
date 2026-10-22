@@ -47,75 +47,77 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 	// Create and populate every table upfront: AS OF SCN reads raise ORA-01466 against a
 	// table whose definition changed after the SCN, so DDL has to settle before Prepare.
 	t.Log("Given tables populated with enough rows to be split into chunks")
-	createChunkedTable(t, db, "chunk_single_key_test", `
+	{
+		createChunkedTable(t, db, "chunk_single_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_single_key_test (
 			id   NUMBER(10) NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_single_key_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
-	// A low-cardinality leading column means chunk bounds fall in the middle of a col1
-	// prefix, exercising the full lexicographic expansion of the composite-key bounds.
-	createChunkedTable(t, db, "chunk_composite_key_test", `
+			"INSERT INTO "+db.Schema+".chunk_single_key_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+		// A low-cardinality leading column means chunk bounds fall in the middle of a col1
+		// prefix, exercising the full lexicographic expansion of the composite-key bounds.
+		createChunkedTable(t, db, "chunk_composite_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_composite_key_test (
 			col1 NUMBER(10) NOT NULL,
 			col2 NUMBER(10) NOT NULL,
 			data NVARCHAR2(100),
 			CONSTRAINT chunk_composite_key_test_pk PRIMARY KEY (col1, col2)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_composite_key_test (col1, col2, data) SELECT MOD(LEVEL, 4), LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
-	// Fractional-second TIMESTAMP keys depend on the session TIME_ZONE when bound back
-	// into the keyset predicate, so this catches any page that runs on a connection
-	// without the snapshot's NLS settings.
-	createChunkedTable(t, db, "chunk_timestamp_key_test", `
+			"INSERT INTO "+db.Schema+".chunk_composite_key_test (col1, col2, data) SELECT MOD(LEVEL, 4), LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+		// Fractional-second TIMESTAMP keys depend on the session TIME_ZONE when bound back
+		// into the keyset predicate, so this catches any page that runs on a connection
+		// without the snapshot's NLS settings.
+		createChunkedTable(t, db, "chunk_timestamp_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_timestamp_key_test (
 			ts   TIMESTAMP(6) NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_timestamp_key_test (ts, data) SELECT TIMESTAMP '2024-01-01 00:00:00' + NUMTODSINTERVAL(LEVEL * 1.5, 'SECOND'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
-	createChunkedTable(t, db, "chunk_date_key_test", `
+			"INSERT INTO "+db.Schema+".chunk_timestamp_key_test (ts, data) SELECT TIMESTAMP '2024-01-01 00:00:00' + NUMTODSINTERVAL(LEVEL * 1.5, 'SECOND'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+		createChunkedTable(t, db, "chunk_date_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_date_key_test (
 			dt   DATE NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_date_key_test (dt, data) SELECT DATE '2024-01-01' + LEVEL * 2 / 86400, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
-	// String keys can't be interpolated between MIN and MAX, so they're sampled.
-	createChunkedTable(t, db, "chunk_string_key_test", `
+			"INSERT INTO "+db.Schema+".chunk_date_key_test (dt, data) SELECT DATE '2024-01-01' + LEVEL * 2 / 86400, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+		// String keys can't be interpolated between MIN and MAX, so they're sampled.
+		createChunkedTable(t, db, "chunk_string_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_string_key_test (
 			id   VARCHAR2(10) NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_string_key_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
-	// Without statistics a string key can't be sampled, but a numeric key can still be
-	// interpolated, since that only needs its MIN and MAX.
-	createChunkedTable(t, db, "chunk_no_stats_test", `
+			"INSERT INTO "+db.Schema+".chunk_string_key_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+		// Without statistics a string key can't be sampled, but a numeric key can still be
+		// interpolated, since that only needs its MIN and MAX.
+		createChunkedTable(t, db, "chunk_no_stats_test", `
 		CREATE TABLE `+db.Schema+`.chunk_no_stats_test (
 			id   VARCHAR2(10) NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_no_stats_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
-	createChunkedTable(t, db, "chunk_no_stats_numeric_test", `
+			"INSERT INTO "+db.Schema+".chunk_no_stats_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+		createChunkedTable(t, db, "chunk_no_stats_numeric_test", `
 		CREATE TABLE `+db.Schema+`.chunk_no_stats_numeric_test (
 			id   NUMBER(10) NOT NULL PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_no_stats_numeric_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
+			"INSERT INTO "+db.Schema+".chunk_no_stats_numeric_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
 
-	// A RELY DISABLE NOVALIDATE primary key, as is common in warehouse schemas, is declared
-	// but not enforced, so the table can hold rows with NULL and duplicate keys.
-	createChunkedTable(t, db, "chunk_unenforced_key_test", `
+		// A RELY DISABLE NOVALIDATE primary key, as is common in warehouse schemas, is declared
+		// but not enforced, so the table can hold rows with NULL and duplicate keys.
+		createChunkedTable(t, db, "chunk_unenforced_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_unenforced_key_test (
 			id   NUMBER(10),
 			data NVARCHAR2(100)
 		)`,
-		"INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
-	)
+			"INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
+	}
 	db.MustExec("INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT NULL, 'null-key' FROM dual CONNECT BY LEVEL <= :1", unenforcedNullKeyRows)
 	db.MustExec("INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT LEVEL * 1000, 'duplicate-key' FROM dual CONNECT BY LEVEL <= :1", unenforcedDuplicateKeyRows)
 	db.MustExec("ALTER TABLE " + db.Schema + ".chunk_unenforced_key_test ADD CONSTRAINT chunk_unenforced_key_test_pk PRIMARY KEY (id) RELY DISABLE NOVALIDATE")
@@ -364,7 +366,6 @@ func newChunkedSnapshot(t *testing.T, connStr, pdbName string, tables ...replica
 	return snapshot, publisher, logs
 }
 
-// Planning methods, as named in the chunked planning log line.
 const (
 	planInterpolated = "interpolating its key range"
 	planSampled      = "sampling its key range"
@@ -374,9 +375,6 @@ func chunkedLogPattern(table replication.UserTable) *regexp.Regexp {
 	return regexp.MustCompile(`Launching snapshot of table '` + regexp.QuoteMeta(table.FullName()) + `' split into (\d+) parallel chunks by ([a-z ]+)`)
 }
 
-// assertSplitIntoChunks asserts that planning split table into more than one chunk using
-// method, so the test is known to have exercised that chunked path rather than another one
-// or the full-scan fallback.
 func assertSplitIntoChunks(t *testing.T, logs *oracledbtest.SyncBuffer, table replication.UserTable, method string) {
 	t.Helper()
 	m := chunkedLogPattern(table).FindStringSubmatch(logs.String())

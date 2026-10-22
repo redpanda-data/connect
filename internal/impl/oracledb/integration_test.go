@@ -193,10 +193,9 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Run("range-based partitioned tables", func(t *testing.T) {
-		t.Parallel()
-
 		// Create tables
 		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
@@ -272,8 +271,6 @@ oracledb_cdc:
 	})
 
 	t.Run("single worker full scan", func(t *testing.T) {
-		t.Parallel()
-
 		// Create tables
 		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
