@@ -2453,24 +2453,29 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	return nil
 }
 
-func (ts *tableStream) getShardIterator(shardID string) *string {
+func (ts *tableStream) getShardIterator(shardID string) (iterator *string, closed bool) {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	reader, exists := ts.shardReaders[shardID]
-	if !exists || reader.exhausted || reader.iterator == nil {
-		return nil
-	}
-	return reader.iterator
+	return readerIterator(ts.shardReaders, shardID)
 }
 
-func (d *dynamoDBCDCInput) getShardIterator(shardID string) *string {
+func (d *dynamoDBCDCInput) getShardIterator(shardID string) (iterator *string, closed bool) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	reader, exists := d.shardReaders[shardID]
-	if !exists || reader.exhausted || reader.iterator == nil {
-		return nil
+	return readerIterator(d.shardReaders, shardID)
+}
+
+// readerIterator returns the iterator of shardID's reader, nil when the reader
+// is gone or exhausted. closed reports a registered, non-exhausted reader
+// holding a nil iterator: GetShardIterator returns no iterator for a closed
+// shard with nothing left to read, so the shard is at its end and must be
+// completed rather than abandoned. The caller holds the lock guarding readers.
+func readerIterator(readers map[string]*dynamoDBShardReader, shardID string) (iterator *string, closed bool) {
+	reader, exists := readers[shardID]
+	if !exists || reader.exhausted {
+		return nil, false
 	}
-	return reader.iterator
+	return reader.iterator, reader.iterator == nil
 }
 
 // lastRecordSequenceNumber returns the sequence number of the final record in a
@@ -2615,9 +2620,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		}
 
 		// Get current reader state
-		iterator := ts.getShardIterator(shardID)
+		iterator, closed := ts.getShardIterator(shardID)
 		if iterator == nil {
 			ts.recordBatcher.Release(shardID, reserve)
+			if closed {
+				d.completeTableShard(ctx, tableName, ts, shardID)
+			}
 			return
 		}
 
@@ -3169,9 +3177,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		}
 
 		// Get current reader state
-		iterator := d.getShardIterator(shardID)
+		iterator, closed := d.getShardIterator(shardID)
 		if iterator == nil {
 			d.recordBatcher.Release(shardID, reserve)
+			if closed {
+				d.completeShard(ctx, shardID)
+			}
 			return
 		}
 
