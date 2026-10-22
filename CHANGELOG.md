@@ -15,10 +15,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- oracledb_cdc: Improve performance by skipping schema cache rebuild when column metadata is unchanged. ([@josephwoodward](https://github.com/josephwoodward), [#5007](https://github.com/redpanda-data/connect/pull/5007))
 - cli: The --rpc-plugins flag now merges values from root and subcommand levels, allowing plugins to be registered at both levels; also added to dry-run command. ([@Leward](https://github.com/Leward), [#4976](https://github.com/redpanda-data/connect/pull/4976))
-- pool: Pool's Indexed.Acquire now hands out items in FIFO order using explicit queue management instead of relying on unspecified goroutine ordering. ([@Jeffail](https://github.com/Jeffail), [#4834](https://github.com/redpanda-data/connect/pull/4834))
 - postgres_cdc: PostgreSQL CDC streaming now batches rows per transaction over a buffered channel with a configurable batch_transactions option, improving throughput while maintaining per-row failure semantics by default. ([@squiidz](https://github.com/squiidz), [#4812](https://github.com/redpanda-data/connect/pull/4812))
 - sap_hana: SAP HANA source now rejects negative max_retries, records table reference in checkpoints to prevent cross-table state sharing, and sanitizes record names for Iceberg targets. ([@squiidz](https://github.com/squiidz), [#4983](https://github.com/redpanda-data/connect/pull/4983))
+
+
 
 ## 4.114.0 - 2026-10-16
 
