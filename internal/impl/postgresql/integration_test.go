@@ -11,6 +11,7 @@ package pgstream
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2091,4 +2092,117 @@ func waitForActiveReplicationSlot(t *testing.T, db interface {
 		var active bool
 		return db.QueryRow("SELECT active FROM pg_replication_slots WHERE slot_name = $1", slot).Scan(&active) == nil && active
 	}, 30*time.Second, 250*time.Millisecond, "replication slot %s never became active", slot)
+}
+
+// BYTEA values must reach the message identically whether the row was read
+// by the snapshot or streamed from the WAL, including bytes that are not valid
+// UTF-8, which do not survive being carried as a string.
+func TestIntegrationPostgresCDCByteaSnapshotStreamParity(t *testing.T) {
+	integration.CheckSkip(t)
+
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE bytea_parity (id INTEGER PRIMARY KEY, payload BYTEA)`)
+	require.NoError(t, err)
+
+	want := map[int][]byte{
+		1: {0xde, 0xad, 0xbe, 0xef, 0x00, 0xff, 0x80},
+		2: {},
+		3: nil,
+	}
+	insert := func(offset int) {
+		t.Helper()
+		for id, b := range want {
+			_, err := db.Exec(`INSERT INTO bytea_parity (id, payload) VALUES ($1, $2)`, id+offset, b)
+			require.NoError(t, err)
+		}
+	}
+	// Rows 1-3 exist before the stream starts, so they arrive as snapshot
+	// reads; rows 11-13 hold the same values and are streamed.
+	insert(0)
+
+	type row struct {
+		operation string
+		payload   []byte
+		null      bool
+		// decodeErr is set when the payload is not the base64 that
+		// encoding/json writes for a []byte, i.e. the value was corrupted.
+		decodeErr error
+	}
+	var (
+		mu  sync.Mutex
+		got = map[int]row{}
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_bytea_parity
+    stream_snapshot: true
+    schema: public
+    tables:
+      - bytea_parity
+`, databaseURL)))
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		var body struct {
+			ID      int     `json:"id"`
+			Payload *string `json:"payload"`
+		}
+		if err := json.Unmarshal(b, &body); err != nil {
+			return err
+		}
+		op, _ := m.MetaGet("operation")
+		r := row{operation: op, null: body.Payload == nil}
+		if body.Payload != nil {
+			r.payload, r.decodeErr = base64.StdEncoding.DecodeString(*body.Payload)
+		}
+		mu.Lock()
+		got[body.ID] = r
+		mu.Unlock()
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(t.Context()) }()
+	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(got)
+	}
+	require.Eventually(t, func() bool { return count() == len(want) }, 30*time.Second, 100*time.Millisecond, "snapshot rows never arrived")
+	// The slot is created once the snapshot is acknowledged; rows inserted
+	// before that would be read by neither path.
+	require.Eventually(t, func() bool {
+		var one int
+		return db.QueryRow("SELECT 1 FROM pg_replication_slots WHERE slot_name = 'test_slot_bytea_parity'").Scan(&one) == nil
+	}, 30*time.Second, 250*time.Millisecond, "replication slot was never created")
+	insert(10)
+	require.Eventually(t, func() bool { return count() == 2*len(want) }, 30*time.Second, 100*time.Millisecond, "streamed rows never arrived")
+
+	mu.Lock()
+	defer mu.Unlock()
+	for id, b := range want {
+		snap, streamed := got[id], got[id+10]
+		assert.Equal(t, "read", snap.operation, "row %d", id)
+		assert.Equal(t, "insert", streamed.operation, "row %d", id+10)
+		assert.Equal(t, b == nil, snap.null, "snapshot row %d nullness", id)
+		assert.Equal(t, b == nil, streamed.null, "streamed row %d nullness", id+10)
+		if b != nil {
+			if assert.NoError(t, snap.decodeErr, "snapshot row %d payload is not base64 bytes", id) {
+				assert.Equal(t, b, snap.payload, "snapshot row %d", id)
+			}
+			if assert.NoError(t, streamed.decodeErr, "streamed row %d payload is not base64 bytes", id+10) {
+				assert.Equal(t, b, streamed.payload, "streamed row %d", id+10)
+			}
+		}
+	}
 }
