@@ -70,6 +70,9 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 	createCtx, cancel := context.WithTimeout(ctx, createStreamTimeout)
 	defer cancel()
 
+	// lastErr is the error of the last attempt that failed before the
+	// deadline. The returned error shows it as the real cause.
+	var lastErr error
 	for {
 		t.Logf("Creating stream '%v'", id)
 		// One SDK attempt per call: this loop does the retries. With SDK
@@ -85,9 +88,16 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 		}
 
 		t.Logf("Failed to create stream '%v': %v", id, err)
+		// The retry delay and the deadline can expire at the same time. Then
+		// the select below can start one more attempt, which fails only
+		// because of the deadline. Do not let that error replace the real
+		// cause.
+		if createCtx.Err() == nil || lastErr == nil {
+			lastErr = err
+		}
 		select {
 		case <-createCtx.Done():
-			return nil, fmt.Errorf("creating stream '%v': %w (last error: %v)", id, createCtx.Err(), err)
+			return nil, fmt.Errorf("creating stream '%v': %w (last error: %v)", id, createCtx.Err(), lastErr)
 		case <-time.After(createStreamRetryDelay):
 		}
 	}
