@@ -163,6 +163,7 @@ func (s *parquetDecodeProcessor) Process(_ context.Context, msg *service.Message
 
 	rowBuf := make([]any, 10)
 	var resBatch service.MessageBatch
+	schema := compileCoercionSchema(pRdr.Schema())
 
 	for {
 		n, err := readWithoutPanic(pRdr, rowBuf)
@@ -173,7 +174,6 @@ func (s *parquetDecodeProcessor) Process(_ context.Context, msg *service.Message
 			break
 		}
 
-		schema := pRdr.Schema()
 		for _, row := range rowBuf[:n] {
 			newMsg := msg.Copy()
 			row, err = visitWithSchema(&s.visitor, row, schema)
