@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +30,10 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 func TestLSNSuite(t *testing.T) {
@@ -255,9 +259,24 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
+	// A FOR ALL TABLES publication lists every table, and is still reported
+	// as FOR ALL TABLES.
 	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
+	assert.Len(t, tables, 1)
+	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
+	assert.True(t, forAllTables)
+
+	// A FOR ALL TABLES publication cannot be narrowed to a table list, so
+	// syncing it to one fails instead of streaming every table.
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"test_table"`}})
+	require.ErrorIs(t, err, errAllTablesPublication)
+	_, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	assert.True(t, forAllTables)
+
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	require.NoError(t, err)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.False(t, forAllTables)
@@ -342,6 +361,206 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
 	assert.False(t, forAllTables)
+
+	// Without publish_via_partition_root, pg_publication_tables lists a
+	// partitioned table's partitions, not the table. Syncing against that
+	// view would try to drop partitions that are not members and to add the
+	// table that already is, failing every reconnect.
+	for _, sql := range []string{
+		"CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);",
+		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');",
+	} {
+		_, err = conn.Exec(t.Context(), sql).ReadAll()
+		require.NoError(t, err)
+	}
+	events := []TableFQN{{schema, `"events"`}}
+	require.NoError(t, CreatePublication(t.Context(), conn, "pub_partitioned", events))
+	require.NoError(t, CreatePublication(t.Context(), conn, "pub_partitioned", events), "a reconnect must not fail")
+	members, err := getPublicationMembers(t.Context(), conn, "pub_partitioned")
+	require.NoError(t, err)
+	assert.Equal(t, events, members, "the publication still lists exactly the partitioned table")
+}
+
+func TestIntegrationValidatePublication(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	exec := func(sql string) {
+		t.Helper()
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+	validate := func(publication string, tables []TableFQN) error {
+		t.Helper()
+		filtered, err := ValidatePublication(ctx, conn, publication, tables)
+		assert.Empty(t, filtered)
+		return err
+	}
+	exec("CREATE TABLE orders (id serial PRIMARY KEY, note text);")
+	exec("CREATE TABLE users (id serial PRIMARY KEY);")
+	exec("CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
+	exec("CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
+
+	schema := `"public"`
+	orders := TableFQN{schema, `"orders"`}
+	users := TableFQN{schema, `"users"`}
+	events := TableFQN{schema, `"events"`}
+
+	err = validate("pub_missing", []TableFQN{orders})
+	require.ErrorIs(t, err, errPublicationNotFound)
+
+	exec("CREATE PUBLICATION pub_some FOR TABLE orders, events;")
+	require.NoError(t, validate("pub_some", []TableFQN{orders}))
+	require.NoError(t, validate("pub_some", nil))
+	// Without publish_via_partition_root the publication lists the
+	// partition, not the partitioned table.
+	require.NoError(t, validate("pub_some", []TableFQN{events}))
+
+	err = validate("pub_some", []TableFQN{orders, users, {schema, `"no_such_table"`}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"public"."users"`)
+	assert.Contains(t, err.Error(), `"public"."no_such_table"`)
+	assert.NotContains(t, err.Error(), `"public"."orders"`)
+
+	// Validation must never alter the publication.
+	tables, _, err := GetPublicationTables(ctx, conn, "pub_some")
+	require.NoError(t, err)
+	assert.NotContains(t, tables, users)
+
+	// A publication listing only some partitions does not cover the
+	// partitioned table, but does cover the partition it lists.
+	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
+	exec("CREATE PUBLICATION pub_partial FOR TABLE events_2026;")
+	err = validate("pub_partial", []TableFQN{events})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"public"."events"`)
+	require.NoError(t, validate("pub_partial", []TableFQN{{schema, `"events_2026"`}}))
+
+	// pub_some lists the partitioned table, so a partition attached later is
+	// covered too.
+	require.NoError(t, validate("pub_some", []TableFQN{events}))
+
+	exec("CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	require.NoError(t, validate("pub_root", []TableFQN{events, {schema, `"events_2027"`}}))
+
+	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
+	require.NoError(t, validate("pub_all", []TableFQN{orders, users, events}))
+
+	// A publication that leaves out updates or deletes would silently drop
+	// them, so it fails, naming the option.
+	exec("CREATE PUBLICATION pub_inserts FOR TABLE orders WITH (publish = 'insert');")
+	err = validate("pub_inserts", []TableFQN{orders})
+	require.ErrorIs(t, err, errPublicationOperations)
+	assert.Contains(t, err.Error(), "does not publish update, delete")
+	assert.Contains(t, err.Error(), "publish")
+
+	// A row filter or a column list (PostgreSQL 15 or later; the container
+	// runs 16) still streams, so it is reported rather than failed.
+	exec("CREATE PUBLICATION pub_rowfilter FOR TABLE orders WHERE (id > 10), users;")
+	filtered, err := ValidatePublication(ctx, conn, "pub_rowfilter", []TableFQN{orders, users})
+	require.NoError(t, err)
+	assert.Equal(t, []TableFQN{orders}, filtered)
+	exec("CREATE PUBLICATION pub_columns FOR TABLE orders (id), users;")
+	filtered, err = ValidatePublication(ctx, conn, "pub_columns", []TableFQN{orders, users})
+	require.NoError(t, err)
+	assert.Equal(t, []TableFQN{orders}, filtered)
+	exec("CREATE PUBLICATION pub_all_columns FOR TABLE orders (id, note);")
+	filtered, err = ValidatePublication(ctx, conn, "pub_all_columns", []TableFQN{orders})
+	require.NoError(t, err)
+	assert.Empty(t, filtered, "a column list naming every column filters nothing")
+}
+
+// TestIntegrationBackfillRequiresTablePublishedAsItself checks the
+// incremental snapshot only accepts a table whose changes stream under its
+// own name, unfiltered, against the publication layouts a DBA can build.
+func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, dbURL := createDockerInstance(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	// A plain query connection, as the incremental snapshot uses.
+	db, err := sql.Open("postgres", strings.Replace(dbURL, " replication=database", "", 1))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.ExecContext(ctx, sql)
+		require.NoError(t, err)
+	}
+	exec("CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
+	exec("CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
+	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
+	exec("CREATE TABLE orders (id int PRIMARY KEY, note text);")
+
+	// The column list check is only built from PostgreSQL 15.
+	var versionNum int
+	require.NoError(t, db.QueryRowContext(ctx, "SHOW server_version_num").Scan(&versionNum))
+
+	newStream := func(slot string) *Stream {
+		return &Stream{
+			pgVersion:                    versionNum / 10000,
+			slotName:                     slot,
+			snapshotSchema:               "public",
+			externallyManagedPublication: true,
+			logger:                       service.MockResources().Logger(),
+			incSnapshot: incrementalSnapshot{
+				conn:    db,
+				pkCache: map[string][]string{},
+			},
+		}
+	}
+	events := incrementalsnapshot.TableID{Schema: "public", Table: "events"}
+	events2027 := incrementalsnapshot.TableID{Schema: "public", Table: "events_2027"}
+	orders := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+
+	// Every leaf is listed, so the parent counts as covered, but its changes
+	// stream under the leaf names even with publish_via_partition_root.
+	exec("CREATE PUBLICATION pglog_stream_leaves FOR TABLE events_2026, events_2027 WITH (publish_via_partition_root = true);")
+	s := newStream("leaves")
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	require.NoError(t, s.checkBackfillable(ctx, events2027), "a leaf listed as itself streams as itself")
+
+	// The root published via the root streams a leaf's changes as the root.
+	exec("CREATE PUBLICATION pglog_stream_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	s = newStream("root")
+	require.NoError(t, s.checkBackfillable(ctx, events))
+	err = s.checkBackfillable(ctx, events2027)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "under its own name")
+
+	// The root without the option streams under the leaf names.
+	exec("CREATE PUBLICATION pglog_stream_noroot FOR TABLE events;")
+	s = newStream("noroot")
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	require.NoError(t, s.checkBackfillable(ctx, events2027))
+
+	// A row filter or column list streams only part of the table.
+	exec("CREATE PUBLICATION pglog_stream_filtered FOR TABLE orders WHERE (id > 10);")
+	err = newStream("filtered").checkBackfillable(ctx, orders)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "row filter or a column list")
+	exec("CREATE PUBLICATION pglog_stream_columns FOR TABLE orders (id);")
+	require.ErrorIs(t, newStream("columns").checkBackfillable(ctx, orders), errSignalRejected)
+	exec("CREATE PUBLICATION pglog_stream_plain FOR TABLE orders;")
+	require.NoError(t, newStream("plain").checkBackfillable(ctx, orders))
+
+	// FOR ALL TABLES lists every table, partitions as leaves.
+	exec("CREATE PUBLICATION pglog_stream_all FOR ALL TABLES;")
+	s = newStream("all")
+	require.NoError(t, s.checkBackfillable(ctx, orders))
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
 }
 
 func TestIntegrationStartReplication(t *testing.T) {

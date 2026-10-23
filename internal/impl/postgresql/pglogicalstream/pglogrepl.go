@@ -275,23 +275,97 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
-	// Check if publication exists
+// publicationInfo describes an existing publication.
+type publicationInfo struct {
+	exists bool
+	// allTables is pg_publication.puballtables. It must be read from there:
+	// pg_publication_tables lists every table for a FOR ALL TABLES
+	// publication, and nothing for a FOR TABLE publication that has had all of
+	// its tables dropped, so the table list alone cannot tell them apart.
+	allTables bool
+	// The operations the publication streams. Truncates are not read, since
+	// the stream ignores them.
+	insert, update, delete bool
+}
+
+func getPublication(ctx context.Context, conn *pgconn.PgConn, publicationName string) (publicationInfo, error) {
 	pubQuery, err := sanitize.SQLQuery(`
-			SELECT pubname, puballtables
+			SELECT puballtables, pubinsert, pubupdate, pubdelete
 			FROM pg_publication
 			WHERE pubname = $1;
 		`, publicationName)
 	if err != nil {
-		return fmt.Errorf("sanitizing publication query: %w", err)
+		return publicationInfo{}, fmt.Errorf("sanitizing publication query: %w", err)
 	}
 
-	result := conn.Exec(ctx, pubQuery)
-
-	rows, err := result.ReadAll()
+	rows, err := conn.Exec(ctx, pubQuery).ReadAll()
 	if err != nil {
-		return fmt.Errorf("checking publication existence: %w", err)
+		return publicationInfo{}, fmt.Errorf("checking publication existence: %w", err)
+	}
+	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+		return publicationInfo{}, nil
+	}
+	row := rows[0].Rows[0]
+	return publicationInfo{
+		exists:    true,
+		allTables: string(row[0]) == "t",
+		insert:    string(row[1]) == "t",
+		update:    string(row[2]) == "t",
+		delete:    string(row[3]) == "t",
+	}, nil
+}
+
+// missingOperations names the operations among insert, update and delete
+// that the publication does not stream.
+func (p publicationInfo) missingOperations() []string {
+	var missing []string
+	for _, op := range []struct {
+		name      string
+		published bool
+	}{{"insert", p.insert}, {"update", p.update}, {"delete", p.delete}} {
+		if !op.published {
+			missing = append(missing, op.name)
+		}
+	}
+	return missing
+}
+
+// errAllTablesPublication is returned when a managed publication is FOR ALL
+// TABLES but the input is configured with a table list.
+var errAllTablesPublication = errors.New("publication is FOR ALL TABLES")
+
+// publicationSyncPlan returns the tables to add to and drop from an existing
+// publication so that it lists exactly tables. A FOR ALL TABLES publication
+// already covers every table when tables is empty, so it is left alone. With a
+// table list it cannot be narrowed, since PostgreSQL rejects ADD TABLE and DROP
+// TABLE on it, and keeping it would stream every table in the database, so an
+// error is returned instead.
+func publicationSyncPlan(publicationName string, pub publicationInfo, pubTables, tables []TableFQN) (add, drop []TableFQN, err error) {
+	if pub.allTables {
+		if len(tables) > 0 {
+			return nil, nil, fmt.Errorf("%w: %s replicates every table and cannot be narrowed to the configured tables: drop it so it can be recreated for the configured tables, use a different publication, or set self_manage_publication to false to stream from it as is", errAllTablesPublication, publicationName)
+		}
+		return nil, nil, nil
+	}
+	for _, table := range tables {
+		if !slices.Contains(pubTables, table) {
+			add = append(add, table)
+		}
+	}
+	for _, table := range pubTables {
+		if !slices.Contains(tables, table) {
+			drop = append(drop, table)
+		}
+	}
+	return add, drop, nil
+}
+
+// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
+// existing one so that it lists exactly those tables. An empty list creates a FOR ALL TABLES publication.
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
+	pub, err := getPublication(ctx, conn, publicationName)
+	if err != nil {
+		return err
 	}
 
 	tablesClause := "FOR ALL TABLES"
@@ -307,46 +381,35 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		tablesClause = sb.String()
 	}
 
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+	if !pub.exists {
 		// tablesClause is sanitized, so we can safely interpolate it into the query
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
 		if err != nil {
 			return fmt.Errorf("sanitizing publication creation query: %w", err)
 		}
 		// Publication doesn't exist, create new one
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
 			return fmt.Errorf("creating publication: %w", err)
 		}
 
 		return nil
 	}
 
-	// assuming publication already exists
-	// get a list of tables in the publication
-	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
+	// Diffed against the tables the publication lists itself, not
+	// pg_publication_tables: without publish_via_partition_root that view
+	// lists a partitioned table's partitions instead of the table, so it
+	// would plan to drop partitions that are not members and to add the
+	// table that already is.
+	var pubTables []TableFQN
+	if !pub.allTables {
+		if pubTables, err = getPublicationMembers(ctx, conn, publicationName); err != nil {
+			return fmt.Errorf("getting publication tables: %w", err)
+		}
+	}
+
+	tablesToAddToPublication, tablesToRemoveFromPublication, err := publicationSyncPlan(publicationName, pub, pubTables, tables)
 	if err != nil {
-		return fmt.Errorf("getting publication tables: %w", err)
-	}
-
-	// list of tables to publish is empty and publication is for all tables
-	// no update is needed
-	if forAllTables && len(pubTables) == 0 {
-		return nil
-	}
-
-	tablesToRemoveFromPublication := []TableFQN{}
-	tablesToAddToPublication := []TableFQN{}
-	for _, table := range tables {
-		if !slices.Contains(pubTables, table) {
-			tablesToAddToPublication = append(tablesToAddToPublication, table)
-		}
-	}
-
-	for _, table := range pubTables {
-		if !slices.Contains(tables, table) {
-			tablesToRemoveFromPublication = append(tablesToRemoveFromPublication, table)
-		}
+		return err
 	}
 
 	// remove tables from publication
@@ -355,8 +418,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		if err != nil {
 			return fmt.Errorf("sanitizing drop table query: %w", err)
 		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
 			return fmt.Errorf("removing table from publication: %w", err)
 		}
 	}
@@ -367,8 +429,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		if err != nil {
 			return fmt.Errorf("sanitizing add table query: %w", err)
 		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
 			return fmt.Errorf("adding table to publication: %w", err)
 		}
 	}
@@ -376,9 +437,285 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	return nil
 }
 
-// GetPublicationTables returns a list of tables currently in the publication
+// errPublicationNotFound is returned by ValidatePublication when the
+// publication does not exist.
+var errPublicationNotFound = errors.New("publication does not exist")
+
+// getPublicationMembers returns the tables a publication lists itself, from
+// pg_publication_rel. Unlike GetPublicationTables, a partitioned table is
+// returned as itself rather than as its partitions.
+func getPublicationMembers(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, error) {
+	query, err := sanitize.SQLQuery(`
+		SELECT c.relname, n.nspname
+		FROM   pg_publication_rel pr
+		JOIN   pg_class c ON c.oid = pr.prrelid
+		JOIN   pg_namespace n ON n.oid = c.relnamespace
+		WHERE  pr.prpubid = (SELECT oid FROM pg_publication WHERE pubname = $1)
+		ORDER BY n.nspname, c.relname;
+	`, publicationName)
+	if err != nil {
+		return nil, fmt.Errorf("sanitizing publication members query: %w", err)
+	}
+	rows, err := conn.Exec(ctx, query).ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("getting publication members: %w", err)
+	}
+	var tables []TableFQN
+	if len(rows) > 0 {
+		for _, row := range rows[0].Rows {
+			tables = append(tables, TableFQN{
+				Table:  sanitize.QuotePostgresIdentifier(string(row[0])),
+				Schema: sanitize.QuotePostgresIdentifier(string(row[1])),
+			})
+		}
+	}
+	return tables, nil
+}
+
+// errExternalPublicationVersion is returned when an externally managed
+// publication is used on a server older than PostgreSQL 12.
+var errExternalPublicationVersion = errors.New("self_manage_publication: false requires PostgreSQL 12 or later")
+
+// checkExternalPublicationVersion fails before PostgreSQL 12, since checking
+// an externally managed publication's coverage needs pg_partition_tree and
+// pg_partition_ancestors, which earlier versions lack.
+func checkExternalPublicationVersion(pgVersion int) error {
+	if pgVersion < 12 {
+		return fmt.Errorf("%w, the server runs PostgreSQL %d", errExternalPublicationVersion, pgVersion)
+	}
+	return nil
+}
+
+// errPublicationOperations is returned by ValidatePublication when the
+// publication does not stream inserts, updates and deletes.
+var errPublicationOperations = errors.New("publication does not publish every operation")
+
+// ValidatePublication checks, without altering anything, that an externally
+// managed publication exists, streams inserts, updates and deletes, and
+// covers every table in tables. A FOR ALL TABLES publication covers every
+// table. A partitioned table counts as covered when the publication lists it,
+// one of its partitions, or one of its ancestors.
+//
+// It returns the tables in tables that the publication streams with a row
+// filter or a column list (PostgreSQL 15 or later). Those still stream, so
+// they are not an error, but only the filtered rows and columns arrive.
+func ValidatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) (filtered []TableFQN, err error) {
+	pub, err := getPublication(ctx, conn, publicationName)
+	if err != nil {
+		return nil, err
+	}
+	if !pub.exists {
+		return nil, fmt.Errorf("%w: %s must be created before this input starts, since it is configured not to manage the publication", errPublicationNotFound, publicationName)
+	}
+	if missing := pub.missingOperations(); len(missing) > 0 {
+		return nil, fmt.Errorf("%w: %s does not publish %s, so those changes would never stream: set its publish option to include insert, update and delete with ALTER PUBLICATION %s SET (publish = 'insert, update, delete')",
+			errPublicationOperations, publicationName, strings.Join(missing, ", "), publicationName)
+	}
+	if pub.allTables {
+		// A FOR ALL TABLES publication can carry neither a row filter nor a
+		// column list.
+		return nil, nil
+	}
+
+	var missing []TableFQN
+	for _, table := range tables {
+		q, err := publicationCoversTableQuery(publicationName, table.String())
+		if err != nil {
+			return nil, fmt.Errorf("sanitizing publication membership query: %w", err)
+		}
+		rows, err := conn.Exec(ctx, q).ReadAll()
+		if err != nil {
+			return nil, fmt.Errorf("checking whether publication %s includes table %s: %w", publicationName, table, err)
+		}
+		if !queryReturnedTrue(rows) {
+			missing = append(missing, table)
+			continue
+		}
+
+		q, err = publicationFiltersTableQuery(publicationName, table.String())
+		if err != nil {
+			return nil, fmt.Errorf("sanitizing publication filter query: %w", err)
+		}
+		rows, err = conn.Exec(ctx, q).ReadAll()
+		if err != nil {
+			return nil, fmt.Errorf("checking whether publication %s filters table %s: %w", publicationName, table, err)
+		}
+		if queryReturnedTrue(rows) {
+			filtered = append(filtered, table)
+		}
+	}
+	if err := missingFromPublicationError(publicationName, missing); err != nil {
+		return nil, err
+	}
+	return filtered, nil
+}
+
+func queryReturnedTrue(rows []*pgconn.Result) bool {
+	return len(rows) > 0 && len(rows[0].Rows) > 0 && len(rows[0].Rows[0]) > 0 && string(rows[0].Rows[0][0]) == "t"
+}
+
+// missingFromPublicationError reports the tables a publication does not
+// cover, or nil when there are none.
+func missingFromPublicationError(publicationName string, missing []TableFQN) error {
+	if len(missing) == 0 {
+		return nil
+	}
+	names := make([]string, len(missing))
+	for i, table := range missing {
+		names[i] = table.String()
+	}
+	return fmt.Errorf("publication %s does not include table(s) %s: add them with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
+}
+
+// publicationCoversTableQuery reports whether a publication replicates every
+// row of a table. pg_publication_tables lists a partitioned table's partitions
+// rather than the table itself unless the publication sets
+// publish_via_partition_root, so a table is covered when the publication
+// lists something in its partition tree or above it, and every leaf partition
+// is listed itself or through one of its ancestors. A publication listing
+// only some partitions does not cover the parent. The table itself is matched
+// directly, since pg_partition_tree and pg_partition_ancestors return no rows
+// for a table that is neither partitioned nor a partition. A table that does
+// not exist is not covered. pg_partition_tree and pg_partition_ancestors need
+// PostgreSQL 12 or later.
+func publicationCoversTableQuery(publication, table string) (string, error) {
+	return sanitize.SQLQuery(`
+        WITH published AS (
+            SELECT c.oid
+            FROM   pg_publication_tables pt
+            JOIN   pg_namespace n ON n.nspname = pt.schemaname
+            JOIN   pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
+            WHERE  pt.pubname = $1
+        )
+        SELECT EXISTS (
+                   SELECT 1 FROM published
+                   WHERE  oid IN (
+                              SELECT to_regclass($2)::oid
+                              UNION
+                              SELECT relid FROM pg_partition_tree(to_regclass($2))
+                              UNION
+                              SELECT relid FROM pg_partition_ancestors(to_regclass($2))
+                          )
+               )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM   pg_partition_tree(to_regclass($2)) leaf
+                   WHERE  leaf.isleaf
+                   AND    NOT EXISTS (
+                              SELECT 1 FROM published
+                              WHERE  oid IN (SELECT relid FROM pg_partition_ancestors(leaf.relid))
+                          )
+               );
+    `, publication, table)
+}
+
+// publicationRowFilterExpr and publicationColumnListExpr read the row filter
+// and column list of a pg_publication_tables row aliased pt. They go through
+// to_jsonb because those columns only exist from PostgreSQL 15, and naming
+// them directly would fail on earlier versions; there they read NULL, which
+// is right, since earlier versions have neither feature.
+const (
+	publicationRowFilterExpr  = `to_jsonb(pt) ->> 'rowfilter'`
+	publicationColumnListExpr = `to_jsonb(pt) -> 'attnames'`
+)
+
+// publicationFilteredExpr is true for a published row p whose row filter is
+// set, or whose column list leaves out a column of its relation p.oid. With
+// no column list PostgreSQL reports every column, and generated columns are
+// left out of the comparison since they are only published on request.
+//
+// The column list comparison is only built when columnLists is set: it names
+// pg_attribute.attgenerated, which PostgreSQL 10 and 11 lack, and a query
+// naming a missing column fails to parse even when that branch never runs.
+// Column lists only exist from PostgreSQL 15, so before that there is nothing
+// to compare.
+func publicationFilteredExpr(columnLists bool) string {
+	if !columnLists {
+		return `(p.rowfilter IS NOT NULL)`
+	}
+	return `(p.rowfilter IS NOT NULL
+               OR (p.attnames IS NOT NULL AND EXISTS (
+                   SELECT 1
+                   FROM   pg_attribute a
+                   WHERE  a.attrelid = p.oid
+                   AND    a.attnum > 0
+                   AND    NOT a.attisdropped
+                   AND    a.attgenerated = ''
+                   AND    NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.attnames) e WHERE e.value = a.attname)
+               )))`
+}
+
+// publicationFiltersTableQuery reports whether a publication streams a table,
+// anything in its partition tree, or one of its ancestors with a row filter
+// or a column list, so that some of the table's rows or columns never
+// stream. It only runs for an externally managed publication, which needs
+// PostgreSQL 12 or later.
+func publicationFiltersTableQuery(publication, table string) (string, error) {
+	return sanitize.SQLQuery(`
+        WITH published AS (
+            SELECT c.oid,
+                   `+publicationRowFilterExpr+` AS rowfilter,
+                   `+publicationColumnListExpr+` AS attnames
+            FROM   pg_publication_tables pt
+            JOIN   pg_namespace n ON n.nspname = pt.schemaname
+            JOIN   pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
+            WHERE  pt.pubname = $1
+            AND    c.oid IN (
+                       SELECT to_regclass($2)::oid
+                       UNION
+                       SELECT relid FROM pg_partition_tree(to_regclass($2))
+                       UNION
+                       SELECT relid FROM pg_partition_ancestors(to_regclass($2))
+                   )
+        )
+        SELECT EXISTS (SELECT 1 FROM published p WHERE `+publicationFilteredExpr(true)+`);
+    `, publication, table)
+}
+
+// publishedAsItselfQuery reports whether a publication streams a table's
+// changes under the table's own name, and whether it streams them with a row
+// filter or a column list. pg_publication_tables lists each table under the
+// name its changes are published with: a partitioned table's partitions
+// unless publish_via_partition_root is set, and the topmost published
+// ancestor when it is. So a partitioned table published through its
+// partitions, and a partition published through its root, are not listed as
+// themselves. pgVersion is the server's major version, since it also runs
+// for connector-managed publications, which work before PostgreSQL 12.
+func publishedAsItselfQuery(pgVersion int, publication, schema, table, fqn string) (string, error) {
+	return sanitize.SQLQuery(`
+        WITH published AS (
+            SELECT to_regclass($4)::oid AS oid,
+                   `+publicationRowFilterExpr+` AS rowfilter,
+                   `+publicationColumnListExpr+` AS attnames
+            FROM   pg_publication_tables pt
+            WHERE  pt.pubname = $1
+            AND    pt.schemaname = $2
+            AND    pt.tablename = $3
+        )
+        SELECT EXISTS (SELECT 1 FROM published),
+               EXISTS (SELECT 1 FROM published p WHERE `+publicationFilteredExpr(pgVersion >= 15)+`);
+    `, publication, schema, table, fqn)
+}
+
+// GetPublicationTables returns the tables a publication replicates, and
+// whether it is FOR ALL TABLES. For a FOR ALL TABLES publication the list is
+// every table in the database.
 // Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+	pub, err := getPublication(ctx, conn, publicationName)
+	if err != nil {
+		return nil, false, err
+	}
+	tables, err := publicationTables(ctx, conn, publicationName)
+	if err != nil {
+		return nil, false, err
+	}
+	return tables, pub.allTables, nil
+}
+
+// publicationTables returns the tables pg_publication_tables lists for a
+// publication, without reading the publication itself.
+func publicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		tablename as table_name,
@@ -388,31 +725,28 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {
-		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+		return nil, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	// Get specific tables in the publication
-	result := conn.Exec(ctx, query)
-
-	rows, err := result.ReadAll()
+	rows, err := conn.Exec(ctx, query).ReadAll()
 	if err != nil {
-		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+		return nil, fmt.Errorf("getting publication tables: %w", err)
 	}
 
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
+	var tables []TableFQN
+	if len(rows) > 0 {
+		tables = make([]TableFQN, 0, len(rows[0].Rows))
+		for _, row := range rows[0].Rows {
+			// These come from postgres so they are valid, but we have to quote them
+			// to prevent normalization
+			table := sanitize.QuotePostgresIdentifier(string(row[0]))
+			schema := sanitize.QuotePostgresIdentifier(string(row[1]))
+			tables = append(tables, TableFQN{Table: table, Schema: schema})
+		}
 	}
 
-	tables := make([]TableFQN, 0, len(rows))
-	for _, row := range rows[0].Rows {
-		// These come from postgres so they are valid, but we have to quote them
-		// to prevent normalization
-		table := sanitize.QuotePostgresIdentifier(string(row[0]))
-		schema := sanitize.QuotePostgresIdentifier(string(row[1]))
-		tables = append(tables, TableFQN{Table: table, Schema: schema})
-	}
-
-	return tables, false, nil
+	return tables, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.
