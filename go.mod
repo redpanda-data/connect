@@ -185,7 +185,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.42.0
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.42.0
 	github.com/tetratelabs/wazero v1.12.1-0.20260714071631-236c2458ed22
-	github.com/tigerbeetle/tigerbeetle-go v0.16.78
+	github.com/tigerbeetle/tigerbeetle-go v0.17.10
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.4
 	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.333.0

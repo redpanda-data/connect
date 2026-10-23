@@ -32,7 +32,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	tb "github.com/tigerbeetle/tigerbeetle-go"
-	tb_types "github.com/tigerbeetle/tigerbeetle-go/pkg/types"
 )
 
 const (
@@ -134,7 +133,7 @@ It is the consumer’s responsibility to perform idempotency checks when process
 
 == Upgrading
 
-Requires TigerBeetle cluster version 0.16.78 or greater.
+Requires TigerBeetle cluster version 0.17.9 or greater.
 
 A cluster older than this version rejects the connection, and the input logs
 ` + "`Client was evicted; release too new.`" + `
@@ -202,7 +201,7 @@ Upgrade the cluster before you upgrade Redpanda Connect.`).
 }
 
 type tigerbeetleConfig struct {
-	clusterID        tb_types.Uint128
+	clusterID        tb.Uint128
 	addresses        []string
 	eventCountMax    uint32
 	idleInterval     time.Duration
@@ -216,7 +215,7 @@ type tigerbeetleConfig struct {
 type tigerbeetleInput struct {
 	config tigerbeetleConfig
 
-	producerChan    chan []tb_types.ChangeEvent
+	producerChan    chan []tb.ChangeEvent
 	consumerChan    chan batchedMesssage
 	connectionState chan error
 
@@ -389,7 +388,7 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 			idleInterval:     time.Duration(idleInterval) * time.Millisecond,
 			timestampInitial: timestampInitial,
 		},
-		producerChan:    make(chan []tb_types.ChangeEvent, 1),
+		producerChan:    make(chan []tb.ChangeEvent, 1),
 		consumerChan:    make(chan batchedMesssage, 1),
 		connectionState: make(chan error, 1),
 		logger:          resources.Logger(),
@@ -429,7 +428,7 @@ func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, ti
 		)
 
 		_ = timeoutTimer.Reset(input.config.timeout)
-		results, err := client.GetChangeEvents(tb_types.ChangeEventsFilter{
+		results, err := client.GetChangeEvents(tb.ChangeEventsFilter{
 			TimestampMin: timestampLast + 1,
 			TimestampMax: 0,
 			Limit:        input.config.eventCountMax,
@@ -633,7 +632,7 @@ type JsonAccount struct {
 	Timestamp      string `json:"timestamp"`
 }
 
-func jsonSerialize(result tb_types.ChangeEvent) ([]byte, error) {
+func jsonSerialize(result tb.ChangeEvent) ([]byte, error) {
 	return json.Marshal(JsonChangeEvent{
 		Timestamp: strconv.FormatUint(result.Timestamp, 10),
 		Type:      eventTypeString(result.Type),
@@ -680,35 +679,35 @@ func jsonSerialize(result tb_types.ChangeEvent) ([]byte, error) {
 }
 
 // stringToUint128 parses a base 10 string and returns the corresponding value as a Uint128.
-func stringToUint128(str string) (tb_types.Uint128, bool) {
+func stringToUint128(str string) (tb.Uint128, bool) {
 	if len(str) == 0 {
-		return tb_types.Uint128{}, false
+		return tb.Uint128{}, false
 	}
 	bigInt := new(big.Int)
 	_, success := bigInt.SetString(str, 10)
 	if !success {
-		return tb_types.Uint128{}, false
+		return tb.Uint128{}, false
 	}
-	return tb_types.BigIntToUint128(*bigInt), true
+	return tb.BigIntToUint128(bigInt), true
 }
 
 // uint128ToString formats a Uint128 number as a base10 string.
-func uint128ToString(value tb_types.Uint128) string {
+func uint128ToString(value tb.Uint128) string {
 	bigInt := value.BigInt()
 	return bigInt.Text(10)
 }
 
-func eventTypeString(value tb_types.ChangeEventType) string {
+func eventTypeString(value tb.ChangeEventType) string {
 	switch value {
-	case tb_types.ChangeEventSinglePhase:
+	case tb.ChangeEventSinglePhase:
 		return "single_phase"
-	case tb_types.ChangeEventTwoPhasePending:
+	case tb.ChangeEventTwoPhasePending:
 		return "two_phase_pending"
-	case tb_types.ChangeEventTwoPhasePosted:
+	case tb.ChangeEventTwoPhasePosted:
 		return "two_phase_posted"
-	case tb_types.ChangeEventTwoPhaseVoided:
+	case tb.ChangeEventTwoPhaseVoided:
 		return "two_phase_voided"
-	case tb_types.ChangeEventTwoPhaseExpired:
+	case tb.ChangeEventTwoPhaseExpired:
 		return "two_phase_expired"
 	default:
 		panic("unexpected event type")
