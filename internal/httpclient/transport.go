@@ -21,11 +21,11 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"net/url"
 
 	"golang.org/x/time/rate"
 
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // --- Base transport ---
@@ -57,9 +57,9 @@ func newBaseTransport(cfg Config) (http.RoundTripper, error) {
 		ForceAttemptHTTP2:      !cfg.DisableHTTP2,
 	}
 	if cfg.ProxyURL != "" {
-		p, err := url.Parse(cfg.ProxyURL)
+		p, err := redact.ParseURL(cfg.ProxyURL)
 		if err != nil {
-			return nil, fmt.Errorf("invalid proxy_url %q: %w", cfg.ProxyURL, err)
+			return nil, fmt.Errorf("invalid proxy_url: %w", err)
 		}
 		tr.Proxy = http.ProxyURL(p)
 	}

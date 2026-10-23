@@ -16,10 +16,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // SearchProjectsResource retrieves Jira projects based on the provided parameters
@@ -97,7 +97,7 @@ func (j *Client) searchAllProjects(ctx context.Context, queryParams map[string]s
 			break
 		}
 		next := res.NextPage
-		parsed, err := url.Parse(next)
+		parsed, err := redact.ParseURL(next)
 		if err != nil {
 			return nil, fmt.Errorf("invalid URL: %v", err)
 		}
@@ -116,7 +116,7 @@ func (j *Client) searchAllProjects(ctx context.Context, queryParams map[string]s
 // Function to get a single page of issues using startAt offset strategy
 // The MaxResults can be overridden by the processor parameters (up to 5000 - default 50).
 func (j *Client) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*ProjectSearchResponse, error) {
-	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/project/search")
+	urlString, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/project/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -154,7 +154,7 @@ func (j *Client) searchProjectsPage(ctx context.Context, qp map[string]string, s
 func (j *Client) SearchProjectTypesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/project/type")
+	urlString, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/project/type")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -204,7 +204,7 @@ func (j *Client) SearchProjectTypesResource(ctx context.Context, q *JsonInputQue
 func (j *Client) SearchProjectCategoriesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/projectCategory")
+	urlString, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/projectCategory")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -261,7 +261,7 @@ func (j *Client) SearchProjectVersionsResource(
 ) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/project/" + inputQuery.Project + "/versions")
+	apiUrl, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/project/" + inputQuery.Project + "/versions")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}

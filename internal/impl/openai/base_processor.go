@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@ package openai
 
 import (
 	"context"
+	"fmt"
 
 	oai "github.com/sashabaranov/go-openai"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -56,6 +58,9 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 	sa, err := conf.FieldString(opFieldServerAddress)
 	if err != nil {
 		return nil, err
+	}
+	if _, err := redact.ParseURL(sa); err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", opFieldServerAddress, err)
 	}
 	k, err := conf.FieldString(opFieldAPIKey)
 	if err != nil {

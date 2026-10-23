@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,12 @@ package redis
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 func clientFields() []*service.ConfigField {
@@ -98,7 +98,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 
 	// handle comma-separated urls
 	for v := range strings.SplitSeq(urlStr, ",") {
-		url, err := url.Parse(v)
+		url, err := redact.ParseURL(v)
 		if err != nil {
 			return nil, err
 		}

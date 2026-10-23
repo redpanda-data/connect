@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/esoutput"
 )
@@ -306,13 +307,13 @@ type esOutput struct {
 func (e *esOutput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
 	client, err := elasticsearch.NewTypedClient(e.conf.clientOpts)
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("creating client: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("creating client: %w", redact.Error(err, redact.Conns(e.conf.clientOpts.Addresses...)))).AsList()
 	}
 
 	// Test connection by pinging the cluster
 	_, err = client.Info().Do(ctx)
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("connecting to cluster: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("connecting to cluster: %w", redact.Error(err, redact.Conns(e.conf.clientOpts.Addresses...)))).AsList()
 	}
 
 	return service.ConnectionTestSucceeded().AsList()
@@ -325,7 +326,7 @@ func (e *esOutput) Connect(context.Context) error {
 
 	client, err := elasticsearch.NewTypedClient(e.conf.clientOpts)
 	if err != nil {
-		return err
+		return redact.Error(err, redact.Conns(e.conf.clientOpts.Addresses...))
 	}
 
 	e.client = client
@@ -344,7 +345,7 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 
 	result, err := bulkWriter.Do(ctx)
 	if err != nil {
-		return fmt.Errorf("sending bulk request: %w", err)
+		return fmt.Errorf("sending bulk request: %w", redact.Error(err, redact.Conns(e.conf.clientOpts.Addresses...)))
 	}
 
 	if result.Errors {
