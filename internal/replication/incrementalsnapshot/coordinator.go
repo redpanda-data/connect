@@ -185,17 +185,26 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 // and queueing it behind the release reads it again from the start.
 func (c *Coordinator[P, W]) RequeueTables(tables []TableID) (added []TableID) {
 	return c.queue(tables, func(table TableID) bool {
-		if slices.Contains(c.remaining, table) {
-			return false
-		}
-		return c.current == nil || *c.current != table || c.currentExhausted
+		return !slices.Contains(c.remaining, table) && !c.reading(table)
 	})
+}
+
+// reading reports whether table is current and has chunks left to fetch.
+//
+// It is narrower than Snapshotting: once the final chunk is buffered, current
+// still names the table so OnStreamedRow can dedup that chunk, but no read is
+// left to do.
+func (c *Coordinator[P, W]) reading(table TableID) bool {
+	return c.Snapshotting(table) && !c.currentExhausted
 }
 
 // queue appends each table eligible reports true for, in order, and reports
 // the ones it appended.
 func (c *Coordinator[P, W]) queue(tables []TableID, eligible func(TableID) bool) (added []TableID) {
 	for _, table := range tables {
+		// eligible sees the tables queued earlier in this loop, so it already
+		// rejects a repeat. This check keeps that true for an eligible that does
+		// not read remaining or knownTables.
 		if !eligible(table) || slices.Contains(added, table) {
 			continue
 		}
@@ -209,10 +218,10 @@ func (c *Coordinator[P, W]) queue(tables []TableID, eligible func(TableID) bool)
 		// table under Tables with no queue entry, and a resume from that is
 		// idle and rejects a repeat request.
 		//
-		// A requeued table can still be there: its single, final chunk is
-		// buffered but unreleased, so the committed state has not yet moved
-		// past queueing it. Once is enough, as that read is not checkpointed
-		// either.
+		// A requeued table can already be in the committed queue: its only chunk
+		// is buffered but not released, so the checkpoint still lists it as
+		// queued. Do not add it twice. A resume from that checkpoint reads it
+		// once, which also satisfies this request.
 		if !slices.Contains(c.committedRemaining, table) {
 			c.committedRemaining = append(c.committedRemaining, table)
 		}

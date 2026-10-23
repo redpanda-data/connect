@@ -731,6 +731,33 @@ func TestCoordinatorRequeueTables(t *testing.T) {
 		assert.Equal(t, []TableID{tableB}, coord.State().RemainingTables, "a resume from here must read B once more, not twice")
 	})
 
+	t.Run("a table whose earlier chunks are released is checkpointed behind itself", func(t *testing.T) {
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1), rowFor(tableA, 2), rowFor(tableA, 3)}, maxPK: PrimaryKey{3}},
+		}, 2)
+		// Not quiesced, so each chunk waits for its own commit.
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 2})
+		coord, err := NewCoordinator(testConfig{ChunkSize: 2, Deps: mock}, nil)
+		require.NoError(t, err)
+		require.NoError(t, coord.Start(t.Context()))
+		coord.AddTables([]TableID{tableA})
+
+		// The queue checkpoint buffers [1 2]. The next commit releases it and
+		// buffers [3], A's last chunk.
+		for pos := uint64(5); pos <= 6; pos++ {
+			_, err := coord.OnCommit(t.Context(), pos, collect(new([][]Row)))
+			require.NoError(t, err)
+		}
+		require.True(t, coord.Snapshotting(tableA))
+		require.Equal(t, PrimaryKey{2}, coord.State().LastSentPK)
+
+		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA}))
+		state := coord.State()
+		require.NotNil(t, state.CurrentTable)
+		assert.Equal(t, tableA, *state.CurrentTable)
+		assert.Equal(t, []TableID{tableA}, state.RemainingTables, "a resume from here must finish A, then read A again")
+	})
+
 	t.Run("duplicates in one request are queued once", func(t *testing.T) {
 		coord := newCoordinator(t, nil)
 		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA, tableA}))
