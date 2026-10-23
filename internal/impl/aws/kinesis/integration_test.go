@@ -88,10 +88,11 @@ func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, 
 		}
 
 		t.Logf("Failed to create stream '%v': %v", id, err)
-		// The retry delay and the deadline can expire at the same time. Then
-		// the select below can start one more attempt, which fails only
-		// because of the deadline. Do not let that error replace the real
-		// cause.
+		// Race: if the deadline and the retry delay expire together, the
+		// select below can pick the retry delay. The next attempt then fails
+		// only with a deadline error. Keep the earlier error: it is the real
+		// cause. Without this check, TestCreateKinesisShardsReturnsLastError
+		// is flaky.
 		if createCtx.Err() == nil || lastErr == nil {
 			lastErr = err
 		}
