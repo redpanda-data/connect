@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/public/docslinks"
 	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
@@ -106,12 +107,12 @@ func TestDocStringConditionalsAreWellFormed(t *testing.T) {
 func TestDocStringsRenderAsMarkdownInEveryDistribution(t *testing.T) {
 	for name, s := range distributions() {
 		t.Run(name, func(t *testing.T) {
-			url := schema.DocumentationURL
+			url := docslinks.DocumentationURL
 			if name != "standard" {
-				url = schema.CloudDocumentationURL
+				url = docslinks.CloudDocumentationURL
 				require.Equal(t, []string{service.DocsAttributeCloud}, s.DocsAttributes(), "Cloud distributions declare env-cloud so their readers see the Cloud text")
 			}
-			out, err := s.MarshalJSONV0Markdown(service.DocsMarkdownOptions{DocumentationURL: url, ComponentURLs: schema.DocsComponentURLs, HasComponent: schema.DocsHasComponent(s.Environment())})
+			out, err := s.MarshalJSONV0Markdown(service.DocsMarkdownOptions{DocumentationURL: url, ComponentURLs: docslinks.ComponentURLs, HasComponent: docslinks.HasComponent(s.Environment())})
 			require.NoError(t, err)
 			var doc map[string]any
 			require.NoError(t, json.Unmarshal(out, &doc))
@@ -162,16 +163,16 @@ func TestWalkDocStringsVisitsFieldDescriptions(t *testing.T) {
 // or to a docs page under components/ that is not a component, stays a link.
 func TestDocsHasComponentKeepsPagesAndShippedComponents(t *testing.T) {
 	cloud := schema.Cloud("0.0.0", "now")
-	has := schema.DocsHasComponent(cloud.Environment())
+	has := docslinks.HasComponent(cloud.Environment())
 	assert.True(t, has("inputs", "generate"), "Cloud ships generate")
 	assert.False(t, has("inputs", "file"), "Cloud does not ship the file input")
 	assert.True(t, has("outputs", "bigquery_cdc_migration"), "a guide page under components/ is not a component")
 	assert.True(t, has("inputs", "about"), "the about page is not a component")
-	assert.True(t, schema.DocsHasComponent(schema.Standard("0.0.0", "now").Environment())("inputs", "file"), "self-managed ships the file input")
+	assert.True(t, docslinks.HasComponent(schema.Standard("0.0.0", "now").Environment())("inputs", "file"), "self-managed ships the file input")
 
 	out, err := cloud.MarshalJSONV0Markdown(service.DocsMarkdownOptions{
-		DocumentationURL: schema.CloudDocumentationURL,
-		ComponentURLs:    schema.DocsComponentURLs,
+		DocumentationURL: docslinks.CloudDocumentationURL,
+		ComponentURLs:    docslinks.ComponentURLs,
 		HasComponent:     has,
 	})
 	require.NoError(t, err)
@@ -189,5 +190,5 @@ func TestDocsHasComponentKeepsPagesAndShippedComponents(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, desc, "Cloud ships gcp_bigquery_write_api")
-	assert.Contains(t, desc, "[CDC migration guide]("+schema.CloudDocumentationURL+"/components/outputs/bigquery_cdc_migration/)")
+	assert.Contains(t, desc, "[CDC migration guide]("+docslinks.CloudDocumentationURL+"/components/outputs/bigquery_cdc_migration/)")
 }

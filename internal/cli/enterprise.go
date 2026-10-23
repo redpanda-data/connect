@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
-	"github.com/redpanda-data/connect/v4/public/schema"
+	"github.com/redpanda-data/connect/v4/public/docslinks"
 )
 
 const connectorListPath = "/etc/redpanda/connector_list.yaml"
@@ -38,8 +38,8 @@ const connectorListPath = "/etc/redpanda/connector_list.yaml"
 // schema declares (see public/schema).
 func DocsOpts() []service.CLIOptFunc {
 	return []service.CLIOptFunc{
-		service.CLIOptSetDocumentationURL(schema.DocumentationURL),
-		service.CLIOptSetDocsComponentURLs(schema.DocsComponentURLs),
+		service.CLIOptSetDocumentationURL(docslinks.DocumentationURL),
+		service.CLIOptSetDocsComponentURLs(docslinks.ComponentURLs),
 	}
 }
 
@@ -48,13 +48,13 @@ func DocsOpts() []service.CLIOptFunc {
 // InitEnterpriseCLI, whose schema parameter shadows the schema package, can
 // call it.
 func docsHasComponent(env *service.Environment) func(typeDir, name string) bool {
-	return schema.DocsHasComponent(env)
+	return docslinks.HasComponent(env)
 }
 
 // CloudDocsOpts points the CLI at the Cloud copy of the Connect docs instead.
 func CloudDocsOpts() []service.CLIOptFunc {
 	return []service.CLIOptFunc{
-		service.CLIOptSetDocumentationURL(schema.CloudDocumentationURL),
+		service.CLIOptSetDocumentationURL(docslinks.CloudDocumentationURL),
 	}
 }
 

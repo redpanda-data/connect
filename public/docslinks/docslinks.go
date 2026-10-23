@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package schema
+// Package docslinks holds where each Redpanda Connect distribution's docs live
+// and how doc string links resolve when the doc strings render as Markdown.
+// It has no component imports, so every binary, including the Apache 2.0
+// community build, can use it without linking enterprise code.
+package docslinks
 
 import (
 	"sync"
@@ -21,6 +25,25 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/plugins"
 )
+
+// Where each distribution's documentation lives. The CLI prints the URL as
+// its documentation link and resolves doc string links against it when it
+// renders them as Markdown.
+const (
+	DocumentationURL      = "https://docs.redpanda.com/connect"
+	CloudDocumentationURL = "https://docs.redpanda.com/cloud-data-platform/develop/connect"
+)
+
+// ComponentURLs maps the other docs site components that doc strings link
+// to with component-qualified xrefs, such as xref:streaming:manage:x.adoc[],
+// to their base URLs.
+var ComponentURLs = map[string]string{
+	// Version-less streaming URLs redirect to the current version; link there
+	// directly.
+	"streaming":           "https://docs.redpanda.com/streaming/current",
+	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
+	"connect":             DocumentationURL,
+}
 
 // componentTypes maps the docs directory of each component family, as it
 // appears in xref:components:<dir>/<name>.adoc, to its plugin type.
@@ -36,7 +59,7 @@ var componentTypes = map[string]plugins.TypeName{
 	"tracers":     plugins.TypeTracer,
 }
 
-// DocsHasComponent returns the function that tells the Markdown renderer
+// HasComponent returns the function that tells the Markdown renderer
 // whether the distribution whose components are registered in env ships the
 // component an xref points at, for service.DocsMarkdownOptions.HasComponent and
 // service.CLIOptSetDocsHasComponent. A link to a component the distribution
@@ -47,7 +70,7 @@ var componentTypes = map[string]plugins.TypeName{
 // The components env ships are read the first time the function is called, so
 // components removed from env after this call, for example by a connector
 // list, are already gone by then.
-func DocsHasComponent(env *service.Environment) func(typeDir, name string) bool {
+func HasComponent(env *service.Environment) func(typeDir, name string) bool {
 	var (
 		once  sync.Once
 		ships map[string]bool
