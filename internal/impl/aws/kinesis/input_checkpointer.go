@@ -167,12 +167,18 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 		return nil, err
 	}
 
+	if len(rawItem.Item) == 0 {
+		return nil, nil
+	}
+
 	c := awsKinesisCheckpoint{}
 
+	// A claim is written before the first commit, so an item can carry a
+	// client ID and lease but no sequence number yet: that is a checkpoint
+	// with no position, and a consumer resuming from it starts from the
+	// configured start_from_oldest position.
 	if s, ok := rawItem.Item["SequenceNumber"].(*types.AttributeValueMemberS); ok {
 		c.SequenceNumber = s.Value
-	} else {
-		return nil, errors.New("sequence ID was not found in checkpoint")
 	}
 
 	if s, ok := rawItem.Item["ClientID"].(*types.AttributeValueMemberS); ok {
@@ -336,7 +342,9 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 		if err != nil {
 			return "", err
 		}
-		startingSequence = cp.SequenceNumber
+		if cp != nil && cp.SequenceNumber != "" {
+			startingSequence = cp.SequenceNumber
+		}
 	}
 
 	return startingSequence, nil
