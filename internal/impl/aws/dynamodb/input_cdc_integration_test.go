@@ -142,6 +142,7 @@ func deleteTestItem(ctx context.Context, client *dynamodb.Client, tableName, id 
 
 func TestIntegrationDynamoDBStreams(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -539,6 +540,7 @@ credentials:
 // checkpoint state, so a restart re-delivers every item. See CON-504.
 func TestIntegrationDynamoDBSnapshotAckGate(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -656,6 +658,7 @@ credentials:
 // TestIntegrationDynamoDBSnapshot tests snapshot functionality.
 func TestIntegrationDynamoDBSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -959,6 +962,7 @@ credentials:
 // TestIntegrationDynamoDBMultiTable tests multi-table streaming functionality
 func TestIntegrationDynamoDBMultiTable(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -1225,6 +1229,7 @@ credentials:
 // TestIntegrationDynamoDBTagDiscovery tests tag-based table discovery
 func TestIntegrationDynamoDBTagDiscovery(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
