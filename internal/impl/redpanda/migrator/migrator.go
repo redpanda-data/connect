@@ -125,81 +125,92 @@ It coordinates topics, schema registry, and consumer groups to migrate data from
 IMPORTANT: This output requires a corresponding `+"xref:components:inputs/redpanda_migrator.adoc[`redpanda_migrator` input]"+` in the same pipeline.
 Each pipeline must have both input and output components configured.
 
-**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline,
+== Multiple migrator pairs
+
+When using multiple migrator pairs in a single pipeline,
 the mapping between input and output components is done based on the label field.
 The label of the input and output must match exactly for proper coordination, and each pair needs its own label.
 
-**Performance tuning for high throughput:** For workloads with high message rates or large messages,
+== Performance tuning
+
+For workloads with high message rates or large messages,
 adjust the following settings to optimize throughput:
 
 On the paired `+"xref:components:inputs/redpanda_migrator.adoc[`redpanda_migrator` input]"+`:
+
 - `+"`partition_buffer_bytes: 2MB`"+` - increases per-partition buffer size
 - `+"`max_yield_batch_bytes: 1MB`"+` - allows larger batches to be yielded
 
 On this output component:
+
 - `+"`max_in_flight`"+` - set to the total number of partitions being copied in parallel (up to all partitions in the cluster). The input processes one batch per partition at a time, so values higher than the partition count provide no benefit.
 
-What gets synchronised:
+== Synchronization details
 
-- Topics
-  - Name resolution with interpolation (default: preserve source name)
-  - Automatic creation with mirrored partition counts
-  - Selectable replication factor with `+"`topic_replication_factor`"+` (default: inherit from source)
-  - Copy of supported topic configuration keys (serverless-aware subset)
-  - Optional ACL replication with safe transforms:
-    - Excludes `+"`ALLOW WRITE`"+` entries
-    - Downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+`
-    - Preserves resource pattern type and host filters
+=== Topics
 
-- Schema Registry
-  - One-shot or periodic syncing
-  - Subject selection via include/exclude regex
-  - Subject renaming with interpolation
-  - Versions: `+"`latest`"+` or `+"`all`"+` (default: `+"`all`"+`)
-  - Optional include of soft-deleted subjects with `+"`schema_registry.include_deleted`"+`
-  - ID handling: translate IDs (create-or-reuse) with `+"`schema_registry.translate_ids`"+`, or keep fixed IDs and versions
-  - Optional schema normalisation on create with `+"`schema_registry.normalize`"+`
-  - Optional per-subject compatibility propagation when explicitly set on source (global mode is not forced)
-  - Serverless note: schema metadata and rule sets are not copied in serverless mode
+* Name resolution with interpolation (default: preserve source name)
+* Automatic creation with mirrored partition counts
+* Selectable replication factor with `+"`topic_replication_factor`"+` (default: inherit from source)
+* Copy of supported topic configuration keys (serverless-aware subset)
+* Optional ACL replication with safe transforms:
+** Excludes `+"`ALLOW WRITE`"+` entries
+** Downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+`
+** Preserves resource pattern type and host filters
 
-- Consumer Groups
-  - Periodic syncing
-  - Group selection via include/exclude regex
-  - Groups in every state except `+"`Dead`"+` are migrated by default. Set `+"`consumer_groups.only_empty`"+` to `+"`true`"+` to migrate only groups in the `+"`Empty`"+` state
-  - Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`, which can be imprecise when multiple records share the same timestamp (see `+"<<offset_header,`offset_header`>>"+` for exact translation)
-  - No rewind guarantee: destination offsets are never moved backwards
-  - Commit performed in parallel with per-group metrics
-  - Requires matching partition counts between source and destination topics
+=== Schema Registry
 
-How it runs:
+* One-shot or periodic syncing
+* Subject selection via include/exclude regex
+* Subject renaming with interpolation
+* Versions: `+"`latest`"+` or `+"`all`"+` (default: `+"`all`"+`)
+* Optional include of soft-deleted subjects with `+"`schema_registry.include_deleted`"+`
+* ID handling: translate IDs (create-or-reuse) with `+"`schema_registry.translate_ids`"+`, or keep fixed IDs and versions
+* Optional schema normalisation on create with `+"`schema_registry.normalize`"+`
+* Optional per-subject compatibility propagation when explicitly set on source (global mode is not forced)
+* Serverless note: schema metadata and rule sets are not copied in serverless mode
+
+=== Consumer groups
+
+* Periodic syncing
+* Group selection via include/exclude regex
+* Groups in every state except `+"`Dead`"+` are migrated by default. Set `+"`consumer_groups.only_empty`"+` to `+"`true`"+` to migrate only groups in the `+"`Empty`"+` state
+* Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`, which can be imprecise when multiple records share the same timestamp (see `+"<<offset_header,`offset_header`>>"+` for exact translation)
+* No rewind guarantee: destination offsets are never moved backwards
+* Commit performed in parallel with per-group metrics
+* Requires matching partition counts between source and destination topics
+
+== How it works
 
 - Topics: the first write triggers a sync of all consumed topics, and any other topic is created when its first record arrives. A background loop also syncs topics every `+"`sync_topic_interval`"+` (default `+"`5m`"+`), which creates destination topics for source topics that have no current data, for example after retention cleanup. Set `+"`sync_topic_interval`"+` to `+"`0s`"+` to disable the periodic sync.
 - Schema Registry: one sync at connect, then periodic syncing via the background loop controlled by `+"`schema_registry.interval`"+` (default `+"`5m`"+`; set to `+"`0s`"+` to sync only once at connect). Schema IDs unknown at write time are not resynced on demand; they are handled per `+"`schema_registry.strict`"+`.
 - Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` (default `+"`1m`"+`) and filtered by the current topic mappings.
 
-Guarantees:
+== Guarantees
 
 - Topics are created with the intended partitioning and configured replication factor. Existing destination topics are never re-created. If an existing destination topic has fewer partitions than its source topic, partitions are added to match. Consumer group migration skips topics whose partition counts still differ.
 - Consumer group offsets are never rewound. Only translated forward positions are committed.
 - ACL replication excludes `+"`ALLOW WRITE`"+` operations and downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+` to avoid unsafe grants.
 
-Limitations and requirements:
+== Limitations and requirements
 
 - Destination Schema Registry must be in `+"`READWRITE`"+` or `+"`IMPORT`"+` mode.
 - When the destination cluster enforces ACLs, the destination principal needs permission to create topics, add partitions, describe topic configurations, and produce records. Consumer group migration also needs group `+"`READ`"+` and topic `+"`READ`"+` to commit the groups' offsets, and `+"`sync_topic_acls`"+` also needs permission to create ACLs. For the exact ACL operations, see xref:cookbooks:redpanda_migrator.adoc#required-permissions[Required permissions].
 - Offset translation is best-effort: if the previous-offset timestamp cannot be read, or no destination offset exists after the timestamp, that partition is skipped.
 - Consumer group migration requires identical partition counts for source and destination topics.
 
-Metrics:
+== Metrics
 
 The component exposes comprehensive metrics for monitoring migration operations:
 
-Topic Migration Metrics:
+=== Topic migration metrics
+
 - `+"`redpanda_migrator_topics_created_total`"+` (counter): Total number of topics successfully created on the destination cluster
 - `+"`redpanda_migrator_topic_create_errors_total`"+` (counter): Total number of errors encountered when creating topics
 - `+"`redpanda_migrator_topic_create_latency_ns`"+` (timer): Latency in nanoseconds for topic creation operations
 
-Schema Registry Migration Metrics:
+=== Schema Registry migration metrics
+
 - `+"`redpanda_migrator_sr_schemas_created_total`"+` (counter): Total number of schemas successfully created in the destination schema registry
 - `+"`redpanda_migrator_sr_schema_create_errors_total`"+` (counter): Total number of errors encountered when creating schemas
 - `+"`redpanda_migrator_sr_schema_create_latency_ns`"+` (timer): Latency in nanoseconds for schema creation operations
@@ -207,7 +218,10 @@ Schema Registry Migration Metrics:
 - `+"`redpanda_migrator_sr_compatibility_update_errors_total`"+` (counter): Total number of errors encountered when updating compatibility levels
 - `+"`redpanda_migrator_sr_compatibility_update_latency_ns`"+` (timer): Latency in nanoseconds for compatibility level update operations
 
-Consumer Group Migration Metrics (with group label):
+=== Consumer group migration metrics
+
+These metrics have a `+"`group`"+` label.
+
 - `+"`redpanda_migrator_cg_offsets_translated_total`"+` (counter): Total number of offsets successfully translated per consumer group
 - `+"`redpanda_migrator_cg_offset_translation_errors_total`"+` (counter): Total number of errors encountered when translating offsets per consumer group
 - `+"`redpanda_migrator_cg_offset_translation_latency_ns`"+` (timer): Latency in nanoseconds for offset translation operations per consumer group
@@ -215,7 +229,10 @@ Consumer Group Migration Metrics (with group label):
 - `+"`redpanda_migrator_cg_offset_commit_errors_total`"+` (counter): Total number of errors encountered when committing offsets per consumer group
 - `+"`redpanda_migrator_cg_offset_commit_latency_ns`"+` (timer): Latency in nanoseconds for offset commit operations per consumer group
 
-Consumer Lag Metrics (with topic and partition labels):
+=== Consumer lag metrics
+
+These metrics have `+"`topic`"+` and `+"`partition`"+` labels.
+
 - `+"`redpanda_lag`"+` (gauge): Current consumer lag in messages for each topic partition being consumed by the migrator input. This metric shows the difference between the high water mark and the current consumer position, providing visibility into how far behind the consumer is on each partition. The metric includes labels for topic name and partition number to enable per-partition monitoring.
 
 This component must be paired with the `+"`redpanda_migrator`"+` input in the same pipeline.`).
