@@ -103,10 +103,27 @@ func columnToCommon(name, typeName string, precision, scale int64, hasDecimalInf
 	if isNumberType(typeName) {
 		return replication.NumberToCommon(name, precision, scale, hasDecimalInfo)
 	}
-	return schema.Common{
+	c := schema.Common{
 		Name:     name,
 		Type:     oracleTypeToCommonType(typeName),
 		Optional: true,
+	}
+	if c.Type == schema.Timestamp {
+		c.Logical = oracleTimestampLogical(typeName)
+	}
+	return c
+}
+
+// oracleTimestampLogical returns the timestamp parameters for a Timestamp
+// column. TIMESTAMP types use micros so TIMESTAMP(6) isn't truncated to
+// millis; precision above 6 is still truncated. DATE has no fractional
+// seconds, so it keeps the millis default.
+func oracleTimestampLogical(typeName string) *schema.LogicalParams {
+	if normalizeOracleTypeName(typeName) == "DATE" {
+		return nil
+	}
+	return &schema.LogicalParams{
+		Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true},
 	}
 }
 

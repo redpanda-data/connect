@@ -702,7 +702,12 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 	if len(records) != len(w.batch) {
 		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))
 	}
-	var errs []error
+	// produceErrs is appended to only from produce promises, which franz-go
+	// guarantees to invoke serially (never concurrently with each other), and
+	// is read only after wg.Wait, which orders the read after the last
+	// promise. decorateErrs is appended to only from this goroutine. Keeping
+	// them apart avoids a concurrent append between the two.
+	var produceErrs, decorateErrs []error
 	var wg sync.WaitGroup
 	for i := range records {
 		r := &records[i]
@@ -718,19 +723,27 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 		if w.DecorateRecord != nil {
 			if err := w.DecorateRecord(r); err != nil {
-				errs = append(errs, fmt.Errorf("decorate record: %w", err))
+				// No dispatch signal here: the record was never handed to the
+				// producer and the batch is about to fail, so an ordered input
+				// must keep holding the partition until the nack resolves.
+				decorateErrs = append(decorateErrs, fmt.Errorf("decorate record: %w", err))
 				continue
 			}
 		}
 
 		wg.Add(1)
 		details.Client.Produce(w.ctx, r, func(_ *kgo.Record, err error) {
-			errs = append(errs, err)
+			produceErrs = append(produceErrs, err)
 			wg.Done()
 		})
+		// The record is now owned by the producer client, so signal dispatch
+		// here rather than from the produce callback: paired ordered inputs use
+		// this signal to release the next batch for the partition before the
+		// broker acknowledges this one.
+		dispatch.TriggerSignal(w.batch[i].Context())
 	}
 	wg.Wait()
-	return errors.Join(slices.Compact(errs)...)
+	return errors.Join(slices.Compact(append(decorateErrs, produceErrs...))...)
 }
 
 // Close calls into the provided yield client func.
