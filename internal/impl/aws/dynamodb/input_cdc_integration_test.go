@@ -206,6 +206,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -257,6 +258,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -322,6 +324,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -387,6 +390,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -489,6 +493,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: trim_horizon
 checkpoint_limit: 2
 credentials:
@@ -698,6 +703,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 snapshot_mode: snapshot_only
 snapshot_segments: 1
 snapshot_batch_size: 10
@@ -731,10 +737,16 @@ credentials:
 		require.NoError(t, err)
 		require.Len(t, batch, itemCount, "expected the whole snapshot in one batch")
 
-		// Give the input time to (wrongly) persist progress or the completion
-		// marker - the pre-fix code did both at read time.
-		time.Sleep(3 * time.Second)
-		require.Zero(t, countCheckpointRows(),
+		// The pre-fix code persisted the segment position in the scanner and
+		// the completion marker right after the scan returned. When no segment
+		// is active, the scanner has done all of its work. The completion
+		// marker comes a few milliseconds later, so poll for a short window.
+		require.Eventually(t, func() bool {
+			return input.snapshot.scanner.ActiveSegments() == 0
+		}, 10*time.Second, 10*time.Millisecond, "the snapshot scan did not finish")
+		assert.Never(t, func() bool {
+			return countCheckpointRows() != 0
+		}, time.Second, 50*time.Millisecond,
 			"no snapshot checkpoint state may be persisted before the batch is acknowledged")
 
 		// Simulated crash: abandon without acking.
@@ -841,6 +853,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_only
 snapshot_segments: 1
@@ -923,6 +936,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_and_cdc
 snapshot_segments: 1
@@ -1010,6 +1024,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_only
 snapshot_segments: 1
@@ -1142,6 +1157,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1210,6 +1226,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1276,6 +1293,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1441,6 +1459,7 @@ table_tag_filter: "%s:%s"
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1507,6 +1526,7 @@ table_tag_filter: "%s:%s"
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
