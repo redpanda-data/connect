@@ -22,33 +22,15 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
 
+	"github.com/redpanda-data/connect/v4/internal/docslinks"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
-	"github.com/redpanda-data/connect/v4/public/docslinks"
 )
 
 const connectorListPath = "/etc/redpanda/connector_list.yaml"
-
-// DocsOpts points the CLI at the self-managed Connect docs: the help footer
-// and the links in doc strings rendered as Markdown. Which conditional text
-// readers see is not decided here but by the attributes the distribution's
-// schema declares (see public/schema).
-func DocsOpts() []service.CLIOptFunc {
-	return []service.CLIOptFunc{
-		service.CLIOptSetDocumentationURL(docslinks.DocumentationURL),
-		service.CLIOptSetDocsComponentURLs(docslinks.ComponentURLs),
-	}
-}
-
-// CloudDocsOpts points the CLI at the Cloud copy of the Connect docs instead.
-func CloudDocsOpts() []service.CLIOptFunc {
-	return []service.CLIOptFunc{
-		service.CLIOptSetDocumentationURL(docslinks.CloudDocumentationURL),
-	}
-}
 
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
 // all of the enterprise functionality of Redpanda Connect. This has been
@@ -92,7 +74,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
 
-	opts := append(DocsOpts(),
+	// The docs links come first so that extraOpts can override them.
+	opts := append(docslinks.CLIOpts(schema),
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
@@ -116,7 +99,6 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			return schema
 		}),
 		service.CLIOptSetEnvironment(schema.Environment()),
-		service.CLIOptSetDocsHasComponent(docslinks.HasComponent(schema.Environment())),
 		service.CLIOptOnLoggerInit(func(l *service.Logger) {
 			fbLogger = l
 			if cListApplied {

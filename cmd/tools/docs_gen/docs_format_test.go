@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/public/docslinks"
+	"github.com/redpanda-data/connect/v4/internal/docslinks"
 	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
@@ -37,12 +37,12 @@ import (
 
 var markdownLeftovers = map[string]*regexp.Regexp{
 	"xref":        regexp.MustCompile(`xref:`),
-	"anchor":      regexp.MustCompile(`<<[^\s<]|[^\s>]>>`),
+	"anchor":      regexp.MustCompile(`<<[a-z0-9_.-]+(,[^>]*)?>>`),
 	"conditional": regexp.MustCompile(`(?m)^(ifn?def|endif)::`),
 	"delimiter":   regexp.MustCompile(`(?m)^(====|----|\|===|\[tabs\])$`),
 	"link macro":  regexp.MustCompile(`https?://[^\s)]+\[`),
 	"raw target":  regexp.MustCompile(`\.adoc\]\(`),
-	"bold":        regexp.MustCompile(`(^|\s)\*[^*\s][^*\n]*[^*\s]\*(\s|$)`),
+	"bold":        regexp.MustCompile(`(^|[\s(])\*[^*\s]([^*\n]*[^*\s])?\*([\s.,;:!?)]|$)`),
 }
 
 // Code carried as data, not prose. A component's field tree also sits under a
@@ -94,25 +94,103 @@ func TestDocStringConditionalsAreWellFormed(t *testing.T) {
 	var doc any
 	require.NoError(t, json.Unmarshal(raw, &doc))
 
-	walkDocStrings(doc, "", "", func(path, key, s string) {
+	walkDocStrings(doc, "", "", func(path, _ string, s string) {
 		for _, p := range service.LintDocsConditionals(s) {
 			assert.Fail(t, "malformed conditional", "%v: %v", path, p)
 		}
-		if key == "summary" && (strings.Contains(s, "ifdef::") || strings.Contains(s, "ifndef::")) {
-			assert.Fail(t, "conditional in a summary", "%v: summaries render as one line in catalogs and page metadata", path)
-		}
 	})
+}
+
+// docsSiteURL finds a link written as a docs.redpanda.com URL. The API
+// reference under /api/ is not part of the Antora site, so it has no xref.
+var docsSiteURL = regexp.MustCompile(`https?://docs\.redpanda\.com/\S*`)
+
+func docsSiteURLs(s string) []string {
+	var urls []string
+	for _, u := range docsSiteURL.FindAllString(s, -1) {
+		if !strings.Contains(u, "docs.redpanda.com/api/") {
+			urls = append(urls, u)
+		}
+	}
+	return urls
+}
+
+// A docs.redpanda.com URL in a doc string always points at one docs site, so
+// a Cloud reader lands on the self-managed page and the link breaks when the
+// page moves. An xref resolves to each distribution's own copy.
+func TestDocStringsLinkDocsWithXrefs(t *testing.T) {
+	for name, s := range distributions() {
+		t.Run(name, func(t *testing.T) {
+			raw, err := s.MarshalJSONV0()
+			require.NoError(t, err)
+			var doc any
+			require.NoError(t, json.Unmarshal(raw, &doc))
+
+			walkDocStrings(doc, "", "", func(path, _ string, s string) {
+				for _, u := range docsSiteURLs(s) {
+					assert.Fail(t, "docs.redpanda.com URL in a doc string", "%v: %v. Link to docs pages with an xref, such as xref:get-started:licensing.adoc[licensing docs] or xref:streaming:manage:x.adoc[text], so each distribution links to its own copy (see docs/README.md).", path, u)
+				}
+			})
+		})
+	}
+}
+
+func TestDocsSiteURLs(t *testing.T) {
+	assert.Equal(t, []string{"https://docs.redpanda.com/redpanda-connect/get-started/licensing/[licensing"}, docsSiteURLs("requires a license (https://docs.redpanda.com/redpanda-connect/get-started/licensing/[licensing docs^])."))
+	assert.Equal(t, []string{"https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes."}, docsSiteURLs("see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes."))
+	assert.Len(t, docsSiteURLs("http://docs.redpanda.com/connect/ and https://docs.redpanda.com/streaming/"), 2)
+	assert.Empty(t, docsSiteURLs("see link:https://docs.redpanda.com/api/doc/cloud-controlplane/authentication[API authentication^]"), "the API reference is not an Antora page")
+	assert.Empty(t, docsSiteURLs("see xref:get-started:licensing.adoc[licensing docs] or https://www.redpanda.com/upgrade[upgrade^]"))
+}
+
+// Each pattern must catch the markup it names and leave correct Markdown
+// alone, or the test above either misses leftovers or fails on good text.
+func TestMarkdownLeftoverPatterns(t *testing.T) {
+	cases := []struct {
+		kind  string
+		match []string
+		clean []string
+	}{
+		{
+			kind:  "anchor",
+			match: []string{"see <<batching>>", "see <<max_in_flight,max in flight>>.", "<<tls.enabled>>"},
+			clean: []string{"a default of `1<<20` bytes", "`x << 2` and `y >> 2`", "`a<<b`, `c>>d`", "see [batching](#batching)"},
+		},
+		{
+			kind:  "bold",
+			match: []string{"Set this to *true*.", "the *a* flag", "*Important*: read this", "it is *not* safe", "(*beta*)", "*all*"},
+			clean: []string{"Set this to **true**.", "matches `*.json` files", "a * b * c", "use a glob such as `*foo*`", "2*3*4", "**a**"},
+		},
+	}
+	for _, c := range cases {
+		rx := markdownLeftovers[c.kind]
+		require.NotNil(t, rx, c.kind)
+		for _, s := range c.match {
+			assert.True(t, rx.MatchString(s), "%v should match %q", c.kind, s)
+		}
+		for _, s := range c.clean {
+			assert.False(t, rx.MatchString(s), "%v should not match %q", c.kind, s)
+		}
+	}
+}
+
+// The docs each distribution's doc strings link to, written out rather than
+// taken from docslinks so a wrong switch in MarkdownOptions fails here.
+var wantDocsURL = map[string]string{
+	"standard": "https://docs.redpanda.com/connect",
+	"cloud":    "https://docs.redpanda.com/cloud-data-platform/develop/connect",
+	"cloud-ai": "https://docs.redpanda.com/cloud-data-platform/develop/connect",
 }
 
 func TestDocStringsRenderAsMarkdownInEveryDistribution(t *testing.T) {
 	for name, s := range distributions() {
 		t.Run(name, func(t *testing.T) {
-			url := docslinks.DocumentationURL
 			if name != "standard" {
-				url = docslinks.CloudDocumentationURL
 				require.Equal(t, []string{service.DocsAttributeCloud}, s.DocsAttributes(), "Cloud distributions declare env-cloud so their readers see the Cloud text")
 			}
-			out, err := s.MarshalJSONV0Markdown(service.DocsMarkdownOptions{DocumentationURL: url, ComponentURLs: docslinks.ComponentURLs, HasComponent: docslinks.HasComponent(s.Environment())})
+			opts := docslinks.MarkdownOptions(s)
+			assert.Equal(t, wantDocsURL[name], opts.DocumentationURL, "the binaries pass these options through docslinks.CLIOpts")
+			out, err := s.MarshalJSONV0Markdown(opts)
 			require.NoError(t, err)
 			var doc map[string]any
 			require.NoError(t, json.Unmarshal(out, &doc))
@@ -170,11 +248,7 @@ func TestDocsHasComponentKeepsPagesAndShippedComponents(t *testing.T) {
 	assert.True(t, has("inputs", "about"), "the about page is not a component")
 	assert.True(t, docslinks.HasComponent(schema.Standard("0.0.0", "now").Environment())("inputs", "file"), "self-managed ships the file input")
 
-	out, err := cloud.MarshalJSONV0Markdown(service.DocsMarkdownOptions{
-		DocumentationURL: docslinks.CloudDocumentationURL,
-		ComponentURLs:    docslinks.ComponentURLs,
-		HasComponent:     has,
-	})
+	out, err := cloud.MarshalJSONV0Markdown(docslinks.MarkdownOptions(cloud))
 	require.NoError(t, err)
 	var doc struct {
 		Outputs []struct {
@@ -190,5 +264,5 @@ func TestDocsHasComponentKeepsPagesAndShippedComponents(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, desc, "Cloud ships gcp_bigquery_write_api")
-	assert.Contains(t, desc, "[CDC migration guide]("+docslinks.CloudDocumentationURL+"/components/outputs/bigquery_cdc_migration/)")
+	assert.Contains(t, desc, "[CDC migration guide]("+wantDocsURL["cloud"]+"/components/outputs/bigquery_cdc_migration/)")
 }

@@ -19,6 +19,7 @@
 package docslinks
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -43,6 +44,35 @@ var ComponentURLs = map[string]string{
 	"streaming":           "https://docs.redpanda.com/streaming/current",
 	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
 	"connect":             DocumentationURL,
+}
+
+// MarkdownOptions returns the link settings for the doc strings of the
+// distribution with schema s. A schema that declares env-cloud links to the
+// Cloud copy of the Connect docs, because the Cloud docs site sets the same
+// attribute. A new attribute or docs site needs a new case here.
+func MarkdownOptions(s *service.ConfigSchema) service.DocsMarkdownOptions {
+	url := DocumentationURL
+	if slices.Contains(s.DocsAttributes(), service.DocsAttributeCloud) {
+		url = CloudDocumentationURL
+	}
+	return service.DocsMarkdownOptions{
+		DocumentationURL: url,
+		ComponentURLs:    ComponentURLs,
+		HasComponent:     HasComponent(s.Environment()),
+	}
+}
+
+// CLIOpts returns the CLI options that set MarkdownOptions(s) for the binary
+// whose main schema is s: the documentation link in its help and the links in
+// its doc strings rendered as Markdown. Options passed after these override
+// them, for example to point at a staging docs site.
+func CLIOpts(s *service.ConfigSchema) []service.CLIOptFunc {
+	o := MarkdownOptions(s)
+	return []service.CLIOptFunc{
+		service.CLIOptSetDocumentationURL(o.DocumentationURL),
+		service.CLIOptSetDocsComponentURLs(o.ComponentURLs),
+		service.CLIOptSetDocsHasComponent(o.HasComponent),
+	}
 }
 
 // componentTypes maps the docs directory of each component family, as it
