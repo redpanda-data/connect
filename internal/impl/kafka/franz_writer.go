@@ -723,6 +723,9 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 		if w.DecorateRecord != nil {
 			if err := w.DecorateRecord(r); err != nil {
+				// No dispatch signal here: the record was never handed to the
+				// producer and the batch is about to fail, so an ordered input
+				// must keep holding the partition until the nack resolves.
 				decorateErrs = append(decorateErrs, fmt.Errorf("decorate record: %w", err))
 				continue
 			}
@@ -733,6 +736,11 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 			produceErrs = append(produceErrs, err)
 			wg.Done()
 		})
+		// The record is now owned by the producer client, so signal dispatch
+		// here rather than from the produce callback: paired ordered inputs use
+		// this signal to release the next batch for the partition before the
+		// broker acknowledges this one.
+		dispatch.TriggerSignal(w.batch[i].Context())
 	}
 	wg.Wait()
 	return errors.Join(slices.Compact(append(decorateErrs, produceErrs...))...)
