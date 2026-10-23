@@ -43,6 +43,30 @@ type mockCheckpointer struct {
 	timestamps      map[string]string
 	checkpointLimit int
 	setCallCount    int
+	// completed records shards marked completed, with the sequence the
+	// completion carried. completeErr, when set, fails MarkShardCompleted.
+	completed   map[string]string
+	completeErr error
+}
+
+func (m *mockCheckpointer) MarkShardCompleted(_ context.Context, shardID, sequenceNumber, _ string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.completeErr != nil {
+		return m.completeErr
+	}
+	if m.completed == nil {
+		m.completed = make(map[string]string)
+	}
+	m.completed[shardID] = sequenceNumber
+	return nil
+}
+
+func (m *mockCheckpointer) completedAt(shardID string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	seq, ok := m.completed[shardID]
+	return seq, ok
 }
 
 func (m *mockCheckpointer) Set(_ context.Context, shardID, sequenceNumber, approxCreationTime string) error {
@@ -175,14 +199,14 @@ func TestBatcherRemoveMessages(t *testing.T) {
 	assert.Equal(t, 10, batcher.TrackedMessageCount())
 
 	// Remove one batch (simulating nack)
-	batcher.RemoveBatch(tbBatch1)
+	batcher.RemoveBatch(t.Context(), tbBatch1)
 
 	// pendingCount is still 0 since we never acked these messages
 	assert.Equal(t, 0, batcher.PendingCount("shard-001"))
 	assert.Equal(t, 5, batcher.TrackedMessageCount())
 
 	// Remove the other batch
-	batcher.RemoveBatch(tbBatch2)
+	batcher.RemoveBatch(t.Context(), tbBatch2)
 
 	assert.Equal(t, 0, batcher.PendingCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
@@ -271,7 +295,7 @@ func TestBatcherNackPinsCheckpointFrontier(t *testing.T) {
 
 	// Batch 2 is nacked; batch 3 acks afterwards. The checkpoint must stay
 	// at batch 1's frontier.
-	batcher.RemoveBatch(tbBatch2)
+	batcher.RemoveBatch(t.Context(), tbBatch2)
 	require.NoError(t, batcher.AckBatch(t.Context(), checkpointer, tbBatch3))
 	assert.Equal(t, "00001", checkpointer.get("shard-001"), "nacked batch must pin the checkpoint")
 	assert.Empty(t, batcher.PendingCheckpoints(), "no unpersisted frontier may exist past the nacked batch")
@@ -371,7 +395,7 @@ func TestBatcherConcurrentAccess(t *testing.T) {
 		for i := range 10 {
 			batch := createTestMessages(5, "shard-001", i*5)
 			tbBatch := batcher.AddMessages(batch, "shard-001")
-			batcher.RemoveBatch(tbBatch)
+			batcher.RemoveBatch(t.Context(), tbBatch)
 		}
 		done <- true
 	}()
@@ -380,7 +404,7 @@ func TestBatcherConcurrentAccess(t *testing.T) {
 		for i := range 10 {
 			batch := createTestMessages(5, "shard-002", i*5)
 			tbBatch := batcher.AddMessages(batch, "shard-002")
-			batcher.RemoveBatch(tbBatch)
+			batcher.RemoveBatch(t.Context(), tbBatch)
 		}
 		done <- true
 	}()
@@ -404,7 +428,7 @@ func TestBatcherNackAndReAdd(t *testing.T) {
 	assert.Equal(t, 0, batcher.PendingCount("shard-001"))
 
 	// Simulate nack by removing messages
-	batcher.RemoveBatch(tbBatch)
+	batcher.RemoveBatch(t.Context(), tbBatch)
 
 	assert.Equal(t, 0, batcher.PendingCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
@@ -683,8 +707,8 @@ func TestBatcherWarnsWhenThrottlePinned(t *testing.T) {
 	assert.True(t, warned, "a continuously pinned budget must emit the stall warning")
 
 	// Draining resets the pin clock on the next successful reservation.
-	batcher.RemoveBatch(tbBatcha)
-	batcher.RemoveBatch(tbBatchb)
+	batcher.RemoveBatch(t.Context(), tbBatcha)
+	batcher.RemoveBatch(t.Context(), tbBatchb)
 	require.True(t, batcher.TryReserve("shard-003", 100))
 	batcher.mu.Lock()
 	reset := batcher.pinClock.throttledSince.IsZero()
@@ -726,7 +750,7 @@ func TestBatcherWarnsWhenShardPinned(t *testing.T) {
 
 	// Settling the batch drains the shard; the next successful reservation
 	// resets its pin clock.
-	batcher.RemoveBatch(tb)
+	batcher.RemoveBatch(t.Context(), tb)
 	require.True(t, batcher.TryReserve("shard-001", 100))
 	batcher.mu.Lock()
 	reset := st.pinClock.throttledSince.IsZero()
@@ -758,7 +782,7 @@ func TestBatcherPerShardRefusalClearsGlobalClock(t *testing.T) {
 
 	// Drain one batch: the global budget has room again, but shard-001 is
 	// still at its own cap, so its reservation exits via the per-shard branch.
-	batcher.RemoveBatch(tbs[3])
+	batcher.RemoveBatch(t.Context(), tbs[3])
 	require.False(t, batcher.TryReserve("shard-001", 1000),
 		"shard-001 is still at its per-shard cap")
 	batcher.mu.Lock()
@@ -821,7 +845,7 @@ func TestBatcherNilReceiverIsSafe(t *testing.T) {
 	b.Release("shard-001", 100)
 	assert.Nil(t, b.AddMessages(createTestMessages(2, "shard-001", 1), "shard-001"),
 		"AddMessages on a nil batcher must return a nil handle, not panic")
-	b.RemoveBatch(nil)
+	b.RemoveBatch(t.Context(), nil)
 	require.NoError(t, b.AckBatch(t.Context(), nil, nil))
 	assert.False(t, b.ShouldThrottle())
 }
@@ -919,7 +943,7 @@ func TestBatcherPerShardCapIsolatesPinnedShard(t *testing.T) {
 		"other shards must keep flowing while one shard is pinned")
 
 	// Settling the poison batch frees the shard again.
-	batcher.RemoveBatch(tbPoison)
+	batcher.RemoveBatch(t.Context(), tbPoison)
 	assert.True(t, batcher.TryReserve("shard-poison", 100))
 }
 
@@ -945,8 +969,8 @@ func TestBatcherSoleActiveShardUsesGlobalBudget(t *testing.T) {
 
 	// Drain below the global budget but keep the shard above its cap, then
 	// activate a second shard: the isolation cap must re-engage.
-	batcher.RemoveBatch(tbs[0])
-	batcher.RemoveBatch(tbs[1])
+	batcher.RemoveBatch(t.Context(), tbs[0])
+	batcher.RemoveBatch(t.Context(), tbs[1])
 	require.True(t, batcher.TryReserve("shard-002", 100))
 	batcher.AddMessages(createTestMessages(100, "shard-002", 1), "shard-002")
 	assert.False(t, batcher.TryReserve("shard-001", 1000),
@@ -1035,7 +1059,7 @@ func TestBatcherNackSurvivesWrapperPointerReplacement(t *testing.T) {
 	tb := batcher.AddMessages(batch, "shard-001")
 	wrapperMutate(batch)
 
-	batcher.RemoveBatch(tb)
+	batcher.RemoveBatch(t.Context(), tb)
 	assert.Equal(t, 0, batcher.TrackedMessageCount(),
 		"nack settlement must not depend on the batch slice's message pointers")
 }
@@ -1051,7 +1075,7 @@ func TestBatcherSettleIsIdempotent(t *testing.T) {
 
 	require.NoError(t, batcher.AckBatch(t.Context(), cp, tb))
 	require.NoError(t, batcher.AckBatch(t.Context(), cp, tb))
-	batcher.RemoveBatch(tb)
+	batcher.RemoveBatch(t.Context(), tb)
 	assert.Equal(t, 0, batcher.TrackedMessageCount(),
 		"repeat settles must be no-ops, not double decrements")
 
@@ -1091,8 +1115,139 @@ func TestBatcherInFlightCount(t *testing.T) {
 	assert.Equal(t, 6, batcher.TrackedMessageCount())
 
 	// Settle batch
-	batcher.RemoveBatch(tb)
+	batcher.RemoveBatch(t.Context(), tb)
 	assert.Equal(t, 0, batcher.InFlightCount())
 	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
+}
+
+// TestBatcherForgetsClosedShardsPastMaxTrackedShards (CON-599): tracker
+// entries used to live forever, so after maxTrackedShards shard rotations
+// every ack returned a "possible memory leak" error. A shard read to the end
+// is forgotten once its last batch settles, so a long-running pipeline
+// cycling through more shards than the cap keeps acking cleanly.
+func TestBatcherForgetsClosedShardsPastMaxTrackedShards(t *testing.T) {
+	const maxShards = 5
+	b := NewRecordBatcher(maxShards, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000}
+
+	for i := range maxShards * 3 {
+		shardID := fmt.Sprintf("shard-%03d", i)
+		tb := b.AddMessages(createTestMessages(3, shardID, 1), shardID)
+		require.NoError(t, b.CloseShard(t.Context(), cp, shardID))
+		require.NoError(t, b.AckBatch(t.Context(), cp, tb),
+			"acks must not fail once more shards than max_tracked_shards have been read")
+		assert.LessOrEqual(t, b.TrackedShardCount(), 1, "finished shards must not accumulate")
+
+		seq, completed := cp.completedAt(shardID)
+		assert.True(t, completed, "a fully acked closed shard must be marked completed")
+		assert.Equal(t, "00003", seq, "the completion must carry the shard's final sequence")
+	}
+	assert.Zero(t, b.TrackedShardCount())
+}
+
+// TestBatcherCloseShardWaitsForInflightBatches: completion is only persisted
+// once the last dispatched batch is acknowledged; marking it earlier would
+// make a restart skip records that never reached the output.
+func TestBatcherCloseShardWaitsForInflightBatches(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000}
+
+	first := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	second := b.AddMessages(createTestMessages(2, "shard-a", 3), "shard-a")
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-a"))
+
+	require.NoError(t, b.AckBatch(t.Context(), cp, second))
+	_, completed := cp.completedAt("shard-a")
+	assert.False(t, completed, "completion must wait for every in-flight batch")
+	assert.False(t, b.ForgetShard("shard-a"), "a shard with in-flight batches must not be forgotten")
+
+	require.NoError(t, b.AckBatch(t.Context(), cp, first))
+	seq, completed := cp.completedAt("shard-a")
+	assert.True(t, completed)
+	assert.Equal(t, "00004", seq)
+	assert.Zero(t, b.TrackedShardCount())
+}
+
+// TestBatcherCloseShardDroppedBatchNotCompleted: a dropped (nacked) batch
+// pins the frontier so a restart redelivers it. Marking the shard completed
+// would skip that redelivery, so only the pinned frontier is persisted.
+func TestBatcherCloseShardDroppedBatchNotCompleted(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000}
+
+	first := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	second := b.AddMessages(createTestMessages(2, "shard-a", 3), "shard-a")
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-a"))
+
+	require.NoError(t, b.AckBatch(t.Context(), cp, first))
+	b.RemoveBatch(t.Context(), second)
+
+	_, completed := cp.completedAt("shard-a")
+	assert.False(t, completed, "a shard with a dropped batch must not be marked completed")
+	assert.Equal(t, "00002", cp.get("shard-a"), "the pinned frontier must be persisted")
+	assert.Zero(t, b.TrackedShardCount())
+}
+
+// ctxCheckpointer fails writes whose context is already done, so a test can
+// tell whether a write ran under the caller's context.
+type ctxCheckpointer struct {
+	mockCheckpointer
+}
+
+func (c *ctxCheckpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.mockCheckpointer.Set(ctx, shardID, sequenceNumber, approxCreationTime)
+}
+
+// TestBatcherRemoveBatchFinalizeUsesCallerContext: the final write of a
+// closed shard whose last batch is dropped runs under the caller's context,
+// so a cancelled caller (shutdown) does not write and the entry stays for the
+// shutdown flush.
+func TestBatcherRemoveBatchFinalizeUsesCallerContext(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &ctxCheckpointer{mockCheckpointer{checkpointLimit: 1000}}
+
+	first := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	second := b.AddMessages(createTestMessages(2, "shard-a", 3), "shard-a")
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-a"))
+	require.NoError(t, b.AckBatch(t.Context(), cp, first))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	b.RemoveBatch(ctx, second)
+
+	assert.Empty(t, cp.get("shard-a"), "a cancelled caller must not write")
+	assert.Equal(t, 1, b.TrackedShardCount(), "the entry must stay for the shutdown flush")
+	assert.Equal(t, "00002", b.PendingCheckpoints()["shard-a"].SequenceNumber)
+}
+
+// TestBatcherCloseShardWriteFailureKeepsState: when the completion write
+// fails the tracker entry stays, so the shutdown flush still persists the
+// frontier.
+func TestBatcherCloseShardWriteFailureKeepsState(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: fmt.Errorf("boom")}
+
+	tb := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-a"))
+	require.Error(t, b.AckBatch(t.Context(), cp, tb))
+
+	assert.Equal(t, 1, b.TrackedShardCount())
+	assert.Equal(t, "00002", b.PendingCheckpoints()["shard-a"].SequenceNumber)
+}
+
+// TestBatcherCloseShardWithoutTrackedBatches: a closed shard that delivered
+// nothing this run is marked completed straight away and leaves no state.
+func TestBatcherCloseShardWithoutTrackedBatches(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+	cp := &mockCheckpointer{checkpointLimit: 1000}
+
+	require.NoError(t, b.CloseShard(t.Context(), cp, "shard-a"))
+	seq, completed := cp.completedAt("shard-a")
+	assert.True(t, completed)
+	assert.Empty(t, seq)
+	assert.Zero(t, b.TrackedShardCount())
 }

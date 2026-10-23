@@ -90,9 +90,12 @@ type RecordBatcher struct {
 
 	mu sync.Mutex
 
-	// shards holds the per-shard ordered ack trackers. Entries are never
-	// removed; DynamoDB stream shards rotate within 24h so the map stays
-	// small, and maxTrackedShards guards against pathological growth.
+	// shards holds the per-shard ordered ack trackers. An entry is removed
+	// once its closed shard has been read to the end and every batch from it
+	// has settled (see CloseShard), or when shard discovery forgets a shard
+	// that aged out of the stream (see ForgetShard). Without that, every
+	// rotation (a partition's shard closes roughly every four hours) would
+	// leave an entry behind, and past maxTrackedShards every ack would fail.
 	shards map[string]*shardAckTracker
 	// trackedMessages counts messages across all in-flight batches, used for
 	// backpressure via ShouldThrottle.
@@ -104,9 +107,10 @@ type RecordBatcher struct {
 	reserved int
 	// reservedByShard breaks reserved down per shard, for the per-shard cap
 	// and so Release/AddMessages can return or consume the right shard's
-	// budget. Kept outside shards and pruned at zero: shards entries are
-	// never removed and count against maxTrackedShards, so a reader polling
-	// a shard that never yields records must not materialise tracker state.
+	// budget. Kept outside shards and pruned at zero: shards entries count
+	// against maxTrackedShards and live until the shard is finished, so a
+	// reader polling a shard that never yields records must not materialise
+	// tracker state.
 	reservedByShard map[string]int
 	// perShardCap bounds one shard's in-flight (tracked + reserved) messages
 	// so a shard whose batches never settle downstream parks alone at its cap
@@ -175,6 +179,18 @@ type shardAckTracker struct {
 	// pinClock tracks continuous throttling duration and rate-limits pinned
 	// warnings on this shard's in-flight cap.
 	pinClock pinClock
+
+	// lastTracked is the checkpoint sequence of the most recently tracked
+	// batch. A closed shard whose frontier reached it had every dispatched
+	// batch acknowledged, so it may be marked completed.
+	lastTracked string
+	// closed is set by CloseShard once the shard's reader has dispatched its
+	// final batch; closeCP is the store the completion is persisted to.
+	// finalizing flips once, when the last batch of a closed shard settles
+	// and finalization (completion write, then forgetting the entry) starts.
+	closed     bool
+	closeCP    checkpointer
+	finalizing bool
 }
 
 // NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC.
@@ -371,6 +387,7 @@ func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) 
 	seq, _ := last.MetaGet("dynamodb_sequence_number")
 	approxCreationTime, _ := last.MetaGet("dynamodb_approximate_creation_time")
 	st.seqTimes[seq] = approxCreationTime
+	st.lastTracked = seq
 	tb := &trackedBatch{
 		shardID: shardID,
 		size:    len(batch),
@@ -400,18 +417,164 @@ func (b *RecordBatcher) settleLocked(tb *trackedBatch) bool {
 // are nacked, acked after close, or never dispatched). The shard's checkpoint
 // frontier stays pinned before this batch, so later acks cannot persist past
 // it and a restart redelivers the dropped records.
-func (b *RecordBatcher) RemoveBatch(tb *trackedBatch) {
+func (b *RecordBatcher) RemoveBatch(ctx context.Context, tb *trackedBatch) {
 	if b == nil || tb == nil {
 		return
 	}
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.settleLocked(tb)
+	finalize := b.settleLocked(tb) && b.claimFinalizeLocked(tb.shardID)
+	b.mu.Unlock()
+	if finalize {
+		// The last batch of a closed shard was dropped. A write that fails
+		// (for example because ctx is already cancelled at shutdown) leaves
+		// the entry in place for the shutdown flush.
+		if err := b.finalizeShard(ctx, tb.shardID); err != nil {
+			b.log.Errorf("Failed to persist final checkpoint for closed shard %s: %v", tb.shardID, err)
+		}
+	}
 }
 
 type checkpointer interface {
 	Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error
+	MarkShardCompleted(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error
 	CheckpointLimit() int
+}
+
+// CloseShard records that shardID's reader has read its closed shard to the
+// end and dispatched its final batch. Once every tracked batch on the shard
+// has settled (immediately if none is in flight), the shard is finalized:
+//
+//   - every dispatched batch acked: the frontier is persisted with the
+//     completion marker (cp.MarkShardCompleted), so a restart skips the
+//     shard instead of re-reading it from a lagging checkpoint;
+//   - a batch was dropped (nacked) and pinned the frontier: only the pinned
+//     frontier is persisted, so a restart still redelivers the dropped
+//     records;
+//
+// and the shard's tracker entry is forgotten. A failed write leaves the entry
+// in place so the shutdown flush still persists the frontier. cp may be nil
+// (no checkpoint store), in which case the entry is simply forgotten.
+func (b *RecordBatcher) CloseShard(ctx context.Context, cp checkpointer, shardID string) error {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	st, exists := b.shards[shardID]
+	if !exists {
+		b.mu.Unlock()
+		// Nothing was delivered from the shard during this run (empty or
+		// fully filtered final pages): the marker alone records completion
+		// and leaves no tracker state behind.
+		if cp == nil {
+			return nil
+		}
+		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+		defer cancel()
+		return cp.MarkShardCompleted(setCtx, shardID, "", "")
+	}
+	st.closed = true
+	st.closeCP = cp
+	finalize := b.claimFinalizeLocked(shardID)
+	b.mu.Unlock()
+	if !finalize {
+		return nil
+	}
+	return b.finalizeShard(ctx, shardID)
+}
+
+// claimFinalizeLocked reports whether the caller must finalize shardID now:
+// the shard is closed, nothing is in flight on it, and no one else has
+// claimed finalization. Callers must hold b.mu.
+func (b *RecordBatcher) claimFinalizeLocked(shardID string) bool {
+	st, exists := b.shards[shardID]
+	if !exists || !st.closed || st.finalizing || st.inflight > 0 {
+		return false
+	}
+	st.finalizing = true
+	return true
+}
+
+// finalizeShard persists a closed, fully settled shard's final position (see
+// CloseShard) and forgets its tracker entry.
+func (b *RecordBatcher) finalizeShard(ctx context.Context, shardID string) error {
+	b.mu.Lock()
+	st, exists := b.shards[shardID]
+	b.mu.Unlock()
+	if !exists {
+		return nil
+	}
+
+	// Wait out any checkpoint write an earlier ack still has in flight, so
+	// the final write is the last one to land on the shard's row.
+	st.persistMu.Lock()
+	defer st.persistMu.Unlock()
+
+	b.mu.Lock()
+	frontier, frontierTime, persisted := st.frontier, st.frontierTime, st.persisted
+	fullyAcked := frontier == st.lastTracked
+	cp := st.closeCP
+	b.mu.Unlock()
+
+	if cp != nil {
+		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+		var err error
+		switch {
+		case fullyAcked:
+			err = cp.MarkShardCompleted(setCtx, shardID, frontier, frontierTime)
+		case frontier != "" && frontier != persisted:
+			err = cp.Set(setCtx, shardID, frontier, frontierTime)
+		}
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+
+	b.mu.Lock()
+	st.persisted = frontier
+	st.pending = 0
+	b.mu.Unlock()
+	b.ForgetShard(shardID)
+	if fullyAcked {
+		b.log.Debugf("Shard %s completed at sequence %s", shardID, frontier)
+	}
+	return nil
+}
+
+// ForgetShard drops shardID's tracker entry once nothing is in flight or
+// reserved on it and its frontier is persisted, so finished shards do not
+// accumulate against maxTrackedShards. It reports whether the entry is gone
+// (true also when there was none).
+func (b *RecordBatcher) ForgetShard(shardID string) bool {
+	return b.forgetShard(shardID, true)
+}
+
+// forgetShard is ForgetShard; requirePersisted false also drops an entry
+// whose frontier was never persisted (the shard aged out of the stream, so
+// its checkpoint can no longer be used).
+func (b *RecordBatcher) forgetShard(shardID string, requirePersisted bool) bool {
+	if b == nil {
+		return true
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	st, exists := b.shards[shardID]
+	if !exists {
+		return true
+	}
+	if st.inflight > 0 || b.reservedByShard[shardID] > 0 || (requirePersisted && st.frontier != st.persisted) {
+		return false
+	}
+	delete(b.shards, shardID)
+	return true
+}
+
+// TrackedShardCount returns the number of shards holding tracker state.
+// Exported for testing.
+func (b *RecordBatcher) TrackedShardCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.shards)
 }
 
 // advanceFrontier records the resolved contiguous frontier and its associated
@@ -460,14 +623,23 @@ func (b *RecordBatcher) AckBatch(
 	}
 	st.pending += tb.size
 	shardsOverCap := len(b.shards) > b.maxTrackedShards
+	finalize := b.claimFinalizeLocked(tb.shardID)
 	b.mu.Unlock()
 
+	var persistErr error
+	if cp != nil {
+		persistErr = b.maybePersist(ctx, cp, st, tb.shardID)
+	}
+	if finalize {
+		// The last batch of a closed shard settled: persist its completion
+		// and forget the shard (see CloseShard).
+		persistErr = errors.Join(persistErr, b.finalizeShard(ctx, tb.shardID))
+	}
 	if cp == nil {
 		// No checkpoint store: settlement still drains the tracker, there is
 		// just nothing to persist.
-		return nil
+		return persistErr
 	}
-	persistErr := b.maybePersist(ctx, cp, st, tb.shardID)
 	if shardsOverCap {
 		// The batch is settled and the frontier persisted above regardless:
 		// swallowing the settle would leak tracked messages and permanently

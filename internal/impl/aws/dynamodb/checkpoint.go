@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,13 @@ const (
 	checkpointHashKeyDefault = "StreamArn"
 	checkpointHashKeyGlobal  = "TableId"
 	checkpointRangeKey       = "ShardID"
+
+	// checkpointShardCompletedAttr marks a shard checkpoint row whose closed
+	// shard was read to the end and fully acknowledged. Discovery skips such
+	// shards after a restart instead of reading them again from their last
+	// checkpoint (DescribeStream keeps listing closed shards for the stream's
+	// 24h retention window). Distinct from the snapshot rows' "Complete".
+	checkpointShardCompletedAttr = "ShardCompleted"
 )
 
 // checkpointDynamoAPI is the subset of the DynamoDB client the Checkpointer
@@ -40,6 +48,7 @@ type checkpointDynamoAPI interface {
 	UpdateTable(context.Context, *dynamodb.UpdateTableInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateTableOutput, error)
 	GetItem(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
 	PutItem(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	UpdateItem(context.Context, *dynamodb.UpdateItemInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error)
 	Query(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
 }
 
@@ -74,6 +83,7 @@ type Checkpointer struct {
 	resumeOnce     sync.Once
 	resumeErr      error
 	ownSeqs        map[string]string
+	ownCompleted   map[string]struct{}
 	hasForeignRows bool
 	cutoff         time.Time
 }
@@ -281,27 +291,41 @@ func (c *Checkpointer) checkpointKey(shardID string) map[string]types.AttributeV
 
 // Get retrieves the checkpoint for a shard.
 func (c *Checkpointer) Get(ctx context.Context, shardID string) (string, error) {
+	seq, _, err := c.getShardRow(ctx, shardID)
+	return seq, err
+}
+
+// getShardRow reads a shard's checkpoint row: its sequence number ("" when
+// none is stored) and whether the shard was marked completed (see
+// MarkShardCompleted).
+func (c *Checkpointer) getShardRow(ctx context.Context, shardID string) (seq string, completed bool, err error) {
 	result, err := c.svc.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(c.tableName),
 		Key:       c.checkpointKey(shardID),
 	})
 	if err != nil {
 		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
-			return "", nil
+			return "", false, nil
 		}
-		return "", fmt.Errorf("getting checkpoint for table=%s key=%s shard=%s: %w",
+		return "", false, fmt.Errorf("getting checkpoint for table=%s key=%s shard=%s: %w",
 			c.tableName, c.hashKeyValue(), shardID, err)
 	}
 
 	if result.Item == nil {
-		return "", nil
+		return "", false, nil
 	}
 
 	if s, ok := result.Item["SequenceNumber"].(*types.AttributeValueMemberS); ok {
-		return s.Value, nil
+		seq = s.Value
 	}
+	return seq, isShardCompletedRow(result.Item), nil
+}
 
-	return "", nil
+// isShardCompletedRow reports whether a checkpoint row carries the shard
+// completion marker.
+func isShardCompletedRow(item map[string]types.AttributeValue) bool {
+	v, ok := item[checkpointShardCompletedAttr].(*types.AttributeValueMemberBOOL)
+	return ok && v.Value
 }
 
 // Set stores a checkpoint for a shard. approxCreationTime is the RFC3339Nano
@@ -322,6 +346,53 @@ func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber, approxC
 	})
 	if err != nil {
 		return fmt.Errorf("setting checkpoint for table=%s key=%s shard=%s seq=%s: %w",
+			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, err)
+	}
+	return nil
+}
+
+// MarkShardCompleted stores a shard's final checkpoint together with the
+// completion marker: the closed shard was read to the end and every record
+// read from it was acknowledged, so a restart must not read it again (see
+// resumeCompleted). sequenceNumber may be empty when no record was read from
+// the shard during this run; the marker alone then suffices.
+//
+// The row is updated in place rather than replaced: attributes that are not
+// passed (an empty sequenceNumber or approxCreationTime) keep their stored
+// values. In global mode the failover cutoff is derived from every row's
+// ApproximateCreationTime, so dropping it when marking a shard that delivered
+// nothing during this run would move the other region's cutoff past records
+// it has not read.
+func (c *Checkpointer) MarkShardCompleted(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
+	sets := []string{"#completed = :completed"}
+	names := map[string]string{"#completed": checkpointShardCompletedAttr}
+	values := map[string]types.AttributeValue{
+		":completed": &types.AttributeValueMemberBOOL{Value: true},
+	}
+	if sequenceNumber != "" {
+		sets = append(sets, "#seq = :seq")
+		names["#seq"] = "SequenceNumber"
+		values[":seq"] = &types.AttributeValueMemberS{Value: sequenceNumber}
+	}
+	if c.globalTable {
+		sets = append(sets, "#stream = :stream")
+		names["#stream"] = "StreamArn"
+		values[":stream"] = &types.AttributeValueMemberS{Value: c.streamArn}
+		if approxCreationTime != "" {
+			sets = append(sets, "#act = :act")
+			names["#act"] = "ApproximateCreationTime"
+			values[":act"] = &types.AttributeValueMemberS{Value: approxCreationTime}
+		}
+	}
+	_, err := c.svc.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(c.tableName),
+		Key:                       c.checkpointKey(shardID),
+		UpdateExpression:          aws.String("SET " + strings.Join(sets, ", ")),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	if err != nil {
+		return fmt.Errorf("marking shard completed for table=%s key=%s shard=%s seq=%s: %w",
 			c.tableName, c.hashKeyValue(), shardID, sequenceNumber, err)
 	}
 	return nil
@@ -373,6 +444,9 @@ const (
 	resumeExact
 	// resumeFailover: resume from TrimHorizon, skipping records at/under Cutoff.
 	resumeFailover
+	// resumeCompleted: the closed shard was already read to the end and fully
+	// acknowledged (see MarkShardCompleted); it must not be read again.
+	resumeCompleted
 )
 
 // ResumeDecision tells the caller how to begin reading a shard.
@@ -386,12 +460,17 @@ type ResumeDecision struct {
 // (non-global) mode it preserves today's behavior exactly. In global mode it
 // queries the table-name partition once, caches the result, and returns an
 // exact resume if rows exist for the current stream, a time-based failover
-// resume if only another region's rows exist, or default otherwise.
+// resume if only another region's rows exist, or default otherwise. A shard
+// whose row carries the completion marker resolves to resumeCompleted in
+// either mode.
 func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (ResumeDecision, error) {
 	if !c.globalTable {
-		seq, err := c.Get(ctx, shardID)
+		seq, completed, err := c.getShardRow(ctx, shardID)
 		if err != nil {
 			return ResumeDecision{}, err
+		}
+		if completed {
+			return ResumeDecision{Mode: resumeCompleted}, nil
 		}
 		if seq != "" {
 			return ResumeDecision{Mode: resumeExact, SequenceNumber: seq}, nil
@@ -404,7 +483,10 @@ func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (Resum
 		return ResumeDecision{}, c.resumeErr
 	}
 
-	if len(c.ownSeqs) > 0 {
+	if len(c.ownSeqs) > 0 || len(c.ownCompleted) > 0 {
+		if _, ok := c.ownCompleted[shardID]; ok {
+			return ResumeDecision{Mode: resumeCompleted}, nil
+		}
 		if seq, ok := c.ownSeqs[shardID]; ok {
 			return ResumeDecision{Mode: resumeExact, SequenceNumber: seq}, nil
 		}
@@ -417,10 +499,11 @@ func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (Resum
 }
 
 // prepareResume queries the whole table-name partition once and classifies rows
-// into "own" (current stream) sequence numbers and the minimum
-// ApproximateCreationTime across foreign-stream shard rows.
+// into "own" (current stream) sequence numbers and completed shards, and the
+// minimum ApproximateCreationTime across foreign-stream shard rows.
 func (c *Checkpointer) prepareResume(ctx context.Context) error {
 	c.ownSeqs = map[string]string{}
+	c.ownCompleted = map[string]struct{}{}
 	var cutoffSet bool
 
 	var startKey map[string]types.AttributeValue
@@ -440,15 +523,20 @@ func (c *Checkpointer) prepareResume(ctx context.Context) error {
 			return fmt.Errorf("querying checkpoint partition for %s: %w", c.hashKeyValue(), err)
 		}
 		for _, item := range out.Items {
-			seqAttr, isShardRow := item["SequenceNumber"].(*types.AttributeValueMemberS)
-			if !isShardRow {
+			seqAttr, hasSeq := item["SequenceNumber"].(*types.AttributeValueMemberS)
+			completed := isShardCompletedRow(item)
+			if !hasSeq && !completed {
 				continue // snapshot row, not a shard checkpoint
 			}
 			shardAttr, _ := item["ShardID"].(*types.AttributeValueMemberS)
 			streamAttr, _ := item["StreamArn"].(*types.AttributeValueMemberS)
 			if streamAttr != nil && streamAttr.Value == c.streamArn {
 				if shardAttr != nil {
-					c.ownSeqs[shardAttr.Value] = seqAttr.Value
+					if completed {
+						c.ownCompleted[shardAttr.Value] = struct{}{}
+					} else {
+						c.ownSeqs[shardAttr.Value] = seqAttr.Value
+					}
 				}
 				continue
 			}
