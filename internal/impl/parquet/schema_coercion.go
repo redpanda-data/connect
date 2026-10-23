@@ -34,7 +34,36 @@ type schemaVisitor interface {
 	visitLeaf(value any, schemaNode parquet.Node) (any, error)
 }
 
-func visitWithSchema(visitor schemaVisitor, value any, schemaNode parquet.Node) (any, error) {
+// coercionNode is a schema node with its child fields resolved once.
+// parquet.Group.Fields() allocates and sorts on every call, which is very
+// expensive for wide schemas when repeated for every row.
+type coercionNode struct {
+	node   parquet.Node
+	fields []coercionField // nil for leaves
+}
+
+type coercionField struct {
+	name string
+	node *coercionNode
+}
+
+// compileCoercionSchema resolves the field lists of a schema tree so that it
+// can be visited repeatedly (once per row) without calling Fields() again.
+func compileCoercionSchema(schemaNode parquet.Node) *coercionNode {
+	c := &coercionNode{node: schemaNode}
+	if schemaNode.Leaf() {
+		return c
+	}
+	fields := schemaNode.Fields()
+	c.fields = make([]coercionField, len(fields))
+	for i, f := range fields {
+		c.fields[i] = coercionField{name: f.Name(), node: compileCoercionSchema(f)}
+	}
+	return c
+}
+
+func visitWithSchema(visitor schemaVisitor, value any, schema *coercionNode) (any, error) {
+	schemaNode := schema.node
 	if schemaNode.Leaf() {
 		if schemaNode.Optional() && value == nil {
 			return nil, nil
@@ -44,11 +73,11 @@ func visitWithSchema(visitor schemaVisitor, value any, schemaNode parquet.Node) 
 
 	switch group := value.(type) {
 	case map[string]any:
-		for _, childSchemaNode := range schemaNode.Fields() {
-			name := childSchemaNode.Name()
+		for _, child := range schema.fields {
+			name := child.name
 			if childValue, ok := group[name]; ok {
 				var err error
-				group[name], err = visitWithSchema(visitor, childValue, childSchemaNode)
+				group[name], err = visitWithSchema(visitor, childValue, child.node)
 				if err != nil {
 					return nil, fmt.Errorf("visiting [%s]: %w", name, err)
 				}
@@ -59,7 +88,7 @@ func visitWithSchema(visitor schemaVisitor, value any, schemaNode parquet.Node) 
 	case []any:
 		for i := range group {
 			var err error
-			group[i], err = visitWithSchema(visitor, group[i], schemaNode)
+			group[i], err = visitWithSchema(visitor, group[i], schema)
 			if err != nil {
 				return nil, fmt.Errorf("visiting [%d]: %w", i, err)
 			}

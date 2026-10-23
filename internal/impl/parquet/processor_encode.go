@@ -346,6 +346,8 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 	buf := bytes.NewBuffer(nil)
 	pWtr := parquet.NewGenericWriter[any](buf, schema, parquet.Compression(s.compressionType))
 
+	coercionSchema := compileCoercionSchema(schema)
+
 	batch = batch.Copy()
 	rows := make([]any, len(batch))
 	for i, m := range batch {
@@ -359,7 +361,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
 
-		rows[i], err = visitWithSchema(encodingCoercionVisitor{}, rows[i], schema)
+		rows[i], err = visitWithSchema(encodingCoercionVisitor{}, rows[i], coercionSchema)
 		if err != nil {
 			return nil, fmt.Errorf("coercing logical types: %w", err)
 		}
