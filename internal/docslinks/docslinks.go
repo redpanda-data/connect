@@ -106,8 +106,8 @@ func HasComponent(env *service.Environment) func(typeDir, name string) bool {
 		ships map[string]bool
 	)
 	return func(typeDir, name string) bool {
-		t, ok := componentTypes[typeDir]
-		if !ok {
+		t, exists := componentTypes[typeDir]
+		if !exists {
 			return true
 		}
 		if !plugins.BaseInfo.Has(name, t) {
