@@ -203,7 +203,7 @@ func TestSourceFile(t *testing.T) {
 	}
 	assert.Equal(t, "redpanda-data/connect:internal/impl/kafka/input_redpanda.go", sourceFile("/src/connect/internal/impl/kafka/input_redpanda.go", mods))
 	assert.Equal(t, "redpanda-data/benthos@v4.84.0:internal/impl/pure/processor_mapping.go", sourceFile("/go/pkg/mod/github.com/redpanda-data/benthos/v4@v4.84.0/internal/impl/pure/processor_mapping.go", mods))
-	assert.Equal(t, "", sourceFile("/go/pkg/mod/github.com/other/dep@v1.0.0/x.go", mods), "a file outside both modules has no source")
+	assert.Empty(t, sourceFile("/go/pkg/mod/github.com/other/dep@v1.0.0/x.go", mods), "a file outside both modules has no source")
 }
 
 func TestFileSources(t *testing.T) {
