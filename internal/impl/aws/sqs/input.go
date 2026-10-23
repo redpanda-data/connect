@@ -89,6 +89,7 @@ func sqsInputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Consume messages from an AWS SQS URL.`).
 		Description(`
+[[credentials-overview]]
 == Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS

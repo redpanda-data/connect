@@ -112,6 +112,7 @@ Metadata fields on messages will be sent as headers, in order to mutate these va
 
 By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
 
+[[batching-overview]]
 == Batching
 
 It's common to want to upload messages to Google Cloud Storage as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"xref:components:processors/archive.adoc[`archive`]"+` and/or `+"xref:components:processors/compress.adoc[`compress`]"+` processor.
