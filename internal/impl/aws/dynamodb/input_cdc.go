@@ -485,9 +485,18 @@ type dynamoDBCDCInput struct {
 	snapshot       *snapshotState // nil if snapshot mode is "none"
 	shardRefreshCh chan struct{}  // Signal coordinator to refresh shards immediately
 
-	pendingAcks       sync.WaitGroup
 	backgroundWorkers sync.WaitGroup // Tracks background goroutines for proper cleanup
-	closed            atomic.Bool
+
+	// ackMu makes Close wait for the ack functions that are running. Each ack
+	// function holds the read lock while it checks closed and does its work.
+	// Close holds the write lock to set closed. After that, no ack function
+	// runs, and all later acks are dropped without a checkpoint. Close has no
+	// timeout for this wait: the ack context limits a running checkpoint
+	// write, and Benthos waits for its own pending acks before it calls Close.
+	ackMu sync.RWMutex
+	// closed is true after Close starts. The ack functions read it, and drop
+	// the ack when it is true. Guarded by ackMu.
+	closed bool
 
 	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
 	// multi-table) is true only until the first successful shard discovery of
@@ -2409,9 +2418,6 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		tb := ts.recordBatcher.AddMessages(batch, shardID)
 		ts.recordBatcher.Release(shardID, reserve-len(batch))
 
-		// Track pending ack
-		d.pendingAcks.Add(1)
-
 		// Create ack function. The checkpointer interface value is built
 		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
 		// must still run to settle the batch (draining the tracker) even
@@ -2423,9 +2429,10 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		recordBatcher := ts.recordBatcher
 		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
-			defer d.pendingAcks.Done()
+			d.ackMu.RLock()
+			defer d.ackMu.RUnlock()
 
-			if d.closed.Load() {
+			if d.closed {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
 					recordBatcher.RemoveBatch(tb)
@@ -2451,10 +2458,9 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Send to channel
 		select {
 		case <-ctx.Done():
-			// The batch was never dispatched: untrack it (and its pending
-			// ack) or its messages would pin the tracker budget forever.
+			// The batch was never dispatched: untrack it or its messages
+			// would pin the tracker budget forever.
 			recordBatcher.RemoveBatch(tb)
-			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
@@ -2867,9 +2873,6 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		tb := d.recordBatcher.AddMessages(batch, shardID)
 		d.recordBatcher.Release(shardID, reserve-len(batch))
 
-		// Track pending ack
-		d.pendingAcks.Add(1)
-
 		// Create ack function. The checkpointer interface value is built
 		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
 		// must still run to settle the batch (draining the tracker) even
@@ -2881,10 +2884,11 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		recordBatcher := d.recordBatcher
 		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
-			defer d.pendingAcks.Done()
+			d.ackMu.RLock()
+			defer d.ackMu.RUnlock()
 
 			// Check if already closed
-			if d.closed.Load() {
+			if d.closed {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
 					recordBatcher.RemoveBatch(tb)
@@ -2910,10 +2914,9 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Send to channel
 		select {
 		case <-ctx.Done():
-			// The batch was never dispatched: untrack it (and its pending
-			// ack) or its messages would pin the tracker budget forever.
+			// The batch was never dispatched: untrack it or its messages
+			// would pin the tracker budget forever.
 			recordBatcher.RemoveBatch(tb)
-			d.pendingAcks.Done()
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
@@ -2984,15 +2987,15 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// only persisted once this batch (and everything before it) is acked.
 	resolve := tracker.TrackBatch(segment, lastKey, len(batch))
 
-	// Track pending acks: the global gauge and the snapshot completion gate.
-	d.pendingAcks.Add(1)
+	// Track the pending ack in the snapshot completion gate.
 	ackGate.Add(1)
 
 	ackFunc := func(ackCtx context.Context, _ error) error {
-		defer d.pendingAcks.Done()
 		defer ackGate.Done()
+		d.ackMu.RLock()
+		defer d.ackMu.RUnlock()
 
-		if d.closed.Load() {
+		if d.closed {
 			d.log.Debug("Received snapshot ack after close, dropping")
 			return nil
 		}
@@ -3012,8 +3015,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// Send to channel (with backpressure handling)
 	select {
 	case <-ctx.Done():
-		d.pendingAcks.Done() // Undo the Add(1) above
-		ackGate.Done()
+		ackGate.Done() // Undo the Add(1) above
 		return ctx.Err()
 	case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 		d.log.Debugf("Sent snapshot batch of %d records from segment %d", len(batch), segment)
@@ -3253,8 +3255,15 @@ func (d *dynamoDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 }
 
 func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
-	// Mark as closed to reject new acks
-	d.closed.Store(true)
+	// Wait for the ack functions that are running, then drop all later acks.
+	// Do not wait for the other acks, because they can never come: Benthos
+	// drops a batch at shutdown without its ack when the batch did not get
+	// into the pipeline, and the batches that stay in msgChan are never
+	// delivered. Their records are not checkpointed, so a restart that resumes
+	// from a checkpoint reads them again.
+	d.ackMu.Lock()
+	d.closed = true
+	d.ackMu.Unlock()
 
 	// Trigger graceful shutdown (shutSig is immutable after Connect())
 	d.log.Debug("Initiating graceful shutdown")
@@ -3285,21 +3294,6 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 		d.log.Warn("Timeout waiting for background workers")
 	}
 
-	// Wait for pending acknowledgments with timeout
-	d.log.Debug("Waiting for pending acknowledgments")
-	acksDone := make(chan struct{})
-	go func() {
-		d.pendingAcks.Wait()
-		close(acksDone)
-	}()
-
-	select {
-	case <-acksDone:
-		d.log.Debug("All pending acks completed")
-	case <-time.After(defaultShutdownTimeout):
-		d.log.Warn("Timeout waiting for pending acks, proceeding with shutdown")
-	}
-
 	// Flush single-table mode checkpoints (fields immutable after Connect())
 	d.flushCheckpoint(ctx, d.checkpointer, d.recordBatcher, "single-table")
 
@@ -3313,7 +3307,10 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 		d.flushCheckpoint(ctx, ts.checkpointer, ts.recordBatcher, "table "+tableName)
 	}
 
-	// Clear references to help GC
+	// Clear references to help GC. Keep msgChan and shutSig: ReadBatch reads
+	// them without a lock, and the Benthos auto-retry wrapper can call
+	// ReadBatch from its own goroutine while Close runs. After Close, the
+	// soft stop signal makes ReadBatch return ErrNotConnected.
 	d.mu.Lock()
 	d.dynamoClient = nil
 	d.streamsClient = nil
@@ -3321,8 +3318,6 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	d.keySchema = nil
 	d.checkpointer = nil
 	d.recordBatcher = nil
-	d.msgChan = nil
-	d.shutSig = nil
 	d.tableStreams = nil
 	if d.snapshot != nil {
 		d.snapshot.seqBuffer = nil

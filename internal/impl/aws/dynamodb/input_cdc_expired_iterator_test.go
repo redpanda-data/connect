@@ -497,6 +497,81 @@ func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
 	}
 }
 
+// TestClose_ConcurrentReadBatch: the Benthos auto-retry wrapper calls
+// ReadBatch from its own goroutine, so a ReadBatch call can run while Close
+// runs. Close must not change the fields that ReadBatch reads without a lock.
+// Run with -race.
+func TestClose_ConcurrentReadBatch(t *testing.T) {
+	d := &dynamoDBCDCInput{
+		log:     service.MockResources().Logger(),
+		metrics: newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		msgChan: make(chan asyncMessage),
+		shutSig: shutdown.NewSignaller(),
+	}
+	// Stand in for the coordinator: signal that the workers stopped after
+	// soft stop.
+	go func() {
+		<-d.shutSig.SoftStopChan()
+		d.shutSig.TriggerHasStopped()
+	}()
+
+	readErr := make(chan error, 1)
+	go func() {
+		_, _, err := d.ReadBatch(t.Context())
+		readErr <- err
+	}()
+
+	require.NoError(t, d.Close(t.Context()))
+	select {
+	case err := <-readErr:
+		assert.ErrorIs(t, err, service.ErrNotConnected)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadBatch must return after Close")
+	}
+}
+
+// TestClose_DoesNotWaitForAcksThatCannotCome: Close must not wait for the
+// acks of batches that nobody will ack. A batch that stays in the message
+// channel is never delivered. Benthos drops a batch that it read at shutdown
+// without its ack when the batch did not get into the pipeline. Close waited
+// the full shutdown timeout (10s) for both.
+func TestClose_DoesNotWaitForAcksThatCannotCome(t *testing.T) {
+	cases := map[string]bool{
+		"batch in message channel": false,
+		"batch read but not acked": true,
+	}
+	for caseName, readBatch := range cases {
+		for name, mk := range readerHarnesses(twoRecordsPage, 100, 10) {
+			t.Run(caseName+"/"+name, func(t *testing.T) {
+				h := mk()
+
+				// Stand in for the coordinator: run the reader until soft
+				// stop, then close the channel and signal that the workers
+				// stopped.
+				workerCtx, workerCancel := h.d.shutSig.SoftStopCtx(context.Background())
+				go func() {
+					defer workerCancel()
+					h.start(workerCtx)
+					close(h.d.msgChan)
+					h.d.shutSig.TriggerHasStopped()
+				}()
+
+				require.Eventually(t, func() bool {
+					return len(h.d.msgChan) == 1
+				}, 5*time.Second, 5*time.Millisecond, "expected one batch in the message channel")
+				if readBatch {
+					_, _, err := h.d.ReadBatch(t.Context())
+					require.NoError(t, err)
+				}
+
+				start := time.Now()
+				require.NoError(t, h.d.Close(t.Context()))
+				assert.Less(t, time.Since(start), 2*time.Second, "Close must not wait for acks that cannot come")
+			})
+		}
+	}
+}
+
 // TestShardReader_AckDrainsAfterWrapperPointerReplacement is the
 // end-to-end regression test for the INC-2974 ack-path stall: benthos's
 // AutoRetryNacksBatched (auto_replay_nacks, default on) replaces every
