@@ -382,13 +382,13 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 					Default(defaultIncSnapshotRetryCooldown.String()),
 			).
 				Description("Configures chunked snapshotting that runs alongside change streaming.").
-				Version("4.115.0").
+				Version("4.116.0").
 				Advanced(),
 			service.NewStringField(fieldSignalCollection).
 				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` incrementally, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, which requires `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`. Signal inserts are also emitted as regular messages with the `collection` metadata set to this collection, so filter them out downstream if they are not wanted.").
 				ShortDescription("A collection watched for signal documents that control the input at runtime.").
 				Optional().
-				Version("4.115.0"),
+				Version("4.116.0"),
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{
 				"update_lookup":       "In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[MongoDB documentation^] for more information.",
 				"pre_and_post_images": "Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[MongoDB documentation^].",
