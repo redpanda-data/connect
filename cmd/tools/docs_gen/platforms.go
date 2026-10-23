@@ -38,6 +38,11 @@ import (
 // compiles shows which components only cgo and x_benthos_extra builds have.
 const allComponentsPkg = "github.com/redpanda-data/connect/v4/cmd/tools/docs_gen/allcomponents"
 
+// releaseBinaryPkg is the standard redpanda-connect binary. Components that a
+// standard build of allComponentsPkg has and this package doesn't are the
+// ones only Redpanda Cloud runs, such as a2a_message.
+const releaseBinaryPkg = "github.com/redpanda-data/connect/v4/cmd/redpanda-connect"
+
 // standardBuildEnv returns env with cgo disabled and any -tags flag removed
 // from GOFLAGS, which is how .goreleaser/connect.yaml builds the standard
 // release binaries (timetzdata, its one tag, doesn't change the components).
@@ -65,12 +70,12 @@ func standardBuildEnv(env []string) []string {
 	return append(out, "CGO_ENABLED=0")
 }
 
-// buildFiles returns the Go files, by path, that a build of allcomponents
-// compiles with env and the given go flags. go list reads build constraints
+// buildFiles returns the Go files, by path, that a build of pkg compiles with
+// env and the given go flags. go list reads build constraints
 // without compiling, so this takes about a second.
-func buildFiles(env []string, flags ...string) (map[string]bool, error) {
+func buildFiles(pkg string, env []string, flags ...string) (map[string]bool, error) {
 	args := append([]string{"list", "-deps", "-f", "{{.Dir}}{{range .GoFiles}}|{{.}}{{end}}{{range .CgoFiles}}|{{.}}{{end}}"}, flags...)
-	cmd := exec.Command("go", append(args, allComponentsPkg)...)
+	cmd := exec.Command("go", append(args, pkg)...)
 	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -130,14 +135,36 @@ var registerGroups = map[string]string{
 // see (such as one that calls a register helper in a shared file).
 func cgoOnlyComponents() (map[string]bool, error) {
 	env, flags := docsGenBuildEnv()
-	full, err := buildFiles(env, flags...)
+	full, err := buildFiles(allComponentsPkg, env, flags...)
 	if err != nil {
 		return nil, err
 	}
-	standard, err := buildFiles(standardBuildEnv(os.Environ()))
+	standard, err := buildFiles(allComponentsPkg, standardBuildEnv(os.Environ()))
 	if err != nil {
 		return nil, err
 	}
+	return registrationsOnlyIn(full, standard)
+}
+
+// notInReleaseBinary returns the components that a standard build of
+// allcomponents registers and the standard redpanda-connect binary doesn't:
+// the components only Redpanda Cloud runs.
+func notInReleaseBinary() (map[string]bool, error) {
+	env := standardBuildEnv(os.Environ())
+	all, err := buildFiles(allComponentsPkg, env)
+	if err != nil {
+		return nil, err
+	}
+	binary, err := buildFiles(releaseBinaryPkg, env)
+	if err != nil {
+		return nil, err
+	}
+	return registrationsOnlyIn(all, binary)
+}
+
+// registrationsOnlyIn returns the components registered in the files of
+// files that other doesn't compile.
+func registrationsOnlyIn(files, other map[string]bool) (map[string]bool, error) {
 	// Only this module and benthos register components. Other dependencies
 	// can also have files that only cgo builds compile, such as a macOS
 	// keychain backend.
@@ -159,11 +186,11 @@ func cgoOnlyComponents() (map[string]bool, error) {
 	}
 	keys := map[string]bool{}
 	fset := token.NewFileSet()
-	for path := range full {
-		if standard[path] || !inModule(path) {
+	for path := range files {
+		if other[path] || !inModule(path) {
 			continue
 		}
-		found, err := fileRegistrations(path, full, fset)
+		found, err := fileRegistrations(path, files, fset)
 		if err != nil {
 			return nil, err
 		}
