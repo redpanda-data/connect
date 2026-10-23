@@ -473,7 +473,7 @@ See the Row-level operations section above for the full constraints, including t
 					Description("Enable automatic schema evolution. When enabled, new columns will be automatically added to the table.").
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
-					Description("A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an Iceberg partition spec in the same string format as the xref:streaming:manage:iceberg/about-iceberg-topics.adoc#use-custom-partitioning[Redpanda Streaming topic property].").
+					Description("A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an Iceberg partition spec in the same string format as the xref:streaming:manage:iceberg/iceberg-performance-tuning.adoc#use-custom-partitioning[Redpanda Streaming topic property].").
 					ShortDescription("A Bloblang expression evaluated on table creation to determine the table's Iceberg partition spec.").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
