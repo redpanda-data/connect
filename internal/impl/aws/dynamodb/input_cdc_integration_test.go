@@ -14,6 +14,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,8 +33,11 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // createTableWithStreams creates a DynamoDB table with streams enabled for testing.
@@ -39,7 +48,9 @@ func createTableWithStreams(ctx context.Context, t testing.TB, dynamoPort, table
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 		config.WithRegion("us-east-1"),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
 	conf.BaseEndpoint = &endpoint
 	client := dynamodb.NewFromConfig(conf)
@@ -1422,4 +1433,642 @@ credentials:
 	// If tag value matching works, we should have found events
 	// Note: DynamoDB Local may not fully support tagging, so we're lenient here
 	t.Logf("Tag value matching: found events = %v", foundEvent)
+}
+
+// incrementalSnapshotRealAWSEnv switches TestIntegrationDynamoDBCDCIncrementalSnapshot
+// from DynamoDB Local to real AWS, using the default credential chain and
+// region. DynamoDB Local rounds ApproximateCreationDateTime down to the minute,
+// so the ordering refinement (which depends on stream timestamps) is only
+// asserted against real AWS; the Safety rule is clock-free and asserted on both.
+const incrementalSnapshotRealAWSEnv = "DYNAMODB_CDC_REAL_AWS"
+
+// TestIntegrationDynamoDBCDCIncrementalSnapshot backfills a table in
+// snapshot_mode incremental while a writer keeps updating random keys. It
+// checks the Safety rule (no snapshot item is emitted after a newer stream
+// event for its key) and that the last value the input emitted for every key
+// matches the table.
+func TestIntegrationDynamoDBCDCIncrementalSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := t.Context()
+	realAWS := os.Getenv(incrementalSnapshotRealAWSEnv) != ""
+
+	var (
+		conf      aws.Config
+		inputConn string
+		err       error
+	)
+	if realAWS {
+		conf, err = config.LoadDefaultConfig(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, conf.Region, "set AWS_REGION to run against real AWS")
+		inputConn = "region: " + conf.Region
+	} else {
+		ctr, err := testcontainers.Run(ctx,
+			"amazon/dynamodb-local:latest",
+			testcontainers.WithExposedPorts("8000/tcp"),
+			testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
+		)
+		testcontainers.CleanupContainer(t, ctr)
+		require.NoError(t, err)
+		mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
+		require.NoError(t, err)
+		endpoint := fmt.Sprintf("http://localhost:%v", mappedPort.Port())
+
+		conf, err = config.LoadDefaultConfig(ctx,
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+			config.WithRegion("us-east-1"),
+		)
+		require.NoError(t, err)
+		conf.BaseEndpoint = &endpoint
+		inputConn = fmt.Sprintf(`region: us-east-1
+endpoint: %s
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx`, endpoint)
+	}
+	client := dynamodb.NewFromConfig(conf)
+
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
+	tableName := "rpcn-incremental-snapshot-" + suffix
+	checkpointTable := "rpcn-incremental-snapshot-cp-" + suffix
+	t.Cleanup(func() {
+		for _, name := range []string{tableName, checkpointTable} {
+			if _, err := client.DeleteTable(context.Background(), &dynamodb.DeleteTableInput{TableName: aws.String(name)}); err != nil {
+				t.Logf("failed to delete table %s: %v", name, err)
+			}
+		}
+	})
+
+	t.Logf("Creating table with streams: %v", tableName)
+	createTable := func() error {
+		_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+			TableName: aws.String(tableName),
+			AttributeDefinitions: []types.AttributeDefinition{
+				{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
+			},
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+			},
+			BillingMode: types.BillingModePayPerRequest,
+			StreamSpecification: &types.StreamSpecification{
+				StreamEnabled:  aws.Bool(true),
+				StreamViewType: types.StreamViewTypeNewAndOldImages,
+			},
+		})
+		return err
+	}
+	// DynamoDB Local can accept connections before it serves requests.
+	require.Eventually(t, func() bool { return createTable() == nil }, time.Minute, 500*time.Millisecond)
+	require.NoError(t, dynamodb.NewTableExistsWaiter(client).Wait(ctx, &dynamodb.DescribeTableInput{
+		TableName: aws.String(tableName),
+	}, 2*time.Minute))
+
+	const itemCount = 500
+	for i := range itemCount {
+		_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
+			TableName: aws.String(tableName),
+			Item: map[string]types.AttributeValue{
+				"pk": &types.AttributeValueMemberS{Value: fmt.Sprintf("k%d", i)},
+				"v":  &types.AttributeValueMemberN{Value: "0"},
+			},
+		})
+		require.NoError(t, err)
+	}
+
+	// Every write is ADD v :one, so a key's value only increases.
+	// safetyViolations are READ events emitted with a v below one already
+	// emitted for the key: a snapshot item leaving the input after a newer
+	// stream event, which the Safety rule forbids. orderRegressions are any
+	// event whose v is below the previous one emitted for the key; the
+	// ordering refinement prevents these only with accurate stream
+	// timestamps. The consumer is the only writer of this state and the test
+	// body reads it under mu.
+	var (
+		mu                                 sync.Mutex
+		last                               = map[string]int{}
+		maxSeen                            = map[string]int{}
+		events                             = map[string]int{}
+		safetyViolations, orderRegressions []string
+		consumeErrs                        []error
+		lastMsgAt                          = time.Now()
+	)
+	consume := func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			eventName, _ := msg.MetaGet("dynamodb_event_name")
+			events[eventName]++
+
+			structured, err := msg.AsStructured()
+			if err != nil {
+				consumeErrs = append(consumeErrs, err)
+				continue
+			}
+			img, ok := structured.(map[string]any)["dynamodb"].(map[string]any)["newImage"].(map[string]any)
+			if !ok {
+				consumeErrs = append(consumeErrs, fmt.Errorf("%s message without a newImage", eventName))
+				continue
+			}
+			v, err := strconv.Atoi(fmt.Sprint(img["v"]))
+			if err != nil {
+				consumeErrs = append(consumeErrs, err)
+				continue
+			}
+			pk := img["pk"].(string)
+
+			if prev, seen := last[pk]; seen && v < prev {
+				orderRegressions = append(orderRegressions, fmt.Sprintf("%s: %s v=%d after v=%d", pk, eventName, v, prev))
+			}
+			if top, seen := maxSeen[pk]; seen && eventName == "READ" && v < top {
+				safetyViolations = append(safetyViolations, fmt.Sprintf("%s: READ v=%d after maxSeen=%d", pk, v, top))
+			}
+			if top, seen := maxSeen[pk]; !seen || v > top {
+				maxSeen[pk] = v
+			}
+			last[pk] = v
+		}
+		if len(batch) > 0 {
+			lastMsgAt = time.Now()
+		}
+		return nil
+	}
+
+	inputYAML := fmt.Sprintf(`
+tables: [%s]
+checkpoint_table: %s
+%s
+snapshot_mode: incremental
+snapshot_segments: 4
+snapshot_batch_size: 25
+snapshot_throttle: 10ms
+`, tableName, checkpointTable, inputConn)
+
+	// The Safety assertion depends on messages reaching the consumer in the
+	// order the input emitted them, so the pipeline must not run processor
+	// threads in parallel (the default is one per CPU, which can reorder
+	// batches). The batch consumer func is driven by a single goroutine, so
+	// it sees batches sequentially. SetThreads is used instead of a full
+	// SetYAML because SetYAML would also add the default reject output.
+	builder := service.NewStreamBuilder()
+	builder.SetThreads(1) // equivalent to pipeline: { threads: 1 }
+	require.NoError(t, builder.AddInputYAML("aws_dynamodb_cdc:\n  "+
+		strings.ReplaceAll(strings.TrimSpace(inputYAML), "\n", "\n  ")))
+	require.NoError(t, builder.AddBatchConsumerFunc(consume))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	var runErr error
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		runErr = stream.Run(t.Context())
+	}()
+	t.Cleanup(func() {
+		_ = stream.StopWithin(10 * time.Second)
+		select {
+		case <-streamDone:
+			if runErr != nil && !errors.Is(runErr, context.Canceled) {
+				t.Errorf("stream failed: %v", runErr)
+			}
+		case <-time.After(15 * time.Second):
+			t.Error("stream did not stop within 15s of teardown")
+		}
+	})
+
+	// Writer: bump random keys for 10 seconds while the backfill runs.
+	var (
+		writerDone atomic.Bool
+		writes     atomic.Int64
+	)
+	writerCtx, stopWriter := context.WithTimeout(ctx, 10*time.Second)
+	defer stopWriter()
+	go func() {
+		defer writerDone.Store(true)
+		for writerCtx.Err() == nil {
+			_, err := client.UpdateItem(writerCtx, &dynamodb.UpdateItemInput{
+				TableName: aws.String(tableName),
+				Key: map[string]types.AttributeValue{
+					"pk": &types.AttributeValueMemberS{Value: fmt.Sprintf("k%d", rand.IntN(itemCount))},
+				},
+				UpdateExpression: aws.String("ADD v :one"),
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":one": &types.AttributeValueMemberN{Value: "1"},
+				},
+			})
+			if err != nil {
+				if writerCtx.Err() == nil {
+					t.Errorf("update failed: %v", err)
+				}
+				return
+			}
+			writes.Add(1)
+		}
+	}()
+
+	// Wait until the writer has stopped, every key has been seen and nothing
+	// has arrived for the quiet period. Once the writer stops, the idle rule
+	// releases held pages after two empty polls plus 1s + 2 *
+	// snapshot_watermark_margin (about 5s). DynamoDB Local rounds stream
+	// timestamps down to the minute, which delays releases until the idle
+	// rule or the next minute, so the local quiet period is longer.
+	quiet := 5 * time.Second
+	if !realAWS {
+		quiet = 20 * time.Second
+	}
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return writerDone.Load() && len(last) >= itemCount && time.Since(lastMsgAt) >= quiet
+	}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for every key and a quiet period")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Empty(t, consumeErrs)
+	t.Logf("writer made %d updates; events by type: %v; safety violations: %d; order regressions: %d",
+		writes.Load(), events, len(safetyViolations), len(orderRegressions))
+	assert.Positive(t, events["READ"], "the incremental backfill emitted no snapshot items")
+	assert.Empty(t, safetyViolations, "snapshot items emitted after a newer stream event for the same key")
+	if realAWS {
+		assert.Empty(t, orderRegressions, "per-key values emitted out of order")
+	}
+
+	table := map[string]int{}
+	var startKey map[string]types.AttributeValue
+	for {
+		out, err := client.Scan(ctx, &dynamodb.ScanInput{
+			TableName:         aws.String(tableName),
+			ConsistentRead:    aws.Bool(true),
+			ExclusiveStartKey: startKey,
+		})
+		require.NoError(t, err)
+		for _, item := range out.Items {
+			pk := item["pk"].(*types.AttributeValueMemberS).Value
+			v, err := strconv.Atoi(item["v"].(*types.AttributeValueMemberN).Value)
+			require.NoError(t, err)
+			table[pk] = v
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = out.LastEvaluatedKey
+	}
+	require.Len(t, table, itemCount)
+
+	for pk, want := range table {
+		assert.Equal(t, want, last[pk], "last emitted value for %s does not match the table", pk)
+	}
+}
+
+// TestIntegrationDynamoDBCDCSnapshotSignal checks that a signal table drives
+// incremental backfills: nothing is backfilled until a snapshot-execute
+// signal arrives, the signal then backfills the table once, and a repeated
+// signal is a no-op.
+func TestIntegrationDynamoDBCDCSnapshotSignal(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := t.Context()
+
+	ctr, err := testcontainers.Run(ctx,
+		"amazon/dynamodb-local:latest",
+		testcontainers.WithExposedPorts("8000/tcp"),
+		testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+	mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
+	require.NoError(t, err)
+	endpoint := fmt.Sprintf("http://localhost:%v", mappedPort.Port())
+
+	conf, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		config.WithRegion("us-east-1"),
+	)
+	require.NoError(t, err)
+	conf.BaseEndpoint = &endpoint
+	inputConn := fmt.Sprintf(`region: us-east-1
+endpoint: %s
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx`, endpoint)
+	client := dynamodb.NewFromConfig(conf)
+
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
+	ordersTable := "orders"
+	signalTable := "rpcn_signals"
+	checkpointTable := "rpcn-snapshot-signal-cp-" + suffix
+
+	createTable := func(name, key string, view types.StreamViewType) func() error {
+		return func() error {
+			_, err := client.CreateTable(ctx, &dynamodb.CreateTableInput{
+				TableName: aws.String(name),
+				AttributeDefinitions: []types.AttributeDefinition{
+					{AttributeName: aws.String(key), AttributeType: types.ScalarAttributeTypeS},
+				},
+				KeySchema: []types.KeySchemaElement{
+					{AttributeName: aws.String(key), KeyType: types.KeyTypeHash},
+				},
+				BillingMode: types.BillingModePayPerRequest,
+				StreamSpecification: &types.StreamSpecification{
+					StreamEnabled:  aws.Bool(true),
+					StreamViewType: view,
+				},
+			})
+			return err
+		}
+	}
+	// DynamoDB Local can accept connections before it serves requests.
+	require.Eventually(t, func() bool {
+		return createTable(ordersTable, "pk", types.StreamViewTypeNewAndOldImages)() == nil
+	}, time.Minute, 500*time.Millisecond)
+	require.NoError(t, createTable(signalTable, "id", types.StreamViewTypeNewImage)())
+	for _, name := range []string{ordersTable, signalTable} {
+		require.NoError(t, dynamodb.NewTableExistsWaiter(client).Wait(ctx, &dynamodb.DescribeTableInput{
+			TableName: aws.String(name),
+		}, 2*time.Minute))
+	}
+
+	const itemCount = 100
+	for i := range itemCount {
+		_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
+			TableName: aws.String(ordersTable),
+			Item: map[string]types.AttributeValue{
+				"pk": &types.AttributeValueMemberS{Value: fmt.Sprintf("k%d", i)},
+				"v":  &types.AttributeValueMemberN{Value: "0"},
+			},
+		})
+		require.NoError(t, err)
+	}
+
+	// Every orders write is ADD v :one, so a key's value only increases and
+	// a READ with a v below one already seen for its key would be a snapshot
+	// item leaving the input after a newer stream event. The consumer is the
+	// only writer of this state and the test body reads it under mu.
+	var (
+		mu               sync.Mutex
+		maxSeen          = map[string]int{}
+		reads            = map[string]int{}
+		last             = map[string]int{}
+		signalRecords    int
+		safetyViolations []string
+		consumeErrs      []error
+	)
+	consume := func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			eventName, _ := msg.MetaGet("dynamodb_event_name")
+			table, _ := msg.MetaGet("dynamodb_table")
+			if table == signalTable {
+				signalRecords++
+				continue
+			}
+			structured, err := msg.AsStructured()
+			if err != nil {
+				consumeErrs = append(consumeErrs, err)
+				continue
+			}
+			img, ok := structured.(map[string]any)["dynamodb"].(map[string]any)["newImage"].(map[string]any)
+			if !ok {
+				consumeErrs = append(consumeErrs, fmt.Errorf("%s message without a newImage", eventName))
+				continue
+			}
+			v, err := strconv.Atoi(fmt.Sprint(img["v"]))
+			if err != nil {
+				consumeErrs = append(consumeErrs, err)
+				continue
+			}
+			pk := img["pk"].(string)
+			if eventName == "READ" {
+				reads[pk]++
+				if top, seen := maxSeen[pk]; seen && v < top {
+					safetyViolations = append(safetyViolations, fmt.Sprintf("%s: READ v=%d after maxSeen=%d", pk, v, top))
+				}
+			}
+			if top, seen := maxSeen[pk]; !seen || v > top {
+				maxSeen[pk] = v
+			}
+			last[pk] = v
+		}
+		return nil
+	}
+	readCount := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		n := 0
+		for _, c := range reads {
+			n += c
+		}
+		return n
+	}
+
+	inputYAML := fmt.Sprintf(`
+tables: [%s]
+signal_table_name: %s
+checkpoint_table: %s
+%s
+snapshot_mode: incremental
+snapshot_segments: 2
+snapshot_batch_size: 25
+snapshot_throttle: 10ms
+`, ordersTable, signalTable, checkpointTable, inputConn)
+
+	// One processor thread keeps batches in emission order for the safety
+	// check (see TestIntegrationDynamoDBCDCIncrementalSnapshot).
+	builder := service.NewStreamBuilder()
+	builder.SetThreads(1)
+	require.NoError(t, builder.AddInputYAML("aws_dynamodb_cdc:\n  "+
+		strings.ReplaceAll(strings.TrimSpace(inputYAML), "\n", "\n  ")))
+	require.NoError(t, builder.AddBatchConsumerFunc(consume))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	var runErr error
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		runErr = stream.Run(t.Context())
+	}()
+	t.Cleanup(func() {
+		_ = stream.StopWithin(10 * time.Second)
+		select {
+		case <-streamDone:
+			if runErr != nil && !errors.Is(runErr, context.Canceled) {
+				t.Errorf("stream failed: %v", runErr)
+			}
+		case <-time.After(15 * time.Second):
+			t.Error("stream did not stop within 15s of teardown")
+		}
+	})
+
+	putSignal := func(id string) {
+		_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
+			TableName: aws.String(signalTable),
+			Item: map[string]types.AttributeValue{
+				"id":   &types.AttributeValueMemberS{Value: id},
+				"type": &types.AttributeValueMemberS{Value: "snapshot-execute"},
+				"data": &types.AttributeValueMemberS{Value: `{"tables":["orders"]}`},
+			},
+		})
+		require.NoError(t, err)
+	}
+
+	// The checkpoint partition for orders is keyed by its stream ARN (the
+	// default, non-global mode), as Checkpointer.hashKeyValue does.
+	descOrders, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(ordersTable)})
+	require.NoError(t, err)
+	ordersPartition := aws.ToString(descOrders.Table.LatestStreamArn)
+	snapshotRowsErr := func(prefix string) ([]string, error) {
+		out, err := client.Query(ctx, &dynamodb.QueryInput{
+			TableName:              aws.String(checkpointTable),
+			ConsistentRead:         aws.Bool(true),
+			KeyConditionExpression: aws.String(checkpointHashKeyDefault + " = :hash AND begins_with(" + checkpointRangeKey + ", :prefix)"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":hash":   &types.AttributeValueMemberS{Value: ordersPartition},
+				":prefix": &types.AttributeValueMemberS{Value: prefix},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		var ids []string
+		for _, item := range out.Items {
+			ids = append(ids, item[checkpointRangeKey].(*types.AttributeValueMemberS).Value)
+		}
+		return ids, nil
+	}
+	// snapshotRows must only be called on the test goroutine; polling
+	// conditions use snapshotRowsErr because require cannot run there.
+	snapshotRows := func(prefix string) []string {
+		ids, err := snapshotRowsErr(prefix)
+		require.NoError(t, err)
+		return ids
+	}
+
+	// Let the input connect, then check its state directly: an eager
+	// backfill could still be held back by DynamoDB Local's minute-rounded
+	// stream timestamps, so the absence of READs alone proves little.
+	time.Sleep(5 * time.Second)
+	assert.Empty(t, snapshotRows("snapshot#"), "snapshot checkpoint rows exist before any signal")
+	assert.Zero(t, readCount(), "READ events before any signal")
+
+	// Writer: bump random orders keys from just before the signal for 10s
+	// while the backfill starts, so the safety bookkeeping guards a real
+	// race. It is bounded because the idle rule that releases held pages
+	// cannot fire while writes keep arriving (the first run with a writer
+	// that lasted until the backfill completed never finished).
+	var writes atomic.Int64
+	writerCtx, stopWriter := context.WithTimeout(ctx, 10*time.Second)
+	writerDone := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		for writerCtx.Err() == nil {
+			_, err := client.UpdateItem(writerCtx, &dynamodb.UpdateItemInput{
+				TableName: aws.String(ordersTable),
+				Key: map[string]types.AttributeValue{
+					"pk": &types.AttributeValueMemberS{Value: fmt.Sprintf("k%d", rand.IntN(itemCount))},
+				},
+				UpdateExpression: aws.String("ADD v :one"),
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":one": &types.AttributeValueMemberN{Value: "1"},
+				},
+			})
+			if err != nil {
+				if writerCtx.Err() == nil {
+					t.Errorf("update failed: %v", err)
+				}
+				return
+			}
+			writes.Add(1)
+		}
+	}()
+	t.Cleanup(func() { stopWriter(); <-writerDone })
+
+	putSignal("1")
+
+	// DynamoDB Local rounds stream timestamps down to the minute, which
+	// delays the release of held snapshot pages until the idle rule or the
+	// next minute, so the waits are generous. The writer makes the stream
+	// deliver a newer value for some keys, and the window then drops their
+	// snapshot item, so the READ count is at most itemCount; completion is
+	// the snapshot#complete row, and every key must have been seen as a READ
+	// or a stream event.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		seen, sigs := len(maxSeen), signalRecords
+		mu.Unlock()
+		if seen != itemCount || sigs < 1 {
+			return false
+		}
+		done, err := snapshotRowsErr("snapshot#complete")
+		return err == nil && len(done) == 1
+	}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the backfill and the signal record")
+	stopWriter()
+	<-writerDone
+	assert.Positive(t, writes.Load(), "the writer made no updates, so the safety check guarded no race")
+	reads1 := readCount()
+	assert.Positive(t, reads1, "the signal backfilled nothing")
+	assert.LessOrEqual(t, reads1, itemCount)
+
+	// The signal was already executed, so a second one is a no-op. Check the
+	// outcome in checkpoint state, which does not depend on release timing.
+	putSignal("2")
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return signalRecords >= 2
+	}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the second signal record")
+	time.Sleep(5 * time.Second)
+
+	assert.Len(t, snapshotRows("snapshot#complete"), 1)
+	assert.Empty(t, snapshotRows("snapshot#requested"), "a complete table must not be requeued by a repeated signal")
+	assert.Equal(t, reads1, readCount(), "a repeated signal must not backfill again")
+
+	// Wait for the stream to deliver every write, then compare with the table.
+	table := map[string]int{}
+	var startKey map[string]types.AttributeValue
+	for {
+		out, err := client.Scan(ctx, &dynamodb.ScanInput{
+			TableName:         aws.String(ordersTable),
+			ConsistentRead:    aws.Bool(true),
+			ExclusiveStartKey: startKey,
+		})
+		require.NoError(t, err)
+		for _, item := range out.Items {
+			pk := item["pk"].(*types.AttributeValueMemberS).Value
+			v, err := strconv.Atoi(item["v"].(*types.AttributeValueMemberN).Value)
+			require.NoError(t, err)
+			table[pk] = v
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = out.LastEvaluatedKey
+	}
+	require.Len(t, table, itemCount)
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for pk, want := range table {
+			if last[pk] != want {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Minute, 500*time.Millisecond, "emitted values never matched the table")
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Empty(t, consumeErrs)
+	n := 0
+	for _, c := range reads {
+		n += c
+	}
+	t.Logf("READ events: %d; writer updates: %d; signal records: %d; safety violations: %d; requested rows: %v; complete rows: %v",
+		n, writes.Load(), signalRecords, len(safetyViolations), snapshotRows("snapshot#requested"), snapshotRows("snapshot#complete"))
+	assert.Empty(t, safetyViolations, "snapshot items emitted after a newer stream event for the same key")
 }
