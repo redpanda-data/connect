@@ -245,7 +245,7 @@ func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache,
 	goArgs = append(goArgs, pkg.Path)
 	cmd := exec.Command("go", goArgs...)
 	cmd.Env = os.Environ()
-	if runArgs.race {
+	if runArgs.race || pkg.CGO {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
 	}
 
