@@ -520,8 +520,10 @@ type componentPlatform struct {
 func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
 
 // renderDescriptionPartial renders the description partial of a component.
-// The meta tag sets page attributes for the page header, the body tag renders
-// the status notice, summary, version note, and description, and the
+// The meta tag sets page attributes for the page header, including
+// page-introduced-in, which the docs UI shows as a badge in the page's sticky
+// header on self-managed pages. The body tag renders the status notice,
+// summary, and description, and the
 // footnotes tag renders the spec footnotes. Every tag is always present, so a
 // page that includes one keeps building when the spec drops that content.
 // excluded is as in cloudGuardXrefs, and is used only for components that
@@ -545,15 +547,15 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 	if plat.CgoOnly {
 		b.WriteString(":page-cgo-only: true\n")
 	}
+	if c.Version != "" {
+		b.WriteString("ifndef::env-cloud[]\n:page-introduced-in: " + c.Version + "\nendif::[]\n")
+	}
 	b.WriteString("// end::meta[]\n\n// tag::body[]\n")
 	if notice := statusNotice(c.Status, "component"); notice != "" {
 		b.WriteString(notice + "\n")
 	}
 	if summary != "" {
 		b.WriteString(guard(summary) + "\n\n")
-	}
-	if c.Version != "" {
-		b.WriteString("ifndef::env-cloud[]\nIntroduced in version " + htmlEscaper.Replace(c.Version) + ".\nendif::[]\n\n")
 	}
 	b.WriteString(guard(renderDescriptionBody(c.Description, typeDir, c.Name)) + "\n// end::body[]\n\n")
 	b.WriteString("// tag::footnotes[]\n")
