@@ -190,6 +190,7 @@ func TestDocStringsRenderAsMarkdownInEveryDistribution(t *testing.T) {
 			}
 			opts := docslinks.MarkdownOptions(s)
 			assert.Equal(t, wantDocsURL[name], opts.DocumentationURL, "the binaries pass these options through docslinks.CLIOpts")
+			assert.Equal(t, wantDocsURL[name], opts.ComponentURLs["connect"], "an xref:connect: link stays on the distribution's copy of the Connect docs")
 			out, err := s.MarshalJSONV0Markdown(opts)
 			require.NoError(t, err)
 			var doc map[string]any

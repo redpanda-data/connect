@@ -19,6 +19,7 @@
 package docslinks
 
 import (
+	"maps"
 	"slices"
 	"sync"
 
@@ -37,13 +38,13 @@ const (
 
 // ComponentURLs maps the other docs site components that doc strings link
 // to with component-qualified xrefs, such as xref:streaming:manage:x.adoc[],
-// to their base URLs.
+// to their base URLs. MarkdownOptions adds connect itself, which follows the
+// distribution's documentation URL.
 var ComponentURLs = map[string]string{
 	// Version-less streaming URLs redirect to the current version; link there
 	// directly.
 	"streaming":           "https://docs.redpanda.com/streaming/current",
 	"cloud-data-platform": "https://docs.redpanda.com/cloud-data-platform",
-	"connect":             DocumentationURL,
 }
 
 // MarkdownOptions returns the link settings for the doc strings of the
@@ -55,9 +56,11 @@ func MarkdownOptions(s *service.ConfigSchema) service.DocsMarkdownOptions {
 	if slices.Contains(s.DocsAttributes(), service.DocsAttributeCloud) {
 		url = CloudDocumentationURL
 	}
+	components := maps.Clone(ComponentURLs)
+	components["connect"] = url
 	return service.DocsMarkdownOptions{
 		DocumentationURL: url,
-		ComponentURLs:    ComponentURLs,
+		ComponentURLs:    components,
 		HasComponent:     HasComponent(s.Environment()),
 	}
 }
