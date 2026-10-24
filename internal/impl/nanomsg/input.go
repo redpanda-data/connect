@@ -43,7 +43,7 @@ const (
 // urlsField returns the `urls` field shared by the nanomsg input and output.
 func urlsField() *service.ConfigField {
 	return service.NewURLListField("urls").
-		Description("A list of URLs to connect to, or to listen on when `bind` is `true`. If an item in the list contains commas, it is split into multiple URLs. A `*` host, such as `tcp://*:5555`, is replaced with `0.0.0.0`.")
+		Description("A list of URLs to connect to, or to listen on when `bind` is `true`. If an item in the list contains commas, it is split into multiple URLs. A `+*+` host, such as `+tcp://*:5555+`, is replaced with `0.0.0.0`.")
 }
 
 func inputConfigSpec() *service.ConfigSpec {

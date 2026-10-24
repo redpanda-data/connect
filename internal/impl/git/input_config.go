@@ -65,11 +65,11 @@ You can access these metadata fields using function interpolation.`
 				Default("10s").
 				Example("10s"),
 			service.NewStringListField("include_patterns").
-				Description(`A list of file patterns to read from. For example, you could read content from only Markdown and YAML files: `+"`"+`'**/*.md', 'configs/*.yaml'`+"`"+`.
+				Description(`A list of file patterns to read from. For example, you could read content from only Markdown and YAML files: `+"`"+`+'**/*.md', 'configs/*.yaml'+`+"`"+`.
 
 The following patterns are supported:
 
-- Glob patterns: `+"`"+`*`+"`"+`, `+"`"+`/**/`+"`"+`, `+"`"+`?`+"`"+`
+- Glob patterns: `+"`"+`+*+`+"`"+`, `+"`"+`+/**/+`+"`"+`, `+"`"+`?`+"`"+`
 - Character ranges: `+"`"+`[a-z]`+"`"+`. Escape any character with a special meaning using a backslash.
 
 If this field is left empty, all files are read.`).
@@ -77,11 +77,11 @@ If this field is left empty, all files are read.`).
 				Default([]any{}).
 				Optional(),
 			service.NewStringListField("exclude_patterns").
-				Description(`A list of file patterns to exclude. For example, you could choose not to read content from certain Git directories or image files: `+"`"+`'.git/**', '**/*.png'`+"`"+`. These patterns take precedence over `+"`"+`include_patterns`+"`"+`.
+				Description(`A list of file patterns to exclude. For example, you could choose not to read content from certain Git directories or image files: `+"`"+`+'.git/**', '**/*.png'+`+"`"+`. These patterns take precedence over `+"`"+`include_patterns`+"`"+`.
 
 The following patterns are supported:
 
-- Glob patterns: `+"`"+`*`+"`"+`, `+"`"+`/**/`+"`"+`, `+"`"+`?`+"`"+`
+- Glob patterns: `+"`"+`+*+`+"`"+`, `+"`"+`+/**/+`+"`"+`, `+"`"+`?`+"`"+`
 - Character ranges: `+"`"+`[a-z]`+"`"+`. Escape any character with a special meaning using a backslash.`).
 				ShortDescription("Glob patterns for files to exclude. These take precedence over include_patterns.").
 				Default([]any{}).
