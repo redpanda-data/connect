@@ -19,6 +19,7 @@ package community
 
 import (
 	// Import all public sub-categories.
+	_ "github.com/redpanda-data/connect/v4/public/components/aerospike"
 	_ "github.com/redpanda-data/connect/v4/public/components/amqp09"
 	_ "github.com/redpanda-data/connect/v4/public/components/amqp1"
 	_ "github.com/redpanda-data/connect/v4/public/components/arc"

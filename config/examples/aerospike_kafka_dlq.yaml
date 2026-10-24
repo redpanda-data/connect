@@ -1,0 +1,85 @@
+# Write two topics to two namespaces, with a different failure path for each.
+#
+# users -> namespace n1
+#   ignore_error_codes lists 13, 20, 21, and 22. A listed code is acknowledged
+#   inside the Aerospike output, so the record is not written and fallback
+#   never sees it.
+#   13 RECORD_TOO_BIG is a server rejection.
+#   20 INVALID_NAMESPACE is a namespace that is not declared on the cluster.
+#   The other records in the batch are still written. A missing field that
+#   resolves to "null" is not code 20. When the namespace comes from the
+#   message, leave 20 unlisted so a typo is published here instead of dropped.
+#   Several messages for one key fold into one record. A listed code
+#   acknowledges every message that folded in.
+#   21 BIN_NAME_TOO_LONG also covers a top-level name longer than 15 bytes,
+#   which is rejected here and never sent.
+#   22 FAIL_FORBIDDEN is a positive ttl written to a namespace with
+#   nsup-period 0. 0, -1, and -2 do not return 22.
+#   Any other reject is published to aerospike_dlq with its original payload.
+#   The message metadata field fallback_error carries the failure text.
+#
+# payments -> namespace n2
+#   No ignore_error_codes and no fallback. A reject stays a failure, and
+#   Connect replays it. auto_replay_nacks stays true for that replay.
+#
+# A connection failure does not take the fallback path. The output reports
+# that it is not connected, and Connect reconnects and retries the batch.
+#
+# n1 and n2 must already exist. nsup-period is per namespace, not per set.
+# The retry around the topic holds the users partition when the topic
+# cannot be written.
+#
+# Run (local Redpanda :19092, cluster-name redpanda-demo):
+#   task run CONF=./config/examples/aerospike_kafka_dlq.yaml
+http:
+  enabled: false
+input:
+  redpanda:
+    seed_brokers: ["127.0.0.1:19092"]
+    topics: [users, payments]
+    consumer_group: aerospike-sink
+    start_offset: earliest
+    auto_replay_nacks: true
+output:
+  switch:
+    retry_until_success: false
+    cases:
+      - check: meta("kafka_topic") == "users"
+        output:
+          fallback:
+            - aerospike:
+                hosts: ["127.0.0.1:3000"]
+                cluster_name: redpanda-demo
+                namespace: n1
+                set: users
+                key: '${! json("user_id").catch(meta("kafka_key")) }'
+                bins: 'root = this.without("user_id", "ttl")'
+                operation: replace
+                ttl: '${! json("ttl").or("keep") }'
+                tombstone_as_delete: true
+                ignore_error_codes: [13, 20, 21, 22]
+                batching:
+                  count: 10
+                  period: 200ms
+            - retry:
+                output:
+                  redpanda:
+                    seed_brokers: ["127.0.0.1:19092"]
+                    topic: aerospike_dlq
+      - check: meta("kafka_topic") == "payments"
+        output:
+          aerospike:
+            hosts: ["127.0.0.1:3000"]
+            cluster_name: redpanda-demo
+            namespace: n2
+            set: payments
+            key: '${! json("id") }'
+            bins: 'root = this.without("id")'
+            operation: write
+            ttl: keep
+            batching:
+              count: 10
+              period: 200ms
+logger:
+  level: INFO
+  format: logfmt
