@@ -144,8 +144,8 @@ Aerospike has no client-side change feed.
 			Description(`The write operation to perform. One of:
 
 - `+"`write`"+` — create or update, merging these bins with any existing bins.
-- `+"`replace`"+` — create or replace, deleting existing bins not named here. A null bin is left out of the write. A replace whose every bin is null is rejected on that message.
-- `+"`replace_only`"+` — fail if the record does not exist, otherwise replace, deleting existing bins not named here. A null bin is left out of the write. A replace_only whose every bin is null is rejected on that message.
+- `+"`replace`"+` — create or replace, deleting existing bins not named here. A null bin is left out of the write. Without fencing, a replace whose every bin is null is rejected on that message.
+- `+"`replace_only`"+` — fail if the record does not exist, otherwise replace, deleting existing bins not named here. A null bin is left out of the write. Without fencing, a replace_only whose every bin is null is rejected on that message.
 - `+"`create_only`"+` — fail if the record already exists.
 - `+"`update_only`"+` — fail if the record does not exist.
 - `+"`delete`"+` — delete the record.
@@ -164,7 +164,8 @@ Interpolation allows routing per message, for example from a CDC operation field
 				"A `null` value depends on the operation:\n\n"+
 				"- `write` and `update_only` delete that bin from the record.\n"+
 				"- `replace` and `replace_only` leave that bin out of the write, because those operations already delete bins they do not name.\n"+
-				"- A `replace` or `replace_only` whose every value is null is rejected on that message while the batch is planned, before coalescing, so an earlier write of the same key still lands. That rejection does not clear on retry, and `ignore_error_codes` does not cover it, so it holds the source partition until the mapping changes.\n\n"+
+				"- A `replace` or `replace_only` whose every value is null is rejected on that message while the batch is planned, before coalescing, so an earlier write of the same key still lands. That rejection does not clear on retry, and `ignore_error_codes` does not cover it, so it holds the source partition until the mapping changes.\n"+
+				"- With fencing on, that message is not rejected, because the fence bin is still written. The record is replaced by one holding only the fence bin, with no tombstone bin, so readers see an existing record with no data bins. Map a delete instead if the record should be removed.\n\n"+
 				"When coalescing folds a later message that nulls every bin into an earlier message for the same key, the folded command is a `delete`:\n\n"+
 				"- After an unfenced `replace`, a `write` or `update_only` produces the record those messages would leave, and a missing key is already that end state.\n"+
 				"- After a `replace_only`, an `update_only` keeps the existence check, so the delete fails if the record is missing.\n"+
@@ -222,7 +223,7 @@ The default is `+"`keep`"+` so a stream of updates does not reset or shorten voi
 				"- `create_only` after `replace_only` becomes a `replace` carrying both payloads, because one command cannot fail the create when the key exists and also fail the replace when it does not. That write succeeds whether the key exists or not.\n\n"+
 				"Deletes and null bins fold as follows:\n\n"+
 				"- An unfenced `delete` followed by `update_only` or `replace_only` drops the later message: the record stays deleted and that payload is not written. With fencing on, that later message is written as a `replace`, because the tombstone record is still there.\n"+
-				"- An all-null `replace` or `replace_only` is rejected on its own message before coalescing, so it does not delete a preceding write.\n"+
+				"- An unfenced all-null `replace` or `replace_only` is rejected on its own message before coalescing, so it does not delete a preceding write. A fenced one still carries the fence bin and folds like any other `replace` or `replace_only`.\n"+
 				"- A later `write` or `update_only` that nulls every bin of an earlier unfenced `replace` becomes a `delete`, which is the record those messages would leave.").
 			Default(true).
 			Advanced(),

@@ -179,9 +179,9 @@ func (p *pendingOp) take(next *pendingOp) {
 //     means bins already on the server must not survive.
 //   - an unfenced replace whose every remaining bin is null becomes a delete.
 //     A later write or update_only has nulled the bins an earlier replace or
-//     delete set up, and a record with no bins does not exist. An all-null
-//     replace or replace_only is rejected in mapMessage and never reaches
-//     here, so it cannot delete a preceding write.
+//     delete set up, and a record with no bins does not exist. An unfenced
+//     all-null replace or replace_only is rejected in mapMessage and never
+//     reaches here, so it cannot delete a preceding write.
 //   - an unfenced replace_only left with only null bins becomes a delete that
 //     still fails when the record is missing. [replace_only{a:1},
 //     update_only{a:null}] keeps the existence check. A later message then
@@ -317,8 +317,8 @@ func (p *pendingOp) fold(next *pendingOp) {
 
 	// A later write or update_only can null every bin of an earlier replace.
 	// That command would send no operations, and a record with no bins does
-	// not exist, so the fold is a delete. An all-null replace or replace_only
-	// never reaches here: mapMessage rejects that message on its own.
+	// not exist, so the fold is a delete. An unfenced all-null replace or
+	// replace_only never reaches here: mapMessage rejects that message on its own.
 	//
 	// replace_only keeps its existence check. The delete fails when the key
 	// is missing, which is what [replace_only{a:1}, update_only{a:null}]
