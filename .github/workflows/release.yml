@@ -365,6 +365,17 @@ jobs:
           gh api repos/redpanda-data/docs-ui/dispatches -f event_type=update-go-mod
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
+          # Regenerate the rpk connect plugin docs in redpanda-data/docs. The
+          # docs workflow (update-rpk-plugin-docs.yml) installs this version
+          # of the plugin from the manifest that goreleaser published above,
+          # refreshes only the connect subtree of its rpk command snapshot,
+          # and opens a PR. It reads client_payload.plugin (the rpk command
+          # name) and client_payload.version (tag without the v prefix, the
+          # same shape the rpk check and rpk ai senders use).
+          gh api repos/redpanda-data/docs/dispatches \
+            -f event_type=update-rpk-plugin-docs \
+            -f 'client_payload[plugin]=connect' \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"
       - name: Update helm chart and create PR
         id: helm
         env:
@@ -501,10 +512,41 @@ jobs:
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":gear: Update Operator PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
+  # Sync the Connect component stubs in redpanda-data/cloud-docs with this
+  # release. Its update-connect-stubs workflow reads catalog.json from the
+  # redpanda-connect-docs.tar.gz asset of client_payload.tag, so this waits
+  # for docs-asset rather than running with update-downstream: a dispatch
+  # sent before the asset exists makes cloud-docs fall back to info.csv,
+  # which has no component summaries.
+  update-cloud-docs:
+    runs-on: ubuntu-latest
+    needs: docs-asset
+    if: github.event_name == 'push' && !contains(github.ref_name, '-')
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - name: Trigger the Connect stub sync in redpanda-data/cloud-docs
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: |
+          gh api repos/redpanda-data/cloud-docs/dispatches \
+            -f event_type=connect-release \
+            -f "client_payload[tag]=$GITHUB_REF_NAME"
+
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream]
-    # always() is required because update-bundles/update-downstream may be skipped
+    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream, update-cloud-docs]
+    # always() is required because update-bundles/update-downstream/update-cloud-docs may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
     permissions:
@@ -523,6 +565,7 @@ jobs:
           DOCS_ASSET_RESULT: ${{ needs.docs-asset.result }}
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
+          CLOUD_DOCS_RESULT: ${{ needs.update-cloud-docs.result }}
         run: |
           # Build follow-up PR links and failure notices
           LINKS=""
@@ -550,6 +593,9 @@ jobs:
           fi
           if [ "$DOWNSTREAM_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-downstream failed  "
+          fi
+          if [ "$CLOUD_DOCS_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-cloud-docs failed, so cloud-docs did not sync its Connect stubs  "
           fi
 
           HEADER_ICON=":green_alert:"
