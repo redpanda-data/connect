@@ -256,6 +256,7 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 		hasInfo          bool
 	}
 	n := func(v int64) sql.NullInt64 { return sql.NullInt64{Int64: v, Valid: true} }
+	micros := schema.TimeUnitMicros
 	tests := []struct {
 		name    string
 		catalog catalogSource
@@ -267,6 +268,10 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 		// the WRONG parameters would still re-register an incompatible schema
 		// against existing subjects.
 		wantDecimal []int32
+		// wantTimestampUnit pins the timestamp unit for Timestamp rows. nil
+		// Logical (the millis default) is only correct for DATE: TIMESTAMP(n)
+		// left on the default is truncated to timestamp-millis on the wire.
+		wantTimestampUnit *schema.TimeUnit
 	}{
 		{
 			name:    "DATE",
@@ -275,28 +280,32 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 			want:    schema.Timestamp,
 		},
 		{
-			name:    "TIMESTAMP",
-			catalog: catalogSource{typeName: "TIMESTAMP(6)"},
-			drivers: []driverSource{{typeName: "TimeStampDTY"}, {typeName: "TIMESTAMP"}},
-			want:    schema.Timestamp,
+			name:              "TIMESTAMP",
+			catalog:           catalogSource{typeName: "TIMESTAMP(6)"},
+			drivers:           []driverSource{{typeName: "TimeStampDTY"}, {typeName: "TIMESTAMP"}},
+			want:              schema.Timestamp,
+			wantTimestampUnit: &micros,
 		},
 		{
-			name:    "TIMESTAMP(9)",
-			catalog: catalogSource{typeName: "TIMESTAMP(9)"},
-			drivers: []driverSource{{typeName: "TimeStampDTY"}},
-			want:    schema.Timestamp,
+			name:              "TIMESTAMP(9)",
+			catalog:           catalogSource{typeName: "TIMESTAMP(9)"},
+			drivers:           []driverSource{{typeName: "TimeStampDTY"}},
+			want:              schema.Timestamp,
+			wantTimestampUnit: &micros,
 		},
 		{
-			name:    "TIMESTAMP WITH TIME ZONE",
-			catalog: catalogSource{typeName: "TIMESTAMP(6) WITH TIME ZONE"},
-			drivers: []driverSource{{typeName: "TimeStampTZ_DTY"}, {typeName: "TimeStampTZ"}},
-			want:    schema.Timestamp,
+			name:              "TIMESTAMP WITH TIME ZONE",
+			catalog:           catalogSource{typeName: "TIMESTAMP(6) WITH TIME ZONE"},
+			drivers:           []driverSource{{typeName: "TimeStampTZ_DTY"}, {typeName: "TimeStampTZ"}},
+			want:              schema.Timestamp,
+			wantTimestampUnit: &micros,
 		},
 		{
-			name:    "TIMESTAMP WITH LOCAL TIME ZONE",
-			catalog: catalogSource{typeName: "TIMESTAMP(6) WITH LOCAL TIME ZONE"},
-			drivers: []driverSource{{typeName: "TimeStampLTZ_DTY"}, {typeName: "TimeStampeLTZ"}},
-			want:    schema.Timestamp,
+			name:              "TIMESTAMP WITH LOCAL TIME ZONE",
+			catalog:           catalogSource{typeName: "TIMESTAMP(6) WITH LOCAL TIME ZONE"},
+			drivers:           []driverSource{{typeName: "TimeStampLTZ_DTY"}, {typeName: "TimeStampeLTZ"}},
+			want:              schema.Timestamp,
+			wantTimestampUnit: &micros,
 		},
 		{
 			name:        "NUMBER(10,2)",
@@ -453,6 +462,16 @@ func TestOracleSchemaSourceParity(t *testing.T) {
 				require.NotNil(t, fromCatalog.Logical.Decimal)
 				assert.Equal(t, tt.wantDecimal[0], fromCatalog.Logical.Decimal.Precision, "decimal precision for %s", tt.name)
 				assert.Equal(t, tt.wantDecimal[1], fromCatalog.Logical.Decimal.Scale, "decimal scale for %s", tt.name)
+			}
+			if tt.want == schema.Timestamp {
+				if tt.wantTimestampUnit == nil {
+					assert.Nil(t, fromCatalog.Logical, "timestamp params for %s", tt.name)
+				} else {
+					require.NotNil(t, fromCatalog.Logical)
+					require.NotNil(t, fromCatalog.Logical.Timestamp)
+					assert.Equal(t, *tt.wantTimestampUnit, fromCatalog.Logical.Timestamp.Unit, "timestamp unit for %s", tt.name)
+					assert.True(t, fromCatalog.Logical.Timestamp.AdjustToUTC, "timestamp UTC adjustment for %s", tt.name)
+				}
 			}
 
 			for _, d := range tt.drivers {
@@ -697,6 +716,13 @@ func TestSchemaRoundTrip(t *testing.T) {
 		assert.Equal(t, wantType, child.Type, "field %s", name)
 		assert.True(t, child.Optional, "field %s should be optional", name)
 	}
+
+	// The timestamp unit must survive serialisation into message metadata, or
+	// schema_registry_encode falls back to timestamp-millis.
+	createdAt := childByName(t, c, "CREATED_AT")
+	require.NotNil(t, createdAt.Logical)
+	require.NotNil(t, createdAt.Logical.Timestamp)
+	assert.Equal(t, schema.TimeUnitMicros, createdAt.Logical.Timestamp.Unit)
 }
 
 // ---------------------------------------------------------------------------
