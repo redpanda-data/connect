@@ -277,6 +277,12 @@ func (s *sapHANAInput) discardCursor() {
 	if s.conf.usesIncrementing() {
 		s.hwm = s.hwmSafe
 	}
+	if s.conf.mode == shModeBulk || s.conf.mode == shModeQuery {
+		// A one-shot read has no position to resume from, so the retry runs the
+		// statement again from its first row. That keeps delivery at-least-once
+		// but re-sends every row already delivered, which must not be silent.
+		s.log.Warnf("The %s read failed part-way; it restarts from the first row, so rows already delivered will be sent again", s.conf.mode)
+	}
 }
 
 func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {

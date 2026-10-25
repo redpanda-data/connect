@@ -35,7 +35,7 @@ func init() {
 		Categories("Services").
 		Summary("Executes a query on Timeplus Enterprise and creates a message from each row received.").
 		Description(`
-This input can execute a query on Timeplus Enterprise Cloud, Timeplus Enterprise (self-hosted) or Timeplusd. A structured message will be created
+This input can execute a query on https://docs.timeplus.com/[Timeplus Enterprise^] Cloud, Timeplus Enterprise (self-hosted) or Timeplusd. A structured message will be created
 from each row received.
 
 If it is a streaming query, this input will keep running until the query is terminated. If it is a table query, this input will shut down once the rows from the query are exhausted.`).Version("4.39.0").

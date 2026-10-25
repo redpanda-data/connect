@@ -90,8 +90,7 @@ func createTableIfNotExists(ctx context.Context, client *dynamodb.Client, tableN
 		fmt.Printf("Table %s already exists.\n", tableName)
 		return nil
 	}
-	var notFound *types.ResourceNotFoundException
-	if !errors.As(err, &notFound) {
+	if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
 		return fmt.Errorf("describe %s: %w", tableName, err)
 	}
 
@@ -323,8 +322,7 @@ func runDropCheckpoint(args []string) {
 		TableName: aws.String(tableCheckpoints),
 	})
 	if err != nil {
-		var notFound *types.ResourceNotFoundException
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			fmt.Printf("Table %s does not exist, nothing to drop.\n", tableCheckpoints)
 			return
 		}

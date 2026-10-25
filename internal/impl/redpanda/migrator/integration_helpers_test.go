@@ -580,16 +580,12 @@ func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 	admin := kadm.NewClient(client)
 
 	return EmbeddedConfluentCluster{
-		EmbeddedRedpandaCluster: EmbeddedRedpandaCluster{
-			Endpoints: redpandatest.Endpoints{
-				BrokerAddr:        brokerAddr,
-				SchemaRegistryURL: schemaRegistryURL,
-			},
-			Client: client,
-			Admin:  admin,
-			t:      t,
-		},
-		ConnectURL: connectURL,
+		BrokerAddr:        brokerAddr,
+		SchemaRegistryURL: schemaRegistryURL,
+		Client:            client,
+		Admin:             admin,
+		t:                 t,
+		ConnectURL:        connectURL,
 	}
 }
 

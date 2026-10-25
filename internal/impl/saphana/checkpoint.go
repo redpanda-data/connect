@@ -29,6 +29,10 @@ import (
 // Typed pointer fields preserve the original Go type so bind parameters
 // round-trip correctly without implicit string casts.
 type sapHANACheckpointState struct {
+	// Source is the quoted table reference the HWM was read from. It lets an
+	// input refuse a checkpoint written by another table sharing the same
+	// cache and key. States written by v4.114.0 have none.
+	Source       string     `json:"source,omitempty"`
 	TimestampHWM *time.Time `json:"ts_hwm,omitempty"`
 	IncrHWMStr   *string    `json:"incr_hwm_str,omitempty"`
 	IncrHWMInt   *int64     `json:"incr_hwm_int,omitempty"`
@@ -40,8 +44,8 @@ type sapHANACheckpointState struct {
 // checkpointSnapshot captures HWM values as the JSON state persisted to the
 // cache. Typed pointer fields preserve the original Go type so bind parameters
 // round-trip correctly without implicit string casts.
-func checkpointSnapshot(hwm any, tsHWM time.Time) *sapHANACheckpointState {
-	cp := &sapHANACheckpointState{}
+func checkpointSnapshot(source string, hwm any, tsHWM time.Time) *sapHANACheckpointState {
+	cp := &sapHANACheckpointState{Source: source}
 	if !tsHWM.IsZero() {
 		cp.TimestampHWM = &tsHWM
 	}
@@ -87,6 +91,7 @@ type checkpointer struct {
 	enabled   bool // checkpoint_cache is set and the mode has an HWM to track
 	cacheName string
 	cacheKey  string
+	source    string // tableRef of the input, stamped into every persisted state
 
 	// mFailures counts checkpoint persist failures, otherwise only a log line.
 	mFailures *service.MetricCounter
@@ -109,6 +114,7 @@ func newCheckpointer(mgr *service.Resources, conf *sapHANAInputConfig) *checkpoi
 		enabled:   conf.checkpointingEnabled(),
 		cacheName: conf.checkpointCache,
 		cacheKey:  conf.checkpointCacheKey,
+		source:    conf.tableRef(),
 		mFailures: mgr.Metrics().NewCounter("sap_hana_checkpoint_write_failures_total"),
 		tracker:   checkpoint.NewCapped[*sapHANACheckpointState](int64(conf.checkpointLimit)),
 	}
@@ -140,6 +146,10 @@ func (c *checkpointer) load(ctx context.Context) (*sapHANACheckpointState, error
 	if err := json.Unmarshal(raw, &cp); err != nil {
 		return nil, fmt.Errorf("parsing checkpoint: %w", err)
 	}
+	if cp.Source != "" && cp.Source != c.source {
+		return nil, fmt.Errorf("checkpoint key %q in cache %q holds the position of %s, not %s: give each sap_hana input its own %s",
+			c.cacheKey, c.cacheName, cp.Source, c.source, shFieldCheckpointCacheKey)
+	}
 	return &cp, nil
 }
 
@@ -152,7 +162,7 @@ func (c *checkpointer) load(ctx context.Context) (*sapHANACheckpointState, error
 // past them rather than pin the tracker (which would block at
 // checkpoint_limit and stall the input permanently).
 func (c *checkpointer) track(ctx context.Context, batchLen int, hwm any, tsHWM time.Time) (service.AckFunc, error) {
-	resolve, err := c.tracker.Track(ctx, checkpointSnapshot(hwm, tsHWM), int64(batchLen))
+	resolve, err := c.tracker.Track(ctx, checkpointSnapshot(c.source, hwm, tsHWM), int64(batchLen))
 	if err != nil {
 		return nil, fmt.Errorf("tracking batch for checkpointing: %w", err)
 	}

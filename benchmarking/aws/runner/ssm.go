@@ -119,8 +119,7 @@ func classifyPollError(err error, notYetPropagatedCount, otherErrCount int) (kee
 	if err == nil {
 		return true, 0, 0
 	}
-	var notFound *types.InvocationDoesNotExist
-	if errors.As(err, &notFound) {
+	if _, ok := errors.AsType[*types.InvocationDoesNotExist](err); ok {
 		notYetPropagatedCount++
 		return notYetPropagatedCount <= notYetPropagatedMaxPolls, notYetPropagatedCount, otherErrCount
 	}

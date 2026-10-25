@@ -32,8 +32,7 @@ func (*schemaMigrationNeededError) Error() string {
 }
 
 func asSchemaMigrationError(err error) (*schemaMigrationNeededError, bool) {
-	var nullColumnErr *streaming.NonNullColumnError
-	if errors.As(err, &nullColumnErr) {
+	if nullColumnErr, ok := errors.AsType[*streaming.NonNullColumnError](err); ok {
 		// Return an error so that we release our read lock and can take the write lock
 		// to forcibly reopen all our channels to get a new schema.
 		return &schemaMigrationNeededError{
@@ -42,16 +41,14 @@ func asSchemaMigrationError(err error) (*schemaMigrationNeededError, bool) {
 			},
 		}, true
 	}
-	var missingColumnErr *streaming.MissingColumnError
-	if errors.As(err, &missingColumnErr) {
+	if missingColumnErr, ok := errors.AsType[*streaming.MissingColumnError](err); ok {
 		return &schemaMigrationNeededError{
 			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
 				return evolver.MigrateMissingColumn(ctx, missingColumnErr)
 			},
 		}, true
 	}
-	var batchErr *streaming.BatchSchemaMismatchError[*streaming.MissingColumnError]
-	if errors.As(err, &batchErr) {
+	if batchErr, ok := errors.AsType[*streaming.BatchSchemaMismatchError[*streaming.MissingColumnError]](err); ok {
 		return &schemaMigrationNeededError{
 			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
 				for _, missingCol := range batchErr.Errors {

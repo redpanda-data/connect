@@ -19,6 +19,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/docslinks"
+
 	_ "github.com/redpanda-data/connect/public/bundle/free/v4"
 )
 
@@ -32,8 +34,7 @@ var (
 )
 
 func main() {
-	service.RunCLI(
-		context.Background(),
+	opts := []service.CLIOptFunc{
 		service.CLIOptSetVersion(Version, DateBuilt),
 		service.CLIOptSetBinaryName(BinaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
@@ -53,6 +54,7 @@ func main() {
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/connect"),
-	)
+	}
+	opts = append(opts, docslinks.CLIOpts(service.GlobalEnvironment().FullConfigSchema(Version, DateBuilt))...)
+	service.RunCLI(context.Background(), opts...)
 }

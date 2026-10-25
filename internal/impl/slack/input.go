@@ -85,8 +85,7 @@ func (i *input) Connect(context.Context) error {
 		defer shutSig.TriggerHasStopped()
 		ctx, cancel := shutSig.HardStopCtx(context.Background())
 		defer cancel()
-		err := client.RunContext(ctx)
-		if err != nil && !errors.Is(err, ctx.Err()) {
+		if err := client.RunContext(ctx); !errors.Is(err, ctx.Err()) {
 			i.log.Warnf("error running: %v", err)
 		}
 	}()

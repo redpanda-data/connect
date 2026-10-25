@@ -13,6 +13,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"sync"
 	"time"
 
@@ -180,7 +181,7 @@ func (c *Client) refreshAuth(ctx context.Context) error {
 func (c *Client) Subscriptions() []*Subscription {
 	c.subsMu.Lock()
 	defer c.subsMu.Unlock()
-	return c.subs[:len(c.subs):len(c.subs)]
+	return slices.Clip(c.subs)
 }
 
 // removeSubscription drops s from the client's subscription list.

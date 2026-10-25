@@ -505,10 +505,10 @@ func (b *blockingCheckpointer) Set(ctx context.Context, shardID, sequenceNumber,
 func TestBatcherCheckpointWriteDoesNotBlockOtherShards(t *testing.T) {
 	batcher := NewRecordBatcher(100, 1, service.MockResources().Logger())
 	cp := &blockingCheckpointer{
-		mockCheckpointer: mockCheckpointer{checkpointLimit: 1},
-		blockShard:       "shard-001",
-		entered:          make(chan struct{}),
-		release:          make(chan struct{}),
+		checkpointLimit: 1,
+		blockShard:      "shard-001",
+		entered:         make(chan struct{}),
+		release:         make(chan struct{}),
 	}
 
 	batch1 := createTestMessages(3, "shard-001", 1)
@@ -593,6 +593,66 @@ func TestBatcherAckOverShardCapStillDrainsTracker(t *testing.T) {
 	assert.Equal(t, "00002", cp.get("shard-002"))
 }
 
+// TestPinClock runs one pinClock through a fixed sequence of checks. Each
+// step depends on the state the previous step left, so the steps are not
+// subtests.
+func TestPinClock(t *testing.T) {
+	now := time.Now()
+	var clock pinClock
+
+	steps := []struct {
+		name      string
+		at        time.Time
+		wantSince time.Duration
+		wantWarn  bool
+	}{
+		{
+			name:      "first check starts throttling",
+			at:        now,
+			wantSince: 0,
+			wantWarn:  false,
+		},
+		{
+			name:      "check before warn threshold returns duration without warning",
+			at:        now.Add(throttlePinWarnAfter - time.Second),
+			wantSince: throttlePinWarnAfter - time.Second,
+			wantWarn:  false,
+		},
+		{
+			name:      "check at warn threshold triggers warning",
+			at:        now.Add(throttlePinWarnAfter),
+			wantSince: throttlePinWarnAfter,
+			wantWarn:  true,
+		},
+		{
+			name:      "immediate check within interval is rate-limited",
+			at:        now.Add(throttlePinWarnAfter + time.Second),
+			wantSince: throttlePinWarnAfter + time.Second,
+			wantWarn:  false,
+		},
+		{
+			name:      "check after interval triggers next warning",
+			at:        now.Add(throttlePinWarnAfter + throttlePinWarnInterval),
+			wantSince: throttlePinWarnAfter + throttlePinWarnInterval,
+			wantWarn:  true,
+		},
+	}
+
+	for _, step := range steps {
+		since, shouldWarn := clock.check(step.at)
+		assert.Equal(t, step.wantSince, since, step.name)
+		assert.Equal(t, step.wantWarn, shouldWarn, step.name)
+	}
+
+	// clear resets throttling: the next check starts a new pin at t2 instead
+	// of measuring from now.
+	clock.clear()
+	t2 := now.Add(1 * time.Hour)
+	since, shouldWarn := clock.check(t2)
+	assert.Equal(t, time.Duration(0), since, "check after clear starts a new pin")
+	assert.False(t, shouldWarn, "check after clear does not warn")
+}
+
 // TestBatcherWarnsWhenThrottlePinned: a throttle that never releases is an
 // otherwise-silent stall, so ShouldThrottle must surface it once the tracker
 // has been pinned past the warn threshold, and dropping below the threshold
@@ -613,12 +673,12 @@ func TestBatcherWarnsWhenThrottlePinned(t *testing.T) {
 
 	// Backdate the pin start beyond the warn threshold.
 	batcher.mu.Lock()
-	batcher.throttledSince = time.Now().Add(-2 * throttlePinWarnAfter)
+	batcher.pinClock.throttledSince = time.Now().Add(-2 * throttlePinWarnAfter)
 	batcher.mu.Unlock()
 
 	require.False(t, batcher.TryReserve("shard-003", 100))
 	batcher.mu.Lock()
-	warned := !batcher.lastPinWarn.IsZero()
+	warned := !batcher.pinClock.lastPinWarn.IsZero()
 	batcher.mu.Unlock()
 	assert.True(t, warned, "a continuously pinned budget must emit the stall warning")
 
@@ -627,7 +687,7 @@ func TestBatcherWarnsWhenThrottlePinned(t *testing.T) {
 	batcher.RemoveBatch(tbBatchb)
 	require.True(t, batcher.TryReserve("shard-003", 100))
 	batcher.mu.Lock()
-	reset := batcher.throttledSince.IsZero()
+	reset := batcher.pinClock.throttledSince.IsZero()
 	batcher.mu.Unlock()
 	assert.True(t, reset, "a successful reservation must reset the pin clock")
 }
@@ -653,13 +713,13 @@ func TestBatcherWarnsWhenShardPinned(t *testing.T) {
 	// Backdate the shard's pin start beyond the warn threshold.
 	batcher.mu.Lock()
 	st := batcher.shards["shard-001"]
-	st.throttledSince = time.Now().Add(-2 * throttlePinWarnAfter)
+	st.pinClock.throttledSince = time.Now().Add(-2 * throttlePinWarnAfter)
 	batcher.mu.Unlock()
 
 	require.False(t, batcher.TryReserve("shard-001", 100))
 	batcher.mu.Lock()
-	warned := !st.lastPinWarn.IsZero()
-	globalUntouched := batcher.throttledSince.IsZero()
+	warned := !st.pinClock.lastPinWarn.IsZero()
+	globalUntouched := batcher.pinClock.throttledSince.IsZero()
 	batcher.mu.Unlock()
 	assert.True(t, warned, "a continuously pinned shard must emit the stall warning")
 	assert.True(t, globalUntouched, "a per-shard refusal must not start the global pin clock")
@@ -669,7 +729,7 @@ func TestBatcherWarnsWhenShardPinned(t *testing.T) {
 	batcher.RemoveBatch(tb)
 	require.True(t, batcher.TryReserve("shard-001", 100))
 	batcher.mu.Lock()
-	reset := st.throttledSince.IsZero()
+	reset := st.pinClock.throttledSince.IsZero()
 	batcher.mu.Unlock()
 	assert.True(t, reset, "a successful reservation must reset the shard's pin clock")
 }
@@ -692,7 +752,7 @@ func TestBatcherPerShardRefusalClearsGlobalClock(t *testing.T) {
 	require.False(t, batcher.TryReserve("shard-005", 100),
 		"the global budget is exhausted")
 	batcher.mu.Lock()
-	pinned := !batcher.throttledSince.IsZero()
+	pinned := !batcher.pinClock.throttledSince.IsZero()
 	batcher.mu.Unlock()
 	require.True(t, pinned)
 
@@ -702,7 +762,7 @@ func TestBatcherPerShardRefusalClearsGlobalClock(t *testing.T) {
 	require.False(t, batcher.TryReserve("shard-001", 1000),
 		"shard-001 is still at its per-shard cap")
 	batcher.mu.Lock()
-	cleared := batcher.throttledSince.IsZero()
+	cleared := batcher.pinClock.throttledSince.IsZero()
 	batcher.mu.Unlock()
 	assert.True(t, cleared,
 		"passing the global check must clear the global pin clock even when the per-shard cap refuses")
@@ -1003,29 +1063,36 @@ func TestBatcherSettleIsIdempotent(t *testing.T) {
 func TestBatcherInFlightCount(t *testing.T) {
 	var nilBatcher *RecordBatcher
 	assert.Equal(t, 0, nilBatcher.InFlightCount())
+	assert.Equal(t, 0, nilBatcher.ShardInFlightCount("shard-001"))
 
 	batcher := NewRecordBatcher(100, 100, service.MockResources().Logger())
 	assert.Equal(t, 0, batcher.InFlightCount())
+	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
 
-	// Reserve 10 messages
+	// Reserve 10 messages on shard-001
 	require.True(t, batcher.TryReserve("shard-001", 10))
 	assert.Equal(t, 10, batcher.InFlightCount())
+	assert.Equal(t, 10, batcher.ShardInFlightCount("shard-001"))
+	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-002"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
 
 	// Add 6 messages (consumes 6 of the reservation)
 	batch := createTestMessages(6, "shard-001", 1)
 	tb := batcher.AddMessages(batch, "shard-001")
 	assert.Equal(t, 10, batcher.InFlightCount()) // 4 reserved + 6 tracked
+	assert.Equal(t, 10, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 6, batcher.TrackedMessageCount())
 
 	// Release remaining 4 reserved messages
 	batcher.Release("shard-001", 4)
 	assert.Equal(t, 6, batcher.InFlightCount())
+	assert.Equal(t, 6, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 6, batcher.TrackedMessageCount())
 
 	// Settle batch
 	batcher.RemoveBatch(tb)
 	assert.Equal(t, 0, batcher.InFlightCount())
+	assert.Equal(t, 0, batcher.ShardInFlightCount("shard-001"))
 	assert.Equal(t, 0, batcher.TrackedMessageCount())
 }

@@ -65,8 +65,7 @@ func createLogGroupWithEvents(ctx context.Context, t testing.TB, cwlPort, logGro
 	})
 	if err != nil {
 		// Check if already exists
-		var alreadyExists *types.ResourceAlreadyExistsException
-		if !errors.As(err, &alreadyExists) {
+		if _, ok := errors.AsType[*types.ResourceAlreadyExistsException](err); !ok {
 			return fmt.Errorf("creating log group: %w", err)
 		}
 	}
@@ -79,8 +78,7 @@ func createLogGroupWithEvents(ctx context.Context, t testing.TB, cwlPort, logGro
 		LogStreamName: aws.String(streamName),
 	})
 	if err != nil {
-		var alreadyExists *types.ResourceAlreadyExistsException
-		if !errors.As(err, &alreadyExists) {
+		if _, ok := errors.AsType[*types.ResourceAlreadyExistsException](err); !ok {
 			return fmt.Errorf("creating log stream: %w", err)
 		}
 	}

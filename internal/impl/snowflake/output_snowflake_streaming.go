@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -82,16 +82,26 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 		Description(`
 For more information, see the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-overview[Snowpipe Streaming classic architecture^] documentation. This output doesn't work with the Snowpipe Streaming high-performance architecture.
 
+There is also a `+"`snowflake_streaming_pipe`"+` output, which writes through a Snowflake pipe rather than
+directly into a table -- use that one if you need Snowflake's Streaming Transformations (stream-static
+join enrichment, server-side `+"`WHERE`"+`-clause filtering), since those only exist on a pipe's `+"`COPY INTO`"+`
+and this output has no such thing. This output remains the simpler choice if you don't need them: it
+creates your destination table for you and needs no pipe set up first, neither of which
+`+"`snowflake_streaming_pipe`"+` does. See xref:components:outputs/snowflake_streaming_pipe.adoc[its own docs]
+for the full comparison.
+
+The following table shows the https://docs.snowflake.com/en/sql-reference/intro-summary-data-types[column data types supported by Snowflake^] and the xref:guides:bloblang/methods.adoc#type[Bloblang data types] that this output accepts for each.
+
 [#supported-data-formats-for-snowflake-columns]
 .Supported data formats for Snowflake columns
 [%header,format=dsv]
 |===
 Snowflake column type:Allowed format in Redpanda Connect
 CHAR, VARCHAR:string
-BINARY:[]byte
+BINARY:[]byte, string
 NUMBER:any numeric type, string
-FLOAT:any numeric type
-BOOLEAN:bool,any numeric type,string parsable according to `+"`strconv.ParseBool`"+`
+FLOAT:any numeric type, including the special values `+"`NaN`"+`, `+"`inf`"+`, and `+"`-inf`"+`, or a string parsable as a number
+BOOLEAN:bool,any numeric type (non-zero is `+"`true`"+`),string parsable according to `+"`strconv.ParseBool`"+`
 TIME,DATE,TIMESTAMP:unix or RFC 3339 with nanoseconds timestamps
 VARIANT,ARRAY,OBJECT:any data type is converted into JSON
 GEOGRAPHY,GEOMETRY: Not supported
@@ -99,7 +109,7 @@ GEOGRAPHY,GEOMETRY: Not supported
 
 For TIMESTAMP, TIME and DATE columns, you can parse different string formats using a bloblang `+"`"+ssoFieldMapping+"`"+`.
 
-Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
+Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^]. Provide either a PEM-encoded private key in the <<private_key,`+"`private_key`"+`>> field, or the path to a file that contains the private key in the <<private_key_file,`+"`private_key_file`"+`>> field.
 
 There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.
 
@@ -109,7 +119,7 @@ Each message becomes one row in the target table. The keys of a message object a
 `+service.OutputPerformanceDocs(true, true)+`
 
 It is recommended that each batches results in at least 16MiB of compressed output being written to Snowflake.
-You can monitor the output batch size using the `+"`snowflake_compressed_output_size_bytes`"+` metric.
+To see how much compressed data each batch uploads, watch the rate of the `+"`snowflake_compressed_output_size_bytes`"+` counter.
 
 == Metrics
 

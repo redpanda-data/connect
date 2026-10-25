@@ -30,11 +30,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
-//go:fix inline
-func ptr[T any](v T) *T {
-	return new(v)
-}
-
 func msg(s string) *service.Message {
 	return service.NewMessage([]byte(s))
 }
@@ -601,14 +596,14 @@ func TestChannelOffsetToken(t *testing.T) {
 		structuredMsg(map[string]any{"a": math.MaxInt64}),
 	}, &streaming.OffsetTokenRange{Start: "3", End: "5"})
 	require.NoError(t, err)
-	require.EqualValues(t, ptr(streaming.OffsetToken("5")), channelA.LatestOffsetToken())
+	require.EqualValues(t, new(streaming.OffsetToken("5")), channelA.LatestOffsetToken())
 	_, err = channelA.InsertRows(ctx, service.MessageBatch{
 		structuredMsg(map[string]any{"a": -1}),
 		structuredMsg(map[string]any{"a": 0}),
 		structuredMsg(map[string]any{"a": 1}),
 	}, &streaming.OffsetTokenRange{Start: "0", End: "2"})
 	require.NoError(t, err)
-	require.Equal(t, ptr(streaming.OffsetToken("2")), channelA.LatestOffsetToken())
+	require.Equal(t, new(streaming.OffsetToken("2")), channelA.LatestOffsetToken())
 	_, err = channelA.WaitUntilCommitted(ctx, streaming.CommitBackoffOptions{
 		InitialInterval: 32 * time.Millisecond,
 		MaxInterval:     512 * time.Millisecond,
@@ -618,7 +613,7 @@ func TestChannelOffsetToken(t *testing.T) {
 	require.NoError(t, err)
 	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
-	require.Equal(t, ptr(streaming.OffsetToken("2")), channelB.LatestOffsetToken())
+	require.Equal(t, new(streaming.OffsetToken("2")), channelB.LatestOffsetToken())
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		// Always order by A so we get consistent ordering for our test
 		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
