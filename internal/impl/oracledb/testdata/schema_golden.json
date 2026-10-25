@@ -1,0 +1,144 @@
+{
+  "BIN_DOUBLE": {
+    "name": "BIN_DOUBLE",
+    "optional": true,
+    "type": "FLOAT64"
+  },
+  "BIN_FLOAT": {
+    "name": "BIN_FLOAT",
+    "optional": true,
+    "type": "FLOAT32"
+  },
+  "CH": {
+    "name": "CH",
+    "optional": true,
+    "type": "STRING"
+  },
+  "DT": {
+    "name": "DT",
+    "optional": true,
+    "type": "TIMESTAMP"
+  },
+  "FLT": {
+    "name": "FLT",
+    "optional": true,
+    "type": "BIG_DECIMAL"
+  },
+  "ID": {
+    "name": "ID",
+    "optional": true,
+    "type": "BIG_DECIMAL"
+  },
+  "NCH": {
+    "name": "NCH",
+    "optional": true,
+    "type": "STRING"
+  },
+  "NUM_10_2": {
+    "name": "NUM_10_2",
+    "optional": true,
+    "precision": 10,
+    "scale": 2,
+    "type": "DECIMAL"
+  },
+  "NUM_38": {
+    "name": "NUM_38",
+    "optional": true,
+    "precision": 38,
+    "scale": 0,
+    "type": "DECIMAL"
+  },
+  "NUM_38_0": {
+    "name": "NUM_38_0",
+    "optional": true,
+    "precision": 38,
+    "scale": 0,
+    "type": "DECIMAL"
+  },
+  "NUM_38_2": {
+    "name": "NUM_38_2",
+    "optional": true,
+    "precision": 38,
+    "scale": 2,
+    "type": "DECIMAL"
+  },
+  "NUM_5_0": {
+    "name": "NUM_5_0",
+    "optional": true,
+    "type": "INT64"
+  },
+  "NUM_INT": {
+    "name": "NUM_INT",
+    "optional": true,
+    "precision": 38,
+    "scale": 0,
+    "type": "DECIMAL"
+  },
+  "NUM_NEG": {
+    "name": "NUM_NEG",
+    "optional": true,
+    "type": "BIG_DECIMAL"
+  },
+  "NUM_PLAIN": {
+    "name": "NUM_PLAIN",
+    "optional": true,
+    "type": "BIG_DECIMAL"
+  },
+  "NUM_STAR_2": {
+    "name": "NUM_STAR_2",
+    "optional": true,
+    "precision": 38,
+    "scale": 2,
+    "type": "DECIMAL"
+  },
+  "NVC": {
+    "name": "NVC",
+    "optional": true,
+    "type": "STRING"
+  },
+  "RW": {
+    "name": "RW",
+    "optional": true,
+    "type": "BYTE_ARRAY"
+  },
+  "TS": {
+    "adjust_to_utc": true,
+    "name": "TS",
+    "optional": true,
+    "type": "TIMESTAMP",
+    "unit": "MICROS"
+  },
+  "TS_9": {
+    "adjust_to_utc": true,
+    "name": "TS_9",
+    "optional": true,
+    "type": "TIMESTAMP",
+    "unit": "MICROS"
+  },
+  "TS_FRAC": {
+    "adjust_to_utc": true,
+    "name": "TS_FRAC",
+    "optional": true,
+    "type": "TIMESTAMP",
+    "unit": "MICROS"
+  },
+  "TS_LTZ": {
+    "adjust_to_utc": true,
+    "name": "TS_LTZ",
+    "optional": true,
+    "type": "TIMESTAMP",
+    "unit": "MICROS"
+  },
+  "TS_TZ": {
+    "adjust_to_utc": true,
+    "name": "TS_TZ",
+    "optional": true,
+    "type": "TIMESTAMP",
+    "unit": "MICROS"
+  },
+  "VC": {
+    "name": "VC",
+    "optional": true,
+    "type": "STRING"
+  }
+}
