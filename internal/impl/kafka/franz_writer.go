@@ -61,8 +61,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Description("The maximum size of a produced record batch in bytes. " +
 				"A `MESSAGE_TOO_LARGE` error is returned if a batch exceeds this limit. " +
 				"This field maps to the `max.message.bytes` Kafka property. " +
-				"Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, " +
-				"see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes.").
+				"Ensure the Redpanda broker's xref:streaming:reference:properties/cluster-properties.adoc#kafka_batch_max_bytes[`kafka_batch_max_bytes`] property is at least as large as this value.").
 			ShortDescription("Maximum size of a produced record batch. Maps to the Kafka max.message.bytes property.").
 			Advanced().
 			Default("1MiB").

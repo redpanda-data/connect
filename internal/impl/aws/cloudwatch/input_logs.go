@@ -62,7 +62,7 @@ IMPORTANT: This input tracks its position in memory only. If the process restart
 
 == Credentials
 
-By default, Redpanda Connect uses a shared credentials file when connecting to AWS services. You can also set credentials explicitly at the component level, which allows you to transfer data across accounts. For more information, see xref:guides:cloud/aws.adoc[].
+By default, Redpanda Connect uses a shared credentials file when connecting to AWS services. You can also set credentials explicitly at the component level, which allows you to transfer data across accounts. For more information, see xref:guides:cloud/aws.adoc[AWS credentials].
 
 == Metadata
 
