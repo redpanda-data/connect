@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.116.0 - TBD
+
+### Fixed
+
+- oracledb_cdc: Streamed `TIMESTAMP WITH LOCAL TIME ZONE` values are now emitted as UTC timestamps, matching the snapshot. Previously they were emitted as the raw `TO_TIMESTAMP_TZ(...)` text from LogMiner, which could fail Avro encoding. ([@josephwoodward](https://github.com/josephwoodward), [#5046](https://github.com/redpanda-data/connect/pull/5046))
+
 ## 4.115.1 - 2026-10-23
 
 ### Fixed
