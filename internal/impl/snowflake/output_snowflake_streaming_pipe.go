@@ -153,7 +153,7 @@ Each batch is one request per channel. Request bodies are zstd-compressed by def
 				Description(`Override the URL for both the control-plane and ingest-plane connections (default `+"`https://ORG-ACCOUNT.snowflakecomputing.com`"+`). This skips ingest-hostname discovery, so it is for local and test deployments only. For PrivateLink or other non-standard hostnames use `+"`"+ssopFieldAccountHost+"`"+` instead. If both are set, this field wins.
 `).Optional().Example("http://localhost:8080").Advanced(),
 			service.NewStringField(ssopFieldAccountHost).
-				Description(`Override the control-plane host (default `+"`<account>.snowflakecomputing.com`"+`) while keeping ingest-hostname discovery. Use this for https://docs.snowflake.com/en/user-guide/admin-privatelink[PrivateLink^] accounts. Ignored when `+"`"+ssopFieldURL+"`"+` is set.
+				Description(`Override the control-plane host (default `+"`<account>.snowflakecomputing.com`"+`) while keeping ingest-hostname discovery. Use this for https://docs.snowflake.com/en/user-guide/admin-security-privatelink[PrivateLink^] accounts. Ignored when `+"`"+ssopFieldURL+"`"+` is set.
 `).Optional().Example("my-account.privatelink.snowflakecomputing.com").Advanced(),
 			service.NewStringField(ssopFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user.").
 				ShortDescription("The user to run the Snowpipe Stream as."),
