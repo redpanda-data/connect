@@ -99,7 +99,13 @@ Messages produced in `+"`bulk`, `incrementing`, `timestamp`, and `timestamp+incr
 
 == Permissions
 
-The connecting user needs `+"`SELECT`"+` on the source table, or on the statement's tables in `+"`query`"+` mode. When `+"`schema_name`"+` is set, the user also needs read access to the `+"`SYS.TABLE_COLUMNS`"+`, `+"`SYS.INDEX_COLUMNS`"+`, and `+"`SYS.INDEXES`"+` system views, which the input reads to build the `+"`schema`"+` and `+"`primary_key_columns`"+` metadata. Granting `+"`CATALOG READ`"+` covers these views.
+The connecting user needs `+"`SELECT`"+` on the source table, or on the statement's tables in `+"`query`"+` mode. The user also needs read access to system views in these cases:
+
+- When `+"`schema_name`"+` is set, the input reads `+"`SYS.TABLE_COLUMNS`"+`, `+"`SYS.INDEX_COLUMNS`"+`, and `+"`SYS.INDEXES`"+` to build the `+"`schema`"+` and `+"`primary_key_columns`"+` metadata.
+- In the `+"`timestamp`"+` and `+"`timestamp+incrementing`"+` modes, the input reads `+"`SYS.TABLE_COLUMNS`"+` to check the type of `+"`timestamp_column`"+` when it connects. Without access, the check is skipped and a warning is logged.
+- When `+"`incrementing_initial_value`"+` is set and no checkpoint exists yet, the input reads `+"`SYS.TABLE_COLUMNS`"+` to bind the initial value with the type of `+"`incrementing_column`"+`. Without access, it guesses the type, and HANA can reject the guessed value on every poll, so the input never progresses.
+
+Granting `+"`CATALOG READ`"+` covers these views.
 
 == Known limitations
 
