@@ -10,6 +10,7 @@ package dynamodb
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -74,4 +75,15 @@ func TestSnapshotSequenceBuffer(t *testing.T) {
 		assert.False(t, buffer.IsOverflow())
 		assert.Equal(t, 0, buffer.Size())
 	})
+}
+
+func TestSnapshotSequenceBufferMixedTimeZones(t *testing.T) {
+	// The snapshot start comes from time.Now() (host zone). The CDC time comes from the SDK (UTC).
+	snapshotStart := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC).In(time.FixedZone("UTC+1", 3600))
+	cdcTime := time.Date(2026, 1, 1, 10, 30, 0, 0, time.UTC)
+
+	buffer := newSnapshotSequenceBuffer(100)
+	buffer.RecordSnapshotItem("key1", snapshotStart.Format(time.RFC3339Nano))
+
+	assert.False(t, buffer.ShouldSkipCDCEvent("key1", cdcTime.Format(time.RFC3339Nano)))
 }
