@@ -25,11 +25,11 @@ func TestSnapshotSequenceBuffer(t *testing.T) {
 		// Record a snapshot item
 		buffer.RecordSnapshotItem("key1", at(100))
 
-		// CDC event with same or earlier time should be skipped
+		// CDC event before the snapshot start should be skipped
 		assert.True(t, buffer.ShouldSkipCDCEvent("key1", at(50)))
-		assert.True(t, buffer.ShouldSkipCDCEvent("key1", at(100)))
 
-		// CDC event with later time should not be skipped
+		// CDC event in the start second or later should not be skipped
+		assert.False(t, buffer.ShouldSkipCDCEvent("key1", at(100)))
 		assert.False(t, buffer.ShouldSkipCDCEvent("key1", at(150)))
 
 		// Unknown key should not be skipped
