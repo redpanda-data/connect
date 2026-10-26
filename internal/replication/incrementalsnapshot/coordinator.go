@@ -81,6 +81,9 @@ type Coordinator[P any, W Watermark[P]] struct {
 	// included. AddTables extends it and State reports it, so a later run
 	// can tell a newly requested table from one already backfilled.
 	knownTables []TableID
+
+	// version counts the changes to what State reports. Refer to Version.
+	version uint64
 }
 
 // NewCoordinator builds a Coordinator. A non-nil resume continues from that
@@ -150,6 +153,7 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 // captureLiveState snapshots the live fields into the committed ones. Call
 // only once everything fetched so far has been flushed.
 func (c *Coordinator[P, W]) captureLiveState() {
+	c.version++
 	c.committedRemaining = slices.Clone(c.remaining)
 	c.committedCurrent = c.current
 	c.committedMaxPK = c.maxPK
@@ -227,6 +231,7 @@ func (c *Coordinator[P, W]) queue(tables []TableID, eligible func(TableID) bool)
 		}
 	}
 	if len(added) > 0 {
+		c.version++
 		// Owed whether or not a backfill is running: a mid-backfill request
 		// is just as unrepeatable, and the running window may not close for
 		// a while.
@@ -383,6 +388,7 @@ func (c *Coordinator[P, W]) snapshotCommitted() committedState {
 }
 
 func (c *Coordinator[P, W]) restoreCommitted(s committedState) {
+	c.version++
 	c.committedRemaining = s.remaining
 	c.committedCurrent = s.current
 	c.committedMaxPK = s.maxPK
@@ -432,6 +438,23 @@ func (c *Coordinator[P, W]) State() *State {
 		Tables:          c.knownTables,
 	}
 	return s.Clone()
+}
+
+// Version increases whenever State may return a different value, so a caller
+// can cache State's encoding and redo it only when Version moves. An equal
+// Version means an equal State.
+func (c *Coordinator[P, W]) Version() uint64 {
+	return c.version
+}
+
+// Remaining reports how many tables State still has to read, the current one
+// included. Unlike State it copies nothing.
+func (c *Coordinator[P, W]) Remaining() int {
+	n := len(c.committedRemaining)
+	if c.committedCurrent != nil {
+		n++
+	}
+	return n
 }
 
 // dropUnusable removes the current table from the run when err reports it

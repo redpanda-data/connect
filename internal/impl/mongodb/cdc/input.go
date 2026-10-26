@@ -1784,7 +1784,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, epoch uint64, cp *checkpo
 			// heartbeat checkpoint, both of which read it fresh.
 			return nil
 		}
-		state, err := run.releasedState()
+		state, err := run.state()
 		if err != nil {
 			return err
 		}

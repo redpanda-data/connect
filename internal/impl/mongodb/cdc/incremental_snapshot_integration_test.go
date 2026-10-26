@@ -147,6 +147,8 @@ type replayed struct {
 	// interleaved records, per collection, a snapshot read of it emitted
 	// after a streamed change.
 	interleaved map[string]bool
+	// lastReadTime is the operation_time of the latest snapshot read.
+	lastReadTime bson.Timestamp
 	// signals counts signal inserts emitted from the signal collection,
 	// which are otherwise left out of the replay.
 	signals int
@@ -177,6 +179,7 @@ func replay(o *outputHelper) replayed {
 				continue
 			}
 			r.ops[op]++
+			r.checkOperationTime(m, op, coll)
 			body, err := m.AsStructured()
 			if err != nil {
 				r.problems = append(r.problems, fmt.Sprintf("decoding a %s message from %s: %v", op, coll, err))
@@ -224,6 +227,35 @@ func replay(o *outputHelper) replayed {
 		}
 	}
 	return r
+}
+
+// checkOperationTime records a problem when a message's operation_time breaks
+// the snapshot's ordering. A chunk is read at its high watermark and only
+// released once the stream is through it, so reads never go back in time and
+// a change emitted after a read happened at or after it.
+func (r *replayed) checkOperationTime(m *service.Message, op, coll string) {
+	raw, _ := m.MetaGet("operation_time")
+	var parsed struct {
+		Timestamp struct {
+			T uint32 `json:"t"`
+			I uint32 `json:"i"`
+		} `json:"$timestamp"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		r.problems = append(r.problems, fmt.Sprintf("a %s message from %s has operation_time %q: %v", op, coll, raw, err))
+		return
+	}
+	ts := bson.Timestamp{T: parsed.Timestamp.T, I: parsed.Timestamp.I}
+	if ts.IsZero() {
+		r.problems = append(r.problems, fmt.Sprintf("a %s message from %s has no operation_time", op, coll))
+		return
+	}
+	if ts.Before(r.lastReadTime) {
+		r.problems = append(r.problems, fmt.Sprintf("a %s message from %s at %v was emitted after a read at %v", op, coll, ts, r.lastReadTime))
+	}
+	if op == "read" {
+		r.lastReadTime = ts
+	}
 }
 
 // replayChecked is replay for the test goroutine: it fails the test if any

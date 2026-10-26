@@ -10,6 +10,7 @@ package incrementalsnapshot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -1982,4 +1983,72 @@ func TestCoordinatorNonRetryableFetchChunkFailsOnCommit(t *testing.T) {
 	require.ErrorIs(t, err, sentinel, "an ordinary failure must reach the caller, not be absorbed as a retry")
 	assert.NotErrorIs(t, err, ErrRetryable)
 	assert.Zero(t, deferred, "OnPlanDeferred must not fire for a non-retryable failure")
+}
+
+// TestCoordinatorVersionTracksState: callers cache State's encoding by
+// Version, so Version must move whenever State does, a failed emit's undo
+// included, and stay put while State does. Remaining must agree with State.
+func TestCoordinatorVersionTracksState(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	coord, err := NewCoordinator(testConfig{ChunkSize: 2, Deps: &refetchMockDeps{
+		rows:       []Row{rowFor(table, 1), rowFor(table, 2), rowFor(table, 3)},
+		maxPK:      PrimaryKey{3},
+		chunkSize:  2,
+		watermarks: []testWatermark{{Xmin: 100, Xmax: 101}},
+	}}, nil)
+	require.NoError(t, err)
+
+	var lastVersion uint64
+	var lastState string
+	observe := func(wantMoved bool) {
+		t.Helper()
+		b, err := json.Marshal(coord.State())
+		require.NoError(t, err)
+		state := coord.State()
+		remaining := len(state.RemainingTables)
+		if state.CurrentTable != nil {
+			remaining++
+		}
+		assert.Equal(t, remaining, coord.Remaining())
+		if coord.Version() == lastVersion {
+			assert.Equal(t, lastState, string(b), "State changed without Version")
+		}
+		assert.Equal(t, wantMoved, coord.Version() != lastVersion)
+		lastVersion, lastState = coord.Version(), string(b)
+	}
+
+	coord.AddTables([]TableID{table})
+	observe(true)
+	require.NoError(t, coord.Start(t.Context()))
+	observe(true)
+
+	// Before the window closes: nothing released.
+	_, err = coord.OnCommit(t.Context(), 100, collect(new([][]Row)))
+	require.NoError(t, err)
+	observe(false)
+
+	sentinel := errors.New("downstream gone")
+	var versionInFailedEmit uint64
+	_, err = coord.OnCommit(t.Context(), 102, func([]Row) error {
+		versionInFailedEmit = coord.Version()
+		return sentinel
+	})
+	require.ErrorIs(t, err, sentinel)
+	// Advanced for the emit, then undone: a cache taken from inside the
+	// failed emit holds the advanced State, so it must not be reused.
+	observe(true)
+	assert.NotEqual(t, versionInFailedEmit, coord.Version())
+
+	var versionInEmit uint64
+	_, err = coord.OnCommit(t.Context(), 102, func([]Row) error {
+		versionInEmit = coord.Version()
+		return nil
+	})
+	require.NoError(t, err)
+	observe(true)
+	assert.Equal(t, lastVersion, versionInEmit, "State read inside emit must stay valid after it")
+
+	// A request for a table already known changes nothing.
+	assert.Empty(t, coord.AddTables([]TableID{table}))
+	observe(false)
 }

@@ -191,7 +191,7 @@ type fakeChunkReader struct {
 }
 
 func fakeID(v bson.RawValue) (int32, bool) {
-	if v.Type == bson.Type(0) {
+	if v.IsZero() {
 		return math.MinInt32, false
 	}
 	return v.Int32(), true

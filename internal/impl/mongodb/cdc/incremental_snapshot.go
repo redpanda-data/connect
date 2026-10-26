@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"time"
 
@@ -78,20 +77,6 @@ func (w clusterTimeWatermark) Quiesced() bool {
 	return w.quiesced
 }
 
-// prevTimestamp returns the cluster time just before ts. A change event at ts
-// only proves the stream is through the tick before it: the events of one
-// transaction share a cluster time, and the rest may not have streamed yet.
-func prevTimestamp(ts bson.Timestamp) bson.Timestamp {
-	switch {
-	case ts.I > 0:
-		return bson.Timestamp{T: ts.T, I: ts.I - 1}
-	case ts.T > 0:
-		return bson.Timestamp{T: ts.T - 1, I: math.MaxUint32}
-	default:
-		return bson.Timestamp{}
-	}
-}
-
 // keyStringTimestampType is the KeyString type byte for a BSON timestamp,
 // which leads every change stream resume token's _data.
 const keyStringTimestampType = 0x82
@@ -144,7 +129,7 @@ func resumeTokenTimestamp(token bson.Raw) (bson.Timestamp, error) {
 // identity, so "1" and 1 never collide, and taking it from the raw value
 // keeps an embedded document's field order, which _id equality depends on.
 func documentKey(id bson.RawValue) (incrementalsnapshot.PrimaryKey, error) {
-	if id.Type == bson.Type(0) {
+	if id.IsZero() {
 		return nil, errors.New("document has no _id")
 	}
 	b, err := bson.MarshalExtJSON(bson.D{{Key: "_id", Value: id}}, true, false)
@@ -402,7 +387,7 @@ func (d *incSnapshotDeps) FetchChunk(ctx context.Context, table incrementalsnaps
 
 func (d *incSnapshotDeps) findRange(ctx context.Context, coll string, lower, upper bson.RawValue, limit int) ([]chunkDoc, error) {
 	var minID any = bson.MinKey{}
-	if lower.Type != bson.Type(0) {
+	if !lower.IsZero() {
 		minID = lower
 	}
 	cursor, err := d.collection(coll).Find(ctx, bson.D{},
@@ -481,9 +466,10 @@ type incSnapshotRun struct {
 	lastHigh bson.Timestamp
 	idle     bool
 
-	// encodedState caches state's encoding until stateDirty.
-	encodedState []byte
-	stateDirty   bool
+	// encodedState caches state's encoding, made at the coordinator's
+	// encodedVersion.
+	encodedState   []byte
+	encodedVersion uint64
 
 	// reading is the collection whose chunks are being released, for the
 	// start and finish logs, and readDocs how many of its documents have been
@@ -547,11 +533,10 @@ func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, 
 
 func newIncSnapshotRunBase(dbName string, logger *service.Logger, metrics *service.Metrics) *incSnapshotRun {
 	return &incSnapshotRun{
-		dbName:     dbName,
-		logger:     logger,
-		now:        time.Now,
-		stateDirty: true,
-		metrics:    newIncSnapshotMetrics(metrics),
+		dbName:  dbName,
+		logger:  logger,
+		now:     time.Now,
+		metrics: newIncSnapshotMetrics(metrics),
 	}
 }
 
@@ -596,12 +581,7 @@ func (r *incSnapshotRun) updateRemaining() {
 		r.metrics.remaining.Set(0)
 		return
 	}
-	state := r.coord.State()
-	remaining := int64(len(state.RemainingTables))
-	if state.CurrentTable != nil {
-		remaining++
-	}
-	r.metrics.remaining.Set(remaining)
+	r.metrics.remaining.Set(int64(r.coord.Remaining()))
 }
 
 // startReading logs a collection's read starting, and the previous one's
@@ -678,26 +658,19 @@ func tableNames(tables []incrementalsnapshot.TableID) []string {
 // state encodes the coordinator's checkpointable progress.
 //
 // It is read for every streamed change, long after the snapshot has gone
-// idle, so the encoding is cached and only redone once the progress may have
-// moved: after a commit the coordinator acted on, a queued request, or a
-// released chunk.
+// idle, so the encoding is cached and only redone once the coordinator's
+// Version moves.
 func (r *incSnapshotRun) state() ([]byte, error) {
-	if !r.stateDirty && r.encodedState != nil {
+	version := r.coord.Version()
+	if r.encodedState != nil && r.encodedVersion == version {
 		return r.encodedState, nil
 	}
 	b, err := json.Marshal(r.coord.State())
 	if err != nil {
 		return nil, fmt.Errorf("encoding incremental snapshot progress: %w", err)
 	}
-	r.encodedState, r.stateDirty = b, false
+	r.encodedState, r.encodedVersion = b, version
 	return b, nil
-}
-
-// releasedState is state for a chunk being released: the coordinator has just
-// advanced its progress past the chunk, so the cached encoding is stale.
-func (r *incSnapshotRun) releasedState() ([]byte, error) {
-	r.stateDirty = true
-	return r.state()
 }
 
 // advance records that the stream is complete through pos and gives the
@@ -712,7 +685,6 @@ func (r *incSnapshotRun) advance(ctx context.Context, pos bson.Timestamp, emit i
 	}
 	changed, err := r.coord.OnCommit(ctx, r.through, r.countingEmit(emit))
 	if changed {
-		r.stateDirty = true
 		r.updateRemaining()
 	}
 	if err != nil {
@@ -750,7 +722,6 @@ func (r *incSnapshotRun) streamedChange(collection string, id bson.RawValue) err
 func (r *incSnapshotRun) request(collections []string) []string {
 	added := r.coord.RequeueTables(r.tables(collections))
 	if len(added) > 0 {
-		r.stateDirty = true
 		r.updateRemaining()
 	}
 	return tableNames(added)
