@@ -692,9 +692,10 @@ func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key string, cdcTime time.Tim
 		return false
 	}
 
-	// Skip if CDC event time <= snapshot start time
-	// This means we already emitted this version in the snapshot
-	return !cdcTime.After(snapshotStart)
+	// Skip only if the CDC event happened before the snapshot start, so the snapshot already emitted this version.
+	// ApproximateCreationDateTime is rounded down to the second, but the snapshot start keeps nanoseconds. An event
+	// stamped in the start second can have happened after the start, so we keep it (a possible duplicate, not a loss).
+	return cdcTime.Before(snapshotStart.Truncate(time.Second))
 }
 
 func (s *snapshotSequenceBuffer) IsOverflow() bool {
