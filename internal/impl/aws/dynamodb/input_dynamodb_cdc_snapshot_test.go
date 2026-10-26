@@ -126,3 +126,38 @@ func TestSnapshotSequenceBufferMixedTimeZones(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshotSequenceBufferSameSecondAsStart(t *testing.T) {
+	// ApproximateCreationDateTime is rounded down to the second. The snapshot start keeps nanoseconds.
+	snapshotStart := time.Date(2026, 1, 1, 10, 0, 0, 300_000_000, time.UTC)
+
+	tests := []struct {
+		name     string
+		cdcTime  time.Time
+		wantSkip bool
+	}{
+		{
+			name:     "second before the start second",
+			cdcTime:  time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC),
+			wantSkip: true,
+		},
+		{
+			name:     "same second as the start, can be after the start",
+			cdcTime:  time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip: false,
+		},
+		{
+			name:     "second after the start second",
+			cdcTime:  time.Date(2026, 1, 1, 10, 0, 1, 0, time.UTC),
+			wantSkip: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buffer := newSnapshotSequenceBuffer(100)
+			buffer.RecordSnapshotItem("key1", snapshotStart)
+
+			assert.Equal(t, tt.wantSkip, buffer.ShouldSkipCDCEvent("key1", tt.cdcTime))
+		})
+	}
+}
