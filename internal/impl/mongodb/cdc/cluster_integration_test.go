@@ -180,7 +180,11 @@ func (s *sharedShardedCluster) boot(ctx context.Context) (string, error) {
 	}
 	shards := []string{"sh1", "sh2"}
 	for _, name := range shards {
-		shard, err := run(name, "mongod", "--shardsvr", "--replSet", name, "--port", "27017", "--bind_ip_all")
+		// A sharded stream advances only as fast as its quietest shard, which
+		// moves on its periodic no-op write (10 s by default). A 1 s interval
+		// keeps the incremental snapshot tests short; it is startup-only.
+		shard, err := run(name, "mongod", "--shardsvr", "--replSet", name, "--port", "27017", "--bind_ip_all",
+			"--setParameter", "periodicNoopIntervalSecs=1")
 		if err != nil {
 			return "", err
 		}
@@ -433,16 +437,23 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection(t *
 	stream := h.stream(input)
 	wait := stream.RunAsync(t)
 
-	// Update the busy shard only while the snapshot reads it. A quiet shard
-	// releases about one chunk per no-op interval (10 s), so this spans a few
-	// chunks. Writes are paced so the stream keeps up.
+	// Update the busy shard only while the snapshot reads it: for at least
+	// minWrite, then until a read of busy has been emitted after a streamed
+	// change, so the snapshot overlapped streaming. maxWrite bounds a run where
+	// they never overlap. Writes are paced so the stream keeps up.
 	waitForLog := func(sub string, within time.Duration) {
 		t.Helper()
 		require.Eventually(t, func() bool { return len(h.logs.matching(sub)) > 0 }, within, 100*time.Millisecond, "waiting for log %q", sub)
 	}
 	waitForLog("Incremental snapshot reading collection busy", 2*time.Minute)
 	rng := rand.New(rand.NewPCG(5, 6))
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
+	const minWrite, maxWrite = 3 * time.Second, 30 * time.Second
+	start := time.Now()
+	for i := 0; ; i++ {
+		if elapsed := time.Since(start); elapsed >= maxWrite ||
+			(elapsed >= minWrite && i%20 == 0 && replay(h.output).interleaved["busy"]) {
+			break
+		}
 		h.db.UpdateOne(t, "busy", rng.IntN(initial), bson.M{"$inc": bson.M{"v": 1}})
 		time.Sleep(20 * time.Millisecond)
 	}

@@ -160,6 +160,11 @@ func documentKeyValue(pk incrementalsnapshot.PrimaryKey) (bson.RawValue, error) 
 	return id, nil
 }
 
+// sameKey reports whether two documentKey keys name the same _id.
+func sameKey(a, b incrementalsnapshot.PrimaryKey) bool {
+	return slices.Equal(a, b)
+}
+
 // chunkDoc is one document a chunk read returned: its _id, raw so it keeps its
 // exact BSON form, and the document decoded for the message body.
 type chunkDoc struct {
@@ -199,7 +204,9 @@ func fetchChunk(ctx context.Context, r chunkReader, table incrementalsnapshot.Ta
 	if err != nil {
 		return nil, err
 	}
-	if lower != nil && lowerID.Equal(upperID) {
+	// Keys are compared as text, not raw bytes: NaN has several bit patterns,
+	// and the one decoded from a key need not be the one stored.
+	if lower != nil && sameKey(lower, upper) {
 		// The previous chunk ended on upper, so the collection is done. A
 		// resume asks once more, since the checkpoint does not record that,
 		// and the server rejects an index range whose bounds are equal.
@@ -211,8 +218,14 @@ func fetchChunk(ctx context.Context, r chunkReader, table incrementalsnapshot.Ta
 	if err != nil {
 		return nil, err
 	}
-	if lower != nil && len(docs) > 0 && docs[0].id.Equal(lowerID) {
-		docs = docs[1:]
+	if lower != nil && len(docs) > 0 {
+		first, err := documentKey(docs[0].id)
+		if err != nil {
+			return nil, err
+		}
+		if sameKey(first, lower) {
+			docs = docs[1:]
+		}
 	}
 	if len(docs) > limit {
 		docs = docs[:limit]
@@ -329,8 +342,9 @@ func (d *incSnapshotDeps) ResolvePrimaryKey(ctx context.Context, table increment
 	if len(specs) == 0 {
 		return nil, fmt.Errorf("%w: collection %s does not exist", incrementalsnapshot.ErrTableUnusable, table)
 	}
-	if specs[0].Type == "view" {
-		return nil, fmt.Errorf("%w: %s is a view", incrementalsnapshot.ErrTableUnusable, table)
+	// Neither accepts a min/max read, and neither has a change stream.
+	if t := specs[0].Type; t == "view" || t == "timeseries" {
+		return nil, fmt.Errorf("%w: %s is a %s collection", incrementalsnapshot.ErrTableUnusable, table, t)
 	}
 	return []string{"_id"}, nil
 }
@@ -717,14 +731,21 @@ func (r *incSnapshotRun) streamedChange(collection string, id bson.RawValue) err
 }
 
 // request queues collections a snapshot-execute signal named, read already or
-// not, reporting the ones it queued: a collection still queued or being read
-// is left alone.
-func (r *incSnapshotRun) request(collections []string) []string {
-	added := r.coord.RequeueTables(r.tables(collections))
-	if len(added) > 0 {
+// not. It reports the ones it queued, and the ones it skipped because they are
+// still queued or being read. Each name appears once in the two lists, even if
+// collections repeats it.
+func (r *incSnapshotRun) request(collections []string) (added, skipped []string) {
+	queued := r.coord.RequeueTables(r.tables(collections))
+	if len(queued) > 0 {
 		r.updateRemaining()
 	}
-	return tableNames(added)
+	added = tableNames(queued)
+	for _, c := range collections {
+		if !slices.Contains(added, c) && !slices.Contains(skipped, c) {
+			skipped = append(skipped, c)
+		}
+	}
+	return added, skipped
 }
 
 // pruneResume drops the collections stored progress still has queued, or is
@@ -751,6 +772,16 @@ func pruneResume(resume *incrementalsnapshot.State, configured []incrementalsnap
 		}
 	}
 	resume.RemainingTables = remaining
+	// AddTables skips a known collection, so an unconfigured one must not stay
+	// known: if it comes back to collections, it is read again, since the
+	// stream did not watch its changes while it was gone.
+	known := resume.Tables[:0]
+	for _, table := range resume.Tables {
+		if slices.Contains(configured, table) {
+			known = append(known, table)
+		}
+	}
+	resume.Tables = known
 	if len(dropped) > 0 {
 		logger.Warnf("Abandoning the incremental snapshot of collections %v, which are no longer in %s", tableNames(dropped), fieldCollections)
 	}

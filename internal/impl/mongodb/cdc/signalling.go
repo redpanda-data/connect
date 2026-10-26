@@ -138,9 +138,9 @@ func (m *mongoCDC) handleSignal(event bson.Raw, run *incSnapshotRun) {
 			log.Errorf("Skipping signal: %v: collections %v are not in %s", replication.ErrSignalRejected, unknown, fieldCollections)
 			return
 		}
-		added := run.request(collections)
-		if skipped := len(slices.Compact(slices.Sorted(slices.Values(collections)))) - len(added); skipped > 0 {
-			log.Infof("%d of the requested collections are already queued or being read, not queueing them again", skipped)
+		added, skipped := run.request(collections)
+		if len(skipped) > 0 {
+			log.Infof("Collections %v are already queued or being read, not queueing them again", skipped)
 		}
 		if len(added) > 0 {
 			log.Infof("Incremental snapshot queued collections %v", added)

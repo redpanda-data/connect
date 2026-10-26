@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -76,6 +77,13 @@ func TestIntegrationIncSnapshotDeps(t *testing.T) {
 		require.NoError(t, db.CreateView(ctx, "mixed_view", "mixed", []bson.D{}))
 		_, err = deps.ResolvePrimaryKey(ctx, incrementalsnapshot.TableID{Schema: db.Name(), Table: "mixed_view"})
 		require.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
+
+		// Like a view, a time series collection rejects min/max reads and
+		// its writes never reach a change stream.
+		timeSeries := options.CreateCollection().SetTimeSeriesOptions(options.TimeSeries().SetTimeField("t"))
+		require.NoError(t, db.CreateCollection(ctx, "mixed_ts", timeSeries))
+		_, err = deps.ResolvePrimaryKey(ctx, incrementalsnapshot.TableID{Schema: db.Name(), Table: "mixed_ts"})
+		require.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable)
 	})
 
 	t.Run("max key across types", func(t *testing.T) {
@@ -110,6 +118,29 @@ func TestIntegrationIncSnapshotDeps(t *testing.T) {
 		}
 		require.Len(t, seen, len(ids), "seen %v", seen)
 		assert.ElementsMatch(t, []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, seen)
+	})
+
+	t.Run("walk past a NaN key", func(t *testing.T) {
+		// The NaN that JavaScript drivers such as mongosh write. Go's
+		// math.NaN() has other bits.
+		jsNaN := math.Float64frombits(0x7ff8000000000000)
+		_, err := db.Collection("nan").InsertMany(ctx, []any{
+			bson.D{{Key: "_id", Value: jsNaN}},
+			bson.D{{Key: "_id", Value: int32(1)}},
+		})
+		require.NoError(t, err)
+		table := incrementalsnapshot.TableID{Schema: db.Name(), Table: "nan"}
+		upper, err := deps.ResolveMaxKey(ctx, table, nil)
+		require.NoError(t, err)
+
+		// NaN sorts before every other number, so a chunk of one ends on it.
+		first, err := deps.FetchChunk(ctx, table, nil, nil, upper, 1)
+		require.NoError(t, err)
+		require.True(t, math.IsNaN(first[0].Data["_id"].(float64)))
+
+		next, err := deps.FetchChunk(ctx, table, nil, first[0].PK, upper, 1)
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), next[0].Data["_id"])
 	})
 
 	t.Run("watermark", func(t *testing.T) {
@@ -699,6 +730,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 
 	// Back to incremental: the stale mid-read progress must not be resumed.
+	completeBefore := len(h.logs.matching("Incremental snapshot complete"))
 	again := h.stream(incrementalInput)
 	wait = again.RunAsync(t)
 	h.db.InsertOne(t, "bar", bson.M{"_id": "incremental-marker", "v": 0})
@@ -706,7 +738,11 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 		_, ok := replay(h.output).docs["bar/incremental-marker"]
 		return ok
 	}, time.Minute, 100*time.Millisecond, "streaming did not start")
-	time.Sleep(2 * time.Second) // give a resumed read time to show itself
+	// Logged either way: at once when the progress is gone, or after foo is
+	// read to the end when stale progress was resumed.
+	require.Eventually(t, func() bool {
+		return len(h.logs.matching("Incremental snapshot complete")) > completeBefore
+	}, time.Minute, 100*time.Millisecond, "the incremental snapshot did not complete")
 	again.Stop(t)
 	wait()
 	assert.Equal(t, stoppedAt, replayChecked(t, h.output).readByColl["foo"], "stale progress was resumed")

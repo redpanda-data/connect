@@ -329,6 +329,9 @@ func TestPruneResumeDropsUnconfiguredCollections(t *testing.T) {
 		assert.Nil(t, got.LastSentPK)
 		assert.Nil(t, got.MaxPK)
 		assert.Equal(t, []incrementalsnapshot.TableID{users, orders}, got.RemainingTables)
+		// AddTables skips a known table, so legacy must not stay known: if
+		// it comes back to collections, its read starts again.
+		assert.Equal(t, []incrementalsnapshot.TableID{users, orders}, got.Tables)
 		assert.Equal(t, &legacy, stored.CurrentTable, "the caller's state must not change")
 		assert.Len(t, stored.RemainingTables, 3)
 	})
