@@ -102,7 +102,12 @@ func newCountingProxy(t *testing.T, targetURL string) *countingProxy {
 // limit.
 func TestIntegrationSchemaRegistryMigratorSyncSharedSchemaFanout(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
+	// Do not call t.Parallel(). The sync registers identical schema bodies
+	// under different subjects, two at a time. When the destination Redpanda
+	// is slow, as in a parallel run, its schema registry can give two
+	// concurrent registrations of the same body different IDs, and the sync
+	// fails with "schema ID mapping conflict". Go runs the sequential tests
+	// before it releases the parallel tests, so the destination is not loaded.
 
 	// Number of source subjects sharing one identical schema body. Large
 	// enough to make quadratic growth unambiguous while keeping runtime low.
