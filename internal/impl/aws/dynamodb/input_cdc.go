@@ -571,7 +571,8 @@ func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
 	}
 }
 
-// snapshotSequenceBuffer tracks sequence numbers seen during snapshot for deduplication.
+// snapshotSequenceBuffer tracks the snapshot start time of each item the snapshot emitted. CDC events use it to skip
+// versions of an item that the snapshot already emitted.
 //
 // Architecture: Lock-free sharded hash table design
 //
@@ -599,8 +600,12 @@ type snapshotSequenceBuffer struct {
 // bufferShard is a single shard of the buffer with its own lock.
 // Each shard handles ~1/32 of all keys (on average, due to FNV-1a distribution).
 type bufferShard struct {
-	mu        sync.RWMutex
-	sequences map[string]string // item key -> sequence number seen in snapshot
+	mu sync.RWMutex
+
+	// sequences maps an item key to the snapshot start time. It stores time.Time, not a formatted string, because the
+	// snapshot start is in the host zone and the stream record time is in UTC. Strings in different zones do not compare
+	// in time order.
+	sequences map[string]time.Time
 }
 
 func newSnapshotSequenceBuffer(maxSize int) *snapshotSequenceBuffer {
@@ -609,7 +614,7 @@ func newSnapshotSequenceBuffer(maxSize int) *snapshotSequenceBuffer {
 	}
 	// Initialize each shard
 	for i := range buf.shards {
-		buf.shards[i].sequences = make(map[string]string, maxSize/numBufferShards)
+		buf.shards[i].sequences = make(map[string]time.Time, maxSize/numBufferShards)
 	}
 	return buf
 }
@@ -641,7 +646,7 @@ func (s *snapshotSequenceBuffer) getShard(key string) *bufferShard {
 	return &s.shards[hash%numBufferShards]
 }
 
-func (s *snapshotSequenceBuffer) RecordSnapshotItem(key, sequenceNum string) {
+func (s *snapshotSequenceBuffer) RecordSnapshotItem(key string, snapshotStart time.Time) {
 	// Quick overflow check without locking
 	if s.overflow.Load() {
 		return
@@ -653,7 +658,7 @@ func (s *snapshotSequenceBuffer) RecordSnapshotItem(key, sequenceNum string) {
 
 	// Check if key already exists (update, not insert)
 	if _, exists := shard.sequences[key]; exists {
-		shard.sequences[key] = sequenceNum
+		shard.sequences[key] = snapshotStart
 		return
 	}
 
@@ -668,10 +673,10 @@ func (s *snapshotSequenceBuffer) RecordSnapshotItem(key, sequenceNum string) {
 		return
 	}
 
-	shard.sequences[key] = sequenceNum
+	shard.sequences[key] = snapshotStart
 }
 
-func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key, sequenceNum string) bool {
+func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key string, cdcTime time.Time) bool {
 	// If buffer overflowed, we can't deduplicate reliably
 	// Better to emit duplicates than lose data
 	if s.overflow.Load() {
@@ -680,16 +685,16 @@ func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key, sequenceNum string) boo
 
 	shard := s.getShard(key)
 	shard.mu.RLock()
-	snapshotSeq, exists := shard.sequences[key]
+	snapshotStart, exists := shard.sequences[key]
 	shard.mu.RUnlock()
 
 	if !exists {
 		return false
 	}
 
-	// Skip if CDC event sequence <= snapshot sequence
+	// Skip if CDC event time <= snapshot start time
 	// This means we already emitted this version in the snapshot
-	return sequenceNum <= snapshotSeq
+	return !cdcTime.After(snapshotStart)
 }
 
 func (s *snapshotSequenceBuffer) IsOverflow() bool {
@@ -2494,9 +2499,8 @@ func convertTableRecordsToBatch(records []types.Record, tableName, shardID strin
 
 		// CDC deduplication: skip records already seen in snapshot
 		if dedupeBuffer != nil && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
-			cdcTimestamp := record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano)
 			keyStr := buildItemKeyFromStream(record.Dynamodb.Keys)
-			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, cdcTimestamp) {
+			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, *record.Dynamodb.ApproximateCreationDateTime) {
 				continue
 			}
 		}
@@ -2955,7 +2959,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 			keyStr := buildItemKeyString(item, keySchema)
 			if keyStr != "" {
 				// Record this item in the snapshot buffer (with timestamp as sequence for deduplication)
-				buffer.RecordSnapshotItem(keyStr, startTime.Format(time.RFC3339Nano))
+				buffer.RecordSnapshotItem(keyStr, startTime)
 			}
 		}
 
@@ -3151,9 +3155,8 @@ func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID
 
 		// CDC deduplication: skip records already seen in snapshot
 		if dedupeBuffer != nil && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
-			cdcTimestamp := record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano)
 			keyStr := buildItemKeyFromStream(record.Dynamodb.Keys)
-			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, cdcTimestamp) {
+			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, *record.Dynamodb.ApproximateCreationDateTime) {
 				continue
 			}
 		}
