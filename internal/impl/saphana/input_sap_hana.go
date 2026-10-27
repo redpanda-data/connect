@@ -197,9 +197,14 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 // timezone, so only the clock that populated it can be compared against it,
 // and an hours-scale host/database offset would otherwise skip or delay rows
 // forever.
+//
+// The shift is cast to DOUBLE because HANA types a bare ADD_SECONDS parameter
+// as INTEGER, and go-hdb then rejects any non-integral float64 client-side:
+// without the cast a fractional timestamp_delay (500ms, 1.5s) fails every
+// poll with a conversion error.
 const (
-	hanaClockQuery    = `SELECT ADD_SECONDS(CURRENT_TIMESTAMP, ?) FROM DUMMY`
-	hanaUTCClockQuery = `SELECT ADD_SECONDS(CURRENT_UTCTIMESTAMP, ?) FROM DUMMY`
+	hanaClockQuery    = `SELECT ADD_SECONDS(CURRENT_TIMESTAMP, CAST(? AS DOUBLE)) FROM DUMMY`
+	hanaUTCClockQuery = `SELECT ADD_SECONDS(CURRENT_UTCTIMESTAMP, CAST(? AS DOUBLE)) FROM DUMMY`
 )
 
 // fetchWindowUpperBound reads the timestamp-mode poll window's upper bound
