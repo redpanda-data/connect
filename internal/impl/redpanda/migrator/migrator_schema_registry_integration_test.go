@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -454,6 +455,95 @@ func TestIntegrationSchemaRegistryMigratorSyncTranslateIDs(t *testing.T) {
 	assert.Greater(t, sd1.ID, 1)
 	assert.Greater(t, sd2.ID, 1)
 	assert.NotEqual(t, sd1.ID, sd2.ID)
+}
+
+// Subjects that share one source schema ID register at the destination one at
+// a time. Redpanda looks up the schema body before it takes its write lock, so
+// two concurrent registrations of a new body can get two IDs. The sync then
+// fails with "schema ID mapping conflict".
+func TestIntegrationSchemaRegistryMigratorSyncTranslateIDsSharedSchemaConcurrency(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const sharedSchema = `{"type":"record","name":"Shared","fields":[{"name":"a","type":"int"}]}`
+
+	t.Log("Given: source and destination Schema Registry")
+	srcCluster, dstCluster := startRedpandaSourceAndDestination(t)
+	src, err := sr.NewClient(sr.URLs(srcCluster.SchemaRegistryURL))
+	require.NoError(t, err)
+
+	t.Log("And: two source subjects that share one schema ID")
+	ss1, err := src.CreateSchema(t.Context(), "shared-1-value", sr.Schema{Schema: sharedSchema})
+	require.NoError(t, err)
+	ss2, err := src.CreateSchema(t.Context(), "shared-2-value", sr.Schema{Schema: sharedSchema})
+	require.NoError(t, err)
+	require.Equal(t, ss1.ID, ss2.ID)
+
+	t.Log("And: the destination holds the first registration until a second one arrives")
+	// The hold makes two registrations overlap if the sync sends them
+	// concurrently. If it does not, the first one waits for the timeout.
+	target, err := url.Parse(dstCluster.SchemaRegistryURL)
+	require.NoError(t, err)
+	fwd := httputil.NewSingleHostReverseProxy(target)
+	var (
+		mu         sync.Mutex
+		inFlight   int
+		peak       int
+		registered int
+	)
+	second := make(chan struct{})
+	dst := newProxiedSchemaRegistryClient(t, dstCluster.SchemaRegistryURL, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/versions") {
+			return false
+		}
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		registered++
+		first := registered == 1
+		if inFlight == 2 {
+			close(second)
+		}
+		mu.Unlock()
+
+		if first {
+			select {
+			case <-second:
+			case <-time.After(2 * time.Second):
+			}
+		}
+		fwd.ServeHTTP(w, r)
+
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+		return true
+	})
+
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:      true,
+		Versions:     migrator.VersionsAll,
+		TranslateIDs: true,
+	}
+	// NB: the testing constructor sets MaxParallelHTTPRequests to 2.
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	t.Log("When: migrator is run")
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+	require.NoError(t, m.Sync(ctx))
+
+	t.Log("Then: the registrations did not overlap")
+	mu.Lock()
+	assert.Equal(t, 2, registered)
+	assert.Equal(t, 1, peak)
+	mu.Unlock()
+
+	t.Log("And: both destination subjects use the same schema ID")
+	d1, err := dst.SchemaByVersion(ctx, "shared-1-value", 1)
+	require.NoError(t, err)
+	d2, err := dst.SchemaByVersion(ctx, "shared-2-value", 1)
+	require.NoError(t, err)
+	assert.Equal(t, d1.ID, d2.ID)
 }
 
 func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
