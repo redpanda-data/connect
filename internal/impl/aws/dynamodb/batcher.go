@@ -455,8 +455,9 @@ type checkpointer interface {
 // and the shard's tracker entry is forgotten. A failed write leaves the entry
 // in place so the shutdown flush still persists the frontier, and the write
 // is retried on every shard refresh (RetryFinalize) until it lands or the
-// shard ages out of the stream. cp may be nil (no checkpoint store), in which
-// case the entry is simply forgotten.
+// shard ages out of the stream. cp is nil only after Close has cleared the
+// input's checkpointer (the shutdown flush already persisted what it could)
+// and in tests; the entry is then forgotten without a write.
 func (b *RecordBatcher) CloseShard(ctx context.Context, cp checkpointer, shardID string) error {
 	if b == nil {
 		return nil
@@ -545,6 +546,7 @@ func (b *RecordBatcher) finalizeShard(ctx context.Context, shardID string) error
 	cp := st.closeCP
 	b.mu.Unlock()
 
+	// cp is nil after Close (see CloseShard).
 	if cp != nil {
 		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
 		var err error
