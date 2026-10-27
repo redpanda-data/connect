@@ -661,6 +661,44 @@ func TestResolveResume_GlobalCompletedRows(t *testing.T) {
 	assert.False(t, cdcCheckpointProbeNeeded(resumeCompleted), "a completed shard has nothing to probe")
 }
 
+// TestResolveResume_GlobalForeignCompletedRowWithoutTimeIgnored (CON-599): a
+// completed row from another region's stream that carries no
+// ApproximateCreationTime (a closed shard that delivered nothing) gives no
+// failover position, so it must not turn a fresh region into a failover
+// resume with a zero cutoff, which would replay every shard from TRIM_HORIZON.
+func TestResolveResume_GlobalForeignCompletedRowWithoutTimeIgnored(t *testing.T) {
+	emptyCompleted := func(shardID string) map[string]types.AttributeValue {
+		return map[string]types.AttributeValue{
+			"TableId":                    &types.AttributeValueMemberS{Value: "t"},
+			"ShardID":                    &types.AttributeValueMemberS{Value: shardID},
+			"StreamArn":                  &types.AttributeValueMemberS{Value: "arn:A"},
+			checkpointShardCompletedAttr: &types.AttributeValueMemberBOOL{Value: true},
+		}
+	}
+
+	t.Run("only timeless completed rows", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:B", []map[string]types.AttributeValue{
+			emptyCompleted("shard-x"), emptyCompleted("shard-y"),
+		})
+		d, err := c.ResolveResume(t.Context(), "shard-new")
+		require.NoError(t, err)
+		assert.Equal(t, resumeDefault, d.Mode)
+	})
+
+	t.Run("beside a timed row", func(t *testing.T) {
+		timedCompleted := shardRow("arn:A", "shard-z", "seq-3", "2026-06-16T10:02:00Z")
+		timedCompleted[checkpointShardCompletedAttr] = &types.AttributeValueMemberBOOL{Value: true}
+		c := globalCheckpointerWithPartition(t, "arn:B", []map[string]types.AttributeValue{
+			emptyCompleted("shard-x"),
+			timedCompleted,
+		})
+		d, err := c.ResolveResume(t.Context(), "shard-new")
+		require.NoError(t, err)
+		assert.Equal(t, resumeFailover, d.Mode)
+		assert.Equal(t, "2026-06-16T10:02:00Z", d.Cutoff.UTC().Format(time.RFC3339))
+	})
+}
+
 // TestCheckpointerMarkShardCompletedKeepsStoredPosition (CON-599): marking a
 // shard completed without a final position (nothing was delivered from it
 // during this run) must keep the row's stored SequenceNumber and, in global

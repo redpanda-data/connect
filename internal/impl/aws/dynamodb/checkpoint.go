@@ -321,6 +321,17 @@ func (c *Checkpointer) getShardRow(ctx context.Context, shardID string) (seq str
 	return seq, isShardCompletedRow(result.Item), nil
 }
 
+// rowApproximateCreationTime returns a checkpoint row's parsed
+// ApproximateCreationTime, if it has a valid one.
+func rowApproximateCreationTime(item map[string]types.AttributeValue) (time.Time, bool) {
+	tsAttr, ok := item["ApproximateCreationTime"].(*types.AttributeValueMemberS)
+	if !ok || tsAttr.Value == "" {
+		return time.Time{}, false
+	}
+	ts, err := time.Parse(time.RFC3339Nano, tsAttr.Value)
+	return ts, err == nil
+}
+
 // isShardCompletedRow reports whether a checkpoint row carries the shard
 // completion marker.
 func isShardCompletedRow(item map[string]types.AttributeValue) bool {
@@ -541,14 +552,18 @@ func (c *Checkpointer) prepareResume(ctx context.Context) error {
 				continue
 			}
 			// Foreign-stream row: contribute to the low-water-mark cutoff.
+			ts, hasTime := rowApproximateCreationTime(item)
+			if completed && !hasTime {
+				// A closed shard that delivered nothing in the other region
+				// gives no failover position; counting it would turn a fresh
+				// region into a failover with a zero cutoff, replaying every
+				// shard from TRIM_HORIZON.
+				continue
+			}
 			c.hasForeignRows = true
-			if tsAttr, ok := item["ApproximateCreationTime"].(*types.AttributeValueMemberS); ok && tsAttr.Value != "" {
-				if ts, perr := time.Parse(time.RFC3339Nano, tsAttr.Value); perr == nil {
-					if !cutoffSet || ts.Before(c.cutoff) {
-						c.cutoff = ts
-						cutoffSet = true
-					}
-				}
+			if hasTime && (!cutoffSet || ts.Before(c.cutoff)) {
+				c.cutoff = ts
+				cutoffSet = true
 			}
 		}
 		if len(out.LastEvaluatedKey) == 0 {
