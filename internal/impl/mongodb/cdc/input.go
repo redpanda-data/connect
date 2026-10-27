@@ -375,7 +375,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 }`),
 				service.NewStringField(fieldIncSnapshotKey).
 					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nIf you delete the stored progress, or change this key, while a stream position is stored, a restart treats every collection as read. To read a collection again, send a `"+replication.SnapshotSignalType+"` signal. Unlike `postgres_cdc`, a new key does not cause a new read. While `"+fieldIncSnapshotEnabled+"` is `false`, the input discards progress left under this key, so enabling it again later never resumes a read the stream has long since moved past.").
-					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from `"+fieldCheckpointKey+"`.").
+					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from "+fieldCheckpointKey+".").
 					Default(""),
 				service.NewDurationField(fieldIncSnapshotRetryCool).
 					Description("How long the snapshot waits before retrying a chunk read that failed transiently, for example during a replica set election or after a dropped connection. Change events keep streaming meanwhile. Setting it to `0s` retries on the next streamed change.").
