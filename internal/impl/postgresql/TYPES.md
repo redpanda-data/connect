@@ -49,13 +49,15 @@ rely on them.
   The CDC path returns the raw PostgreSQL text representation, bypassing the
   pgtype.Numeric struct.
 - **DATE**: Mapped to Timestamp schema type. Both paths return `time.Time`.
-  ±infinity dates return `nil`.
+  The special values `infinity` and `-infinity` have no `time.Time` form, so
+  both paths return them as the strings `"infinity"` and `"-infinity"`.
 - **TIME / TIMETZ**: Returned as raw PostgreSQL text strings. The CDC path
   bypasses pgtype.Time to avoid struct values. Note: timetz (OID 1266) is not
   in pgx's default type map; the CDC path handles it via a `string(data)`
   fallback, and the snapshot path resolves the numeric OID via `resolveTypeName`.
-- **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. ±infinity
-  timestamps return `nil`.
+- **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. The special
+  values `infinity` and `-infinity` are returned as the strings `"infinity"`
+  and `"-infinity"`, as for DATE.
 - **JSON / JSONB**: Both paths run `json.Unmarshal`, producing a tree of stdlib
   types (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.

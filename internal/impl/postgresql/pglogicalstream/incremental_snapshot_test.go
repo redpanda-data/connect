@@ -169,6 +169,12 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"timestamptz", "timestamptz", "'2026-01-02 03:04:05.678+00'::timestamptz"},
 		{"timestamp", "timestamp", "'2026-01-02 03:04:05.678'::timestamp"},
 		{"date", "date", "'2026-01-02'::date"},
+		// infinity has no time.Time form: the snapshot gets a string from
+		// the driver and the stream a pgtype.InfinityModifier, so both
+		// sides must agree on the same string.
+		{"timestamptz_infinity", "timestamptz", "'infinity'::timestamptz"},
+		{"timestamp_neg_infinity", "timestamp", "'-infinity'::timestamp"},
+		{"date_infinity", "date", "'infinity'::date"},
 		{"float8", "double precision", "0.1"},
 		{"bool", "boolean", "true"},
 		{"inet", "inet", "'192.168.0.1/24'::inet"},
