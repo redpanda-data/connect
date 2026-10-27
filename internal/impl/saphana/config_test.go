@@ -9,8 +9,12 @@
 package saphana
 
 import (
+	"bytes"
+	"log/slog"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -60,6 +64,27 @@ dsn: hdb://user:pass@host:39017
 mode: incrementing
 table: MY_TABLE
 incrementing_column: ID
+`,
+		},
+		{
+			name: "negative timestamp_delay",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: MY_TABLE
+timestamp_column: TS
+timestamp_delay: -1s
+`,
+			errContains: "timestamp_delay",
+		},
+		{
+			name: "zero timestamp_delay",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: MY_TABLE
+timestamp_column: TS
+timestamp_delay: 0s
 `,
 		},
 		{
@@ -312,4 +337,61 @@ func TestSAPHANAInputTableRef(t *testing.T) {
 			require.Equal(t, tc.want, c.tableRef())
 		})
 	}
+}
+
+// timestamp_initial_value is compared against a TIMESTAMP column, which has no
+// timezone, and go-hdb binds t.UTC(): an offset must keep the wall clock the
+// user wrote rather than shift the start by that offset.
+func TestSAPHANAInputTimestampInitialValueKeepsWallClock(t *testing.T) {
+	conf := parseInputConf(t, `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: MY_TABLE
+timestamp_column: TS
+timestamp_initial_value: "2024-01-01T00:00:00+02:00"
+`)
+	s, err := newSAPHANAInput(conf, enterpriseResources())
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), s.timestampHWM)
+	assert.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), s.timestampHWM.UTC(),
+		"the value go-hdb puts on the wire must be the configured wall clock")
+}
+
+// A polling mode without checkpoint_cache restarts from its initial value on
+// every redeploy, re-emitting history; that must not be silent.
+func TestSAPHANAInputWarnsWithoutCheckpointCache(t *testing.T) {
+	newLogged := func(t *testing.T, yaml string) string {
+		t.Helper()
+		var buf bytes.Buffer
+		logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, nil)))
+		res := service.MockResources(service.MockResourcesOptUseLogger(logger), service.MockResourcesOptAddCache("cp"))
+		license.InjectTestService(res)
+		_, err := newSAPHANAInput(parseInputConf(t, yaml), res)
+		require.NoError(t, err)
+		return buf.String()
+	}
+
+	logs := newLogged(t, `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: MY_TABLE
+incrementing_column: ID
+`)
+	assert.Contains(t, logs, "No checkpoint_cache is set")
+
+	logs = newLogged(t, `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: MY_TABLE
+incrementing_column: ID
+checkpoint_cache: cp
+`)
+	assert.NotContains(t, logs, "checkpoint_cache")
+
+	logs = newLogged(t, `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: MY_TABLE
+`)
+	assert.NotContains(t, logs, "checkpoint_cache", "bulk has no position to keep")
 }

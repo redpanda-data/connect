@@ -58,8 +58,15 @@ import (
 // views, and --dont-exit-on-error keeps the container alive when the tenant
 // step fails. On an amd64 Linux host the tenant is created normally and the
 // tests still use SYSTEMDB.
+//
+// The image is pinned so a new HANA revision cannot change behaviour or break
+// start-up without a code change, and the container runs at UTC+3 (TZ is
+// honoured by the HANA processes) so CURRENT_TIMESTAMP and
+// CURRENT_UTCTIMESTAMP differ and the timestamp_clock tests can tell them
+// apart.
 const (
-	hanaImage       = "saplabs/hanaexpress:latest"
+	hanaImage       = "saplabs/hanaexpress:2.00.088.00.20251110.1"
+	hanaTimezone    = "Etc/GMT-3" // POSIX sign convention: UTC+3
 	hanaSystemPort  = "39017/tcp" // SQL port of SYSTEMDB
 	hanaUser        = "SYSTEM"
 	hanaPassword    = "HXEHana1" // must satisfy the HXE policy: upper, lower, digit, 8+ chars
@@ -112,6 +119,7 @@ func startHANA(ctx context.Context) (string, func(), error) {
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts(hanaSystemPort),
 		testcontainers.WithCmd("--agree-to-sap-license", "--dont-exit-on-error", "--master-password", hanaPassword),
+		testcontainers.WithEnv(map[string]string{"TZ": hanaTimezone}),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
 			hc.SecurityOpt = append(hc.SecurityOpt, "seccomp=unconfined")
 			hc.Ulimits = append(hc.Ulimits, &container.Ulimit{Name: "nofile", Soft: 1048576, Hard: 1048576})
@@ -185,6 +193,54 @@ func currentSchema(t *testing.T, db *sql.DB) string {
 	var schema string
 	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT CURRENT_SCHEMA FROM DUMMY`).Scan(&schema))
 	return schema
+}
+
+// createRestrictedUser creates a user holding nothing but SELECT on the given
+// objects of schema, the way a least-privilege cloud user would be set up,
+// and returns a DSN connecting as it. The user is dropped when the test ends.
+func createRestrictedUser(t *testing.T, db *sql.DB, dsn, schema string, objects ...string) (string, string) {
+	t.Helper()
+	const password = "Rpcn1Restricted"
+	// CREATE USER takes a bare identifier, so the name is plain upper case.
+	user := fmt.Sprintf("RPCN_R_%d_%d", time.Now().UnixNano()%1_000_000, hanaTableID.Add(1))
+	_, err := db.ExecContext(t.Context(), `CREATE USER `+user+` PASSWORD "`+password+`" NO FORCE_FIRST_PASSWORD_CHANGE`)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DROP USER `+user+` CASCADE`)
+	})
+	for _, obj := range objects {
+		_, err := db.ExecContext(t.Context(), `GRANT SELECT ON `+quoteIdentifier(schema)+`.`+quoteIdentifier(obj)+` TO `+user)
+		require.NoError(t, err)
+	}
+	u, err := url.Parse(dsn)
+	require.NoError(t, err)
+	u.User = url.UserPassword(user, password)
+	return user, u.String()
+}
+
+// disconnectSessions kills every open session of user from the admin
+// connection, as an operator, a network reset or an idle-session timeout
+// would, and returns how many were killed.
+func disconnectSessions(t *testing.T, db *sql.DB, user string) int {
+	t.Helper()
+	rows, err := db.QueryContext(t.Context(),
+		`SELECT CONNECTION_ID FROM M_CONNECTIONS WHERE USER_NAME = ? AND CONNECTION_ID <> CURRENT_CONNECTION AND CONNECTION_STATUS <> 'DISCONNECTED'`, user)
+	require.NoError(t, err)
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		require.NoError(t, rows.Scan(&id))
+		ids = append(ids, id)
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	killed := 0
+	for _, id := range ids {
+		if _, err := db.ExecContext(t.Context(), fmt.Sprintf(`ALTER SYSTEM DISCONNECT SESSION '%d'`, id)); err == nil {
+			killed++
+		}
+	}
+	return killed
 }
 
 // newIntegrationInput builds and connects an input from YAML; the test owns
@@ -275,18 +331,21 @@ func seq(from, to int64) []int64 {
 func TestIntegrationSAPHANAInputBulk(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a table with three rows")
 	table := createTable(t, db, "bulk", `ID INTEGER, NAME NVARCHAR(100)`)
 	for i := 1; i <= 3; i++ {
 		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i, fmt.Sprintf("row-%d", i))
 		require.NoError(t, err)
 	}
 
+	t.Log("When: a bulk input reads the table")
 	rows := readAllMessages(t, fmt.Sprintf(`
 dsn: %q
 mode: bulk
 table: %s
 `, dsn, table))
 
+	t.Log("Then: every row is emitted once with its columns")
 	assert.ElementsMatch(t, []int64{1, 2, 3}, intsOf(t, rows, "ID"))
 	for _, row := range rows {
 		assert.Equal(t, fmt.Sprintf("row-%v", row["ID"]), row["NAME"])
@@ -296,18 +355,21 @@ table: %s
 func TestIntegrationSAPHANAInputQuery(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a table with active and inactive rows")
 	table := createTable(t, db, "query", `ID INTEGER, ACTIVE TINYINT`)
 	for i, active := range []int{1, 0, 1, 0} {
 		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i+1, active)
 		require.NoError(t, err)
 	}
 
+	t.Log("When: a query input selects the active rows")
 	rows := readAllMessages(t, fmt.Sprintf(`
 dsn: %q
 mode: query
 query: SELECT * FROM %s WHERE ACTIVE = 1
 `, dsn, quoteIdentifier(table)))
 
+	t.Log("Then: only the active rows are emitted")
 	assert.ElementsMatch(t, []int64{1, 3}, intsOf(t, rows, "ID"))
 }
 
@@ -324,6 +386,7 @@ func TestIntegrationSAPHANAInputIncrementing(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
+	t.Log("Given: a table with a backlog of five rows")
 	insert(1, 5)
 
 	conf := fmt.Sprintf(`
@@ -335,14 +398,19 @@ poll_interval: 200ms
 fetch_size: 2
 `, dsn, table)
 
+	t.Log("When: an incrementing input starts")
 	input := newIntegrationInput(t, enterpriseResources(), conf)
+	t.Log("Then: the backlog is emitted in key order")
 	assert.Equal(t, seq(1, 5), intsOf(t, readRows(t, input, 5, 30*time.Second), "ID"))
 	expectNoRows(t, input, time.Second)
 
+	t.Log("When: three more rows are inserted")
 	insert(6, 8)
+	t.Log("Then: only the new rows are emitted")
 	assert.Equal(t, seq(6, 8), intsOf(t, readRows(t, input, 3, 30*time.Second), "ID"))
 	expectNoRows(t, input, time.Second)
 
+	t.Log("And: an input with incrementing_initial_value 3 starts after it")
 	withInitial := newIntegrationInput(t, enterpriseResources(), conf+"incrementing_initial_value: \"3\"\n")
 	assert.Equal(t, seq(4, 8), intsOf(t, readRows(t, withInitial, 5, 30*time.Second), "ID"))
 }
@@ -352,6 +420,7 @@ fetch_size: 2
 func TestIntegrationSAPHANAIncrementingResumesFromCheckpoint(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a table with ten rows")
 	table := createTable(t, db, "incres", `ID BIGINT PRIMARY KEY, VAL NVARCHAR(50)`)
 	for i := int64(1); i <= 10; i++ {
 		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i, fmt.Sprintf("v-%d", i))
@@ -367,6 +436,7 @@ fetch_size: 3
 checkpoint_cache: %s
 `, dsn, table, testCacheName)
 
+	t.Log("When: one batch is acknowledged, a second is read but not acknowledged, and the input stops")
 	res := enterpriseResourcesWithCache()
 	first := newIntegrationInput(t, res, conf)
 	batch, ack, err := first.ReadBatch(t.Context())
@@ -378,12 +448,14 @@ checkpoint_cache: %s
 	require.NoError(t, err)
 	require.NoError(t, first.Close(context.Background()))
 
+	t.Log("Then: only the acknowledged batch is checkpointed")
 	cp := readCheckpoint(t, res)
 	require.NotNil(t, cp)
 	require.NotNil(t, cp.IncrHWMInt)
 	assert.Equal(t, int64(3), *cp.IncrHWMInt, "only the acknowledged batch is checkpointed")
 	assert.Equal(t, quoteIdentifier(table), cp.Source)
 
+	t.Log("And: a restarted input resumes after it, re-delivering the unacknowledged batch")
 	second := newIntegrationInput(t, res, conf)
 	assert.Equal(t, seq(4, 10), intsOf(t, readRows(t, second, 7, 30*time.Second), "ID"))
 	expectNoRows(t, second, time.Second)
@@ -392,23 +464,47 @@ checkpoint_cache: %s
 	assert.Equal(t, int64(10), *cp.IncrHWMInt)
 }
 
-// Timestamp mode bounds each poll by the database clock minus
+// Timestamp mode bounds each poll by the clock timestamp_clock names minus
 // timestamp_delay (a fractional delay binds a non-integer ADD_SECONDS
-// argument), sees rows inserted later, and never re-delivers a row.
+// argument), sees rows inserted later, and never re-delivers a row. The
+// container runs ahead of UTC, so a row stamped between the UTC clock and the
+// local clock is inside the database window but outside the database_utc
+// one: the subtests fail if the clock choice were ignored.
 func TestIntegrationSAPHANAInputTimestamp(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
-	table := createTable(t, db, "ts", `ID INTEGER, UPDATED_AT TIMESTAMP`)
-	insertNow := func(ids ...int) {
-		for _, id := range ids {
-			_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, CURRENT_TIMESTAMP)`, id)
-			require.NoError(t, err)
-		}
-	}
-	insertNow(1, 2, 3)
 
-	for _, clock := range []string{"database", "database_utc"} {
-		t.Run(clock, func(t *testing.T) {
+	var offset int64
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		`SELECT SECONDS_BETWEEN(CURRENT_UTCTIMESTAMP, CURRENT_TIMESTAMP) FROM DUMMY`).Scan(&offset))
+	if offset <= 0 {
+		if os.Getenv(hanaDSNEnv) != "" {
+			t.Skipf("the instance behind %s runs at UTC%+ds; the clock subtests need a local clock ahead of UTC", hanaDSNEnv, offset)
+		}
+		t.Fatalf("the HANA container should run ahead of UTC (TZ=%s), got an offset of %ds", hanaTimezone, offset)
+	}
+
+	for _, tc := range []struct {
+		clock, now  string
+		wantBetween bool
+	}{
+		{clock: "database", now: "CURRENT_TIMESTAMP", wantBetween: true},
+		{clock: "database_utc", now: "CURRENT_UTCTIMESTAMP", wantBetween: false},
+	} {
+		t.Run(tc.clock, func(t *testing.T) {
+			t.Logf("Given: rows stamped with %s, and row 99 stamped between the UTC and local clocks", tc.now)
+			table := createTable(t, db, "ts", `ID INTEGER, UPDATED_AT TIMESTAMP`)
+			insertNow := func(ids ...int) {
+				for _, id := range ids {
+					_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, `+tc.now+`)`, id)
+					require.NoError(t, err)
+				}
+			}
+			insertNow(1, 2, 3)
+			_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (99, ADD_SECONDS(CURRENT_UTCTIMESTAMP, ?))`, offset/2)
+			require.NoError(t, err)
+
+			t.Logf("When: a timestamp input polls with timestamp_clock %s", tc.clock)
 			res := enterpriseResourcesWithCache()
 			input := newIntegrationInput(t, res, fmt.Sprintf(`
 dsn: %q
@@ -419,22 +515,29 @@ timestamp_clock: %s
 timestamp_delay: 500ms
 poll_interval: 200ms
 checkpoint_cache: %s
-`, dsn, table, clock, testCacheName))
-			assert.ElementsMatch(t, []int64{1, 2, 3}, intsOf(t, readRows(t, input, 3, 30*time.Second), "ID"))
+`, dsn, table, tc.clock, testCacheName))
+
+			want := []int64{1, 2, 3}
+			if tc.wantBetween {
+				want = append(want, 99)
+			}
+			t.Logf("Then: it emits %v", want)
+			assert.ElementsMatch(t, want, intsOf(t, readRows(t, input, len(want), 30*time.Second), "ID"))
 			expectNoRows(t, input, time.Second)
 
+			t.Log("And: rows inserted later are emitted once")
 			insertNow(4, 5)
 			assert.ElementsMatch(t, []int64{4, 5}, intsOf(t, readRows(t, input, 2, 30*time.Second), "ID"))
 			expectNoRows(t, input, time.Second)
 
+			var dbNow time.Time
+			require.NoError(t, db.QueryRowContext(t.Context(), `SELECT `+tc.now+` FROM DUMMY`).Scan(&dbNow))
 			cp := readCheckpoint(t, res)
 			require.NotNil(t, cp)
 			require.NotNil(t, cp.TimestampHWM, "the window bound is checkpointed")
-			assert.WithinDuration(t, time.Now(), *cp.TimestampHWM, 2*time.Minute,
-				"the bound comes from the database clock, which should agree with the host within reason")
+			assert.WithinDuration(t, dbNow, *cp.TimestampHWM, time.Minute,
+				"the checkpointed bound must come from the %s clock", tc.now)
 		})
-		_, err := db.ExecContext(t.Context(), `DELETE FROM `+quoteIdentifier(table)+` WHERE ID > 3`)
-		require.NoError(t, err)
 	}
 }
 
@@ -444,6 +547,7 @@ checkpoint_cache: %s
 func TestIntegrationSAPHANAInputTimestampIncrementingTiesAndResume(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: ten rows, ids 1 to 6 sharing one timestamp")
 	table := createTable(t, db, "tsinc", `ID INTEGER, UPDATED_AT TIMESTAMP`)
 	// Ten rows: ids 1..6 share one timestamp, 7..10 a later one.
 	tieTime := time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC)
@@ -467,6 +571,7 @@ fetch_size: 4
 checkpoint_cache: %s
 `, dsn, table, testCacheName)
 
+	t.Log("When: the first batch, ending inside the tie group, is acknowledged and the input stops")
 	res := enterpriseResourcesWithCache()
 	first := newIntegrationInput(t, res, conf)
 	batch, ack, err := first.ReadBatch(t.Context())
@@ -475,6 +580,7 @@ checkpoint_cache: %s
 	require.Len(t, batch, 4, "first batch stops at fetch_size inside the tie group")
 	require.NoError(t, first.Close(context.Background()))
 
+	t.Log("Then: the checkpoint is the last delivered (timestamp, id) pair")
 	cp := readCheckpoint(t, res)
 	require.NotNil(t, cp)
 	require.NotNil(t, cp.IncrHWMInt)
@@ -482,6 +588,7 @@ checkpoint_cache: %s
 	assert.Equal(t, int64(4), *cp.IncrHWMInt, "mid-window checkpoint is the last delivered row's id")
 	assert.Equal(t, tieTime, cp.TimestampHWM.UTC())
 
+	t.Log("And: a restarted input continues with id 5 and later rows")
 	second := newIntegrationInput(t, res, conf)
 	assert.Equal(t, seq(5, 10), intsOf(t, readRows(t, second, 6, 30*time.Second), "ID"))
 	expectNoRows(t, second, time.Second)
@@ -497,6 +604,7 @@ checkpoint_cache: %s
 func TestIntegrationSAPHANATimestampColumnTypeChecked(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a timestamp_column stored as DECIMAL(15,0)")
 	table := createTable(t, db, "tstype", `ID INTEGER, CHANGED DECIMAL(15,0)`)
 	schema := currentSchema(t, db)
 
@@ -513,7 +621,9 @@ timestamp_column: CHANGED
 			input, err := newSAPHANAInput(conf, enterpriseResources())
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = input.Close(context.Background()) })
+			t.Log("When: a timestamp input connects")
 			err = input.Connect(t.Context())
+			t.Log("Then: Connect fails naming the column type")
 			require.ErrorContains(t, err, "has type DECIMAL")
 		})
 	}
@@ -550,6 +660,7 @@ func TestIntegrationSAPHANAIncrementingInitialValueTypes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Given: a %s key with values %v", tc.columnType, tc.values)
 			table := createTable(t, db, "init_"+tc.name, `ID INTEGER, KEY `+tc.columnType)
 			for i, v := range tc.values {
 				// go-hdb converts bind parameters client-side and accepts no
@@ -569,6 +680,7 @@ func TestIntegrationSAPHANAIncrementingInitialValueTypes(t *testing.T) {
 				_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i+1, arg)
 				require.NoError(t, err)
 			}
+			t.Logf("When: an input starts with incrementing_initial_value %q", tc.initial)
 			res := enterpriseResourcesWithCache()
 			input := newIntegrationInput(t, res, fmt.Sprintf(`
 dsn: %q
@@ -579,10 +691,11 @@ incrementing_initial_value: %q
 poll_interval: 200ms
 checkpoint_cache: %s
 `, dsn, table, tc.initial, testCacheName))
+			t.Log("Then: only the rows after the initial value are emitted")
 			assert.Equal(t, tc.wantIDs, intsOf(t, readRows(t, input, len(tc.wantIDs), 30*time.Second), "ID"))
 			expectNoRows(t, input, time.Second)
 
-			// The persisted HWM must bind on the next connect too.
+			t.Log("And: the persisted HWM binds on the next connect too")
 			require.NoError(t, input.Close(context.Background()))
 			resumed := newIntegrationInput(t, res, fmt.Sprintf(`
 dsn: %q
@@ -602,6 +715,7 @@ checkpoint_cache: %s
 func TestIntegrationSAPHANABestFitDecimalKey(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a DECIMAL(10,2) key read with numeric_mapping best_fit")
 	table := createTable(t, db, "bestfit", `ID INTEGER, SEQ DECIMAL(10,2)`)
 	for i, v := range []string{"1.10", "2.20", "3.30"} {
 		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i+1, v)
@@ -615,11 +729,14 @@ incrementing_column: SEQ
 numeric_mapping: best_fit
 poll_interval: 200ms
 `, dsn, table))
+	t.Log("When: the backlog is read")
 	rows := readRows(t, input, 3, 30*time.Second)
+	t.Log("Then: each row is emitted once and the poll does not re-match the last one")
 	assert.Equal(t, seq(1, 3), intsOf(t, rows, "ID"))
 	assert.Equal(t, 3.3, rows[2]["SEQ"], "best_fit emits a DECIMAL(10,2) as a double")
 	expectNoRows(t, input, time.Second)
 
+	t.Log("And: a later row is picked up")
 	_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (4, 4.40)`)
 	require.NoError(t, err)
 	assert.Equal(t, []int64{4}, intsOf(t, readRows(t, input, 1, 30*time.Second), "ID"))
@@ -631,6 +748,7 @@ poll_interval: 200ms
 func TestIntegrationSAPHANASlashColumnNames(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a /BIC/ table with /BIC/ column names")
 	table := createTable(t, db, "/BIC/AZ", `"/BIC/ZID" INTEGER PRIMARY KEY, "/BIC/ZNAME" NVARCHAR(20)`)
 	for i := 1; i <= 2; i++ {
 		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i, fmt.Sprintf("n%d", i))
@@ -644,10 +762,12 @@ table: %q
 incrementing_column: /BIC/ZID
 poll_interval: 200ms
 `, dsn, currentSchema(t, db), table))
+	t.Log("When: the input reads keyed on /BIC/ZID")
 	batch, ack, err := input.ReadBatch(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, ack(context.Background(), nil))
 	require.Len(t, batch, 2)
+	t.Log("Then: the names reach the payload and the schema metadata unchanged")
 	assert.Equal(t, []int64{1, 2}, intsOf(t, []map[string]any{decodeRow(t, batch[0]), decodeRow(t, batch[1])}, "/BIC/ZID"))
 
 	pk, ok := batch[0].MetaGet("primary_key_columns")
@@ -682,6 +802,7 @@ func fieldNames(t *testing.T, schemaVal any) []string {
 func TestIntegrationSAPHANAColumnTypes(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: one row covering every column type the type map knows")
 	table := createTable(t, db, "types", `
 ID INTEGER PRIMARY KEY,
 C_TINYINT TINYINT, C_SMALLINT SMALLINT, C_BIGINT BIGINT,
@@ -708,11 +829,13 @@ mode: bulk
 table: %s
 %s
 `, dsn, table, schemaLine))
+			t.Logf("When: a bulk input reads it (%s)", name)
 			batch, ack, err := input.ReadBatch(t.Context())
 			require.NoError(t, err)
 			require.NoError(t, ack(context.Background(), nil))
 			require.Len(t, batch, 1)
 			row := decodeRow(t, batch[0])
+			t.Log("Then: each column has its expected JSON value and schema type")
 
 			want := map[string]any{
 				"ID":             float64(1),
@@ -793,6 +916,7 @@ func fieldTypes(t *testing.T, schemaVal any) map[string]string {
 func TestIntegrationSAPHANAStream(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
+	t.Log("Given: a table with five rows and a stream with a memory checkpoint cache")
 	table := createTable(t, db, "stream", `ID INTEGER PRIMARY KEY, VAL NVARCHAR(20)`)
 	for i := 1; i <= 5; i++ {
 		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i, fmt.Sprintf("v%d", i))
@@ -834,6 +958,7 @@ sap_hana:
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 
+	t.Log("When: the stream runs and a sixth row is inserted")
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- stream.Run(ctx) }()
@@ -850,6 +975,7 @@ sap_hana:
 		defer mut.Unlock()
 		return len(seen) == 6
 	}, 30*time.Second, 100*time.Millisecond)
+	t.Log("Then: all six rows arrive in order and the checkpoint holds the last id")
 	assert.Equal(t, seq(1, 6), seen)
 
 	var raw []byte
@@ -872,4 +998,248 @@ sap_hana:
 	case <-time.After(30 * time.Second):
 		t.Fatal("stream did not stop")
 	}
+}
+
+// A session killed while a cursor is open (an operator, a network reset, or
+// HANA Cloud's idle-session timeout) must not lose rows: go-hdb surfaces the
+// broken fetch as an error, the input rewinds to its last safe position, and
+// the rows already scanned (the peeked one and the rest of the fetch-ahead)
+// are read again after the reconnect.
+func TestIntegrationSAPHANASessionKilledMidCursor(t *testing.T) {
+	dsn := requireHANA(t)
+	db := openTestDB(t, dsn)
+	schema := currentSchema(t, db)
+	base := time.Date(2024, 3, 1, 8, 0, 0, 0, time.UTC)
+	// HANA answers the statement itself with a first chunk of rows larger
+	// than fetch_size; enough rows keep the cursor open on the server.
+	const n = int64(500)
+
+	for _, mode := range []string{"incrementing", "timestamp+incrementing"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Logf("Given: %d rows with distinct ids and timestamps, read by a dedicated user with fetch_size 2", n)
+			table := createTable(t, db, "kill", `ID BIGINT PRIMARY KEY, UPDATED_AT TIMESTAMP`)
+			for i := int64(1); i <= n; i++ {
+				_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?)`, i, base.Add(time.Duration(i)*time.Second))
+				require.NoError(t, err)
+			}
+			user, userDSN := createRestrictedUser(t, db, dsn, schema, table)
+			conf := fmt.Sprintf(`
+dsn: %q
+mode: %s
+schema_name: %s
+table: %s
+incrementing_column: ID
+poll_interval: 200ms
+fetch_size: 2
+retry_backoff: 100ms
+checkpoint_cache: %s
+`, userDSN, mode, schema, table, testCacheName)
+			if mode == "timestamp+incrementing" {
+				conf += "timestamp_column: UPDATED_AT\ntimestamp_delay: 0s\n"
+			}
+			res := enterpriseResourcesWithCache()
+			input := newIntegrationInput(t, res, conf)
+
+			seen := map[int64]int{}
+			batch, ack, err := input.ReadBatch(t.Context())
+			require.NoError(t, err)
+			require.NoError(t, ack(context.Background(), nil))
+			for _, id := range intsOf(t, decodeBatch(t, batch), "ID") {
+				seen[id]++
+			}
+			require.Len(t, batch, 2)
+
+			t.Log("When: the input's sessions are disconnected with the cursor still open")
+			require.Positive(t, disconnectSessions(t, db, user), "no session of %s to disconnect", user)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+			defer cancel()
+			var readErrs int
+			for int64(len(seen)) < n && ctx.Err() == nil {
+				batch, ack, err := input.ReadBatch(ctx)
+				if err != nil {
+					// The framework retries a failed ReadBatch and reconnects
+					// on ErrNotConnected; do the same.
+					readErrs++
+					t.Logf("ReadBatch error (expected after the disconnect): %v", err)
+					if errors.Is(err, service.ErrNotConnected) {
+						require.NoError(t, input.Connect(ctx))
+					}
+					continue
+				}
+				require.NoError(t, ack(context.Background(), nil))
+				for _, id := range intsOf(t, decodeBatch(t, batch), "ID") {
+					seen[id]++
+				}
+			}
+
+			t.Log("Then: the broken fetch surfaced as an error, and every id arrived at least once")
+			assert.Positive(t, readErrs, "the disconnect should have broken the open cursor")
+			for id := int64(1); id <= n; id++ {
+				assert.Positive(t, seen[id], "id %d was skipped", id)
+			}
+			expectNoRows(t, input, time.Second)
+			cp := readCheckpoint(t, res)
+			require.NotNil(t, cp)
+			require.NotNil(t, cp.IncrHWMInt)
+			assert.Equal(t, n, *cp.IncrHWMInt, "the final checkpoint is the highest id")
+		})
+	}
+}
+
+// timestamp_delay is what stands between the timestamp modes and silent loss
+// under MVCC: a row whose timestamp is set inside a transaction that commits
+// after the poll covering it is never read unless the delay outlasts the
+// transaction. Both sides are pinned here against a real snapshot.
+func TestIntegrationSAPHANATimestampCommitLag(t *testing.T) {
+	dsn := requireHANA(t)
+	db := openTestDB(t, dsn)
+
+	for _, tc := range []struct {
+		name, delay string
+		wantLate    bool
+	}{
+		{name: "delay outlasts the transaction", delay: "5s", wantLate: true},
+		{name: "zero delay misses the row", delay: "0s", wantLate: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Given: an empty table polled every 200ms with timestamp_delay %s", tc.delay)
+			table := createTable(t, db, "lag", `ID INTEGER, UPDATED_AT TIMESTAMP`)
+			input := newIntegrationInput(t, enterpriseResources(), fmt.Sprintf(`
+dsn: %q
+mode: timestamp
+table: %s
+timestamp_column: UPDATED_AT
+timestamp_delay: %s
+poll_interval: 200ms
+`, dsn, table, tc.delay))
+			expectNoRows(t, input, 500*time.Millisecond)
+
+			t.Log("When: a second connection inserts row 1 stamped CURRENT_TIMESTAMP and commits only after several polls")
+			tx, err := db.BeginTx(t.Context(), nil)
+			require.NoError(t, err)
+			_, err = tx.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (1, CURRENT_TIMESTAMP)`)
+			require.NoError(t, err)
+			expectNoRows(t, input, 2*time.Second)
+			require.NoError(t, tx.Commit())
+
+			if tc.wantLate {
+				t.Log("Then: the row is delivered once the window passes its timestamp")
+				assert.Equal(t, []int64{1}, intsOf(t, readRows(t, input, 1, 30*time.Second), "ID"))
+				return
+			}
+			t.Log("Then: the row is never delivered (the documented limitation), while later rows still are")
+			expectNoRows(t, input, 2*time.Second)
+			_, err = db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (2, CURRENT_TIMESTAMP)`)
+			require.NoError(t, err)
+			assert.Equal(t, []int64{2}, intsOf(t, readRows(t, input, 1, 30*time.Second), "ID"))
+		})
+	}
+}
+
+// A least-privilege user holding only SELECT on the object it reads. HANA
+// shows catalog rows for objects a user has a privilege on, so on a table the
+// schema metadata and catalog-typed initial value still work. A view has no
+// SYS.TABLE_COLUMNS rows at all: metadata is omitted, the timestamp_column
+// check is skipped, and incrementing_initial_value must still bind (the test
+// bind falls back from the integer guess to the literal string) instead of
+// failing every poll.
+func TestIntegrationSAPHANARestrictedUser(t *testing.T) {
+	dsn := requireHANA(t)
+	db := openTestDB(t, dsn)
+	schema := currentSchema(t, db)
+
+	table := createTable(t, db, "restricted", `ID INTEGER PRIMARY KEY, DOC_NO NVARCHAR(10), UPDATED_AT TIMESTAMP`)
+	base := time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC)
+	for i, doc := range []string{"005", "007", "008", "070"} {
+		_, err := db.ExecContext(t.Context(), `INSERT INTO `+quoteIdentifier(table)+` VALUES (?, ?, ?)`, i+1, doc, base.Add(time.Duration(i)*time.Second))
+		require.NoError(t, err)
+	}
+	view := table + "_V"
+	_, err := db.ExecContext(t.Context(), `CREATE VIEW `+quoteIdentifier(view)+` AS SELECT * FROM `+quoteIdentifier(table))
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DROP VIEW `+quoteIdentifier(view)) })
+
+	for _, tc := range []struct {
+		object       string
+		wantMetadata bool
+	}{
+		{object: table, wantMetadata: true},
+		{object: view, wantMetadata: false},
+	} {
+		kind := "table"
+		if !tc.wantMetadata {
+			kind = "view"
+		}
+		t.Run(kind, func(t *testing.T) {
+			t.Logf("Given: a user with nothing but SELECT on the %s", kind)
+			_, userDSN := createRestrictedUser(t, db, dsn, schema, tc.object)
+
+			t.Run("incrementing", func(t *testing.T) {
+				t.Log(`When: it reads by an NVARCHAR key from incrementing_initial_value "007"`)
+				input := newIntegrationInput(t, enterpriseResources(), fmt.Sprintf(`
+dsn: %q
+mode: incrementing
+schema_name: %s
+table: %s
+incrementing_column: DOC_NO
+incrementing_initial_value: "007"
+poll_interval: 200ms
+`, userDSN, schema, tc.object))
+				assert.Equal(t, "007", input.hwm, "the initial value binds as the literal string")
+
+				t.Log("Then: the rows after 007 flow, with schema metadata only where the catalog describes the object")
+				batch, ack, err := input.ReadBatch(t.Context())
+				require.NoError(t, err)
+				require.NoError(t, ack(context.Background(), nil))
+				assert.Equal(t, []int64{3, 4}, intsOf(t, decodeBatch(t, batch), "ID"))
+				_, hasSchema := batch[0].MetaGet("schema")
+				_, hasPK := batch[0].MetaGet("primary_key_columns")
+				assert.Equal(t, tc.wantMetadata, hasSchema, "schema metadata")
+				assert.Equal(t, tc.wantMetadata, hasPK, "primary_key_columns metadata")
+				tn, _ := batch[0].MetaGet("table_name")
+				assert.Equal(t, tc.object, tn)
+				expectNoRows(t, input, time.Second)
+			})
+
+			t.Run("timestamp", func(t *testing.T) {
+				t.Log("When: it reads in timestamp mode")
+				input := newIntegrationInput(t, enterpriseResources(), fmt.Sprintf(`
+dsn: %q
+mode: timestamp
+schema_name: %s
+table: %s
+timestamp_column: UPDATED_AT
+timestamp_delay: 0s
+poll_interval: 200ms
+`, userDSN, schema, tc.object))
+				t.Log("Then: every row flows")
+				assert.ElementsMatch(t, []int64{1, 2, 3, 4}, intsOf(t, readRows(t, input, 4, 30*time.Second), "ID"))
+				expectNoRows(t, input, time.Second)
+			})
+		})
+	}
+
+	t.Run("initial value that cannot bind fails Connect", func(t *testing.T) {
+		t.Log("Given: a SELECT-only user reading the view with an initial value that is no NVARCHAR or integer")
+		_, userDSN := createRestrictedUser(t, db, dsn, schema, view)
+		conf, err := sapHANAInputConfigSpec.ParseYAML(fmt.Sprintf(`
+dsn: %q
+mode: incrementing
+schema_name: %s
+table: %s
+incrementing_column: UPDATED_AT
+incrementing_initial_value: "not-a-timestamp"
+`, userDSN, schema, view), nil)
+		require.NoError(t, err)
+		input, err := newSAPHANAInput(conf, enterpriseResources())
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = input.Close(context.Background()) })
+
+		t.Log("When: it connects")
+		err = input.Connect(t.Context())
+
+		t.Log("Then: Connect fails with a clear error instead of polling forever")
+		require.ErrorContains(t, err, `incrementing_initial_value "not-a-timestamp" does not bind`)
+	})
 }

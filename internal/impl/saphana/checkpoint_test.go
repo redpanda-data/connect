@@ -9,6 +9,7 @@
 package saphana
 
 import (
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -40,6 +41,10 @@ func TestCoerceIncrementingValue(t *testing.T) {
 		{raw: "2024-01-01T00:00:00Z", dataType: "SECONDDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "2024-01-01T00:00:00Z", dataType: "LONGDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "2024-01-01", dataType: "DAYDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		// HANA date and time columns have no timezone and go-hdb binds t.UTC(),
+		// so an offset must not shift the wall clock the user wrote.
+		{raw: "2024-01-01T00:00:00+02:00", dataType: "TIMESTAMP", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{raw: "2024-01-01T23:30:00-05:00", dataType: "LONGDATE", want: time.Date(2024, 1, 1, 23, 30, 0, 0, time.UTC)},
 		{raw: "abc", dataType: "BIGINT", wantErr: true},
 		{raw: "yesterday", dataType: "TIMESTAMP", wantErr: true},
 		// Binary keys (a ULID or UUID stored as VARBINARY(16)) are written in
@@ -90,7 +95,7 @@ max_retries: 0
 }
 
 // When the catalog lookup fails the heuristic value is kept (with a warning)
-// rather than failing the connection outright.
+// once a test bind shows HANA accepts it.
 func TestSAPHANAInputInitialValueFallsBackWhenCatalogUnavailable(t *testing.T) {
 	s, mock := newTestInput(t, enterpriseResourcesWithCache(), `
 dsn: hdb://user:pass@host:39017
@@ -104,8 +109,58 @@ max_retries: 0
 `)
 	mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
 		WillReturnError(errors.New("insufficient privilege"))
+	mock.ExpectQuery(testInitProbeQuery).WithArgs(int64(100)).
+		WillReturnRows(sqlmock.NewRows([]string{"ONE"}))
 	require.NoError(t, s.resolveIncrementingInitialValue(t.Context(), s.db))
 	assert.Equal(t, int64(100), s.hwm)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+const testInitProbeQuery = `SELECT 1 FROM "T" WHERE "ID" > ? LIMIT 1`
+
+// Without the catalog, a zero-padded value is guessed to be an integer. go-hdb
+// rejects an integer against an NVARCHAR key on every poll, so the test bind
+// must fall back to the literal string, keeping the leading zeros.
+func TestSAPHANAInputInitialValueProbeFallsBackToString(t *testing.T) {
+	s, mock := newTestInput(t, enterpriseResourcesWithCache(), `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: T
+incrementing_column: ID
+incrementing_initial_value: "007"
+`)
+	require.Equal(t, int64(7), s.hwm)
+	mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(testInitProbeQuery).WithArgs(int64(7)).
+		WillReturnError(errors.New("convert named argument: unsupported type conversion"))
+	mock.ExpectQuery(testInitProbeQuery).WithArgs("007").
+		WillReturnRows(sqlmock.NewRows([]string{"ONE"}).AddRow(1))
+	require.NoError(t, s.resolveIncrementingInitialValue(t.Context(), s.db))
+	assert.Equal(t, "007", s.hwm)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// When neither candidate binds, Connect must fail with a clear error rather
+// than leave an input that fails every poll with only a log line.
+func TestSAPHANAInputInitialValueProbeFailsConnect(t *testing.T) {
+	s, mock := newTestInput(t, enterpriseResourcesWithCache(), `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: T
+incrementing_column: ID
+incrementing_initial_value: "42"
+`)
+	mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(testInitProbeQuery).WithArgs(int64(42)).
+		WillReturnError(errors.New("unsupported type conversion"))
+	mock.ExpectQuery(testInitProbeQuery).WithArgs("42").
+		WillReturnError(errors.New("unsupported type conversion"))
+	err := s.resolveIncrementingInitialValue(t.Context(), s.db)
+	require.ErrorContains(t, err, `incrementing_initial_value "42" does not bind`)
+	require.ErrorContains(t, err, "CATALOG READ")
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestValidateTimestampColumnType: the field doc promises a TIMESTAMP or

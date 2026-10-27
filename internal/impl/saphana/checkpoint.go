@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -95,6 +96,19 @@ type checkpointer struct {
 
 	// mFailures counts checkpoint persist failures, otherwise only a log line.
 	mFailures *service.MetricCounter
+	// mPending is the number of delivered messages not yet acknowledged. It
+	// sits at checkpoint_limit when ReadBatch is blocked behind unacked
+	// batches, which an idle table never shows.
+	mPending *service.MetricGauge
+	// mLag is, in the timestamp modes, how far the checkpointed timestamp HWM
+	// trails the database clock at the latest poll, in seconds. It grows when
+	// a window never closes or acks stop, and stays near timestamp_delay on an
+	// idle table.
+	mLag *service.MetricGauge
+	// dbNowNanos is the database clock read by the latest timestamp-mode poll
+	// (unix nanoseconds, zero until the first poll); the input writes it and
+	// ack callbacks read it, hence atomic.
+	dbNowNanos atomic.Int64
 
 	// tracker orders checkpoint persistence by delivery order: a batch's HWM
 	// snapshot is only persisted once every earlier batch has also resolved.
@@ -116,6 +130,8 @@ func newCheckpointer(mgr *service.Resources, conf *sapHANAInputConfig) *checkpoi
 		cacheKey:  conf.checkpointCacheKey,
 		source:    conf.tableRef(),
 		mFailures: mgr.Metrics().NewCounter("sap_hana_checkpoint_write_failures_total"),
+		mPending:  mgr.Metrics().NewGauge("sap_hana_checkpoint_pending_messages"),
+		mLag:      mgr.Metrics().NewGauge("sap_hana_hwm_lag_seconds"),
 		tracker:   checkpoint.NewCapped[*sapHANACheckpointState](int64(conf.checkpointLimit)),
 	}
 }
@@ -166,6 +182,7 @@ func (c *checkpointer) track(ctx context.Context, batchLen int, hwm any, tsHWM t
 	if err != nil {
 		return nil, fmt.Errorf("tracking batch for checkpointing: %w", err)
 	}
+	c.mPending.Set(c.tracker.Pending())
 	return func(ctx context.Context, ackErr error) error {
 		if ackErr != nil {
 			c.log.Warnf("Advancing the checkpoint past a batch rejected downstream (auto_replay_nacks is disabled, so the rejected messages are dropped by contract): %v", ackErr)
@@ -175,15 +192,28 @@ func (c *checkpointer) track(ctx context.Context, batchLen int, hwm any, tsHWM t
 		c.ackMut.Lock()
 		defer c.ackMut.Unlock()
 		cp := resolve()
+		c.mPending.Set(c.tracker.Pending())
 		if cp == nil || *cp == nil {
 			return nil
 		}
+		c.recordLag(*cp)
 		if saveErr := c.persist(ctx, *cp); saveErr != nil {
 			c.mFailures.Incr(1)
 			c.log.Warnf("Failed to save checkpoint: %v", saveErr)
 		}
 		return nil
 	}, nil
+}
+
+// recordLag sets the HWM lag gauge from a resolved checkpoint's timestamp
+// HWM. It does nothing outside the timestamp modes or before the first poll.
+func (c *checkpointer) recordLag(cp *sapHANACheckpointState) {
+	nowNanos := c.dbNowNanos.Load()
+	if cp.TimestampHWM == nil || nowNanos == 0 {
+		return
+	}
+	lag := time.Unix(0, nowNanos).Sub(*cp.TimestampHWM)
+	c.mLag.Set(int64(lag / time.Second))
 }
 
 // persist writes the checkpoint state to the configured cache. Callers hold
@@ -212,6 +242,7 @@ func (c *checkpointer) persist(ctx context.Context, cp *sapHANACheckpointState) 
 		return fmt.Errorf("writing checkpoint key %q: %w", c.cacheKey, setErr)
 	}
 	c.lastPersisted = b
+	c.log.Debugf("Persisted checkpoint to key %q: %s", c.cacheKey, b)
 	return nil
 }
 
@@ -266,13 +297,20 @@ func parseIncrHWMString(s string) any {
 // only gives us a string, and go-hdb converts bind parameters client-side
 // against the prepared statement's metadata: an int64 against an NVARCHAR
 // key or a string against a TIMESTAMP is rejected on every poll, so the
-// input would never progress. If the catalog is unreadable the constructor's
-// heuristic guess is kept and the situation is logged.
+// input would never progress. If the catalog is unreadable, the value is
+// test-bound against the column instead (see probeIncrementingInitialValue),
+// and Connect fails when no candidate binds.
 func (s *sapHANAInput) resolveIncrementingInitialValue(ctx context.Context, db *sql.DB) error {
 	dataType, err := fetchHANAColumnType(ctx, db, s.conf.schemaName, s.conf.tableName, s.conf.incrementingCol)
 	if err != nil {
+		v, probeErr := s.probeIncrementingInitialValue(ctx, db)
+		if probeErr != nil {
+			return fmt.Errorf("could not determine the type of %s column %q from SYS.TABLE_COLUMNS (%v), and %s %q does not bind against it: %w; grant the connecting user CATALOG READ or check the value",
+				shFieldIncrementingColumn, s.conf.incrementingCol, err, shFieldIncrementingInitialVal, s.conf.incrInitialRaw, probeErr)
+		}
 		s.log.Warnf("Could not determine the type of %s column %q from SYS.TABLE_COLUMNS, binding %s as %T: %v",
-			shFieldIncrementingColumn, s.conf.incrementingCol, shFieldIncrementingInitialVal, s.hwm, err)
+			shFieldIncrementingColumn, s.conf.incrementingCol, shFieldIncrementingInitialVal, v, err)
+		s.hwm = v
 		return nil
 	}
 	v, err := coerceIncrementingValue(s.conf.incrInitialRaw, dataType)
@@ -282,6 +320,30 @@ func (s *sapHANAInput) resolveIncrementingInitialValue(ctx context.Context, db *
 	}
 	s.hwm = v
 	return nil
+}
+
+// probeIncrementingInitialValue picks a bind value for
+// incrementing_initial_value without the catalog: it runs the poll predicate
+// once with the constructor's guess and then with the literal string, and
+// returns the first that HANA accepts. go-hdb converts bind parameters
+// client-side, so a value of the wrong type (an integer against an NVARCHAR
+// key) fails here instead of on every poll.
+func (s *sapHANAInput) probeIncrementingInitialValue(ctx context.Context, db *sql.DB) (any, error) {
+	q := `SELECT 1 FROM ` + s.conf.tableRef() + ` WHERE ` + quoteIdentifier(s.conf.incrementingCol) + ` > ? LIMIT 1`
+	candidates := []any{s.hwm}
+	if _, isString := s.hwm.(string); !isString {
+		candidates = append(candidates, s.conf.incrInitialRaw)
+	}
+	var errs []error
+	for _, v := range candidates {
+		var one int
+		err := db.QueryRowContext(ctx, q, v).Scan(&one)
+		if err == nil || errors.Is(err, sql.ErrNoRows) {
+			return v, nil
+		}
+		errs = append(errs, fmt.Errorf("as %T: %w", v, err))
+	}
+	return nil, errors.Join(errs...)
 }
 
 // timestampColumnTypes are the catalog types a timestamp_column may have: the
@@ -318,6 +380,15 @@ var incrementingTimeLayouts = []string{
 	"2006-01-02",
 }
 
+// wallClock returns t's wall-clock reading (date and time of day as written,
+// offset dropped) as a UTC time. HANA date and time columns carry no
+// timezone, and go-hdb binds a time.Time as t.UTC(), so a value parsed with a
+// non-UTC offset would otherwise reach HANA shifted by that offset:
+// 2024-01-01T00:00:00+02:00 would bind as 2023-12-31 22:00:00.
+func wallClock(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+}
+
 // coerceIncrementingValue converts the configured initial value to the Go
 // type go-hdb expects for a column of the given HANA data type.
 func coerceIncrementingValue(raw, dataType string) (any, error) {
@@ -345,7 +416,7 @@ func coerceIncrementingValue(raw, dataType string) (any, error) {
 	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
 		for _, layout := range incrementingTimeLayouts {
 			if t, err := time.Parse(layout, raw); err == nil {
-				return t.UTC(), nil
+				return wallClock(t), nil
 			}
 		}
 		return nil, errors.New("expected an RFC3339 or 'YYYY-MM-DD[ HH:MM:SS]' timestamp")
