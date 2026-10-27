@@ -1196,6 +1196,69 @@ func TestRefreshShardsFailingParentReleasesChildrenAfterRetries(t *testing.T) {
 	})
 }
 
+// TestRefreshShardsWarnsOnLongChildWait (CON-599): a parent that prepares but
+// never finishes (its reader keeps failing) is never released, so its child
+// would wait silently until the parent ages out. A warning must be logged
+// once the child has waited childWaitWarnAfterCycles refresh cycles, and the
+// count must reset once the child is read.
+func TestRefreshShardsWarnsOnLongChildWait(t *testing.T) {
+	const warning = "refresh cycles for parent shard shard-parent"
+	newTransport := func() *refreshStubTransport {
+		return &refreshStubTransport{
+			shardIDs: []string{"shard-child", "shard-parent"},
+			parents:  map[string]string{"shard-child": "shard-parent"},
+		}
+	}
+	run := func(t *testing.T, d *dynamoDBCDCInput, parents *parentPrepareFailures, refresh func() error, complete func(), registered func() []string) {
+		t.Helper()
+		var (
+			mu     sync.Mutex
+			levels []slog.Level
+		)
+		d.log = service.NewLoggerFromSlog(slog.New(levelRecorder{substr: warning, mu: &mu, levels: &levels}))
+		warnings := func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(levels)
+		}
+
+		for cycle := 1; cycle < childWaitWarnAfterCycles; cycle++ {
+			require.NoError(t, refresh())
+		}
+		assert.ElementsMatch(t, []string{"shard-parent"}, registered(), "the child must still wait for its parent")
+		assert.Zero(t, warnings(), "no warning before childWaitWarnAfterCycles cycles")
+
+		require.NoError(t, refresh())
+		require.Equal(t, 1, warnings(), "a warning must be logged after %d cycles of waiting", childWaitWarnAfterCycles)
+		mu.Lock()
+		assert.Equal(t, slog.LevelWarn, levels[0])
+		mu.Unlock()
+
+		complete()
+		require.NoError(t, refresh())
+		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, registered())
+		parents.mu.Lock()
+		defer parents.mu.Unlock()
+		assert.NotContains(t, parents.waits, "shard-child", "a child that is read must not keep its wait count")
+	}
+
+	t.Run("single-table", func(t *testing.T) {
+		d := newRefreshTestInput(t, newTransport())
+		run(t, d, &d.parentFailures,
+			func() error { return d.refreshShards(t.Context()) },
+			func() { d.completeShard(t.Context(), "shard-parent") },
+			func() []string { return registeredShards(d) })
+	})
+
+	t.Run("multi-table", func(t *testing.T) {
+		d, ts, tableShards := tableRefreshHarness(t, newTransport(), newTestCheckpointer(t))
+		run(t, d, &ts.parentFailures,
+			func() error { return d.refreshTableShards(t.Context(), "test", ts) },
+			func() { d.completeTableShard(t.Context(), "test", ts, "shard-parent") },
+			tableShards)
+	})
+}
+
 // markRecordingCheckpointer returns a checkpointer over an empty store that
 // records the shards MarkShardCompleted is called for, failing each call with
 // markErr(ctx) when set.

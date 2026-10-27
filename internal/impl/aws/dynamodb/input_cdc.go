@@ -1824,6 +1824,13 @@ type shardStatus struct {
 // parent shard may fail to prepare before its children are read anyway.
 const parentReleaseAfterFailures = 5
 
+// childWaitWarnAfterCycles is how many consecutive refresh cycles a child
+// shard may be held back behind its parent before a warning is logged (and
+// logged again every as many cycles while it keeps waiting). A parent that
+// prepares but whose reader keeps failing is never released, so without the
+// warning its children could go unread for up to 24h with no signal.
+const childWaitWarnAfterCycles = 20
+
 // parentPrepareFailures remembers, across refresh cycles, the listed shards
 // that discovery failed to prepare. A child is normally held back until its
 // parent is read to the end, but a parent that can never be prepared would
@@ -1832,12 +1839,15 @@ const parentReleaseAfterFailures = 5
 // and releases its children right away; a parent failing for any other
 // reason releases them after parentReleaseAfterFailures consecutive cycles.
 // Neither persists a completion marker: the parent is still retried and read
-// if it becomes readable. The zero value is ready to use.
+// if it becomes readable. It also counts how long each child has been held
+// back, so a child stuck behind a parent that prepares but never finishes is
+// reported (see childWaitWarnAfterCycles). The zero value is ready to use.
 type parentPrepareFailures struct {
 	mu       sync.Mutex
 	failures map[string]int      // consecutive failed prepares per shard
 	gone     map[string]struct{} // shards GetShardIterator reported not found
 	released map[string]struct{} // shards whose children were released (logged once)
+	waits    map[string]int      // consecutive cycles a child shard was held back
 }
 
 // recordFailure counts a failed prepare of shardID.
@@ -1854,6 +1864,7 @@ func (p *parentPrepareFailures) recordFailure(shardID string, err error) {
 		p.failures = map[string]int{}
 	}
 	p.failures[shardID]++
+	delete(p.waits, shardID)
 }
 
 // recordSuccess clears shardID's failure history once it prepares.
@@ -1863,6 +1874,19 @@ func (p *parentPrepareFailures) recordSuccess(shardID string) {
 	delete(p.failures, shardID)
 	delete(p.gone, shardID)
 	delete(p.released, shardID)
+	delete(p.waits, shardID)
+}
+
+// recordWait counts another refresh cycle in which childID was held back
+// behind its parent and returns the number of consecutive such cycles.
+func (p *parentPrepareFailures) recordWait(childID string) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.waits == nil {
+		p.waits = map[string]int{}
+	}
+	p.waits[childID]++
+	return p.waits[childID]
 }
 
 // release reports whether the children of parentID may be read although
@@ -1896,6 +1920,11 @@ func (p *parentPrepareFailures) prune(listed map[string]struct{}) {
 			delete(p.failures, shardID)
 			delete(p.gone, shardID)
 			delete(p.released, shardID)
+		}
+	}
+	for shardID := range p.waits {
+		if _, ok := listed[shardID]; !ok {
+			delete(p.waits, shardID)
 		}
 	}
 }
@@ -2005,6 +2034,11 @@ func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointe
 	}
 	if len(pending) > 0 {
 		d.log.Debugf("Holding back %d child shards%s until their parent shards are read to the end", len(pending), tableSuffix)
+		for _, shard := range pending {
+			if cycles := parents.recordWait(*shard.ShardId); cycles%childWaitWarnAfterCycles == 0 {
+				d.log.Warnf("Child shard %s%s has waited %d refresh cycles for parent shard %s to be read to the end; its changes are not delivered until the parent finishes or ages out of the stream (up to 24h), check the logs for errors reading the parent", *shard.ShardId, tableSuffix, cycles, aws.ToString(shard.ParentShardId))
+			}
+		}
 	}
 
 	return d.logPrepareFailures(prepared, failedShards, len(shards), tableSuffix, firstErr)
