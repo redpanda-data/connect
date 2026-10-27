@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-// TestMain terminates the shared MongoDB containers (if either was started)
+// TestMain terminates the shared MongoDB containers (if any were started)
 // after every test in the package has finished.
 func TestMain(m *testing.M) {
 	code := m.Run()
@@ -25,6 +25,12 @@ func TestMain(m *testing.M) {
 	}
 	if err := sharedMongoNoAuth.terminate(); err != nil {
 		os.Stderr.WriteString("failed to terminate shared no-auth MongoDB container: " + err.Error() + "\n")
+		if code == 0 {
+			code = 1
+		}
+	}
+	if err := sharedSharded.terminate(); err != nil {
+		os.Stderr.WriteString("failed to terminate shared sharded MongoDB cluster: " + err.Error() + "\n")
 		if code == 0 {
 			code = 1
 		}
