@@ -916,9 +916,9 @@ func newSyncRun(m *schemaRegistryMigrator, scope map[string]struct{}) *syncRun {
 // run a Redpanda version without the fix.
 func (r *syncRun) lockID(id int) func() {
 	r.mu.Lock()
-	l, ok := r.idLocks[id]
-	if !ok {
-		l = &sync.Mutex{}
+	l, exists := r.idLocks[id]
+	if !exists {
+		l = new(sync.Mutex)
 		r.idLocks[id] = l
 	}
 	r.mu.Unlock()
