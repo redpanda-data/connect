@@ -2592,12 +2592,7 @@ func (d *dynamoDBCDCInput) refreshExpiredIterator(ctx context.Context, cp *Check
 
 	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint)
 
-	iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-		StreamArn:         &streamArn,
-		ShardId:           &shardID,
-		ShardIteratorType: iteratorType,
-		SequenceNumber:    sequenceNumber,
-	})
+	iter, err := d.acquireShardIterator(ctx, &streamArn, shardID, iteratorType, sequenceNumber)
 	if err != nil {
 		return nil, fmt.Errorf("getting refreshed iterator for shard %s: %w", shardID, err)
 	}
@@ -2692,11 +2687,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			}
 			if isTrimmedDataAccessError(err) {
 				d.log.Warnf("Shard %s (table %s) trimmed, attempting iterator refresh", shardID, tableName)
-				iterRes, iterErr := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-					StreamArn:         &ts.streamArn,
-					ShardId:           &shardID,
-					ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
-				})
+				iterRes, iterErr := d.acquireShardIterator(ctx, &ts.streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
 				if iterErr == nil {
 					ts.mu.Lock()
 					if reader, ok := ts.shardReaders[shardID]; ok {
@@ -3263,11 +3254,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			}
 			if isTrimmedDataAccessError(err) {
 				d.log.Warnf("Shard %s trimmed, attempting iterator refresh", shardID)
-				iterRes, iterErr := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-					StreamArn:         d.streamArn,
-					ShardId:           &shardID,
-					ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
-				})
+				iterRes, iterErr := d.acquireShardIterator(ctx, d.streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
 				if iterErr == nil {
 					d.mu.Lock()
 					if reader, ok := d.shardReaders[shardID]; ok {
