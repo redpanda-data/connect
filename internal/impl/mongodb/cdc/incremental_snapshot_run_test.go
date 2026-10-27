@@ -386,3 +386,53 @@ func TestCommitPositionStoresProgressBeforeToken(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"version":1}`, string(stored))
 }
+
+// TestCommitPositionRefreshesProgress covers a checkpoint_cache with a TTL:
+// every token write rewrites the unchanged progress too, pending or finished,
+// so it cannot expire while the token is kept fresh and leave the next start
+// counting every collection as read.
+func TestCommitPositionRefreshesProgress(t *testing.T) {
+	pending := []byte(`{"version":1,"remaining_tables":[{"schema":"db","table":"foo"}]}`)
+	finished := []byte(`{"version":1,"tables":[{"schema":"db","table":"foo"}]}`)
+	expire := func(t *testing.T, f *loadFixture) {
+		t.Helper()
+		require.NoError(t, f.m.incStateStore.Delete(t.Context()))
+	}
+	stored := func(t *testing.T, f *loadFixture) []byte {
+		t.Helper()
+		b, err := f.m.incStateStore.get(t.Context())
+		require.NoError(t, err)
+		return b
+	}
+
+	t.Run("pending progress is rewritten with each token", func(t *testing.T) {
+		f := newLoadFixture(t)
+		epoch := f.m.beginTokenEpoch(nil)
+		require.NoError(t, f.m.commitPosition(t.Context(), epoch, streamPosition{token: f.token, incState: pending}))
+		expire(t, f)
+		require.NoError(t, f.m.commitPosition(t.Context(), epoch, streamPosition{token: f.token, incState: pending}))
+		assert.JSONEq(t, string(pending), string(stored(t, f)))
+	})
+
+	t.Run("pending progress is not rewritten without a token write", func(t *testing.T) {
+		f := newLoadFixture(t)
+		epoch := f.m.beginTokenEpoch(nil)
+		require.NoError(t, f.m.commitPosition(t.Context(), epoch, streamPosition{token: f.token, incState: pending}))
+		expire(t, f)
+		m := f.m
+		m.resumeTokenMu.Lock()
+		err := m.storeIncStateLocked(t.Context(), false)
+		m.resumeTokenMu.Unlock()
+		require.NoError(t, err)
+		assert.Nil(t, stored(t, f))
+	})
+
+	t.Run("finished progress is rewritten with each token", func(t *testing.T) {
+		f := newLoadFixture(t)
+		epoch := f.m.beginTokenEpoch(nil)
+		require.NoError(t, f.m.commitPosition(t.Context(), epoch, streamPosition{token: f.token, incState: finished}))
+		expire(t, f)
+		require.NoError(t, f.m.commitPosition(t.Context(), epoch, streamPosition{token: f.token, incState: finished}))
+		assert.JSONEq(t, string(finished), string(stored(t, f)))
+	})
+}

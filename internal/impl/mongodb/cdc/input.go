@@ -234,7 +234,7 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 [[incremental-snapshots]]
 == Incremental snapshots
 
-With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart, for example after a credential expiry, continues from the last acknowledged chunk rather than starting over.
+With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Chunks are read from the primary whatever the read preference in `+"`url`"+`, which still applies to the change stream: a lagging secondary could return documents older than changes already streamed. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart, for example after a credential expiry, continues from the last acknowledged chunk rather than starting over. The progress is written again with every stream position, so a cache with a TTL expires both together.
 
 A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. Turning on `+"`incremental_snapshot.enabled`"+` in a pipeline that already has a stream position stored, whether it ran with `+"`stream_snapshot`"+` or without it, reads nothing: with a stored position and no stored snapshot progress, every collection counts as read. To backfill such a pipeline, set `+"`signal_collection_name`"+` and send a `+"`"+replication.SnapshotSignalType+"`"+` signal. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
 
@@ -519,11 +519,12 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 				return func(ctx context.Context) {
 					cdc.resumeTokenMu.Lock()
 					defer cdc.resumeTokenMu.Unlock()
-					if err := cdc.storeIncStateLocked(ctx); err != nil {
+					tokenChanged := cdc.resumeToken != nil && !bytes.Equal(lastResumeToken, cdc.resumeToken)
+					if err := cdc.storeIncStateLocked(ctx, tokenChanged); err != nil {
 						res.Logger().Warnf("unable to store checkpoints in cache: %v", err)
 						return
 					}
-					if cdc.resumeToken == nil || bytes.Equal(lastResumeToken, cdc.resumeToken) {
+					if !tokenChanged {
 						return
 					}
 					if err := cdc.checkpoint.Store(ctx, cdc.resumeToken); err != nil {
@@ -753,7 +754,7 @@ func (m *mongoCDC) commitPosition(ctx context.Context, epoch uint64, pos streamP
 		m.incState = pos.incState
 	}
 	if m.checkpointFlusher == nil {
-		if err := m.storeIncStateLocked(ctx); err != nil {
+		if err := m.storeIncStateLocked(ctx, true); err != nil {
 			return err
 		}
 		return m.checkpoint.Store(ctx, pos.token)
@@ -766,8 +767,18 @@ func (m *mongoCDC) commitPosition(ctx context.Context, epoch uint64, pos streamP
 // stored ahead of its progress could checkpoint past a snapshot-execute signal
 // whose request the stored progress does not yet hold, losing it for good.
 // The reverse order only costs a re-read chunk or a replayed change.
-func (m *mongoCDC) storeIncStateLocked(ctx context.Context) error {
-	if m.incStateStore == nil || m.incState == nil || bytes.Equal(m.incState, m.storedIncState) {
+//
+// tokenWrite reports that the token is written next. Unchanged progress is
+// then written again too, so a checkpoint_cache with a TTL expires both
+// together. Otherwise the token, kept fresh by every write, could outlive the
+// progress: the next start would count every collection as read, skipping
+// those a stalled backfill had not reached, and reading none that was added to
+// collections since.
+func (m *mongoCDC) storeIncStateLocked(ctx context.Context, tokenWrite bool) error {
+	if m.incStateStore == nil || m.incState == nil {
+		return nil
+	}
+	if !tokenWrite && bytes.Equal(m.incState, m.storedIncState) {
 		return nil
 	}
 	if err := m.incStateStore.Store(ctx, m.incState); err != nil {
@@ -1077,7 +1088,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			defer cancel()
 			m.resumeTokenMu.Lock()
 			defer m.resumeTokenMu.Unlock()
-			if err := m.storeIncStateLocked(ctx); err != nil {
+			if err := m.storeIncStateLocked(ctx, m.resumeToken != nil); err != nil {
 				m.logger.Warnf("unable to store checkpoint before stopping `mongodb_cdc`: %v", err)
 				return
 			}

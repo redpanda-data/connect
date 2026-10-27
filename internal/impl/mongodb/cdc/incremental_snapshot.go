@@ -22,6 +22,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readconcern"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 	"go.mongodb.org/mongo-driver/v2/x/mongo/driver/topology"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -276,8 +277,22 @@ var _ incrementalsnapshot.Deps[clusterTimeWatermark] = (*incSnapshotDeps)(nil)
 // yet majority-committed, whose change only streams after the chunk is
 // released (moving the document back to its older states first), or that a
 // failover rolls back, leaving downstream a state that never durably existed.
+//
+// Chunk and watermark reads go to the primary whatever the connection's read
+// preference, which still applies to the change stream. A secondary's majority
+// snapshot can trail the stream, which may run on another member: a chunk read
+// there would miss changes that already streamed, and its watermark would
+// already be passed, releasing the stale documents at once. The primary
+// learns of a majority commit before any secondary does, so its majority
+// snapshot holds everything any member has streamed.
 func (d *incSnapshotDeps) collection(coll string) *mongo.Collection {
-	return d.db.Collection(coll, options.Collection().SetReadConcern(readconcern.Majority()))
+	return d.primary().Collection(coll, options.Collection().SetReadConcern(readconcern.Majority()))
+}
+
+// primary addresses the database on the primary, whatever the connection's
+// read preference. Every snapshot read goes through it: refer to collection.
+func (d *incSnapshotDeps) primary() *mongo.Database {
+	return d.db.Client().Database(d.db.Name(), options.Database().SetReadPreference(readpref.Primary()))
 }
 
 // transientServerCodes are the server errors a later read can be expected to
@@ -335,7 +350,7 @@ func isTransient(err error) bool {
 // ResolvePrimaryKey reports _id, the only key every document is guaranteed to
 // have, after checking the collection is one a chunk read can address.
 func (d *incSnapshotDeps) ResolvePrimaryKey(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
-	specs, err := d.db.ListCollectionSpecifications(ctx, bson.D{{Key: "name", Value: table.Table}})
+	specs, err := d.primary().ListCollectionSpecifications(ctx, bson.D{{Key: "name", Value: table.Table}})
 	if err != nil {
 		return nil, retryable(fmt.Errorf("listing collection %s: %w", table, err))
 	}
@@ -369,11 +384,12 @@ func (d *incSnapshotDeps) ResolveMaxKey(ctx context.Context, table incrementalsn
 // ResolveWatermark reads the cluster time of a majority read. Every write a
 // majority chunk read started after it can see is at or before it, which is
 // what the window needs. Any command would carry operationTime; a find keeps it
-// to the read path, and majority matches what the change stream reports.
+// to the read path, and majority matches what the change stream reports. It
+// reads from the primary, like the chunks: refer to collection.
 func (d *incSnapshotDeps) ResolveWatermark(ctx context.Context) (clusterTimeWatermark, error) {
 	streamed := d.streamedThrough()
 	var reply bson.Raw
-	err := d.db.RunCommand(ctx, bson.D{
+	err := d.primary().RunCommand(ctx, bson.D{
 		{Key: "find", Value: d.watermarkCollection()},
 		{Key: "limit", Value: 1},
 		{Key: "projection", Value: bson.D{{Key: "_id", Value: 1}}},

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readconcern"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 	"go.mongodb.org/mongo-driver/v2/mongo/writeconcern"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -388,6 +390,113 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 		maxKey, err := deps.ResolveMaxKey(ctx, table, nil)
 		return err == nil && assert.ObjectsAreEqual(want, maxKey)
 	}, time.Minute, 250*time.Millisecond)
+}
+
+// TestIntegrationIncSnapshotDepsReadFromPrimary connects with
+// readPreference=secondary to a replica set whose only secondary has stopped
+// replicating. The secondary does not vote, so a majority write commits on the
+// primary alone and the secondary's majority snapshot falls behind. The change
+// stream can run on an up-to-date member meanwhile, so a chunk read from the
+// lagging one would miss changes that already streamed, and be released with
+// them undone. Chunk and watermark reads must go to the primary.
+func TestIntegrationIncSnapshotDepsReadFromPrimary(t *testing.T) {
+	integration.CheckSkip(t)
+	// Starts its own containers on its own network.
+	t.Parallel()
+	nw, err := network.New(t.Context())
+	require.NoError(t, err)
+	testcontainers.CleanupNetwork(t, nw)
+	args := []string{"mongod", "--replSet", "rp0", "--port", "27017", "--bind_ip_all", "--setParameter", "enableTestCommands=1"}
+	primary := startMongoNode(t, nw, "rp-a", args...)
+	secondary := startMongoNode(t, nw, "rp-b", args...)
+	primary.eval(`rs.initiate({_id: "rp0", members: [{_id: 0, host: "rp-a:27017"}, {_id: 1, host: "rp-b:27017", priority: 0, votes: 0}]})`)
+	primary.awaitEval(`db.hello().isWritablePrimary`, "true")
+	secondary.awaitEval(`db.hello().secondary`, "true")
+
+	db := connectTo(t, primary.uri(true)).Database("readpref")
+	ctx := t.Context()
+	majority := db.Collection("c", options.Collection().SetWriteConcern(writeconcern.Majority()))
+	_, err = majority.InsertMany(ctx, []any{
+		bson.M{"_id": 1, "v": 0}, bson.M{"_id": 2, "v": 0}, bson.M{"_id": 3, "v": 0},
+	})
+	require.NoError(t, err)
+	secondary.awaitEval(`db.getMongo().setReadPref("secondary"); db.getSiblingDB("readpref").c.countDocuments({v: 0})`, "3")
+	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
+	t.Cleanup(func() {
+		_, _ = evalOn(context.Background(), secondary.container, `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+	})
+	_, err = majority.UpdateMany(ctx, bson.D{}, bson.M{"$set": bson.M{"v": 1}})
+	require.NoError(t, err)
+
+	// Discover the set by its member names, dialling each through its mapped
+	// port.
+	endpoints := map[string]string{}
+	for alias, n := range map[string]*mongoNode{"rp-a:27017": primary, "rp-b:27017": secondary} {
+		host, err := n.container.Host(ctx)
+		require.NoError(t, err)
+		port, err := n.container.MappedPort(ctx, "27017/tcp")
+		require.NoError(t, err)
+		endpoints[alias] = net.JoinHostPort(host, port.Port())
+	}
+	client, err := mongo.Connect(options.Client().
+		ApplyURI("mongodb://rp-a:27017,rp-b:27017/?replicaSet=rp0&readPreference=secondary").
+		SetDialer(memberDialer(endpoints)).
+		SetTimeout(30 * time.Second))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Disconnect(context.Background()) })
+	setDB := client.Database("readpref")
+
+	// Sanity: a read following the connection's preference is stale.
+	var doc bson.M
+	require.NoError(t, setDB.Collection("c", options.Collection().SetReadConcern(readconcern.Majority())).
+		FindOne(ctx, bson.M{"_id": 2}).Decode(&doc))
+	require.EqualValues(t, 0, doc["v"], "the secondary is not behind, so the test proves nothing")
+
+	deps := &incSnapshotDeps{
+		db:                  setDB,
+		watermarkCollection: func() string { return "c" },
+		streamedThrough:     func() bson.Timestamp { return bson.Timestamp{} },
+	}
+	table := incrementalsnapshot.TableID{Schema: setDB.Name(), Table: "c"}
+	rows, err := deps.FetchChunk(ctx, table, nil, nil, key(t, 3), 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+	for _, r := range rows {
+		assert.EqualValues(t, 1, r.Data["v"], "chunk read the lagging secondary for _id %v", r.Data["_id"])
+	}
+
+	opTime := func() bson.Timestamp {
+		var reply bson.Raw
+		require.NoError(t, db.RunCommand(ctx, bson.D{
+			{Key: "find", Value: "c"},
+			{Key: "limit", Value: 1},
+			{Key: "readConcern", Value: bson.D{{Key: "level", Value: "majority"}}},
+		}, options.RunCmd().SetReadPreference(readpref.Primary())).Decode(&reply))
+		ts, i := reply.Lookup("operationTime").Timestamp()
+		return bson.Timestamp{T: ts, I: i}
+	}
+	updated := opTime()
+	w, err := deps.ResolveWatermark(ctx)
+	require.NoError(t, err)
+	assert.False(t, w.T.Before(updated), "watermark %v trails the primary's majority time %v", w.T, updated)
+}
+
+// memberDialer dials replica set members by their configured names through
+// the given host-reachable addresses.
+func memberDialer(endpoints map[string]string) options.ContextDialer {
+	return dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		if mapped, ok := endpoints[address]; ok {
+			address = mapped
+		}
+		var d net.Dialer
+		return d.DialContext(ctx, network, address)
+	})
+}
+
+type dialerFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
+func (f dialerFunc) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return f(ctx, network, address)
 }
 
 // TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection
