@@ -82,7 +82,7 @@ var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
-- `+"`bulk`"+`: reads all rows once then the input terminates (wrap it in xref:components:inputs/read_until.adoc[read_until] with `+"`restart_input: true`"+` for periodic re-reads).
+- `+"`bulk`"+`: reads all rows once then the input terminates (wrap it in xref:components:inputs/read_until.adoc[`+"`read_until`"+`] with `+"`restart_input: true`"+` for periodic re-reads).
 - `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows. Values from an `+"`IDENTITY`"+` column or a sequence are assigned when a row is inserted, not when it commits: with concurrent writers a lower value can commit after a higher one has been read, and that row is never emitted. Use `+"`timestamp+incrementing`"+` with a `+"`timestamp_delay`"+` longer than your longest write transaction when the table has concurrent writers.
 - `+"`query`"+`: executes a user-supplied SQL statement and emits one message per result row.
 - `+"`timestamp`"+`: polls for rows where `+"`timestamp_column`"+` falls within `+"`(last_hwm, database_now - timestamp_delay]`"+`. The bound is read from the database clock (see `+"`timestamp_clock`"+`) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed. Mid-window, a batch checkpoints the timestamp of its last row when the next row has a later one, so a restart re-reads only the rows of the timestamp that was in progress (rows sharing a timestamp cannot be split).
@@ -230,7 +230,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingColumn).
-		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values — a BIGINT auto-increment column is ideal. Columns that produce duplicate values (e.g. a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
+		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values — a BIGINT auto-increment column is ideal. Columns that produce duplicate values (for example, a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
@@ -248,7 +248,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (e.g. `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. The value is read as the column's wall time: TIMESTAMP columns have no timezone, so any offset is ignored (`2024-01-01T00:00:00+02:00` starts at `2024-01-01 00:00:00`). Write the value in the timezone the column is populated in.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. The value is read as the column's wall time: TIMESTAMP columns have no timezone, so any offset is ignored (`2024-01-01T00:00:00+02:00` starts at `2024-01-01 00:00:00`). Write the value in the timezone the column is populated in.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
