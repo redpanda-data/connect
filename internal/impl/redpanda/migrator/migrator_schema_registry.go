@@ -911,6 +911,10 @@ func newSyncRun(m *schemaRegistryMigrator, scope map[string]struct{}) *syncRun {
 // conflict. When one worker at a time registers an ID, the next registration
 // finds the body and gets the same destination ID.
 //
+// TODO(CON-610): this is a workaround for the registry race. Remove it when
+// the fix is released and the migrator no longer supports destinations that
+// run a Redpanda version without the fix.
+//
 // [1] https://github.com/redpanda-data/redpanda/blob/v26.2.2/src/v/pandaproxy/schema_registry/handlers.cc#L979-L1061
 func (r *syncRun) lockID(id int) func() {
 	r.mu.Lock()
