@@ -699,6 +699,61 @@ func TestResolveResume_GlobalForeignCompletedRowWithoutTimeIgnored(t *testing.T)
 	})
 }
 
+// TestResolveResume_GlobalReResolveReadsCurrentRow (CON-599): in global mode
+// a shard resolved a second time (its reader was released and discovery
+// prepares it again) must resume from the checkpoint written during this run,
+// not from the partition cache read at startup, or the records acked since
+// startup are delivered again.
+func TestResolveResume_GlobalReResolveReadsCurrentRow(t *testing.T) {
+	store := map[string]map[string]types.AttributeValue{}
+	api := sharedStoreAPI(store)
+	api.describeTable = func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+		return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+			TableStatus: types.TableStatusActive,
+			KeySchema:   globalTableKeySchema(),
+			Replicas:    []types.ReplicaDescription{{RegionName: aws.String("us-east-1")}, {RegionName: aws.String("us-west-2")}},
+		}}, nil
+	}
+	api.query = func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		out := &dynamodb.QueryOutput{}
+		for _, r := range store {
+			out.Items = append(out.Items, r)
+		}
+		return out, nil
+	}
+	// Another region's row makes a shard with no own checkpoint a failover.
+	foreign := shardRow("arn:A", "shard-foreign", "seq-1", "2026-06-16T10:00:00Z")
+	store["t|shard-foreign"] = foreign
+	c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:B", CheckpointLimit: 1,
+		GlobalTable: true, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+	}, checkpointTestLogger())
+	require.NoError(t, err)
+
+	d, err := c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	require.Equal(t, resumeFailover, d.Mode)
+
+	// Acks during the run checkpoint the shard; a re-resolve resumes there.
+	require.NoError(t, c.Set(t.Context(), "shard-1", "seq-1000", "2026-06-16T11:00:00Z"))
+	d, err = c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.Equal(t, resumeExact, d.Mode)
+	assert.Equal(t, "seq-1000", d.SequenceNumber)
+
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-1", "seq-2000", "2026-06-16T12:00:00Z"))
+	d, err = c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
+
+	// A shard with no row of its own still falls back to the cached decision.
+	_, err = c.ResolveResume(t.Context(), "shard-2")
+	require.NoError(t, err)
+	d, err = c.ResolveResume(t.Context(), "shard-2")
+	require.NoError(t, err)
+	assert.Equal(t, resumeFailover, d.Mode)
+}
+
 // TestCheckpointerMarkShardCompletedKeepsStoredPosition (CON-599): marking a
 // shard completed without a final position (nothing was delivered from it
 // during this run) must keep the row's stored SequenceNumber and, in global
