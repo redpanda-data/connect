@@ -230,7 +230,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingColumn).
-		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values — a BIGINT auto-increment column is ideal. Columns that produce duplicate values (for example, a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
+		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values. A BIGINT auto-increment column is ideal. Columns that produce duplicate values (for example, a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
