@@ -371,6 +371,92 @@ pg_stream:
 	require.NoError(t, stream.StopWithin(30*time.Second))
 }
 
+// TestIntegrationPostgresInfiniteTimestamps verifies that the PostgreSQL
+// special values infinity and -infinity in date, timestamp and timestamptz
+// columns reach the output as the strings "infinity" and "-infinity" on both
+// the snapshot and the streaming path. The snapshot used to fail the scan and
+// restart in a loop, and the stream used to turn the value into null. See
+// CON-588.
+func TestIntegrationPostgresInfiniteTimestamps(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	db.MustExec(t, "CREATE TABLE validity (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp);")
+	db.MustExec(t, "INSERT INTO validity VALUES (1, now(), now()::date, now()::timestamp);")
+	db.MustExec(t, "INSERT INTO validity VALUES (2, 'infinity', '-infinity', 'infinity');")
+
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_infinite_timestamps
+    stream_snapshot: true
+    schema: public
+    tables:
+       - validity
+`, databaseURL)
+
+	var (
+		receivedMu sync.Mutex
+		received   []map[string]any
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(template))
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		var row map[string]any
+		if err := json.Unmarshal(b, &row); err != nil {
+			return err
+		}
+		receivedMu.Lock()
+		received = append(received, row)
+		receivedMu.Unlock()
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() { _ = stream.Run(t.Context()) }()
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 2
+	}, 30*time.Second, 100*time.Millisecond, "the snapshot must deliver both rows, the infinite one included")
+
+	// Streamed after the snapshot, so this row goes through the pgoutput decoder.
+	db.MustExec(t, "INSERT INTO validity VALUES (3, '-infinity', 'infinity', '-infinity');")
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 3
+	}, 30*time.Second, 100*time.Millisecond, "the streamed row was never delivered")
+
+	receivedMu.Lock()
+	got := append([]map[string]any(nil), received...)
+	receivedMu.Unlock()
+
+	require.Equal(t, float64(1), got[0]["id"])
+	require.NotNil(t, got[0]["valid_to"], "a finite snapshot value must still be delivered")
+
+	require.Equal(t, float64(2), got[1]["id"])
+	require.Equal(t, "infinity", got[1]["valid_to"], "snapshot timestamptz")
+	require.Equal(t, "-infinity", got[1]["valid_on"], "snapshot date")
+	require.Equal(t, "infinity", got[1]["valid_ts"], "snapshot timestamp")
+
+	require.Equal(t, float64(3), got[2]["id"])
+	require.Equal(t, "-infinity", got[2]["valid_to"], "streamed timestamptz")
+	require.Equal(t, "infinity", got[2]["valid_on"], "streamed date")
+	require.Equal(t, "-infinity", got[2]["valid_ts"], "streamed timestamp")
+
+	require.NoError(t, stream.StopWithin(30*time.Second))
+}
+
 // TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
 // snapshot->stream handoff (after snapshot rows are emitted but before they are
 // acknowledged) does not lose data: because the replication slot is only

@@ -213,12 +213,8 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 				return nil, fmt.Errorf("normalising numeric value: %w", err)
 			}
 			return canonical, nil
-		case "date":
-			// ±infinity dates cannot be represented as time.Time; return nil.
-			if ts, ok := val.(time.Time); ok {
-				return ts, nil
-			}
-			return nil, nil
+		case "date", "timestamp", "timestamptz":
+			return decodedTimeValue(val)
 		case "time":
 			// Return the raw PostgreSQL text representation as a string,
 			// avoiding pgtype.Time struct.
@@ -230,15 +226,26 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 			// pgx decodes tsvector as pgtype.TSVector (a struct with Lexemes/Valid),
 			// but we want the raw PostgreSQL text representation as a string.
 			return string(data), nil
-		case "timestamp", "timestamptz":
-			// ±infinity timestamps cannot be represented as time.Time; return nil.
-			if ts, ok := val.(time.Time); ok {
-				return ts, nil
-			}
-			return nil, nil
 		default:
 			return val, err
 		}
 	}
 	return string(data), nil
+}
+
+// decodedTimeValue maps what pgx decoded for a date, timestamp or timestamptz
+// column to the value the stream emits. pgx returns a time.Time for a finite
+// value and a pgtype.InfinityModifier for the PostgreSQL special values
+// "infinity" and "-infinity", which have no time.Time form. Those are emitted
+// as the same strings PostgreSQL prints, which is also what the snapshot path
+// gets from the stdlib driver, so both paths agree.
+func decodedTimeValue(val any) (any, error) {
+	switch v := val.(type) {
+	case time.Time:
+		return v, nil
+	case pgtype.InfinityModifier:
+		return v.String(), nil
+	default:
+		return nil, fmt.Errorf("unexpected decoded value of type %T for a date or timestamp column", val)
+	}
 }

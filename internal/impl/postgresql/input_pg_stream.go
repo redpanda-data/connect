@@ -163,6 +163,10 @@ This input adds the following metadata fields to each message:
 
 A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
 
+== Infinite dates and timestamps
+
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation, so both the snapshot and the stream deliver them as the strings ` + "`\"infinity\"`" + ` and ` + "`\"-infinity\"`" + `.
+
 == Metrics
 
 This input emits the following metrics:
