@@ -671,8 +671,8 @@ func (b *RecordBatcher) AckBatch(
 		persistErr = errors.Join(persistErr, b.finalizeShard(ctx, tb.shardID))
 	}
 	if cp == nil {
-		// No checkpoint store: settlement still drains the tracker, there is
-		// just nothing to persist.
+		// cp is nil after Close (see CloseShard): settlement still drains the
+		// tracker, there is just nothing left to persist to.
 		return persistErr
 	}
 	if shardsOverCap {

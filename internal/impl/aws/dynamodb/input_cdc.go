@@ -2825,8 +2825,9 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 		// Create ack function. The checkpointer interface value is built
 		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
-		// must still run to settle the batch (draining the tracker) even
-		// when there is no checkpoint store to persist to.
+		// must still run to settle the batch (draining the tracker). Close
+		// does not clear a table stream's checkpointer, so here it is nil
+		// only in tests.
 		var cp checkpointer
 		if ts.checkpointer != nil {
 			cp = ts.checkpointer
@@ -3389,7 +3390,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Create ack function. The checkpointer interface value is built
 		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
 		// must still run to settle the batch (draining the tracker) even
-		// when there is no checkpoint store to persist to.
+		// after Close has cleared the checkpointer.
 		var cp checkpointer
 		if d.checkpointer != nil {
 			cp = d.checkpointer

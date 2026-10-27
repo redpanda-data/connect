@@ -1345,3 +1345,22 @@ func TestBatcherCloseShardWithoutTrackedBatches(t *testing.T) {
 	assert.Empty(t, seq)
 	assert.Zero(t, b.TrackedShardCount())
 }
+
+// TestBatcherCloseShardAfterCloseForgetsWithoutWrite: Close clears the
+// input's checkpointer after the shutdown flush, so a straggler reader that
+// reaches the end of a shard calls CloseShard with a nil checkpointer, and a
+// straggler ack settles with one. There is nothing left to write to; the
+// shard's entry must still be forgotten instead of lingering in the tracker.
+func TestBatcherCloseShardAfterCloseForgetsWithoutWrite(t *testing.T) {
+	b := NewRecordBatcher(100, 1000, service.MockResources().Logger())
+
+	require.NoError(t, b.CloseShard(t.Context(), nil, "shard-untracked"),
+		"closing an untracked shard after Close must not fail")
+
+	tb := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	require.NoError(t, b.CloseShard(t.Context(), nil, "shard-a"))
+	assert.Equal(t, 1, b.TrackedShardCount(), "an in-flight batch keeps the entry until it settles")
+
+	require.NoError(t, b.AckBatch(t.Context(), nil, tb))
+	assert.Zero(t, b.TrackedShardCount(), "the settled closed shard must be forgotten without a write")
+}
