@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -475,6 +476,30 @@ type ResumeDecision struct {
 	Mode           resumeMode
 	SequenceNumber string    // set when Mode == resumeExact
 	Cutoff         time.Time // set when Mode == resumeFailover (zero => no skip)
+}
+
+// ForgetResolved drops the shards DescribeStream no longer lists from the
+// global-mode resolved set, bounding it to the shards still in retention like
+// the completed-shard set. A shard that left the listing is never resolved
+// again. Safe on a nil receiver.
+func (c *Checkpointer) ForgetResolved(listed []streamstypes.Shard) {
+	if c == nil {
+		return
+	}
+	c.resolvedMu.Lock()
+	defer c.resolvedMu.Unlock()
+	if len(c.resolved) == 0 {
+		return
+	}
+	stillListed := make(map[string]struct{}, len(listed))
+	for _, shard := range listed {
+		stillListed[aws.ToString(shard.ShardId)] = struct{}{}
+	}
+	for shardID := range c.resolved {
+		if _, exists := stillListed[shardID]; !exists {
+			delete(c.resolved, shardID)
+		}
+	}
 }
 
 // ResolveResume decides how to resume the given shard. In the default
