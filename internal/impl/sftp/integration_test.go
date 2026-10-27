@@ -757,6 +757,6 @@ func (c *countingPathProvider) Next(context.Context) (string, bool, error) {
 	return c.path, true, nil
 }
 
-func (*countingPathProvider) Ack(context.Context, string, error) error {
+func (*countingPathProvider) Ack(context.Context, fileInfo, error) error {
 	return nil
 }
