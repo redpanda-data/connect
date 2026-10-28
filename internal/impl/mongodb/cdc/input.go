@@ -277,10 +277,10 @@ Size the oplog for consumer lag: a change stream resumes from a position in the 
 
 Each message emitted by this plugin has the following metadata:
 
-- operation: either "insert", "replace", "delete" or "update" for changes streamed. Documents from a snapshot have the operation set to "read".
-- collection: the collection the document was written to.
-- operation_time: the oplog time for when this operation occurred.
-- schema: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
+- `+"`operation`"+`: either "insert", "replace", "delete" or "update" for changes streamed. Documents from a snapshot have the operation set to "read".
+- `+"`collection`"+`: the collection the document was written to.
+- `+"`operation_time`"+`: the oplog time for when this operation occurred.
+- `+"`schema`"+`: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
 
 == Schema Detection
 
