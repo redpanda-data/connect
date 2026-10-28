@@ -403,7 +403,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["snapshot_watermark_margin must not be negative"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotIdleShardGrace).
-				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.").Version("4.115.0").
+				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.").Version("4.115.0").
 				ShortDescription("Incremental snapshot only: how long a shard with no records holds back snapshot pages.").
 				Default("1m").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_idle_shard_grace must be greater than 0"] }`).
