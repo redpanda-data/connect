@@ -81,6 +81,9 @@ type Coordinator[P any, W Watermark[P]] struct {
 	// included. AddTables extends it and State reports it, so a later run
 	// can tell a newly requested table from one already backfilled.
 	knownTables []TableID
+
+	// version counts the changes to what State reports. Refer to Version.
+	version uint64
 }
 
 // NewCoordinator builds a Coordinator. A non-nil resume continues from that
@@ -150,6 +153,7 @@ func (c *Coordinator[P, W]) Start(ctx context.Context) error {
 // captureLiveState snapshots the live fields into the committed ones. Call
 // only once everything fetched so far has been flushed.
 func (c *Coordinator[P, W]) captureLiveState() {
+	c.version++
 	c.committedRemaining = slices.Clone(c.remaining)
 	c.committedCurrent = c.current
 	c.committedMaxPK = c.maxPK
@@ -163,29 +167,71 @@ func (c *Coordinator[P, W]) Idle() bool {
 }
 
 // AddTables queues tables for backfill and reports the ones it queued. It
-// is the only way a table enters the queue.
+// and RequeueTables are the only ways a table enters the queue.
 //
 // Call it at any time. Before Start it seeds the queue; on a resume the
 // checkpoint's queue is read first and these follow it. Afterwards the next
 // OnCommit checkpoints the queue and plans.
 //
 // A table is skipped when knownTables holds it, which covers the finished
-// ones. Re-reading one takes a fresh checkpoint.
+// ones. Re-reading one takes RequeueTables or a fresh checkpoint.
 func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
+	return c.queue(tables, func(table TableID) bool {
+		return !slices.Contains(c.knownTables, table)
+	})
+}
+
+// RequeueTables is AddTables for a request to read tables again: a finished
+// table is queued once more, so only one still queued or being read is
+// skipped. It reports the ones it queued.
+//
+// A table whose last chunk is buffered counts as finished: its read is over,
+// and queueing it behind the release reads it again from the start.
+func (c *Coordinator[P, W]) RequeueTables(tables []TableID) (added []TableID) {
+	return c.queue(tables, func(table TableID) bool {
+		return !slices.Contains(c.remaining, table) && !c.reading(table)
+	})
+}
+
+// reading reports whether table is current and has chunks left to fetch.
+//
+// It is narrower than Snapshotting: once the final chunk is buffered, current
+// still names the table so OnStreamedRow can dedup that chunk, but no read is
+// left to do.
+func (c *Coordinator[P, W]) reading(table TableID) bool {
+	return c.Snapshotting(table) && !c.currentExhausted
+}
+
+// queue appends each table eligible reports true for, in order, and reports
+// the ones it appended.
+func (c *Coordinator[P, W]) queue(tables []TableID, eligible func(TableID) bool) (added []TableID) {
 	for _, table := range tables {
-		if slices.Contains(c.knownTables, table) {
+		// eligible sees the tables queued earlier in this loop, so it already
+		// rejects a repeat. This check keeps that true for an eligible that does
+		// not read remaining or knownTables.
+		if !eligible(table) || slices.Contains(added, table) {
 			continue
 		}
 		added = append(added, table)
-		c.knownTables = append(c.knownTables, table)
+		if !slices.Contains(c.knownTables, table) {
+			c.knownTables = append(c.knownTables, table)
+		}
 		c.remaining = append(c.remaining, table)
 		// Also the committed queue, which State reports. Nothing has been
 		// read yet, so "committed" is the truth. Without it State reports the
 		// table under Tables with no queue entry, and a resume from that is
 		// idle and rejects a repeat request.
-		c.committedRemaining = append(c.committedRemaining, table)
+		//
+		// A requeued table can already be in the committed queue: its only chunk
+		// is buffered but not released, so the checkpoint still lists it as
+		// queued. Do not add it twice. A resume from that checkpoint reads it
+		// once, which also satisfies this request.
+		if !slices.Contains(c.committedRemaining, table) {
+			c.committedRemaining = append(c.committedRemaining, table)
+		}
 	}
 	if len(added) > 0 {
+		c.version++
 		// Owed whether or not a backfill is running: a mid-backfill request
 		// is just as unrepeatable, and the running window may not close for
 		// a while.
@@ -210,6 +256,16 @@ func (c *Coordinator[P, W]) AddTables(tables []TableID) (added []TableID) {
 // other.
 func (c *Coordinator[P, W]) Snapshotting(table TableID) bool {
 	return c.current != nil && table == *c.current
+}
+
+// CurrentTable reports the table being read, the live one as Snapshotting
+// does. Watermarks are read with it set, so Deps can address the table the
+// chunk read targets.
+func (c *Coordinator[P, W]) CurrentTable() (TableID, bool) {
+	if c.current == nil {
+		return TableID{}, false
+	}
+	return *c.current, true
 }
 
 // OnStreamedRow must be cheap and do no I/O. It removes pk from the buffer
@@ -332,6 +388,7 @@ func (c *Coordinator[P, W]) snapshotCommitted() committedState {
 }
 
 func (c *Coordinator[P, W]) restoreCommitted(s committedState) {
+	c.version++
 	c.committedRemaining = s.remaining
 	c.committedCurrent = s.current
 	c.committedMaxPK = s.maxPK
@@ -381,6 +438,23 @@ func (c *Coordinator[P, W]) State() *State {
 		Tables:          c.knownTables,
 	}
 	return s.Clone()
+}
+
+// Version increases whenever State may return a different value, so a caller
+// can cache State's encoding and redo it only when Version moves. An equal
+// Version means an equal State.
+func (c *Coordinator[P, W]) Version() uint64 {
+	return c.version
+}
+
+// Remaining reports how many tables State still has to read, the current one
+// included. Unlike State it copies nothing.
+func (c *Coordinator[P, W]) Remaining() int {
+	n := len(c.committedRemaining)
+	if c.committedCurrent != nil {
+		n++
+	}
+	return n
 }
 
 // dropUnusable removes the current table from the run when err reports it

@@ -34,6 +34,7 @@ import (
 
 func TestIntegrationListGroupOffsets(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, dst := startRedpandaSourceAndDestination(t)
 
@@ -177,6 +178,7 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 
 func TestIntegrationReadRecordTimestamp(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, _ := startRedpandaSourceAndDestination(t)
 
@@ -349,6 +351,7 @@ func TestIntegrationReadRecordTimestampMultiNodeCluster(t *testing.T) {
 
 func TestIntegrationGroupsOffsetSync(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: source and destination Redpanda clusters")
 	src, dst := startRedpandaSourceAndDestination(t)

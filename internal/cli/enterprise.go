@@ -22,6 +22,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
 
+	"github.com/redpanda-data/connect/v4/internal/docslinks"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -35,7 +36,7 @@ const connectorListPath = "/etc/redpanda/connector_list.yaml"
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
-func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
+func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, extraOpts ...service.CLIOptFunc) {
 	instanceID := xid.New().String()
 
 	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
@@ -73,7 +74,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
 
-	opts = append(opts,
+	// The docs links come first so that extraOpts can override them.
+	opts := append(docslinks.CLIOpts(schema),
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
 		service.CLIOptSetProductName("Redpanda Connect"),
@@ -93,7 +95,6 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			"/etc/benthos/config.yaml",
 			"/etc/benthos.yaml",
 		),
-		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return schema
 		}),
@@ -238,7 +239,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptAddCommand(pluginInit()),
 	)
 
-	exitCode, err := service.RunCLIToCode(context.Background(), opts...)
+	exitCode, err := service.RunCLIToCode(context.Background(), append(opts, extraOpts...)...)
 	if err != nil {
 		slog.New(rpMgr.SlogHandler()).With("status", exitCode, "error", err).Error("Pipeline exited with non-zero status")
 		if fbLogger != nil {
