@@ -185,7 +185,7 @@ This input adds the following metadata fields to each message:
 - `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (empty for snapshot records)
 - `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (empty for snapshot records)
 - `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
-- `+"`dynamodb_event_name`"+` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
+- `+"`dynamodb_event_name`"+` - The type of change: `+"`INSERT`"+`, `+"`MODIFY`"+`, `+"`REMOVE`"+`, or `+"`READ`"+` (for snapshot records)
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
 
 == Metrics
@@ -194,7 +194,7 @@ This input emits the following metrics:
 
 - `+"`dynamodb_cdc_shards_tracked`"+` - Total number of shards being tracked (gauge)
 - `+"`dynamodb_cdc_shards_active`"+` - Number of shards currently being read from (gauge)
-- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=not_started, 1=in_progress, 2=complete (gauge)
+- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=`+"`not_started`"+`, 1=`+"`in_progress`"+`, 2=`+"`complete`"+` (gauge)
 - `+"`dynamodb_cdc_snapshot_records_read`"+` - Total records read during snapshot (counter)
 - `+"`dynamodb_cdc_snapshot_segments_active`"+` - Number of active snapshot scan segments (gauge)
 - `+"`dynamodb_cdc_snapshot_buffer_overflow`"+` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
