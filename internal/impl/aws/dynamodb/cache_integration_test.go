@@ -51,8 +51,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 		TableName: &table,
 	})
 	if err != nil {
-		var derr *types.ResourceNotFoundException
-		if !errors.As(err, &derr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
 			return err
 		}
 	}

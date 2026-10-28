@@ -465,7 +465,7 @@ func TestCommitResumeTokenDropsSupersededEpoch(t *testing.T) {
 	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 	m := &mongoCDC{logger: res.Logger(), checkpoint: cp}
 
 	// An ack from the live generation is honoured, and with no flusher it writes
@@ -511,7 +511,7 @@ func TestCommitResumeTokenDefersToFlusher(t *testing.T) {
 	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 	m := &mongoCDC{
 		logger:            res.Logger(),
 		checkpoint:        cp,
@@ -533,7 +533,7 @@ func TestCheckpointCacheRoundTripAndRecoverableFailures(t *testing.T) {
 	ctx := t.Context()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 
 	// A missing checkpoint is not an error, it just means "start fresh".
 	loaded, err := cp.Load(ctx)
@@ -591,7 +591,7 @@ func newRecoveryFixture(t *testing.T, snapshotParallelism int, onUnresumable str
 	t.Helper()
 	const cacheName = "checkpoints"
 	res := service.MockResources(service.MockResourcesOptAddCache(cacheName))
-	cp := &checkpointCache{resources: res, cacheName: cacheName, cacheKey: "key"}
+	cp := &checkpointCache{cacheEntry{resources: res, cacheName: cacheName, cacheKey: "key"}}
 	m := &mongoCDC{
 		logger:                 res.Logger(),
 		checkpoint:             cp,
@@ -666,6 +666,21 @@ func TestUnresumableRecoveryBreaksAfterConsecutiveRecoveries(t *testing.T) {
 	f.m.recoverFromUnresumablePosition(t.Context(), cause)
 	require.Equal(t, f.token, f.stored(t), "the refusal must hold across reconnects")
 	require.Equal(t, maxConsecutiveUnresumableRecoveries, f.m.recoveryCount())
+}
+
+// TestUnresumableRecoveryIncrementalCountsAsSnapshot pins that
+// incremental_snapshot.enabled, which excludes stream_snapshot and so leaves
+// snapshotParallelism at 0, still recovers by clearing the position and reading
+// every collection again, rather than applying on_unresumable_position: fail.
+func TestUnresumableRecoveryIncrementalCountsAsSnapshot(t *testing.T) {
+	f := newRecoveryFixture(t, 0, onUnresumablePositionFail)
+	f.m.incremental = true
+	cause := mongo.CommandError{Code: codeChangeStreamHistoryLost, Name: "ChangeStreamHistoryLost"}
+
+	f.seed(t)
+	f.m.recoverFromUnresumablePosition(t.Context(), cause)
+	require.Nil(t, f.stored(t), "recovery must clear the dead position so the incremental snapshot reads everything again")
+	require.NoError(t, f.reportedError(t), "on_unresumable_position must not apply while an incremental snapshot is enabled")
 }
 
 // TestUnresumableRecoveryCounterResetsOnStreamProgress is the other half of the
@@ -818,4 +833,167 @@ func TestBeginTokenEpochAdvancesAndInstallsToken(t *testing.T) {
 	m.resumeTokenMu.Lock()
 	require.Nil(t, m.resumeToken, "clearing installs no position")
 	m.resumeTokenMu.Unlock()
+}
+
+const incSnapshotTestConfig = `
+url: mongodb://localhost:27017
+database: foo
+collections: [bar]
+checkpoint_cache: baz
+`
+
+func TestIncrementalSnapshotConfigRejected(t *testing.T) {
+	tests := []struct {
+		name        string
+		extra       string
+		errContains string
+	}{
+		{
+			name: "signal collection is a streamed collection",
+			extra: `incremental_snapshot:
+  enabled: true
+signal_collection_name: bar
+`,
+			errContains: "field signal_collection_name must not name one of the streamed collections",
+		},
+		{
+			name: "progress key equals checkpoint_key",
+			extra: `checkpoint_key: same
+incremental_snapshot:
+  enabled: true
+  checkpoint_cache_key: same
+`,
+			errContains: "field incremental_snapshot.checkpoint_cache_key must differ from checkpoint_key",
+		},
+		{
+			name: "incremental with stream_snapshot",
+			extra: `stream_snapshot: true
+incremental_snapshot:
+  enabled: true
+`,
+			errContains: "stream_snapshot and incremental_snapshot.enabled are mutually exclusive snapshot modes",
+		},
+		{
+			name: "chunk_size below one",
+			extra: `incremental_snapshot:
+  enabled: true
+  chunk_size: 0
+`,
+			errContains: "field incremental_snapshot.chunk_size must be greater or equal to 1",
+		},
+		{
+			name: "chunk_size above checkpoint_limit",
+			extra: `checkpoint_limit: 100
+incremental_snapshot:
+  enabled: true
+  chunk_size: 101
+`,
+			errContains: "field incremental_snapshot.chunk_size (101) must not exceed checkpoint_limit (100)",
+		},
+		{
+			name: "negative retry_cooldown",
+			extra: `incremental_snapshot:
+  enabled: true
+  retry_cooldown: -1s
+`,
+			errContains: "field incremental_snapshot.retry_cooldown must not be negative",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := spec().ParseYAML(incSnapshotTestConfig+tc.extra, nil)
+			require.NoError(t, err)
+			res := service.MockResources(service.MockResourcesOptAddCache("baz"))
+			license.InjectTestService(res)
+			_, err = newMongoCDC(parsed, res)
+			require.ErrorContains(t, err, tc.errContains)
+		})
+	}
+}
+
+func TestIncrementalSnapshotConfigAccepted(t *testing.T) {
+	tests := []struct {
+		name            string
+		extra           string
+		wantIncremental bool
+		wantKey         string
+		wantChunkSize   int
+		wantCooldown    time.Duration
+		wantSignal      string
+	}{
+		{
+			name: "defaults derive the progress key from checkpoint_key",
+			extra: `incremental_snapshot:
+  enabled: true
+`,
+			wantIncremental: true,
+			wantKey:         "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
+			wantChunkSize:   defaultIncSnapshotChunkSize,
+			wantCooldown:    defaultIncSnapshotRetryCooldown,
+		},
+		{
+			name: "custom checkpoint_key carries into the derived key",
+			extra: `incremental_snapshot:
+  enabled: true
+checkpoint_key: mine
+`,
+			wantIncremental: true,
+			wantKey:         "mine" + incSnapshotKeySuffix,
+			wantChunkSize:   defaultIncSnapshotChunkSize,
+			wantCooldown:    defaultIncSnapshotRetryCooldown,
+		},
+		{
+			name: "explicit settings",
+			extra: `signal_collection_name: signals
+incremental_snapshot:
+  enabled: true
+  chunk_size: 10
+  checkpoint_cache_key: progress
+  retry_cooldown: 0s
+`,
+			wantIncremental: true,
+			wantKey:         "progress",
+			wantChunkSize:   10,
+			wantCooldown:    0,
+			wantSignal:      "signals",
+		},
+		{
+			name: "stream_snapshot keeps the store so it can discard stale progress",
+			extra: `stream_snapshot: true
+`,
+			wantKey: "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := spec().ParseYAML(incSnapshotTestConfig+tc.extra, nil)
+			require.NoError(t, err)
+			res := service.MockResources(service.MockResourcesOptAddCache("baz"))
+			license.InjectTestService(res)
+			_, err = newMongoCDC(parsed, res)
+			require.NoError(t, err)
+
+			key, err := parsed.FieldString(fieldCheckpointKey)
+			require.NoError(t, err)
+			streamSnapshot, err := parsed.FieldBool(fieldStreamSnapshot)
+			require.NoError(t, err)
+			collections, err := parsed.FieldStringList(fieldCollections)
+			require.NoError(t, err)
+			limit, err := parsed.FieldInt(fieldCheckpointLimit)
+			require.NoError(t, err)
+			m := &mongoCDC{
+				logger:          res.Logger(),
+				collections:     collections,
+				checkpointLimit: limit,
+				checkpoint:      &checkpointCache{cacheEntry{resources: res, cacheName: "baz", cacheKey: key}},
+			}
+			require.NoError(t, m.parseIncrementalSnapshot(parsed, streamSnapshot, "baz"))
+			require.Equal(t, tc.wantIncremental, m.incremental)
+			require.NotNil(t, m.incStateStore)
+			require.Equal(t, tc.wantKey, m.incStateStore.cacheKey)
+			require.Equal(t, tc.wantChunkSize, m.incChunkSize)
+			require.Equal(t, tc.wantCooldown, m.incRetryCooldown)
+			require.Equal(t, tc.wantSignal, m.signalCollection)
+		})
+	}
 }

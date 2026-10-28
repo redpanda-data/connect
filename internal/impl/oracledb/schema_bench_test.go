@@ -19,12 +19,9 @@ import (
 
 // oracleAllTypesColumnMeta returns a fresh []ColumnMeta describing the
 // integration test's ALL_TYPES table, using go-ora driver type-name
-// spellings as buildColumnMeta reports them. Returning a new slice on every
-// call matters for the benchmarks below: seedFromColumnMeta skips its rebuild
-// when handed the same slice as last time, so measuring the rebuild path
-// requires a distinct slice per call, the same as a new snapshot page's
-// []ColumnMeta is distinct from the previous page's even when the columns
-// are identical (see replication/snapshot.go's buildColumnMeta).
+// spellings as buildColumnMeta reports them. It returns a new slice on every
+// call, the same as each snapshot page builds a new []ColumnMeta even when the
+// columns are identical (see replication/snapshot.go's buildColumnMeta).
 func oracleAllTypesColumnMeta() []replication.ColumnMeta {
 	return []replication.ColumnMeta{
 		{Name: "ID", TypeName: "NUMBER", Precision: 38, Scale: 255, HasDecimalSize: true},
@@ -49,13 +46,33 @@ func oracleAllTypesColumnMeta() []replication.ColumnMeta {
 }
 
 func BenchmarkSeedFromColumnMeta(b *testing.B) {
+	// Alternates between two different column sets so every call rebuilds.
 	b.Run("rebuild", func(b *testing.B) {
 		sc := newSchemaCache(nil, "", service.NewLoggerFromSlog(slog.Default()))
 		tbl := replication.UserTable{Schema: "TESTDB", Name: "ALL_TYPES"}
+		metas := [2][]replication.ColumnMeta{oracleAllTypesColumnMeta(), oracleAllTypesColumnMeta()[1:]}
+
+		b.ReportAllocs()
+		var i int
+		for b.Loop() {
+			sc.seedFromColumnMeta(tbl, metas[i%2])
+			i++
+		}
+	})
+
+	// A different slice with the same content as the seeded one, as each
+	// snapshot page produces: this should cost a content comparison, not a
+	// schema rebuild. A skipped call doesn't replace the seeded slice, so meta
+	// never matches it by address and every call compares contents.
+	b.Run("equal_content", func(b *testing.B) {
+		sc := newSchemaCache(nil, "", service.NewLoggerFromSlog(slog.Default()))
+		tbl := replication.UserTable{Schema: "TESTDB", Name: "ALL_TYPES"}
+		sc.seedFromColumnMeta(tbl, oracleAllTypesColumnMeta())
+		meta := oracleAllTypesColumnMeta()
 
 		b.ReportAllocs()
 		for b.Loop() {
-			sc.seedFromColumnMeta(tbl, oracleAllTypesColumnMeta())
+			sc.seedFromColumnMeta(tbl, meta)
 		}
 	})
 

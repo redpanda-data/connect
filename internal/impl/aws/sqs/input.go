@@ -94,7 +94,7 @@ func sqsInputSpec() *service.ConfigSpec {
 By default Redpanda Connect will use a shared credentials file when connecting to AWS
 services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more in
-xref:guides:cloud/aws.adoc[].
+xref:guides:cloud/aws.adoc[AWS credentials].
 
 == Metadata
 
@@ -477,12 +477,12 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 
 	getMsgs := func() {
 		res, err := a.sqs.ReceiveMessage(closeAtLeisureCtx, &sqs.ReceiveMessageInput{
-			QueueUrl:              aws.String(a.conf.URL),
-			MaxNumberOfMessages:   int32(a.conf.MaxNumberOfMessages),
-			WaitTimeSeconds:       int32(a.conf.WaitTimeSeconds),
-			AttributeNames:        []types.QueueAttributeName{types.QueueAttributeNameAll},
-			VisibilityTimeout:     int32(a.conf.MessageTimeout.Seconds()),
-			MessageAttributeNames: []string{"All"},
+			QueueUrl:                    aws.String(a.conf.URL),
+			MaxNumberOfMessages:         int32(a.conf.MaxNumberOfMessages),
+			WaitTimeSeconds:             int32(a.conf.WaitTimeSeconds),
+			MessageSystemAttributeNames: []types.MessageSystemAttributeName{types.MessageSystemAttributeNameAll},
+			VisibilityTimeout:           int32(a.conf.MessageTimeout.Seconds()),
+			MessageAttributeNames:       []string{"All"},
 		})
 		if err != nil {
 			if !awsErrIsTimeout(err) {

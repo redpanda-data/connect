@@ -40,18 +40,18 @@ func cmdShow(args []string) error {
 
 // parseFileLineRef splits "path/to/file.txt:42" into (path, 42, nil).
 func parseFileLineRef(ref string) (string, int, error) {
-	idx := strings.LastIndex(ref, ":")
-	if idx < 0 {
+	before, after, ok := strings.CutLast(ref, ":")
+	if !ok {
 		return "", 0, fmt.Errorf("expected file:line format, got %q", ref)
 	}
-	line, err := strconv.Atoi(ref[idx+1:])
+	line, err := strconv.Atoi(after)
 	if err != nil {
 		return "", 0, fmt.Errorf("invalid line number in %q: %w", ref, err)
 	}
 	if line < 1 {
 		return "", 0, fmt.Errorf("line number must be >= 1, got %d", line)
 	}
-	return ref[:idx], line, nil
+	return before, line, nil
 }
 
 // showTestOutput reads the file up to the target line, finds the test name,

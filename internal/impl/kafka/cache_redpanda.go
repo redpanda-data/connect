@@ -41,7 +41,7 @@ A cache that stores data in a Kafka topic.
 This cache is useful for data that is written frequently and queried infrequently.
 Reads from the cache require scanning the entire topic partition. If you expect frequent access, consider placing an in-memory caching layer in front of this one.
 
-Because only the latest values are needed, configure compaction for topics used as caches so that reads are less expensive when topics are rescanned. See xref:streaming:manage:cluster-maintenance/compaction-settings.adoc[].
+Because only the latest values are needed, configure compaction for topics used as caches so that reads are less expensive when topics are rescanned. See xref:streaming:manage:cluster-maintenance/compaction-settings.adoc[Compaction settings].
 
 The cache does not have any time-to-live (TTL) mechanism. Use the Kafka topic retention policies to manage TTL.
 `).Version("4.55.0").

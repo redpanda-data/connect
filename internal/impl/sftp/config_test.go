@@ -436,7 +436,7 @@ func TestSSHAlgorithmsHandshake(t *testing.T) {
 	for _, kex := range []string{ssh.InsecureKeyExchangeDH1SHA1, ssh.InsecureKeyExchangeDHGEXSHA1} {
 		t.Run(kex, func(t *testing.T) {
 			serverConf := &ssh.ServerConfig{
-				Config: ssh.Config{KeyExchanges: []string{kex}},
+				KeyExchanges: []string{kex},
 				PasswordCallback: func(_ ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 					if string(password) != "secret" {
 						return nil, errors.New("wrong password")
@@ -481,7 +481,7 @@ credentials:
 				c, chans, reqs, err := ssh.NewClientConn(clientConn, "localhost:22", clientConf)
 				if err != nil {
 					clientConn.Close()
-					<-serverErr
+					<-serverErr //nolint:errcheck // the client error is the one worth reporting
 					return err
 				}
 				go ssh.DiscardRequests(reqs)

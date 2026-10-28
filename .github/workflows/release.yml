@@ -470,8 +470,21 @@ jobs:
             operator/chart/values.yaml
 
           # Reuse a bump entry that hasn't shipped in an operator release yet,
-          # so consecutive bumps produce one changelog line.
-          ENTRY=$(grep -lF 'Bumped the default Redpanda Connect image' .changes/unreleased/operator-*.yaml 2>/dev/null | head -n1 || true)
+          # so consecutive bumps produce one changelog line. Main keeps entries
+          # in unreleased/ after a release branch ships them, so check those too.
+          RELEASED=$(mktemp)
+          for REF in $(git ls-remote --heads origin | sed -n 's|.*refs/heads/\(release/.*\)|\1|p'); do
+            gh api -H 'Accept: application/vnd.github.raw' \
+              "repos/redpanda-data/redpanda-operator/contents/operator/CHANGELOG.md?ref=${REF}" >> "$RELEASED"
+          done
+          ENTRY=""
+          for F in $(grep -lF 'Bumped the default Redpanda Connect image' .changes/unreleased/operator-*.yaml 2>/dev/null | sort -r || true); do
+            V=$(sed -nE 's|.*resources to ([0-9]+\.[0-9]+\.[0-9]+).*|\1|p' "$F")
+            if [ -n "$V" ] && ! grep -qF "resources to ${V}." "$RELEASED"; then
+              ENTRY="$F"
+              break
+            fi
+          done
           if [ -n "$ENTRY" ]; then
             sed -Ei "s|resources to [0-9]+\.[0-9]+\.[0-9]+|resources to ${VERSION}|" "$ENTRY"
           else

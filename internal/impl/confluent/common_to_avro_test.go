@@ -220,6 +220,24 @@ func TestSanitizeAvroName(t *testing.T) {
 	}
 }
 
+// A record name that is not a valid Avro full name (SAP namespaces tables
+// as /BIC/AZSALES00) is sanitised; a valid dotted full name is left alone so
+// schemas already registered under it keep their identity.
+func TestCommonToAvroRecordName(t *testing.T) {
+	for _, tt := range []struct{ name, want string }{
+		{"/BIC/AZSALES00", "_BIC_AZSALES00"},
+		{"public.orders", "public.orders"},
+		{"ORDERS", "ORDERS"},
+		{"a..b", "a__b"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := schema.Common{Name: tt.name, Type: schema.Object, Children: []schema.Common{{Name: "ID", Type: schema.Int64}}}
+			got := avroUnmarshal(t, c, "", "").(map[string]any)
+			assert.Equal(t, tt.want, got["name"])
+		})
+	}
+}
+
 // TestCommonToAvroLogicalTypeRoundTrip drives both halves of the Avro
 // adapter to confirm encode/decode are symmetric for every logical type
 // the connector now preserves. A schema.Common produced by a synthetic

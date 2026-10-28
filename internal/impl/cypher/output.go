@@ -87,7 +87,7 @@ func extractAuth(conf *service.ParsedConfig) (neo4j.AuthToken, error) {
 func outputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Writes batches of messages to any database that speaks the Bolt protocol, such as Neo4j or Memgraph, using operations written in the Cypher query language.").
-		Description("The cypher output type writes a batch of messages to any database that speaks the Bolt protocol, connecting with a `neo4j://` or `bolt://` URI.").
+		Description("The cypher output type writes a batch of messages to any database that speaks the Bolt protocol, connecting with a `neo4j://` or `bolt://` URI. For more information about these URI schemes, see https://neo4j.com/docs/go-manual/current/connect-advanced/[Neo4j's connection documentation^].\n\nThis output runs the <<cypher,`cypher`>> expression once for each message, within one transaction for each batch. Write the expression in the https://neo4j.com/docs/cypher-manual/current/introduction/[Cypher query language^] to store or delete data for each message.").
 		Categories("Services").
 		Version("4.37.0").
 		Fields(

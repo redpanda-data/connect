@@ -316,7 +316,7 @@ waitForRows:
 	}
 	s.shutSig.TriggerSoftStop()
 	select {
-	case <-streamDone: // nil on soft stop, or a wrapped error (e.g. a connection reset, not necessarily EOF) from the blocked channel send once the fake closes; both fine
+	case <-streamDone: //nolint:errcheck // nil on soft stop, or a wrapped error (e.g. a connection reset, not necessarily EOF) from the blocked channel send once the fake closes; both fine
 	case <-time.After(10 * time.Second):
 		b.Fatal("streamMessages did not stop")
 	}

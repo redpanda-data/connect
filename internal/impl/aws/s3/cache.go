@@ -152,8 +152,7 @@ func (s *s3Cache) Get(ctx context.Context, key string) (body []byte, err error) 
 			Bucket: &s.bucket,
 			Key:    &key,
 		}); err != nil {
-			var aerr *types.NoSuchKey
-			if errors.As(err, &aerr) {
+			if _, ok := errors.AsType[*types.NoSuchKey](err); ok {
 				err = service.ErrKeyNotFound
 				return
 			}

@@ -84,8 +84,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	// if we successfully create a stream.
 	var cleanups []func()
 	defer func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, cleanup := range slices.Backward(cleanups) {
+			cleanup()
 		}
 	}()
 
