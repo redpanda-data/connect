@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -263,6 +262,15 @@ func globalCheckpointerWithPartition(t *testing.T, currentStreamArn string, item
 		},
 		query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 			return &dynamodb.QueryOutput{Items: items}, nil
+		},
+		getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			shardID := in.Key[checkpointRangeKey].(*types.AttributeValueMemberS).Value
+			for _, item := range items {
+				if item["ShardID"].(*types.AttributeValueMemberS).Value == shardID {
+					return &dynamodb.GetItemOutput{Item: item}, nil
+				}
+			}
+			return &dynamodb.GetItemOutput{}, nil
 		},
 	}
 	c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
@@ -588,6 +596,9 @@ func TestPrepareResume_UsesNamespacedHashValue(t *testing.T) {
 			queryIn = in
 			return &dynamodb.QueryOutput{}, nil
 		},
+		getItem: func(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{}, nil
+		},
 	}
 	c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
 		TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
@@ -700,12 +711,12 @@ func TestResolveResume_GlobalForeignCompletedRowWithoutTimeIgnored(t *testing.T)
 	})
 }
 
-// TestResolveResume_GlobalReResolveReadsCurrentRow (CON-599): in global mode
-// a shard resolved a second time (its reader was released and discovery
-// prepares it again) must resume from the checkpoint written during this run,
-// not from the partition cache read at startup, or the records acked since
-// startup are delivered again.
-func TestResolveResume_GlobalReResolveReadsCurrentRow(t *testing.T) {
+// TestResolveResume_GlobalReadsCurrentRow (CON-599): in global mode a shard
+// resolved during the run (its reader was released, or it left the listing
+// and came back, and discovery prepares it again) must resume from the
+// checkpoint written during this run, not from the partition cache read at
+// startup, or the records acked since startup are delivered again.
+func TestResolveResume_GlobalReadsCurrentRow(t *testing.T) {
 	store := map[string]map[string]types.AttributeValue{}
 	api := sharedStoreAPI(store)
 	api.describeTable = func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
@@ -747,27 +758,19 @@ func TestResolveResume_GlobalReResolveReadsCurrentRow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, resumeCompleted, d.Mode)
 
+	// A shard completed during the run resolves as completed even on its first
+	// resolve since startup.
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-3", "seq-3000", "2026-06-16T12:00:00Z"))
+	d, err = c.ResolveResume(t.Context(), "shard-3")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
+
 	// A shard with no row of its own still falls back to the cached decision.
 	_, err = c.ResolveResume(t.Context(), "shard-2")
 	require.NoError(t, err)
 	d, err = c.ResolveResume(t.Context(), "shard-2")
 	require.NoError(t, err)
 	assert.Equal(t, resumeFailover, d.Mode)
-}
-
-// TestCheckpointerForgetResolved (CON-599): the global-mode resolved set must
-// drop shards DescribeStream no longer lists, or it grows by one entry per
-// shard for the life of the process.
-func TestCheckpointerForgetResolved(t *testing.T) {
-	var nilCP *Checkpointer
-	nilCP.ForgetResolved(nil)
-
-	c := &Checkpointer{resolved: map[string]struct{}{"shard-1": {}, "shard-2": {}, "shard-3": {}}}
-	c.ForgetResolved([]streamstypes.Shard{{ShardId: aws.String("shard-2")}})
-	assert.Equal(t, map[string]struct{}{"shard-2": {}}, c.resolved)
-
-	c.ForgetResolved(nil)
-	assert.Empty(t, c.resolved)
 }
 
 // TestCheckpointerMarkShardCompletedKeepsStoredPosition (CON-599): marking a

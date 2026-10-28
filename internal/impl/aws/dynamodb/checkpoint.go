@@ -20,7 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -87,12 +86,6 @@ type Checkpointer struct {
 	ownCompleted   map[string]struct{}
 	hasForeignRows bool
 	cutoff         time.Time
-	// resolved holds the shards ResolveResume has already answered from the
-	// cache above; a shard resolved again (its reader was released and
-	// discovery prepares it anew) reads its current row instead, since the
-	// cache predates every checkpoint written during this run.
-	resolvedMu sync.Mutex
-	resolved   map[string]struct{}
 }
 
 // NewCheckpointer creates a new [Checkpointer] for DynamoDB CDC.
@@ -478,38 +471,14 @@ type ResumeDecision struct {
 	Cutoff         time.Time // set when Mode == resumeFailover (zero => no skip)
 }
 
-// ForgetResolved drops the shards DescribeStream no longer lists from the
-// global-mode resolved set, bounding it to the shards still in retention like
-// the completed-shard set. A shard that left the listing is never resolved
-// again. Safe on a nil receiver.
-func (c *Checkpointer) ForgetResolved(listed []streamstypes.Shard) {
-	if c == nil {
-		return
-	}
-	c.resolvedMu.Lock()
-	defer c.resolvedMu.Unlock()
-	if len(c.resolved) == 0 {
-		return
-	}
-	stillListed := make(map[string]struct{}, len(listed))
-	for _, shard := range listed {
-		stillListed[aws.ToString(shard.ShardId)] = struct{}{}
-	}
-	for shardID := range c.resolved {
-		if _, exists := stillListed[shardID]; !exists {
-			delete(c.resolved, shardID)
-		}
-	}
-}
-
 // ResolveResume decides how to resume the given shard. In the default
 // (non-global) mode it preserves today's behavior exactly. In global mode it
 // queries the table-name partition once, caches the result, and returns an
 // exact resume if rows exist for the current stream, a time-based failover
-// resume if only another region's rows exist, or default otherwise. A shard
-// resolved again in global mode first reads its current row, so it resumes
-// from the checkpoints written during this run rather than from the startup
-// cache. A shard whose row carries the completion marker resolves to
+// resume if only another region's rows exist, or default otherwise. In global
+// mode the shard's current row is read first, so a shard checkpointed or
+// completed during this run resumes from that row rather than from the
+// startup cache. A shard whose row carries the completion marker resolves to
 // resumeCompleted in either mode.
 func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (ResumeDecision, error) {
 	if !c.globalTable {
@@ -531,25 +500,16 @@ func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (Resum
 		return ResumeDecision{}, c.resumeErr
 	}
 
-	c.resolvedMu.Lock()
-	if c.resolved == nil {
-		c.resolved = map[string]struct{}{}
+	item, err := c.readShardRow(ctx, shardID)
+	if err != nil {
+		return ResumeDecision{}, err
 	}
-	_, seen := c.resolved[shardID]
-	c.resolved[shardID] = struct{}{}
-	c.resolvedMu.Unlock()
-	if seen {
-		item, err := c.readShardRow(ctx, shardID)
-		if err != nil {
-			return ResumeDecision{}, err
+	if streamAttr, ok := item["StreamArn"].(*types.AttributeValueMemberS); ok && streamAttr.Value == c.streamArn {
+		if isShardCompletedRow(item) {
+			return ResumeDecision{Mode: resumeCompleted}, nil
 		}
-		if streamAttr, ok := item["StreamArn"].(*types.AttributeValueMemberS); ok && streamAttr.Value == c.streamArn {
-			if isShardCompletedRow(item) {
-				return ResumeDecision{Mode: resumeCompleted}, nil
-			}
-			if seqAttr, ok := item["SequenceNumber"].(*types.AttributeValueMemberS); ok && seqAttr.Value != "" {
-				return ResumeDecision{Mode: resumeExact, SequenceNumber: seqAttr.Value}, nil
-			}
+		if seqAttr, ok := item["SequenceNumber"].(*types.AttributeValueMemberS); ok && seqAttr.Value != "" {
+			return ResumeDecision{Mode: resumeExact, SequenceNumber: seqAttr.Value}, nil
 		}
 	}
 

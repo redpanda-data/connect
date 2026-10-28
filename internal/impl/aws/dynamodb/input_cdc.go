@@ -2062,7 +2062,6 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	pruned := pruneCompletedShards(d.completedShards, shards)
 	d.mu.Unlock()
 	forgetShards(d.recordBatcher, pruned)
-	d.checkpointer.ForgetResolved(shards)
 	d.retryShardFinalization(ctx, d.recordBatcher, "")
 
 	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) shardStatus {
@@ -2457,7 +2456,6 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	pruned := pruneCompletedShards(ts.completedShards, shards)
 	ts.mu.Unlock()
 	forgetShards(ts.recordBatcher, pruned)
-	ts.checkpointer.ForgetResolved(shards)
 	d.retryShardFinalization(ctx, ts.recordBatcher, " (table "+tableName+")")
 
 	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) shardStatus {
