@@ -185,6 +185,7 @@ func requireSubjectVersionStatus(t *testing.T, url, subject string, version, wan
 
 func TestSchemaRegistryIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	dummySchema := `{"name":"foo", "type": "string"}`
 	dummySchemaWithReference := `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`
@@ -377,6 +378,7 @@ schema_registry:
 
 func TestSchemaRegistryProtobufSchemasIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	sr, err := redpandatest.StartRedpanda(t, true)
 	require.NoError(t, err)
@@ -522,6 +524,7 @@ message SampleRecord {
 
 func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
 	setGlobalImportMode(t, dst.SchemaRegistryURL)
@@ -574,6 +577,7 @@ output:
 
 func TestSchemaRegistryConflictingSchemaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
 	setGlobalImportMode(t, dst.SchemaRegistryURL)
@@ -593,6 +597,7 @@ func TestSchemaRegistryConflictingSchemaIntegration(t *testing.T) {
 
 func TestSchemaRegistryReadWriteDestinationIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// The destination is deliberately left in READWRITE mode, which rejects schemas created with their original IDs.
 	src, dst := runRedpandaPairForSchemaMigration(t)
@@ -610,6 +615,7 @@ func TestSchemaRegistryReadWriteDestinationIntegration(t *testing.T) {
 
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
 
@@ -703,6 +709,7 @@ output:
 
 func TestSchemaRegistryCompatibilityLevelIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
 	setGlobalImportMode(t, dst.SchemaRegistryURL)
@@ -770,6 +777,7 @@ output:
 
 func TestSchemaRegistryMaxInFlightIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
 	setGlobalImportMode(t, dst.SchemaRegistryURL)

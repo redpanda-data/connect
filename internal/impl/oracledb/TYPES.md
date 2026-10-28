@@ -38,10 +38,10 @@ their proper Go types using column metadata from the schema cache.
 | `FLOAT` | BigDecimal ² | `string` | `string` ¹ | `"1.5"` |
 | `BINARY_FLOAT` | Float32 | `float64` | `float64` ¹ | `1.5` |
 | `BINARY_DOUBLE` | Float64 | `float64` | `float64` ¹ | `3.14` |
-| `DATE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
-| `TIMESTAMP` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00.123456Z"` |
-| `TIMESTAMP WITH TIME ZONE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00+05:30"` |
-| `TIMESTAMP WITH LOCAL TIME ZONE` | Timestamp | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
+| `DATE` | Timestamp (millis) | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
+| `TIMESTAMP` | Timestamp (micros) | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00.123456Z"` |
+| `TIMESTAMP WITH TIME ZONE` | Timestamp (micros) | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00+05:30"` |
+| `TIMESTAMP WITH LOCAL TIME ZONE` | Timestamp (micros) | `time.Time` | `time.Time` ³ | `"2024-01-15T10:30:00Z"` |
 | `RAW` / `LONG RAW` / `BLOB` | ByteArray | `[]byte` | `[]byte` ³ | `"3q2+7w=="` (base64) |
 | `CHAR` / `VARCHAR2` | String | `string` | `string` | `"hello"` |
 | `NCHAR` / `NVARCHAR2` | String | `string` | `string` | `"hello"` |

@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -81,6 +81,14 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 		Summary("Ingests data into Snowflake using the Snowpipe Streaming classic architecture.").
 		Description(`
 For more information, see the https://docs.snowflake.com/en/user-guide/snowpipe-streaming/snowpipe-streaming-classic-overview[Snowpipe Streaming classic architecture^] documentation. This output doesn't work with the Snowpipe Streaming high-performance architecture.
+
+There is also a `+"`snowflake_streaming_pipe`"+` output, which writes through a Snowflake pipe rather than
+directly into a table -- use that one if you need Snowflake's Streaming Transformations (stream-static
+join enrichment, server-side `+"`WHERE`"+`-clause filtering), since those only exist on a pipe's `+"`COPY INTO`"+`
+and this output has no such thing. This output remains the simpler choice if you don't need them: it
+creates your destination table for you and needs no pipe set up first, neither of which
+`+"`snowflake_streaming_pipe`"+` does. See xref:components:outputs/snowflake_streaming_pipe.adoc[its own docs]
+for the full comparison.
 
 The following table shows the https://docs.snowflake.com/en/sql-reference/intro-summary-data-types[column data types supported by Snowflake^] and the xref:guides:bloblang/methods.adoc#type[Bloblang data types] that this output accepts for each.
 

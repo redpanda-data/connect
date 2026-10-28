@@ -10,6 +10,7 @@ package incrementalsnapshot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -652,6 +653,116 @@ func TestCoordinatorAddTables(t *testing.T) {
 		require.NotEmpty(t, chunks[1])
 		assert.Equal(t, tableA, chunks[1][0].Table)
 		assert.Equal(t, PrimaryKey{1}, chunks[1][0].PK)
+	})
+}
+
+// TestCoordinatorRequeueTables covers a request to read tables again: unlike
+// AddTables a finished table is queued once more, but a table still queued
+// or being read is not doubled up.
+func TestCoordinatorRequeueTables(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	newCoordinatorChunked := func(t *testing.T, resume *State, chunkSize int) *Coordinator[uint64, testWatermark] {
+		t.Helper()
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1), rowFor(tableA, 2)}, maxPK: PrimaryKey{2}},
+			tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+		}, chunkSize)
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+
+		coord, err := NewCoordinator(testConfig{ChunkSize: chunkSize, Deps: mock}, resume)
+		require.NoError(t, err)
+		require.NoError(t, coord.Start(t.Context()))
+		return coord
+	}
+	newCoordinator := func(t *testing.T, resume *State) *Coordinator[uint64, testWatermark] {
+		t.Helper()
+		return newCoordinatorChunked(t, resume, 1)
+	}
+
+	t.Run("a finished table is read again", func(t *testing.T) {
+		coord := newCoordinator(t, &State{Version: CurrentStateVersion, Tables: []TableID{tableA}})
+		require.True(t, coord.Idle())
+
+		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA}))
+		assert.False(t, coord.Idle())
+		assert.Equal(t, []TableID{tableA}, coord.State().Tables, "known tables are not duplicated")
+		assert.Equal(t, []TableID{tableA}, coord.State().RemainingTables)
+
+		var chunks [][]Row
+		for pos := uint64(5); pos < 10; pos++ {
+			_, err := coord.OnCommit(t.Context(), pos, collect(&chunks))
+			require.NoError(t, err)
+		}
+		var keys []PrimaryKey
+		for _, chunk := range chunks {
+			for _, row := range chunk {
+				keys = append(keys, row.PK)
+			}
+		}
+		assert.Equal(t, []PrimaryKey{{1}, {2}}, keys)
+		assert.True(t, coord.Idle())
+	})
+
+	t.Run("a queued table is not queued twice", func(t *testing.T) {
+		coord := newCoordinator(t, nil)
+		coord.AddTables([]TableID{tableA, tableB})
+		_, err := coord.OnCommit(t.Context(), 5, collect(new([][]Row)))
+		require.NoError(t, err)
+		require.True(t, coord.Snapshotting(tableA))
+
+		// A is mid-read and B is still queued.
+		before := coord.State().RemainingTables
+		assert.Empty(t, coord.RequeueTables([]TableID{tableA, tableB}))
+		assert.Equal(t, before, coord.State().RemainingTables, "the queue must not change")
+	})
+
+	t.Run("a table whose final chunk is unreleased is checkpointed once", func(t *testing.T) {
+		// B's one row is a short chunk, so it is B's last.
+		coord := newCoordinatorChunked(t, nil, 2)
+		coord.AddTables([]TableID{tableB})
+		// The queue checkpoint, then B's only chunk is read: B is now current
+		// and exhausted, its chunk buffered, the committed queue still [B].
+		_, err := coord.OnCommit(t.Context(), 5, collect(new([][]Row)))
+		require.NoError(t, err)
+		require.True(t, coord.Snapshotting(tableB))
+
+		assert.Equal(t, []TableID{tableB}, coord.RequeueTables([]TableID{tableB}))
+		assert.Equal(t, []TableID{tableB}, coord.State().RemainingTables, "a resume from here must read B once more, not twice")
+	})
+
+	t.Run("a table whose earlier chunks are released is checkpointed behind itself", func(t *testing.T) {
+		mock := newScriptedMockDeps(map[string]*mockTable{
+			tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1), rowFor(tableA, 2), rowFor(tableA, 3)}, maxPK: PrimaryKey{3}},
+		}, 2)
+		// Not quiesced, so each chunk waits for its own commit.
+		mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 2})
+		coord, err := NewCoordinator(testConfig{ChunkSize: 2, Deps: mock}, nil)
+		require.NoError(t, err)
+		require.NoError(t, coord.Start(t.Context()))
+		coord.AddTables([]TableID{tableA})
+
+		// The queue checkpoint buffers [1 2]. The next commit releases it and
+		// buffers [3], A's last chunk.
+		for pos := uint64(5); pos <= 6; pos++ {
+			_, err := coord.OnCommit(t.Context(), pos, collect(new([][]Row)))
+			require.NoError(t, err)
+		}
+		require.True(t, coord.Snapshotting(tableA))
+		require.Equal(t, PrimaryKey{2}, coord.State().LastSentPK)
+
+		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA}))
+		state := coord.State()
+		require.NotNil(t, state.CurrentTable)
+		assert.Equal(t, tableA, *state.CurrentTable)
+		assert.Equal(t, []TableID{tableA}, state.RemainingTables, "a resume from here must finish A, then read A again")
+	})
+
+	t.Run("duplicates in one request are queued once", func(t *testing.T) {
+		coord := newCoordinator(t, nil)
+		assert.Equal(t, []TableID{tableA}, coord.RequeueTables([]TableID{tableA, tableA}))
+		assert.Equal(t, []TableID{tableA}, coord.State().RemainingTables)
 	})
 }
 
@@ -1553,6 +1664,59 @@ func TestCoordinatorSnapshotting(t *testing.T) {
 
 	assert.False(t, idle.Snapshotting(tableA), "a finished table must not be gated in")
 	assert.False(t, idle.Snapshotting(tableB))
+	_, ok := idle.CurrentTable()
+	assert.False(t, ok, "an idle coordinator reads no table")
+}
+
+// currentTableRecorder records the table the coordinator reports as current
+// whenever a watermark is read.
+type currentTableRecorder struct {
+	*scriptedMockDeps
+	coord *Coordinator[uint64, testWatermark]
+	seen  []TableID
+}
+
+func (r *currentTableRecorder) ResolveWatermark(ctx context.Context) (testWatermark, error) {
+	table, _ := r.coord.CurrentTable()
+	r.seen = append(r.seen, table)
+	return r.scriptedMockDeps.ResolveWatermark(ctx)
+}
+
+// TestCoordinatorCurrentTableDuringWatermarks pins what Deps can rely on: both
+// watermarks of a chunk are read with CurrentTable naming the chunk's table,
+// so an implementation can address the watermark read to it.
+func TestCoordinatorCurrentTableDuringWatermarks(t *testing.T) {
+	tableA := TableID{Schema: "public", Table: "a"}
+	tableB := TableID{Schema: "public", Table: "b"}
+
+	mock := newScriptedMockDeps(map[string]*mockTable{
+		tableA.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableA, 1)}, maxPK: PrimaryKey{1}},
+		tableB.String(): {pkCols: []string{"id"}, rows: []Row{rowFor(tableB, 1)}, maxPK: PrimaryKey{1}},
+	}, 1)
+	mock.pushWatermark(testWatermark{Xmin: 1, Xmax: 1})
+	rec := &currentTableRecorder{scriptedMockDeps: mock}
+
+	coord, err := NewCoordinator(testConfig{ChunkSize: 1, Deps: rec}, nil)
+	require.NoError(t, err)
+	rec.coord = coord
+	coord.AddTables([]TableID{tableA, tableB})
+	require.NoError(t, coord.Start(t.Context()))
+	current, ok := coord.CurrentTable()
+	require.True(t, ok)
+	assert.Equal(t, tableA, current)
+
+	var chunks [][]Row
+	for i := uint64(2); !coord.Idle() && i < 20; i++ {
+		_, err := coord.OnCommit(t.Context(), i, collect(&chunks))
+		require.NoError(t, err)
+	}
+	require.True(t, coord.Idle())
+	require.NotEmpty(t, rec.seen)
+	for _, table := range rec.seen {
+		assert.Contains(t, []TableID{tableA, tableB}, table, "a watermark was read with no current table")
+	}
+	assert.Equal(t, tableA, rec.seen[0])
+	assert.Equal(t, tableB, rec.seen[len(rec.seen)-1])
 }
 
 // TestCoordinatorRetryableFetchChunkRecovers pins the point of the retry
@@ -1819,4 +1983,72 @@ func TestCoordinatorNonRetryableFetchChunkFailsOnCommit(t *testing.T) {
 	require.ErrorIs(t, err, sentinel, "an ordinary failure must reach the caller, not be absorbed as a retry")
 	assert.NotErrorIs(t, err, ErrRetryable)
 	assert.Zero(t, deferred, "OnPlanDeferred must not fire for a non-retryable failure")
+}
+
+// TestCoordinatorVersionTracksState: callers cache State's encoding by
+// Version, so Version must move whenever State does, a failed emit's undo
+// included, and stay put while State does. Remaining must agree with State.
+func TestCoordinatorVersionTracksState(t *testing.T) {
+	table := TableID{Schema: "public", Table: "a"}
+	coord, err := NewCoordinator(testConfig{ChunkSize: 2, Deps: &refetchMockDeps{
+		rows:       []Row{rowFor(table, 1), rowFor(table, 2), rowFor(table, 3)},
+		maxPK:      PrimaryKey{3},
+		chunkSize:  2,
+		watermarks: []testWatermark{{Xmin: 100, Xmax: 101}},
+	}}, nil)
+	require.NoError(t, err)
+
+	var lastVersion uint64
+	var lastState string
+	observe := func(wantMoved bool) {
+		t.Helper()
+		b, err := json.Marshal(coord.State())
+		require.NoError(t, err)
+		state := coord.State()
+		remaining := len(state.RemainingTables)
+		if state.CurrentTable != nil {
+			remaining++
+		}
+		assert.Equal(t, remaining, coord.Remaining())
+		if coord.Version() == lastVersion {
+			assert.Equal(t, lastState, string(b), "State changed without Version")
+		}
+		assert.Equal(t, wantMoved, coord.Version() != lastVersion)
+		lastVersion, lastState = coord.Version(), string(b)
+	}
+
+	coord.AddTables([]TableID{table})
+	observe(true)
+	require.NoError(t, coord.Start(t.Context()))
+	observe(true)
+
+	// Before the window closes: nothing released.
+	_, err = coord.OnCommit(t.Context(), 100, collect(new([][]Row)))
+	require.NoError(t, err)
+	observe(false)
+
+	sentinel := errors.New("downstream gone")
+	var versionInFailedEmit uint64
+	_, err = coord.OnCommit(t.Context(), 102, func([]Row) error {
+		versionInFailedEmit = coord.Version()
+		return sentinel
+	})
+	require.ErrorIs(t, err, sentinel)
+	// Advanced for the emit, then undone: a cache taken from inside the
+	// failed emit holds the advanced State, so it must not be reused.
+	observe(true)
+	assert.NotEqual(t, versionInFailedEmit, coord.Version())
+
+	var versionInEmit uint64
+	_, err = coord.OnCommit(t.Context(), 102, func([]Row) error {
+		versionInEmit = coord.Version()
+		return nil
+	})
+	require.NoError(t, err)
+	observe(true)
+	assert.Equal(t, lastVersion, versionInEmit, "State read inside emit must stay valid after it")
+
+	// A request for a table already known changes nothing.
+	assert.Empty(t, coord.AddTables([]TableID{table}))
+	observe(false)
 }
