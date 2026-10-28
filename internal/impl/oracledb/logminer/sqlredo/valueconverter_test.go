@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertDateValue(t *testing.T) {
@@ -142,6 +143,31 @@ func TestConvertTimestampWithZone(t *testing.T) {
 			wantTime: time.Date(2020, 1, 15, 10, 30, 0, 123456000, time.UTC),
 		},
 		{
+			name:     "TO_TIMESTAMP_TZ without offset or fraction",
+			input:    "TO_TIMESTAMP_TZ('2024-01-15 10:30:00')",
+			wantTime: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		},
+		{
+			name:     "TO_TIMESTAMP_TZ without offset, 6 digit fraction",
+			input:    "TO_TIMESTAMP_TZ('2024-01-15 10:30:00.123456')",
+			wantTime: time.Date(2024, 1, 15, 10, 30, 0, 123456000, time.UTC),
+		},
+		{
+			name:     "TO_TIMESTAMP_TZ without offset, zero 9 digit fraction",
+			input:    "TO_TIMESTAMP_TZ('2024-01-15 10:30:00.000000000')",
+			wantTime: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		},
+		{
+			name:     "TO_TIMESTAMP_TZ without offset, 9 digit fraction",
+			input:    "TO_TIMESTAMP_TZ('2024-01-15 10:30:00.123456789')",
+			wantTime: time.Date(2024, 1, 15, 10, 30, 0, 123456789, time.UTC),
+		},
+		{
+			name:    "TO_TIMESTAMP_TZ with unparseable value",
+			input:   "TO_TIMESTAMP_TZ('not a timestamp')",
+			wantNil: true,
+		},
+		{
 			name:    "not a TO_TIMESTAMP_TZ call",
 			input:   "2020-01-15 10:30:00",
 			wantNil: true,
@@ -163,6 +189,23 @@ func TestConvertTimestampWithZone(t *testing.T) {
 			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
 		})
 	}
+}
+
+func TestConvertTimestampWithZoneUsesConverterTimezone(t *testing.T) {
+	// Offset-less values (TIMESTAMP WITH LOCAL TIME ZONE) are rendered in the
+	// mining session's zone, so they must be interpreted in the converter's
+	// timezone, while explicit offsets are unaffected by it.
+	converter := NewOracleValueConverter(time.FixedZone("x", 5*3600))
+
+	result := converter.convertTimestampWithZone("TO_TIMESTAMP_TZ('2024-01-15 10:30:00.000000000')")
+	gotTime, ok := result.(time.Time)
+	require.True(t, ok, "expected time.Time, got %T", result)
+	assert.True(t, gotTime.Equal(time.Date(2024, 1, 15, 5, 30, 0, 0, time.UTC)), "got %v", gotTime)
+
+	result = converter.convertTimestampWithZone("TO_TIMESTAMP_TZ('2024-01-15 10:30:00 +00:00')")
+	gotTime, ok = result.(time.Time)
+	require.True(t, ok, "expected time.Time, got %T", result)
+	assert.True(t, gotTime.Equal(time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)), "got %v", gotTime)
 }
 
 func TestConvertRawValue(t *testing.T) {
@@ -324,6 +367,11 @@ func TestConvertValue(t *testing.T) {
 		{
 			name:      "TO_TIMESTAMP function call",
 			input:     "TO_TIMESTAMP('2020-01-15 10:30:00','YYYY-MM-DD HH24:MI:SS')",
+			wantValue: time.Date(2020, 1, 15, 10, 30, 0, 0, time.UTC),
+		},
+		{
+			name:      "TO_TIMESTAMP_TZ function call without offset",
+			input:     "TO_TIMESTAMP_TZ('2020-01-15 10:30:00.000000000')",
 			wantValue: time.Date(2020, 1, 15, 10, 30, 0, 0, time.UTC),
 		},
 		{

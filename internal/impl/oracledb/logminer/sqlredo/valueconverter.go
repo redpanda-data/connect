@@ -43,6 +43,8 @@ var (
 	toDatePattern = regexp.MustCompile(`(?i)TO_DATE\('(?P<value>[^']+)',\s*'(?P<format>[^']+)'\)`)
 
 	// TO_TIMESTAMP_TZ('2020-01-15 10:30:00 +00:00')
+	// TO_TIMESTAMP_TZ('2020-01-15 10:30:00.000000000') - no offset, emitted
+	// for TIMESTAMP WITH LOCAL TIME ZONE columns
 	toTimestampTzPattern = regexp.MustCompile(`(?i)TO_TIMESTAMP_TZ\('(?P<value>[^']+)'\)`)
 
 	// HEXTORAW('48656C6C6F') - converts hex string to bytes
@@ -160,8 +162,11 @@ func (c *OracleValueConverter) convertTimestampValue(value string) any {
 	return nil
 }
 
-// convertTimestampWithZone converts TO_TIMESTAMP_TZ function calls
-func (*OracleValueConverter) convertTimestampWithZone(value string) any {
+// convertTimestampWithZone converts TO_TIMESTAMP_TZ function calls. Values
+// without an offset (TIMESTAMP WITH LOCAL TIME ZONE) are rendered in the
+// session time zone, which ApplyNLSSettings pins to UTC, so they are parsed in
+// c.timezone.
+func (c *OracleValueConverter) convertTimestampWithZone(value string) any {
 	matches := toTimestampTzPattern.FindStringSubmatch(value)
 	if matches == nil {
 		return nil
@@ -181,6 +186,15 @@ func (*OracleValueConverter) convertTimestampWithZone(value string) any {
 
 	for _, format := range formats {
 		if t, err := time.Parse(format, timestampStr); err == nil {
+			return t
+		}
+	}
+
+	for _, format := range []string{
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+	} {
+		if t, err := time.ParseInLocation(format, timestampStr, c.timezone); err == nil {
 			return t
 		}
 	}

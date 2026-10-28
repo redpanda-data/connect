@@ -71,6 +71,9 @@ driver — both land on BigDecimal.
 as `TO_DATE(...)`, `TO_TIMESTAMP(...)`, etc., which the `OracleValueConverter` converts
 to `time.Time`. Binary values appear as `HEXTORAW(...)`, converted to `[]byte`. These
 conversions happen at parse time, before the coercion step.
+`TIMESTAMP WITH LOCAL TIME ZONE` appears as `TO_TIMESTAMP_TZ('...')` with no offset. LogMiner
+renders it in the session time zone, which `ApplyNLSSettings` pins to UTC, so the converter
+parses it as UTC and it yields `time.Time` like the other timestamp types.
 
 ⁴ **JSON limitation.** In streaming, JSON column values appear as quoted strings in
 `SQL_REDO`. There is no way to distinguish a JSON string from a regular string at
