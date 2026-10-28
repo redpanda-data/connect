@@ -1091,6 +1091,13 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 					return
 				}
 				m.client, m.db = client, db
+				// With stream_snapshot and a signal collection the run was
+				// built over the client just disconnected: point its chunk
+				// reads at the new one. Safe here, as the run is only used
+				// on this goroutine.
+				if incRun != nil {
+					incRun.deps.db = db
+				}
 			}
 		}
 		if err := m.readFromStream(ctx, tokenEpoch, cp, opts, incRun); err != nil {
