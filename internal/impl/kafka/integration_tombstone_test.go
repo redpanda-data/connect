@@ -82,6 +82,7 @@ func runStreamYAML(t *testing.T, yaml string) {
 
 func TestRedpandaOutputTombstoneIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	rp, err := redpandatest.StartRedpanda(t, true)
 	require.NoError(t, err)

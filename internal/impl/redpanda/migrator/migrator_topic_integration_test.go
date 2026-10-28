@@ -29,6 +29,7 @@ import (
 
 func TestIntegrationTopicMigratorSyncConfig(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Log("Given: Redpanda clusters")
 	src, dst := startRedpandaSourceAndDestination(t)
@@ -52,6 +53,7 @@ func TestIntegrationTopicMigratorSyncConfig(t *testing.T) {
 
 func TestIntegrationTopicMigratorSyncACLs(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	hasACL := func(t *testing.T, cluster EmbeddedRedpandaCluster, topic, principal string, perm kmsg.ACLPermissionType, op kmsg.ACLOperation) bool {
 		acls, err := cluster.DescribeTopicACLs(topic)
@@ -131,6 +133,7 @@ func TestIntegrationTopicMigratorSyncACLs(t *testing.T) {
 
 func TestIntegrationTopicMigratorIdempotentSyncIdempotence(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	defaultTopic := func() []string {
 		return []string{migratorTestTopic}
@@ -162,6 +165,7 @@ func TestIntegrationTopicMigratorIdempotentSyncIdempotence(t *testing.T) {
 
 func TestIntegrationTopicMigratorPartitionGrowth(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	partitionCount := func(adm *kadm.Client, topic string) int {
 		topics, err := adm.ListTopics(t.Context(), topic)

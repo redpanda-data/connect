@@ -122,6 +122,21 @@ output:
         args_mapping: 'root = [this.id, this.name, this.updated_at]'
 `,
 		).
+		Example(
+			"Upsert into SAP HANA",
+			"SAP HANA uses `UPSERT ... WITH PRIMARY KEY` for insert-or-update semantics instead of the `ON CONFLICT` clause used by PostgreSQL. To read from SAP HANA, use the xref:components:inputs/sap_hana.adoc[`sap_hana` input].",
+			`
+output:
+  sql_raw:
+    driver: hana
+    dsn: hdb://user:password@hana-host:39017
+    query: |
+      UPSERT ORDERS (ORDER_ID, CUSTOMER_ID, STATUS, UPDATED_AT)
+      VALUES (?, ?, ?, ?)
+      WITH PRIMARY KEY
+    args_mapping: 'root = [this.order_id, this.customer_id, this.status, this.updated_at]'
+`,
+		).
 		LintRule(`root = match {
         !this.exists("queries") && !this.exists("query") => [ "either ` + "`query`" + ` or ` + "`queries`" + ` is required" ],
     }`).
