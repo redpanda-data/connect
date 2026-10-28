@@ -275,20 +275,18 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
-// existing one so that it lists exactly those tables. An empty list means FOR ALL TABLES: a new publication is
-// created that way, and an existing FOR TABLE publication is recreated as FOR ALL TABLES, since PostgreSQL has no
-// ALTER PUBLICATION form that switches between the two.
+// CreatePublication makes the publication with the given name publish exactly the given tables. An empty list means
+// FOR ALL TABLES. Each case runs at most one statement, so a failure never leaves the publication half changed.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
-	// Check if publication exists. puballtables must be read from here:
-	// pg_publication_tables lists every table for a FOR ALL TABLES publication
-	// and nothing for a FOR TABLE publication that has had all of its tables
-	// dropped, so the table list alone cannot tell them apart. The options are
-	// read too, so that a recreated publication keeps them. They go through
-	// to_jsonb because the newer columns are missing on older servers, and
-	// naming a missing column fails the whole query.
+	// puballtables must be read from pg_publication: pg_publication_tables
+	// lists every table for a FOR ALL TABLES publication and nothing for a
+	// FOR TABLE publication that has had all of its tables dropped, so the
+	// table list alone cannot tell them apart. The options are read too, so
+	// that a recreated publication keeps them. They go through to_jsonb
+	// because the newer columns are missing on older servers, and naming a
+	// missing column fails the whole query.
 	pubQuery, err := sanitize.SQLQuery(`
-			SELECT pubname, puballtables,
+			SELECT puballtables,
 				to_jsonb(p) ->> 'pubinsert',
 				to_jsonb(p) ->> 'pubupdate',
 				to_jsonb(p) ->> 'pubdelete',
@@ -301,116 +299,67 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	if err != nil {
 		return fmt.Errorf("sanitizing publication query: %w", err)
 	}
-
-	result := conn.Exec(ctx, pubQuery)
-
-	rows, err := result.ReadAll()
+	rows, err := conn.Exec(ctx, pubQuery).ReadAll()
 	if err != nil {
 		return fmt.Errorf("checking publication existence: %w", err)
 	}
+	exists := len(rows) > 0 && len(rows[0].Rows) > 0
+	// The simple query protocol returns booleans as text: "t" or "f".
+	allTables := exists && string(rows[0].Rows[0][0]) == "t"
 
-	tablesClause := "FOR ALL TABLES"
-	if len(tables) > 0 {
-		var sb strings.Builder
-		sb.WriteString("FOR TABLE ")
-		for i, table := range tables {
-			if i > 0 {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(table.String())
-		}
-		tablesClause = sb.String()
+	tableNames := make([]string, 0, len(tables))
+	for _, table := range tables {
+		tableNames = append(tableNames, table.String())
 	}
+	// The table names are sanitized, so we can safely interpolate them into the query.
+	tableClause := "TABLE " + strings.Join(tableNames, ", ")
 
-	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		// tablesClause is sanitized, so we can safely interpolate it into the query
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
-		if err != nil {
-			return fmt.Errorf("sanitizing publication creation query: %w", err)
-		}
-		// Publication doesn't exist, create new one
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("creating publication: %w", err)
-		}
-
+	var stmt string
+	switch {
+	case !exists && len(tables) == 0:
+		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES;", publicationName)
+	case !exists:
+		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR %s;", publicationName, tableClause)
+	case len(tables) == 0 && allTables:
 		return nil
-	}
-
-	// assuming publication already exists
-	pubRow := rows[0].Rows[0]
-	allTables := string(pubRow[1]) == "t"
-
-	if len(tables) == 0 {
-		// Every table is wanted. A FOR ALL TABLES publication already covers
-		// them, so nothing to do. A FOR TABLE publication cannot be widened
-		// with ALTER PUBLICATION, and dropping its members one by one would
-		// only leave an empty publication that streams nothing, so recreate
-		// it with the same options. Both statements run in one implicit
-		// transaction, so the publication never goes missing for a concurrent
-		// reader, and a failed CREATE leaves it as it was.
-		if allTables {
+	case len(tables) == 0:
+		// A FOR TABLE publication cannot be widened with ALTER PUBLICATION,
+		// and dropping its members would only leave an empty publication that
+		// streams nothing, so recreate it with the same options. Both
+		// statements run in one implicit transaction, so the publication never
+		// goes missing for a concurrent reader, and a failed CREATE leaves it
+		// as it was. The WITH clause is built from fixed keywords only, so we
+		// can safely interpolate it into the query.
+		stmt = fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(rows[0].Rows[0][1:]))
+	default:
+		pubTables, err := GetPublicationTables(ctx, conn, publicationName)
+		if err != nil {
+			return fmt.Errorf("getting publication tables: %w", err)
+		}
+		// Only the owner may run ALTER PUBLICATION, so skip it when nothing
+		// changes. A publication that another role created ahead of time then
+		// keeps working.
+		if len(pubTables) == len(tables) && !slices.ContainsFunc(tables, func(table TableFQN) bool {
+			return !slices.Contains(pubTables, table)
+		}) {
 			return nil
 		}
-		// withClause is built from fixed keywords only, so we can safely
-		// interpolate it into the query
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(pubRow[2:])))
-		if err != nil {
-			return fmt.Errorf("sanitizing publication recreation query: %w", err)
-		}
-		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
-			if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" {
-				return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
-			}
-			return fmt.Errorf("recreating publication for all tables: %w", err)
-		}
-		return nil
+		// SET TABLE replaces the member list and keeps the publication
+		// options. It fails on a FOR ALL TABLES publication, because
+		// PostgreSQL cannot narrow one.
+		stmt = fmt.Sprintf("ALTER PUBLICATION %s SET %s;", publicationName, tableClause)
 	}
 
-	// get a list of tables in the publication
-	pubTables, err := GetPublicationTables(ctx, conn, publicationName)
+	sq, err := sanitize.SQLQuery(stmt)
 	if err != nil {
-		return fmt.Errorf("getting publication tables: %w", err)
+		return fmt.Errorf("sanitizing publication statement: %w", err)
 	}
-
-	tablesToRemoveFromPublication := []TableFQN{}
-	tablesToAddToPublication := []TableFQN{}
-	for _, table := range tables {
-		if !slices.Contains(pubTables, table) {
-			tablesToAddToPublication = append(tablesToAddToPublication, table)
+	if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" && exists && len(tables) == 0 {
+			return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
 		}
+		return fmt.Errorf("updating publication %s: %w", publicationName, err)
 	}
-
-	for _, table := range pubTables {
-		if !slices.Contains(tables, table) {
-			tablesToRemoveFromPublication = append(tablesToRemoveFromPublication, table)
-		}
-	}
-
-	// remove tables from publication
-	for _, dropTable := range tablesToRemoveFromPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf(`ALTER PUBLICATION %s DROP TABLE %s;`, publicationName, dropTable.String()))
-		if err != nil {
-			return fmt.Errorf("sanitizing drop table query: %w", err)
-		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("removing table from publication: %w", err)
-		}
-	}
-
-	// add tables to publication
-	for _, addTable := range tablesToAddToPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
-		if err != nil {
-			return fmt.Errorf("sanitizing add table query: %w", err)
-		}
-		result = conn.Exec(ctx, sq)
-		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("adding table to publication: %w", err)
-		}
-	}
-
 	return nil
 }
 

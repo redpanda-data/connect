@@ -500,6 +500,40 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 	})
 }
 
+// The docs suggest creating the publication ahead of time, so that the
+// replication user does not need to own it. When it already lists the
+// configured tables, CreatePublication must not run ALTER PUBLICATION, which
+// only the owner may run.
+func TestIntegrationCreatePublicationLeavesMatchingPublicationAlone(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
+	defer cancel()
+
+	owner, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, owner)
+
+	_, err = owner.Exec(ctx, `
+		CREATE TABLE listed (id serial PRIMARY KEY, name text);
+		CREATE PUBLICATION pub_precreated FOR TABLE listed;
+		CREATE ROLE replicator LOGIN REPLICATION PASSWORD 'secret';
+	`).ReadAll()
+	require.NoError(t, err)
+
+	replicatorURL := strings.Replace(dbURL, "user=user_name", "user=replicator", 1)
+	require.NotEqual(t, dbURL, replicatorURL)
+	replicator, err := pgconn.Connect(ctx, replicatorURL)
+	require.NoError(t, err)
+	defer closeConn(t, replicator)
+
+	listed := TableFQN{Schema: `"public"`, Table: `"listed"`}
+	require.NoError(t, CreatePublication(ctx, replicator, "pub_precreated", []TableFQN{listed}))
+}
+
 func TestIntegrationStartReplication(t *testing.T) {
 	integration.CheckSkip(t)
 
