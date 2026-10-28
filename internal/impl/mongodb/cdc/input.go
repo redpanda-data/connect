@@ -254,7 +254,7 @@ When `+"`signal_collection_name`"+` is set, documents inserted into that collect
 - `+"`"+replication.LogSignalType+"`"+`: logs `+"`data.message`"+` at info level, for example `+"`{\"type\": \""+replication.LogSignalType+"\", \"data\": {\"message\": \"hello\"}}`"+`.
 - `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Each named collection must also be in `+"`collections`"+`, because the input only watches those for changes. If a signal names any other collection, the input skips the whole signal and logs an error. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
 +
-The read works the same in every snapshot mode. It does not need `+"`incremental_snapshot.enabled`"+`: with `+"`stream_snapshot`"+`, or with no snapshot at all, the named collections are read in `+"`incremental_snapshot.chunk_size`"+` chunks between change events, exactly as described under <<incremental-snapshots,incremental snapshots>>, and the same `+"`retry_cooldown`"+` and duplicate-delivery notes apply. Nothing is read until a signal asks for it. Progress is stored under `+"`incremental_snapshot.checkpoint_cache_key`"+` alongside the stream position, so a restart continues a requested read from the last acknowledged chunk rather than losing the request.
+The read works the same in every snapshot mode. It does not need `+"`incremental_snapshot.enabled`"+`: with `+"`stream_snapshot`"+`, or with no snapshot at all, the named collections are read in `+"`incremental_snapshot.chunk_size`"+` chunks between change events, exactly as described under <<incremental-snapshots,incremental snapshots>>, and the same `+"`retry_cooldown`"+` and duplicate-delivery notes apply. Nothing is read until a signal asks for it, a collection added to `+"`collections`"+` later included: only `+"`incremental_snapshot.enabled`"+` reads one on the next start. Progress is stored under `+"`incremental_snapshot.checkpoint_cache_key`"+` alongside the stream position, so a restart continues a requested read from the last acknowledged chunk rather than losing the request.
 
 Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored.
 
@@ -1414,11 +1414,17 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 // enabled, with or without stream_snapshot, so every configured collection
 // is marked done; a signal reads one again.
 //
-// Undecodable progress is cleared and every configured collection read again
-// while the stream resumes from its position, which loses nothing. The token
-// is kept: clearing it would restart the stream from now, skipping every
-// delete since the stored position, which no re-read can recover. Repeated
-// clears trip the same breaker as a corrupt checkpoint.
+// Without incremental_snapshot.enabled a collection the progress does not
+// know, one added to collections since it was stored, is marked read too:
+// only a signal reads in that mode, and the run would otherwise queue it.
+//
+// Undecodable progress is cleared and the stream resumes from its position,
+// which loses nothing: with incremental_snapshot.enabled every configured
+// collection is read again, and otherwise every collection counts as read,
+// so a read a signal had requested is dropped rather than widened to every
+// collection. The token is kept: clearing it would restart the stream from
+// now, skipping every delete since the stored position, which no re-read can
+// recover. Repeated clears trip the same breaker as a corrupt checkpoint.
 func (m *mongoCDC) loadIncSnapshotState(ctx context.Context, resumeToken bson.Raw) (*incrementalsnapshot.State, bson.Raw, error) {
 	m.resumeTokenMu.Lock()
 	m.storedIncState = nil
@@ -1449,12 +1455,19 @@ func (m *mongoCDC) loadIncSnapshotState(ctx context.Context, resumeToken bson.Ra
 		if plan, recoveries := m.planUnresumableRecovery(); plan == unresumableRecoveryRefuseChurn {
 			return nil, nil, fmt.Errorf("the stored incremental snapshot progress cannot be decoded and has been cleared %d times in a row without the change stream ever advancing in between; refusing to clear it again - repair or delete the checkpoint cache entries, then restart the pipeline: %w", recoveries, err)
 		}
-		m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing it to read every collection again while the stream resumes: %v", err)
+		if m.incremental {
+			m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing it to read every collection again while the stream resumes: %v", err)
+		} else {
+			m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing it while the stream resumes; a read a signal requested is dropped and must be requested again: %v", err)
+		}
 		if derr := m.incStateStore.Delete(ctx); derr != nil {
 			return nil, nil, fmt.Errorf("unable to clear the corrupt incremental snapshot progress: %w", derr)
 		}
-		// No progress with a position queues every configured collection.
-		return nil, resumeToken, nil
+		if m.incremental {
+			// No progress with a position queues every configured collection.
+			return nil, resumeToken, nil
+		}
+		return m.collectionsReadState(), resumeToken, nil
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to load incremental snapshot progress from cache: %w", err)
@@ -1463,7 +1476,35 @@ func (m *mongoCDC) loadIncSnapshotState(ctx context.Context, resumeToken bson.Ra
 		m.logger.Infof("Resuming a stream with no incremental snapshot progress, treating every configured collection as already read")
 		state = m.collectionsReadState()
 	}
+	if !m.incremental {
+		m.markUnknownCollectionsRead(state)
+	}
 	return state, resumeToken, nil
+}
+
+// markUnknownCollectionsRead adds every configured collection the progress
+// does not cover to its read set, so the run does not queue it. One queued or
+// being read is left alone: that is a read a signal requested.
+//
+// Only for runs without incremental_snapshot.enabled, where nothing is read
+// until a signal asks: with it, a collection added to collections since the
+// progress was stored is meant to be read on the next start.
+func (m *mongoCDC) markUnknownCollectionsRead(state *incrementalsnapshot.State) {
+	var added []string
+	for _, c := range m.collections {
+		table := incrementalsnapshot.TableID{Schema: m.db.Name(), Table: c}
+		if slices.Contains(state.Tables, table) || slices.Contains(state.RemainingTables, table) {
+			continue
+		}
+		if state.CurrentTable != nil && *state.CurrentTable == table {
+			continue
+		}
+		state.Tables = append(state.Tables, table)
+		added = append(added, c)
+	}
+	if len(added) > 0 {
+		m.logger.Infof("Treating collections %v, which the stored incremental snapshot progress does not cover, as already read: only a %s signal reads a collection without %s.%s", added, replication.SnapshotSignalType, fieldIncSnapshot, fieldIncSnapshotEnabled)
+	}
 }
 
 // collectionsReadState is the progress of a run that has every configured

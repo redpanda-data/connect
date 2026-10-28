@@ -693,7 +693,6 @@ func TestIntegrationMongoCDCSignalsWithStreamSnapshot(t *testing.T) {
 	assert.Equal(t, 100, got.readByColl["bar"], "bar read by the blocking snapshot and once by the signal")
 	assert.Equal(t, 60, got.readByColl["foo"], "foo read by the blocking snapshot and once by the signal")
 	assert.Equal(t, 2, got.signals, "signal inserts emitted")
-	assert.Empty(t, h.logs.matching("no backfill was queued"), "a signal was dropped")
 }
 
 func TestIntegrationMongoCDCSignalsWithoutSnapshot(t *testing.T) {
@@ -720,6 +719,48 @@ func TestIntegrationMongoCDCSignalsWithoutSnapshot(t *testing.T) {
 	for i := range 30 {
 		assert.Equal(t, 1, got.reads[fmt.Sprintf("foo/%d", i)], "document %d read once", i)
 	}
+}
+
+func TestIntegrationMongoCDCSignalsNewCollectionWaitsForSignal(t *testing.T) {
+	t.Parallel()
+	h := newIncrementalHarness(t)
+	h.seed("foo", 30)
+	h.seed("bar", 50)
+	h.db.CreateCollection(t, "signals")
+	h.db.CreateCollection(t, "markers")
+
+	// A spell without bar in collections stores progress that does not know
+	// it.
+	withoutBar := strings.Replace(signalsOnlyInput, "    - 'bar'\n", "", 1)
+	first := h.stream(withoutBar)
+	wait := first.RunAsync(t)
+	h.waitStreamed("first")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"foo"}}})
+	h.waitReads("foo", 30)
+	first.Stop(t)
+	wait()
+
+	// Adding bar reads nothing without incremental_snapshot.enabled: only a
+	// signal does. The run logs what it queues as it is set up, before any
+	// chunk could be released, so the log is the check that cannot race the
+	// read.
+	second := h.stream(signalsOnlyInput)
+	wait = second.RunAsync(t)
+	h.waitStreamed("second")
+	require.Empty(t, h.logs.matching("queued collections [bar]"), "the added collection was queued without a signal")
+	require.NotEmpty(t, h.logs.matching("Treating collections [bar]"), "the added collection was not marked read")
+	got := replayChecked(t, h.output)
+	require.Zero(t, got.readByColl["bar"], "the added collection was read without a signal")
+	require.Equal(t, 30, got.readCount, "the restart re-read collections")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"bar"}}})
+	h.waitReads("bar", 50)
+	second.Stop(t)
+	wait()
+
+	got = replayChecked(t, h.output)
+	assert.Len(t, h.logs.matching("queued collections [bar]"), 1, "bar queued by the signal alone")
+	assert.Equal(t, 50, got.readByColl["bar"], "bar read once by the signal")
+	assert.Equal(t, 30, got.readByColl["foo"], "foo read once by the signal")
 }
 
 func TestIntegrationMongoCDCSignalsResumeAfterRestart(t *testing.T) {

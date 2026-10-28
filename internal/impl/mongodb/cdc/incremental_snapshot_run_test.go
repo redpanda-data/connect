@@ -348,6 +348,96 @@ func TestLoadIncSnapshotState(t *testing.T) {
 		assert.Nil(t, state.CurrentTable)
 	})
 
+	// Progress stored before bar joined collections: it knows foo only.
+	storeProgressWithoutBar := func(t *testing.T, f *loadFixture) {
+		t.Helper()
+		b, err := json.Marshal(&incrementalsnapshot.State{
+			Version: incrementalsnapshot.CurrentStateVersion,
+			Tables:  tables("foo"),
+		})
+		require.NoError(t, err)
+		f.storeProgress(t, b)
+	}
+
+	t.Run("progress missing a collection without incremental mode marks it read", func(t *testing.T) {
+		// Only a signal reads in this mode, so a collection added to
+		// collections since the progress was stored must not be queued.
+		f := newLoadFixture(t)
+		f.m.incremental = false
+		f.m.signalCollection = "signals"
+		storeProgressWithoutBar(t, f)
+
+		state, token, err := f.m.loadIncSnapshotState(t.Context(), f.token)
+		require.NoError(t, err)
+		assert.Equal(t, f.token, token)
+		require.NotNil(t, state)
+		assert.Equal(t, tables("foo", "bar"), state.Tables)
+		assert.Empty(t, state.RemainingTables)
+
+		run := newIncSnapshotRunBase("db", f.res.Logger(), f.res.Metrics())
+		require.NoError(t, run.setUp(&fakeIncDeps{t: t}, f.m.collections, 10, 0, state))
+		assert.Empty(t, run.coord.State().RemainingTables, "a collection added to collections is not read until a signal asks")
+		added, skipped := run.request([]string{"bar"})
+		assert.Equal(t, []string{"bar"}, added, "a signal still queues it")
+		assert.Empty(t, skipped)
+	})
+
+	t.Run("progress missing a collection without incremental mode keeps a requested read", func(t *testing.T) {
+		f := newLoadFixture(t)
+		f.m.incremental = false
+		f.m.signalCollection = "signals"
+		want := &incrementalsnapshot.State{
+			Version:         incrementalsnapshot.CurrentStateVersion,
+			CurrentTable:    &tables("foo")[0],
+			LastSentPK:      key(t, 4),
+			MaxPK:           key(t, 9),
+			RemainingTables: tables("bar"),
+		}
+		b, err := json.Marshal(want)
+		require.NoError(t, err)
+		f.storeProgress(t, b)
+
+		state, _, err := f.m.loadIncSnapshotState(t.Context(), f.token)
+		require.NoError(t, err)
+		assert.Equal(t, want, state, "a collection queued or being read is a requested read, not an unknown one")
+	})
+
+	t.Run("progress missing a collection with incremental mode reads it", func(t *testing.T) {
+		f := newLoadFixture(t)
+		storeProgressWithoutBar(t, f)
+
+		state, _, err := f.m.loadIncSnapshotState(t.Context(), f.token)
+		require.NoError(t, err)
+		require.NotNil(t, state)
+		assert.Equal(t, tables("foo"), state.Tables, "the progress is returned as stored")
+
+		run := newIncSnapshotRunBase("db", f.res.Logger(), f.res.Metrics())
+		require.NoError(t, run.setUp(&fakeIncDeps{t: t}, f.m.collections, 10, 0, state))
+		assert.Equal(t, tables("bar"), run.coord.State().RemainingTables, "a collection added to collections is read on the next start")
+	})
+
+	t.Run("corrupt progress without incremental mode marks every collection read", func(t *testing.T) {
+		f := newLoadFixture(t)
+		f.m.incremental = false
+		f.m.signalCollection = "signals"
+		require.NoError(t, f.m.checkpoint.Store(t.Context(), f.token))
+		f.storeProgress(t, []byte(`{`))
+
+		state, token, err := f.m.loadIncSnapshotState(t.Context(), f.token)
+		require.NoError(t, err)
+		assert.Equal(t, f.token, token, "the stream must resume from its position")
+		require.NotNil(t, state)
+		assert.Equal(t, tables("foo", "bar"), state.Tables)
+		assert.Empty(t, state.RemainingTables)
+		stored, err := f.m.incStateStore.Load(t.Context())
+		require.NoError(t, err)
+		assert.Nil(t, stored, "the corrupt progress is cleared")
+
+		run := newIncSnapshotRunBase("db", f.res.Logger(), f.res.Metrics())
+		require.NoError(t, run.setUp(&fakeIncDeps{t: t}, f.m.collections, 10, 0, state))
+		assert.Empty(t, run.coord.State().RemainingTables, "nothing is read until a signal asks")
+	})
+
 	t.Run("corrupt progress keeps the position and queues every collection", func(t *testing.T) {
 		f := newLoadFixture(t)
 		require.NoError(t, f.m.checkpoint.Store(t.Context(), f.token))
