@@ -220,3 +220,24 @@ region: us-east-1
 	assert.Contains(t, err.Error(), "KEYS_ONLY")
 	assert.Contains(t, err.Error(), "NEW_IMAGE or NEW_AND_OLD_IMAGES")
 }
+
+// TestConnectIncrementalSingleSkippedBackfillReportsComplete: a table whose
+// incremental snapshot already completed (and whose stream checkpoint is not
+// stale) skips the backfill, and the snapshot state reports complete rather
+// than not started.
+func TestConnectIncrementalSingleSkippedBackfillReportsComplete(t *testing.T) {
+	streams := &incStreamsStub{describe: func(string) []string { return []string{"s1"} }}
+	scan := &scanStubTransport{items: `[{"pk":{"S":"a"}}]`}
+	api := newMemCheckpointAPI(nil)
+	api.put(testStreamArn, snapshotRow(testStreamArn, "snapshot#complete", true, nil))
+	api.put(testStreamArn, memShardRow(testStreamArn, "s1", "100"))
+	d := newIncSingleInput(t, scan, streams, api)
+	defer waitStopped(t, d)
+
+	require.NoError(t, d.connectIncrementalSingle(t.Context(), "t"))
+	assert.Nil(t, d.backfillCancel, "the completed snapshot is not backfilled again")
+	assert.Equal(t, snapshotStateComplete, d.snapshot.state.Load())
+	scan.mu.Lock()
+	assert.Empty(t, scan.scanStartKeys, "no Scan runs")
+	scan.mu.Unlock()
+}
