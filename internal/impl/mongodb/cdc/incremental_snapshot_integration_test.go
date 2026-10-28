@@ -879,11 +879,24 @@ func TestIntegrationMongoCDCSignalCollectionWithPrePostImages(t *testing.T) {
 
 	stream := h.stream(strings.Replace(incrementalInput, "  signal_collection_name: signals\n", "  signal_collection_name: signals\n  document_mode: pre_and_post_images\n", 1))
 	wait := stream.RunAsync(t)
-	h.db.InsertOne(t, "foo", bson.M{"_id": 0, "v": 0})
+	// The first start streams from the position at connect time, so a write
+	// landing before the change stream opens is never delivered: keep writing
+	// until one arrives.
+	written := 0
 	require.Eventually(t, func() bool {
-		_, ok := replay(h.output).docs["foo/0"]
-		return ok
-	}, time.Minute, 100*time.Millisecond, "streaming did not start")
+		written++
+		if _, err := h.db.Collection("foo").InsertOne(t.Context(), bson.M{"_id": fmt.Sprintf("start-%d", written), "v": 0}); err != nil {
+			t.Logf("insert failed: %v", err)
+			return false
+		}
+		r := replay(h.output)
+		for i := 1; i <= written; i++ {
+			if _, ok := r.docs[fmt.Sprintf("foo/start-%d", i)]; ok {
+				return true
+			}
+		}
+		return false
+	}, time.Minute, 250*time.Millisecond, "streaming did not start")
 
 	h.db.InsertOne(t, "signals", bson.M{"_id": "s1", "type": "log", "data": bson.M{"message": "first"}})
 	require.Eventually(t, func() bool { return len(h.logs.matching("first")) > 0 }, 20*time.Second, 100*time.Millisecond, "log signal not seen: %v", h.logs.matching("ERROR"))
