@@ -41,6 +41,7 @@ Converts an XML document into a JSON structure, where elements appear as keys of
 - If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
 - If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
 - XML comments, directives, and process instructions are ignored.
+- Namespace prefixes are stripped from element and attribute names. Namespace declarations are kept as attributes: `+"`xmlns`"+` becomes `+"`-xmlns`"+`, and a prefixed declaration such as `+"`xmlns:a`"+` becomes `+"`-a`"+`.
 - When elements are repeated the resulting JSON value is an array.
 
 For example, given the following XML:

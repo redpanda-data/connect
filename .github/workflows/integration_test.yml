@@ -143,6 +143,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          # A PR command (/integration) runs this job on the main branch, but with PR code.
+          # A cache save from that run can poison the main cache. Thus, do not cache for a PR command.
+          cache: ${{ github.event_name != 'issue_comment' }}
 
       - name: Install Task
         uses: ./.github/actions/setup-task

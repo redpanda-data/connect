@@ -46,7 +46,7 @@ func rerankProcessorConfig() *service.ConfigSpec {
 		Categories("AI").
 		Summary("Reranks a list of documents by their relevance to a query, using the Cohere API.").
 		Description(`
-This processor sends document strings to the Cohere API, which reranks them based on the relevance to the query.
+This processor sends document strings to the https://docs.cohere.com/reference/rerank[Cohere API^], which reranks them based on the relevance to the query.
 
 To learn more about reranking, see the https://docs.cohere.com/docs/rerank-2[Cohere API documentation^].
 

@@ -239,6 +239,16 @@ fetch_size: 0
 `,
 			errContains: "fetch_size",
 		},
+		{
+			name: "negative max_retries",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: MY_TABLE
+max_retries: -1
+`,
+			errContains: "max_retries",
+		},
 	}
 
 	for _, tc := range tests {

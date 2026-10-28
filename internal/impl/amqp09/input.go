@@ -37,7 +37,7 @@ func amqp09InputSpec() *service.ConfigSpec {
 		Stable().
 		Summary(`Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various message brokers, including RabbitMQ.`).
 		Description(`
-TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the `+"`tls`"+` section.
+TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the <<tls,`+"`tls`"+`>> section.
 
 == Metadata
 

@@ -75,7 +75,7 @@ func protobufProcessorSpec() *service.ConfigSpec {
 		Summary(`
 Performs conversions to or from a protobuf message. This processor uses reflection, meaning conversions can be made directly from the target .proto files.
 `).Description(`
-The main functionality of this processor is to map to and from JSON documents. For how protobuf messages map to JSON, see https://protobuf.dev/programming-guides/json/[ProtoJSON Format^].
+The main functionality of this processor is to map to and from JSON documents. For how protobuf messages map to JSON, see https://protobuf.dev/programming-guides/json/[ProtoJSON Format^] and <<examples,Examples>>.
 
 Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively. For an example, see the https://github.com/redpanda-data/redpanda-connect-plugin-example[Redpanda Connect plugin example^].
 

@@ -304,8 +304,7 @@ func (a *azureTargetStreamReader) Pop(ctx context.Context) (*azureObjectTarget, 
 				key: name,
 				ackFn: func(ctx context.Context, err error) (aerr error) {
 					keyNotFound := false
-					var rErr *azcore.ResponseError
-					if errors.As(err, &rErr) {
+					if rErr, ok := errors.AsType[*azcore.ResponseError](err); ok {
 						if rErr.ErrorCode == string(bloberror.BlobNotFound) {
 							a.log.Warnf("Skipping missing blob: %s", name)
 							keyNotFound = true

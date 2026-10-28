@@ -81,7 +81,7 @@ Use ` + "`operation`" + ` to tell them apart: ` + "`update_before`" + ` is alway
 
 == Permissions
 
-When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to <<` + fieldCheckpointCacheTableName + `,` + "`" + fieldCheckpointCacheTableName + "`" + `>> for more information.
 
 == Performance
 
@@ -334,10 +334,14 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 // place, so the new session resumes from the last durable LSN.
 func (i *sqlServerCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
 	publisher := i.publisher.Load()
-	if !publisher.poisoned.Load() {
+	if !publisher.poisoned() {
 		return publisher, nil
 	}
-	i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	if err := publisher.queue.Err(); err != nil {
+		i.log.Warnf("Rebuilding publisher: rows were dropped, so the flush queue is sealed: %v", err)
+	} else {
+		i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	}
 	publisher.close()
 	batcher, err := i.batching.NewBatcher(i.res)
 	if err != nil {
@@ -363,7 +367,8 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
-	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// (see sendTracked), and a sealed flush queue refuses every later batch
+	// (see sealQueue), so a poisoned publisher can never checkpoint again.
 	// Rebuild it with a fresh tracker: the new session resumes from the last
 	// durable LSN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheLSN's
@@ -479,10 +484,8 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, ctx := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
-			}
-			return nil
+			// ReadChangeTables only returns once it hits an error.
+			return fmt.Errorf("streaming from change tables: %w", streaming.ReadChangeTables(ctx, i.db, maxLSN))
 		})
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
@@ -566,7 +569,7 @@ func (i *sqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch
 		case m := <-pub.msgs():
 			return m.msg, m.ackFn, nil
 		case <-pubStopped:
-			if pub.poisoned.Load() {
+			if pub.poisoned() {
 				// Fatal flush-loop exit: tear the session down BEFORE handing
 				// control to Connect - the session goroutine may still be
 				// alive (Connect's still-active guard would otherwise turn
@@ -629,7 +632,7 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	// runs under the publisher's OWN signaller, and a flush parked in
 	// sendTracked (nothing drains msgChan once ReadBatch stops) would
 	// otherwise hold its flush ticket forever - wedging every other flusher
-	// waiting in admit() and leaking the session goroutines past the
+	// waiting in Ticket.Wait and leaking the session goroutines past the
 	// timeout. Cancelling the loop's context releases its ticket, and the
 	// chain then drains: each later ticket holder's Track/send escapes via
 	// its stopSig-derived context.

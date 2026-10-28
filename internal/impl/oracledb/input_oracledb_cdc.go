@@ -209,7 +209,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			ShortDescription("Maximum events buffered for a single transaction. Exceeding it discards the transaction. Set to 0 to disable.").
 			Default(logminer.DefaultMaxTransactionEvents),
 		service.NewBoolField(ociFieldLOBEnabled).
-			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").Version("4.84.1").
+			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements. While a transaction that changed a LOB stays open, every mining window re-reads redo back to the start of that transaction, because LogMiner can only rebuild a LOB from a session that starts before it. Long-running transactions with LOB changes therefore increase mining work, and a window can read more redo than the scn_window_size and redo_volume settings imply.").Version("4.84.1").
 			ShortDescription("Include large object (CLOB, BLOB) columns in snapshot and change events. They are empty when disabled.").
 			Default(logminer.DefaultLOBEnabled),
 		service.NewStringField(ociFieldTransactionCache).
@@ -514,10 +514,14 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 // new session resumes from the last durable SCN.
 func (o *oracleDBCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
 	publisher := o.publisher.Load()
-	if !publisher.poisoned.Load() {
+	if !publisher.poisoned() {
 		return publisher, nil
 	}
-	o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	if err := publisher.queue.Err(); err != nil {
+		o.log.Warnf("Rebuilding publisher: rows were dropped, so the flush queue is sealed: %v", err)
+	} else {
+		o.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	}
 	publisher.Close()
 	batcher, err := o.batching.NewBatcher(o.res)
 	if err != nil {
@@ -537,7 +541,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	)
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
-	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// (see sendTracked), and a sealed flush queue refuses every later batch
+	// (see batchPublisher.queue), so a poisoned publisher can never checkpoint again.
 	// Rebuild it with a fresh tracker: the new session resumes from the last
 	// durable SCN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheSCN's
@@ -869,7 +874,7 @@ func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 		case m := <-pub.msgs():
 			return m.msg, m.ackFn, nil
 		case <-pubStopped:
-			if pub.poisoned.Load() {
+			if pub.poisoned() {
 				// Fatal flush-loop exit: tear the session down BEFORE handing
 				// control to Connect - the session goroutine may still be
 				// alive and holds o.db and o.stopSig, which Connect replaces.

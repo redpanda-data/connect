@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -51,9 +52,23 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
-const httpAddr = "127.0.0.1:8080"
+// freeHTTPAddr returns a local address with a free TCP port for the HTTP
+// server of a stream. The tests run in parallel, so a fixed port makes the
+// servers of two tests collide.
+func freeHTTPAddr(t *testing.T) string {
+	t.Helper()
 
-func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.MessageHandlerFunc) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	require.NoError(t, l.Close())
+	return addr
+}
+
+// startMigrator runs a migrator stream from src to dst until the test ends,
+// and returns the address of the stream's HTTP server.
+func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.MessageHandlerFunc) (httpAddr string) {
+	httpAddr = freeHTTPAddr(t)
 	t.Helper()
 
 	const yamlTmpl = `
@@ -125,6 +140,8 @@ logger:
 	t.Cleanup(func() {
 		require.NoError(t, stream.StopWithin(stopStreamTimeout))
 	})
+
+	return httpAddr
 }
 
 func readMetrics(t *testing.T, baseURL string) map[string]any {
@@ -157,9 +174,12 @@ func readMetrics(t *testing.T, baseURL string) map[string]any {
 	return metrics
 }
 
-func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaCluster, numMessages int) {
+// startMigratorAndWaitForMessages runs startMigrator and waits until the
+// stream has written numMessages messages. It returns the address of the
+// stream's HTTP server.
+func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaCluster, numMessages int) (httpAddr string) {
 	done := make(chan struct{})
-	startMigrator(t, src, dst, func(_ context.Context, _ *service.Message) error {
+	httpAddr = startMigrator(t, src, dst, func(_ context.Context, _ *service.Message) error {
 		done <- struct{}{}
 		return nil
 	})
@@ -177,10 +197,13 @@ func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaClus
 			t.Fatalf("Timed out waiting for message %d/%d", i+1, numMessages)
 		}
 	}
+
+	return httpAddr
 }
 
 func TestIntegrationMigratorSinglePartition(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const numMessages = 100
 
@@ -209,6 +232,7 @@ func TestIntegrationMigratorSinglePartition(t *testing.T) {
 
 func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numMessages = 100
@@ -258,6 +282,7 @@ func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 
 func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numMessages = 10_000
@@ -328,7 +353,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	}
 
 	t.Log("And: Migrator is started")
-	startMigratorAndWaitForMessages(t, src, dst, numMessages)
+	httpAddr := startMigratorAndWaitForMessages(t, src, dst, numMessages)
 
 	t.Log("Then: Schema is visible at destination")
 	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
@@ -390,6 +415,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 
 func TestIntegrationMigratorInputKafkaFranzConsumerGroup(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const group = "foobar_cg"
 
@@ -921,6 +947,7 @@ output:
 
 func TestIntegrationMigratorTwoWayWithProvenanceHeaders(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const numMessages = 10
 
@@ -992,6 +1019,7 @@ func stopStreamAndWait(t *testing.T, stream *service.Stream, d time.Duration) {
 
 func TestIntegrationMigratorJiraCON229(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numMessages   = 1000
@@ -1136,7 +1164,7 @@ logger:
 			TopicC:        topicC,
 			TopicD:        topicD,
 			ConsumerGroup: consumerGroup,
-			HTTPAddr:      httpAddr,
+			HTTPAddr:      freeHTTPAddr(t),
 		}
 		var yamlBuf bytes.Buffer
 		require.NoError(t, tmpl.Execute(&yamlBuf, data))
@@ -1215,6 +1243,7 @@ logger:
 
 func TestIntegrationMigratorEmptyTopicReplication(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		topicPopulated = "topic_populated"
@@ -1310,11 +1339,12 @@ logger:
 
 func TestIntegrationMigratorOutputCustomHeaders(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	getHeader := func(headers []kgo.RecordHeader, key string) ([]byte, bool) {
-		for i := len(headers) - 1; i >= 0; i-- {
-			if headers[i].Key == key {
-				return headers[i].Value, true
+		for _, header := range slices.Backward(headers) {
+			if header.Key == key {
+				return header.Value, true
 			}
 		}
 		return nil, false
@@ -1412,6 +1442,7 @@ logger:
 // forever so that no topic was ever created and no data was copied.
 func TestIntegrationMigratorIncompatibleSubjectDoesNotBlockTopics(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		topicPopulated = migratorTestTopic

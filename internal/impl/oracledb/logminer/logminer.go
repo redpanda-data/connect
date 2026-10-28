@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -67,6 +68,11 @@ type LogMiner struct {
 	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
 	// replayed after the INSERT is buffered so inferLOBLocator can find it.
 	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
+	// lobReplay is the in-flight window that re-mines open LOB transactions.
+	// It stays set until the window succeeds, so a retry resets them again.
+	lobReplay *lobReplay
+	// lobWarner warns once when one transaction has been re-mined for too long.
+	lobWarner lobReplayWarner
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -104,7 +110,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME, RS_ID, SSN FROM V$LOGMNR_CONTENTS WHERE SCN > :1 AND SCN <= :2" + buf.String()
+	logMinerQuery := "SELECT SCN, SQL_REDO, OPERATION_CODE, TABLE_NAME, SEG_OWNER, TIMESTAMP, XID, COMMIT_SCN, CSF, USERNAME, RS_ID, SSN FROM V$LOGMNR_CONTENTS" + logMinerRangeClause + buf.String()
 
 	lm := &LogMiner{
 		cfg:                  cfg,
@@ -314,7 +320,39 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		}
 	}
 
-	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN, logFiles); err != nil {
+	var (
+		sessionStart = lm.currentSCN
+		processEvent = lm.processRedoEvent
+	)
+	if lm.cfg.LOBEnabled {
+		replay, err := lm.planLOBReplay(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		lm.lobReplay = replay
+		warn, age := lm.lobWarner.observe(replay, time.Now())
+		if replay != nil {
+			sessionStart = replay.fromSCN - 1
+			// The preselected files start at currentSCN and may not cover fromSCN.
+			if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, sessionStart, endSCN); err != nil {
+				return false, fmt.Errorf("collecting redo logs for LOB replay: %w", err)
+			}
+			remined := replay.processedSCN - replay.fromSCN + 1
+			lm.log.Debugf("Re-mining %d open transaction(s) with LOB changes from SCN %d (%d SCNs re-mined); rows of other transactions up to SCN %d are skipped", len(replay.txns), replay.fromSCN, remined, replay.processedSCN)
+			if warn {
+				lm.log.Warnf("An open transaction with LOB changes since SCN %d has been re-mined in every mining window for %s so its LOB data is complete (%d SCNs re-read this window). Long-running transactions with LOB changes increase mining work and can increase lag until they commit or roll back", replay.fromSCN, age.Round(time.Second), remined)
+			}
+			processEvent = func(ctx context.Context, ev *sqlredo.RedoEvent) error {
+				if replay.skip(ev) {
+					return nil
+				}
+				return lm.processRedoEvent(ctx, ev)
+			}
+		}
+	}
+
+	if err := lm.prepareLogsAndStartSession(ctx, conn, sessionStart, endSCN, logFiles); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
 			var reduceWindowHint string
@@ -359,7 +397,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, len(logFiles), lm.processRedoEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, sessionStart, endSCN, len(logFiles), processEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			// Resume just before the last processed SCN rather than from the start
@@ -381,9 +419,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	default:
 		lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	}
+	lm.lobReplay = nil
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
 }
+
+// logMinerRangeClause is the SCN range every contents query starts with.
+const logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
@@ -726,6 +768,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 			}
+			lm.lobReplay.end(redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
@@ -733,6 +776,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+			lm.lobReplay.end(redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
@@ -929,8 +973,8 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 			claimed, empty, event.TransactionID, event.SCN, schema, table)
 	}
 
-	for i := len(txn.Events) - 1; i >= 0; i-- {
-		ev := txn.Events[i]
+	for _, ev := range slices.Backward(txn.Events) {
+
 		if ev.Schema != schema || ev.Table != table {
 			continue
 		}
@@ -1077,9 +1121,25 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	default:
 		lm.log.Debugf("Executing LogMiner query with SCN range (scn=%d to %d with window %d)", startSCN, endSCN, lm.windowSize)
 	}
-	if lm.contentStmt == nil {
-		stmt, err := conn.PrepareContext(ctx, lm.logMinerQuery)
-		if err != nil {
+
+	stmt, queryArgs := lm.contentStmt, []any{startSCN, endSCN}
+	if replay := lm.lobReplay; replay != nil {
+		// The replay set changes per window, so this statement is not cached.
+		if pred, ok := replay.queryFilter(); ok {
+			query := strings.Replace(lm.logMinerQuery, logMinerRangeClause, logMinerRangeClause+pred, 1)
+			replayStmt, err := conn.PrepareContext(ctx, query)
+			if err != nil {
+				return lastSCN, fmt.Errorf("preparing logminer LOB replay query: %w", err)
+			}
+			defer replayStmt.Close()
+			stmt, queryArgs = replayStmt, append(queryArgs, replay.processedSCN)
+		} else {
+			lm.log.Debugf("Unparseable transaction ID in LOB replay set, querying without a transaction filter")
+		}
+	}
+	if stmt == nil {
+		var err error
+		if stmt, err = conn.PrepareContext(ctx, lm.logMinerQuery); err != nil {
 			return lastSCN, fmt.Errorf("preparing logminer contents query: %w", err)
 		}
 		lm.contentStmt = stmt
@@ -1090,7 +1150,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	rows, err := lm.contentStmt.QueryContext(ctx, startSCN, endSCN) //nolint:rowserrcheck
+	rows, err := stmt.QueryContext(ctx, queryArgs...) //nolint:rowserrcheck
 	if err != nil {
 		return lastSCN, fmt.Errorf("querying logminer: %w", err)
 	}

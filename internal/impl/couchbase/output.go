@@ -32,7 +32,7 @@ func outputConfig() *service.ConfigSpec {
 		Version("4.37.0").
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or delete data.").
-		Description("When inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
+		Description("This output turns each message into one operation on a https://docs.couchbase.com/home/index.html[Couchbase database^]. It sends the operations of a batch concurrently and waits for all of them to complete.\n\nWhen inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewInterpolatedStringField("id").Description(`The document ID to use.`).Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("The document content to update. When inserting, replacing, or upserting documents, you must set a `content` value.").Optional()).
 		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Version("4.73.0").Optional().Advanced()).
@@ -175,7 +175,28 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 		ops[index] = o.op(k, content, o.ttl)
 	}
 
-	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})
+	if err := o.client.collection.Do(ops, &gocb.BulkOpOptions{}); err != nil {
+		return err
+	}
+
+	// Do does not return the errors of single operations. Fail only the messages whose operation failed, so that
+	// the other messages are acked.
+	var batchErr *service.BatchError
+	for index, op := range ops {
+		err := opErr(op)
+		if err == nil {
+			continue
+		}
+		err = fmt.Errorf("couchbase operation failed: %w", err)
+		if batchErr == nil {
+			batchErr = service.NewBatchError(batch, err)
+		}
+		batchErr.Failed(index, err)
+	}
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
 }
 
 // Close closes the connection to the cluster if Connect was successful.

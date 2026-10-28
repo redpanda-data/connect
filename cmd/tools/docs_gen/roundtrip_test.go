@@ -107,6 +107,18 @@ func TestListExamplesKeepQuotes(t *testing.T) {
 	assert.Equal(t, []string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`, "'single'"}, got["tables"])
 }
 
+func TestListExamplesQuoteHex(t *testing.T) {
+	f := fieldSpec{Name: "ciphers", Kind: "array", Type: "string", Examples: []json.RawMessage{
+		json.RawMessage(`["0x1E0F3", "TLS_AES_128_GCM_SHA256"]`),
+	}}
+	out := renderFieldExamples(f)
+	assert.Contains(t, out, `  - "0x1E0F3"`)
+	body := strings.TrimSuffix(strings.SplitN(out, "# Examples:\n", 2)[1], "----\n\n")
+	var got map[string][]string
+	require.NoError(t, yaml.Unmarshal([]byte(body), &got), body)
+	assert.Equal(t, []string{"0x1E0F3", "TLS_AES_128_GCM_SHA256"}, got["ciphers"])
+}
+
 var fieldHeading = regexp.MustCompile("(?m)^=== `")
 
 // Each top-level config object with fields gets a field reference that lists

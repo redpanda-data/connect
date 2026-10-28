@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -282,9 +283,9 @@ func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task)
 			p.logger.Debugf("  History[%d]: Role=%s, MessageID=%s, Parts=%d", i, histMsg.Role, histMsg.ID, len(histMsg.Parts))
 		}
 
-		for i := len(task.History) - 1; i >= 0; i-- {
-			if task.History[i].Role == a2a.MessageRoleAgent {
-				lastAgentMessage = task.History[i]
+		for i, v := range slices.Backward(task.History) {
+			if v.Role == a2a.MessageRoleAgent {
+				lastAgentMessage = v
 				p.logger.Debugf("Found last agent message at history index %d (MessageID=%s)", i, lastAgentMessage.ID)
 				break
 			}

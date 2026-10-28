@@ -32,6 +32,8 @@ var (
 	yamlBoolLike   = regexp.MustCompile(`(?i)^(true|false|null|yes|no|on|off)$`)
 	yamlSpecial    = regexp.MustCompile("[:\\[\\]{},&>|%@`\"]")
 	yamlSpecialNQ  = regexp.MustCompile("[:\\[\\]{},&>|%@`]")
+	// YAML 1.1 reads an unquoted 0x value as a number, so 0x1E0F3 becomes 123123.
+	yamlHex = regexp.MustCompile(`^0[xX][0-9A-Fa-f]+$`)
 	// interpolationPhrase finds a description that mentions interpolation
 	// functions without linking them.
 	interpolationPhrase = regexp.MustCompile(`(?i)interpolation functions`)
@@ -263,7 +265,7 @@ func quoteListScalar(item any) string {
 			return yamlQuotedString(s, "    ", false)
 		}
 		if s == "" || s == "*" || yamlBoolLike.MatchString(s) || numericLooking.MatchString(s) ||
-			yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
+			yamlHex.MatchString(s) || yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
 			return doubleQuote(s)
 		}
 		return s

@@ -61,8 +61,7 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 			Description("The maximum size of a produced record batch in bytes. " +
 				"A `MESSAGE_TOO_LARGE` error is returned if a batch exceeds this limit. " +
 				"This field maps to the `max.message.bytes` Kafka property. " +
-				"Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, " +
-				"see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes.").
+				"Ensure the Redpanda broker's xref:streaming:reference:properties/cluster-properties.adoc#kafka_batch_max_bytes[`kafka_batch_max_bytes`] property is at least as large as this value.").
 			ShortDescription("Maximum size of a produced record batch. Maps to the Kafka max.message.bytes property.").
 			Advanced().
 			Default("1MiB").
@@ -376,6 +375,7 @@ const (
 	kfwFieldMetadata    = "metadata"
 	kfwFieldTimestamp   = "timestamp"
 	kfwFieldTimestampMs = "timestamp_ms"
+	kfwFieldTombstone   = "tombstone"
 )
 
 // Descriptions shared by the fields of the franz-go and Sarama based Kafka
@@ -416,6 +416,13 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().
 			Advanced(),
+		service.NewInterpolatedStringField(kfwFieldTombstone).
+			Description("An optional boolean that, when it resolves to `true` for a message, writes that message as a tombstone: a record with a null value. The message payload is ignored for tombstones. Use this to delete keys on compacted topics, or to keep tombstones intact when mirroring a topic. An empty payload is not a tombstone. The interpolation must resolve to a value that can be parsed as a boolean, otherwise the write fails.").
+			Version("4.114.0").
+			Example(`${! @kafka_tombstone_message }`).
+			Example(`${! @operation == "delete" }`).
+			Optional().
+			Advanced(),
 	}
 }
 
@@ -453,6 +460,7 @@ type FranzWriter struct {
 	Partition     *service.InterpolatedString
 	Timestamp     *service.InterpolatedString
 	IsTimestampMs bool
+	Tombstone     *service.InterpolatedString
 	MetaFilter    *service.MetadataFilter
 	hooks         franzWriterHooks
 
@@ -521,6 +529,12 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks
 		w.IsTimestampMs = true
 	}
 
+	if conf.Contains(kfwFieldTombstone) {
+		if w.Tombstone, err = conf.FieldInterpolatedString(kfwFieldTombstone); err != nil {
+			return nil, err
+		}
+	}
+
 	return &w, nil
 }
 
@@ -543,10 +557,24 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 
 		var err error
 
-		// Required: Value
-		r.Value, err = msg.AsBytes()
-		if err != nil {
-			return nil, fmt.Errorf("message to bytes: %w", err)
+		// Optional: Tombstone
+		var tombstone bool
+		if w.Tombstone != nil {
+			tsStr, err := w.Tombstone.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("tombstone interpolation: %w", err)
+			}
+			if tombstone, err = strconv.ParseBool(tsStr); err != nil {
+				return nil, fmt.Errorf("parse tombstone: %w", err)
+			}
+		}
+
+		// Required: Value, left nil for tombstones so it is encoded as null.
+		if !tombstone {
+			r.Value, err = msg.AsBytes()
+			if err != nil {
+				return nil, fmt.Errorf("message to bytes: %w", err)
+			}
 		}
 
 		// Required: Topic
@@ -673,7 +701,12 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 	if len(records) != len(w.batch) {
 		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))
 	}
-	var errs []error
+	// produceErrs is appended to only from produce promises, which franz-go
+	// guarantees to invoke serially (never concurrently with each other), and
+	// is read only after wg.Wait, which orders the read after the last
+	// promise. decorateErrs is appended to only from this goroutine. Keeping
+	// them apart avoids a concurrent append between the two.
+	var produceErrs, decorateErrs []error
 	var wg sync.WaitGroup
 	for i := range records {
 		r := &records[i]
@@ -689,19 +722,27 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 		if w.DecorateRecord != nil {
 			if err := w.DecorateRecord(r); err != nil {
-				errs = append(errs, fmt.Errorf("decorate record: %w", err))
+				// No dispatch signal here: the record was never handed to the
+				// producer and the batch is about to fail, so an ordered input
+				// must keep holding the partition until the nack resolves.
+				decorateErrs = append(decorateErrs, fmt.Errorf("decorate record: %w", err))
 				continue
 			}
 		}
 
 		wg.Add(1)
 		details.Client.Produce(w.ctx, r, func(_ *kgo.Record, err error) {
-			errs = append(errs, err)
+			produceErrs = append(produceErrs, err)
 			wg.Done()
 		})
+		// The record is now owned by the producer client, so signal dispatch
+		// here rather than from the produce callback: paired ordered inputs use
+		// this signal to release the next batch for the partition before the
+		// broker acknowledges this one.
+		dispatch.TriggerSignal(w.batch[i].Context())
 	}
 	wg.Wait()
-	return errors.Join(slices.Compact(errs)...)
+	return errors.Join(slices.Compact(append(decorateErrs, produceErrs...))...)
 }
 
 // Close calls into the provided yield client func.

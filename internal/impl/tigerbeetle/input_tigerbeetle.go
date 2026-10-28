@@ -104,9 +104,9 @@ func configSpec() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.65.0").
 		Summary("Streams change data capture (CDC) events from a TigerBeetle cluster.").
-		Description(`Listens to a TigerBeetle cluster and creates a message for each change.
+		Description(`Listens to a TigerBeetle cluster and creates a message for each change. Each change is a transfer event, such as a single-phase transfer or a step of a two-phase transfer, together with the state of its debit and credit accounts after the change.
 
-Each message is a JSON object like:
+Each message is a JSON object that includes the event timestamp and type, the ledger, the transfer, and the debit and credit accounts, like:
 
 `+fmt.Sprintf("```json\n%s\n```", string(jsonSampleObject))+`
 
