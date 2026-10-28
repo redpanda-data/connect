@@ -12,10 +12,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -150,31 +152,58 @@ func isNumberType(dataType string) bool {
 // catalog query, then switches back. Avoids both CDB_* view privilege issues and
 // separate-connection login issues.
 type schemaCache struct {
-	mu         sync.Mutex
-	schemas    map[string]*cachedSchema
-	seededMeta map[string][]replication.ColumnMeta // last ColumnMeta each table was seeded with
-	db         *sql.DB
-	pdbName    string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
-	log        *service.Logger
+	entries   atomic.Pointer[map[string]*tableSchemaEntry]
+	entriesMu sync.Mutex // serialises writers
+	db        *sql.DB
+	pdbName   string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
+	log       *service.Logger
 }
 
-type cachedSchema struct {
+// tableSchemaEntry is one table's cache entry, immutable once stored.
+type tableSchemaEntry struct {
+	schema     *cachedSchemaVal
+	seededMeta []replication.ColumnMeta // last ColumnMeta seeded
+}
+
+type cachedSchemaVal struct {
 	schema   any                      // serialised schema.Common returned by ToAny()
 	keys     map[string]struct{}      // column names for O(1) membership checks
 	colTypes map[string]schema.Common // column name → Common for value coercion (carries decimal precision/scale)
+	typeInfo *columnTypeInfo          // built once rather than per event
+}
+
+func newCachedSchema(c schema.Common, keys map[string]struct{}, colTypes map[string]schema.Common) *cachedSchemaVal {
+	return &cachedSchemaVal{schema: c.ToAny(), keys: keys, colTypes: colTypes, typeInfo: &columnTypeInfo{colTypes}}
 }
 
 // newSchemaCache creates a schemaCache. db is used for on-demand cache-miss refreshes.
 // pdbName is non-empty when connected to CDB$ROOT and monitoring a specific PDB; the cache
 // will switch the session to that PDB for each catalog query.
 func newSchemaCache(db *sql.DB, pdbName string, log *service.Logger) *schemaCache {
-	return &schemaCache{
-		schemas:    make(map[string]*cachedSchema),
-		seededMeta: make(map[string][]replication.ColumnMeta),
-		db:         db,
-		pdbName:    pdbName,
-		log:        log,
+	sc := &schemaCache{db: db, pdbName: pdbName, log: log}
+	sc.entries.Store(&map[string]*tableSchemaEntry{})
+	return sc
+}
+
+func (sc *schemaCache) entry(tableKey string) *tableSchemaEntry {
+	return (*sc.entries.Load())[tableKey]
+}
+
+func (sc *schemaCache) cached(tableKey string) *cachedSchemaVal {
+	if e := sc.entry(tableKey); e != nil {
+		return e.schema
 	}
+	return nil
+}
+
+// storeLocked swaps in a copy of entries with the table's entry set to e. MUST be called
+// with mu held.
+func (sc *schemaCache) storeLocked(tableKey string, e *tableSchemaEntry) {
+	current := *sc.entries.Load()
+	next := make(map[string]*tableSchemaEntry, len(current)+1)
+	maps.Copy(next, current)
+	next[tableKey] = e
+	sc.entries.Store(&next)
 }
 
 // fetchTableSchema queries ALL_TAB_COLUMNS for the given table.
@@ -182,7 +211,7 @@ func newSchemaCache(db *sql.DB, pdbName string, log *service.Logger) *schemaCach
 func fetchTableSchema(ctx context.Context, db interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }, table replication.UserTable,
-) (*cachedSchema, error) {
+) (*cachedSchemaVal, error) {
 	query := `SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE
 FROM ALL_TAB_COLUMNS
 WHERE OWNER = :1 AND TABLE_NAME = :2
@@ -230,45 +259,50 @@ ORDER BY COLUMN_ID`
 		Optional: false,
 		Children: children,
 	}
-	return &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}, nil
+	return newCachedSchema(c, keySet, colTypes), nil
 }
 
-// schemaForEvent returns the schema for the given table, refreshing the cache
-// when eventKeys contains a column name not present in the stored schema.
-// If a refresh fails but a prior schema exists, the old schema is returned
-// alongside the error so callers can degrade gracefully.
-//
-// The mutex is held for the full duration including any DB query on drift.
-// This is intentional: it avoids TOCTOU races and is acceptable because
-// drift is rare (only on column additions). The tradeoff is that a slow
-// catalog query during drift will stall all concurrent Publish() calls.
 // columnTypeInfo holds the type metadata needed for streaming value coercion.
 type columnTypeInfo struct {
 	colTypes map[string]schema.Common
 }
 
-func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.UserTable, eventKeys []string) (any, *columnTypeInfo, error) {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
+// knowsAll reports whether every key is a column of the cached schema.
+func (c *cachedSchemaVal) knowsAll(keys []string) bool {
+	for _, k := range keys {
+		if _, ok := c.keys[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
 
+// schemaForEvent returns table's schema, refreshing it from the catalog when
+// eventKeys has a column the cache doesn't. If the refresh fails, any prior
+// schema is returned with the error.
+//
+// Cache hits take no lock. A refresh holds mu and re-checks the cache first, so
+// concurrent refreshes of the same drift run once.
+func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.UserTable, eventKeys []string) (any, *columnTypeInfo, error) {
 	tableKey := table.Schema + "." + table.Name
 
-	if cached, exists := sc.schemas[tableKey]; exists {
-		allKnown := true
-		for _, k := range eventKeys {
-			if _, ok := cached.keys[k]; !ok {
-				allKnown = false
-				break
-			}
-		}
-		if allKnown {
-			return cached.schema, &columnTypeInfo{cached.colTypes}, nil
+	if cached := sc.cached(tableKey); cached != nil && cached.knowsAll(eventKeys) {
+		return cached.schema, cached.typeInfo, nil
+	}
+
+	sc.entriesMu.Lock()
+	defer sc.entriesMu.Unlock()
+
+	if cached := sc.cached(tableKey); cached != nil {
+		if cached.knowsAll(eventKeys) {
+			// Refreshed by another goroutine while waiting for mu.
+			return cached.schema, cached.typeInfo, nil
 		}
 		sc.log.Debugf("Schema drift detected for %s: refreshing after unknown column in event", tableKey)
 	}
 
 	var (
-		fresh *cachedSchema
+		fresh *cachedSchemaVal
 		err   error
 	)
 	if sc.pdbName != "" {
@@ -276,17 +310,17 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 		// before querying ALL_TAB_COLUMNS.
 		conn, connErr := sc.db.Conn(ctx)
 		if connErr != nil {
-			if existing, exists := sc.schemas[tableKey]; exists {
+			if existing := sc.cached(tableKey); existing != nil {
 				sc.log.Warnf("Failed to get connection for schema refresh of %s, using cached version: %v", tableKey, connErr)
-				return existing.schema, &columnTypeInfo{existing.colTypes}, connErr
+				return existing.schema, existing.typeInfo, connErr
 			}
 			return nil, nil, connErr
 		}
 		defer conn.Close()
 		if _, execErr := conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+sc.pdbName); execErr != nil {
-			if existing, exists := sc.schemas[tableKey]; exists {
+			if existing := sc.cached(tableKey); existing != nil {
 				sc.log.Warnf("Failed to switch to PDB %s for schema refresh of %s, using cached version: %v", sc.pdbName, tableKey, execErr)
-				return existing.schema, &columnTypeInfo{existing.colTypes}, execErr
+				return existing.schema, existing.typeInfo, execErr
 			}
 			return nil, nil, execErr
 		}
@@ -300,15 +334,19 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 		fresh, err = fetchTableSchema(ctx, sc.db, table)
 	}
 	if err != nil {
-		if existing, exists := sc.schemas[tableKey]; exists {
+		if existing := sc.cached(tableKey); existing != nil {
 			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)
-			return existing.schema, &columnTypeInfo{existing.colTypes}, err
+			return existing.schema, existing.typeInfo, err
 		}
 		return nil, nil, err
 	}
 
-	sc.schemas[tableKey] = fresh
-	return fresh.schema, &columnTypeInfo{fresh.colTypes}, nil
+	var seeded []replication.ColumnMeta
+	if e := sc.entry(tableKey); e != nil {
+		seeded = e.seededMeta
+	}
+	sc.storeLocked(tableKey, &tableSchemaEntry{schema: fresh, seededMeta: seeded})
+	return fresh.schema, fresh.typeInfo, nil
 }
 
 // seedFromColumnMeta caches table's schema from snapshot column metadata,
@@ -318,17 +356,20 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 //
 // The match is against the last seeded meta, not the cached schema, so a
 // schema replaced by schemaForEvent's catalog refresh isn't restored by a
-// later seed with the same columns.
+// later seed with the same columns. A match takes no lock.
 func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []replication.ColumnMeta) {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-
 	tableKey := table.Schema + "." + table.Name
 
-	if sameColumnMeta(sc.seededMeta[tableKey], meta) {
+	if e := sc.entry(tableKey); e != nil && sameColumnMeta(e.seededMeta, meta) {
 		return
 	}
-	sc.seededMeta[tableKey] = meta
+
+	sc.entriesMu.Lock()
+	defer sc.entriesMu.Unlock()
+
+	if e := sc.entry(tableKey); e != nil && sameColumnMeta(e.seededMeta, meta) {
+		return
+	}
 
 	children := make([]schema.Common, 0, len(meta))
 	keySet := make(map[string]struct{}, len(meta))
@@ -346,7 +387,7 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 		Optional: false,
 		Children: children,
 	}
-	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}
+	sc.storeLocked(tableKey, &tableSchemaEntry{schema: newCachedSchema(c, keySet, colTypes), seededMeta: meta})
 }
 
 // sameColumnMeta reports whether a and b describe the same columns. Comparing the

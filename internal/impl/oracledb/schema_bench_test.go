@@ -89,3 +89,27 @@ func BenchmarkSeedFromColumnMeta(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkSchemaCacheParallelSnapshotRows runs each snapshot row's schema cache calls,
+// a seed then a cache hit, from many goroutines as parallel snapshot chunks do.
+func BenchmarkSchemaCacheParallelSnapshotRows(b *testing.B) {
+	sc := newSchemaCache(nil, "", service.NewLoggerFromSlog(slog.Default()))
+	tbl := replication.UserTable{Schema: "TESTDB", Name: "ALL_TYPES"}
+	sc.seedFromColumnMeta(tbl, oracleAllTypesColumnMeta())
+	keys := make([]string, 0, len(oracleAllTypesColumnMeta()))
+	for _, m := range oracleAllTypesColumnMeta() {
+		keys = append(keys, m.Name)
+	}
+
+	b.ReportAllocs()
+	b.SetParallelism(8) // like 50+ snapshot workers
+	b.RunParallel(func(pb *testing.PB) {
+		meta := oracleAllTypesColumnMeta() // each worker has its own slice
+		for pb.Next() {
+			sc.seedFromColumnMeta(tbl, meta)
+			if _, _, err := sc.schemaForEvent(b.Context(), tbl, keys); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}

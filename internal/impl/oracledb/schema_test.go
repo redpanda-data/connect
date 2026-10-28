@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -592,6 +593,46 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 	require.Len(t, c2.Children, 3)
 }
 
+func TestSchemaCacheConcurrentSeedAndLookup(t *testing.T) {
+	sc := testSchemaCache(t)
+	tbl := replication.UserTable{Schema: "S", Name: "T"}
+	metaAB := []replication.ColumnMeta{
+		{Name: "A", TypeName: "VARCHAR2"},
+		{Name: "B", TypeName: "NUMBER", Precision: 5, Scale: 0, HasDecimalSize: true},
+	}
+	metaABC := append(append([]replication.ColumnMeta(nil), metaAB...), replication.ColumnMeta{Name: "C", TypeName: "DATE"})
+	sc.seedFromColumnMeta(tbl, metaAB)
+
+	// Writers alternate between two column sets while readers look up columns in both,
+	// so every lookup must hit the cache and see a complete schema.
+	var wg sync.WaitGroup
+	for w := range 4 {
+		wg.Go(func() {
+			for i := range 500 {
+				if (i+w)%2 == 0 {
+					sc.seedFromColumnMeta(tbl, metaAB)
+				} else {
+					sc.seedFromColumnMeta(tbl, metaABC)
+				}
+			}
+		})
+	}
+	for range 16 {
+		wg.Go(func() {
+			for range 2000 {
+				s, info, err := sc.schemaForEvent(t.Context(), tbl, []string{"A", "B"})
+				assert.NoError(t, err)
+				assert.NotNil(t, s)
+				if assert.NotNil(t, info) {
+					assert.Contains(t, info.colTypes, "A")
+					assert.Contains(t, info.colTypes, "B")
+				}
+			}
+		})
+	}
+	wg.Wait()
+}
+
 func TestSeedFromColumnMetaSkip(t *testing.T) {
 	newMeta := func() []replication.ColumnMeta {
 		return []replication.ColumnMeta{
@@ -607,11 +648,11 @@ func TestSeedFromColumnMetaSkip(t *testing.T) {
 
 		sc.seedFromColumnMeta(tbl, meta)
 		tableKey := tbl.Schema + "." + tbl.Name
-		first := sc.schemas[tableKey]
+		first := sc.cached(tableKey)
 		require.NotNil(t, first)
 
 		sc.seedFromColumnMeta(tbl, meta)
-		assert.Same(t, first, sc.schemas[tableKey],
+		assert.Same(t, first, sc.cached(tableKey),
 			"re-seeding with the same slice must skip the rebuild and leave the cached schema untouched")
 	})
 
@@ -622,13 +663,13 @@ func TestSeedFromColumnMetaSkip(t *testing.T) {
 
 		sc.seedFromColumnMeta(tbl, meta)
 		tableKey := tbl.Schema + "." + tbl.Name
-		first := sc.schemas[tableKey]
+		first := sc.cached(tableKey)
 		require.NotNil(t, first)
 
 		freshCopy := make([]replication.ColumnMeta, len(meta))
 		copy(freshCopy, meta)
 		sc.seedFromColumnMeta(tbl, freshCopy)
-		assert.Same(t, first, sc.schemas[tableKey],
+		assert.Same(t, first, sc.cached(tableKey),
 			"re-seeding with an equal-content slice, as each parallel snapshot chunk's page builds, must skip the rebuild")
 	})
 
@@ -638,13 +679,13 @@ func TestSeedFromColumnMetaSkip(t *testing.T) {
 
 		sc.seedFromColumnMeta(tbl, newMeta())
 		tableKey := tbl.Schema + "." + tbl.Name
-		first := sc.schemas[tableKey]
+		first := sc.cached(tableKey)
 		require.NotNil(t, first)
 
 		changed := newMeta()
 		changed[1].Precision = 10
 		sc.seedFromColumnMeta(tbl, changed)
-		assert.NotSame(t, first, sc.schemas[tableKey],
+		assert.NotSame(t, first, sc.cached(tableKey),
 			"re-seeding with different column metadata must rebuild the cached schema")
 	})
 
