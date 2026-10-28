@@ -196,6 +196,37 @@ func TestIntegrationDynamoDBStreams(t *testing.T) {
 	t.Run("MarkShardCompletedKeepsStoredPosition", func(t *testing.T) {
 		testMarkShardCompletedKeepsStoredPosition(t, client)
 	})
+
+	t.Run("SetKeepsCompletionMarker", func(t *testing.T) {
+		testSetKeepsCompletionMarker(t, client)
+	})
+}
+
+// testSetKeepsCompletionMarker (CON-600) checks the conditional plain
+// checkpoint write against a real endpoint: a Set landing after
+// MarkShardCompleted is rejected by the store, reported as success, and leaves
+// the completed row with its final position.
+func testSetKeepsCompletionMarker(t *testing.T, client *dynamodb.Client) {
+	cp, err := NewCheckpointer(t.Context(), client, CheckpointerConfig{
+		TableName: "test-checkpoints-sticky", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+	}, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-1", "seq-9", ""))
+	require.NoError(t, cp.Set(t.Context(), "shard-1", "seq-7", ""), "a late plain write is not an error")
+	require.NoError(t, cp.FlushCheckpoints(t.Context(), map[string]CheckpointValue{"shard-1": {SequenceNumber: "seq-8"}}))
+	seq, completed, err := cp.getShardRow(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.True(t, completed)
+	assert.Equal(t, "seq-9", seq)
+
+	// Rows without the marker keep accepting plain writes.
+	require.NoError(t, cp.Set(t.Context(), "shard-2", "seq-1", ""))
+	require.NoError(t, cp.Set(t.Context(), "shard-2", "seq-2", ""))
+	seq, completed, err = cp.getShardRow(t.Context(), "shard-2")
+	require.NoError(t, err)
+	assert.False(t, completed)
+	assert.Equal(t, "seq-2", seq)
 }
 
 // testMarkShardCompletedKeepsStoredPosition (CON-599) checks the completion
