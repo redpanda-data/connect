@@ -1507,3 +1507,50 @@ func TestCompleteShardCompletionWriteFailure(t *testing.T) {
 		}
 	}
 }
+
+// TestCompleteShardCleanupDuringCompletionWrite (CON-599): a cleanup tick that
+// lands while a closed shard's completion marker is being written must not
+// cancel the reader's context and fail the write. The reader is marked
+// exhausted only after the write returns, so cleanup leaves it alone until
+// then, and children are released only once the marker is stored.
+func TestCompleteShardCleanupDuringCompletionWrite(t *testing.T) {
+	for _, multiTable := range []bool{false, true} {
+		t.Run(fmt.Sprintf("multi-table=%v", multiTable), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			var (
+				d       *dynamoDBCDCInput
+				ts      *tableStream
+				cleanup func()
+			)
+			cp, marked := markRecordingCheckpointer(t, func(ctx context.Context) error {
+				cleanup()
+				return ctx.Err()
+			})
+			d, ts, _ = tableRefreshHarness(t, &refreshStubTransport{}, cp)
+			reader := &dynamoDBShardReader{shardID: "shard-parent"}
+			if multiTable {
+				ts.recordBatcher = NewRecordBatcher(100, 1000, d.log)
+				ts.shardReaders["shard-parent"] = reader
+				cleanup = func() {
+					d.cleanupTableExhaustedShards("test", ts, map[string]context.CancelFunc{"shard-parent": cancel})
+				}
+				d.completeTableShard(ctx, "test", ts, "shard-parent")
+			} else {
+				d.checkpointer = cp
+				d.recordBatcher = NewRecordBatcher(100, 1000, d.log)
+				d.shardReaders = map[string]*dynamoDBShardReader{"shard-parent": reader}
+				d.shardRefreshCh = make(chan struct{}, 1)
+				cleanup = func() {
+					d.cleanupExhaustedShards(map[string]context.CancelFunc{"shard-parent": cancel})
+				}
+				d.completeShard(ctx, "shard-parent")
+			}
+
+			require.NoError(t, ctx.Err(), "cleanup must not cancel a reader whose completion write is running")
+			assert.Equal(t, []string{"shard-parent"}, marked(), "the completion marker must be stored")
+			assert.True(t, reader.exhausted, "the reader must be marked exhausted once the write returns")
+		})
+	}
+}

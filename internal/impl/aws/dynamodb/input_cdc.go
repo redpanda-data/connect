@@ -2878,18 +2878,15 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 	}
 }
 
-// completeTableShard marks a multi-table shard read to the end of its closed
-// shard as exhausted and completed (see markShardCompleted), wakes the
-// coordinator so child shards held back behind it start right away, and hands
-// the shard to the batcher, which persists the completion once its last batch
-// is acknowledged (see RecordBatcher.CloseShard).
+// completeTableShard hands a multi-table shard read to the end of its closed
+// shard to the batcher, which persists the completion once its last batch is
+// acknowledged (see RecordBatcher.CloseShard), then marks it exhausted and
+// completed (see markShardCompleted) and wakes the coordinator so child shards
+// held back behind it start right away. The reader is marked only after
+// CloseShard returns: while the completion write runs the reader is still
+// registered and not exhausted, so the cleanup ticker cannot cancel its
+// context mid-write, and the marker is written before any child is read.
 func (d *dynamoDBCDCInput) completeTableShard(ctx context.Context, tableName string, ts *tableStream, shardID string) {
-	ts.mu.Lock()
-	markShardCompleted(ts.shardReaders, &ts.completedShards, shardID)
-	ts.mu.Unlock()
-	d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
-	signalShardRefresh(ts.shardRefreshCh)
-
 	var cp checkpointer
 	if ts.checkpointer != nil {
 		cp = ts.checkpointer
@@ -2897,6 +2894,12 @@ func (d *dynamoDBCDCInput) completeTableShard(ctx context.Context, tableName str
 	if err := ts.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
 		d.logCompletionFailure(ctx, shardID, " (table "+tableName+")", err)
 	}
+
+	ts.mu.Lock()
+	markShardCompleted(ts.shardReaders, &ts.completedShards, shardID)
+	ts.mu.Unlock()
+	d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
+	signalShardRefresh(ts.shardRefreshCh)
 }
 
 // signalShardRefresh asks a coordinator for an immediate shard refresh
@@ -3134,15 +3137,10 @@ func (d *dynamoDBCDCInput) cleanupExhaustedShards(activeShards map[string]contex
 	}
 }
 
-// completeShard marks a single-table shard read to the end of its closed shard
-// as exhausted and completed; see completeTableShard.
+// completeShard hands a single-table shard read to the end of its closed shard
+// to the batcher, then marks it exhausted and completed; see
+// completeTableShard.
 func (d *dynamoDBCDCInput) completeShard(ctx context.Context, shardID string) {
-	d.mu.Lock()
-	markShardCompleted(d.shardReaders, &d.completedShards, shardID)
-	d.mu.Unlock()
-	d.log.Infof("Shard %s exhausted", shardID)
-	signalShardRefresh(d.shardRefreshCh)
-
 	var cp checkpointer
 	if d.checkpointer != nil {
 		cp = d.checkpointer
@@ -3150,6 +3148,12 @@ func (d *dynamoDBCDCInput) completeShard(ctx context.Context, shardID string) {
 	if err := d.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
 		d.logCompletionFailure(ctx, shardID, "", err)
 	}
+
+	d.mu.Lock()
+	markShardCompleted(d.shardReaders, &d.completedShards, shardID)
+	d.mu.Unlock()
+	d.log.Infof("Shard %s exhausted", shardID)
+	signalShardRefresh(d.shardRefreshCh)
 }
 
 // logCompletionFailure reports a failed write of a shard's completion marker.
