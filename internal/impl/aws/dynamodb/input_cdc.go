@@ -230,7 +230,7 @@ The source DynamoDB table(s) must have https://docs.aws.amazon.com/amazondynamod
 
 == Snapshots
 
-When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+`, `+"`snapshot_and_cdc`"+`, or `+"`incremental`"+`, the input scans the entire table before, instead of, or while streaming changes. This is useful for:
+When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+`, `+"`snapshot_and_cdc`"+`, or `+"`incremental`"+`, the input scans the entire table instead of, before, or while streaming changes. This is useful for:
 
 - Building a replica or cache with all existing data
 - Syncing historical data to a data warehouse

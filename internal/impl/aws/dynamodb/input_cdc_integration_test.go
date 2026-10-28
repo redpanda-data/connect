@@ -1655,6 +1655,7 @@ const incrementalSnapshotRealAWSEnv = "DYNAMODB_CDC_REAL_AWS"
 // matches the table.
 func TestIntegrationDynamoDBCDCIncrementalSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := t.Context()
 	realAWS := os.Getenv(incrementalSnapshotRealAWSEnv) != ""
@@ -1934,6 +1935,7 @@ snapshot_throttle: 10ms
 // signal is a no-op.
 func TestIntegrationDynamoDBCDCSnapshotSignal(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := t.Context()
 
