@@ -379,6 +379,7 @@ pg_stream:
 // CON-588.
 func TestIntegrationPostgresInfiniteTimestamps(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -420,7 +421,11 @@ pg_stream:
 	stream, err := builder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
-	go func() { _ = stream.Run(t.Context()) }()
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
 
 	require.Eventually(t, func() bool {
 		receivedMu.Lock()
