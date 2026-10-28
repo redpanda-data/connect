@@ -17,9 +17,11 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
+	"github.com/aws/smithy-go"
 	smithytime "github.com/aws/smithy-go/time"
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
@@ -289,10 +291,27 @@ func isExpiredIteratorError(err error) bool {
 	return ok
 }
 
+// isIteratorThrottlingError reports whether a GetShardIterator failure is
+// throttling. The GetShardIterator operation models no throttling exception,
+// so AWS throttling codes reach the caller as generic API errors and are
+// matched by code (the SDK retryer's own throttle list) on top of the typed
+// checks in isThrottlingError.
+func isIteratorThrottlingError(err error) bool {
+	if isThrottlingError(err) {
+		return true
+	}
+	apiErr, ok := errors.AsType[smithy.APIError](err)
+	if !ok {
+		return false
+	}
+	_, throttled := retry.DefaultThrottleErrorCodes[apiErr.ErrorCode()]
+	return throttled
+}
+
 // isStreamsResourceNotFoundError returns true when a DynamoDB Streams call
 // fails because the requested stream or shard no longer exists. Unlike a
 // throttle or a network blip this is permanent: a deleted shard can never be
-// read again, so callers should mark it exhausted and move on rather than
+// read again, so callers should hand it back to shard discovery rather than
 // retry. Deliberately matches only the Streams API type, not the DynamoDB
 // table API's ResourceNotFoundException (e.g. a missing checkpoint table).
 func isStreamsResourceNotFoundError(err error) bool {

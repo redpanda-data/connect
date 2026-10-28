@@ -191,6 +191,32 @@ func TestIntegrationDynamoDBStreams(t *testing.T) {
 		checkpointTable := "test-checkpoints-count"
 		testVerifyRecordCount(t, client, port, tableName, checkpointTable)
 	})
+
+	t.Run("MarkShardCompletedKeepsStoredPosition", func(t *testing.T) {
+		testMarkShardCompletedKeepsStoredPosition(t, client)
+	})
+}
+
+// testMarkShardCompletedKeepsStoredPosition (CON-599) checks the completion
+// marker's UpdateItem against a real endpoint: marking a shard completed
+// without a final position keeps the stored sequence number.
+func testMarkShardCompletedKeepsStoredPosition(t *testing.T, client *dynamodb.Client) {
+	cp, err := NewCheckpointer(t.Context(), client, CheckpointerConfig{
+		TableName: "test-checkpoints-completed", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+	}, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	require.NoError(t, cp.Set(t.Context(), "shard-1", "seq-7", ""))
+	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-1", "", ""))
+	seq, completed, err := cp.getShardRow(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.True(t, completed)
+	assert.Equal(t, "seq-7", seq)
+
+	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-2", "", ""))
+	d, err := cp.ResolveResume(t.Context(), "shard-2")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
 }
 
 // testReadInsertEvents verifies that INSERT events are captured.
