@@ -125,7 +125,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | Number
 
 | ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
-| String in RFC 3339 format
+| String in RFC 3339 format, or ` + "`\"infinity\"`" + ` and ` + "`\"-infinity\"`" + ` for the infinite values (see Infinite dates and timestamps below)
 
 | ` + "`BYTEA`" + `
 | Base64-encoded string
