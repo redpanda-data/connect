@@ -2019,6 +2019,7 @@ credentials:
 		reads            = map[string]int{}
 		last             = map[string]int{}
 		signalRecords    int
+		streamEvents     int
 		safetyViolations []string
 		consumeErrs      []error
 	)
@@ -2053,6 +2054,8 @@ credentials:
 				if top, seen := maxSeen[pk]; seen && v < top {
 					safetyViolations = append(safetyViolations, fmt.Sprintf("%s: READ v=%d after maxSeen=%d", pk, v, top))
 				}
+			} else {
+				streamEvents++
 			}
 			if top, seen := maxSeen[pk]; !seen || v > top {
 				maxSeen[pk] = v
@@ -2155,10 +2158,28 @@ snapshot_throttle: 10ms
 		return ids
 	}
 
-	// Let the input connect, then check its state directly: an eager
-	// backfill could still be held back by DynamoDB Local's minute-rounded
-	// stream timestamps, so the absence of READs alone proves little.
-	time.Sleep(5 * time.Second)
+	// Wait until the input streams orders, proven by a stream event reaching
+	// the consumer (start_from is trim_horizon, so the seeded INSERTs count
+	// as well as the probe). Shard readers start inside Connect, after it
+	// has queued any backfill, so the checks below run against a connected
+	// input instead of racing Connect. Check checkpoint state as well as
+	// READs: an eager backfill could still be held back by DynamoDB Local's
+	// minute-rounded stream timestamps, so the absence of READs alone proves
+	// little.
+	_, err = client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:        aws.String(ordersTable),
+		Key:              map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: "k0"}},
+		UpdateExpression: aws.String("ADD v :one"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":one": &types.AttributeValueMemberN{Value: "1"},
+		},
+	})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return streamEvents > 0
+	}, 2*time.Minute, 200*time.Millisecond, "timed out waiting for the input to stream orders")
 	assert.Empty(t, snapshotRows("snapshot#"), "snapshot checkpoint rows exist before any signal")
 	assert.Zero(t, readCount(), "READ events before any signal")
 
