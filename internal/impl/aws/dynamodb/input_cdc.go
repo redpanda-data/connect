@@ -119,7 +119,8 @@ const (
 )
 
 // signalTableDescription documents the signal_table_name field.
-const signalTableDescription = `A DynamoDB table used to send control signals to the input. The table must exist and have a
+const signalTableDescription = `A DynamoDB table used to send control signals to the input. Leave empty (the default)
+to disable control signals. When set, the table must exist and have a
 stream enabled with view type ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `, otherwise the input fails to
 connect. It must not also appear in ` + "`" + dciFieldTables + "`" + `, which is rejected at startup, and tag discovery
 never treats it as a source table, even when its tags match. The signal table is always streamed
@@ -366,7 +367,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc", "incremental").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too), and never emits a snapshot item after a newer change to the same key. `incremental` requires a stream view of NEW_IMAGE or NEW_AND_OLD_IMAGES, reads with strongly consistent Scans (twice the RCU of the other modes), and backfills a table once the first time it is enabled, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset deletes snapshot progress rows.").Version("4.82.0").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too), and never emits a snapshot item after a newer change to the same key. `incremental` requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, reads with strongly consistent Scans (twice the RCU of the other modes), and backfills a table once the first time it is enabled, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset deletes snapshot progress rows.").Version("4.82.0").
 				ShortDescription("Snapshot behaviour: none, snapshot_only, snapshot_and_cdc, or incremental (backfill while streaming, multi-table capable).").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
@@ -387,12 +388,12 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss. Not used by snapshot_mode incremental.").Version("4.82.0").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss. Not used by `snapshot_mode: incremental`.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering CDC events.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
-				Description("Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. Not used by snapshot_mode incremental.").Version("4.82.0").
+				Description("Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. Not used by `snapshot_mode: incremental`.").Version("4.82.0").
 				ShortDescription("Maximum CDC events buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
