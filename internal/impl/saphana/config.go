@@ -248,7 +248,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. TIMESTAMP columns have no timezone, so write the column's wall time with the `Z` or `+00:00` offset, in the timezone the column is populated in. Any other offset is rejected when the configuration is parsed.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. `timestamp_column` has no timezone, so write its wall time with the `Z` or `+00:00` offset, in the timezone the column is populated in. Any other offset is rejected when the configuration is parsed.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
