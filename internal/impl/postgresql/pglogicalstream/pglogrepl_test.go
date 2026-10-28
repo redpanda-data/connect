@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -244,10 +245,10 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
-	tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
+	tables, err := GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.Empty(t, tables)
-	assert.True(t, forAllTables)
+	assert.True(t, publicationIsForAllTables(t, conn, publicationName))
 
 	multiReader := conn.Exec(t.Context(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
 	_, err = multiReader.ReadAll()
@@ -257,12 +258,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	tables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.False(t, forAllTables)
+	assert.True(t, publicationIsForAllTables(t, conn, publicationName))
 
 	// Add more tables to publication
 	multiReader = conn.Exec(t.Context(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
@@ -276,13 +277,13 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	tables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 2)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
-	assert.False(t, forAllTables)
+	assert.False(t, publicationIsForAllTables(t, conn, publicationWithTables))
 
 	// Remove one table from the publication
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
@@ -290,12 +291,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	tables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.False(t, forAllTables)
+	assert.False(t, publicationIsForAllTables(t, conn, publicationWithTables))
 
 	// Add one table and remove one at the same time
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
@@ -303,11 +304,11 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	tables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
-	assert.False(t, forAllTables)
+	assert.False(t, publicationIsForAllTables(t, conn, publicationWithTables))
 
 	// Create a schema with a quoted identifier
 	caseSensitiveSchema := `"FooBar"`
@@ -339,11 +340,11 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
+	tables, err = GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
 	require.NoError(t, err)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
-	assert.False(t, forAllTables)
+	assert.False(t, publicationIsForAllTables(t, conn, publicationQuotedIdentifiers))
 }
 
 // publicationIsForAllTables reads pg_publication.puballtables, which is the
@@ -397,7 +398,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
 
 		assert.True(t, publicationIsForAllTables(t, conn, pub))
-		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		tables, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Contains(t, tables, listed)
 		assert.Contains(t, tables, unlisted)
@@ -417,7 +418,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
 
 		assert.True(t, publicationIsForAllTables(t, conn, pub))
-		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		tables, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Contains(t, tables, listed)
 		assert.Contains(t, tables, unlisted)
@@ -431,7 +432,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{unlisted}))
 
 		assert.False(t, publicationIsForAllTables(t, conn, pub))
-		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		tables, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Equal(t, []TableFQN{unlisted}, tables)
 	})
@@ -446,7 +447,54 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{listed}))
 
 		assert.False(t, publicationIsForAllTables(t, conn, pub))
-		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		tables, err := GetPublicationTables(ctx, conn, pub)
+		require.NoError(t, err)
+		assert.Equal(t, []TableFQN{listed}, tables)
+	})
+
+	t.Run("recreated publication keeps its options", func(t *testing.T) {
+		// publish_via_partition_root is what the incremental snapshot needs for
+		// partitioned tables, so losing it on recreation would break them.
+		pub := "pub_with_options"
+		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed WITH (publish = 'insert', publish_via_partition_root = true);", pub)).ReadAll()
+		require.NoError(t, err)
+
+		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
+
+		assert.True(t, publicationIsForAllTables(t, conn, pub))
+		q, err := sanitize.SQLQuery("SELECT pubinsert, pubupdate, pubdelete, pubtruncate, pubviaroot FROM pg_publication WHERE pubname = $1;", pub)
+		require.NoError(t, err)
+		rows, err := conn.Exec(ctx, q).ReadAll()
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.Len(t, rows[0].Rows, 1)
+		var got []string
+		for _, v := range rows[0].Rows[0] {
+			got = append(got, string(v))
+		}
+		assert.Equal(t, []string{"t", "f", "f", "f", "t"}, got)
+	})
+
+	t.Run("recreating without superuser explains what to do", func(t *testing.T) {
+		pub := "pub_owned_by_non_superuser"
+		_, err := conn.Exec(ctx, fmt.Sprintf(`
+			CREATE ROLE pub_owner LOGIN REPLICATION PASSWORD 'secret';
+			GRANT CREATE ON DATABASE dbname TO pub_owner;
+			CREATE PUBLICATION %s FOR TABLE listed;
+			ALTER PUBLICATION %s OWNER TO pub_owner;
+		`, pub, pub)).ReadAll()
+		require.NoError(t, err)
+
+		ownerConn, err := pgconn.Connect(ctx, strings.Replace(dbURL, "user=user_name", "user=pub_owner", 1))
+		require.NoError(t, err)
+		defer closeConn(t, ownerConn)
+
+		err = CreatePublication(ctx, ownerConn, pub, nil)
+		require.ErrorContains(t, err, "recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables")
+
+		// The failed recreation rolls back, so the publication is untouched.
+		assert.False(t, publicationIsForAllTables(t, conn, pub))
+		tables, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Equal(t, []TableFQN{listed}, tables)
 	})

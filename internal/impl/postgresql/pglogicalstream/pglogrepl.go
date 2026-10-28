@@ -283,10 +283,19 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	// Check if publication exists. puballtables must be read from here:
 	// pg_publication_tables lists every table for a FOR ALL TABLES publication
 	// and nothing for a FOR TABLE publication that has had all of its tables
-	// dropped, so the table list alone cannot tell them apart.
+	// dropped, so the table list alone cannot tell them apart. The options are
+	// read too, so that a recreated publication keeps them. They go through
+	// to_jsonb because the newer columns are missing on older servers, and
+	// naming a missing column fails the whole query.
 	pubQuery, err := sanitize.SQLQuery(`
-			SELECT pubname, puballtables
-			FROM pg_publication
+			SELECT pubname, puballtables,
+				to_jsonb(p) ->> 'pubinsert',
+				to_jsonb(p) ->> 'pubupdate',
+				to_jsonb(p) ->> 'pubdelete',
+				to_jsonb(p) ->> 'pubtruncate',
+				to_jsonb(p) ->> 'pubviaroot',
+				to_jsonb(p) ->> 'pubgencols'
+			FROM pg_publication p
 			WHERE pubname = $1;
 		`, publicationName)
 	if err != nil {
@@ -329,30 +338,37 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	}
 
 	// assuming publication already exists
-	allTables := len(rows[0].Rows[0]) > 1 && string(rows[0].Rows[0][1]) == "t"
+	pubRow := rows[0].Rows[0]
+	allTables := string(pubRow[1]) == "t"
 
 	if len(tables) == 0 {
 		// Every table is wanted. A FOR ALL TABLES publication already covers
 		// them, so nothing to do. A FOR TABLE publication cannot be widened
 		// with ALTER PUBLICATION, and dropping its members one by one would
 		// only leave an empty publication that streams nothing, so recreate
-		// it. Both statements run in one implicit transaction, so the
-		// publication never goes missing for a concurrent reader.
+		// it with the same options. Both statements run in one implicit
+		// transaction, so the publication never goes missing for a concurrent
+		// reader, and a failed CREATE leaves it as it was.
 		if allTables {
 			return nil
 		}
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES;", publicationName, publicationName))
+		// withClause is built from fixed keywords only, so we can safely
+		// interpolate it into the query
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(pubRow[2:])))
 		if err != nil {
 			return fmt.Errorf("sanitizing publication recreation query: %w", err)
 		}
 		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+			if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" {
+				return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
+			}
 			return fmt.Errorf("recreating publication for all tables: %w", err)
 		}
 		return nil
 	}
 
 	// get a list of tables in the publication
-	pubTables, _, err := GetPublicationTables(ctx, conn, publicationName)
+	pubTables, err := GetPublicationTables(ctx, conn, publicationName)
 	if err != nil {
 		return fmt.Errorf("getting publication tables: %w", err)
 	}
@@ -398,9 +414,37 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	return nil
 }
 
-// GetPublicationTables returns a list of tables currently in the publication
-// Arguments, in order: list of the tables, exist for all tables, error.
-func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+// publicationWithClause turns the pg_publication option columns read by
+// CreatePublication (pubinsert, pubupdate, pubdelete, pubtruncate, pubviaroot,
+// pubgencols, each NULL when the server predates it) into the body of a
+// CREATE PUBLICATION ... WITH (...) clause that restores them.
+func publicationWithClause(opts [][]byte) string {
+	var publish []string
+	for i, op := range []string{"insert", "update", "delete", "truncate"} {
+		if string(opts[i]) == "true" {
+			publish = append(publish, op)
+		}
+	}
+	clause := fmt.Sprintf("publish = '%s'", strings.Join(publish, ", "))
+	switch string(opts[4]) {
+	case "true":
+		clause += ", publish_via_partition_root = true"
+	case "false":
+		clause += ", publish_via_partition_root = false"
+	}
+	switch string(opts[5]) {
+	case "n":
+		clause += ", publish_generated_columns = none"
+	case "s":
+		clause += ", publish_generated_columns = stored"
+	}
+	return clause
+}
+
+// GetPublicationTables returns the tables currently in the publication. A FOR
+// ALL TABLES publication lists every table, and a FOR TABLE publication with no
+// members lists none: read pg_publication.puballtables to tell those apart.
+func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 		tablename as table_name,
@@ -410,7 +454,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {
-		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+		return nil, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	// Get specific tables in the publication
@@ -418,11 +462,11 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 
 	rows, err := result.ReadAll()
 	if err != nil {
-		return nil, false, fmt.Errorf("getting publication tables: %w", err)
+		return nil, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
-		return nil, true, nil // Publication exists and is for all tables
+		return nil, nil
 	}
 
 	tables := make([]TableFQN, 0, len(rows))
@@ -434,7 +478,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		tables = append(tables, TableFQN{Table: table, Schema: schema})
 	}
 
-	return tables, false, nil
+	return tables, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.
