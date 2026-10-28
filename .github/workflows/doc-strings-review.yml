@@ -57,7 +57,7 @@ jobs:
     # The reusable workflow resolves the doc-tools CLI version from its own
     # ref, so this SHA pins the review logic and the CLI together and a bump
     # moves both.
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@ad5f399e920677c63749bd8f5e4b2423d5f55dac # v5.56.1
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@328a2e453374048824248564fb5af87969b25ede # v5.58.0
     permissions:
       contents: read
       pull-requests: write
@@ -86,6 +86,10 @@ jobs:
       # failure, so pin it here rather than rely on the reusable default.
       gateway_model: us.anthropic.claude-sonnet-5
       surfaces: connect
+      # Connect's review policy forbids committable suggestions, so each
+      # rewrite goes in a ```text block the author can copy, with no commit
+      # button.
+      committable_suggestions: false
     secrets:
       # No anthropic_api_key: the reusable workflow only reads it when
       # use_adp_gateway is off, so passing it would just expose a long-lived
