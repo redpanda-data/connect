@@ -101,14 +101,23 @@ type checkpointer struct {
 	// batches, which an idle table never shows.
 	mPending *service.MetricGauge
 	// mLag is, in the timestamp modes, how far the checkpointed timestamp HWM
-	// trails the database clock at the latest poll, in seconds. It grows when
-	// a window never closes or acks stop, and stays near timestamp_delay on an
-	// idle table.
+	// trails the database clock, in seconds. It is refreshed every
+	// lagRefreshInterval as well as on each poll and ack, so it keeps growing
+	// when a window never closes or acks stop (ReadBatch then blocks at
+	// checkpoint_limit and neither polls nor acks happen), and stays near
+	// timestamp_delay on an idle table.
 	mLag *service.MetricGauge
-	// dbNowNanos is the database clock read by the latest timestamp-mode poll
-	// (unix nanoseconds, zero until the first poll); the input writes it and
-	// ack callbacks read it, hence atomic.
-	dbNowNanos atomic.Int64
+	// clockOffsetNanos is the database clock minus the host clock at the
+	// latest timestamp-mode poll, so the database clock can be estimated
+	// between polls. clockKnown is false until the first poll.
+	clockOffsetNanos atomic.Int64
+	clockKnown       atomic.Bool
+	// lagHWM is the timestamp HWM of the latest resolved checkpoint, nil
+	// until one resolves.
+	lagHWM atomic.Pointer[time.Time]
+	// now is the host clock, replaced in tests.
+	now      func() time.Time
+	lagStart sync.Once
 
 	// tracker orders checkpoint persistence by delivery order: a batch's HWM
 	// snapshot is only persisted once every earlier batch has also resolved.
@@ -133,6 +142,7 @@ func newCheckpointer(mgr *service.Resources, conf *sapHANAInputConfig) *checkpoi
 		mPending:  mgr.Metrics().NewGauge("sap_hana_checkpoint_pending_messages"),
 		mLag:      mgr.Metrics().NewGauge("sap_hana_hwm_lag_seconds"),
 		tracker:   checkpoint.NewCapped[*sapHANACheckpointState](int64(conf.checkpointLimit)),
+		now:       time.Now,
 	}
 }
 
@@ -205,15 +215,57 @@ func (c *checkpointer) track(ctx context.Context, batchLen int, hwm any, tsHWM t
 	}, nil
 }
 
-// recordLag sets the HWM lag gauge from a resolved checkpoint's timestamp
-// HWM. It does nothing outside the timestamp modes or before the first poll.
+// lagRefreshInterval is how often the HWM lag gauge is recomputed between
+// polls and acks.
+const lagRefreshInterval = time.Second
+
+// observeDBClock records the database clock read by a timestamp-mode poll.
+func (c *checkpointer) observeDBClock(dbNow time.Time) {
+	c.clockOffsetNanos.Store(int64(dbNow.Sub(c.now())))
+	c.clockKnown.Store(true)
+	c.refreshLag()
+}
+
+// recordLag remembers a resolved checkpoint's timestamp HWM for the lag
+// gauge. It does nothing outside the timestamp modes.
 func (c *checkpointer) recordLag(cp *sapHANACheckpointState) {
-	nowNanos := c.dbNowNanos.Load()
-	if cp.TimestampHWM == nil || nowNanos == 0 {
+	if cp.TimestampHWM == nil {
 		return
 	}
-	lag := time.Unix(0, nowNanos).Sub(*cp.TimestampHWM)
-	c.mLag.Set(int64(lag / time.Second))
+	hwm := *cp.TimestampHWM
+	c.lagHWM.Store(&hwm)
+	c.refreshLag()
+}
+
+// refreshLag sets the HWM lag gauge from the estimated database clock and the
+// latest resolved timestamp HWM. It does nothing before the first poll or the
+// first resolved checkpoint.
+func (c *checkpointer) refreshLag() {
+	hwm := c.lagHWM.Load()
+	if hwm == nil || !c.clockKnown.Load() {
+		return
+	}
+	dbNow := c.now().Add(time.Duration(c.clockOffsetNanos.Load()))
+	c.mLag.Set(int64(dbNow.Sub(*hwm) / time.Second))
+}
+
+// startLagRefresh refreshes the HWM lag gauge every lagRefreshInterval until
+// stop is closed. Only the first call starts the loop.
+func (c *checkpointer) startLagRefresh(stop <-chan struct{}) {
+	c.lagStart.Do(func() {
+		go func() {
+			t := time.NewTicker(lagRefreshInterval)
+			defer t.Stop()
+			for {
+				select {
+				case <-t.C:
+					c.refreshLag()
+				case <-stop:
+					return
+				}
+			}
+		}()
+	})
 }
 
 // persist writes the checkpoint state to the configured cache. Callers hold

@@ -122,6 +122,9 @@ func (s *sapHANAInput) Connect(ctx context.Context) (err error) {
 
 	s.db = db
 	s.schemas = newSchemaCache(db, s.log, s.conf.numericMapping)
+	if s.conf.usesTimestamp() {
+		s.cp.startLagRefresh(s.stopChan)
+	}
 
 	s.log.Debug("Connected to SAP HANA.")
 	return nil
@@ -218,7 +221,7 @@ func (s *sapHANAInput) fetchWindowUpperBound(ctx context.Context) (time.Time, er
 	if err := s.db.QueryRowContext(ctx, q, -s.conf.timestampDelay.Seconds()).Scan(&upper); err != nil {
 		return time.Time{}, fmt.Errorf("reading database clock for the poll window: %w", err)
 	}
-	s.cp.dbNowNanos.Store(upper.Add(s.conf.timestampDelay).UnixNano())
+	s.cp.observeDBClock(upper.Add(s.conf.timestampDelay))
 	return upper, nil
 }
 

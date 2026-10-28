@@ -126,7 +126,7 @@ HANA lists catalog rows for the objects a user holds a privilege on, so `+"`SELE
 
 *`+"`schema`"+` and `+"`primary_key_columns`"+` metadata are missing.* The input reads them from `+"`SYS.TABLE_COLUMNS`"+` and `+"`SYS.INDEX_COLUMNS`"+`; when that read fails it logs a warning and carries on without them. Views never have them. For a table, check the warning in the logs, grant the connecting user `+"`SELECT`"+` on the table (or `+"`CATALOG READ`"+`), and make sure `+"`schema_name`"+` is set.
 
-*"invalid table name" or "invalid column name" for a table that exists.* Identifiers in this config are quoted when sent to HANA, so they must match the catalog's case exactly. HANA upper-cases identifiers that were created without quotes: a table created as `+"`create table orders`"+` is `+"`ORDERS`"+` in the catalog and must be configured as such.
+*"invalid table name" or "invalid column name" for a table that exists.* Identifiers in this configuration are quoted when sent to HANA, so they must match the catalog's case exactly. HANA upper-cases identifiers that were created without quotes: a table created as `+"`create table orders`"+` is `+"`ORDERS`"+` in the catalog and must be configured as such.
 
 *Batches arrive one at a time.* `+"`fetch_size`"+` larger than `+"`checkpoint_limit`"+` means a batch cannot be handed on until the previous one is acknowledged (a warning is logged at startup). Raise `+"`checkpoint_limit`"+` or lower `+"`fetch_size`"+`.
 
@@ -248,7 +248,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. TIMESTAMP columns have no timezone, so write the column's wall time with the `Z` or `+00:00` offset, in the timezone the column is populated in. Any other offset is rejected when the config is parsed.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. TIMESTAMP columns have no timezone, so write the column's wall time with the `Z` or `+00:00` offset, in the timezone the column is populated in. Any other offset is rejected when the configuration is parsed.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).

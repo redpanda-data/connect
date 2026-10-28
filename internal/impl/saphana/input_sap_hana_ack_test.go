@@ -1007,6 +1007,10 @@ checkpoint_cache: %s
 
 	t.Log("Given: a window whose bound is the database clock minus 30s, and rows ten minutes old")
 	upper := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	// The host clock runs an hour behind the database clock; only the offset
+	// read at each poll matters.
+	hostNow := upper.Add(-time.Hour)
+	s.cp.now = func() time.Time { return hostNow }
 	t1, t2, t3 := upper.Add(-11*time.Minute), upper.Add(-10*time.Minute), upper.Add(-9*time.Minute)
 	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(-30)).
 		WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(upper))
@@ -1031,4 +1035,48 @@ checkpoint_cache: %s
 	require.True(t, ok)
 	// Checkpoint is t2 (the peeked t3 is later); database now is upper+30s.
 	assert.Equal(t, int64((10*time.Minute+30*time.Second)/time.Second), lag)
+
+	t.Log("When: five minutes pass with no poll and no ack, as when ReadBatch is blocked at checkpoint_limit")
+	hostNow = hostNow.Add(5 * time.Minute)
+	s.cp.refreshLag()
+
+	t.Log("Then: the lag keeps growing with the estimated database clock")
+	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
+	assert.Equal(t, int64((15*time.Minute+30*time.Second)/time.Second), lag)
+}
+
+// The lag refresh loop recomputes the gauge on its own, so a stalled pipeline
+// shows a growing lag without any poll or ack.
+func TestSAPHANAInputLagRefreshLoop(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+	c := newCheckpointer(res, &sapHANAInputConfig{checkpointLimit: 10})
+	var mu sync.Mutex
+	hostNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	c.now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return hostNow
+	}
+
+	t.Log("Given: a poll that read the database clock and a checkpoint one minute behind it")
+	c.observeDBClock(hostNow)
+	hwm := hostNow.Add(-time.Minute)
+	c.recordLag(&sapHANACheckpointState{TimestampHWM: &hwm})
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64(60), lag)
+
+	t.Log("When: the refresh loop runs while the host clock moves on by an hour")
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	c.startLagRefresh(stop)
+	mu.Lock()
+	hostNow = hostNow.Add(time.Hour)
+	mu.Unlock()
+
+	t.Log("Then: the gauge catches up without a poll or an ack")
+	assert.Eventually(t, func() bool {
+		lag, _ := exp.get("sap_hana_hwm_lag_seconds")
+		return lag == int64((time.Hour+time.Minute)/time.Second)
+	}, 5*time.Second, 50*time.Millisecond)
 }
