@@ -149,6 +149,12 @@ func (i InfoCollection) addIfMissing(info PluginInfo) {
 	}
 }
 
+// Has returns true if the collection lists a plugin of the given name and type.
+func (i InfoCollection) Has(name string, typeStr TypeName) bool {
+	_, exists := i[PluginInfo{Name: name, Type: typeStr}.key()]
+	return exists
+}
+
 // BaseInfo represents the information defined within info.csv.
 var BaseInfo = InfoCollection{}
 

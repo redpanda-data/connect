@@ -52,7 +52,7 @@ func dataTransformProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor executes a Redpanda Data Transform WebAssembly module, calling OnRecordWritten for each message being processed.
 
-You can find out about how transforms work here: https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/[https://docs.redpanda.com/current/develop/data-transforms/how-transforms-work/^]
+For how transforms work, see xref:streaming:develop:data-transforms/how-transforms-work.adoc[How transforms work].
 `).
 		Field(service.NewStringField(dtpFieldModulePath).
 			Description("The path of the compiled Redpanda Data Transform module to run, such as the `.wasm` file built by `rpk transform build`.")).

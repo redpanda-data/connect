@@ -64,6 +64,12 @@ func Cloud(version, dateBuilt string) *service.ConfigSchema {
 		"@service": "redpanda-connect",
 	}, "logger", "static_fields")
 	s = s.Field(redpandaTopLevelConfigField())
+	// Readers of this distribution run inside Redpanda Cloud, so doc strings
+	// wrapped in ifndef::env-cloud[] are hidden from them and ifdef::env-cloud[]
+	// text is shown, the same as on the Cloud docs site. Declaring env-cloud
+	// also points doc string links at the Cloud copy of the Connect docs (see
+	// docslinks.MarkdownOptions).
+	s.SetDocsAttributes(service.DocsAttributeCloud)
 	return s
 }
 
@@ -93,5 +99,11 @@ func CloudAI(version, dateBuilt string) *service.ConfigSchema {
 		"@service": "redpanda-connect",
 	}, "logger", "static_fields")
 	s = s.Field(redpandaTopLevelConfigField())
+	// Readers of this distribution run inside Redpanda Cloud, so doc strings
+	// wrapped in ifndef::env-cloud[] are hidden from them and ifdef::env-cloud[]
+	// text is shown, the same as on the Cloud docs site. Declaring env-cloud
+	// also points doc string links at the Cloud copy of the Connect docs (see
+	// docslinks.MarkdownOptions).
+	s.SetDocsAttributes(service.DocsAttributeCloud)
 	return s
 }

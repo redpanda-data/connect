@@ -75,7 +75,9 @@ Ingest data into Snowflake using Snowpipe Streaming, writing through a Snowflake
 
 Unlike `+"`snowflake_streaming`"+`, which opens channels on a table, this output opens them on a pipe, so any transformation defined in the pipe's `+"`COPY INTO`"+` (stream-static join enrichment, `+"`WHERE`"+` filtering) runs before rows land. If you don't need those, `+"`snowflake_streaming`"+` is the simpler choice: it creates its table for you and needs no pipe.
 
-This is an Enterprise feature and requires a valid Redpanda Enterprise Edition license that includes Connect (https://docs.redpanda.com/redpanda-connect/get-started/licensing/[licensing docs^]).
+ifndef::env-cloud[]
+This is an Enterprise feature and requires a valid Redpanda Enterprise Edition license that includes Connect. See xref:get-started:licensing.adoc[Redpanda Connect licensing].
+endif::[]
 
 The `+"`"+ssopFieldPipe+"`"+` (and its table) must already exist; this output never issues `+"`CREATE PIPE`"+` or `+"`CREATE TABLE`"+`. A missing pipe is reported when the output connects, before any message is written. Fields with no matching column are dropped by Snowflake unless the table has `+"`ENABLE_SCHEMA_EVOLUTION = TRUE`"+` and the pipe uses `+"`MATCH_BY_COLUMN_NAME`"+`, in which case new fields become columns.
 
