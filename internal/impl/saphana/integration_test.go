@@ -1004,7 +1004,8 @@ sap_hana:
 // HANA Cloud's idle-session timeout) must not lose rows: go-hdb surfaces the
 // broken fetch as an error, the input rewinds to its last safe position, and
 // the rows already scanned (the peeked one and the rest of the fetch-ahead)
-// are read again after the reconnect.
+// are read again after the reconnect. Pure timestamp mode is covered too: it
+// is the one mode that peeks ahead to close a timestamp window.
 func TestIntegrationSAPHANASessionKilledMidCursor(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
@@ -1014,7 +1015,7 @@ func TestIntegrationSAPHANASessionKilledMidCursor(t *testing.T) {
 	// than fetch_size; enough rows keep the cursor open on the server.
 	const n = int64(500)
 
-	for _, mode := range []string{"incrementing", "timestamp+incrementing"} {
+	for _, mode := range []string{"incrementing", "timestamp", "timestamp+incrementing"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Logf("Given: %d rows with distinct ids and timestamps, read by a dedicated user with fetch_size 2", n)
 			table := createTable(t, db, "kill", `ID BIGINT PRIMARY KEY, UPDATED_AT TIMESTAMP`)
@@ -1028,13 +1029,15 @@ dsn: %q
 mode: %s
 schema_name: %s
 table: %s
-incrementing_column: ID
 poll_interval: 200ms
 fetch_size: 2
 retry_backoff: 100ms
 checkpoint_cache: %s
 `, userDSN, mode, schema, table, testCacheName)
-			if mode == "timestamp+incrementing" {
+			if mode != "timestamp" {
+				conf += "incrementing_column: ID\n"
+			}
+			if mode != "incrementing" {
 				conf += "timestamp_column: UPDATED_AT\ntimestamp_delay: 0s\n"
 			}
 			res := enterpriseResourcesWithCache()
@@ -1081,8 +1084,18 @@ checkpoint_cache: %s
 			expectNoRows(t, input, time.Second)
 			cp := readCheckpoint(t, res)
 			require.NotNil(t, cp)
-			require.NotNil(t, cp.IncrHWMInt)
-			assert.Equal(t, n, *cp.IncrHWMInt, "the final checkpoint is the highest id")
+			if mode != "timestamp" {
+				require.NotNil(t, cp.IncrHWMInt)
+				assert.Equal(t, n, *cp.IncrHWMInt, "the final checkpoint is the highest id")
+			}
+			if mode != "incrementing" {
+				require.NotNil(t, cp.TimestampHWM)
+				// A drained window moves the HWM to its upper bound (the
+				// database clock minus timestamp_delay), past the last row.
+				latest := base.Add(time.Duration(n) * time.Second)
+				assert.False(t, cp.TimestampHWM.Before(latest),
+					"the final checkpoint %v is before the latest row timestamp %v", *cp.TimestampHWM, latest)
+			}
 		})
 	}
 }
@@ -1140,10 +1153,9 @@ poll_interval: 200ms
 // A least-privilege user holding only SELECT on the object it reads. HANA
 // shows catalog rows for objects a user has a privilege on, so on a table the
 // schema metadata and catalog-typed initial value still work. A view has no
-// SYS.TABLE_COLUMNS rows at all: metadata is omitted, the timestamp_column
-// check is skipped, and incrementing_initial_value must still bind (the test
-// bind falls back from the integer guess to the literal string) instead of
-// failing every poll.
+// SYS.TABLE_COLUMNS rows at all, so metadata is omitted, but its
+// SYS.VIEW_COLUMNS rows still type incrementing_initial_value and the
+// timestamp_column check.
 func TestIntegrationSAPHANARestrictedUser(t *testing.T) {
 	dsn := requireHANA(t)
 	db := openTestDB(t, dsn)
@@ -1220,8 +1232,8 @@ poll_interval: 200ms
 		})
 	}
 
-	t.Run("initial value that cannot bind fails Connect", func(t *testing.T) {
-		t.Log("Given: a SELECT-only user reading the view with an initial value that is no NVARCHAR or integer")
+	t.Run("initial value that does not match the column fails Connect", func(t *testing.T) {
+		t.Log("Given: a SELECT-only user reading the view with an initial value that is no timestamp, for a TIMESTAMP column")
 		_, userDSN := createRestrictedUser(t, db, dsn, schema, view)
 		conf, err := sapHANAInputConfigSpec.ParseYAML(fmt.Sprintf(`
 dsn: %q
@@ -1240,6 +1252,6 @@ incrementing_initial_value: "not-a-timestamp"
 		err = input.Connect(t.Context())
 
 		t.Log("Then: Connect fails with a clear error instead of polling forever")
-		require.ErrorContains(t, err, `incrementing_initial_value "not-a-timestamp" does not bind`)
+		require.ErrorContains(t, err, `incrementing_initial_value "not-a-timestamp" does not match incrementing_column "UPDATED_AT" of type TIMESTAMP`)
 	})
 }

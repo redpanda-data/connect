@@ -41,10 +41,12 @@ func TestCoerceIncrementingValue(t *testing.T) {
 		{raw: "2024-01-01T00:00:00Z", dataType: "SECONDDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "2024-01-01T00:00:00Z", dataType: "LONGDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{raw: "2024-01-01", dataType: "DAYDATE", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-		// HANA date and time columns have no timezone and go-hdb binds t.UTC(),
-		// so an offset must not shift the wall clock the user wrote.
-		{raw: "2024-01-01T00:00:00+02:00", dataType: "TIMESTAMP", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{raw: "2024-01-01T23:30:00-05:00", dataType: "LONGDATE", want: time.Date(2024, 1, 1, 23, 30, 0, 0, time.UTC)},
+		// HANA date and time columns have no timezone, so an offset is
+		// ambiguous: only Z or +00:00 is accepted, anything else is rejected
+		// rather than silently shifted or ignored.
+		{raw: "2024-01-01T00:00:00+00:00", dataType: "TIMESTAMP", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{raw: "2024-01-01T00:00:00+02:00", dataType: "TIMESTAMP", wantErr: true},
+		{raw: "2024-01-01T23:30:00-05:00", dataType: "LONGDATE", wantErr: true},
 		{raw: "abc", dataType: "BIGINT", wantErr: true},
 		{raw: "yesterday", dataType: "TIMESTAMP", wantErr: true},
 		// Binary keys (a ULID or UUID stored as VARBINARY(16)) are written in
@@ -132,6 +134,8 @@ incrementing_initial_value: "007"
 	require.Equal(t, int64(7), s.hwm)
 	mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
 		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(hanaViewColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(testInitProbeQuery).WithArgs(int64(7)).
 		WillReturnError(errors.New("convert named argument: unsupported type conversion"))
 	mock.ExpectQuery(testInitProbeQuery).WithArgs("007").
@@ -142,24 +146,67 @@ incrementing_initial_value: "007"
 }
 
 // When neither candidate binds, Connect must fail with a clear error rather
-// than leave an input that fails every poll with only a log line.
+// than leave an input that fails every poll with only a log line. With no
+// catalog row the cause is the column or the value, not a missing privilege
+// (HANA lists the columns of every object the user can select from), so the
+// hint must not send the user to CATALOG READ; a failed catalog read must.
 func TestSAPHANAInputInitialValueProbeFailsConnect(t *testing.T) {
-	s, mock := newTestInput(t, enterpriseResourcesWithCache(), `
+	for _, tc := range []struct {
+		name       string
+		catalogErr error
+		wantHint   string
+		noHint     string
+	}{
+		{name: "no catalog row", catalogErr: sql.ErrNoRows, wantHint: "check the column name and the value", noHint: "CATALOG READ"},
+		{name: "catalog read fails", catalogErr: errors.New("insufficient privilege"), wantHint: "grant the connecting user CATALOG READ"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, mock := newTestInput(t, enterpriseResourcesWithCache(), `
 dsn: hdb://user:pass@host:39017
 mode: incrementing
 table: T
 incrementing_column: ID
 incrementing_initial_value: "42"
 `)
-	mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
+			mock.ExpectQuery(hanaColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
+				WillReturnError(tc.catalogErr)
+			if errors.Is(tc.catalogErr, sql.ErrNoRows) {
+				mock.ExpectQuery(hanaViewColumnTypeCurrentSchemaQuery).WithArgs("T", "ID").
+					WillReturnError(sql.ErrNoRows)
+			}
+			mock.ExpectQuery(testInitProbeQuery).WithArgs(int64(42)).
+				WillReturnError(errors.New("unsupported type conversion"))
+			mock.ExpectQuery(testInitProbeQuery).WithArgs("42").
+				WillReturnError(errors.New("unsupported type conversion"))
+			err := s.resolveIncrementingInitialValue(t.Context(), s.db)
+			require.ErrorContains(t, err, `incrementing_initial_value "42" does not bind`)
+			require.ErrorContains(t, err, tc.wantHint)
+			if tc.noHint != "" {
+				assert.NotContains(t, err.Error(), tc.noHint)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+// A view has no SYS.TABLE_COLUMNS rows, so the column type comes from
+// SYS.VIEW_COLUMNS and no test bind runs against the view: the probe query
+// could scan a wide join view at connect time.
+func TestSAPHANAInputInitialValueTypeFromViewColumns(t *testing.T) {
+	s, mock := newTestInput(t, enterpriseResourcesWithCache(), `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+schema_name: S
+table: V
+incrementing_column: DOC_NO
+incrementing_initial_value: "007"
+`)
+	mock.ExpectQuery(hanaColumnTypeQuery).WithArgs("S", "V", "DOC_NO").
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(testInitProbeQuery).WithArgs(int64(42)).
-		WillReturnError(errors.New("unsupported type conversion"))
-	mock.ExpectQuery(testInitProbeQuery).WithArgs("42").
-		WillReturnError(errors.New("unsupported type conversion"))
-	err := s.resolveIncrementingInitialValue(t.Context(), s.db)
-	require.ErrorContains(t, err, `incrementing_initial_value "42" does not bind`)
-	require.ErrorContains(t, err, "CATALOG READ")
+	mock.ExpectQuery(hanaViewColumnTypeQuery).WithArgs("S", "V", "DOC_NO").
+		WillReturnRows(sqlmock.NewRows([]string{"DATA_TYPE_NAME"}).AddRow("NVARCHAR"))
+	require.NoError(t, s.resolveIncrementingInitialValue(t.Context(), s.db))
+	assert.Equal(t, "007", s.hwm)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

@@ -297,18 +297,25 @@ func parseIncrHWMString(s string) any {
 // only gives us a string, and go-hdb converts bind parameters client-side
 // against the prepared statement's metadata: an int64 against an NVARCHAR
 // key or a string against a TIMESTAMP is rejected on every poll, so the
-// input would never progress. If the catalog is unreadable, the value is
-// test-bound against the column instead (see probeIncrementingInitialValue),
-// and Connect fails when no candidate binds.
+// input would never progress. If neither SYS.TABLE_COLUMNS nor
+// SYS.VIEW_COLUMNS gives the type, the value is test-bound against the
+// column instead (see probeIncrementingInitialValue), and Connect fails when
+// no candidate binds.
 func (s *sapHANAInput) resolveIncrementingInitialValue(ctx context.Context, db *sql.DB) error {
 	dataType, err := fetchHANAColumnType(ctx, db, s.conf.schemaName, s.conf.tableName, s.conf.incrementingCol)
 	if err != nil {
 		v, probeErr := s.probeIncrementingInitialValue(ctx, db)
 		if probeErr != nil {
-			return fmt.Errorf("could not determine the type of %s column %q from SYS.TABLE_COLUMNS (%v), and %s %q does not bind against it: %w; grant the connecting user CATALOG READ or check the value",
-				shFieldIncrementingColumn, s.conf.incrementingCol, err, shFieldIncrementingInitialVal, s.conf.incrInitialRaw, probeErr)
+			// No catalog row is not a privilege problem: HANA lists the
+			// columns of every object the user can select from.
+			hint := "check the column name and the value"
+			if !errors.Is(err, sql.ErrNoRows) {
+				hint = "grant the connecting user CATALOG READ or check the value"
+			}
+			return fmt.Errorf("could not determine the type of %s column %q from the catalog (%v), and %s %q does not bind against it: %w; %s",
+				shFieldIncrementingColumn, s.conf.incrementingCol, err, shFieldIncrementingInitialVal, s.conf.incrInitialRaw, probeErr, hint)
 		}
-		s.log.Warnf("Could not determine the type of %s column %q from SYS.TABLE_COLUMNS, binding %s as %T: %v",
+		s.log.Warnf("Could not determine the type of %s column %q from the catalog, binding %s as %T: %v",
 			shFieldIncrementingColumn, s.conf.incrementingCol, shFieldIncrementingInitialVal, v, err)
 		s.hwm = v
 		return nil
@@ -353,14 +360,14 @@ var timestampColumnTypes = map[string]struct{}{
 	"TIMESTAMP": {}, "LONGDATE": {}, "SECONDDATE": {},
 }
 
-// validateTimestampColumn checks timestamp_column against SYS.TABLE_COLUMNS
+// validateTimestampColumn checks timestamp_column against the catalog
 // so a wrongly typed column fails at connect time with a clear message rather
 // than on the first poll's bind. An unreadable catalog is logged and skipped,
 // as for the incrementing column.
 func (s *sapHANAInput) validateTimestampColumn(ctx context.Context, db *sql.DB) error {
 	dataType, err := fetchHANAColumnType(ctx, db, s.conf.schemaName, s.conf.tableName, s.conf.timestampCol)
 	if err != nil {
-		s.log.Warnf("Could not determine the type of %s column %q from SYS.TABLE_COLUMNS, continuing without checking it: %v",
+		s.log.Warnf("Could not determine the type of %s column %q from the catalog, continuing without checking it: %v",
 			shFieldTimestampColumn, s.conf.timestampCol, err)
 		return nil
 	}
@@ -380,13 +387,18 @@ var incrementingTimeLayouts = []string{
 	"2006-01-02",
 }
 
-// wallClock returns t's wall-clock reading (date and time of day as written,
-// offset dropped) as a UTC time. HANA date and time columns carry no
-// timezone, and go-hdb binds a time.Time as t.UTC(), so a value parsed with a
-// non-UTC offset would otherwise reach HANA shifted by that offset:
-// 2024-01-01T00:00:00+02:00 would bind as 2023-12-31 22:00:00.
-func wallClock(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+// requireUTC returns t in UTC, or an error when t carries a non-zero offset.
+// HANA date and time columns carry no timezone and go-hdb binds a time.Time
+// as t.UTC(), so 2024-01-01T02:00:00+02:00 would bind as 2024-01-01 00:00:00.
+// Whether that or 02:00 is what the user meant depends on how the column is
+// populated, so neither is guessed: the value must be written as the column's
+// wall time with Z or +00:00.
+func requireUTC(t time.Time) (time.Time, error) {
+	if _, off := t.Zone(); off != 0 {
+		return time.Time{}, fmt.Errorf("offset %s is not allowed: HANA date and time columns have no timezone, so write the column's wall time with Z or +00:00 (for example 2024-01-01T00:00:00Z)",
+			t.Format("-07:00"))
+	}
+	return t.UTC(), nil
 }
 
 // coerceIncrementingValue converts the configured initial value to the Go
@@ -416,7 +428,7 @@ func coerceIncrementingValue(raw, dataType string) (any, error) {
 	case "DATE", "TIME", "TIMESTAMP", "SECONDDATE", "LONGDATE", "DAYDATE", "SECONDTIME":
 		for _, layout := range incrementingTimeLayouts {
 			if t, err := time.Parse(layout, raw); err == nil {
-				return wallClock(t), nil
+				return requireUTC(t)
 			}
 		}
 		return nil, errors.New("expected an RFC3339 or 'YYYY-MM-DD[ HH:MM:SS]' timestamp")

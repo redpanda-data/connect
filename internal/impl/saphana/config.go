@@ -102,10 +102,10 @@ Messages produced in `+"`bulk`, `incrementing`, `timestamp`, and `timestamp+incr
 The connecting user needs `+"`SELECT`"+` on the source table, or on the statement's tables in `+"`query`"+` mode. The user also needs read access to system views in these cases:
 
 - When `+"`schema_name`"+` is set, the input reads `+"`SYS.TABLE_COLUMNS`"+`, `+"`SYS.INDEX_COLUMNS`"+`, and `+"`SYS.INDEXES`"+` to build the `+"`schema`"+` and `+"`primary_key_columns`"+` metadata.
-- In the `+"`timestamp`"+` and `+"`timestamp+incrementing`"+` modes, the input reads `+"`SYS.TABLE_COLUMNS`"+` to check the type of `+"`timestamp_column`"+` when it connects. Without access, the check is skipped and a warning is logged.
-- When `+"`incrementing_initial_value`"+` is set and no checkpoint exists yet, the input reads `+"`SYS.TABLE_COLUMNS`"+` to bind the initial value with the type of `+"`incrementing_column`"+`. Without catalog rows, it test-binds the value against the column (as a number when it parses as one, then as the literal string) and fails to connect when neither binds.
+- In the `+"`timestamp`"+` and `+"`timestamp+incrementing`"+` modes, the input reads `+"`SYS.TABLE_COLUMNS`"+` (or `+"`SYS.VIEW_COLUMNS`"+` for a view) to check the type of `+"`timestamp_column`"+` when it connects. Without access, the check is skipped and a warning is logged.
+- When `+"`incrementing_initial_value`"+` is set and no checkpoint exists yet, the input reads `+"`SYS.TABLE_COLUMNS`"+` (or `+"`SYS.VIEW_COLUMNS`"+` for a view) to bind the initial value with the type of `+"`incrementing_column`"+`. Without catalog rows, it test-binds the value against the column (as a number when it parses as one, then as the literal string) and fails to connect when neither binds.
 
-HANA lists catalog rows for the objects a user holds a privilege on, so `+"`SELECT`"+` on a table is enough for these reads. A view has no rows in `+"`SYS.TABLE_COLUMNS`"+` whatever the privileges, so it is read without `+"`schema`"+` and `+"`primary_key_columns`"+` metadata and without the `+"`timestamp_column`"+` type check. For other objects the user cannot see in the catalog, grant `+"`CATALOG READ`"+`.
+HANA lists catalog rows for the objects a user holds a privilege on, so `+"`SELECT`"+` on a table or view is enough for these reads. A view has no rows in `+"`SYS.TABLE_COLUMNS`"+` whatever the privileges, so it is read without `+"`schema`"+` and `+"`primary_key_columns`"+` metadata. For other objects the user cannot see in the catalog, grant `+"`CATALOG READ`"+`.
 
 == Known limitations
 
@@ -234,7 +234,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
-		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns (read as the column's wall time, so any offset is ignored), hexadecimal for BINARY/VARBINARY columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
+		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns (the column's wall time, with no offset other than `Z` or `+00:00`), hexadecimal for BINARY/VARBINARY columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
@@ -248,7 +248,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. The value is read as the column's wall time: TIMESTAMP columns have no timezone, so any offset is ignored (`2024-01-01T00:00:00+02:00` starts at `2024-01-01 00:00:00`). Write the value in the timezone the column is populated in.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. TIMESTAMP columns have no timezone, so write the column's wall time with the `Z` or `+00:00` offset, in the timezone the column is populated in. Any other offset is rejected when the config is parsed.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
@@ -439,9 +439,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		if tsInit, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", shFieldTimestampInitialVal, err)
 		}
-		// The value is the column's wall time: a TIMESTAMP column has no
-		// timezone, so an offset in the value must not shift it.
-		c.timestampInitial = wallClock(tsInit)
+		if c.timestampInitial, err = requireUTC(tsInit); err != nil {
+			return nil, fmt.Errorf("field %q: %w", shFieldTimestampInitialVal, err)
+		}
 		s.timestampHWM = c.timestampInitial
 	}
 	if c.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {
