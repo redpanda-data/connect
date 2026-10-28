@@ -152,12 +152,12 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 == Metadata
 
 This input adds the following metadata fields to each message:
-- table: Name of the table that the message originated from
-- operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
-- lsn: the log sequence number in postgres
-- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
-- commit_ts_ms: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
-- before: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's REPLICA IDENTITY setting - with the default identity only key columns are present, with REPLICA IDENTITY FULL all columns are present.
+- ` + "`table`" + `: Name of the table that the message originated from
+- ` + "`operation`" + `: Type of operation that generated the message: ` + "`read`" + `, ` + "`insert`" + `, ` + "`update`" + `, or ` + "`delete`" + `. ` + "`read`" + ` is from messages that are read in the initial snapshot phase. This will also be ` + "`begin`" + ` and ` + "`commit`" + ` if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
+- ` + "`lsn`" + `: The log sequence number in PostgreSQL
+- ` + "`schema`" + `: The table schema in benthos common schema format, compatible with processors like ` + "`parquet_encode`" + `
+- ` + "`commit_ts_ms`" + `: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
+- ` + "`before`" + `: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's REPLICA IDENTITY setting - with the default identity only key columns are present, with REPLICA IDENTITY FULL all columns are present.
 
 == Unserializable rows
 
