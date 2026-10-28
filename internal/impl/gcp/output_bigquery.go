@@ -152,7 +152,7 @@ func gcpBigQueryConfig() *service.ConfigSpec {
 		Description(`
 == Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[GCP credentials].
 
 [[format-overview]]
 == Format
