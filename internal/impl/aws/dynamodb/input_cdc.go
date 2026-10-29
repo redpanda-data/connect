@@ -810,14 +810,20 @@ func parseTableTagFilter(filter string) (map[string][]string, error) {
 	return result, nil
 }
 
-// newInputRecordBatcher builds the input's record batcher. The budget scales
-// with the larger of checkpoint_limit and batch_size: readers reserve the
-// full batch_size before every read, so a checkpoint_limit below batch_size
-// must not shrink the budget below what batch-sized reads need - otherwise
-// TryReserve refuses whenever anything is in flight and the whole input
-// serializes to one batch in flight globally.
-func newInputRecordBatcher(conf dynamoDBCDCConfig, log *service.Logger) *RecordBatcher {
-	return NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), log)
+// newInputRecordBatcher builds the input's record batcher over cp. The
+// budget scales with the larger of checkpoint_limit and batch_size: readers
+// reserve the full batch_size before every read, so a checkpoint_limit below
+// batch_size must not shrink the budget below what batch-sized reads need -
+// otherwise TryReserve refuses whenever anything is in flight and the whole
+// input serializes to one batch in flight globally. The persister is started
+// separately (RecordBatcher.Run) once the input's workers are running.
+func newInputRecordBatcher(conf dynamoDBCDCConfig, cp *Checkpointer, failures *service.MetricCounter, log *service.Logger) *RecordBatcher {
+	// Built explicitly so a nil *Checkpointer stays a nil interface (tests).
+	var store checkpointer
+	if cp != nil {
+		store = cp
+	}
+	return NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), store, failures, log)
 }
 
 // validateDynamoDBCDCConfig validates the configuration for consistency
@@ -1171,8 +1177,11 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 		return fmt.Errorf("creating checkpointer: %w", err)
 	}
 
-	// Initialize record batcher
-	d.recordBatcher = newInputRecordBatcher(d.conf, d.log)
+	// Initialize record batcher and start its checkpoint persister. The
+	// persister stops with the other workers at soft stop; Close then
+	// flushes whatever it had not written yet.
+	d.recordBatcher = newInputRecordBatcher(d.conf, d.checkpointer, d.metrics.checkpointFailures, d.log)
+	d.startBackgroundWorker("checkpoint persister", d.recordBatcher.Run)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists, shards without checkpoints are rotation children
@@ -1293,8 +1302,9 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 		return false, fmt.Errorf("creating checkpointer for table %s: %w", tableName, err)
 	}
 
-	// Initialize record batcher for this table
-	recordBatcher := newInputRecordBatcher(d.conf, d.log)
+	// Initialize record batcher for this table; its persister starts with
+	// the table's coordinator (startTableCoordinator).
+	recordBatcher := newInputRecordBatcher(d.conf, checkpointer, d.metrics.checkpointFailures, d.log)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists for this table, shards without checkpoints are
@@ -2071,7 +2081,6 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	pruned := pruneCompletedShards(d.completedShards, shards)
 	d.mu.Unlock()
 	forgetShards(d.recordBatcher, pruned)
-	d.retryShardFinalization(ctx, d.recordBatcher, "")
 
 	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) shardStatus {
 		d.mu.RLock()
@@ -2151,22 +2160,13 @@ func pruneCompletedShards(completed map[string]struct{}, listed []types.Shard) [
 
 // forgetShards drops the batcher's tracker state for completed shards that
 // aged out of the stream. Normally that state is already gone once the
-// shard's last batch settled (RecordBatcher.CloseShard); this catches entries
-// whose final checkpoint write kept failing (see retryShardFinalization). The
-// shard can no longer be read, so its unpersisted frontier is worthless and
-// is dropped too.
+// shard's last batch settled and the persister wrote its final position
+// (RecordBatcher.CloseShard); this catches entries whose final write kept
+// failing. The shard can no longer be read, so its unpersisted frontier is
+// worthless and is dropped too.
 func forgetShards(batcher *RecordBatcher, shardIDs []string) {
 	for _, shardID := range shardIDs {
 		batcher.forgetShard(shardID, false)
-	}
-}
-
-// retryShardFinalization retries the final checkpoint write of closed shards
-// whose earlier attempt failed (see RecordBatcher.RetryFinalize), once per
-// shard refresh cycle. A failure is logged and retried on the next cycle.
-func (d *dynamoDBCDCInput) retryShardFinalization(ctx context.Context, batcher *RecordBatcher, tableSuffix string) {
-	if err := batcher.RetryFinalize(ctx); err != nil {
-		d.log.Warnf("Failed to persist completion of closed shards%s; retrying on the next shard refresh: %v", tableSuffix, err)
 	}
 }
 
@@ -2465,7 +2465,6 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	pruned := pruneCompletedShards(ts.completedShards, shards)
 	ts.mu.Unlock()
 	forgetShards(ts.recordBatcher, pruned)
-	d.retryShardFinalization(ctx, ts.recordBatcher, " (table "+tableName+")")
 
 	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) shardStatus {
 		ts.mu.RLock()
@@ -2674,7 +2673,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		if iterator == nil {
 			ts.recordBatcher.Release(shardID, reserve)
 			if closed {
-				d.completeTableShard(ctx, tableName, ts, shardID)
+				d.completeTableShard(tableName, ts, shardID)
 			}
 			return
 		}
@@ -2790,7 +2789,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		if len(getRecords.Records) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
-				d.completeTableShard(ctx, tableName, ts, shardID)
+				d.completeTableShard(tableName, ts, shardID)
 				return
 			}
 			// No records available: wait before polling again
@@ -2812,7 +2811,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		if len(batch) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
-				d.completeTableShard(ctx, tableName, ts, shardID)
+				d.completeTableShard(tableName, ts, shardID)
 				return
 			}
 			continue
@@ -2827,41 +2826,33 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		tb := ts.recordBatcher.AddMessages(batch, shardID)
 		ts.recordBatcher.Release(shardID, reserve-len(batch))
 
-		// Create ack function. The checkpointer interface value is built
-		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
-		// must still run to settle the batch (draining the tracker). Close
-		// does not clear a table stream's checkpointer, so here it is nil
-		// only in tests.
-		var cp checkpointer
-		if ts.checkpointer != nil {
-			cp = ts.checkpointer
-		}
+		// Create ack function. Settling never touches the checkpoint store:
+		// the batcher's persister writes the shard's progress on its own.
 		recordBatcher := ts.recordBatcher
 		batchLen := len(batch)
-		ackFunc := func(ackCtx context.Context, err error) error {
+		ackFunc := func(_ context.Context, err error) error {
 			d.ackMu.RLock()
 			defer d.ackMu.RUnlock()
 
 			if d.closed {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveBatch(ackCtx, tb)
+					recordBatcher.RemoveBatch(tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s (table %s): %v", shardID, tableName, err)
-				recordBatcher.RemoveBatch(ackCtx, tb)
+				recordBatcher.RemoveBatch(tb)
 				return err
 			}
 
-			// Mark messages as acked and checkpoint if needed
-			if ackErr := recordBatcher.AckBatch(ackCtx, cp, tb); ackErr != nil {
-				d.log.Errorf("Failed to checkpoint shard %s (table %s) after ack: %v", shardID, tableName, ackErr)
+			if ackErr := recordBatcher.AckBatch(tb); ackErr != nil {
+				d.log.Errorf("Failed to acknowledge batch from shard %s (table %s): %v", shardID, tableName, ackErr)
 				return ackErr
 			}
-			d.log.Debugf("Successfully checkpointed %d messages from shard %s (table %s)", batchLen, shardID, tableName)
+			d.log.Debugf("Acknowledged %d messages from shard %s (table %s)", batchLen, shardID, tableName)
 			return nil
 		}
 
@@ -2870,34 +2861,27 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		case <-ctx.Done():
 			// The batch was never dispatched: untrack it or its messages
 			// would pin the tracker budget forever.
-			recordBatcher.RemoveBatch(ctx, tb)
+			recordBatcher.RemoveBatch(tb)
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
 		}
 		if shardClosed {
-			d.completeTableShard(ctx, tableName, ts, shardID)
+			d.completeTableShard(tableName, ts, shardID)
 			return
 		}
 	}
 }
 
 // completeTableShard hands a multi-table shard read to the end of its closed
-// shard to the batcher, which persists the completion once its last batch is
-// acknowledged (see RecordBatcher.CloseShard), then marks it exhausted and
-// completed (see markShardCompleted) and wakes the coordinator so child shards
-// held back behind it start right away. The reader is marked only after
-// CloseShard returns: while the completion write runs the reader is still
-// registered and not exhausted, so the cleanup ticker cannot cancel its
-// context mid-write, and the marker is written before any child is read.
-func (d *dynamoDBCDCInput) completeTableShard(ctx context.Context, tableName string, ts *tableStream, shardID string) {
-	var cp checkpointer
-	if ts.checkpointer != nil {
-		cp = ts.checkpointer
-	}
-	if err := ts.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
-		d.logCompletionFailure(ctx, shardID, " (table "+tableName+")", err)
-	}
+// shard to the batcher, whose persister writes the completion once its last
+// batch is acknowledged (see RecordBatcher.CloseShard), then marks it
+// exhausted and completed (see markShardCompleted) and wakes the coordinator
+// so child shards held back behind it start right away. The completion write
+// runs on the persister's own context, so the cleanup ticker cancelling this
+// reader's context cannot fail it.
+func (d *dynamoDBCDCInput) completeTableShard(tableName string, ts *tableStream, shardID string) {
+	ts.recordBatcher.CloseShard(shardID)
 
 	ts.mu.Lock()
 	markShardCompleted(ts.shardReaders, &ts.completedShards, shardID)
@@ -3007,22 +2991,16 @@ func convertTableRecordsToBatch(records []types.Record, tableName, shardID strin
 	return batch
 }
 
-// flushCheckpoint flushes pending checkpoints for a given checkpointer/batcher pair.
-// Returns true if any error occurred during flush.
-func (d *dynamoDBCDCInput) flushCheckpoint(ctx context.Context, cp *Checkpointer, batcher *RecordBatcher, label string) bool {
-	if cp == nil || batcher == nil {
+// flushCheckpoint writes everything a batcher's persister had not persisted
+// when it stopped: unpersisted frontiers and pending shard completions.
+// Returns true if any write failed.
+func (d *dynamoDBCDCInput) flushCheckpoint(ctx context.Context, batcher *RecordBatcher, label string) bool {
+	if batcher == nil {
 		return false
 	}
-
-	pending := batcher.PendingCheckpoints()
-	if len(pending) == 0 {
-		return false
-	}
-
-	d.log.Infof("Flushing %d pending checkpoints for %s on close", len(pending), label)
-	if err := cp.FlushCheckpoints(ctx, pending); err != nil {
+	d.log.Debugf("Flushing pending checkpoints for %s on close", label)
+	if err := batcher.Flush(ctx); err != nil {
 		d.log.Errorf("Failed to flush checkpoints for %s: %v", label, err)
-		d.metrics.checkpointFailures.Incr(1)
 		return true
 	}
 	return false
@@ -3045,8 +3023,10 @@ func (d *dynamoDBCDCInput) startBackgroundWorker(name string, fn func(context.Co
 	}()
 }
 
-// startTableCoordinator launches a table stream coordinator goroutine.
+// startTableCoordinator launches a table stream coordinator goroutine and
+// the table's checkpoint persister.
 func (d *dynamoDBCDCInput) startTableCoordinator(tableName string, ts *tableStream) {
+	d.startBackgroundWorker("checkpoint persister for table "+tableName, ts.recordBatcher.Run)
 	d.startBackgroundWorker(
 		"coordinator for table "+tableName,
 		func(ctx context.Context) {
@@ -3144,34 +3124,14 @@ func (d *dynamoDBCDCInput) cleanupExhaustedShards(activeShards map[string]contex
 // completeShard hands a single-table shard read to the end of its closed shard
 // to the batcher, then marks it exhausted and completed; see
 // completeTableShard.
-func (d *dynamoDBCDCInput) completeShard(ctx context.Context, shardID string) {
-	var cp checkpointer
-	if d.checkpointer != nil {
-		cp = d.checkpointer
-	}
-	if err := d.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
-		d.logCompletionFailure(ctx, shardID, "", err)
-	}
+func (d *dynamoDBCDCInput) completeShard(shardID string) {
+	d.recordBatcher.CloseShard(shardID)
 
 	d.mu.Lock()
 	markShardCompleted(d.shardReaders, &d.completedShards, shardID)
 	d.mu.Unlock()
 	d.log.Infof("Shard %s exhausted", shardID)
 	signalShardRefresh(d.shardRefreshCh)
-}
-
-// logCompletionFailure reports a failed write of a shard's completion marker.
-// A write cut short by the reader's context being canceled (shutdown) is
-// expected and logged at debug; any other failure is counted as a checkpoint
-// failure. Either way a restart reads the shard again from its last
-// checkpoint.
-func (d *dynamoDBCDCInput) logCompletionFailure(ctx context.Context, shardID, tableSuffix string, err error) {
-	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
-		d.log.Debugf("Completion of shard %s%s not persisted, shutting down; a restart reads it again from its last checkpoint: %v", shardID, tableSuffix, err)
-		return
-	}
-	d.metrics.checkpointFailures.Incr(1)
-	d.log.Errorf("Failed to persist completion of shard %s%s; a restart reads it again from its last checkpoint: %v", shardID, tableSuffix, err)
 }
 
 // releaseShardReader is called by a single-table reader giving up on its
@@ -3243,7 +3203,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		if iterator == nil {
 			d.recordBatcher.Release(shardID, reserve)
 			if closed {
-				d.completeShard(ctx, shardID)
+				d.completeShard(shardID)
 			}
 			return
 		}
@@ -3359,7 +3319,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		if len(getRecords.Records) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
-				d.completeShard(ctx, shardID)
+				d.completeShard(shardID)
 				return
 			}
 			// No records available: wait before polling again
@@ -3377,7 +3337,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		if len(batch) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
-				d.completeShard(ctx, shardID)
+				d.completeShard(shardID)
 				return
 			}
 			continue
@@ -3392,17 +3352,11 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		tb := d.recordBatcher.AddMessages(batch, shardID)
 		d.recordBatcher.Release(shardID, reserve-len(batch))
 
-		// Create ack function. The checkpointer interface value is built
-		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
-		// must still run to settle the batch (draining the tracker) even
-		// after Close has cleared the checkpointer.
-		var cp checkpointer
-		if d.checkpointer != nil {
-			cp = d.checkpointer
-		}
+		// Create ack function. Settling never touches the checkpoint store:
+		// the batcher's persister writes the shard's progress on its own.
 		recordBatcher := d.recordBatcher
 		batchLen := len(batch)
-		ackFunc := func(ackCtx context.Context, err error) error {
+		ackFunc := func(_ context.Context, err error) error {
 			d.ackMu.RLock()
 			defer d.ackMu.RUnlock()
 
@@ -3410,23 +3364,22 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			if d.closed {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveBatch(ackCtx, tb)
+					recordBatcher.RemoveBatch(tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s: %v", shardID, err)
-				recordBatcher.RemoveBatch(ackCtx, tb)
+				recordBatcher.RemoveBatch(tb)
 				return err // Propagate nack error
 			}
 
-			// Mark messages as acked and checkpoint if needed
-			if ackErr := recordBatcher.AckBatch(ackCtx, cp, tb); ackErr != nil {
-				d.log.Errorf("Failed to checkpoint shard %s after ack: %v", shardID, ackErr)
-				return ackErr // Propagate checkpoint failure
+			if ackErr := recordBatcher.AckBatch(tb); ackErr != nil {
+				d.log.Errorf("Failed to acknowledge batch from shard %s: %v", shardID, ackErr)
+				return ackErr
 			}
-			d.log.Debugf("Successfully checkpointed %d messages from shard %s", batchLen, shardID)
+			d.log.Debugf("Acknowledged %d messages from shard %s", batchLen, shardID)
 			return nil
 		}
 
@@ -3435,13 +3388,13 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		case <-ctx.Done():
 			// The batch was never dispatched: untrack it or its messages
 			// would pin the tracker budget forever.
-			recordBatcher.RemoveBatch(ctx, tb)
+			recordBatcher.RemoveBatch(tb)
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
 		}
 		if shardClosed {
-			d.completeShard(ctx, shardID)
+			d.completeShard(shardID)
 			return
 		}
 	}
@@ -3818,7 +3771,7 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	}
 
 	// Flush single-table mode checkpoints (fields immutable after Connect())
-	d.flushCheckpoint(ctx, d.checkpointer, d.recordBatcher, "single-table")
+	d.flushCheckpoint(ctx, d.recordBatcher, "single-table")
 
 	// Flush multi-table mode checkpoints
 	d.mu.RLock()
@@ -3827,7 +3780,7 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	d.mu.RUnlock()
 
 	for tableName, ts := range tableStreamsCopy {
-		d.flushCheckpoint(ctx, ts.checkpointer, ts.recordBatcher, "table "+tableName)
+		d.flushCheckpoint(ctx, ts.recordBatcher, "table "+tableName)
 	}
 
 	// Clear references to help GC. Keep msgChan and shutSig: ReadBatch reads

@@ -432,7 +432,7 @@ func readerHarnesses(records string, checkpointLimit, msgChanCap int) map[string
 func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointLimit, msgChanCap int) map[string]func() *readerHarness {
 	build := func(multiTable bool) *readerHarness {
 		transport := mkTransport()
-		batcher := NewRecordBatcher(100, checkpointLimit, service.MockResources().Logger())
+		batcher := NewRecordBatcher(100, checkpointLimit, nil, nil, service.MockResources().Logger())
 		shardReaders := map[string]*dynamoDBShardReader{
 			"shard-001": {shardID: "shard-001", iterator: aws.String("initial-iterator")},
 		}
