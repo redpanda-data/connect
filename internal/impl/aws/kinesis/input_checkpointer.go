@@ -167,6 +167,9 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 		return nil, err
 	}
 
+	// GetItem on a missing key succeeds with an empty Item (the
+	// ResourceNotFoundException above is a missing table), so a shard that
+	// was never claimed has no checkpoint.
 	if len(rawItem.Item) == 0 {
 		return nil, nil
 	}
