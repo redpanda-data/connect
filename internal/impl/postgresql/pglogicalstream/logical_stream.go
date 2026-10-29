@@ -1024,18 +1024,6 @@ func toastFidelityQuery(table string) (string, error) {
     `, table)
 }
 
-// partitionDedupQuery reports whether a table is a partitioned parent, and
-// whether the publication republishes its partitions' changes under the
-// parent's name.
-func partitionDedupQuery(table, publication string) (string, error) {
-	return sanitize.SQLQuery(`
-        SELECT c.relkind = 'p',
-               COALESCE((SELECT p.pubviaroot FROM pg_publication p WHERE p.pubname = $2), false)
-        FROM   pg_class c
-        WHERE  c.oid = $1::regclass;
-    `, table, publication)
-}
-
 // primaryKeyColumnsQuery returns the query used to resolve table's primary
 // key columns, in index order.
 func primaryKeyColumnsQuery(table string) (string, error) {
