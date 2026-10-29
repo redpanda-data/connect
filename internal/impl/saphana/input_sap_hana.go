@@ -135,7 +135,11 @@ func (s *sapHANAInput) restorePosition(ctx context.Context, db *sql.DB) error {
 	}
 	// The offset is checked here and not when the config is parsed, so that a
 	// pipeline resuming from a checkpoint, which ignores the value, still
-	// starts.
+	// starts. A resumed ts_hwm can itself carry an offset: releases before the
+	// check persisted the initial value as the window start (an empty poll, or
+	// a full batch that ends inside a timestamp group). go-hdb binds it as
+	// t.UTC(), the same way those releases did, so the pipeline continues from
+	// where it was. Rejecting it would stop a working pipeline and undo nothing.
 	if !resumed.ts && s.conf.usesTimestamp() && !s.conf.timestampInitial.IsZero() {
 		if s.timestampHWM, err = requireUTC(s.conf.timestampInitial); err != nil {
 			return fmt.Errorf("field %q: %w", shFieldTimestampInitialVal, err)
