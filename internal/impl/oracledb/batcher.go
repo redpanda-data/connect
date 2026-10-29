@@ -347,7 +347,7 @@ type trackedBatch struct {
 func (b *batchPublisher) dispatch(ctx context.Context, tkt ticket.Ticket, batch service.MessageBatch) error {
 	defer tkt.Release()
 	if err := tkt.Wait(ctx); err != nil {
-		return err
+		return fmt.Errorf("waiting for batch publish turn: %w", err)
 	}
 	if len(batch) == 0 {
 		return nil
@@ -515,12 +515,15 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 // a restart fails with ORA-01291.
 func (b *batchPublisher) CheckpointWindow(ctx context.Context, scn replication.SCN) error {
 	tkt, ok, err := b.takeTicketIfDrained()
+	if err != nil {
+		return fmt.Errorf("taking window checkpoint turn: %w", err)
+	}
 	if !ok {
-		return err
+		return nil
 	}
 	defer tkt.Release()
 	if err := tkt.Wait(ctx); err != nil {
-		return err
+		return fmt.Errorf("waiting for window checkpoint turn: %w", err)
 	}
 
 	resolveFn, err := b.checkpoint.Track(ctx, scn, 1)
