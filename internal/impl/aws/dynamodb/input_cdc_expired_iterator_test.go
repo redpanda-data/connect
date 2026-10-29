@@ -172,40 +172,159 @@ func TestStartPolicyCurrent(t *testing.T) {
 			if tc.positioned {
 				p.positioned()
 			}
-			assert.Equal(t, tc.want, p.current())
+			assert.Equal(t, shardStart{iteratorType: tc.want}, p.current())
 		})
 	}
 }
 
 // TestStartPolicyLoad: load honors start_from only when the checkpoint store
 // has no state for the stream, and fails when the probe fails, so a stream
-// never guesses that it is fresh.
+// never guesses that it is fresh. Under start_from: latest, a fresh stream
+// saves a start marker, and a restart reads checkpoint-less shards from
+// TRIM_HORIZON and skips the records from before the marker (CON-597).
 func TestStartPolicyLoad(t *testing.T) {
-	t.Run("fresh pipeline", func(t *testing.T) {
+	startedAt := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	checkpointRow := map[string]dynamodbtypes.AttributeValue{
+		"ShardID":        &dynamodbtypes.AttributeValueMemberS{Value: "shard-1"},
+		"SequenceNumber": &dynamodbtypes.AttributeValueMemberS{Value: "00001"},
+	}
+	markerRow := map[string]dynamodbtypes.AttributeValue{
+		"ShardID":   &dynamodbtypes.AttributeValueMemberS{Value: checkpointStartMarkerKey},
+		"StartedAt": &dynamodbtypes.AttributeValueMemberS{Value: startedAt.Format(time.RFC3339Nano)},
+	}
+
+	// store is a checkpoint table partition keyed by ShardID. puts records
+	// every PutItem.
+	type store struct {
+		rows     map[string]map[string]dynamodbtypes.AttributeValue
+		puts     []*dynamodb.PutItemInput
+		queryErr error
+		putErr   error
+	}
+	newCheckpointer := func(st *store) *Checkpointer {
+		if st.rows == nil {
+			st.rows = map[string]map[string]dynamodbtypes.AttributeValue{}
+		}
+		return &Checkpointer{
+			tableName:   "checkpoints",
+			sourceTable: "test",
+			streamArn:   testStreamArn,
+			svc: &fakeCheckpointAPI{
+				query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+					if st.queryErr != nil {
+						return nil, st.queryErr
+					}
+					var items []map[string]dynamodbtypes.AttributeValue
+					for _, row := range st.rows {
+						items = append(items, row)
+					}
+					return &dynamodb.QueryOutput{Items: items}, nil
+				},
+				getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+					key := in.Key[checkpointRangeKey].(*dynamodbtypes.AttributeValueMemberS).Value
+					return &dynamodb.GetItemOutput{Item: st.rows[key]}, nil
+				},
+				putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+					st.puts = append(st.puts, in)
+					if st.putErr != nil {
+						return nil, st.putErr
+					}
+					return &dynamodb.PutItemOutput{}, nil
+				},
+			},
+			log: service.MockResources().Logger(),
+		}
+	}
+
+	t.Run("fresh pipeline with latest saves the start marker", func(t *testing.T) {
+		st := &store{}
 		var p startPolicy
-		require.NoError(t, p.load(t.Context(), globalCheckpointerWithPartition(t, testStreamArn, nil), "latest"))
-		assert.Equal(t, types.ShardIteratorTypeLatest, p.current())
+		before := time.Now()
+		require.NoError(t, p.load(t.Context(), newCheckpointer(st), "latest"))
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeLatest}, p.current())
+
+		require.Len(t, st.puts, 1)
+		assert.Equal(t, checkpointStartMarkerKey, st.puts[0].Item[checkpointRangeKey].(*dynamodbtypes.AttributeValueMemberS).Value)
+		saved, err := time.Parse(time.RFC3339Nano, st.puts[0].Item["StartedAt"].(*dynamodbtypes.AttributeValueMemberS).Value)
+		require.NoError(t, err)
+		assert.False(t, saved.Before(before.Truncate(time.Second)), "the marker must hold the start time of this run")
+
+		p.positioned()
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current(),
+			"a rotation child found in the first run has no records from before the start, so it needs no cutoff")
 	})
 
-	t.Run("restart with state", func(t *testing.T) {
-		cp := globalCheckpointerWithPartition(t, testStreamArn, []map[string]dynamodbtypes.AttributeValue{
-			shardRow(testStreamArn, "shard-1", "00001", ""),
-		})
+	t.Run("fresh pipeline with trim_horizon saves no marker", func(t *testing.T) {
+		st := &store{}
 		var p startPolicy
-		require.NoError(t, p.load(t.Context(), cp, "latest"))
-		assert.Equal(t, types.ShardIteratorTypeTrimHorizon, p.current())
+		require.NoError(t, p.load(t.Context(), newCheckpointer(st), "trim_horizon"))
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current())
+		assert.Empty(t, st.puts)
+	})
+
+	t.Run("restart before the first checkpoint skips records from before the start", func(t *testing.T) {
+		st := &store{rows: map[string]map[string]dynamodbtypes.AttributeValue{
+			checkpointStartMarkerKey: markerRow,
+		}}
+		var p startPolicy
+		require.NoError(t, p.load(t.Context(), newCheckpointer(st), "latest"))
+		assert.Equal(t, shardStart{
+			iteratorType: types.ShardIteratorTypeTrimHorizon,
+			cutoff:       startedAt.Add(-startMarkerMargin),
+		}, p.current())
+		assert.Empty(t, st.puts, "a restart must keep the first start time")
+	})
+
+	t.Run("restart of a pipeline from before the marker", func(t *testing.T) {
+		st := &store{rows: map[string]map[string]dynamodbtypes.AttributeValue{
+			"shard-1": checkpointRow,
+		}}
+		var p startPolicy
+		require.NoError(t, p.load(t.Context(), newCheckpointer(st), "latest"))
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current())
+		assert.Empty(t, st.puts)
+	})
+
+	t.Run("restart with trim_horizon ignores the marker", func(t *testing.T) {
+		st := &store{rows: map[string]map[string]dynamodbtypes.AttributeValue{
+			checkpointStartMarkerKey: markerRow,
+		}}
+		var p startPolicy
+		require.NoError(t, p.load(t.Context(), newCheckpointer(st), "trim_horizon"))
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current())
 	})
 
 	t.Run("probe error", func(t *testing.T) {
-		cp := newTestCheckpointer(t)
-		cp.svc = &fakeCheckpointAPI{
-			query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-				return nil, errors.New("access denied")
-			},
-		}
 		var p startPolicy
-		require.ErrorContains(t, p.load(t.Context(), cp, "latest"), "probing checkpoint state")
+		err := p.load(t.Context(), newCheckpointer(&store{queryErr: errors.New("access denied")}), "latest")
+		require.ErrorContains(t, err, "probing checkpoint state")
 	})
+
+	t.Run("marker write error", func(t *testing.T) {
+		var p startPolicy
+		err := p.load(t.Context(), newCheckpointer(&store{putErr: errors.New("throttled")}), "latest")
+		require.ErrorContains(t, err, "throttled")
+	})
+}
+
+// TestRefreshShardsAppliesRestartCutoff: on a restart before the first
+// checkpoint, a shard without a checkpoint is read from TRIM_HORIZON and its
+// reader gets the restart cutoff, so it skips only the records from before
+// the pipeline first started (CON-597).
+func TestRefreshShardsAppliesRestartCutoff(t *testing.T) {
+	cutoff := time.Date(2026, 10, 29, 9, 55, 0, 0, time.UTC)
+	transport := &refreshStubTransport{shardIDs: []string{"shard-001"}}
+	d := newRefreshTestInput(t, transport)
+	d.start.startFrom = "latest"
+	d.start.restartCutoff = cutoff
+
+	require.NoError(t, d.refreshShards(t.Context()))
+
+	assert.Equal(t, "TRIM_HORIZON", transport.iteratorTypeFor("shard-001"))
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	require.Contains(t, d.shardReaders, "shard-001")
+	assert.Equal(t, cutoff, d.shardReaders["shard-001"].failoverCutoff)
 }
 
 // stubStreamsTransport is a minimal net/http fake standing in for the real
