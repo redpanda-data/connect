@@ -2081,12 +2081,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.log.Infof("Tracking %d shards", totalShards)
 		d.metrics.shardsTracked.Set(int64(totalShards))
 
-		// The first discovery to commit shards has positioned the fresh
-		// pipeline; anything discovered from here on (including retries of
-		// shards that failed to prepare above) starts at TRIM_HORIZON -
-		// at-least-once delivery takes precedence over start_from: latest. A
-		// cycle that committed nothing keeps the flag so start_from still
-		// applies once discovery first succeeds.
+		// Only a cycle that committed shards positions the pipeline.
 		d.start.positioned()
 	}
 
@@ -2474,12 +2469,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		d.log.Infof("Table %s: tracking %d shards", tableName, shardCount)
 		d.updateTotalShardsMetric()
 
-		// The first discovery to commit shards has positioned the fresh
-		// pipeline; anything discovered from here on (including retries of
-		// shards that failed to prepare above) starts at TRIM_HORIZON -
-		// at-least-once delivery takes precedence over start_from: latest. A
-		// cycle that committed nothing keeps the flag so start_from still
-		// applies once discovery first succeeds.
+		// Only a cycle that committed shards positions the pipeline.
 		ts.start.positioned()
 	}
 
@@ -2549,9 +2539,6 @@ type startPolicy struct {
 // load sets the policy from the start_from config value and the checkpoint
 // state of cp.
 func (p *startPolicy) load(ctx context.Context, cp *Checkpointer, startFrom string) error {
-	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
-	// state already exists, shards without checkpoints are rotation children
-	// created while we were down and must be read from TRIM_HORIZON.
 	hasState, err := cp.HasAnyState(ctx)
 	if err != nil {
 		return fmt.Errorf("probing checkpoint state: %w", err)
@@ -2571,16 +2558,19 @@ func (p *startPolicy) current() shardStart {
 }
 
 // positioned records that a discovery cycle committed shards. From then on,
-// current starts every shard at TRIM_HORIZON.
+// current starts every shard at TRIM_HORIZON, including retries of shards that
+// failed to prepare in that cycle: at-least-once delivery takes precedence
+// over start_from: latest. The callers skip it for a cycle that committed
+// nothing, so start_from still applies once discovery first succeeds.
 func (p *startPolicy) positioned() {
 	p.honor.Store(false)
 }
 
 // shardStart is where one discovery cycle starts a shard that has no
-// checkpoint. prepareNewShards reads it once per cycle from
-// startPolicy.current and gives the same value to prepareShardReader, so every
-// shard of the cycle, and the lineage ordering decision, see the same start
-// position.
+// checkpoint. refreshShards and refreshTableShards take it from
+// startPolicy.current once per cycle. prepareNewShards uses it for the lineage
+// ordering decision and gives the same value to prepareShardReader, so every
+// shard of the cycle sees the same start position.
 type shardStart struct {
 	// iteratorType is the iterator type for a shard without a checkpoint:
 	// LATEST or TRIM_HORIZON.

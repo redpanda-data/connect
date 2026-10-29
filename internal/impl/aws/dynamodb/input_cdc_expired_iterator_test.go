@@ -154,7 +154,7 @@ func TestStartPolicyCurrent(t *testing.T) {
 			want:      types.ShardIteratorTypeTrimHorizon,
 		},
 		{
-			name:      "trim_horizon unaffected by honor flag",
+			name:      "trim_horizon on a restart with state",
 			startFrom: "trim_horizon",
 			honor:     false,
 			want:      types.ShardIteratorTypeTrimHorizon,
@@ -181,42 +181,30 @@ func TestStartPolicyCurrent(t *testing.T) {
 // has no state for the stream, and fails when the probe fails, so a stream
 // never guesses that it is fresh.
 func TestStartPolicyLoad(t *testing.T) {
-	newCheckpointer := func(items []map[string]dynamodbtypes.AttributeValue, err error) *Checkpointer {
-		return &Checkpointer{
-			tableName:   "checkpoints",
-			sourceTable: "test",
-			streamArn:   testStreamArn,
-			svc: &fakeCheckpointAPI{
-				query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-					if err != nil {
-						return nil, err
-					}
-					return &dynamodb.QueryOutput{Items: items}, nil
-				},
-			},
-			log: service.MockResources().Logger(),
-		}
-	}
-
 	t.Run("fresh pipeline", func(t *testing.T) {
 		var p startPolicy
-		require.NoError(t, p.load(t.Context(), newCheckpointer(nil, nil), "latest"))
+		require.NoError(t, p.load(t.Context(), globalCheckpointerWithPartition(t, testStreamArn, nil), "latest"))
 		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeLatest}, p.current())
 	})
 
 	t.Run("restart with state", func(t *testing.T) {
-		row := map[string]dynamodbtypes.AttributeValue{
-			"SequenceNumber": &dynamodbtypes.AttributeValueMemberS{Value: "00001"},
-		}
+		cp := globalCheckpointerWithPartition(t, testStreamArn, []map[string]dynamodbtypes.AttributeValue{
+			shardRow(testStreamArn, "shard-1", "00001", ""),
+		})
 		var p startPolicy
-		require.NoError(t, p.load(t.Context(), newCheckpointer([]map[string]dynamodbtypes.AttributeValue{row}, nil), "latest"))
+		require.NoError(t, p.load(t.Context(), cp, "latest"))
 		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current())
 	})
 
 	t.Run("probe error", func(t *testing.T) {
+		cp := newTestCheckpointer(t)
+		cp.svc = &fakeCheckpointAPI{
+			query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+				return nil, errors.New("access denied")
+			},
+		}
 		var p startPolicy
-		err := p.load(t.Context(), newCheckpointer(nil, errors.New("access denied")), "latest")
-		require.ErrorContains(t, err, "probing checkpoint state")
+		require.ErrorContains(t, p.load(t.Context(), cp, "latest"), "probing checkpoint state")
 	})
 }
 
