@@ -563,10 +563,8 @@ func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
 		}
 
 		stack = append(stack, stackItem{
-			SubjectSchema: sr.SubjectSchema{
-				Subject: subject,
-				Version: version,
-			},
+			Subject: subject,
+			Version: version,
 		})
 	}
 
@@ -814,20 +812,24 @@ func (m *schemaRegistryMigrator) sync(ctx context.Context, roots map[string]stru
 					if err := modeMgr.TrySetImportMode(gctx, s); err != nil {
 						m.log.Warnf("Schema migration: failed to set IMPORT mode for subject %s: %v", s.Subject, err)
 					}
+					unlockID := run.lockID(s.ID)
 					info, err := m.syncSubjectSchema(gctx, s)
 					if err != nil {
+						unlockID()
 						return run.fail(gctx, ss, s, fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err))
 					}
 					// A source ID that maps to two destination IDs is an
 					// inconsistency rather than a rejected subject, so it
 					// aborts the sync.
 					if err := m.checkSchemaIDConflict(s.ID, info); err != nil {
+						unlockID()
 						return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
 					}
 
 					// The schema is registered, so record its ID mapping even if
 					// syncing the compatibility level fails below.
 					m.setSchemaSynced(s, info)
+					unlockID()
 
 					if err := m.syncSubjectCompatibility(gctx, s.Subject); err != nil {
 						return run.failCompat(gctx, ss, s, fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err))
@@ -879,6 +881,10 @@ type syncRun struct {
 	ids    map[int]struct{}               // source schema IDs that failed or were skipped
 	compat map[string]error               // subjects whose compatibility level failed to sync; dedups logs
 	roots  map[string]struct{}            // roots with a failure; reconciled into m.failedRoots by finish
+
+	// idLocks holds one lock per source schema ID. A worker holds it while it
+	// registers the ID at the destination and records the mapping, see lockID.
+	idLocks map[int]*sync.Mutex
 }
 
 func newSyncRun(m *schemaRegistryMigrator, scope map[string]struct{}) *syncRun {
@@ -890,7 +896,35 @@ func newSyncRun(m *schemaRegistryMigrator, scope map[string]struct{}) *syncRun {
 		ids:    map[int]struct{}{},
 		compat: map[string]error{},
 		roots:  map[string]struct{}{},
+
+		idLocks: map[int]*sync.Mutex{},
 	}
+}
+
+// lockID locks the registration of source schema ID id and returns the unlock
+// function.
+//
+// Subjects that share a schema body share one source ID. The Redpanda schema
+// registry looks up the body before it takes its write lock, so two concurrent
+// registrations of a new body under different subjects can each get a new
+// destination ID. The sync would then fail with a schema ID mapping
+// conflict. When one worker at a time registers an ID, the next registration
+// finds the body and gets the same destination ID.
+//
+// TODO(CON-610): this is a workaround for the registry race. Remove it when
+// the fix is released and the migrator no longer supports destinations that
+// run a Redpanda version without the fix.
+func (r *syncRun) lockID(id int) func() {
+	r.mu.Lock()
+	l, exists := r.idLocks[id]
+	if !exists {
+		l = new(sync.Mutex)
+		r.idLocks[id] = l
+	}
+	r.mu.Unlock()
+
+	l.Lock()
+	return l.Unlock
 }
 
 // inScope reports whether the root subject is synced by this run.
@@ -1113,8 +1147,7 @@ func (e *fixedIDError) Unwrap() error { return e.err }
 // isSubjectError reports whether err is a schema registry rejection of a single
 // subject or version, as opposed to a failure of the registry as a whole.
 func isSubjectError(err error) bool {
-	var fe *fixedIDError
-	if errors.As(err, &fe) {
+	if _, ok := errors.AsType[*fixedIDError](err); ok {
 		return false
 	}
 	var re *sr.ResponseError

@@ -39,7 +39,7 @@ type sapHANAInput struct {
 	peekedRow *service.Message // row buffered from peek-ahead at fetch_size boundary
 
 	timestampHWM time.Time
-	lastRowKey   rowKey // resume key of the most recently scanned row (timestamp+incrementing mid-window checkpoints)
+	lastRowKey   rowKey // resume key of the most recently scanned row (timestamp-mode mid-window checkpoints)
 	tsQueryUpper time.Time
 
 	db      *sql.DB
@@ -122,6 +122,9 @@ func (s *sapHANAInput) Connect(ctx context.Context) (err error) {
 
 	s.db = db
 	s.schemas = newSchemaCache(db, s.log, s.conf.numericMapping)
+	if s.conf.usesTimestamp() {
+		s.cp.startLagRefresh(s.stopChan)
+	}
 
 	s.log.Debug("Connected to SAP HANA.")
 	return nil
@@ -197,9 +200,14 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 // timezone, so only the clock that populated it can be compared against it,
 // and an hours-scale host/database offset would otherwise skip or delay rows
 // forever.
+//
+// The shift is cast to DOUBLE because HANA types a bare ADD_SECONDS parameter
+// as INTEGER, and go-hdb then rejects any non-integral float64 client-side:
+// without the cast a fractional timestamp_delay (500ms, 1.5s) fails every
+// poll with a conversion error.
 const (
-	hanaClockQuery    = `SELECT ADD_SECONDS(CURRENT_TIMESTAMP, ?) FROM DUMMY`
-	hanaUTCClockQuery = `SELECT ADD_SECONDS(CURRENT_UTCTIMESTAMP, ?) FROM DUMMY`
+	hanaClockQuery    = `SELECT ADD_SECONDS(CURRENT_TIMESTAMP, CAST(? AS DOUBLE)) FROM DUMMY`
+	hanaUTCClockQuery = `SELECT ADD_SECONDS(CURRENT_UTCTIMESTAMP, CAST(? AS DOUBLE)) FROM DUMMY`
 )
 
 // fetchWindowUpperBound reads the timestamp-mode poll window's upper bound
@@ -213,6 +221,7 @@ func (s *sapHANAInput) fetchWindowUpperBound(ctx context.Context) (time.Time, er
 	if err := s.db.QueryRowContext(ctx, q, -s.conf.timestampDelay.Seconds()).Scan(&upper); err != nil {
 		return time.Time{}, fmt.Errorf("reading database clock for the poll window: %w", err)
 	}
+	s.cp.observeDBClock(upper.Add(s.conf.timestampDelay))
 	return upper, nil
 }
 
@@ -277,6 +286,36 @@ func (s *sapHANAInput) discardCursor() {
 	if s.conf.usesIncrementing() {
 		s.hwm = s.hwmSafe
 	}
+	if s.conf.mode == shModeBulk || s.conf.mode == shModeQuery {
+		// A one-shot read has no position to resume from, so the retry runs the
+		// statement again from its first row. That keeps delivery at-least-once
+		// but re-sends every row already delivered, which must not be silent.
+		s.log.Warnf("The %s read failed part-way; it restarts from the first row, so rows already delivered will be sent again", s.conf.mode)
+	}
+}
+
+// position is the part of the read position a single ReadBatch call can
+// move. It is captured before a batch is scanned so that a batch which never
+// reaches the framework can be undone.
+type position struct {
+	hwmSafe       any
+	timestampHWM  time.Time
+	bulkExhausted bool
+}
+
+func (s *sapHANAInput) position() position {
+	return position{hwmSafe: s.hwmSafe, timestampHWM: s.timestampHWM, bulkExhausted: s.bulkExhausted}
+}
+
+// rewindTo undoes a batch that was scanned but never handed to the framework
+// (its checkpoint registration failed): the position goes back to where it
+// was before the batch and the cursor is discarded, so the next poll reads
+// the batch's rows again instead of continuing after them.
+func (s *sapHANAInput) rewindTo(p position) {
+	s.hwmSafe = p.hwmSafe
+	s.timestampHWM = p.timestampHWM
+	s.bulkExhausted = p.bulkExhausted
+	s.discardCursor()
 }
 
 func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
@@ -342,6 +381,7 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			}
 		}
 
+		before := s.position()
 		batch := make(service.MessageBatch, 0, s.conf.fetchSize)
 		// Emit the row buffered by the previous batch's peek-ahead before
 		// continuing the cursor scan. s.hwm was already updated when peeked.
@@ -387,7 +427,10 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 						s.resetCursorCache()
 						s.hwmSafe = s.hwm
 					}
-					return s.deliverBatch(ctx, batch, s.hwmSafe)
+					return s.deliverBatch(ctx, batch, s.hwmSafe, before)
+				}
+				if s.conf.mode == shModeTimestamp {
+					return s.deliverTimestampBoundary(ctx, batch, before)
 				}
 				if s.conf.mode == shModeTimestampIncrementing {
 					// Every scanned row is now handed to the framework (which
@@ -399,10 +442,10 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 					// resumes exactly after it, instead of re-reading the whole
 					// window from its start on restart.
 					if k := s.lastRowKey; k.incr != nil {
-						return s.deliverBatchAt(ctx, batch, k.incr, k.ts)
+						return s.deliverBatchAt(ctx, batch, k.incr, k.ts, before)
 					}
 				}
-				return s.deliverBatch(ctx, batch, s.hwm)
+				return s.deliverBatch(ctx, batch, s.hwm, before)
 			}
 		}
 		if err := s.rows.Err(); err != nil {
@@ -429,7 +472,7 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			if s.conf.mode == shModeIncrementing {
 				hwmSnap = s.hwmSafe
 			}
-			return s.deliverBatch(ctx, batch, hwmSnap)
+			return s.deliverBatch(ctx, batch, hwmSnap, before)
 		}
 
 		// Empty poll: route the persist through the tracker so it stays
@@ -440,6 +483,7 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 		}
 		ackFn, err := s.cp.track(ctx, 0, hwmSnap, s.timestampHWM)
 		if err != nil {
+			s.rewindTo(before)
 			return nil, nil, err
 		}
 		_ = ackFn(ctx, nil)
@@ -509,14 +553,16 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 			incrVal = v
 		}
 	}
-	if s.conf.mode == shModeTimestampIncrementing {
+	if s.conf.usesTimestamp() {
 		// The mid-window resume key must be a single row's (timestamp,
-		// incrementing) pair. A row with no usable incrementing value
-		// invalidates it (rather than pairing its timestamp with an earlier
-		// row's HWM, which would skip rows on resume) and the checkpoint
-		// falls back to the window start.
+		// incrementing) pair. In timestamp+incrementing mode a row with no
+		// usable incrementing value invalidates it (rather than pairing its
+		// timestamp with an earlier row's HWM, which would skip rows on
+		// resume) and the checkpoint falls back to the window start. Pure
+		// timestamp mode only needs the timestamp.
 		s.lastRowKey = rowKey{}
-		if ts, ok := rowMap[s.conf.timestampCol].(time.Time); ok && incrVal != nil {
+		ts, ok := rowMap[s.conf.timestampCol].(time.Time)
+		if ok && (s.conf.mode == shModeTimestamp || incrVal != nil) {
 			s.lastRowKey = rowKey{ts: ts, incr: incrVal}
 		}
 	}
@@ -548,16 +594,55 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 	return msg, nil
 }
 
-// deliverBatch registers the batch with the ack-order tracker and returns it
-// alongside the AckFunc that resolves its checkpoint slot.
-func (s *sapHANAInput) deliverBatch(ctx context.Context, batch service.MessageBatch, hwm any) (service.MessageBatch, service.AckFunc, error) {
-	return s.deliverBatchAt(ctx, batch, hwm, s.timestampHWM)
+// deliverTimestampBoundary delivers a full batch in timestamp mode. Rows
+// sharing a timestamp cannot be split by a `ts > T` resume predicate, so it
+// peeks one row ahead: when the next row's timestamp is later than the last
+// delivered row's, every row at that timestamp has been delivered and the
+// batch checkpoints it, letting a restart resume mid-window instead of
+// re-reading the window from its start. Otherwise the checkpoint stays at the
+// last completed timestamp.
+func (s *sapHANAInput) deliverTimestampBoundary(ctx context.Context, batch service.MessageBatch, before position) (service.MessageBatch, service.AckFunc, error) {
+	lastTS := s.lastRowKey.ts
+	if !s.rows.Next() {
+		if rErr := s.rows.Err(); rErr != nil {
+			s.discardCursor()
+			return nil, nil, fmt.Errorf("iterating rows: %w", rErr)
+		}
+		// Cursor exhausted by the peek: the window is complete.
+		_ = s.rows.Close()
+		s.rows = nil
+		s.resetCursorCache()
+		s.timestampHWM = s.tsQueryUpper
+		return s.deliverBatch(ctx, batch, nil, before)
+	}
+	peekedMsg, err := s.scanRow(ctx, s.rows)
+	if err != nil {
+		s.discardCursor()
+		return nil, nil, err
+	}
+	s.peekedRow = peekedMsg
+	if !lastTS.IsZero() && s.lastRowKey.ts.After(lastTS) {
+		// The cursor stays open on the old window; only a re-query (after an
+		// error, or a restart from the checkpoint) uses the raised lower bound.
+		s.timestampHWM = lastTS
+	}
+	return s.deliverBatch(ctx, batch, nil, before)
 }
 
-// deliverBatchAt is deliverBatch with an explicit timestamp HWM snapshot.
-func (s *sapHANAInput) deliverBatchAt(ctx context.Context, batch service.MessageBatch, hwm any, tsHWM time.Time) (service.MessageBatch, service.AckFunc, error) {
+// deliverBatch registers the batch with the ack-order tracker and returns it
+// alongside the AckFunc that resolves its checkpoint slot.
+func (s *sapHANAInput) deliverBatch(ctx context.Context, batch service.MessageBatch, hwm any, before position) (service.MessageBatch, service.AckFunc, error) {
+	return s.deliverBatchAt(ctx, batch, hwm, s.timestampHWM, before)
+}
+
+// deliverBatchAt is deliverBatch with an explicit timestamp HWM snapshot. If
+// the batch cannot be registered (the context ends while the tracker is full
+// at checkpoint_limit), its rows are dropped here, so the position is rewound
+// to before the batch rather than left past rows nobody received.
+func (s *sapHANAInput) deliverBatchAt(ctx context.Context, batch service.MessageBatch, hwm any, tsHWM time.Time, before position) (service.MessageBatch, service.AckFunc, error) {
 	ackFn, err := s.cp.track(ctx, len(batch), hwm, tsHWM)
 	if err != nil {
+		s.rewindTo(before)
 		return nil, nil, err
 	}
 	s.mRowsRead.Incr(int64(len(batch)))

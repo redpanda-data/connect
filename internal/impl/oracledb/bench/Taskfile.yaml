@@ -1,70 +1,53 @@
 version: '3'
 
-# Running Order
-#
-# task bench:setup
-# task bench:run
-# task bench:clear
-# task bench:teardown
+# Running order - Preferred (CDB mode, connect via CDB root):
+# - task bench:up                                   # start Oracle, enable archive logging, create TESTPDB and users
+# - task sqlcl:pdb:data:users [TOTAL=1000000]       # load data (also gathers optimizer statistics)
+# - task sqlcl:pdb:data:products [TOTAL=50000]      # optional
+# - task sqlcl:pdb:data:cart [TOTAL=10000000]       # optional
+# - task bench:run
+# - task bench:reset                                # drop the checkpoint cache and results before the next run
+# - task bench:down
 
-# Running order - Preferred (multiple PDB databases - CDB mode, connect via CDB root):
-# - task oracledb:up
-# - task oracledb:archivelog
-# - task pdb:create
-# - task pdb:setup
-# - task cdb:setup
-# - task sqlcl:pdb:data:users
-# - task connect:run
-
-# Running order (single PDB database - PDB mode, connect via PDB service):
-# - task oracledb:up
-# - task oracledb:archivelog
-# - task pdb:create
-# - task pdb:setup
-# - task sqlcl:pdb:data:users
-# - task connect:run
+# Running order (PDB mode, connect via PDB service):
+# As above, but point benchmark_config.yaml at the TESTPDB service (the CDB users that
+# bench:up creates are simply unused), and also run sqlcl:pdb:drop-cache before the next run,
+# since bench:reset only drops the CDB checkpoint cache.
 
 tasks:
 
-  bench:setup:
+  bench:up:
     desc: Full CDB setup (preferred multi-PDB mode)
-    cmds:
-      - task: oracledb:up
-      - cmd: echo "Waiting for OracleDB..." && sleep 10
-      - task: oracledb:archivelog
-      - cmd: echo "Configuring archive log" && sleep 5
-      - task: pdb:create
-      - task: pdb:setup
-      - task: cdb:setup
-      - cmd: echo "Inserting test data, please hold..."
-      - task: sqlcl:pdb:data:users
-
-  bench:teardown:
-    desc: Teardown benchmark
-    cmds:
-      - task: oracledb:down
-
-  bench:clear:
-    desc: Clear benchmark in preparation for a new run
-    cmds:
-      - task: sqlcl:cdb:drop-cache
-      - cmd: rm ./benchmark_results.json
-
-  bench:run:
-    desc: Run benchmark
-    cmds:
-      - task: connect:run
-
-  oracledb:up:
     cmds:
       - docker run -d
           --name oracledb
           -p 1521:1521
           -e ORACLE_PWD=YourPassword123
           container-registry.oracle.com/database/free:latest-lite
+      - cmd: echo "Waiting for OracleDB..." && sleep 10
+      - task: oracledb:archivelog
+      - cmd: echo "Configuring archive log" && sleep 5
+      - task: pdb:create
+      - task: pdb:setup
+      - task: cdb:setup
 
-  oracledb:down:
+  bench:down:
+    desc: Teardown benchmark
     cmd: docker rm -fv oracledb
+
+  bench:reset:
+    desc: Clear benchmark in preparation for a new run
+    cmds:
+      - task: sqlcl:cdb:drop-cache
+      - cmd: rm -f ./benchmark_results.json
+      - cmd: rm -f ./benchmark_logs.log
+
+  bench:run:
+    desc: Run benchmark
+    cmds:
+      - task: connect:run
+
+  # ── Data setup ───────────────────────────────────────────────────────────────
 
   oracledb:logs:
     cmd: docker logs -f oracledb
@@ -97,30 +80,37 @@ tasks:
     cmd: docker exec -i oracledb sqlplus -s pdbadmin/pdbadmin123@localhost:1521/TESTPDB < pluggable.sql
 
   sqlcl:pdb:data:users:
-    desc: Insert test users data into TESTPDB
-    cmd: docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB < users.sql
+    desc: Insert test users data into TESTPDB (default 1000000 rows, override with TOTAL=...)
+    vars:
+      TOTAL: '{{.TOTAL | default "1000000"}}'
+    cmd: (echo "DEFINE users_total = {{.TOTAL}}"; cat users.sql) | docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
 
   sqlcl:pdb:data:products:
-    desc: Insert test products data into TESTPDB
-    cmd: docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB < products.sql
+    desc: Insert test products data into TESTPDB (default 50000 rows, override with TOTAL=...)
+    vars:
+      TOTAL: '{{.TOTAL | default "50000"}}'
+    cmd: (echo "DEFINE products_total = {{.TOTAL}}"; cat products.sql) | docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
 
   sqlcl:pdb:data:cart:
-    desc: Insert test cart data into TESTPDB
-    cmd: docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB < cart.sql
+    desc: Insert test cart data into TESTPDB (default 10000000 rows, override with TOTAL=...)
+    vars:
+      TOTAL: '{{.TOTAL | default "10000000"}}'
+    cmd: (echo "DEFINE cart_total = {{.TOTAL}}"; cat cart.sql) | docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
 
   sqlcl:pdb:drop-cache:
     desc: Drop the CDC checkpoint cache table from TESTPDB (PDB mode, connect via PDB service)
-    cmd: docker exec -i oracledb sqlplus -s rpcn/rpcn123@localhost:1521/TESTPDB <<< "DROP TABLE RPCN.CDC_CHECKPOINT_CACHE;"
+    cmd: docker exec -i oracledb sqlplus -s rpcn/rpcn123@localhost:1521/TESTPDB <<< "DROP TABLE IF EXISTS RPCN.CDC_CHECKPOINT_CACHE;"
 
   sqlcl:cdb:drop-cache:
     desc: Drop the CDC checkpoint cache table from CDB root (CDB mode, connect via CDB root)
-    cmd: docker exec -i oracledb sqlplus -s / as sysdba <<< "DROP TABLE C##RPCN.CDC_CHECKPOINT_TESTPDB;"
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba <<< "DROP TABLE IF EXISTS C##RPCN.CDC_CHECKPOINT_TESTPDB;"
 
   connect:run:
     desc: Run Connect using the benchmark_config.yaml configuration
-    cmd: go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+    cmd: go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml 2>&1 | tee benchmark_logs.log
 
-  # Debezium Setup
+  # ── Debezium Setup ───────────────────────────────────────────────────────────────
+
   debezium:up:
     desc: Start Debezium Server and Kafka
     cmd: docker-compose -f docker-compose.debezium.yaml up -d

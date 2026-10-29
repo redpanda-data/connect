@@ -62,10 +62,26 @@ const (
 
 type redpandatestConfigOpt func(redpandatestConfigOptKind, *redpandatest.Config)
 
+// containerPairSlots limits how many tests hold a source and destination
+// pair of Redpanda containers at the same time. The tests in this package run
+// in parallel, and without a limit go test starts up to GOMAXPROCS pairs. On
+// a CI runner with 32 CPUs that is 64 containers. Each container reserves
+// about 2000 Linux AIO events (with redpandatest.WithLowAIOUsage) from a host
+// limit of 65536, and asks Redpanda for 1 GiB of memory.
+var containerPairSlots = make(chan struct{}, 8)
+
 // startRedpandaSourceAndDestination starts two containers for Redpanda and
 // returns the EmbeddedRedpandaCluster for each container.
+//
+// It blocks until a slot in containerPairSlots is free, and frees the slot
+// when the test ends. A test must not call it again while it holds a slot,
+// for example from a parallel subtest, or the package can deadlock.
 func startRedpandaSourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (src, dst EmbeddedRedpandaCluster) {
 	var err error
+
+	// Registered before the container cleanups, so it runs after them.
+	containerPairSlots <- struct{}{}
+	t.Cleanup(func() { <-containerPairSlots })
 
 	src = EmbeddedRedpandaCluster{t: t}
 	dst = EmbeddedRedpandaCluster{t: t}
@@ -580,16 +596,12 @@ func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 	admin := kadm.NewClient(client)
 
 	return EmbeddedConfluentCluster{
-		EmbeddedRedpandaCluster: EmbeddedRedpandaCluster{
-			Endpoints: redpandatest.Endpoints{
-				BrokerAddr:        brokerAddr,
-				SchemaRegistryURL: schemaRegistryURL,
-			},
-			Client: client,
-			Admin:  admin,
-			t:      t,
-		},
-		ConnectURL: connectURL,
+		BrokerAddr:        brokerAddr,
+		SchemaRegistryURL: schemaRegistryURL,
+		Client:            client,
+		Admin:             admin,
+		t:                 t,
+		ConnectURL:        connectURL,
 	}
 }
 

@@ -245,17 +245,15 @@ func runOtelgen(t *testing.T, cmd []string) {
 	ctx := t.Context()
 
 	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:      "ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest",
-			Cmd:        cmd,
-			WaitingFor: wait.ForExit().WithExitTimeout((*soakDuration) + 30*time.Second),
-			// telemetrygen reaches the collector (published on the host) via
-			// host.docker.internal, which only resolves automatically on Docker
-			// Desktop. Map it to the host gateway so the container can reach the
-			// host on Linux CI runners too.
-			HostConfigModifier: func(hc *dockercontainer.HostConfig) {
-				hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
-			},
+		Image:      "ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest",
+		Cmd:        cmd,
+		WaitingFor: wait.ForExit().WithExitTimeout((*soakDuration) + 30*time.Second),
+		// telemetrygen reaches the collector (published on the host) via
+		// host.docker.internal, which only resolves automatically on Docker
+		// Desktop. Map it to the host gateway so the container can reach the
+		// host on Linux CI runners too.
+		HostConfigModifier: func(hc *dockercontainer.HostConfig) {
+			hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 		},
 		Started: true,
 	})

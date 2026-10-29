@@ -977,8 +977,7 @@ func setMetaIfNonEmpty(msg *service.Message, key, value string) {
 // checkpoint would resubscribe via the preset and silently skip everything
 // between the checkpoint and now.
 func (e *salesforceCDCInputExecutor) handleStreamErr(ctx context.Context, topic string, err error) bool {
-	var terminal *salesforcegrpc.TerminalStreamError
-	if errors.As(err, &terminal) {
+	if _, ok := errors.AsType[*salesforcegrpc.TerminalStreamError](err); ok {
 		return false
 	}
 	if grpcErr, ok := status.FromError(err); ok && grpcErr.Code() == codes.InvalidArgument {

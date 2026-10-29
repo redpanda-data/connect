@@ -183,7 +183,7 @@ To find your account ID and generate R2 API credentials, see https://developers.
 
 == Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more  in xref:guides:cloud/aws.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].
 
 == Metadata
 
@@ -578,8 +578,8 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		QueueUrl:            &s.conf.SQS.URL,
 		MaxNumberOfMessages: int32(s.conf.SQS.MaxMessages),
 		WaitTimeSeconds:     int32(s.conf.SQS.WaitTimeSeconds),
-		AttributeNames: []sqstypes.QueueAttributeName{
-			sqstypes.QueueAttributeName(sqstypes.MessageSystemAttributeNameSentTimestamp),
+		MessageSystemAttributeNames: []sqstypes.MessageSystemAttributeName{
+			sqstypes.MessageSystemAttributeNameSentTimestamp,
 		},
 		MessageAttributeNames: []string{
 			string(sqstypes.MessageSystemAttributeNameSentTimestamp),

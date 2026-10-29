@@ -198,8 +198,8 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// Pass 2: fall back to the most-recent DML event of any type with a matching PK.
 		// For LOB-only UPDATE events the SET clause contains only LOB columns, so
 		// PK columns are not in ev.Data — they are in ev.OldValues (WHERE clause).
-		for i := len(events) - 1; i >= 0; i-- {
-			ev := events[i]
+		for _, ev := range slices.Backward(events) {
+
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}

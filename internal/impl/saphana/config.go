@@ -78,14 +78,14 @@ func mustDuration(s string) time.Duration {
 
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
-	Version("4.114.0").
+	Version("4.113.1").
 	Summary("Reads rows from a SAP HANA table.").
 	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
-- `+"`bulk`"+`: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
-- `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows.
+- `+"`bulk`"+`: reads all rows once then the input terminates (wrap it in xref:components:inputs/read_until.adoc[`+"`read_until`"+`] with `+"`restart_input: true`"+` for periodic re-reads).
+- `+"`incrementing`"+`: polls for rows where `+"`incrementing_column`"+` exceeds the last seen value, emitting only net-new rows. Values from an `+"`IDENTITY`"+` column or a sequence are assigned when a row is inserted, not when it commits: with concurrent writers a lower value can commit after a higher one has been read, and that row is never emitted. Use `+"`timestamp+incrementing`"+` with a `+"`timestamp_delay`"+` longer than your longest write transaction when the table has concurrent writers.
 - `+"`query`"+`: executes a user-supplied SQL statement and emits one message per result row.
-- `+"`timestamp`"+`: polls for rows where `+"`timestamp_column`"+` falls within `+"`(last_hwm, database_now - timestamp_delay]`"+`. The bound is read from the database clock (see `+"`timestamp_clock`"+`) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed, so a restart mid-window re-reads that window from its start (rows sharing a timestamp cannot be split, hence no finer checkpoint).
+- `+"`timestamp`"+`: polls for rows where `+"`timestamp_column`"+` falls within `+"`(last_hwm, database_now - timestamp_delay]`"+`. The bound is read from the database clock (see `+"`timestamp_clock`"+`) and the delay absorbs commit lag. The HWM advances to the window bound once the window is fully consumed. Mid-window, a batch checkpoints the timestamp of its last row when the next row has a later one, so a restart re-reads only the rows of the timestamp that was in progress (rows sharing a timestamp cannot be split).
 - `+"`timestamp+incrementing`"+`: like `+"`timestamp`"+` but orders by `+"`(timestamp_column, incrementing_column)`"+` and resumes after the exact `+"`(timestamp, incrementing)`"+` pair of the last delivered row, so rows sharing a timestamp are neither duplicated nor missed and a restart mid-window continues from the last acknowledged batch rather than the window start.
 
 == Metadata
@@ -97,11 +97,36 @@ Messages produced in `+"`bulk`, `incrementing`, `timestamp`, and `timestamp+incr
 - `+"`schema`"+`: Avro-compatible schema derived from `+"`SYS.TABLE_COLUMNS`"+`, suitable for use with `+"`schema_registry_encode`"+`. Column additions are detected automatically without a pipeline restart. Only present when `+"`schema_name`"+` is configured.
 - `+"`primary_key_columns`"+`: JSON array of the table's primary-key column names in key order. Only present when `+"`schema_name`"+` is configured and the table has a primary key.
 
+== Permissions
+
+The connecting user needs `+"`SELECT`"+` on the source table, or on the statement's tables in `+"`query`"+` mode. The user also needs read access to system views in these cases:
+
+- When `+"`schema_name`"+` is set, the input reads `+"`SYS.TABLE_COLUMNS`"+`, `+"`SYS.INDEX_COLUMNS`"+`, and `+"`SYS.INDEXES`"+` to build the `+"`schema`"+` and `+"`primary_key_columns`"+` metadata.
+- In the `+"`timestamp`"+` and `+"`timestamp+incrementing`"+` modes, the input reads `+"`SYS.TABLE_COLUMNS`"+` (or `+"`SYS.VIEW_COLUMNS`"+` for a view) to check the type of `+"`timestamp_column`"+` when it connects. Without access, the check is skipped and a warning is logged.
+- When `+"`incrementing_initial_value`"+` is set and no checkpoint exists yet, the input reads `+"`SYS.TABLE_COLUMNS`"+` (or `+"`SYS.VIEW_COLUMNS`"+` for a view) to bind the initial value with the type of `+"`incrementing_column`"+`. Without catalog rows, it test-binds the value against the column (as a number when it parses as one, then as the literal string) and fails to connect when neither binds.
+
+HANA lists catalog rows for the objects a user holds a privilege on, so `+"`SELECT`"+` on a table or view is enough for these reads. A view has no rows in `+"`SYS.TABLE_COLUMNS`"+` whatever the privileges, so it is read without `+"`schema`"+` and `+"`primary_key_columns`"+` metadata. For other objects the user cannot see in the catalog, grant `+"`CATALOG READ`"+`.
+
+== Known limitations
+
+- Polling only: deleted rows are never seen, and `+"`incrementing`"+` mode never sees updates to existing rows. The timestamp modes see an update only when the application also updates `+"`timestamp_column`"+`.
+- Rows whose `+"`incrementing_column`"+` or `+"`timestamp_column`"+` is NULL are never emitted.
+- `+"`timestamp_column`"+` must be a TIMESTAMP, LONGDATE or SECONDDATE column. Change times stored as `+"`DEC(15,0)`"+` UTC timestamps or as separate date and time character columns, as in many SAP application tables, cannot drive the timestamp modes.
+- `+"`schema`"+` and `+"`primary_key_columns`"+` metadata come from `+"`SYS.TABLE_COLUMNS`"+`, which does not describe views or calculation views, so those are read without schema metadata.
+- `+"`schema_registry_encode`"+` derives Avro field names from column names. Column names that are not valid Avro names, such as SAP's `+"`/BIC/`"+` namespaced columns, fail to encode; register the schema yourself and rename the columns in a `+"`mapping`"+` instead of using `+"`schema_metadata`"+`. Table names are sanitised automatically.
+- `+"`bulk`"+` and `+"`query`"+` have no position to resume from: an error part-way through a read restarts it from the first row, re-sending the rows already delivered.
+- `+"`query`"+` runs its statement once and then the input ends, like `+"`bulk`"+`, and attaches no metadata. Calculation views with input parameters can only be read this way.
+- The cursor stays open while downstream components apply backpressure. On a busy HANA system a long-open cursor holds back MVCC garbage collection, so index the `+"`incrementing_column`"+` or `+"`timestamp_column`"+` and avoid outputs that stall for long periods. The first poll of a polling mode without an initial value reads the whole table in key order; set `+"`incrementing_initial_value`"+` or `+"`timestamp_initial_value`"+` to skip history you do not need. Raise `+"`fetch_size`"+` (for example to 1000 to 5000) on high-latency links, together with `+"`checkpoint_limit`"+`.
+
 == Troubleshooting
 
-*`+"`schema`"+` and `+"`primary_key_columns`"+` metadata are missing.* The input reads them from `+"`SYS.TABLE_COLUMNS`"+` and `+"`SYS.INDEX_COLUMNS`"+`; when that read fails it logs a warning and carries on without them, and `+"`incrementing_initial_value`"+` falls back to a guessed bind type. Check the warning in the logs and grant the connecting user `+"`CATALOG READ`"+` (or `+"`SELECT`"+` on the table's schema), and make sure `+"`schema_name`"+` is set.
+*`+"`checkpoint key ... holds the position of ...`"+` on connect.* Two `+"`sap_hana`"+` inputs share a `+"`checkpoint_cache`"+` and `+"`checkpoint_cache_key`"+`. Give each input its own `+"`checkpoint_cache_key`"+`. The error also appears when `+"`schema_name`"+` or `+"`table`"+` changed for an existing input: the stored position is for the old reference, so delete the key to start over or set `+"`incrementing_initial_value`"+`/`+"`timestamp_initial_value`"+` under a new key.
 
-*"invalid table name" or "invalid column name" for a table that exists.* Identifiers in this config are quoted when sent to HANA, so they must match the catalog's case exactly. HANA upper-cases identifiers that were created without quotes: a table created as `+"`create table orders`"+` is `+"`ORDERS`"+` in the catalog and must be configured as such.
+*Cannot connect to SAP HANA Cloud.* HANA Cloud accepts TLS connections only, on port 443. go-hdb enables TLS when a TLS parameter is present, so add `+"`TLSServerName=<host>`"+` to the DSN (and `+"`TLSRootCAFile=<path>`"+` if the CA is not in the system trust store).
+
+*`+"`schema`"+` and `+"`primary_key_columns`"+` metadata are missing.* The input reads them from `+"`SYS.TABLE_COLUMNS`"+` and `+"`SYS.INDEX_COLUMNS`"+`; when that read fails it logs a warning and carries on without them. Views never have them. For a table, check the warning in the logs, grant the connecting user `+"`SELECT`"+` on the table (or `+"`CATALOG READ`"+`), and make sure `+"`schema_name`"+` is set.
+
+*"invalid table name" or "invalid column name" for a table that exists.* Identifiers in this configuration are quoted when sent to HANA, so they must match the catalog's case exactly. HANA upper-cases identifiers that were created without quotes: a table created as `+"`create table orders`"+` is `+"`ORDERS`"+` in the catalog and must be configured as such.
 
 *Batches arrive one at a time.* `+"`fetch_size`"+` larger than `+"`checkpoint_limit`"+` means a batch cannot be handed on until the previous one is acknowledged (a warning is logged at startup). Raise `+"`checkpoint_limit`"+` or lower `+"`fetch_size`"+`.
 
@@ -119,6 +144,7 @@ input:
     incrementing_column: ORDER_ID
     poll_interval: 30s
     checkpoint_cache: hana_checkpoints
+    checkpoint_cache_key: sales_orders
 
 cache_resources:
   - label: hana_checkpoints
@@ -126,7 +152,7 @@ cache_resources:
       directory: /var/lib/redpanda-connect/sap_hana
 `).
 	Example("Change tracking by timestamp with automatic Avro schema registration",
-		"Follows an updated-at column together with the primary key so rows sharing a timestamp are neither duplicated nor missed, bounds each poll by the database's UTC clock with a commit-lag buffer, and registers the table's schema from the emitted metadata before encoding.",
+		"Follows an updated-at column together with the primary key so rows sharing a timestamp are neither duplicated nor missed, bounds each poll by the database's UTC clock with a commit-lag buffer, and registers the table's schema from the emitted metadata before encoding. The checkpoint is kept in a Redpanda topic, which survives redeploys and needs no local disk (use a compacted topic).",
 		`
 input:
   sap_hana:
@@ -140,6 +166,7 @@ input:
     timestamp_delay: 30s
     poll_interval: 10s
     checkpoint_cache: hana_checkpoints
+    checkpoint_cache_key: sales_orders_changes
 
 pipeline:
   processors:
@@ -158,12 +185,27 @@ output:
 
 cache_resources:
   - label: hana_checkpoints
-    file:
-      directory: /var/lib/redpanda-connect/sap_hana
+    redpanda:
+      seed_brokers: [ "broker:9092" ]
+      topic: sap_hana_checkpoints
+`).
+	Example("Run a custom query",
+		"Runs a SQL statement once and emits one message per result row. In `query` mode, `table` and `schema_name` are not required and no metadata is attached.",
+		`
+input:
+  sap_hana:
+    dsn: hdb://user:password@hana-host:39017
+    mode: query
+    query: |
+      SELECT ORDER_ID, CUSTOMER_ID, STATUS
+      FROM SALES.ORDERS
+      WHERE STATUS = 'PENDING'
 `).
 	Field(service.NewStringField(shFieldDSN).
-		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
+		Description("SAP HANA connection DSN in `hdb://user:password@host:port[?param=value&...]` form. URL-encode reserved characters in the user name and password (`#` as `%23`, `@` as `%40`, `%` as `%25`). Useful parameters: `databaseName` selects a tenant database when connecting through the system database port, `defaultSchema` sets the schema unqualified names resolve against, and `TLSServerName`, `TLSRootCAFile` and `TLSInsecureSkipVerify` configure TLS, which SAP HANA Cloud requires.").
 		Example("hdb://user:password@host:39017").
+		Example("hdb://user:password@host:30013?databaseName=HXE").
+		Example("hdb://user:password@<instance-id>.hana.prod-eu10.hanacloud.ondemand.com:443?TLSServerName=<instance-id>.hana.prod-eu10.hanacloud.ondemand.com").
 		Secret(),
 	).
 	Field(service.NewIntField(shFieldFetchSize).
@@ -188,11 +230,11 @@ cache_resources:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingColumn).
-		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values — a BIGINT auto-increment column is ideal. Columns that produce duplicate values (e.g. a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
+		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values. A BIGINT auto-increment column is ideal. Columns that produce duplicate values (for example, a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
-		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns, hexadecimal for BINARY/VARBINARY columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
+		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run. The value is converted to the `incrementing_column`'s type from the catalog on connect: integers for integer columns, RFC3339 or `YYYY-MM-DD[ HH:MM:SS]` for DATE/TIMESTAMP columns (the column's wall time, with no offset other than `Z` or `+00:00`), hexadecimal for BINARY/VARBINARY columns, and the literal string (leading zeros preserved) for character columns. A persisted checkpoint takes precedence over this value.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
@@ -206,11 +248,11 @@ cache_resources:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (e.g. `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. `timestamp_column` has no timezone, so write its wall-clock value as-is, tagged with a `Z` or `+00:00` offset, rather than converting it. Any other offset is rejected when the configuration is parsed.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
-		Description("Commit-lag buffer for timestamp modes. The upper bound for each poll is the database clock minus `timestamp_delay`, so rows whose timestamp was assigned slightly before a still-uncommitted transaction finished are not missed.").
+		Description("Commit-lag buffer for timestamp modes. The upper bound for each poll is the database clock minus `timestamp_delay`, so rows whose timestamp was assigned slightly before a still-uncommitted transaction finished are not missed. Set it longer than your longest write transaction: a row whose transaction commits after the poll window covering its timestamp has closed is never emitted. Negative values are rejected.").
 		Default(shDefaultTimestampDelay).
 		Example("0s").
 		Example("30s"),
@@ -225,7 +267,7 @@ cache_resources:
 		Default(shNumericMappingNone),
 	).
 	Field(service.NewIntField(shFieldMaxRetries).
-		Description("Maximum number of times to retry a failed query before returning an error. Set to `0` to disable retries.").
+		Description("Maximum number of times to retry a failed query before returning an error. Set to `0` to disable retries; negative values are rejected.").
 		Default(3).
 		Advanced(),
 	).
@@ -235,12 +277,12 @@ cache_resources:
 		Advanced(),
 	).
 	Field(service.NewStringField(shFieldCheckpointCache).
-		Description("Name of a cache resource to persist the high-water mark across restarts. When set, the connector resumes from where it left off rather than starting from scratch. Only effective in `incrementing`, `timestamp`, and `timestamp+incrementing` modes. The cache must be declared under `cache_resources`. Choose a durable backend (Redis, PostgreSQL) for production; in-memory caches lose state on restart.").
+		Description("Name of a cache resource to persist the high-water mark across restarts. When set, the connector resumes from where it left off rather than starting from scratch. Only effective in `incrementing`, `timestamp`, and `timestamp+incrementing` modes. The cache must be declared under `cache_resources`. Choose a durable backend (`redpanda`, `redis`, PostgreSQL via `sql`) for production; `memory` and `lru` caches lose the position on every restart or redeploy, and the input then re-reads from the initial value. Without this field the position is also kept in memory only, and a warning is logged at startup.").
 		Example("redis_cache").
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldCheckpointCacheKey).
-		Description("Key used to store the checkpoint in `checkpoint_cache`. Change this when multiple `sap_hana` inputs share the same cache resource to avoid key collisions.").
+		Description("Key used to store the checkpoint in `checkpoint_cache`. Every `sap_hana` input sharing a cache resource needs its own key: the stored checkpoint records its table, and an input refuses to start from another table's checkpoint.").
 		Default(shDefaultCheckpointCacheKey).
 		Advanced(),
 	).
@@ -393,13 +435,23 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		return nil, err
 	}
 	if tsInitStr != "" {
-		if c.timestampInitial, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
+		var tsInit time.Time
+		if tsInit, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", shFieldTimestampInitialVal, err)
+		}
+		if c.timestampInitial, err = requireUTC(tsInit); err != nil {
+			return nil, fmt.Errorf("field %q: %w", shFieldTimestampInitialVal, err)
 		}
 		s.timestampHWM = c.timestampInitial
 	}
 	if c.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {
 		return nil, err
+	}
+	if c.timestampDelay < 0 {
+		// A negative delay moves the window bound into the future, and once the
+		// window is consumed the HWM jumps there: rows inserted afterwards with
+		// a timestamp below that bound are never emitted.
+		return nil, fmt.Errorf("field %q must be zero or more", shFieldTimestampDelay)
 	}
 	if c.timestampClock, err = conf.FieldString(shFieldTimestampClock); err != nil {
 		return nil, err
@@ -409,6 +461,9 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if c.maxRetries, err = conf.FieldInt(shFieldMaxRetries); err != nil {
 		return nil, err
+	}
+	if c.maxRetries < 0 {
+		return nil, fmt.Errorf("field %q must be zero or more", shFieldMaxRetries)
 	}
 	if c.retryBackoff, err = conf.FieldDuration(shFieldRetryBackoff); err != nil {
 		return nil, err
@@ -453,6 +508,10 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if err := c.rejectInertFields(conf); err != nil {
 		return nil, err
+	}
+	if c.polls() && c.checkpointCache == "" {
+		s.log.Warnf("No %s is set, so the %s position is kept in memory only: every restart or redeploy reads again from the configured initial value, which re-emits rows already delivered. Set %s to a durable cache resource to resume where the input left off.",
+			shFieldCheckpointCache, c.mode, shFieldCheckpointCache)
 	}
 
 	s.cp = newCheckpointer(mgr, c)

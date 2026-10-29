@@ -51,8 +51,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 		TableName: &table,
 	})
 	if err != nil {
-		var derr *types.ResourceNotFoundException
-		if !errors.As(err, &derr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
 			return err
 		}
 	}
@@ -94,6 +93,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 
 func TestIntegrationDynamoDBCache(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "amazon/dynamodb-local:latest",
 		testcontainers.WithExposedPorts("8000/tcp"),

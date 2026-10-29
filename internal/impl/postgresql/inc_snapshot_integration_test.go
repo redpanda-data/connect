@@ -126,6 +126,7 @@ func runIncSnapshotStream(t *testing.T, cfg incSnapshotStream) (stop func()) {
 
 func TestIntegrationIncrementalSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	type incrementalSnapshotRow struct {
 		id        int64
@@ -133,6 +134,7 @@ func TestIntegrationIncrementalSnapshot(t *testing.T) {
 	}
 
 	t.Run("Concurrent Writes", func(t *testing.T) {
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 
@@ -278,6 +280,7 @@ postgres_cdc:
 		},
 	} {
 		t.Run("Concurrent Updates/"+keyed.name, func(t *testing.T) {
+			t.Parallel()
 			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 			require.NoError(t, err)
 
@@ -408,6 +411,7 @@ postgres_cdc:
 		// snapshot's result, and one committing after must evict the buffered
 		// row.
 
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 
@@ -627,6 +631,7 @@ postgres_cdc:
 	}
 
 	t.Run("QuietTable/The First Commit After A Chunk Read Releases It", func(t *testing.T) {
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 		_, err = db.Exec(`CREATE TABLE quiet_xmax (id bigint PRIMARY KEY, name text)`)
@@ -705,6 +710,7 @@ postgres_cdc:
 	})
 
 	t.Run("Resume", func(t *testing.T) {
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 
@@ -832,6 +838,7 @@ file:
 			streamedRows = 20
 		)
 
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 
@@ -984,6 +991,7 @@ postgres_cdc:
 			lockHold = 20 * time.Second
 		)
 
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 
@@ -1200,6 +1208,7 @@ postgres_cdc:
 
 func TestIntegrationIncrementalSnapshotPartitionedTable(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numRows = 40
@@ -1220,6 +1229,7 @@ func TestIntegrationIncrementalSnapshotPartitionedTable(t *testing.T) {
 	run := func(t *testing.T, table, slot string, ddl []string) ([]event, *pgtest.TestLogCapture) {
 		t.Helper()
 
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 		for _, stmt := range ddl {
@@ -1375,6 +1385,7 @@ postgres_cdc:
 
 func TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// viaRoot pre-creates the publication with the option set. The connector
 	// only passes options on CREATE and leaves an existing publication's
@@ -1383,6 +1394,7 @@ func TestIntegrationIncrementalSnapshotWarnsAboutPartitionedTables(t *testing.T)
 	start := func(t *testing.T, slot string, viaRoot bool) *pgtest.TestLogCapture {
 		t.Helper()
 
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 		for _, stmt := range []string{
@@ -1461,6 +1473,7 @@ postgres_cdc:
 
 func TestIntegrationIncrementalSnapshotWarnsAboutToastedColumns(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	for _, tc := range []struct {
 		name         string
@@ -1476,6 +1489,7 @@ func TestIntegrationIncrementalSnapshotWarnsAboutToastedColumns(t *testing.T) {
 		{name: "no toastable column stays quiet", slot: "toast_none_slot", noToastable: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 			require.NoError(t, err)
 
@@ -1564,6 +1578,7 @@ postgres_cdc:
 	// Its own case rather than a row in the table above: it needs two
 	// stream lifetimes and a cache that survives between them.
 	t.Run("warns again on resume with no signal", func(t *testing.T) {
+		t.Parallel()
 		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 		require.NoError(t, err)
 		for _, stmt := range []string{
@@ -1671,6 +1686,7 @@ file:
 
 func TestIntegrationIncrementalSnapshotPKChangingUpdate(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	for _, tc := range []struct {
 		name         string
@@ -1683,6 +1699,7 @@ func TestIntegrationIncrementalSnapshotPKChangingUpdate(t *testing.T) {
 		{name: "replica identity full", slot: "pkmove_full_slot", fullIdentity: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 			require.NoError(t, err)
 			_, err = db.Exec(`CREATE TABLE pkmove (id bigint PRIMARY KEY, name text)`)

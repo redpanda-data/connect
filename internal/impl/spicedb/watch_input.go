@@ -44,16 +44,16 @@ func watchInputSpec() *service.ConfigSpec {
 		Version("4.39.0").
 		Summary(`Consume messages from the Watch API from SpiceDB.`).
 		Description(`
-The SpiceDB input allows you to consume messages from the Watch API of a SpiceDB instance.
+The SpiceDB input allows you to consume messages from the https://buf.build/authzed/api/docs/main:authzed.api.v1#authzed.api.v1.WatchService.Watch[Watch API^] of a https://authzed.com/docs/spicedb/getting-started/discovering-spicedb[SpiceDB^] instance.
 This input is useful for applications that need to react to changes in the data managed by SpiceDB in real-time.
 
 == Credentials
 
-You need to provide the endpoint of your SpiceDB instance and a Bearer token for authentication.
+You need to provide the <<endpoint,endpoint>> of your SpiceDB instance and a <<bearer_token,bearer token>> for authentication.
 
 == Cache
 
-The zed token of the newest update consumed and acked is stored in a cache in order to start reading from it each time the input is initialised.
+You must provide a xref:components:caches/about.adoc[cache resource] in the <<cache,`+"`cache`"+`>> field. The input stores the https://authzed.com/docs/spicedb/concepts/consistency#zedtokens[ZedToken^] of the newest update consumed and acked in this cache in order to start reading from it each time the input is initialised.
 Ideally this cache should be persisted across restarts.
 `).
 		Fields(

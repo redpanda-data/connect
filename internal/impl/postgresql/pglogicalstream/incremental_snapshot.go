@@ -467,8 +467,7 @@ func retryableReadErr(err error, deadline, parent context.Context) error {
 		return nil
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		switch pgErr.Code {
 		case pgErrLockNotAvailable, pgErrQueryCanceled:
 			return fmt.Errorf("%w: %w", incrementalsnapshot.ErrRetryable, err)

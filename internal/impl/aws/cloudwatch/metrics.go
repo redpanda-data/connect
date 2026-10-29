@@ -299,12 +299,10 @@ func (c *cwMetrics) NewCounterCtor(name string, labelKeys ...string) service.Met
 	}
 	return func(labelValues ...string) service.MetricsExporterCounter {
 		return (&cloudWatchCounterVec{
-			cloudWatchStatVec: cloudWatchStatVec{
-				root:       c,
-				name:       name,
-				unit:       types.StandardUnitCount,
-				labelNames: labelKeys,
-			},
+			root:       c,
+			name:       name,
+			unit:       types.StandardUnitCount,
+			labelNames: labelKeys,
 		}).With(labelValues...)
 	}
 }
@@ -322,12 +320,10 @@ func (c *cwMetrics) NewTimerCtor(name string, labelKeys ...string) service.Metri
 	}
 	return func(labelValues ...string) service.MetricsExporterTimer {
 		return (&cloudWatchTimerVec{
-			cloudWatchStatVec: cloudWatchStatVec{
-				root:       c,
-				name:       name,
-				unit:       types.StandardUnitMicroseconds,
-				labelNames: labelKeys,
-			},
+			root:       c,
+			name:       name,
+			unit:       types.StandardUnitMicroseconds,
+			labelNames: labelKeys,
 		}).With(labelValues...)
 	}
 }
@@ -345,12 +341,10 @@ func (c *cwMetrics) NewGaugeCtor(name string, labelKeys ...string) service.Metri
 	}
 	return func(labelValues ...string) service.MetricsExporterGauge {
 		return (&cloudWatchGaugeVec{
-			cloudWatchStatVec: cloudWatchStatVec{
-				root:       c,
-				name:       name,
-				unit:       types.StandardUnitNone,
-				labelNames: labelKeys,
-			},
+			root:       c,
+			name:       name,
+			unit:       types.StandardUnitNone,
+			labelNames: labelKeys,
 		}).With(labelValues...)
 	}
 }

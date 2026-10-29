@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -142,6 +144,7 @@ func deleteTestItem(ctx context.Context, client *dynamodb.Client, tableName, id 
 
 func TestIntegrationDynamoDBStreams(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -191,6 +194,63 @@ func TestIntegrationDynamoDBStreams(t *testing.T) {
 		checkpointTable := "test-checkpoints-count"
 		testVerifyRecordCount(t, client, port, tableName, checkpointTable)
 	})
+
+	t.Run("MarkShardCompletedKeepsStoredPosition", func(t *testing.T) {
+		testMarkShardCompletedKeepsStoredPosition(t, client)
+	})
+
+	t.Run("SetKeepsCompletionMarker", func(t *testing.T) {
+		testSetKeepsCompletionMarker(t, client)
+	})
+}
+
+// testSetKeepsCompletionMarker (CON-600) checks the conditional plain
+// checkpoint write against a real endpoint: a Set landing after
+// MarkShardCompleted is rejected by the store, reported as success, and leaves
+// the completed row with its final position.
+func testSetKeepsCompletionMarker(t *testing.T, client *dynamodb.Client) {
+	cp, err := NewCheckpointer(t.Context(), client, CheckpointerConfig{
+		TableName: "test-checkpoints-sticky", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+	}, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-1", "seq-9", ""))
+	require.NoError(t, cp.Set(t.Context(), "shard-1", "seq-7", ""), "a late plain write is not an error")
+	require.NoError(t, cp.FlushCheckpoints(t.Context(), map[string]CheckpointValue{"shard-1": {SequenceNumber: "seq-8"}}))
+	seq, completed, err := cp.getShardRow(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.True(t, completed)
+	assert.Equal(t, "seq-9", seq)
+
+	// Rows without the marker keep accepting plain writes.
+	require.NoError(t, cp.Set(t.Context(), "shard-2", "seq-1", ""))
+	require.NoError(t, cp.Set(t.Context(), "shard-2", "seq-2", ""))
+	seq, completed, err = cp.getShardRow(t.Context(), "shard-2")
+	require.NoError(t, err)
+	assert.False(t, completed)
+	assert.Equal(t, "seq-2", seq)
+}
+
+// testMarkShardCompletedKeepsStoredPosition (CON-599) checks the completion
+// marker's UpdateItem against a real endpoint: marking a shard completed
+// without a final position keeps the stored sequence number.
+func testMarkShardCompletedKeepsStoredPosition(t *testing.T, client *dynamodb.Client) {
+	cp, err := NewCheckpointer(t.Context(), client, CheckpointerConfig{
+		TableName: "test-checkpoints-completed", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+	}, service.MockResources().Logger())
+	require.NoError(t, err)
+
+	require.NoError(t, cp.Set(t.Context(), "shard-1", "seq-7", ""))
+	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-1", "", ""))
+	seq, completed, err := cp.getShardRow(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.True(t, completed)
+	assert.Equal(t, "seq-7", seq)
+
+	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-2", "", ""))
+	d, err := cp.ResolveResume(t.Context(), "shard-2")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
 }
 
 // testReadInsertEvents verifies that INSERT events are captured.
@@ -203,6 +263,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -227,8 +288,9 @@ credentials:
 	require.NoError(t, putTestItem(ctx, client, tableName, "test-2", "value-2"))
 
 	// Read events
-	batch, _, err := input.ReadBatch(ctx)
+	batch, ackFn, err := input.ReadBatch(ctx)
 	require.NoError(t, err)
+	require.NoError(t, ackFn(ctx, nil))
 	require.NotEmpty(t, batch)
 
 	// Verify we got INSERT events
@@ -253,6 +315,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -285,11 +348,12 @@ credentials:
 	// Read events (may need multiple batches)
 	foundModify := false
 	for i := 0; i < 5 && !foundModify; i++ {
-		batch, _, err := input.ReadBatch(ctx)
+		batch, ackFn, err := input.ReadBatch(ctx)
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			eventName, _ := msg.MetaGet("dynamodb_event_name")
@@ -317,6 +381,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -349,11 +414,12 @@ credentials:
 	// Read events (may need multiple batches)
 	foundRemove := false
 	for i := 0; i < 5 && !foundRemove; i++ {
-		batch, _, err := input.ReadBatch(ctx)
+		batch, ackFn, err := input.ReadBatch(ctx)
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			eventName, _ := msg.MetaGet("dynamodb_event_name")
@@ -381,6 +447,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -441,12 +508,13 @@ credentials:
 		}
 
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			eventName, exists := msg.MetaGet("dynamodb_event_name")
@@ -482,6 +550,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: trim_horizon
 checkpoint_limit: 2
 credentials:
@@ -526,11 +595,123 @@ credentials:
 	require.NoError(t, putTestItem(ctx, client, tableName, "checkpoint-3", "value-3"))
 
 	// Second input should read new events (not re-read old ones)
-	batch2, _, err := input2.ReadBatch(ctx)
+	batch2, ackFn2, err := input2.ReadBatch(ctx)
 	require.NoError(t, err)
+	require.NoError(t, ackFn2(ctx, nil))
 
 	// The batch may include checkpoint-3 but should not re-process already checkpointed items
 	assert.NotEmpty(t, batch2, "Should read new events after resumption")
+}
+
+// TestIntegrationDynamoDBShutdownWithBufferedBatches stops a pipeline while
+// the input has batches in its buffer that the pipeline did not get. The stop
+// must not wait for the acks of these batches, and a restart must read them
+// again.
+func TestIntegrationDynamoDBShutdownWithBufferedBatches(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	ctx := context.Background()
+
+	ctr, err := testcontainers.Run(ctx,
+		"amazon/dynamodb-local:latest",
+		testcontainers.WithExposedPorts("8000/tcp"),
+		testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
+
+	t.Log("Given: a table with 100 items in its stream")
+	tableName := "test-shutdown-buffered"
+	client, err := createTableWithStreams(ctx, t, port, tableName)
+	require.NoError(t, err)
+
+	const itemCount = 100
+	for i := range itemCount {
+		require.NoError(t, putTestItem(ctx, client, tableName, fmt.Sprintf("item-%03d", i), "value"))
+	}
+
+	// batch_size 1 makes each record its own batch, so the shard reader fills
+	// the buffer while the slow output holds the pipeline. checkpoint_limit 1
+	// saves each acked position.
+	inputYAML := fmt.Sprintf(`
+aws_dynamodb_cdc:
+  tables: [%s]
+  checkpoint_table: test-checkpoints-shutdown-buffered
+  endpoint: http://localhost:%s
+  region: us-east-1
+  start_from: trim_horizon
+  batch_size: 1
+  checkpoint_limit: 1
+  credentials:
+    id: xxxxx
+    secret: xxxxx
+    token: xxxxx
+`, tableName, port)
+
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	record := func(msg *service.Message) error {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return err
+		}
+		id, _ := structured.(map[string]any)["dynamodb"].(map[string]any)["keys"].(map[string]any)["id"].(string)
+		mu.Lock()
+		seen[id] = true
+		mu.Unlock()
+		return nil
+	}
+	seenCount := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(seen)
+	}
+
+	startStream := func(consume service.MessageHandlerFunc) *service.Stream {
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetLoggerYAML("level: off"))
+		require.NoError(t, sb.AddInputYAML(inputYAML))
+		require.NoError(t, sb.AddConsumerFunc(consume))
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		go func() {
+			if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		return stream
+	}
+
+	t.Log("When: a pipeline with a slow output stops after the first message")
+	// The buffer then holds batches that the pipeline did not get.
+	stream1 := startStream(func(_ context.Context, msg *service.Message) error {
+		time.Sleep(50 * time.Millisecond)
+		return record(msg)
+	})
+	require.Eventually(t, func() bool { return seenCount() > 0 }, 30*time.Second, 10*time.Millisecond,
+		"expected the first message")
+
+	stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer stopCancel()
+	start := time.Now()
+	require.NoError(t, stream1.Stop(stopCtx))
+	t.Log("Then: the stop does not wait for acks that cannot come")
+	assert.Less(t, time.Since(start), 5*time.Second, "stop must not wait for acks that cannot come")
+	require.Less(t, seenCount(), itemCount, "expected undelivered batches at shutdown")
+
+	t.Log("When: the pipeline restarts")
+	stream2 := startStream(func(_ context.Context, msg *service.Message) error {
+		return record(msg)
+	})
+	t.Log("Then: it reads the records that the first run did not ack")
+	require.Eventually(t, func() bool { return seenCount() == itemCount }, 30*time.Second, 10*time.Millisecond,
+		"expected all items after restart")
+	require.NoError(t, stream2.Stop(stopCtx))
 }
 
 // TestIntegrationDynamoDBSnapshotAckGate verifies that snapshot progress and
@@ -539,6 +720,7 @@ credentials:
 // checkpoint state, so a restart re-delivers every item. See CON-504.
 func TestIntegrationDynamoDBSnapshotAckGate(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -578,6 +760,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 snapshot_mode: snapshot_only
 snapshot_segments: 1
 snapshot_batch_size: 10
@@ -611,10 +794,16 @@ credentials:
 		require.NoError(t, err)
 		require.Len(t, batch, itemCount, "expected the whole snapshot in one batch")
 
-		// Give the input time to (wrongly) persist progress or the completion
-		// marker - the pre-fix code did both at read time.
-		time.Sleep(3 * time.Second)
-		require.Zero(t, countCheckpointRows(),
+		// The pre-fix code persisted the segment position in the scanner and
+		// the completion marker right after the scan returned. When no segment
+		// is active, the scanner has done all of its work. The completion
+		// marker comes a few milliseconds later, so poll for a short window.
+		require.Eventually(t, func() bool {
+			return input.snapshot.scanner.ActiveSegments() == 0
+		}, 10*time.Second, 10*time.Millisecond, "the snapshot scan did not finish")
+		assert.Never(t, func() bool {
+			return countCheckpointRows() != 0
+		}, time.Second, 50*time.Millisecond,
 			"no snapshot checkpoint state may be persisted before the batch is acknowledged")
 
 		// Simulated crash: abandon without acking.
@@ -656,6 +845,7 @@ credentials:
 // TestIntegrationDynamoDBSnapshot tests snapshot functionality.
 func TestIntegrationDynamoDBSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -720,6 +910,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_only
 snapshot_segments: 1
@@ -802,6 +993,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_and_cdc
 snapshot_segments: 1
@@ -889,6 +1081,7 @@ tables: [%s]
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 snapshot_mode: snapshot_only
 snapshot_segments: 1
@@ -936,13 +1129,16 @@ credentials:
 	readCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
 
-	batch2, _, err := input2.ReadBatch(readCtx2)
+	batch2, ackFn2, err := input2.ReadBatch(readCtx2)
 
 	// We expect either:
 	// 1. More snapshot data to read (no error)
 	// 2. Snapshot complete (ErrEndOfInput or timeout)
 	if err != nil && !errors.Is(err, service.ErrEndOfInput) && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Unexpected error on resume: %v", err)
+	}
+	if err == nil {
+		require.NoError(t, ackFn2(ctx, nil))
 	}
 
 	// If we got data, verify it's snapshot data
@@ -959,6 +1155,7 @@ credentials:
 // TestIntegrationDynamoDBMultiTable tests multi-table streaming functionality
 func TestIntegrationDynamoDBMultiTable(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -1017,6 +1214,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1048,12 +1246,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, exists := msg.MetaGet("dynamodb_table")
@@ -1084,6 +1283,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1113,12 +1313,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts && eventsWithMetadata < 2; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, hasTable := msg.MetaGet("dynamodb_table")
@@ -1149,6 +1350,7 @@ table_discovery_mode: includelist
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1179,12 +1381,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, hasTable := msg.MetaGet("dynamodb_table")
@@ -1225,6 +1428,7 @@ credentials:
 // TestIntegrationDynamoDBTagDiscovery tests tag-based table discovery
 func TestIntegrationDynamoDBTagDiscovery(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
 
@@ -1312,6 +1516,7 @@ table_tag_filter: "%s:%s"
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1341,12 +1546,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		for _, msg := range batch {
 			tableName, exists := msg.MetaGet("dynamodb_table")
@@ -1377,6 +1583,7 @@ table_tag_filter: "%s:%s"
 checkpoint_table: %s
 endpoint: http://localhost:%s
 region: us-east-1
+poll_interval: 100ms # the default 1s adds about 1s after each empty poll
 start_from: latest
 credentials:
   id: xxxxx
@@ -1406,12 +1613,13 @@ credentials:
 
 	for attempt := 0; attempt < maxAttempts && !foundEvent; attempt++ {
 		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
-		batch, _, err := input.ReadBatch(readCtx)
+		batch, ackFn, err := input.ReadBatch(readCtx)
 		readCancel()
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
 		}
+		require.NoError(t, ackFn(ctx, nil))
 
 		if len(batch) > 0 {
 			foundEvent = true
