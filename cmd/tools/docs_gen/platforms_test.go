@@ -140,9 +140,10 @@ func TestRenderCatalog(t *testing.T) {
 }
 
 // TestPlatformsFromBuilds lists the real release builds with go list and
-// checks rules that hold for any correct result, rather than exact component
-// lists, so moving a component between distributions doesn't fail it. It
-// needs a Go toolchain, so -short skips it.
+// pins the exact cloud-only and cgo-only sets, so a component that moves
+// between distributions fails it until the expected sets are updated. It also
+// fails when a release build registers a component that docs_gen doesn't
+// document. It needs a Go toolchain, so -short skips it.
 func TestPlatformsFromBuilds(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs go list on the real builds")
@@ -158,6 +159,11 @@ func TestPlatformsFromBuilds(t *testing.T) {
 	require.NoError(t, err)
 	cloudOnly, err := cloudOnlyComponents()
 	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{"inputs/tigerbeetle_cdc": true, "inputs/zmq4": true, "outputs/zmq4": true, "processors/ffi": true}, cgoOnly)
+	assert.Equal(t, map[string]bool{"processors/a2a_message": true}, cloudOnly)
+	if builtWithAllComponents {
+		assert.Equal(t, []string{"inputs/tigerbeetle_cdc", "inputs/zmq4", "outputs/zmq4", "processors/ffi"}, plat.cgoOnlyKeys())
+	}
 
 	builds := map[string]map[string]bool{}
 	for _, name := range []string{standardRelease, cgoRelease, cloudRelease} {
@@ -177,29 +183,13 @@ func TestPlatformsFromBuilds(t *testing.T) {
 		assert.True(t, cgoOnly[k], "%v is cgo-only in the platform set but not in the cgo build comparison", k)
 	}
 
-	// Sentinels, to show that real builds were compared. If one of these
-	// components moves to another distribution, pick another sentinel.
-	assert.True(t, cloudOnly["processors/a2a_message"], "a2a_message is in the Cloud build only")
-	assert.True(t, cgoOnly["processors/ffi"], "ffi is in the cgo build only")
 	assert.False(t, plat.get("processors", "a2a_message").CgoOnly, "Cloud-only isn't cgo-only")
 
-	// The report of components without docs never fails the build; check
-	// only that it's well-formed.
+	// docs_gen documents only allcomponents, so a component that a release
+	// build registers and allcomponents doesn't would ship without docs.
 	report, err := undocumentedReport()
 	require.NoError(t, err)
-	require.NotNil(t, report)
-	names := map[string]bool{}
-	for _, r := range releaseBuildNames {
-		names[r.name] = true
-	}
-	for _, u := range report {
-		assert.NotEmpty(t, u.Type)
-		assert.NotEmpty(t, u.Name)
-		require.NotEmpty(t, u.Builds)
-		for _, b := range u.Builds {
-			assert.True(t, names[b], "unknown build %q", b)
-		}
-	}
+	assert.Empty(t, report, "components a release build registers and allcomponents doesn't")
 }
 
 // buildRegistrations returns every component that a register call in the

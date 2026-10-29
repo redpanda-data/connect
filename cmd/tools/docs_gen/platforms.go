@@ -269,8 +269,8 @@ var releaseBuildNames = []struct{ file, name string }{
 
 // undocumentedReport returns the components that any release build registers
 // and docs_gen doesn't document, sorted by type and then name, and never nil.
-// It is a record for the docs side to warn on, not a check: nothing here
-// fails because a component lacks docs.
+// docs_gen records it for the docs side and doesn't fail on it;
+// TestPlatformsFromBuilds fails when it has any entries.
 func undocumentedReport() ([]undocumentedComponent, error) {
 	builds := map[string][]string{}
 	for _, r := range releaseBuildNames {
