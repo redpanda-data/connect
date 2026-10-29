@@ -103,7 +103,7 @@ type RecordBatcher struct {
 	// failures counts failed checkpoint writes (nil-safe).
 	failures *service.MetricCounter
 	// retryInitial and retryMax bound the persister's retry backoff
-	// (persistRetryInitial/persistRetryMax; shortened by tests).
+	// (checkpoint_retry_initial_interval/checkpoint_retry_max_interval).
 	retryInitial, retryMax time.Duration
 
 	// wake is signalled (non-blocking, buffered 1) whenever a shard becomes
@@ -520,9 +520,10 @@ func (b *RecordBatcher) markDirtyLocked(shardID string) {
 	}
 }
 
-// Persister retry backoff: a failed pass is retried after
+// Default persister retry backoff: a failed pass is retried after
 // persistRetryInitial, doubling up to persistRetryMax while the store keeps
-// failing. Waking acks do not cut the wait short.
+// failing. Waking acks do not cut the wait short. The input overrides both
+// from checkpoint_retry_initial_interval and checkpoint_retry_max_interval.
 const (
 	persistRetryInitial = time.Second
 	persistRetryMax     = 30 * time.Second

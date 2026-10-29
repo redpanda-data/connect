@@ -81,6 +81,8 @@ const (
 	dciFieldStartFrom              = "start_from"
 	dciFieldCheckpointLimit        = "checkpoint_limit"
 	dciFieldMaxTrackedShards       = "max_tracked_shards"
+	dciFieldCheckpointRetryInitial = "checkpoint_retry_initial_interval"
+	dciFieldCheckpointRetryMax     = "checkpoint_retry_max_interval"
 	dciFieldThrottleBackoff        = "throttle_backoff"
 	dciFieldSnapshotMode           = "snapshot_mode"
 	dciFieldSnapshotSegments       = "snapshot_segments"
@@ -269,6 +271,20 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Maximum number of shards holding acknowledgement state at once. A shard is normally forgotten once it has been read to the end and its last batch has been acknowledged, so this bounds the shards being read concurrently, not the shards seen over the pipeline's lifetime. Past this limit acknowledgements return an error.").
 				Default(10000).
 				Advanced(),
+			service.NewDurationField(dciFieldCheckpointRetryInitial).
+				Description("Time to wait before retrying a failed checkpoint write. The wait doubles after each consecutive failure, up to `checkpoint_retry_max_interval`, and resets after a successful write.").
+				ShortDescription("Time to wait before retrying a failed checkpoint write. Doubles on each consecutive failure.").
+				Default("1s").
+				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_initial_interval must be greater than 0"] }`).
+				Advanced().
+				Version("4.116.0"),
+			service.NewDurationField(dciFieldCheckpointRetryMax).
+				Description("Maximum time to wait between retries of a failed checkpoint write. While the checkpoint table keeps failing, acknowledged positions and closed shards' completion markers stay unpersisted for up to this long between attempts.").
+				ShortDescription("Maximum time to wait between retries of a failed checkpoint write.").
+				Default("30s").
+				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_max_interval must be greater than 0"] }`).
+				Advanced().
+				Version("4.116.0"),
 			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
@@ -436,6 +452,8 @@ type dynamoDBCDCConfig struct {
 	startFrom              string
 	checkpointLimit        int
 	maxTrackedShards       int
+	checkpointRetryInitial time.Duration
+	checkpointRetryMax     time.Duration
 	throttleBackoff        time.Duration
 	snapshot               snapshotConfig
 }
@@ -823,7 +841,15 @@ func newInputRecordBatcher(conf dynamoDBCDCConfig, cp *Checkpointer, failures *s
 	if cp != nil {
 		store = cp
 	}
-	return NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), store, failures, log)
+	b := NewRecordBatcher(conf.maxTrackedShards, max(conf.checkpointLimit, conf.batchSize), store, failures, log)
+	// Configs built in tests leave these zero; keep the defaults then.
+	if conf.checkpointRetryInitial > 0 {
+		b.retryInitial = conf.checkpointRetryInitial
+	}
+	if conf.checkpointRetryMax > 0 {
+		b.retryMax = conf.checkpointRetryMax
+	}
+	return b
 }
 
 // validateDynamoDBCDCConfig validates the configuration for consistency
@@ -852,6 +878,10 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 	// tracker budget's floor so a reservation can always eventually fit.
 	if conf.batchSize < 1 || conf.batchSize > 1000 {
 		return errors.New("batch_size must be between 1 and 1000")
+	}
+
+	if conf.checkpointRetryMax < conf.checkpointRetryInitial {
+		return fmt.Errorf("checkpoint_retry_max_interval (%v) must not be less than checkpoint_retry_initial_interval (%v)", conf.checkpointRetryMax, conf.checkpointRetryInitial)
 	}
 
 	// Validate snapshot configuration
@@ -923,6 +953,12 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 		return
 	}
 	if conf.maxTrackedShards, err = pConf.FieldInt(dciFieldMaxTrackedShards); err != nil {
+		return
+	}
+	if conf.checkpointRetryInitial, err = pConf.FieldDuration(dciFieldCheckpointRetryInitial); err != nil {
+		return
+	}
+	if conf.checkpointRetryMax, err = pConf.FieldDuration(dciFieldCheckpointRetryMax); err != nil {
 		return
 	}
 	if conf.throttleBackoff, err = pConf.FieldDuration(dciFieldThrottleBackoff); err != nil {

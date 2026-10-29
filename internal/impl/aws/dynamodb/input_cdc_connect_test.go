@@ -119,7 +119,7 @@ func waitBackgroundWorkers(d *dynamoDBCDCInput, timeout time.Duration) bool {
 	}
 }
 
-// TestConnectSingleTable_FailedAttemptStartsNoWorker (CON-613): Benthos
+// TestConnectSingleTableFailedAttemptStartsNoWorker (CON-613): Benthos
 // retries a failed Connect about once a second for as long as it takes, so
 // a connection attempt that fails must leave nothing running. The checkpoint
 // persister is a background worker of the input; started before the
@@ -128,7 +128,7 @@ func waitBackgroundWorkers(d *dynamoDBCDCInput, timeout time.Duration) bool {
 // worker count and one batcher per failed attempt. It must start with the
 // shard coordinator instead, so attempts that fail at the probe leave the
 // worker group empty.
-func TestConnectSingleTable_FailedAttemptStartsNoWorker(t *testing.T) {
+func TestConnectSingleTableFailedAttemptStartsNoWorker(t *testing.T) {
 	transport := &connectStubTransport{failProbe: true}
 	d := &dynamoDBCDCInput{
 		conf: dynamoDBCDCConfig{
@@ -162,13 +162,13 @@ func TestConnectSingleTable_FailedAttemptStartsNoWorker(t *testing.T) {
 		"a failed connection attempt must not leave a background worker running")
 }
 
-// TestConnectCDCOnly_StartsPersister (CON-613): the persister is the only
+// TestConnectCDCOnlyStartsPersister (CON-613): the persister is the only
 // writer of checkpoints, and connectCDCOnly is where the single-table shard
 // coordinator starts, so it must start the persister too or no acknowledged
 // progress would ever be persisted. Drives the real CDC-only connect path
 // over a stubbed stream with one closed shard, and checks that acking its
 // final batch persists the shard's completion with no help from the test.
-func TestConnectCDCOnly_StartsPersister(t *testing.T) {
+func TestConnectCDCOnlyStartsPersister(t *testing.T) {
 	transport := &coordinatorStubTransport{
 		shards: []string{"shard-001"},
 		closed: map[string]string{"shard-001": twoRecordsPage},
