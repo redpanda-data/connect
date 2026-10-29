@@ -214,16 +214,28 @@ jobs:
       # other site tools read, attachments/connect-<version>.json. The date is
       # the tag commit's, in UTC, so a rerun writes the same file. A tag whose
       # docs_gen predates the flag (a docs_tag rerun of an older release) gets
-      # the partials only.
+      # the partials only. The flag list comes from the built generator's -h
+      # output, which every docs_gen that writes partials prints with -dir, so
+      # output without -dir means the probe failed rather than that the flag
+      # is missing.
       - name: Generate the reference docs
         id: generate
         run: |
           set -euo pipefail
           args=()
-          if grep -q 'flag.StringVar(&version, "version"' cmd/tools/docs_gen/main.go; then
+          rc=0
+          usage=$(CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen -h 2>&1) || rc=$?
+          if [ "$rc" -ne 0 ] || ! grep -qE '^ +-dir( |$)' <<< "$usage"; then
+            echo "$usage"
+            echo "::error::Couldn't read the flags of docs_gen at $DOCS_TAG (exit code $rc), so can't tell whether it writes the connector data."
+            exit 1
+          fi
+          if grep -qE '^ +-version( |$)' <<< "$usage"; then
             date=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ)
             args=(-version "${DOCS_TAG#v}" -date "$date")
             echo "connect_json=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::docs_gen at $DOCS_TAG has no -version flag, so the docs asset has no connector data."
           fi
           CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen "${args[@]}"
       # Releases from before the generator wrote partials produce full pages
