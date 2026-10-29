@@ -40,7 +40,7 @@ const matchFieldName = "match"
 func redisScanInputConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Summary(`Scans the set of keys in the current selected database and gets their values, using the Scan and Get commands.`).
-		Description(`Optionally, iterates only elements matching a blob-style pattern. For example:
+		Description(`Optionally, iterates only elements matching a glob-style pattern. For example:
 
 - ` + "`+*foo*+`" + ` iterates only keys which contain ` + "`foo`" + ` in it.
 - ` + "`+foo*+`" + ` iterates only keys starting with ` + "`foo`" + `.

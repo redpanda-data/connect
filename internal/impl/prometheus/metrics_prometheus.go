@@ -68,7 +68,7 @@ The suffix only renames timing metrics whose names end in `+"`_ns`"+`. All built
 
 The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Redpanda Connect shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
 
-The Push Gateway is useful for when Redpanda Connect instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Redpanda Connect instances are short lived. Do not include the `+"`/metrics/jobs/...`"+` path in the push URL.
 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
 		Fields(
