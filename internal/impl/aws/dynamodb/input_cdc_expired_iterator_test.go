@@ -172,7 +172,7 @@ func TestStartPolicyCurrent(t *testing.T) {
 			if tc.positioned {
 				p.positioned()
 			}
-			assert.Equal(t, shardStart{iteratorType: tc.want}, p.current())
+			assert.Equal(t, tc.want, p.current())
 		})
 	}
 }
@@ -184,7 +184,7 @@ func TestStartPolicyLoad(t *testing.T) {
 	t.Run("fresh pipeline", func(t *testing.T) {
 		var p startPolicy
 		require.NoError(t, p.load(t.Context(), globalCheckpointerWithPartition(t, testStreamArn, nil), "latest"))
-		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeLatest}, p.current())
+		assert.Equal(t, types.ShardIteratorTypeLatest, p.current())
 	})
 
 	t.Run("restart with state", func(t *testing.T) {
@@ -193,7 +193,7 @@ func TestStartPolicyLoad(t *testing.T) {
 		})
 		var p startPolicy
 		require.NoError(t, p.load(t.Context(), cp, "latest"))
-		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current())
+		assert.Equal(t, types.ShardIteratorTypeTrimHorizon, p.current())
 	})
 
 	t.Run("probe error", func(t *testing.T) {
