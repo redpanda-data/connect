@@ -170,7 +170,7 @@ func (w *writer) connectJSON(version, date string) {
 	if !builtWithAllComponents {
 		panic("-version needs a build with every component: run with CGO_ENABLED=1 and -tags x_benthos_extra")
 	}
-	notInBinary, err := notInReleaseBinary()
+	cloudOnly, err := cloudOnlyComponents()
 	if err != nil {
 		panic(fmt.Errorf("finding the components only Redpanda Cloud runs: %w", err))
 	}
@@ -182,7 +182,7 @@ func (w *writer) connectJSON(version, date string) {
 	if err != nil {
 		panic(err)
 	}
-	out, err := renderConnectJSON(raw, cloudRaw, w.platforms, notInBinary)
+	out, err := renderConnectJSON(raw, cloudRaw, w.platforms, cloudOnly)
 	if err != nil {
 		panic(err)
 	}

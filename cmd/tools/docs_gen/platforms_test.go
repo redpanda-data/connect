@@ -157,6 +157,23 @@ func TestPlatformsFromBuilds(t *testing.T) {
 	if builtWithAllComponents {
 		assert.Equal(t, []string{"inputs/tigerbeetle_cdc", "inputs/zmq4", "outputs/zmq4", "processors/ffi"}, plat.cgoOnlyKeys())
 	}
+
+	// These come from go list on the builds in .goreleaser, whatever tags
+	// this test runs with.
+	cgoOnly, err := cgoOnlyComponents()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{"inputs/tigerbeetle_cdc": true, "inputs/zmq4": true, "outputs/zmq4": true, "processors/ffi": true}, cgoOnly)
+	cloudOnly, err := cloudOnlyComponents()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{"processors/a2a_message": true}, cloudOnly)
+
+	// docs_gen documents only allcomponents, so a release build component it
+	// doesn't import would have no docs.
+	for _, name := range []string{standardRelease, cgoRelease, cloudRelease, cloudAIRelease} {
+		got, err := undocumentedComponents(name)
+		require.NoError(t, err)
+		assert.Empty(t, got, "components the %v build registers and allcomponents doesn't", name)
+	}
 }
 
 func TestFileRegistrations(t *testing.T) {

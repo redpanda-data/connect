@@ -40,13 +40,13 @@ func TestRenderConnectJSON(t *testing.T) {
 		componentKey("processors", "a2a_message"): {Cloud: true},
 		componentKey("processors", "branch"):      {},
 	}}
-	notInBinary := map[string]bool{
+	cloudOnly := map[string]bool{
 		componentKey("processors", "a2a_message"): true,
 		// Not run in Cloud, so not cloud-only even though the binary lacks it.
 		componentKey("processors", "branch"): true,
 	}
 
-	out, err := renderConnectJSON(raw, cloudRaw, plat, notInBinary)
+	out, err := renderConnectJSON(raw, cloudRaw, plat, cloudOnly)
 	require.NoError(t, err)
 
 	var doc map[string]any
