@@ -112,8 +112,8 @@ type checkpointer struct {
 	// between polls. clockKnown is false until the first poll.
 	clockOffsetNanos atomic.Int64
 	clockKnown       atomic.Bool
-	// lagHWM is the timestamp HWM of the latest resolved checkpoint, nil
-	// until one resolves.
+	// lagHWM is the timestamp HWM of the latest persisted checkpoint, nil
+	// until one is persisted.
 	lagHWM atomic.Pointer[time.Time]
 	// now is the host clock, replaced in tests.
 	now      func() time.Time
@@ -206,11 +206,14 @@ func (c *checkpointer) track(ctx context.Context, batchLen int, hwm any, tsHWM t
 		if cp == nil || *cp == nil {
 			return nil
 		}
-		c.recordLag(*cp)
 		if saveErr := c.persist(ctx, *cp); saveErr != nil {
 			c.mFailures.Incr(1)
 			c.log.Warnf("Failed to save checkpoint: %v", saveErr)
+			return nil
 		}
+		// Only a persisted checkpoint moves the lag gauge, so it never shows
+		// a position a restart would not resume from.
+		c.recordLag(*cp)
 		return nil
 	}, nil
 }
@@ -226,7 +229,7 @@ func (c *checkpointer) observeDBClock(dbNow time.Time) {
 	c.refreshLag()
 }
 
-// recordLag remembers a resolved checkpoint's timestamp HWM for the lag
+// recordLag remembers a persisted checkpoint's timestamp HWM for the lag
 // gauge. It does nothing outside the timestamp modes.
 func (c *checkpointer) recordLag(cp *sapHANACheckpointState) {
 	if cp.TimestampHWM == nil {
@@ -238,8 +241,8 @@ func (c *checkpointer) recordLag(cp *sapHANACheckpointState) {
 }
 
 // refreshLag sets the HWM lag gauge from the estimated database clock and the
-// latest resolved timestamp HWM. It does nothing before the first poll or the
-// first resolved checkpoint.
+// latest persisted timestamp HWM. It does nothing before the first poll or
+// the first persisted checkpoint.
 func (c *checkpointer) refreshLag() {
 	hwm := c.lagHWM.Load()
 	if hwm == nil || !c.clockKnown.Load() {
@@ -344,65 +347,57 @@ func parseIncrHWMString(s string) any {
 	return s
 }
 
-// resolveIncrementingInitialValue coerces the configured
-// incrementing_initial_value to the incrementing column's catalog type. YAML
-// only gives us a string, and go-hdb converts bind parameters client-side
-// against the prepared statement's metadata: an int64 against an NVARCHAR
-// key or a string against a TIMESTAMP is rejected on every poll, so the
-// input would never progress. If neither SYS.TABLE_COLUMNS nor
-// SYS.VIEW_COLUMNS gives the type, the value is test-bound against the
-// column instead (see probeIncrementingInitialValue), and Connect fails when
-// no candidate binds.
+// resolveIncrementingInitialValue sets s.hwm to incrementing_initial_value,
+// typed so that go-hdb can bind it against incrementing_column. Connect fails
+// when no type binds.
 func (s *sapHANAInput) resolveIncrementingInitialValue(ctx context.Context, db *sql.DB) error {
-	dataType, err := fetchHANAColumnType(ctx, db, s.conf.schemaName, s.conf.tableName, s.conf.incrementingCol)
-	if err != nil {
-		v, probeErr := s.probeIncrementingInitialValue(ctx, db)
-		if probeErr != nil {
-			// No catalog row is not a privilege problem: HANA lists the
-			// columns of every object the user can select from.
-			hint := "check the column name and the value"
-			if !errors.Is(err, sql.ErrNoRows) {
-				hint = "grant the connecting user CATALOG READ or check the value"
-			}
-			return fmt.Errorf("could not determine the type of %s column %q from the catalog (%v), and %s %q does not bind against it: %w; %s",
-				shFieldIncrementingColumn, s.conf.incrementingCol, err, shFieldIncrementingInitialVal, s.conf.incrInitialRaw, probeErr, hint)
+	raw := s.conf.incrInitialRaw
+
+	// Normal path: the catalog gives the column type, from SYS.TABLE_COLUMNS
+	// for a table or SYS.VIEW_COLUMNS for a view.
+	dataType, catalogErr := fetchHANAColumnType(ctx, db, s.conf.schemaName, s.conf.tableName, s.conf.incrementingCol)
+	if catalogErr == nil {
+		v, err := coerceIncrementingValue(raw, dataType)
+		if err != nil {
+			return fmt.Errorf("%s %q does not match %s %q of type %s: %w",
+				shFieldIncrementingInitialVal, raw, shFieldIncrementingColumn, s.conf.incrementingCol, dataType, err)
 		}
-		s.log.Warnf("Could not determine the type of %s column %q from the catalog, binding %s as %T: %v",
-			shFieldIncrementingColumn, s.conf.incrementingCol, shFieldIncrementingInitialVal, v, err)
 		s.hwm = v
 		return nil
 	}
-	v, err := coerceIncrementingValue(s.conf.incrInitialRaw, dataType)
-	if err != nil {
-		return fmt.Errorf("%s %q does not match %s %q of type %s: %w",
-			shFieldIncrementingInitialVal, s.conf.incrInitialRaw, shFieldIncrementingColumn, s.conf.incrementingCol, dataType, err)
-	}
-	s.hwm = v
-	return nil
-}
 
-// probeIncrementingInitialValue picks a bind value for
-// incrementing_initial_value without the catalog: it runs the poll predicate
-// once with the constructor's guess and then with the literal string, and
-// returns the first that HANA accepts. go-hdb converts bind parameters
-// client-side, so a value of the wrong type (an integer against an NVARCHAR
-// key) fails here instead of on every poll.
-func (s *sapHANAInput) probeIncrementingInitialValue(ctx context.Context, db *sql.DB) (any, error) {
+	// No catalog type: test-bind each candidate against the column. go-hdb
+	// converts bind parameters client-side against the statement's metadata,
+	// so a wrong type (an int64 against an NVARCHAR key) fails here, once,
+	// instead of on every poll. The constructor's numeric guess goes first.
+	// The raw string is the fallback, for example "007" on a character key.
 	q := `SELECT 1 FROM ` + s.conf.tableRef() + ` WHERE ` + quoteIdentifier(s.conf.incrementingCol) + ` > ? LIMIT 1`
 	candidates := []any{s.hwm}
 	if _, isString := s.hwm.(string); !isString {
-		candidates = append(candidates, s.conf.incrInitialRaw)
+		candidates = append(candidates, raw)
 	}
-	var errs []error
+	var bindErrs []error
 	for _, v := range candidates {
 		var one int
 		err := db.QueryRowContext(ctx, q, v).Scan(&one)
+		// No rows above the value still means the bind worked.
 		if err == nil || errors.Is(err, sql.ErrNoRows) {
-			return v, nil
+			s.log.Warnf("Could not determine the type of %s column %q from the catalog, binding %s as %T: %v",
+				shFieldIncrementingColumn, s.conf.incrementingCol, shFieldIncrementingInitialVal, v, catalogErr)
+			s.hwm = v
+			return nil
 		}
-		errs = append(errs, fmt.Errorf("as %T: %w", v, err))
+		bindErrs = append(bindErrs, fmt.Errorf("as %T: %w", v, err))
 	}
-	return nil, errors.Join(errs...)
+
+	// No candidate binds. A missing catalog row is not a privilege problem:
+	// HANA lists the columns of every object the user can select from.
+	hint := "check the column name and the value"
+	if !errors.Is(catalogErr, sql.ErrNoRows) {
+		hint = "grant the connecting user CATALOG READ or check the value"
+	}
+	return fmt.Errorf("could not determine the type of %s column %q from the catalog (%v), and %s %q does not bind against it: %w; %s",
+		shFieldIncrementingColumn, s.conf.incrementingCol, catalogErr, shFieldIncrementingInitialVal, raw, errors.Join(bindErrs...), hint)
 }
 
 // timestampColumnTypes are the catalog types a timestamp_column may have: the

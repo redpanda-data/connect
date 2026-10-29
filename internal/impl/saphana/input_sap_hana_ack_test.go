@@ -1080,3 +1080,40 @@ func TestSAPHANAInputLagRefreshLoop(t *testing.T) {
 		return lag == int64((time.Hour+time.Minute)/time.Second)
 	}, 5*time.Second, 50*time.Millisecond)
 }
+
+// The lag gauge follows the persisted checkpoint: when the cache write fails,
+// a restart resumes from the older position, so the gauge must not move.
+func TestSAPHANAInputLagIgnoresFailedPersist(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+	s, _ := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+checkpoint_cache: %s
+`, testCacheName))
+	c := s.cp
+	hostNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	c.now = func() time.Time { return hostNow }
+	c.observeDBClock(hostNow)
+
+	t.Log("Given: a checkpoint one minute behind the database clock, persisted")
+	older := hostNow.Add(-time.Minute)
+	ack, err := c.track(t.Context(), 1, int64(1), older)
+	require.NoError(t, err)
+	require.NoError(t, ack(t.Context(), nil))
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64(60), lag)
+
+	t.Log("When: a later checkpoint resolves but the cache write fails")
+	c.cacheName = "missing_cache"
+	newer := hostNow.Add(-time.Second)
+	ack, err = c.track(t.Context(), 1, int64(2), newer)
+	require.NoError(t, err)
+	require.NoError(t, ack(t.Context(), nil))
+
+	t.Log("Then: the gauge still shows the persisted checkpoint")
+	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
+	assert.Equal(t, int64(60), lag)
+}
