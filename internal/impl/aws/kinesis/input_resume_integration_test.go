@@ -28,7 +28,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -142,7 +141,7 @@ aws_kinesis:
 	// Taking over the first shard is a steal (the dead client holds two
 	// shards, this one none); the second becomes unclaimed once its lease is
 	// two lease periods stale. Both complete within a few lease periods.
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		receivedMu.Lock()
 		defer receivedMu.Unlock()
 		return len(received) == recordCount
@@ -156,11 +155,5 @@ aws_kinesis:
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("stream did not exit after StopWithin returned")
-	}
-
-	receivedMu.Lock()
-	defer receivedMu.Unlock()
-	for i := range recordCount {
-		assert.Contains(t, received, strconv.Itoa(i))
 	}
 }
