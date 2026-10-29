@@ -1177,11 +1177,12 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 		return fmt.Errorf("creating checkpointer: %w", err)
 	}
 
-	// Initialize record batcher and start its checkpoint persister. The
-	// persister stops with the other workers at soft stop; Close then
-	// flushes whatever it had not written yet.
+	// Initialize record batcher. Its checkpoint persister starts with the
+	// shard coordinator (startSingleTableCoordinator), once this attempt
+	// can no longer fail: Benthos retries a failed Connect, and a worker
+	// started before the checkpoint state probe or shard discovery would
+	// outlive the attempt that started it.
 	d.recordBatcher = newInputRecordBatcher(d.conf, d.checkpointer, d.metrics.checkpointFailures, d.log)
-	d.startBackgroundWorker("checkpoint persister", d.recordBatcher.Run)
 
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists, shards without checkpoints are rotation children
@@ -1364,19 +1365,8 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 		return errors.New("initializing shard readers: no active shards available")
 	}
 
-	// Start background goroutine to coordinate shard readers
-	coordinatorCtx, coordinatorCancel := d.shutSig.SoftStopCtx(context.Background())
-	d.backgroundWorkers.Add(1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				d.log.Errorf("Shard coordinator panicked: %v", r)
-			}
-			d.backgroundWorkers.Done()
-		}()
-		defer coordinatorCancel()
-		d.startShardCoordinator(coordinatorCtx)
-	}()
+	// Start the shard coordinator and the checkpoint persister in the background
+	d.startSingleTableCoordinator()
 
 	return nil
 }
@@ -1453,19 +1443,8 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 			return errors.New("initializing shard readers: no active shards available")
 		}
 
-		// Start shard coordinator in background
-		coordinatorCtx, coordinatorCancel := d.shutSig.SoftStopCtx(context.Background())
-		d.backgroundWorkers.Add(1)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					d.log.Errorf("CDC shard coordinator panicked during snapshot: %v", r)
-				}
-				d.backgroundWorkers.Done()
-			}()
-			defer coordinatorCancel()
-			d.startShardCoordinator(coordinatorCtx)
-		}()
+		// Start the shard coordinator and the checkpoint persister in the background
+		d.startSingleTableCoordinator()
 
 		d.log.Info("CDC readers started, will capture changes during snapshot")
 	}
@@ -3021,6 +3000,18 @@ func (d *dynamoDBCDCInput) startBackgroundWorker(name string, fn func(context.Co
 		defer workerCancel()
 		fn(workerCtx)
 	}()
+}
+
+// startSingleTableCoordinator launches the single-table shard coordinator
+// and the checkpoint persister of d.recordBatcher. It is the single-table
+// counterpart of startTableCoordinator and the only place that persister
+// starts: callers reach it once the connection attempt can no longer fail,
+// so an attempt that fails (and is retried by Benthos) leaves no worker
+// behind. The persister stops with the other workers at soft stop; Close
+// then flushes whatever it had not written yet.
+func (d *dynamoDBCDCInput) startSingleTableCoordinator() {
+	d.startBackgroundWorker("checkpoint persister", d.recordBatcher.Run)
+	d.startBackgroundWorker("shard coordinator", d.startShardCoordinator)
 }
 
 // startTableCoordinator launches a table stream coordinator goroutine and
