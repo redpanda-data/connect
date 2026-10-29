@@ -247,13 +247,13 @@ func TestRefreshShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 	transport.setFailShards("shard-002")
 
 	d := newRefreshTestInput(t, transport)
-	d.honorStartFrom.Store(true)
+	d.start.honor.Store(true)
 
 	require.NoError(t, d.refreshShards(t.Context()),
 		"a per-shard failure must not fail the whole refresh cycle")
 	assert.ElementsMatch(t, []string{"shard-001", "shard-003"}, registeredShards(d),
 		"healthy shards must be registered even when another shard fails")
-	assert.False(t, d.honorStartFrom.Load(),
+	assert.False(t, d.start.honor.Load(),
 		"the first committed discovery positions the pipeline; later retries of failed shards must use TRIM_HORIZON so no backlog is skipped")
 
 	// The failed shard recovers on the next cycle.
@@ -276,17 +276,17 @@ func TestRefreshShards_ZeroCommitKeepsStartFrom(t *testing.T) {
 	transport.setFailShards("shard-001", "shard-002")
 
 	d := newRefreshTestInput(t, transport)
-	d.honorStartFrom.Store(true)
+	d.start.honor.Store(true)
 
 	require.NoError(t, d.refreshShards(t.Context()))
 	assert.Empty(t, registeredShards(d))
-	assert.True(t, d.honorStartFrom.Load(),
+	assert.True(t, d.start.honor.Load(),
 		"a cycle that committed nothing must keep honoring start_from for the first real discovery")
 
 	transport.setFailShards()
 	require.NoError(t, d.refreshShards(t.Context()))
 	assert.ElementsMatch(t, []string{"shard-001", "shard-002"}, registeredShards(d))
-	assert.False(t, d.honorStartFrom.Load())
+	assert.False(t, d.start.honor.Load())
 }
 
 // TestRefreshShards_BudgetExhaustedCommitsProgress: when the refresh budget
@@ -337,7 +337,7 @@ func TestRefreshTableShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 		shardReaders:   map[string]*dynamoDBShardReader{},
 		shardRefreshCh: make(chan struct{}, 1),
 	}
-	ts.honorStartFrom.Store(true)
+	ts.start.honor.Store(true)
 
 	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts),
 		"a per-shard failure must not fail the whole refresh cycle")
@@ -350,7 +350,7 @@ func TestRefreshTableShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 	ts.mu.RUnlock()
 	assert.ElementsMatch(t, []string{"shard-001", "shard-003"}, ids,
 		"healthy shards must be registered even when another shard fails")
-	assert.False(t, ts.honorStartFrom.Load())
+	assert.False(t, ts.start.honor.Load())
 }
 
 // TestRefreshShardsCompletedShardNotRediscoveredAfterCleanup (CON-599):
@@ -531,7 +531,7 @@ func TestRefreshShardsChildHeldBackUntilParentCompleted(t *testing.T) {
 // TestRefreshShardsLatestDoesNotHoldBackChildren (CON-599): on a fresh
 // pipeline with start_from: latest every shard starts at LATEST, so a closed
 // parent has no backlog to drain and parent-before-child ordering must not
-// apply. Holding the child back would clear honorStartFrom after the parents
+// apply. Holding the child back would clear startPolicy.honor after the parents
 // commit and start the child at TRIM_HORIZON on the next cycle, replaying up
 // to 24h of records the user asked to skip.
 func TestRefreshShardsLatestDoesNotHoldBackChildren(t *testing.T) {
@@ -551,31 +551,31 @@ func TestRefreshShardsLatestDoesNotHoldBackChildren(t *testing.T) {
 	t.Run("single-table", func(t *testing.T) {
 		transport := newTransport()
 		d := newRefreshTestInput(t, transport)
-		d.conf.startFrom = "latest"
-		d.honorStartFrom.Store(true)
+		d.start.startFrom = "latest"
+		d.start.honor.Store(true)
 
 		require.NoError(t, d.refreshShards(t.Context()))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, registeredShards(d))
 		assertLatest(t, transport)
-		assert.False(t, d.honorStartFrom.Load())
+		assert.False(t, d.start.honor.Load())
 	})
 
 	t.Run("multi-table", func(t *testing.T) {
 		transport := newTransport()
 		d, ts, tableShards := tableRefreshHarness(t, transport, newTestCheckpointer(t))
-		d.conf.startFrom = "latest"
-		ts.honorStartFrom.Store(true)
+		ts.start.startFrom = "latest"
+		ts.start.honor.Store(true)
 
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
 		assertLatest(t, transport)
-		assert.False(t, ts.honorStartFrom.Load())
+		assert.False(t, ts.start.honor.Load())
 	})
 
 	t.Run("restart with state still orders lineage", func(t *testing.T) {
 		transport := newTransport()
 		d := newRefreshTestInput(t, transport)
-		d.conf.startFrom = "latest"
+		d.start.startFrom = "latest"
 
 		require.NoError(t, d.refreshShards(t.Context()))
 		assert.ElementsMatch(t, []string{"shard-parent"}, registeredShards(d))

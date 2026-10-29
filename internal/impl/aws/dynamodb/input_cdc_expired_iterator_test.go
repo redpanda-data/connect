@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
@@ -114,29 +115,109 @@ func TestResolveResumeIterator(t *testing.T) {
 	}
 }
 
-// TestInitialIteratorType locks in the start_from contract: latest applies
+// TestStartPolicyCurrent locks in the start_from contract: latest applies
 // only to the first discovery of a genuinely fresh pipeline; every other
 // checkpoint-less shard (rotation children found on refresh cycles, or any
 // shard after a restart with existing state) starts at TRIM_HORIZON so its
 // backlog is never silently skipped.
-func TestInitialIteratorType(t *testing.T) {
+func TestStartPolicyCurrent(t *testing.T) {
 	cases := []struct {
-		name      string
-		startFrom string
-		honor     bool
-		want      types.ShardIteratorType
+		name       string
+		startFrom  string
+		honor      bool
+		positioned bool
+		want       types.ShardIteratorType
 	}{
-		{"fresh pipeline honors latest", "latest", true, types.ShardIteratorTypeLatest},
-		{"fresh pipeline honors trim_horizon", "trim_horizon", true, types.ShardIteratorTypeTrimHorizon},
-		{"rotation child ignores latest", "latest", false, types.ShardIteratorTypeTrimHorizon},
-		{"restart with state ignores latest", "latest", false, types.ShardIteratorTypeTrimHorizon},
-		{"trim_horizon unaffected by honor flag", "trim_horizon", false, types.ShardIteratorTypeTrimHorizon},
+		{
+			name:      "fresh pipeline honors latest",
+			startFrom: "latest",
+			honor:     true,
+			want:      types.ShardIteratorTypeLatest,
+		},
+		{
+			name:      "fresh pipeline honors trim_horizon",
+			startFrom: "trim_horizon",
+			honor:     true,
+			want:      types.ShardIteratorTypeTrimHorizon,
+		},
+		{
+			name:       "rotation child ignores latest",
+			startFrom:  "latest",
+			honor:      true,
+			positioned: true,
+			want:       types.ShardIteratorTypeTrimHorizon,
+		},
+		{
+			name:      "restart with state ignores latest",
+			startFrom: "latest",
+			honor:     false,
+			want:      types.ShardIteratorTypeTrimHorizon,
+		},
+		{
+			name:      "trim_horizon unaffected by honor flag",
+			startFrom: "trim_horizon",
+			honor:     false,
+			want:      types.ShardIteratorTypeTrimHorizon,
+		},
+		{
+			name: "zero value starts at trim_horizon",
+			want: types.ShardIteratorTypeTrimHorizon,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, initialIteratorType(tc.startFrom, tc.honor))
+			var p startPolicy
+			p.startFrom = tc.startFrom
+			p.honor.Store(tc.honor)
+			if tc.positioned {
+				p.positioned()
+			}
+			assert.Equal(t, shardStart{iteratorType: tc.want}, p.current())
 		})
 	}
+}
+
+// TestStartPolicyLoad: load honors start_from only when the checkpoint store
+// has no state for the stream, and fails when the probe fails, so a stream
+// never guesses that it is fresh.
+func TestStartPolicyLoad(t *testing.T) {
+	newCheckpointer := func(items []map[string]dynamodbtypes.AttributeValue, err error) *Checkpointer {
+		return &Checkpointer{
+			tableName:   "checkpoints",
+			sourceTable: "test",
+			streamArn:   testStreamArn,
+			svc: &fakeCheckpointAPI{
+				query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+					if err != nil {
+						return nil, err
+					}
+					return &dynamodb.QueryOutput{Items: items}, nil
+				},
+			},
+			log: service.MockResources().Logger(),
+		}
+	}
+
+	t.Run("fresh pipeline", func(t *testing.T) {
+		var p startPolicy
+		require.NoError(t, p.load(t.Context(), newCheckpointer(nil, nil), "latest"))
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeLatest}, p.current())
+	})
+
+	t.Run("restart with state", func(t *testing.T) {
+		row := map[string]dynamodbtypes.AttributeValue{
+			"SequenceNumber": &dynamodbtypes.AttributeValueMemberS{Value: "00001"},
+		}
+		var p startPolicy
+		require.NoError(t, p.load(t.Context(), newCheckpointer([]map[string]dynamodbtypes.AttributeValue{row}, nil), "latest"))
+		assert.Equal(t, shardStart{iteratorType: types.ShardIteratorTypeTrimHorizon}, p.current())
+	})
+
+	t.Run("probe error", func(t *testing.T) {
+		var p startPolicy
+		err := p.load(t.Context(), newCheckpointer(nil, errors.New("access denied")), "latest")
+		require.ErrorContains(t, err, "probing checkpoint state")
+	})
 }
 
 // stubStreamsTransport is a minimal net/http fake standing in for the real
