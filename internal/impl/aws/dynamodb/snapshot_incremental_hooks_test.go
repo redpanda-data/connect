@@ -67,6 +67,48 @@ func TestIncrementalHooksReaderTouchesBeforeSend(t *testing.T) {
 	}
 }
 
+// failoverSplitPage holds a record for a before the failover cutoff used below
+// and one for b after it.
+const failoverSplitPage = `[{"eventID":"1","eventName":"MODIFY","dynamodb":{"ApproximateCreationDateTime":1789999990,"SequenceNumber":"00001","Keys":{"pk":{"S":"a"}},"NewImage":{"pk":{"S":"a"}}}},
+                            {"eventID":"2","eventName":"MODIFY","dynamodb":{"ApproximateCreationDateTime":1790000010,"SequenceNumber":"00002","Keys":{"pk":{"S":"b"}},"NewImage":{"pk":{"S":"b"}}}}]`
+
+// A record the global-table failover replay skips is never enqueued, so it
+// must not drop the held snapshot item for its key: nothing would replace it.
+func TestIncrementalHooksReaderSkipsFailoverRecordsWhenTouching(t *testing.T) {
+	for name, mk := range readerHarnesses(failoverSplitPage, 100, 0) {
+		t.Run(name, func(t *testing.T) {
+			h := mk()
+			h.shardReaders["shard-001"].failoverCutoff = time.Unix(1790000000, 0)
+			inc := incsnapshot.NewState(0, time.Minute)
+			h.d.incremental = inc
+			if ts := h.tableStream(); ts != nil {
+				ts.incremental = inc
+			}
+			inc.Register("shard-001")
+			inc.RefreshDone([]string{"shard-001"})
+			inc.Window().Begin(0)
+			inc.Window().Hold(0, DynamoItems{
+				{"pk": &dynamodbtypes.AttributeValueMemberS{Value: "a"}},
+				{"pk": &dynamodbtypes.AttributeValueMemberS{Value: "b"}},
+			}, []string{mustStreamKey(t, "a"), mustStreamKey(t, "b")}, time.Unix(1790000000, 0), nil)
+			require.Equal(t, 2, inc.Window().HeldItems())
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			var batch asyncMessage
+			select {
+			case batch = <-h.d.msgChan:
+			case <-time.After(5 * time.Second):
+				t.Fatal("no batch from reader")
+			}
+			require.Len(t, batch.msg, 1, "the record before the cutoff must be skipped")
+			assert.Equal(t, 1, inc.Window().HeldItems(), "only b may be dropped; a's record was skipped")
+		})
+	}
+}
+
 func mustStreamKey(t *testing.T, pk string) string {
 	t.Helper()
 	k, ok := incsnapshot.WindowKeyFromItem(map[string]dynamodbtypes.AttributeValue{"pk": &dynamodbtypes.AttributeValueMemberS{Value: pk}},

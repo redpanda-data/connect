@@ -16,6 +16,7 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
 )
 
@@ -367,13 +368,53 @@ func (d *dynamoDBCDCInput) signalOnlyBackfillPending(ctx context.Context, table 
 
 // backfillRetries holds the backoff of each multi-table incremental table
 // whose last prepare or backfill failed, and the tables whose prepare has
-// not yet succeeded. Its mutex is a leaf lock: nothing else is taken or
-// called while it is held.
+// not yet succeeded, and drives the snapshot state gauge from them. Its
+// mutex is a leaf lock: nothing else is taken or called while it is held,
+// apart from the gauge update, which takes none of the input's locks.
 type backfillRetries struct {
 	mu    sync.Mutex
 	boffs map[string]backoff.BackOff
 	// preparing holds the prepare-pending tables.
 	preparing map[string]*pendingPrepare
+	// running is set while runBackfillQueue runs a table's backfill.
+	running bool
+	// stateGauge, once set, receives the multi-table snapshot state on every
+	// change (see publishLocked).
+	stateGauge *service.MetricGauge
+}
+
+// publishTo makes g receive the snapshot state, starting now.
+func (r *backfillRetries) publishTo(g *service.MetricGauge) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stateGauge = g
+	r.publishLocked()
+}
+
+// setRunning records whether runBackfillQueue is running a backfill.
+func (r *backfillRetries) setRunning(running bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.running = running
+	r.publishLocked()
+}
+
+// publishLocked sets the snapshot state gauge: in progress while a backfill
+// runs, failed while a prepare or backfill retry is pending, otherwise
+// complete. It is called with r.mu held, so concurrent changes cannot
+// publish out of order.
+func (r *backfillRetries) publishLocked() {
+	if r.stateGauge == nil {
+		return
+	}
+	state := snapshotStateComplete
+	switch {
+	case r.running:
+		state = snapshotStateInProgress
+	case len(r.boffs) > 0:
+		state = snapshotStateFailed
+	}
+	r.stateGauge.Set(int64(state))
 }
 
 // pendingPrepare is the state of a prepare-pending table.
@@ -397,6 +438,7 @@ func (r *backfillRetries) next(table string, newBoff func() backoff.BackOff) tim
 		}
 		boff = newBoff()
 		r.boffs[table] = boff
+		r.publishLocked()
 	}
 	return boff.NextBackOff()
 }
@@ -406,6 +448,7 @@ func (r *backfillRetries) reset(table string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.boffs, table)
+	r.publishLocked()
 }
 
 // beginPrepare marks table prepare-pending.
@@ -430,6 +473,7 @@ func (r *backfillRetries) endPrepare(table string) (skipped bool) {
 	}
 	delete(r.preparing, table)
 	delete(r.boffs, table)
+	r.publishLocked()
 	return skipped
 }
 
@@ -512,7 +556,9 @@ func (ts *tableStream) backfillTarget() backfillTarget {
 // pushed back after its own backoff, and the next table starts at once.
 // Streaming the table is unaffected. No delayed push happens once ctx ends.
 func (d *dynamoDBCDCInput) runBackfillQueue(ctx context.Context) {
+	d.backfillRetries.publishTo(d.metrics.snapshotState)
 	for {
+		d.backfillRetries.setRunning(false)
 		d.metrics.backfillTablesPending.Set(int64(d.backfills.Len()))
 		table, ok := d.backfills.Pop(ctx)
 		if !ok {
@@ -531,6 +577,7 @@ func (d *dynamoDBCDCInput) runBackfillQueue(ctx context.Context) {
 			d.log.Debugf("Incremental snapshot of table %s deferred until its prepare succeeds", table)
 			continue
 		}
+		d.backfillRetries.setRunning(true)
 		outcome, err := d.backfillTable(ctx, table, ts)
 		switch outcome {
 		case backfillStopped:

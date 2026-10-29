@@ -2245,13 +2245,14 @@ snapshot_throttle: 10ms
 
 	// The signal was already executed, so a second one is a no-op. Check the
 	// outcome in checkpoint state, which does not depend on release timing.
+	// The signal table's reader handles a signal before it sends the record,
+	// so once the consumer has counted it the rows are final.
 	putSignal("2")
 	require.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		return signalRecords >= 2
 	}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the second signal record")
-	time.Sleep(5 * time.Second)
 
 	assert.Len(t, snapshotRows("snapshot#complete"), 1)
 	assert.Empty(t, snapshotRows("snapshot#requested"), "a complete table must not be requeued by a repeated signal")

@@ -149,6 +149,71 @@ func TestRunBackfillQueueRequeuesFailedTable(t *testing.T) {
 	}
 }
 
+// TestRunBackfillQueueDrivesSnapshotState: in multi-table mode the snapshot
+// state gauge follows the queue: in progress while a table backfills, failed
+// while a retry is pending, complete once every queued table has completed.
+func TestRunBackfillQueueDrivesSnapshotState(t *testing.T) {
+	// The first Scan is t1's and fails; t2's and t1's retry succeed.
+	tr := &scanStubTransport{scanItems: failFirstScans(1)}
+	d := newBackfillTestInput(t, tr)
+	metrics, exporter := newCountingMetrics(t)
+	d.metrics = newDynamoDBCDCMetrics(metrics)
+	scheduled := make(chan struct{}, 1)
+	d.backfillRetryBackoff = func() backoff.BackOff {
+		return signalingBackOff{ConstantBackOff: backoff.NewConstantBackOff(200 * time.Millisecond), scheduled: scheduled}
+	}
+	d.tableStreams = map[string]*tableStream{
+		"t1": newQueueTableStream(t, d, "t1"),
+		"t2": newQueueTableStream(t, d, "t2"),
+	}
+	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills.Push("t1")
+	d.backfills.Push("t2")
+	state := func() int64 { return exporter.gauge(metricSnapshotState) }
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	runnerDone := make(chan struct{})
+	go func() {
+		defer close(runnerDone)
+		d.runBackfillQueue(ctx)
+	}()
+
+	select {
+	case <-scheduled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("t1's retry was never scheduled")
+	}
+	// t2's page waits for its ack, so t2 is still running.
+	var m asyncMessage
+	select {
+	case m = <-d.msgChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("queue did not reach table t2")
+	}
+	assert.Equal(t, int64(snapshotStateInProgress), state(), "t2 is backfilling")
+	require.NoError(t, m.ackFn(t.Context(), nil))
+	require.Eventually(t, func() bool { return state() == int64(snapshotStateFailed) },
+		5*time.Second, 5*time.Millisecond, "t2 is done and t1's retry is pending")
+
+	select {
+	case m = <-d.msgChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("t1 was not retried")
+	}
+	assert.Equal(t, int64(snapshotStateInProgress), state(), "t1's retry is backfilling")
+	require.NoError(t, m.ackFn(t.Context(), nil))
+	require.Eventually(t, func() bool { return state() == int64(snapshotStateComplete) },
+		5*time.Second, 5*time.Millisecond, "both tables are backfilled")
+
+	cancel()
+	select {
+	case <-runnerDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runner did not return on shutdown")
+	}
+}
+
 // TestRunBackfillQueueNoRequeueAfterShutdown: a failed table's delayed push
 // is dropped when the input stops first, and the runner does not return
 // until the delayed push has exited.

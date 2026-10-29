@@ -282,7 +282,7 @@ This input emits the following metrics:
 
 - `+"`dynamodb_cdc_shards_tracked`"+` - Total number of shards being tracked (gauge)
 - `+"`dynamodb_cdc_shards_active`"+` - Number of shards currently being read from (gauge)
-- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=`+"`not_started`"+`, 1=`+"`in_progress`"+`, 2=`+"`complete`"+` (gauge)
+- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=`+"`not_started`"+`, 1=`+"`in_progress`"+`, 2=`+"`complete`"+`, 3=`+"`failed`"+` (gauge). In multi-table mode, it covers the incremental snapshot queue: `+"`in_progress`"+` while a table is backfilled, `+"`failed`"+` while a failed table waits to retry, and `+"`complete`"+` otherwise.
 - `+"`dynamodb_cdc_snapshot_records_read`"+` - Total records read during snapshot (counter)
 - `+"`dynamodb_cdc_snapshot_segments_active`"+` - Number of active snapshot scan segments (gauge)
 - `+"`dynamodb_cdc_snapshot_buffer_overflow`"+` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
@@ -3223,7 +3223,8 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		if ts.snapshot != nil {
 			dedupeBuffer = ts.snapshot.seqBuffer
 		}
-		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
+		failoverCutoff := ts.getShardCutoff(shardID)
+		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, failoverCutoff, d.metrics.failoverSkipped)
 		if len(batch) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
@@ -3282,7 +3283,9 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 		// Incremental snapshot: drop held snapshot items these records
 		// supersede before the records can be enqueued (spec, Safety rule).
-		if n := inc.TouchRecords(getRecords.Records); n > 0 {
+		// Records skipped by the failover replay are never enqueued, so they
+		// must not drop the snapshot item either.
+		if n := inc.TouchRecords(failoverKeptRecords(getRecords.Records, failoverCutoff)); n > 0 {
 			d.metrics.snapshotWindowDropped.Incr(int64(n))
 		}
 
@@ -3364,6 +3367,20 @@ func shouldSkipFailoverRecord(record types.Record, failoverCutoff time.Time) boo
 		return false
 	}
 	return record.Dynamodb.ApproximateCreationDateTime.Before(failoverCutoff)
+}
+
+// failoverKeptRecords returns the records shouldSkipFailoverRecord keeps.
+func failoverKeptRecords(records []types.Record, failoverCutoff time.Time) []types.Record {
+	if failoverCutoff.IsZero() {
+		return records
+	}
+	kept := make([]types.Record, 0, len(records))
+	for _, r := range records {
+		if !shouldSkipFailoverRecord(r, failoverCutoff) {
+			kept = append(kept, r)
+		}
+	}
+	return kept
 }
 
 // convertTableRecordsToBatch converts DynamoDB Stream records to Benthos messages for a specific table
@@ -3822,7 +3839,8 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		}
 
 		// Convert records to messages
-		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
+		failoverCutoff := d.getShardCutoff(shardID)
+		batch := d.convertRecordsToBatch(getRecords.Records, shardID, failoverCutoff)
 		if len(batch) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
@@ -3881,7 +3899,9 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 
 		// Incremental snapshot: drop held snapshot items these records
 		// supersede before the records can be enqueued (spec, Safety rule).
-		if n := inc.TouchRecords(getRecords.Records); n > 0 {
+		// Records skipped by the failover replay are never enqueued, so they
+		// must not drop the snapshot item either.
+		if n := inc.TouchRecords(failoverKeptRecords(getRecords.Records, failoverCutoff)); n > 0 {
 			d.metrics.snapshotWindowDropped.Incr(int64(n))
 		}
 
