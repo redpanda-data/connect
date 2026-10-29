@@ -34,6 +34,7 @@ import (
 // those privileges alone.
 func TestIntegrationExternallyManagedPublicationWithoutOwnership(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
