@@ -81,7 +81,7 @@ reducing overhead and improving throughput at the cost of higher memory usage.
 
 This input commits consumer group offsets only after the paired output acknowledges the writes, so it provides the same at-least-once delivery and per-partition ordering as the ` + "xref:components:inputs/redpanda.adoc[`redpanda` input]" + `.
 
-When a pipeline contains more than one migrator pair, each input is paired with the output that has the same ` + "`label`" + `. The labels must match exactly. If they do not match, the input and output of that pair fail to connect.
+Each pipeline holds one migrator pair. The input pairs automatically with the ` + "`redpanda_migrator`" + ` output in the same pipeline, so leave ` + "`label`" + ` unset on both. To migrate several source clusters, run a separate pipeline for each pair.
 
 == Source cluster permissions
 
@@ -134,9 +134,9 @@ Each pipeline must have both input and output components configured.
 
 == Multiple migrator pairs
 
-When using multiple migrator pairs in a single pipeline,
-the mapping between input and output components is done based on the label field.
-The label of the input and output must match exactly for proper coordination, and each pair needs its own label.
+Each pipeline holds one migrator pair. The input and output in the same pipeline pair automatically, so leave `+"`label`"+` unset on both.
+Several pairs in one configuration would need matching input and output labels, which the configuration linter rejects as a label collision.
+To migrate several source clusters, run a separate pipeline for each pair.
 
 == Performance tuning
 
