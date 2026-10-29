@@ -1644,22 +1644,17 @@ credentials:
 // downtime) to keep at-least-once delivery.
 func TestIntegrationDynamoDBStartFromLatestCrashBeforeFirstCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
-	ctx := context.Background()
-
-	ctr, err := testcontainers.Run(ctx,
+	ctr, err := testcontainers.Run(t.Context(),
 		"amazon/dynamodb-local:latest",
 		testcontainers.WithExposedPorts("8000/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForListeningPort("8000/tcp")),
 	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err := ctr.Terminate(context.Background()); err != nil {
-			t.Logf("failed to terminate dynamodb container: %v", err)
-		}
-	})
 
-	mappedPort, err := ctr.MappedPort(ctx, "8000/tcp")
+	mappedPort, err := ctr.MappedPort(t.Context(), "8000/tcp")
 	require.NoError(t, err)
 	port := mappedPort.Port()
 
@@ -1684,7 +1679,7 @@ func TestIntegrationDynamoDBStartFromLatestCrashBeforeFirstCheckpoint(t *testing
 // ackFirst acks the batch that holds A before the crash. want lists the item
 // IDs that run 2 must deliver.
 func testStartFromLatestCrashRestart(t *testing.T, port, tableName, checkpointTable string, checkpointLimit int, ackFirst bool, want []string) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	client, err := createTableWithStreams(ctx, t, port, tableName)
 	require.NoError(t, err)
@@ -1732,7 +1727,8 @@ credentials:
 	require.NoError(t, err)
 	require.NoError(t, input2.Connect(ctx))
 	t.Cleanup(func() {
-		_ = input2.Close(ctx)
+		// t.Context() is already canceled when cleanup runs.
+		_ = input2.Close(context.Background())
 	})
 
 	require.NoError(t, putTestItem(ctx, client, tableName, "item-c", "value-c"))
