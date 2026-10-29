@@ -248,7 +248,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. `timestamp_column` has no timezone, so write its wall-clock value as-is, tagged with a `Z` or `+00:00` offset, rather than converting it. Any other offset is rejected when the configuration is parsed.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. `timestamp_column` has no timezone, so write its wall-clock value as-is, tagged with a `Z` or `+00:00` offset, rather than converting it. Any other offset is rejected when the input connects without a checkpoint.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
@@ -319,7 +319,7 @@ type sapHANAInputConfig struct {
 	pollInterval    time.Duration
 
 	timestampCol     string
-	timestampInitial time.Time // timestamp_initial_value as configured; zero when unset
+	timestampInitial time.Time // timestamp_initial_value as configured, offset unchecked; zero when unset
 	timestampDelay   time.Duration
 	timestampClock   string
 
@@ -435,13 +435,11 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		return nil, err
 	}
 	if tsInitStr != "" {
-		var tsInit time.Time
-		if tsInit, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
+		if c.timestampInitial, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", shFieldTimestampInitialVal, err)
 		}
-		if c.timestampInitial, err = requireUTC(tsInit); err != nil {
-			return nil, fmt.Errorf("field %q: %w", shFieldTimestampInitialVal, err)
-		}
+		// The offset is checked on connect, and only on a fresh start: a
+		// resumed checkpoint ignores this value.
 		s.timestampHWM = c.timestampInitial
 	}
 	if c.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {

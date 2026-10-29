@@ -301,23 +301,32 @@ func (c *checkpointer) persist(ctx context.Context, cp *sapHANACheckpointState) 
 	return nil
 }
 
-// loadCheckpoint restores persisted HWM state from the cache. It reports
-// whether an incrementing HWM was restored, since that value supersedes the
-// configured initial value.
-func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
+// resumedHWMs reports which HWMs loadCheckpoint restored. A restored HWM
+// supersedes the configured initial value of the same kind, so Connect checks
+// and applies that initial value only when the flag is false.
+type resumedHWMs struct {
+	incr bool // incrementing HWM restored; incrementing_initial_value is ignored
+	ts   bool // timestamp HWM restored; timestamp_initial_value is ignored
+}
+
+// loadCheckpoint restores persisted HWM state from the cache and reports which
+// HWMs it restored.
+func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (resumedHWMs, error) {
+	var resumed resumedHWMs
 	cp, err := s.cp.load(ctx)
 	if err != nil || cp == nil {
-		return false, err
+		return resumed, err
 	}
 	if cp.TimestampHWM != nil {
 		s.timestampHWM = *cp.TimestampHWM
+		resumed.ts = true
 	}
-	hwm, resumedHWM := cp.incrHWM()
-	if resumedHWM {
+	var hwm any
+	if hwm, resumed.incr = cp.incrHWM(); resumed.incr {
 		s.hwm = hwm
 	}
 	s.log.Debugf("Loaded checkpoint: ts_hwm=%v incr_hwm=%v", s.timestampHWM, s.hwm)
-	return resumedHWM, nil
+	return resumed, nil
 }
 
 // hwmEqual compares two high-water mark values. They are the normalised

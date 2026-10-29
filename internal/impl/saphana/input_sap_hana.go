@@ -99,26 +99,14 @@ func (s *sapHANAInput) Connect(ctx context.Context) (err error) {
 		return fmt.Errorf("pinging SAP HANA: %w", err)
 	}
 
-	resumedHWM, err := s.loadCheckpoint(ctx)
-	if err != nil {
-		return fmt.Errorf("loading checkpoint: %w", err)
-	}
-	// A persisted checkpoint already carries the HWM with its real type; only
-	// a fresh start binds the configured initial value, which must match the
-	// column's type or go-hdb rejects the parameter on every poll.
-	if !resumedHWM && s.conf.incrInitialRaw != "" && s.conf.incrementingCol != "" {
-		if err = s.resolveIncrementingInitialValue(ctx, db); err != nil {
-			return err
-		}
+	if err = s.restorePosition(ctx, db); err != nil {
+		return err
 	}
 	if s.conf.usesTimestamp() {
 		if err = s.validateTimestampColumn(ctx, db); err != nil {
 			return err
 		}
 	}
-	// hwmSafe must start at the loaded checkpoint value so that a partial
-	// batch on the first poll never persists nil and regresses progress.
-	s.hwmSafe = s.hwm
 
 	s.db = db
 	s.schemas = newSchemaCache(db, s.log, s.conf.numericMapping)
@@ -127,6 +115,35 @@ func (s *sapHANAInput) Connect(ctx context.Context) (err error) {
 	}
 
 	s.log.Debug("Connected to SAP HANA.")
+	return nil
+}
+
+// restorePosition sets the start HWMs from the checkpoint, or from the
+// configured initial values when the checkpoint has none.
+func (s *sapHANAInput) restorePosition(ctx context.Context, db *sql.DB) error {
+	resumed, err := s.loadCheckpoint(ctx)
+	if err != nil {
+		return fmt.Errorf("loading checkpoint: %w", err)
+	}
+	// A persisted checkpoint already carries the HWM with its real type; only
+	// a fresh start binds the configured initial value, which must match the
+	// column's type or go-hdb rejects the parameter on every poll.
+	if !resumed.incr && s.conf.incrInitialRaw != "" && s.conf.incrementingCol != "" {
+		if err = s.resolveIncrementingInitialValue(ctx, db); err != nil {
+			return err
+		}
+	}
+	// The offset is checked here and not when the config is parsed, so that a
+	// pipeline resuming from a checkpoint, which ignores the value, still
+	// starts.
+	if !resumed.ts && s.conf.usesTimestamp() && !s.conf.timestampInitial.IsZero() {
+		if s.timestampHWM, err = requireUTC(s.conf.timestampInitial); err != nil {
+			return fmt.Errorf("field %q: %w", shFieldTimestampInitialVal, err)
+		}
+	}
+	// hwmSafe must start at the loaded checkpoint value so that a partial
+	// batch on the first poll never persists nil and regresses progress.
+	s.hwmSafe = s.hwm
 	return nil
 }
 

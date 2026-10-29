@@ -340,21 +340,19 @@ func TestSAPHANAInputTableRef(t *testing.T) {
 	}
 }
 
-// timestamp_initial_value is compared against a TIMESTAMP column, which has no
-// timezone. An offset other than Z or +00:00 is ambiguous (the instant or the
-// wall clock), so it is rejected when the config is parsed instead of silently
-// shifting where the input starts.
-func TestSAPHANAInputTimestampInitialValueOffset(t *testing.T) {
+// timestamp_initial_value must be valid RFC3339 when the config is parsed. Its
+// offset is checked only on connect, because a resumed checkpoint ignores the
+// value (see TestSAPHANAInputTimestampInitialValueOffsetOnConnect).
+func TestSAPHANAInputTimestampInitialValueParse(t *testing.T) {
 	for _, tc := range []struct {
 		value   string
 		want    time.Time
 		wantErr string
 	}{
 		{value: "2024-01-01T00:00:00Z", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{value: "2024-01-01T00:00:00+00:00", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{value: "2024-01-01T00:00:00.5Z", want: time.Date(2024, 1, 1, 0, 0, 0, 500_000_000, time.UTC)},
-		{value: "2024-01-01T02:00:00+02:00", wantErr: "offset +02:00 is not allowed"},
-		{value: "2023-12-31T19:00:00-05:00", wantErr: "offset -05:00 is not allowed"},
+		{value: "2024-01-01T02:00:00+02:00", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{value: "2024-01-01 00:00:00", wantErr: "cannot parse"},
 	} {
 		t.Run(tc.value, func(t *testing.T) {
 			conf := parseInputConf(t, fmt.Sprintf(`
@@ -371,7 +369,7 @@ timestamp_initial_value: %q
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tc.want, s.timestampHWM)
+			assert.True(t, tc.want.Equal(s.conf.timestampInitial), "got %v", s.conf.timestampInitial)
 		})
 	}
 }

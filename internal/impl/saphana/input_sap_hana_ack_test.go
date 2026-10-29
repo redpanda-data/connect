@@ -657,7 +657,7 @@ checkpoint_cache: %s
 	require.NoError(t, err)
 	resumed, err := s2.loadCheckpoint(t.Context())
 	require.NoError(t, err)
-	require.True(t, resumed, "a persisted incrementing HWM must be reported as resumed so the initial value is not re-applied")
+	require.True(t, resumed.incr, "a persisted incrementing HWM must be reported as resumed so the initial value is not re-applied")
 	require.Equal(t, int64(2), s2.hwm, "restarted input must resume from the persisted HWM")
 }
 
@@ -717,7 +717,7 @@ checkpoint_cache: %s
 	require.NoError(t, err)
 	resumed, err := s2.loadCheckpoint(t.Context())
 	require.NoError(t, err)
-	require.True(t, resumed)
+	require.True(t, resumed.incr)
 	require.Equal(t, k2, s2.hwm)
 }
 
@@ -759,8 +759,74 @@ func TestSAPHANAInputCheckpointAcceptsStateWithoutSource(t *testing.T) {
 	s, _ := newTestIncInput(t, res, 10)
 	resumed, err := s.loadCheckpoint(t.Context())
 	require.NoError(t, err)
-	require.True(t, resumed)
+	require.True(t, resumed.incr)
 	require.Equal(t, int64(7), s.hwm)
+}
+
+// timestamp_initial_value is compared against a TIMESTAMP column, which has no
+// timezone. An offset other than Z or +00:00 is ambiguous (the instant or the
+// wall clock), so a fresh start rejects it instead of silently shifting where
+// the input starts.
+func TestSAPHANAInputTimestampInitialValueOffsetOnConnect(t *testing.T) {
+	for _, tc := range []struct {
+		value   string
+		want    time.Time
+		wantErr string
+	}{
+		{value: "2024-01-01T00:00:00Z", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{value: "2024-01-01T00:00:00+00:00", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{value: "2024-01-01T02:00:00+02:00", wantErr: "offset +02:00 is not allowed"},
+		{value: "2023-12-31T19:00:00-05:00", wantErr: "offset -05:00 is not allowed"},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Log("Given: an empty checkpoint cache")
+			s, _ := newTestInput(t, enterpriseResourcesWithCache(), fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+timestamp_initial_value: %q
+checkpoint_cache: %s
+`, tc.value, testCacheName))
+
+			t.Log("When: the input restores its start position on connect")
+			err := s.restorePosition(t.Context(), s.db)
+
+			t.Log("Then: the offset is checked and the UTC value is the start HWM")
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, "timestamp_initial_value")
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, s.timestampHWM)
+		})
+	}
+}
+
+// A resumed pipeline ignores timestamp_initial_value, so an offset in it must
+// not stop the input from starting.
+func TestSAPHANAInputTimestampInitialValueOffsetIgnoredOnResume(t *testing.T) {
+	t.Log("Given: a checkpoint with a timestamp HWM and an initial value with a +02:00 offset")
+	res := enterpriseResourcesWithCache()
+	require.NoError(t, res.AccessCache(t.Context(), testCacheName, func(c service.Cache) {
+		require.NoError(t, c.Set(t.Context(), "sap_hana_hwm", []byte(`{"source":"\"T\"","ts_hwm":"2026-03-01T10:00:00Z"}`), nil))
+	}))
+	s, _ := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+timestamp_initial_value: "2024-01-01T02:00:00+02:00"
+checkpoint_cache: %s
+`, testCacheName))
+
+	t.Log("When: the input restores its start position on connect")
+	err := s.restorePosition(t.Context(), s.db)
+
+	t.Log("Then: the input resumes from the checkpoint")
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC), s.timestampHWM)
 }
 
 // A batch whose checkpoint registration fails (the context ends while the
