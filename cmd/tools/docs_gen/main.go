@@ -174,6 +174,13 @@ func (w *writer) connectJSON(version, date string) {
 	if err != nil {
 		panic(fmt.Errorf("finding the components only Redpanda Cloud runs: %w", err))
 	}
+	undocumented, err := undocumentedReport()
+	if err != nil {
+		panic(fmt.Errorf("finding the components that release builds have and docs_gen doesn't: %w", err))
+	}
+	for _, u := range undocumented {
+		fmt.Fprintf(os.Stderr, "warning: %v/%v is in the %v release builds but has no docs; it's listed under undocumented in %v\n", u.Type, u.Name, strings.Join(u.Builds, ", "), connectJSONPath(version))
+	}
 	raw, err := schema.Standard(version, date).MarshalJSONV0()
 	if err != nil {
 		panic(err)
@@ -182,7 +189,7 @@ func (w *writer) connectJSON(version, date string) {
 	if err != nil {
 		panic(err)
 	}
-	out, err := renderConnectJSON(raw, cloudRaw, w.platforms, cloudOnly)
+	out, err := renderConnectJSON(raw, cloudRaw, w.platforms, cloudOnly, undocumented)
 	if err != nil {
 		panic(err)
 	}

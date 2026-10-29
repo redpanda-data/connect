@@ -16,9 +16,13 @@ package main
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,10 +139,10 @@ func TestRenderCatalog(t *testing.T) {
 	assert.Contains(t, out, `"categories": []`, "empty lists stay arrays, not null")
 }
 
-// TestPlatformsFromBuilds lists the real standard and docs_gen builds with go
-// list and checks the components that build constraints are known to gate.
-// It needs a Go toolchain, so -short skips it. The docs task runs it with
-// x_benthos_extra, where it checks the exact cgo-only list.
+// TestPlatformsFromBuilds lists the real release builds with go list and
+// checks rules that hold for any correct result, rather than exact component
+// lists, so moving a component between distributions doesn't fail it. It
+// needs a Go toolchain, so -short skips it.
 func TestPlatformsFromBuilds(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs go list on the real builds")
@@ -148,32 +152,103 @@ func TestPlatformsFromBuilds(t *testing.T) {
 	plat, err := loadPlatforms(raw)
 	require.NoError(t, err)
 
-	assert.False(t, plat.get("inputs", "kafka_franz").CgoOnly)
-	assert.False(t, plat.get("processors", "a2a_message").CgoOnly, "Cloud-only isn't cgo-only")
-	gated := map[string]bool{"inputs/zmq4": true, "outputs/zmq4": true, "processors/ffi": true, "inputs/tigerbeetle_cdc": true}
-	for _, k := range plat.cgoOnlyKeys() {
-		assert.True(t, gated[k], "unexpected cgo-only component %v", k)
-	}
-	if builtWithAllComponents {
-		assert.Equal(t, []string{"inputs/tigerbeetle_cdc", "inputs/zmq4", "outputs/zmq4", "processors/ffi"}, plat.cgoOnlyKeys())
-	}
-
 	// These come from go list on the builds in .goreleaser, whatever tags
 	// this test runs with.
 	cgoOnly, err := cgoOnlyComponents()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]bool{"inputs/tigerbeetle_cdc": true, "inputs/zmq4": true, "outputs/zmq4": true, "processors/ffi": true}, cgoOnly)
 	cloudOnly, err := cloudOnlyComponents()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]bool{"processors/a2a_message": true}, cloudOnly)
 
-	// docs_gen documents only allcomponents, so a release build component it
-	// doesn't import would have no docs.
-	for _, name := range []string{standardRelease, cgoRelease, cloudRelease, cloudAIRelease} {
-		got, err := undocumentedComponents(name)
+	builds := map[string]map[string]bool{}
+	for _, name := range []string{standardRelease, cgoRelease, cloudRelease} {
+		b, err := readReleaseBuild(name)
 		require.NoError(t, err)
-		assert.Empty(t, got, "components the %v build registers and allcomponents doesn't", name)
+		builds[name] = buildRegistrations(t, b)
 	}
+	for k := range cloudOnly {
+		assert.True(t, builds[cloudRelease][k], "cloud-only %v isn't registered by the Cloud build", k)
+		assert.False(t, builds[standardRelease][k], "cloud-only %v is registered by the standard build", k)
+	}
+	for k := range cgoOnly {
+		assert.True(t, builds[cgoRelease][k], "cgo-only %v isn't registered by the cgo build", k)
+		assert.False(t, builds[standardRelease][k], "cgo-only %v is registered by the standard build", k)
+	}
+	for _, k := range plat.cgoOnlyKeys() {
+		assert.True(t, cgoOnly[k], "%v is cgo-only in the platform set but not in the cgo build comparison", k)
+	}
+
+	// Sentinels, to show that real builds were compared. If one of these
+	// components moves to another distribution, pick another sentinel.
+	assert.True(t, cloudOnly["processors/a2a_message"], "a2a_message is in the Cloud build only")
+	assert.True(t, cgoOnly["processors/ffi"], "ffi is in the cgo build only")
+	assert.False(t, plat.get("processors", "a2a_message").CgoOnly, "Cloud-only isn't cgo-only")
+
+	// The report of components without docs never fails the build; check
+	// only that it's well-formed.
+	report, err := undocumentedReport()
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	names := map[string]bool{}
+	for _, r := range releaseBuildNames {
+		names[r.name] = true
+	}
+	for _, u := range report {
+		assert.NotEmpty(t, u.Type)
+		assert.NotEmpty(t, u.Name)
+		require.NotEmpty(t, u.Builds)
+		for _, b := range u.Builds {
+			assert.True(t, names[b], "unknown build %q", b)
+		}
+	}
+}
+
+// buildRegistrations returns every component that a register call in the
+// connect or benthos files of build b names. It reads all of the build's
+// files, not only the ones another build lacks, and skips calls whose name it
+// can't read, so it checks the comparison independently of
+// registrationsOnlyIn.
+func buildRegistrations(t *testing.T, b releaseBuild) map[string]bool {
+	t.Helper()
+	files, err := b.files(b.main)
+	require.NoError(t, err)
+	modDirs, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", connectModule, "github.com/redpanda-data/benthos/v4").Output()
+	require.NoError(t, err)
+	mods := strings.Fields(string(modDirs))
+	keys := map[string]bool{}
+	fset := token.NewFileSet()
+	for path := range files {
+		inModule := false
+		for _, m := range mods {
+			inModule = inModule || strings.HasPrefix(path, m+string(filepath.Separator))
+		}
+		if !inModule || strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		require.NoError(t, err)
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "service" {
+				return true
+			}
+			group, ok := registerGroups[strings.TrimPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register")]
+			if !ok {
+				return true
+			}
+			if name, err := registeredName(call.Args[0], filepath.Dir(path), files, fset); err == nil {
+				keys[componentKey(group, name)] = true
+			}
+			return true
+		})
+	}
+	return keys
 }
 
 func TestFileRegistrations(t *testing.T) {

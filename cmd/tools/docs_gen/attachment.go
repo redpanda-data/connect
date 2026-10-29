@@ -33,9 +33,11 @@ func connectJSONPath(version string) string {
 // with the version and date, and on every component and config object
 // whether Redpanda Cloud runs it (cloudSupported) and whether only cgo builds
 // have it (requiresCgo). Components that the Cloud release build has and the
-// standard release build doesn't also get cloudOnly. raw is the docs_gen
-// schema, which has every component.
-func renderConnectJSON(raw, cloudRaw []byte, plat platformSet, cloudOnly map[string]bool) (string, error) {
+// standard release build doesn't also get cloudOnly. The top-level
+// undocumented field lists the components a release build registers and
+// docs_gen doesn't document, and is an empty array when there are none. raw is
+// the docs_gen schema, which has every component.
+func renderConnectJSON(raw, cloudRaw []byte, plat platformSet, cloudOnly map[string]bool, undocumented []undocumentedComponent) (string, error) {
 	var doc map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return "", err
@@ -87,6 +89,13 @@ func renderConnectJSON(raw, cloudRaw []byte, plat platformSet, cloudOnly map[str
 		c["requiresCgo"] = false
 	}
 	if doc["config"], err = marshalRaw(config); err != nil {
+		return "", err
+	}
+
+	if undocumented == nil {
+		undocumented = []undocumentedComponent{}
+	}
+	if doc["undocumented"], err = marshalRaw(undocumented); err != nil {
 		return "", err
 	}
 

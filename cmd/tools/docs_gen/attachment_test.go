@@ -46,7 +46,7 @@ func TestRenderConnectJSON(t *testing.T) {
 		componentKey("processors", "branch"): true,
 	}
 
-	out, err := renderConnectJSON(raw, cloudRaw, plat, cloudOnly)
+	out, err := renderConnectJSON(raw, cloudRaw, plat, cloudOnly, nil)
 	require.NoError(t, err)
 
 	var doc map[string]any
@@ -81,6 +81,13 @@ func TestRenderConnectJSON(t *testing.T) {
 	// Groups the schema doesn't have stay out of the file.
 	assert.NotContains(t, doc, "outputs")
 	assert.True(t, strings.HasSuffix(out, "}\n"))
+	// The field is always present, as an empty array when nothing is missing.
+	assert.Equal(t, []any{}, doc["undocumented"])
+
+	out, err = renderConnectJSON(raw, cloudRaw, plat, cloudOnly, []undocumentedComponent{{Type: "processors", Name: "x", Builds: []string{"cloud", "ai"}}})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(out), &doc))
+	assert.Equal(t, []any{map[string]any{"type": "processors", "name": "x", "builds": []any{"cloud", "ai"}}}, doc["undocumented"])
 }
 
 func TestConnectJSONPath(t *testing.T) {

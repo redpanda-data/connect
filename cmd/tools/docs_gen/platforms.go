@@ -249,6 +249,53 @@ func undocumentedComponents(name string) (map[string]bool, error) {
 	return registrationsOnlyIn(files, documented)
 }
 
+// undocumentedComponent is a component that one or more release builds
+// register and docs_gen doesn't document. Type is its schema group, such as
+// processors, and Builds names the release builds that have it.
+type undocumentedComponent struct {
+	Type   string   `json:"type"`
+	Name   string   `json:"name"`
+	Builds []string `json:"builds"`
+}
+
+// releaseBuildNames maps each release build that undocumentedReport checks to
+// the name the report uses for it.
+var releaseBuildNames = []struct{ file, name string }{
+	{standardRelease, "standard"},
+	{cgoRelease, "cgo"},
+	{cloudRelease, "cloud"},
+	{cloudAIRelease, "ai"},
+}
+
+// undocumentedReport returns the components that any release build registers
+// and docs_gen doesn't document, sorted by type and then name, and never nil.
+// It is a record for the docs side to warn on, not a check: nothing here
+// fails because a component lacks docs.
+func undocumentedReport() ([]undocumentedComponent, error) {
+	builds := map[string][]string{}
+	for _, r := range releaseBuildNames {
+		keys, err := undocumentedComponents(r.file)
+		if err != nil {
+			return nil, fmt.Errorf("%v: %w", r.file, err)
+		}
+		for k := range keys {
+			builds[k] = append(builds[k], r.name)
+		}
+	}
+	out := []undocumentedComponent{}
+	for k, b := range builds {
+		group, name, _ := strings.Cut(k, "/")
+		out = append(out, undocumentedComponent{Type: group, Name: name, Builds: b})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
 const connectModule = "github.com/redpanda-data/connect/v4"
 
 // moduleDir returns the directory of the module mod.
@@ -481,19 +528,8 @@ func loadPlatforms(full *fullSchema) (platformSet, error) {
 	if err != nil {
 		return platformSet{}, fmt.Errorf("finding cgo-only components: %w", err)
 	}
-	fullNames := componentNames(full)
-	var unknown []string
-	for k := range cgoOnly {
-		if !fullNames[k] {
-			unknown = append(unknown, k)
-		}
-	}
-	// A build without x_benthos_extra lacks the cgo-only components, so only a
-	// full build can check that docs_gen has each of them.
-	if len(unknown) > 0 && builtWithAllComponents {
-		sort.Strings(unknown)
-		return platformSet{}, fmt.Errorf("the cgo release build registers components the docs_gen build doesn't have: %v", strings.Join(unknown, ", "))
-	}
+	// A cgo-only component that docs_gen doesn't have is left out here and
+	// recorded by undocumentedReport instead.
 	standard := withoutComponents(full, cgoOnly)
 	cloud, err := marshalSchema(schema.Cloud("", "").MarshalJSONV0())
 	if err != nil {
