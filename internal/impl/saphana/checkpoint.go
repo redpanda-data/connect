@@ -113,14 +113,17 @@ type checkpointer struct {
 	clockOffsetNanos atomic.Int64
 	clockKnown       atomic.Bool
 	// lagHWM is the timestamp HWM that mLag measures from. refreshLag reads
-	// it. With checkpoint_cache it is the position a restart would resume
-	// from: seedLag sets it at Connect from the loaded checkpoint or
-	// timestamp_initial_value, and recordLag moves it only after a
-	// successful persist. Without checkpoint_cache a restart always resumes
-	// from timestamp_initial_value, so a gauge measured from that would grow
-	// forever and could not show a stall. persist then always succeeds, and
-	// lagHWM follows the acknowledged in-memory position instead. It is nil
-	// while there is no such position (no checkpoint, no initial value, no
+	// it. seedLag sets it at Connect from the loaded checkpoint, else
+	// timestamp_initial_value, and recordLag moves it after each resolved
+	// ack. With checkpoint_cache, recordLag runs only after a successful
+	// persist, so lagHWM is always the position a restart would resume from.
+	// Without checkpoint_cache, a restart always resumes from
+	// timestamp_initial_value. A gauge measured from that value for the whole
+	// run would grow forever and could not show a stall. So persist always
+	// succeeds, and lagHWM follows the acknowledged in-memory position. Before
+	// the first ack, that position is timestamp_initial_value, so the gauge
+	// shows the full lag from it, as on a first start with a cache. lagHWM is
+	// nil while there is no position (no checkpoint, no initial value and no
 	// resolved ack), and the gauge then stays unset.
 	lagHWM atomic.Pointer[time.Time]
 	// now is the host clock, replaced in tests.
@@ -239,11 +242,12 @@ func (c *checkpointer) observeDBClock(dbNow time.Time) {
 	c.refreshLag()
 }
 
-// seedLag sets the HWM lag gauge's start position at Connect, before any
-// checkpoint is persisted, so a restart into a stall shows a growing lag. A
-// zero hwm (no checkpoint and no timestamp_initial_value, or not a timestamp
-// mode) leaves the gauge unset. The gauge appears at the first poll, which
-// gives the database clock.
+// seedLag sets the HWM lag gauge's start position at Connect, before any ack
+// resolves, so a restart into a stall shows a growing lag. It also runs
+// without checkpoint_cache, where hwm is timestamp_initial_value (see
+// lagHWM). A zero hwm (no checkpoint and no timestamp_initial_value, or not a
+// timestamp mode) leaves the gauge unset. The gauge appears at the first
+// poll, which gives the database clock.
 func (c *checkpointer) seedLag(hwm time.Time) {
 	if hwm.IsZero() {
 		return
