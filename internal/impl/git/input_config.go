@@ -83,7 +83,7 @@ The following patterns are supported:
 
 - Glob patterns: `+"`"+`+*+`+"`"+`, `+"`"+`+/**/+`+"`"+`, `+"`"+`?`+"`"+`
 - Character ranges: `+"`"+`[a-z]`+"`"+`. Escape any character with a special meaning using a backslash.`).
-				ShortDescription("Glob patterns for files to exclude. These take precedence over `include_patterns`.").
+				ShortDescription("Glob patterns for files to exclude. These take precedence over include_patterns.").
 				Default([]any{}).
 				Optional(),
 			service.NewIntField("max_file_size").

@@ -275,7 +275,7 @@ Each query must project every column of the table's primary key (all columns of 
 		Default(1024),
 	).
 	Field(service.NewStringField(ociFieldPDBName).
-		Description("The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires `GRANT SET CONTAINER TO <user> CONTAINER=ALL`.").Version("4.88.0").
+		Description("The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via `SRC_CON_NAME` filtering and catalog queries use `ALTER SESSION SET CONTAINER` to switch context. Requires `GRANT SET CONTAINER TO <user> CONTAINER=ALL`.").Version("4.88.0").
 		ShortDescription("The name of the pluggable database (PDB) to monitor.").
 		Optional(),
 	).
