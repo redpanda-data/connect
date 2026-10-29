@@ -231,7 +231,7 @@ A table the publication streams with a row filter or a column list (PostgreSQL 1
 
 With ` + "`false`" + `, the publication decides what is streamed: every table it includes is replicated, whether or not it is listed in ` + "`" + fieldTables + "`" + `, and a table added with ` + "`ALTER PUBLICATION ... ADD TABLE`" + ` starts streaming without a restart. ` + "`" + fieldTables + "`" + ` then lists the tables that must be in the publication, the tables ` + "`" + fieldStreamSnapshot + "`" + ` reads, and the tables an incremental snapshot signal may name; leave it empty to accept whatever the publication includes. To add a table, add it to the publication first, then to ` + "`" + fieldTables + "`" + `, and request an incremental snapshot to backfill it if needed. To remove one, remove it from ` + "`" + fieldTables + "`" + ` first, then from the publication. An incremental snapshot signal naming a table the publication does not include is rejected.`).
 			Advanced().
-			Version("4.115.0").
+			Version("4.116.0").
 			Default(true)).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout after which an idle connection is refreshed to keep the connection alive.").
