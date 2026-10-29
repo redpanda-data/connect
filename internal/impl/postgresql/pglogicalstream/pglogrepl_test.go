@@ -30,9 +30,11 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 func TestLSNSuite(t *testing.T) {
@@ -245,10 +247,10 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
-	tables, err := GetPublicationTables(t.Context(), conn, publicationName)
+	tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.Empty(t, tables)
-	assert.True(t, publicationIsForAllTables(t, conn, publicationName))
+	assert.True(t, forAllTables)
 
 	multiReader := conn.Exec(t.Context(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
 	_, err = multiReader.ReadAll()
@@ -258,12 +260,27 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
-	tables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	// A FOR ALL TABLES publication lists every table, and is still reported
+	// as FOR ALL TABLES.
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.True(t, publicationIsForAllTables(t, conn, publicationName))
+	assert.True(t, forAllTables)
+
+	// A FOR ALL TABLES publication cannot be narrowed to a table list, so
+	// syncing it to one fails instead of streaming every table.
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"test_table"`}})
+	require.ErrorIs(t, err, errAllTablesPublication)
+	_, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	assert.True(t, forAllTables)
+
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	require.NoError(t, err)
+	assert.Len(t, tables, 1)
+	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
+	assert.False(t, forAllTables)
 
 	// Add more tables to publication
 	multiReader = conn.Exec(t.Context(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
@@ -277,13 +294,13 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 2)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
-	assert.False(t, publicationIsForAllTables(t, conn, publicationWithTables))
+	assert.False(t, forAllTables)
 
 	// Remove one table from the publication
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
@@ -291,12 +308,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
-	assert.False(t, publicationIsForAllTables(t, conn, publicationWithTables))
+	assert.False(t, forAllTables)
 
 	// Add one table and remove one at the same time
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
@@ -304,11 +321,11 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
-	assert.False(t, publicationIsForAllTables(t, conn, publicationWithTables))
+	assert.False(t, forAllTables)
 
 	// Create a schema with a quoted identifier
 	caseSensitiveSchema := `"FooBar"`
@@ -340,26 +357,30 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tables, err = GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
 	require.NoError(t, err)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
-	assert.False(t, publicationIsForAllTables(t, conn, publicationQuotedIdentifiers))
-}
+	assert.False(t, forAllTables)
 
-// publicationIsForAllTables reads pg_publication.puballtables, which is the
-// only reliable way to tell a FOR ALL TABLES publication from a FOR TABLE one:
-// pg_publication_tables lists every table for the former and nothing for the
-// latter once all of its members have been dropped.
-func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationName string) bool {
-	t.Helper()
-	q, err := sanitize.SQLQuery("SELECT puballtables FROM pg_publication WHERE pubname = $1;", publicationName)
+	// Without publish_via_partition_root, pg_publication_tables lists a
+	// partitioned table's partitions, not the table. Syncing against that
+	// view would try to drop partitions that are not members and to add the
+	// table that already is, failing every reconnect.
+	for _, sql := range []string{
+		"CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);",
+		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');",
+	} {
+		_, err = conn.Exec(t.Context(), sql).ReadAll()
+		require.NoError(t, err)
+	}
+	events := []TableFQN{{schema, `"events"`}}
+	require.NoError(t, CreatePublication(t.Context(), conn, "pub_partitioned", events))
+	require.NoError(t, CreatePublication(t.Context(), conn, "pub_partitioned", events), "a reconnect must not fail")
+	members, err := getPublicationMembers(t.Context(), conn, "pub_partitioned")
 	require.NoError(t, err)
-	rows, err := conn.Exec(t.Context(), q).ReadAll()
-	require.NoError(t, err)
-	require.Len(t, rows, 1)
-	require.Len(t, rows[0].Rows, 1, "publication %s must exist", publicationName)
-	return string(rows[0].Rows[0][0]) == "t"
+	assert.Equal(t, events, members, "the publication still lists exactly the partitioned table")
 }
 
 // An empty table list means "replicate every table". When the publication
@@ -398,7 +419,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
 
 		assert.True(t, publicationIsForAllTables(t, conn, pub))
-		tables, err := GetPublicationTables(ctx, conn, pub)
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Contains(t, tables, listed)
 		assert.Contains(t, tables, unlisted)
@@ -418,7 +439,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
 
 		assert.True(t, publicationIsForAllTables(t, conn, pub))
-		tables, err := GetPublicationTables(ctx, conn, pub)
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Contains(t, tables, listed)
 		assert.Contains(t, tables, unlisted)
@@ -432,7 +453,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{unlisted}))
 
 		assert.False(t, publicationIsForAllTables(t, conn, pub))
-		tables, err := GetPublicationTables(ctx, conn, pub)
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Equal(t, []TableFQN{unlisted}, tables)
 	})
@@ -447,7 +468,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{listed}))
 
 		assert.False(t, publicationIsForAllTables(t, conn, pub))
-		tables, err := GetPublicationTables(ctx, conn, pub)
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Equal(t, []TableFQN{listed}, tables)
 	})
@@ -494,10 +515,102 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 
 		// The failed recreation rolls back, so the publication is untouched.
 		assert.False(t, publicationIsForAllTables(t, conn, pub))
-		tables, err := GetPublicationTables(ctx, conn, pub)
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
 		require.NoError(t, err)
 		assert.Equal(t, []TableFQN{listed}, tables)
 	})
+}
+
+// publicationIsForAllTables reports pg_publication.puballtables for an
+// existing publication.
+func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationName string) bool {
+	t.Helper()
+	pub, err := getPublication(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	require.True(t, pub.exists, "publication %s must exist", publicationName)
+	return pub.allTables
+}
+
+// TestIntegrationBackfillRequiresTablePublishedAsItself checks the
+// incremental snapshot only accepts a table whose changes stream under its
+// own name, unfiltered, against the publication layouts a DBA can build.
+func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, dbURL := createDockerInstance(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	// A plain query connection, as the incremental snapshot uses.
+	db, err := sql.Open("postgres", strings.Replace(dbURL, " replication=database", "", 1))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.ExecContext(ctx, sql)
+		require.NoError(t, err)
+	}
+	exec("CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
+	exec("CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
+	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
+	exec("CREATE TABLE orders (id int PRIMARY KEY, note text);")
+
+	// The column list check is only built from PostgreSQL 15.
+	var versionNum int
+	require.NoError(t, db.QueryRowContext(ctx, "SHOW server_version_num").Scan(&versionNum))
+
+	newStream := func(slot string) *Stream {
+		return &Stream{
+			pgVersion:      versionNum / 10000,
+			slotName:       slot,
+			snapshotSchema: "public",
+			logger:         service.MockResources().Logger(),
+			incSnapshot: incrementalSnapshot{
+				conn:    db,
+				pkCache: map[string][]string{},
+			},
+		}
+	}
+	events := incrementalsnapshot.TableID{Schema: "public", Table: "events"}
+	events2027 := incrementalsnapshot.TableID{Schema: "public", Table: "events_2027"}
+	orders := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
+
+	// Every leaf is listed, so the parent counts as covered, but its changes
+	// stream under the leaf names even with publish_via_partition_root.
+	exec("CREATE PUBLICATION pglog_stream_leaves FOR TABLE events_2026, events_2027 WITH (publish_via_partition_root = true);")
+	s := newStream("leaves")
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	require.NoError(t, s.checkBackfillable(ctx, events2027), "a leaf listed as itself streams as itself")
+
+	// The root published via the root streams a leaf's changes as the root.
+	exec("CREATE PUBLICATION pglog_stream_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	s = newStream("root")
+	require.NoError(t, s.checkBackfillable(ctx, events))
+	err = s.checkBackfillable(ctx, events2027)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "under its own name")
+
+	// The root without the option streams under the leaf names.
+	exec("CREATE PUBLICATION pglog_stream_noroot FOR TABLE events;")
+	s = newStream("noroot")
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	require.NoError(t, s.checkBackfillable(ctx, events2027))
+
+	// A row filter or column list streams only part of the table.
+	exec("CREATE PUBLICATION pglog_stream_filtered FOR TABLE orders WHERE (id > 10);")
+	err = newStream("filtered").checkBackfillable(ctx, orders)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "row filter or a column list")
+	exec("CREATE PUBLICATION pglog_stream_columns FOR TABLE orders (id);")
+	require.ErrorIs(t, newStream("columns").checkBackfillable(ctx, orders), errSignalRejected)
+	exec("CREATE PUBLICATION pglog_stream_plain FOR TABLE orders;")
+	require.NoError(t, newStream("plain").checkBackfillable(ctx, orders))
+
+	// FOR ALL TABLES lists every table, partitions as leaves.
+	exec("CREATE PUBLICATION pglog_stream_all FOR ALL TABLES;")
+	s = newStream("all")
+	require.NoError(t, s.checkBackfillable(ctx, orders))
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
 }
 
 func TestIntegrationStartReplication(t *testing.T) {
