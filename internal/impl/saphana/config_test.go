@@ -9,8 +9,13 @@
 package saphana
 
 import (
+	"bytes"
+	"fmt"
+	"log/slog"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -60,6 +65,27 @@ dsn: hdb://user:pass@host:39017
 mode: incrementing
 table: MY_TABLE
 incrementing_column: ID
+`,
+		},
+		{
+			name: "negative timestamp_delay",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: MY_TABLE
+timestamp_column: TS
+timestamp_delay: -1s
+`,
+			errContains: "timestamp_delay",
+		},
+		{
+			name: "zero timestamp_delay",
+			yaml: `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: MY_TABLE
+timestamp_column: TS
+timestamp_delay: 0s
 `,
 		},
 		{
@@ -312,4 +338,79 @@ func TestSAPHANAInputTableRef(t *testing.T) {
 			require.Equal(t, tc.want, c.tableRef())
 		})
 	}
+}
+
+// timestamp_initial_value is compared against a TIMESTAMP column, which has no
+// timezone. An offset other than Z or +00:00 is ambiguous (the instant or the
+// wall clock), so it is rejected when the config is parsed instead of silently
+// shifting where the input starts.
+func TestSAPHANAInputTimestampInitialValueOffset(t *testing.T) {
+	for _, tc := range []struct {
+		value   string
+		want    time.Time
+		wantErr string
+	}{
+		{value: "2024-01-01T00:00:00Z", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{value: "2024-01-01T00:00:00+00:00", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{value: "2024-01-01T00:00:00.5Z", want: time.Date(2024, 1, 1, 0, 0, 0, 500_000_000, time.UTC)},
+		{value: "2024-01-01T02:00:00+02:00", wantErr: "offset +02:00 is not allowed"},
+		{value: "2023-12-31T19:00:00-05:00", wantErr: "offset -05:00 is not allowed"},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			conf := parseInputConf(t, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: MY_TABLE
+timestamp_column: TS
+timestamp_initial_value: %q
+`, tc.value))
+			s, err := newSAPHANAInput(conf, enterpriseResources())
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, "timestamp_initial_value")
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, s.timestampHWM)
+		})
+	}
+}
+
+// A polling mode without checkpoint_cache restarts from its initial value on
+// every redeploy, re-emitting history; that must not be silent.
+func TestSAPHANAInputWarnsWithoutCheckpointCache(t *testing.T) {
+	newLogged := func(t *testing.T, yaml string) string {
+		t.Helper()
+		var buf bytes.Buffer
+		logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, nil)))
+		res := service.MockResources(service.MockResourcesOptUseLogger(logger), service.MockResourcesOptAddCache("cp"))
+		license.InjectTestService(res)
+		_, err := newSAPHANAInput(parseInputConf(t, yaml), res)
+		require.NoError(t, err)
+		return buf.String()
+	}
+
+	logs := newLogged(t, `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: MY_TABLE
+incrementing_column: ID
+`)
+	assert.Contains(t, logs, "No checkpoint_cache is set")
+
+	logs = newLogged(t, `
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: MY_TABLE
+incrementing_column: ID
+checkpoint_cache: cp
+`)
+	assert.NotContains(t, logs, "checkpoint_cache")
+
+	logs = newLogged(t, `
+dsn: hdb://user:pass@host:39017
+mode: bulk
+table: MY_TABLE
+`)
+	assert.NotContains(t, logs, "checkpoint_cache", "bulk has no position to keep")
 }
