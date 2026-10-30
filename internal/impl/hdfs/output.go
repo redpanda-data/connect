@@ -17,6 +17,7 @@ package hdfs
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -88,8 +89,26 @@ type hdfsWriter struct {
 	directory *service.InterpolatedString
 	path      *service.InterpolatedString
 
-	client *hdfs.Client
+	client hdfsClient
 	log    *service.Logger
+}
+
+// hdfsClient is the subset of *hdfs.Client used by the output.
+type hdfsClient interface {
+	MkdirAll(dirname string, perm os.FileMode) error
+	Create(name string) (io.WriteCloser, error)
+}
+
+type hdfsClientAdapter struct {
+	*hdfs.Client
+}
+
+func (c hdfsClientAdapter) Create(name string) (io.WriteCloser, error) {
+	fw, err := c.Client.Create(name)
+	if err != nil {
+		return nil, err
+	}
+	return fw, nil
 }
 
 func (h *hdfsWriter) Connect(context.Context) error {
@@ -105,7 +124,7 @@ func (h *hdfsWriter) Connect(context.Context) error {
 		return err
 	}
 
-	h.client = client
+	h.client = hdfsClientAdapter{client}
 	return nil
 }
 
@@ -129,20 +148,26 @@ func (h *hdfsWriter) WriteBatch(_ context.Context, batch service.MessageBatch) e
 			return err
 		}
 
-		fw, err := h.client.Create(filePath)
-		if err != nil {
-			return err
-		}
-
 		mBytes, err := m.AsBytes()
 		if err != nil {
 			return err
 		}
 
-		if _, err := fw.Write(mBytes); err != nil {
+		fw, err := h.client.Create(filePath)
+		if err != nil {
 			return err
 		}
-		fw.Close()
+
+		if _, err := fw.Write(mBytes); err != nil {
+			_ = fw.Close()
+			return err
+		}
+
+		// Close flushes the last block and completes the file, so an error
+		// here means the file was not fully written.
+		if err := fw.Close(); err != nil {
+			return fmt.Errorf("closing file %v: %w", filePath, err)
+		}
 		return nil
 	})
 }
