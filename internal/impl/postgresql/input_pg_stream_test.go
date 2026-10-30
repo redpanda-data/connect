@@ -10,6 +10,7 @@ package pgstream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -649,15 +650,17 @@ batching:
 	require.Equal(t, []string{"0/25"}, acker.acked(), "acknowledging the earlier batch confirms through the filtered position")
 }
 
-func TestWithoutInfiniteTimes(t *testing.T) {
+func TestMapInfiniteTimes(t *testing.T) {
 	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	tests := []struct {
 		name string
+		mode string
 		row  any
 		want any
 	}{
 		{
-			name: "infinite values become nil",
+			name: "null",
+			mode: "as_null",
 			row: map[string]any{
 				"id":       1,
 				"valid_to": pglogicalstream.PositiveInfinity,
@@ -670,7 +673,32 @@ func TestWithoutInfiniteTimes(t *testing.T) {
 			},
 		},
 		{
+			name: "string",
+			mode: "as_string",
+			row: map[string]any{
+				"valid_to": pglogicalstream.PositiveInfinity,
+				"valid_on": pglogicalstream.NegativeInfinity,
+			},
+			want: map[string]any{
+				"valid_to": "infinity",
+				"valid_on": "-infinity",
+			},
+		},
+		{
+			name: "sentinel",
+			mode: "as_sentinel",
+			row: map[string]any{
+				"valid_to": pglogicalstream.PositiveInfinity,
+				"valid_on": pglogicalstream.NegativeInfinity,
+			},
+			want: map[string]any{
+				"valid_to": time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC),
+				"valid_on": time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+		{
 			name: "finite values and strings are kept",
+			mode: "as_sentinel",
 			row: map[string]any{
 				"valid_to": ts,
 				"note":     "infinity",
@@ -682,19 +710,35 @@ func TestWithoutInfiniteTimes(t *testing.T) {
 		},
 		{
 			name: "nil row is kept",
+			mode: "as_null",
 			row:  nil,
 			want: nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, withoutInfiniteTimes(tt.row))
+			to, err := infiniteTimeMapper(tt.mode)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, mapInfiniteTimes(tt.row, to))
 		})
 	}
 
 	t.Run("the input row is not changed", func(t *testing.T) {
+		to, err := infiniteTimeMapper("as_string")
+		require.NoError(t, err)
 		row := map[string]any{"valid_to": pglogicalstream.PositiveInfinity}
-		withoutInfiniteTimes(row)
+		mapInfiniteTimes(row, to)
 		require.Equal(t, map[string]any{"valid_to": pglogicalstream.PositiveInfinity}, row)
+	})
+
+	t.Run("sentinels marshal to JSON", func(t *testing.T) {
+		to, err := infiniteTimeMapper("as_sentinel")
+		require.NoError(t, err)
+		b, err := json.Marshal(mapInfiniteTimes(map[string]any{
+			"valid_to": pglogicalstream.PositiveInfinity,
+			"valid_on": pglogicalstream.NegativeInfinity,
+		}, to))
+		require.NoError(t, err)
+		require.JSONEq(t, `{"valid_to":"9999-12-31T23:59:59.999999Z","valid_on":"0001-01-01T00:00:00Z"}`, string(b))
 	})
 }

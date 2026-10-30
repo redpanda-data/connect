@@ -55,12 +55,19 @@ const (
 	fieldBatchTransactions         = "batch_transactions"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
+	fieldInfiniteTimestamps        = "infinite_timestamps"
 	fieldHeartbeatInterval         = "heartbeat_interval"
 	fieldSignalTableName           = "signal_table_name"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
 	shutdownTimeout        = 5 * time.Second
+
+	// The infinite_timestamps values. They are not "null" and similar, because
+	// YAML reads an unquoted null as no value.
+	infiniteTimestampsNull     = "as_null"
+	infiniteTimestampsString   = "as_string"
+	infiniteTimestampsSentinel = "as_sentinel"
 
 	fieldIncSnapshot                   = "incremental_snapshot"
 	fieldIncSnapshotEnabled            = "enabled"
@@ -126,7 +133,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | Number
 
 | ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
-| String in RFC 3339 format, or ` + "`null`" + ` for the infinite values (see Infinite dates and timestamps below)
+| String in RFC 3339 format. For the infinite values, see Infinite dates and timestamps below
 
 | ` + "`BYTEA`" + `
 | Base64-encoded string
@@ -166,7 +173,7 @@ Some rows cannot be marshalled to JSON, in practice because they hold a non-fini
 
 == Infinite dates and timestamps
 
-PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation, so both the snapshot and the stream deliver them as ` + "`null`" + `. A message does not show if a ` + "`null`" + ` value is a SQL ` + "`NULL`" + `, ` + "`infinity`" + `, or ` + "`-infinity`" + `.
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation. By default, both the snapshot and the stream deliver them as ` + "`null`" + `. To emit the strings or sentinel timestamps instead, set <<` + fieldInfiniteTimestamps + `,` + "`" + fieldInfiniteTimestamps + "`" + `>>.
 
 == Metrics
 
@@ -244,6 +251,16 @@ Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" +
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Optional().
+			Advanced()).
+		Field(service.NewStringAnnotatedEnumField(fieldInfiniteTimestamps, map[string]string{
+			infiniteTimestampsNull:     "Emit `null`. A `null` value does not show if the column is SQL `NULL`, `infinity`, or `-infinity`.",
+			infiniteTimestampsString:   "Emit the strings `\"infinity\"` and `\"-infinity\"`. PostgreSQL accepts them as input, so a PostgreSQL output stores the same value. An output that parses the column as a timestamp rejects them, for example `parquet_encode`, `schema_registry_encode` with Avro, `iceberg`, and `snowflake_streaming`.",
+			infiniteTimestampsSentinel: "Emit the timestamps `9999-12-31T23:59:59.999999Z` for `infinity` and `0001-01-01T00:00:00Z` for `-infinity`. Outputs that parse the column as a timestamp accept them. No other value that this input emits sorts after the `infinity` sentinel or before the `-infinity` sentinel. A consumer cannot tell them apart from the same finite values.",
+		}).
+			Description("Specify the value to emit for the PostgreSQL special values `infinity` and `-infinity` in `date`, `timestamp`, and `timestamptz` columns. They have no timestamp representation. The setting applies to the message and to the `before` metadata, on the snapshot and on the stream.").
+			ShortDescription("The value to emit for infinite dates and timestamps.").
+			Default(infiniteTimestampsNull).
+			Version("4.117.0").
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
 			Description("The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.\n\n" +
@@ -489,6 +506,14 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if batchTransactions, err = conf.FieldBool(fieldBatchTransactions); err != nil {
 		return nil, err
 	}
+	infiniteTimestamps, err := conf.FieldString(fieldInfiniteTimestamps)
+	if err != nil {
+		return nil, err
+	}
+	infiniteTime, err := infiniteTimeMapper(infiniteTimestamps)
+	if err != nil {
+		return nil, err
+	}
 	batching, batchingConfigured, err := resolveBatchingPolicy(batching, batchTransactions)
 	if err != nil {
 		return nil, err
@@ -591,6 +616,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching:           batching,
 		batchingConfigured: batchingConfigured,
 		batchTransactions:  batchTransactions,
+		infiniteTime:       infiniteTime,
 		checkpointLimit:    checkpointLimit,
 		msgChan:            make(chan asyncMessage),
 
@@ -685,7 +711,11 @@ type pgStreamInput struct {
 	batching           service.BatchPolicy
 	batchingConfigured bool
 	batchTransactions  bool
-	checkpointLimit    int
+	// infiniteTime maps each pglogicalstream.InfiniteTime value to the value
+	// the message carries, as set by infinite_timestamps. The build of each
+	// message calls it through mapInfiniteTimes.
+	infiniteTime    func(pglogicalstream.InfiniteTime) any
+	checkpointLimit int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
@@ -872,8 +902,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
-				msg.Data = withoutInfiniteTimes(msg.Data)
-				msg.BeforeData = withoutInfiniteTimes(msg.BeforeData)
+				msg.Data = mapInfiniteTimes(msg.Data, p.infiniteTime)
+				msg.BeforeData = mapInfiniteTimes(msg.BeforeData, p.infiniteTime)
 
 				var marshalErr error
 				if mb, marshalErr = json.Marshal(msg.Data); marshalErr != nil {
@@ -1354,25 +1384,52 @@ func (p *pgStreamInput) Close(ctx context.Context) error {
 	return nil
 }
 
-// withoutInfiniteTimes returns the row with each infinite date or timestamp
-// value set to nil, which is how the stream has always emitted them. The
-// decoders keep pglogicalstream.InfiniteTime until here so that the snapshot
-// keys stay exact. It copies the row only when it changes a value, because the
-// decoder may still hold the original map.
-func withoutInfiniteTimes(row any) any {
+// Sentinel timestamps for infinite_timestamps: sentinel. They are the largest
+// and the smallest times that encoding/json and Snowflake accept: a time.Time
+// outside the years 0 to 9999 fails to marshal, and Snowflake rejects years
+// outside 1 to 9999.
+var (
+	positiveInfinitySentinel = time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)
+	negativeInfinitySentinel = time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
+)
+
+// infiniteTimeMapper returns the mapping for an infinite_timestamps value.
+func infiniteTimeMapper(mode string) (func(pglogicalstream.InfiniteTime) any, error) {
+	switch mode {
+	case infiniteTimestampsNull:
+		return func(pglogicalstream.InfiniteTime) any { return nil }, nil
+	case infiniteTimestampsString:
+		return func(t pglogicalstream.InfiniteTime) any { return string(t) }, nil
+	case infiniteTimestampsSentinel:
+		return func(t pglogicalstream.InfiniteTime) any {
+			if t == pglogicalstream.NegativeInfinity {
+				return negativeInfinitySentinel
+			}
+			return positiveInfinitySentinel
+		}, nil
+	}
+	return nil, fmt.Errorf("unknown %s value %q", fieldInfiniteTimestamps, mode)
+}
+
+// mapInfiniteTimes returns the row with each infinite date or timestamp value
+// replaced by to(value). The decoders keep pglogicalstream.InfiniteTime until
+// here so that the snapshot keys stay exact. It copies the row only when it
+// changes a value, because the decoder may still hold the original map.
+func mapInfiniteTimes(row any, to func(pglogicalstream.InfiniteTime) any) any {
 	m, ok := row.(map[string]any)
 	if !ok {
 		return row
 	}
 	var out map[string]any
 	for k, v := range m {
-		if _, ok := v.(pglogicalstream.InfiniteTime); !ok {
+		t, ok := v.(pglogicalstream.InfiniteTime)
+		if !ok {
 			continue
 		}
 		if out == nil {
 			out = maps.Clone(m)
 		}
-		out[k] = nil
+		out[k] = to(t)
 	}
 	if out == nil {
 		return m
