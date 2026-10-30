@@ -133,8 +133,9 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.LOCK_TABLE_STATS('%s', '%s'); END;", db.Schema, table))
 	}
 
-	// Wait for DDL changes to settle in Oracle's redo logs before taking snapshots.
-	time.Sleep(2 * time.Second)
+	waitForFlashbackReads(t, db,
+		"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test",
+		"chunk_string_key_test", "chunk_no_stats_test", "chunk_no_stats_numeric_test", "chunk_unenforced_key_test")
 
 	t.Run("SinglePrimaryKey", func(t *testing.T) {
 		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_SINGLE_KEY_TEST"}
@@ -325,8 +326,7 @@ func TestIntegrationSnapshotChunkedCDB(t *testing.T) {
 	pdbDB.MustExec("INSERT INTO "+pdbDB.Schema+".chunk_pdb_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1", chunkedTableRows)
 	pdbDB.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.GATHER_TABLE_STATS('%s', 'CHUNK_PDB_TEST'); END;", pdbDB.Schema))
 
-	// Wait for DDL changes to settle in Oracle's redo logs before taking snapshots.
-	time.Sleep(2 * time.Second)
+	waitForFlashbackReads(t, pdbDB, "chunk_pdb_test")
 
 	table := replication.UserTable{Schema: pdbDB.Schema, Name: "CHUNK_PDB_TEST"}
 	snapshot, publisher, logs := newChunkedSnapshot(t, connStr, pdbName, table)
@@ -350,6 +350,21 @@ func createChunkedTable(t *testing.T, db *oracledbtest.TestDB, table, createQuer
 	t.Helper()
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+"."+table, createQuery))
 	db.MustExec(insertQuery, chunkedTableRows)
+}
+
+// waitForFlashbackReads waits until each table in db.Schema can be read AS OF the current
+// SCN. Oracle raises ORA-01466 for a flashback read at an SCN too close to the table's
+// CREATE TABLE, so a snapshot taken straight after creating the tables can fail.
+func waitForFlashbackReads(t *testing.T, db *oracledbtest.TestDB, tables ...string) {
+	t.Helper()
+	for _, table := range tables {
+		require.EventuallyWithTf(t, func(c *assert.CollectT) {
+			var scn uint64
+			require.NoError(c, db.QueryRowContext(t.Context(), `SELECT CURRENT_SCN FROM V$DATABASE`).Scan(&scn))
+			var n int
+			require.NoError(c, db.QueryRowContext(t.Context(), fmt.Sprintf("SELECT COUNT(*) FROM %s.%s AS OF SCN %d WHERE ROWNUM = 1", db.Schema, table, scn)).Scan(&n))
+		}, 30*time.Second, 500*time.Millisecond, "Expected table %s.%s to be readable with a flashback query", db.Schema, table)
+	}
 }
 
 // newChunkedSnapshot returns a snapshot of tables whose Info-level logs are captured, so
