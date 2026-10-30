@@ -156,7 +156,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
 			return fmt.Sprint(row["ID"])
 		}, strconv.Itoa)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 			if row := msg.Data.(map[string]any); row["ID"] == int64(100) {
 				assert.NotEqual(t, "changed", row["DATA"], "Expected the row as of the snapshot SCN, not the later update")
@@ -277,7 +277,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		assert.Equal(t, chunkedTableRows+unenforcedNullKeyRows+unenforcedDuplicateKeyRows, publisher.count())
 
 		var nullKeys, duplicateKeys int
-		for _, msg := range publisher.messages {
+		for _, msg := range publisher.messagesCopy() {
 			row, ok := msg.Data.(map[string]any)
 			require.Truef(t, ok, "Expected message data to be a map[string]any, got %T", msg.Data)
 			switch row["DATA"] {
@@ -396,11 +396,10 @@ func paddedKey(i int) string {
 // a page re-read).
 func assertEveryKeyOnce(t *testing.T, publisher *publisherStub, n int, gotKey func(row map[string]any) string, wantKey func(i int) string) {
 	t.Helper()
-	publisher.mu.Lock()
-	defer publisher.mu.Unlock()
+	msgs := publisher.messagesCopy()
 
-	seen := make(map[string]int, len(publisher.messages))
-	for _, msg := range publisher.messages {
+	seen := make(map[string]int, len(msgs))
+	for _, msg := range msgs {
 		row, ok := msg.Data.(map[string]any)
 		require.Truef(t, ok, "Expected message data to be a map[string]any, got %T", msg.Data)
 		seen[gotKey(row)]++
@@ -423,7 +422,7 @@ func assertEveryKeyOnce(t *testing.T, publisher *publisherStub, n int, gotKey fu
 		unexpected = append(unexpected, k)
 	}
 
-	assert.Len(t, publisher.messages, n, "Expected exactly one message per row")
+	assert.Len(t, msgs, n, "Expected exactly one message per row")
 	assert.Empty(t, missing, "Expected no rows to be missing")
 	assert.Empty(t, duplicated, "Expected no rows to be published more than once")
 	assert.Empty(t, unexpected, "Expected no rows outside the snapshot")
