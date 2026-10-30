@@ -408,9 +408,9 @@ func TestIntegrationPostgresInfiniteTimestamps(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.mode, func(t *testing.T) {
 			table := "validity_" + tt.mode
-			db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp);", table))
-			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (1, now(), now()::date, now()::timestamp);", table))
-			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (2, 'infinity', '-infinity', 'infinity');", table))
+			db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp, valid_days date[]);", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (1, now(), now()::date, now()::timestamp, ARRAY[now()::date]);", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (2, 'infinity', '-infinity', 'infinity', '{infinity,-infinity}');", table))
 
 			template := fmt.Sprintf(`
 pg_stream:
@@ -465,7 +465,7 @@ pg_stream:
 			}, 30*time.Second, 100*time.Millisecond, "the snapshot must deliver both rows, the infinite one included")
 
 			// Streamed after the snapshot, so this row goes through the pgoutput decoder.
-			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (3, '-infinity', 'infinity', '-infinity');", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (3, '-infinity', 'infinity', '-infinity', '{-infinity,infinity}');", table))
 
 			require.Eventually(t, func() bool {
 				receivedMu.Lock()
@@ -482,17 +482,19 @@ pg_stream:
 
 			require.Equal(t, float64(2), got[1]["id"])
 			require.Equal(t, map[string]any{
-				"id":       float64(2),
-				"valid_to": tt.positiveInfinity,
-				"valid_on": tt.negativeInfinity,
-				"valid_ts": tt.positiveInfinity,
+				"id":         float64(2),
+				"valid_to":   tt.positiveInfinity,
+				"valid_on":   tt.negativeInfinity,
+				"valid_ts":   tt.positiveInfinity,
+				"valid_days": []any{tt.positiveInfinity, tt.negativeInfinity},
 			}, got[1], "snapshot")
 
 			require.Equal(t, map[string]any{
-				"id":       float64(3),
-				"valid_to": tt.negativeInfinity,
-				"valid_on": tt.positiveInfinity,
-				"valid_ts": tt.negativeInfinity,
+				"id":         float64(3),
+				"valid_to":   tt.negativeInfinity,
+				"valid_on":   tt.positiveInfinity,
+				"valid_ts":   tt.negativeInfinity,
+				"valid_days": []any{tt.negativeInfinity, tt.positiveInfinity},
 			}, got[2], "stream")
 
 			// With REPLICA IDENTITY FULL the update carries the old row, infinite
@@ -539,23 +541,52 @@ pg_stream:
 // the last key back as a query argument (the incremental snapshot also passes
 // the max key, which is infinity here), so the decoders must keep the exact
 // infinite value: a nil key after the -infinity row would end the scan there.
+// A date array key goes back as a []any with InfiniteTime elements.
 func TestIntegrationPostgresInfinitePrimaryKeySnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	for _, keyType := range []string{"date", "timestamp", "timestamptz"} {
+	keys := []struct {
+		// name is the subtest and table name part.
+		name    string
+		keyType string
+		// rows holds three rows named first, middle and last, in key order.
+		rows string
+	}{
+		{
+			name:    "date",
+			keyType: "date",
+			rows:    "('-infinity', 'first'), ('2026-01-02', 'middle'), ('infinity', 'last')",
+		},
+		{
+			name:    "timestamp",
+			keyType: "timestamp",
+			rows:    "('-infinity', 'first'), ('2026-01-02', 'middle'), ('infinity', 'last')",
+		},
+		{
+			name:    "timestamptz",
+			keyType: "timestamptz",
+			rows:    "('-infinity', 'first'), ('2026-01-02', 'middle'), ('infinity', 'last')",
+		},
+		{
+			name:    "date_array",
+			keyType: "date[]",
+			rows:    "('{-infinity}', 'first'), ('{2026-01-02,infinity}', 'middle'), ('{infinity}', 'last')",
+		},
+	}
+	for _, key := range keys {
 		for _, incremental := range []bool{false, true} {
 			mode := "initial"
 			if incremental {
 				mode = "incremental"
 			}
-			t.Run(keyType+"/"+mode, func(t *testing.T) {
-				table := fmt.Sprintf("validity_pk_%s_%s", keyType, mode)
+			t.Run(key.name+"/"+mode, func(t *testing.T) {
+				table := fmt.Sprintf("validity_pk_%s_%s", key.name, mode)
 				slot := "test_slot_" + table
-				db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (valid_from %s PRIMARY KEY, name text);", table, keyType))
-				db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES ('-infinity', 'first'), ('2026-01-02', 'middle'), ('infinity', 'last');", table))
+				db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (valid_from %s PRIMARY KEY, name text);", table, key.keyType))
+				db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES %s;", table, key.rows))
 
 				snapshotYAML := `
     stream_snapshot: true
