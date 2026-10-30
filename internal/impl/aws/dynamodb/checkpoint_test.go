@@ -37,6 +37,7 @@ type fakeCheckpointAPI struct {
 	putItem       func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 	updateItem    func(context.Context, *dynamodb.UpdateItemInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error)
 	query         func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
+	deleteItem    func(context.Context, *dynamodb.DeleteItemInput, ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
 }
 
 func (f *fakeCheckpointAPI) DescribeTable(ctx context.Context, in *dynamodb.DescribeTableInput, o ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
@@ -65,6 +66,10 @@ func (f *fakeCheckpointAPI) UpdateItem(ctx context.Context, in *dynamodb.UpdateI
 
 func (f *fakeCheckpointAPI) Query(ctx context.Context, in *dynamodb.QueryInput, o ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 	return f.query(ctx, in, o...)
+}
+
+func (f *fakeCheckpointAPI) DeleteItem(ctx context.Context, in *dynamodb.DeleteItemInput, o ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
+	return f.deleteItem(ctx, in, o...)
 }
 
 func checkpointTestLogger() *service.Logger { return service.MockResources().Logger() }
@@ -603,7 +608,7 @@ func TestSnapshotCheckpoints_UseNamespacedHashValue(t *testing.T) {
 	require.Equal(t, "dev-alice#arn:A", queryIn.ExpressionAttributeValues[":hash"].(*types.AttributeValueMemberS).Value,
 		"snapshot segment query must use the namespaced hash value")
 
-	require.NoError(t, c.UpdateSnapshotProgress(context.Background(), 3, nil, 42))
+	require.NoError(t, c.UpdateSnapshotProgress(context.Background(), 3, 0, nil, 42))
 	require.Equal(t, "dev-alice#arn:A", putIn.Item["StreamArn"].(*types.AttributeValueMemberS).Value,
 		"snapshot segment writes must use the namespaced hash value")
 	require.Equal(t, "snapshot#segment#3", putIn.Item[checkpointRangeKey].(*types.AttributeValueMemberS).Value)

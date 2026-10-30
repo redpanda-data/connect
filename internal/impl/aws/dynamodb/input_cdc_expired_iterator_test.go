@@ -411,11 +411,17 @@ type readerHarness struct {
 	// shardReaders is the reader-state map the harnessed entry point consults
 	// (d.shardReaders for single-table, ts.shardReaders for multi-table).
 	shardReaders map[string]*dynamoDBShardReader
-	start        func(ctx context.Context)
+	// ts is the multi-table tableStream, or nil for the single-table harness.
+	ts    *tableStream
+	start func(ctx context.Context)
 	// completed reports whether the harnessed entry point recorded shard-001
 	// as read to the end of its closed shard.
 	completed func() bool
 }
+
+// tableStream returns the harness's multi-table tableStream, or nil for the
+// single-table harness.
+func (h *readerHarness) tableStream() *tableStream { return h.ts }
 
 // readerHarnesses returns one fresh harness factory per reader entry point,
 // serving the given records page. Each factory builds its own stub transport
@@ -455,7 +461,7 @@ func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointL
 				recordBatcher: batcher,
 				shardReaders:  shardReaders,
 			}
-			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
+			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, ts: ts, start: func(ctx context.Context) {
 				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
 			}, completed: func() bool {
 				ts.mu.RLock()
