@@ -115,7 +115,7 @@ Messages with an empty or whitespace-only body (Kafka/Redpanda tombstones, typic
 [[choosing-a-channel-name]]
 == Choosing a `+"`"+ssopFieldChannelName+"`"+`
 
-By default every message shares one constant channel, `+"`<database>.<schema>.<pipe>`"+`. Set `+"`"+ssopFieldChannelName+"`"+` to split that up, most commonly one channel per Kafka/Redpanda partition.
+By default every message shares one constant channel, `+"`<database-name>.<schema-name>.<pipe-name>`"+`, where `+"`<database-name>`"+` and `+"`<schema-name>`"+` are the `+"`database`"+` and `+"`schema`"+` values in upper case and `+"`<pipe-name>`"+` is the `+"`pipe`"+` value as written. Set `+"`"+ssopFieldChannelName+"`"+` to split that up, most commonly one channel per Kafka/Redpanda partition.
 
 *The requirement:* a channel must be written by one ordered source with at most one batch in flight. `+"`"+ssopFieldOffsetToken+"`"+` dedup compares each token against the channel's single last-committed token and cannot tell "already committed by me" from "an unrelated writer got ahead of me", so two token sequences sharing a channel lose rows silently.
 
@@ -123,8 +123,10 @@ By default every message shares one constant channel, `+"`<database>.<schema>.<p
 
 [source,yaml]
 ----
-channel_name: "<pipe>-p${! @kafka_partition }"
+channel_name: "<pipe-name>-p${! @kafka_partition }"
 ----
+
+Replace `+"`<pipe-name>`"+` with the name of your Snowflake pipe, the `+"`pipe`"+` value. Each partition then writes through its own channel, such as `+"`MY_PIPE-p0`"+`.
 
 This is safe at any `+"`max_in_flight`"+` only if the input dispatches one batch per partition at a time. The `+"`redpanda`"+` input does (unless `+"`unordered.enabled`"+` is set); `+"`kafka_franz`"+` and `+"`kafka`"+` do not by default (`+"`checkpoint_limit`"+` is 1024), so set `+"`checkpoint_limit: 1`"+` there or `+"`max_in_flight: 1`"+` here. If the input consumes several topics, include `+"`${! @kafka_topic }`"+` in the name too. Never derive the name from the host: after a rebalance the new owner would start a channel with no committed history and re-send everything.
 
@@ -177,7 +179,7 @@ Each batch is one request per channel. Request bodies are zstd-compressed by def
 			service.NewInterpolatedStringField(ssopFieldChannelName).
 				Description(`The channel to write through. Resolved per message: a batch is grouped by channel name (preserving order within each group) and each group is appended, deduplicated when `+"`"+ssopFieldOffsetToken+"`"+` is set, and committed separately, so batch at the input so that a batch spans as few channels as possible. Two instances writing the same channel name conflict.
 
-Defaults to a single constant channel, `+"`<database>.<schema>.<pipe>`"+`. See <<choosing-a-channel-name,Choosing a `+"`"+ssopFieldChannelName+"`"+`>> for when that is safe and the per-partition pattern for Kafka/Redpanda inputs.`).
+Defaults to a single constant channel, `+"`<database-name>.<schema-name>.<pipe-name>`"+`: the `+"`database`"+` and `+"`schema`"+` values in upper case and the `+"`pipe`"+` value as written. See <<choosing-a-channel-name,Choosing a `+"`"+ssopFieldChannelName+"`"+`>> for when that is safe and the per-partition pattern for Kafka/Redpanda inputs.`).
 				Optional().
 				Advanced().
 				Examples(`MYDB.PUBLIC.BETS_PIPE-p${!@kafka_partition}`),
@@ -242,7 +244,7 @@ The same policy applies to a message this output cannot send at all: one that sp
 		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
   !this.exists("private_key") && !this.exists("private_key_file") => [ "exactly one of `+"`private_key`"+` or `+"`private_key_file`"+` must be set" ],
-  this.exists("offset_token") && this.offset_token.string().contains("kafka_offset") && !(this.exists("channel_name") && this.channel_name.string().contains("kafka_partition")) => [ "`+"`offset_token`"+` uses the per-partition `+"`@kafka_offset`"+` but `+"`channel_name`"+` does not scope the channel per partition (e.g. `+"`<pipe>-p${! @kafka_partition }`"+`): every partition's offsets would be compared against one shared committed token and rows would be silently dropped as duplicates. Include `+"`@kafka_partition`"+` in `+"`channel_name`"+`, or remove `+"`offset_token`"+` for at-least-once delivery" ],
+  this.exists("offset_token") && this.offset_token.string().contains("kafka_offset") && !(this.exists("channel_name") && this.channel_name.string().contains("kafka_partition")) => [ "`+"`offset_token`"+` uses the per-partition `+"`@kafka_offset`"+` but `+"`channel_name`"+` does not scope the channel per partition (e.g. `+"`<pipe-name>-p${! @kafka_partition }`"+`): every partition's offsets would be compared against one shared committed token and rows would be silently dropped as duplicates. Include `+"`@kafka_partition`"+` in `+"`channel_name`"+`, or remove `+"`offset_token`"+` for at-least-once delivery" ],
   this.exists("offset_token") && !this.exists("channel_name") && (!this.exists("max_in_flight") || this.max_in_flight > 1) => [ "`+"`offset_token`"+` is set with the default single shared channel (no `+"`channel_name`"+`), so `+"`max_in_flight`"+` must be 1 (its default is 4): more than one batch in flight to one channel can arrive out of offset order, which exactly-once dedup then treats as duplicates. Set `+"`max_in_flight: 1`"+`, or give `+"`channel_name`"+` a per-partition value" ],
 }`).
 		Example(
