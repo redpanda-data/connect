@@ -147,7 +147,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | ` + "`TEXT`" + `, ` + "`VARCHAR`" + `, ` + "`UUID`" + `, ` + "`TIME`" + `, ` + "`TIMETZ`" + `
 | String
 
-| ` + "`INTEGER[]`" + `, ` + "`TEXT[]`" + `
+| ` + "`INTEGER[]`" + `, ` + "`TEXT[]`" + `, ` + "`DATE[]`" + `, ` + "`TIMESTAMP[]`" + `, ` + "`TIMESTAMPTZ[]`" + `
 | Array, for example ` + "`[1,2,3]`" + ` or ` + "`[\"a\",\"b\"]`" + `
 
 | ` + "`INET`" + `
@@ -176,7 +176,7 @@ Some rows cannot be marshalled to JSON, in practice because they hold a non-fini
 
 == Infinite dates and timestamps
 
-PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation. By default, both the snapshot and the stream deliver them as ` + "`null`" + `. To emit the strings or sentinel timestamps instead, set <<` + fieldInfiniteTimestamps + `,` + "`" + fieldInfiniteTimestamps + "`" + `>>. This setting does not apply to intervals and ranges, which keep ` + "`infinity`" + ` in their PostgreSQL text form.
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns and in arrays of these types, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation. By default, both the snapshot and the stream deliver them as ` + "`null`" + `. To emit the strings or sentinel timestamps instead, set <<` + fieldInfiniteTimestamps + `,` + "`" + fieldInfiniteTimestamps + "`" + `>>. This setting does not apply to intervals and ranges, which keep ` + "`infinity`" + ` in their PostgreSQL text form.
 
 == Metrics
 
@@ -260,7 +260,7 @@ Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" +
 			infiniteTimestampsString:   "Emit the strings `\"infinity\"` and `\"-infinity\"`. PostgreSQL accepts them as input, so a PostgreSQL output stores the same value. An output that parses the column as a timestamp rejects them, for example `parquet_encode`, `schema_registry_encode` with Avro, `iceberg`, and `snowflake_streaming`.",
 			infiniteTimestampsSentinel: "Emit the timestamps `9999-12-31T23:59:59.999999Z` for `infinity` and `0001-01-01T00:00:00Z` for `-infinity`. Outputs that parse the column as a timestamp accept them. No other value that this input emits sorts after the `infinity` sentinel or before the `-infinity` sentinel. A consumer cannot tell them apart from the same finite values.",
 		}).
-			Description("Specify the value to emit for the PostgreSQL special values `infinity` and `-infinity` in `date`, `timestamp`, and `timestamptz` columns. They have no timestamp representation. The setting applies to the message and to the `before` metadata, on the snapshot and on the stream.").
+			Description("Specify the value to emit for the PostgreSQL special values `infinity` and `-infinity` in `date`, `timestamp`, and `timestamptz` columns and in arrays of these types. They have no timestamp representation. The setting applies to the message and to the `before` metadata, on the snapshot and on the stream.").
 			ShortDescription("The value to emit for infinite dates and timestamps.").
 			Default(infiniteTimestampsNull).
 			Version("4.117.0").
@@ -1416,24 +1416,40 @@ func infiniteTimeMapper(mode string) (func(pglogicalstream.InfiniteTime) any, er
 }
 
 // mapInfiniteTimes returns the row with each infinite date or timestamp value
-// replaced by to(value). The decoders keep pglogicalstream.InfiniteTime until
-// here so that the snapshot keys stay exact. It copies the row only when it
-// changes a value, because the decoder may still hold the original map.
+// replaced by to(value), also inside date and timestamp arrays. The decoders
+// keep pglogicalstream.InfiniteTime until here so that the snapshot keys stay
+// exact. It copies the row and an array only when it changes a value, because
+// the decoder may still hold the originals.
 func mapInfiniteTimes(row any, to func(pglogicalstream.InfiniteTime) any) any {
 	m, ok := row.(map[string]any)
 	if !ok {
 		return row
 	}
 	var out map[string]any
-	for k, v := range m {
-		t, ok := v.(pglogicalstream.InfiniteTime)
-		if !ok {
-			continue
-		}
+	set := func(k string, v any) {
 		if out == nil {
 			out = maps.Clone(m)
 		}
-		out[k] = to(t)
+		out[k] = v
+	}
+	for k, v := range m {
+		switch v := v.(type) {
+		case pglogicalstream.InfiniteTime:
+			set(k, to(v))
+		case []any:
+			var arr []any
+			for i, e := range v {
+				if t, ok := e.(pglogicalstream.InfiniteTime); ok {
+					if arr == nil {
+						arr = slices.Clone(v)
+					}
+					arr[i] = to(t)
+				}
+			}
+			if arr != nil {
+				set(k, arr)
+			}
+		}
 	}
 	if out == nil {
 		return m

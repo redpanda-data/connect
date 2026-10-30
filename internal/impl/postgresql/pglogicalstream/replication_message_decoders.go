@@ -228,6 +228,22 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 			return canonical, nil
 		case "date", "timestamp", "timestamptz":
 			return decodedTimeValue(val)
+		case "_date", "_timestamp", "_timestamptz":
+			// pgx decodes the elements as for a scalar column, so an infinite
+			// element is a pgtype.InfinityModifier, which marshals to 1 or -1.
+			elems, ok := val.([]any)
+			if !ok {
+				return nil, fmt.Errorf("unexpected decoded value of type %T for a date or timestamp array column", val)
+			}
+			for i, e := range elems {
+				if e == nil {
+					continue
+				}
+				if elems[i], err = decodedTimeValue(e); err != nil {
+					return nil, err
+				}
+			}
+			return elems, nil
 		case "time":
 			// Return the raw PostgreSQL text representation as a string,
 			// avoiding pgtype.Time struct.
