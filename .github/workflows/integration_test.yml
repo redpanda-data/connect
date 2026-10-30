@@ -130,14 +130,20 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         id: detect
         run: |
+          CHANGED=$(git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD)
           FILTERS=$(
-            git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD \
+            printf '%s\n' "${CHANGED}" \
               | { grep '^internal/impl/' || true; } \
               | cut -d/ -f3 \
               | sort -u \
               | tr '\n' ' '
           )
           echo "filters=${FILTERS}" >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "${CHANGED}" | grep -qxE 'go\.(mod|sum)'; then
+            echo "go_mod=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go_mod=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install Go
         uses: actions/setup-go@v6
@@ -157,14 +163,42 @@ jobs:
       - name: Verify Integration Tests Registry
         run: task test:integration:verify
 
+      # On a pull request the filter is the list of changed internal/impl/
+      # packages. An empty filter means every package in packages.json, which
+      # does not fit the 30-minute budget, so a pull request never runs it:
+      # - go.mod and go.sum unchanged: skip and say so in the summary
+      #   (workflow, docs and tooling changes).
+      # - go.mod or go.sum changed: fail and ask for /integration <packages>,
+      #   so a dependency change does not pass without any integration run.
+      #   The /integration run reports on main, not on this PR, so this check
+      #   stays red while the PR changes go.mod or go.sum; a maintainer merges
+      #   once that run passes.
+      # The run-integration-tests label is not checked: auto-label-integration
+      # adds it to every pull request from a write-access author.
+      # A comment or a dispatch passes its own filter through unchanged. A bare
+      # "/integration " or an empty dispatch filter still means every package.
       - name: Pull Latest Redpanda Image
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         run: task docker:pull-redpanda
 
       - name: Run Integration Tests
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         env:
           FILTER: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}
         timeout-minutes: 30
+
+      - name: No component package changed
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod != 'true' }}
+        run: echo "No files under internal/impl/ changed; the filtered integration run was skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require a package filter
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod == 'true' }}
+        run: |
+          MSG="No files under internal/impl/ changed, so there is no package filter, and the full suite does not fit this job's 30-minute budget. Comment /integration <packages> on this PR (for example /integration kafka aws) to run the packages this change affects. That run reports on main, not on this PR, so this check stays red for as long as this PR changes go.mod or go.sum; a maintainer can merge once the /integration run passes."
+          echo "::error title=Integration filter required::${MSG}"
+          echo "${MSG}" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Write Summary
         if: always()
