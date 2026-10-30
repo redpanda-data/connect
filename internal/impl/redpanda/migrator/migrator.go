@@ -745,6 +745,9 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 				return nil, fmt.Errorf("parse schema ID: %w", err)
 			}
 			if schemaID != 0 {
+				// Rewrite a copy: the input redelivers this message if the
+				// write fails, and it must still carry the source schema ID.
+				value = bytes.Clone(value)
 				if schemaID != lastSchemaID {
 					dstSchemaID, err := m.sr.DestinationSchemaID(schemaID)
 					if err != nil {

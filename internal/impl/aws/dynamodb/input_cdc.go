@@ -158,7 +158,9 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 == Checkpointing
 
-Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
+Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses.
+
+A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one: the first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position; a parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged); and a parent shard the stream reports as not found. A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged.
 
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
@@ -183,7 +185,7 @@ This input adds the following metadata fields to each message:
 - `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (empty for snapshot records)
 - `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (empty for snapshot records)
 - `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
-- `+"`dynamodb_event_name`"+` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
+- `+"`dynamodb_event_name`"+` - The type of change: `+"`INSERT`"+`, `+"`MODIFY`"+`, `+"`REMOVE`"+`, or `+"`READ`"+` (for snapshot records)
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
 
 == Metrics
@@ -192,7 +194,7 @@ This input emits the following metrics:
 
 - `+"`dynamodb_cdc_shards_tracked`"+` - Total number of shards being tracked (gauge)
 - `+"`dynamodb_cdc_shards_active`"+` - Number of shards currently being read from (gauge)
-- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=not_started, 1=in_progress, 2=complete (gauge)
+- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=`+"`not_started`"+`, 1=`+"`in_progress`"+`, 2=`+"`complete`"+` (gauge)
 - `+"`dynamodb_cdc_snapshot_records_read`"+` - Total records read during snapshot (counter)
 - `+"`dynamodb_cdc_snapshot_segments_active`"+` - Number of active snapshot scan segments (gauge)
 - `+"`dynamodb_cdc_snapshot_buffer_overflow`"+` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
@@ -264,7 +266,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(1000).
 				Advanced(),
 			service.NewIntField(dciFieldMaxTrackedShards).
-				Description("Maximum number of shards to track simultaneously. Prevents memory issues with extremely large tables.").
+				Description("Maximum number of shards holding acknowledgement state at once. A shard is normally forgotten once it has been read to the end and its last batch has been acknowledged, so this bounds the shards being read concurrently, not the shards seen over the pipeline's lifetime. Past this limit acknowledgements return an error.").
 				Default(10000).
 				Advanced(),
 			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
@@ -445,10 +447,27 @@ type tableStream struct {
 	checkpointer  *Checkpointer
 	recordBatcher *RecordBatcher
 
-	mu             sync.RWMutex // Level 2 lock - never hold when acquiring dynamoDBCDCInput.mu
-	shardReaders   map[string]*dynamoDBShardReader
-	snapshot       *snapshotState
-	shardRefreshCh chan struct{} // Signal coordinator to refresh shards immediately
+	mu           sync.RWMutex // Level 2 lock - never hold when acquiring dynamoDBCDCInput.mu
+	shardReaders map[string]*dynamoDBShardReader
+	// completedShards records shards whose reader reached the end of the
+	// closed shard (NextShardIterator == nil). DescribeStream keeps listing
+	// closed shards for the stream's 24h retention window, so without this
+	// set a shard pruned from shardReaders by the cleanup ticker would be
+	// rediscovered as new and read again from its checkpoint (or
+	// TRIM_HORIZON) on every refresh after cleanup. Entries are dropped once
+	// the shard is no longer listed. Guarded by the same lock as
+	// shardReaders (ts.mu).
+	completedShards map[string]struct{}
+	snapshot        *snapshotState
+	shardRefreshCh  chan struct{} // Signal coordinator to refresh shards immediately
+	// parentFailures tracks shards discovery fails to prepare across refresh
+	// cycles, so an unreadable parent cannot hold its children back forever.
+	parentFailures parentPrepareFailures
+
+	// activeShards is the number of running shard readers, published by this
+	// table's coordinator and summed across tables into the shards_active
+	// gauge (see updateActiveShardsMetric).
+	activeShards atomic.Int64
 
 	// honorStartFrom is true only until the first successful shard discovery
 	// of a pipeline with no pre-existing checkpoint state. start_from applies
@@ -476,18 +495,45 @@ type dynamoDBCDCInput struct {
 	tableStreams map[string]*tableStream // keyed by table name
 
 	// Legacy fields for backward compatibility with single table mode
-	resolvedTable  string // Actual table name for single-table path; may differ from conf.tables in tag discovery mode
-	streamArn      *string
-	keySchema      []dynamodbtypes.KeySchemaElement // Table's primary key schema for deduplication
-	checkpointer   *Checkpointer
-	recordBatcher  *RecordBatcher
-	shardReaders   map[string]*dynamoDBShardReader
-	snapshot       *snapshotState // nil if snapshot mode is "none"
-	shardRefreshCh chan struct{}  // Signal coordinator to refresh shards immediately
+	resolvedTable string // Actual table name for single-table path; may differ from conf.tables in tag discovery mode
+	streamArn     *string
+	keySchema     []dynamodbtypes.KeySchemaElement // Table's primary key schema for deduplication
+	checkpointer  *Checkpointer
+	recordBatcher *RecordBatcher
+	shardReaders  map[string]*dynamoDBShardReader
+	// completedShards records shards whose reader reached the end of the
+	// closed shard (NextShardIterator == nil). DescribeStream keeps listing
+	// closed shards for the stream's 24h retention window, so without this
+	// set a shard pruned from shardReaders by the cleanup ticker would be
+	// rediscovered as new and read again from its checkpoint (or
+	// TRIM_HORIZON) on every refresh after cleanup. Entries are dropped once
+	// the shard is no longer listed. Guarded by the same lock as
+	// shardReaders (d.mu).
+	completedShards map[string]struct{}
+	snapshot        *snapshotState // nil if snapshot mode is "none"
+	shardRefreshCh  chan struct{}  // Signal coordinator to refresh shards immediately
+	// parentFailures tracks shards discovery fails to prepare across refresh
+	// cycles, so an unreadable parent cannot hold its children back forever.
+	parentFailures parentPrepareFailures
 
-	pendingAcks       sync.WaitGroup
+	// refreshInterval and cleanupInterval override shardRefreshInterval and
+	// shardCleanupInterval when non-zero (tests drive coordinators with
+	// millisecond intervals).
+	refreshInterval time.Duration
+	cleanupInterval time.Duration
+
 	backgroundWorkers sync.WaitGroup // Tracks background goroutines for proper cleanup
-	closed            atomic.Bool
+
+	// ackMu makes Close wait for the ack functions that are running. Each ack
+	// function holds the read lock while it checks closed and does its work.
+	// Close holds the write lock to set closed. After that, no ack function
+	// runs, and all later acks are dropped without a checkpoint. Close has no
+	// timeout for this wait: the ack context limits a running checkpoint
+	// write, and Benthos waits for its own pending acks before it calls Close.
+	ackMu sync.RWMutex
+	// closed is true after Close starts. The ack functions read it, and drop
+	// the ack when it is true. Guarded by ackMu.
+	closed bool
 
 	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
 	// multi-table) is true only until the first successful shard discovery of
@@ -1703,6 +1749,10 @@ type preparedShard struct {
 	shardID  string
 	iterator *string
 	cutoff   time.Time
+	// completed is set when the checkpoint store already marks the shard as
+	// read to the end (resumeCompleted): no iterator is acquired and the
+	// caller records the shard as completed instead of registering a reader.
+	completed bool
 }
 
 // prepareShardReader resolves where a shard should start (global-table
@@ -1723,6 +1773,9 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		cutoff         time.Time
 	)
 	switch decision.Mode {
+	case resumeCompleted:
+		d.log.Debugf("Shard %s%s was read to the end by an earlier run, skipping", shardID, tableSuffix)
+		return preparedShard{shardID: shardID, completed: true}, nil
 	case resumeExact:
 		iteratorType = types.ShardIteratorTypeAfterSequenceNumber
 		seq := decision.SequenceNumber
@@ -1737,14 +1790,18 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		d.log.Infof("Starting shard %s%s from %s", shardID, tableSuffix, iteratorType)
 	}
 
-	iterCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
-	iter, err := d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
-		StreamArn:         streamArn,
-		ShardId:           &shardID,
-		ShardIteratorType: iteratorType,
-		SequenceNumber:    sequenceNumber,
-	})
-	cancel()
+	iter, err := d.acquireShardIterator(ctx, streamArn, shardID, iteratorType, sequenceNumber)
+	if err != nil && iteratorType == types.ShardIteratorTypeAfterSequenceNumber && isTrimmedDataAccessError(err) {
+		// The checkpoint points at records the stream has already trimmed
+		// (the pipeline was down beyond the 24h retention window). Retrying
+		// the same position fails forever, which would leave the shard, and
+		// every child shard held back behind it, unread until it ages out of
+		// the listing. Everything still retained is newer than the
+		// checkpoint, so read it from TRIM_HORIZON, as a running reader does
+		// when GetRecords hits trimmed data.
+		d.log.Warnf("Checkpoint for shard %s%s points at trimmed stream data, records between it and the trim horizon were lost; resuming from TRIM_HORIZON", shardID, tableSuffix)
+		iter, err = d.acquireShardIterator(ctx, streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
+	}
 	if err != nil {
 		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 	}
@@ -1752,46 +1809,254 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
 }
 
+// acquireShardIterator calls GetShardIterator under its own timeout.
+func (d *dynamoDBCDCInput) acquireShardIterator(ctx context.Context, streamArn *string, shardID string, iteratorType types.ShardIteratorType, sequenceNumber *string) (*dynamodbstreams.GetShardIteratorOutput, error) {
+	iterCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	defer cancel()
+	return d.streamsClient.GetShardIterator(iterCtx, &dynamodbstreams.GetShardIteratorInput{
+		StreamArn:         streamArn,
+		ShardId:           &shardID,
+		ShardIteratorType: iteratorType,
+		SequenceNumber:    sequenceNumber,
+	})
+}
+
+// shardStatus is what shard discovery knows about a shard: known means it has
+// a registered reader or was already read to the end; completed means the
+// latter.
+type shardStatus struct {
+	known     bool
+	completed bool
+}
+
+// parentReleaseAfterFailures is how many consecutive refresh cycles a listed
+// parent shard may fail to prepare before its children are read anyway.
+const parentReleaseAfterFailures = 5
+
+// childWaitWarnAfterCycles is how many consecutive refresh cycles a child
+// shard may be held back behind its parent before a warning is logged (and
+// logged again every as many cycles while it keeps waiting). A parent that
+// prepares but whose reader keeps failing is never released, so without the
+// warning its children could go unread for up to 24h with no signal.
+const childWaitWarnAfterCycles = 20
+
+// parentPrepareFailures remembers, across refresh cycles, the listed shards
+// that discovery failed to prepare. A child is normally held back until its
+// parent is read to the end, but a parent that can never be prepared would
+// then stall its whole lineage until it ages out of the listing (up to 24h).
+// A parent whose GetShardIterator reports ResourceNotFoundException is gone
+// and releases its children right away; a parent failing for any other
+// reason releases them after parentReleaseAfterFailures consecutive cycles.
+// Neither persists a completion marker: the parent is still retried and read
+// if it becomes readable. It also counts how long each child has been held
+// back, so a child stuck behind a parent that prepares but never finishes is
+// reported (see childWaitWarnAfterCycles). The zero value is ready to use.
+type parentPrepareFailures struct {
+	mu       sync.Mutex
+	failures map[string]int      // consecutive failed prepares per shard
+	gone     map[string]struct{} // shards GetShardIterator reported not found
+	released map[string]struct{} // shards whose children were released (logged once)
+	waits    map[string]int      // consecutive cycles a child shard was held back
+}
+
+// recordFailure counts a failed prepare of shardID.
+func (p *parentPrepareFailures) recordFailure(shardID string, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if isStreamsResourceNotFoundError(err) {
+		if p.gone == nil {
+			p.gone = map[string]struct{}{}
+		}
+		p.gone[shardID] = struct{}{}
+	}
+	if p.failures == nil {
+		p.failures = map[string]int{}
+	}
+	p.failures[shardID]++
+	delete(p.waits, shardID)
+}
+
+// recordSuccess clears shardID's failure history once it prepares.
+func (p *parentPrepareFailures) recordSuccess(shardID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.failures, shardID)
+	delete(p.gone, shardID)
+	delete(p.released, shardID)
+	delete(p.waits, shardID)
+}
+
+// recordWait counts another refresh cycle in which childID was held back
+// behind its parent and returns the number of consecutive such cycles.
+func (p *parentPrepareFailures) recordWait(childID string) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.waits == nil {
+		p.waits = map[string]int{}
+	}
+	p.waits[childID]++
+	return p.waits[childID]
+}
+
+// release reports whether the children of parentID may be read although
+// parentID is listed and not read to the end. firstRelease is true the first
+// time a parent is released for repeated failures, so the caller warns once.
+func (p *parentPrepareFailures) release(parentID string) (release, firstRelease bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, gone := p.gone[parentID]; gone {
+		return true, false
+	}
+	if p.failures[parentID] < parentReleaseAfterFailures {
+		return false, false
+	}
+	if _, logged := p.released[parentID]; logged {
+		return true, false
+	}
+	if p.released == nil {
+		p.released = map[string]struct{}{}
+	}
+	p.released[parentID] = struct{}{}
+	return true, true
+}
+
+// prune forgets shards that are no longer listed.
+func (p *parentPrepareFailures) prune(listed map[string]struct{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for shardID := range p.failures {
+		if _, ok := listed[shardID]; !ok {
+			delete(p.failures, shardID)
+			delete(p.gone, shardID)
+			delete(p.released, shardID)
+		}
+	}
+	for shardID := range p.waits {
+		if _, ok := listed[shardID]; !ok {
+			delete(p.waits, shardID)
+		}
+	}
+}
+
 // prepareNewShards resolves and acquires iterators for every discovered shard
-// not already registered (per isRegistered). A shard that fails to prepare is
-// skipped, counted, and retried on a later cycle rather than aborting the
-// batch, and the loop stops early once ctx's budget is exhausted so the
-// shards prepared so far can still be committed by the caller: an
-// all-or-nothing cycle can never converge on a large shard backlog, because
-// a single error each pass discards every prepared shard and the next pass
-// starts over from zero (INC-2974). Truncation and per-shard failures are
-// logged here, not returned - the caller commits whatever came back.
-func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, isRegistered func(string) bool, tableSuffix string, honorStartFrom bool) []preparedShard {
+// not already known (per status). A shard that fails to prepare is skipped,
+// counted, and retried on a later cycle rather than aborting the batch, and
+// the loop stops early once ctx's budget is exhausted so the shards prepared
+// so far can still be committed by the caller: an all-or-nothing cycle can
+// never converge on a large shard backlog, because a single error each pass
+// discards every prepared shard and the next pass starts over from zero
+// (INC-2974). Truncation and per-shard failures are logged here, not returned
+// - the caller commits whatever came back.
+//
+// A child shard is held back while its parent is still listed and not read
+// to the end: reading both concurrently would deliver an item's newer
+// updates (child) before its older ones (parent backlog). An unlisted parent
+// has aged out of the stream and counts as done. Shards the checkpoint store
+// marks completed come back with completed set, which also releases their
+// children within the same cycle. A parent whose checkpoint has been trimmed
+// is resumed from TRIM_HORIZON by prepareShardReader rather than failing every
+// cycle, so it cannot hold its descendants back indefinitely; a parent that
+// fails to prepare for another reason is handled by parents (see
+// parentPrepareFailures).
+//
+// The ordering does not apply while start_from: latest is still honored (the
+// first discovery of a fresh pipeline): every shard then starts at LATEST, so
+// a parent has no backlog for its child to overtake, and deferring the child
+// would start it at TRIM_HORIZON on a later cycle once honorStartFrom is
+// cleared, replaying records the user asked to skip.
+func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, status func(string) shardStatus, parents *parentPrepareFailures, tableSuffix string, honorStartFrom bool) []preparedShard {
 	var (
 		prepared     []preparedShard
 		failedShards int
 		firstErr     error
 	)
-	for _, shard := range shards {
-		if ctx.Err() != nil {
-			d.log.Infof("Shard discovery budget expired after preparing %d shards%s; the remaining shards will be discovered on the next refresh cycle", len(prepared), tableSuffix)
-			break
-		}
-		shardID := *shard.ShardId
-		if isRegistered(shardID) {
-			continue
-		}
 
-		p, err := d.prepareShardReader(ctx, cp, streamArn, shardID, tableSuffix, honorStartFrom)
-		if err != nil {
-			failedShards++
-			if firstErr == nil {
-				firstErr = err
-			}
-			d.log.Debugf("Failed to prepare shard %s%s, will retry on the next refresh cycle: %v", shardID, tableSuffix, err)
-			continue
+	listed := make(map[string]struct{}, len(shards))
+	for _, shard := range shards {
+		listed[*shard.ShardId] = struct{}{}
+	}
+	parents.prune(listed)
+	completedNow := map[string]struct{}{}
+	orderLineage := initialIteratorType(d.conf.startFrom, honorStartFrom) != types.ShardIteratorTypeLatest
+	parentDone := func(shard types.Shard) bool {
+		parentID := aws.ToString(shard.ParentShardId)
+		if parentID == "" || !orderLineage {
+			return true
 		}
-		prepared = append(prepared, p)
+		if _, isListed := listed[parentID]; !isListed {
+			return true
+		}
+		if _, done := completedNow[parentID]; done {
+			return true
+		}
+		if status(parentID).completed {
+			return true
+		}
+		release, firstRelease := parents.release(parentID)
+		if firstRelease {
+			d.log.Warnf("Parent shard %s%s failed to prepare on %d consecutive refresh cycles; reading its child shards without waiting for it, so their changes may be delivered before older changes still in the parent", parentID, tableSuffix, parentReleaseAfterFailures)
+		}
+		return release
 	}
 
+	var pending []types.Shard
+	for _, shard := range shards {
+		if !status(*shard.ShardId).known {
+			pending = append(pending, shard)
+		}
+	}
+
+	// Each pass prepares every pending shard whose parent is done; a parent
+	// resolved as completed in one pass releases its children in the next.
+	for progress := true; progress && len(pending) > 0; {
+		progress = false
+		var deferred []types.Shard
+		for _, shard := range pending {
+			if ctx.Err() != nil {
+				d.log.Infof("Shard discovery budget expired after preparing %d shards%s; the remaining shards will be discovered on the next refresh cycle", len(prepared), tableSuffix)
+				return d.logPrepareFailures(prepared, failedShards, len(shards), tableSuffix, firstErr)
+			}
+			if !parentDone(shard) {
+				deferred = append(deferred, shard)
+				continue
+			}
+			progress = true
+
+			shardID := *shard.ShardId
+			p, err := d.prepareShardReader(ctx, cp, streamArn, shardID, tableSuffix, honorStartFrom)
+			if err != nil {
+				parents.recordFailure(shardID, err)
+				failedShards++
+				if firstErr == nil {
+					firstErr = err
+				}
+				d.log.Debugf("Failed to prepare shard %s%s, will retry on the next refresh cycle: %v", shardID, tableSuffix, err)
+				continue
+			}
+			parents.recordSuccess(shardID)
+			if p.completed {
+				completedNow[shardID] = struct{}{}
+			}
+			prepared = append(prepared, p)
+		}
+		pending = deferred
+	}
+	if len(pending) > 0 {
+		d.log.Debugf("Holding back %d child shards%s until their parent shards are read to the end", len(pending), tableSuffix)
+		for _, shard := range pending {
+			if cycles := parents.recordWait(*shard.ShardId); cycles%childWaitWarnAfterCycles == 0 {
+				d.log.Warnf("Child shard %s%s has waited %d refresh cycles for parent shard %s to be read to the end; its changes are not delivered until the parent finishes or ages out of the stream (up to 24h), check the logs for errors reading the parent", *shard.ShardId, tableSuffix, cycles, aws.ToString(shard.ParentShardId))
+			}
+		}
+	}
+
+	return d.logPrepareFailures(prepared, failedShards, len(shards), tableSuffix, firstErr)
+}
+
+func (d *dynamoDBCDCInput) logPrepareFailures(prepared []preparedShard, failedShards, discovered int, tableSuffix string, firstErr error) []preparedShard {
 	if failedShards > 0 {
 		d.log.Warnf("Failed to prepare %d of %d discovered shards this refresh cycle%s; they will be retried on the next cycle (first error: %v)",
-			failedShards, len(shards), tableSuffix, firstErr)
+			failedShards, discovered, tableSuffix, firstErr)
 	}
 	return prepared
 }
@@ -1802,25 +2067,34 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		return err
 	}
 
-	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) bool {
+	d.mu.Lock()
+	pruned := pruneCompletedShards(d.completedShards, shards)
+	d.mu.Unlock()
+	forgetShards(d.recordBatcher, pruned)
+	d.retryShardFinalization(ctx, d.recordBatcher, "")
+
+	newShards := d.prepareNewShards(ctx, d.checkpointer, d.streamArn, shards, func(shardID string) shardStatus {
 		d.mu.RLock()
 		defer d.mu.RUnlock()
-		_, exists := d.shardReaders[shardID]
-		return exists
-	}, "", d.honorStartFrom.Load())
+		return lookupShard(d.shardReaders, d.completedShards, shardID)
+	}, &d.parentFailures, "", d.honorStartFrom.Load())
 
 	// Add all new shard readers in a single critical section
 	if len(newShards) > 0 {
 		d.mu.Lock()
 		for _, s := range newShards {
 			// Double-check shard wasn't added by another goroutine
-			if _, exists := d.shardReaders[s.shardID]; !exists {
-				d.shardReaders[s.shardID] = &dynamoDBShardReader{
-					shardID:        s.shardID,
-					iterator:       s.iterator,
-					exhausted:      false,
-					failoverCutoff: s.cutoff,
-				}
+			if lookupShard(d.shardReaders, d.completedShards, s.shardID).known {
+				continue
+			}
+			if s.completed {
+				markShardCompleted(d.shardReaders, &d.completedShards, s.shardID)
+				continue
+			}
+			d.shardReaders[s.shardID] = &dynamoDBShardReader{
+				shardID:        s.shardID,
+				iterator:       s.iterator,
+				failoverCutoff: s.cutoff,
 			}
 		}
 		totalShards := len(d.shardReaders)
@@ -1841,6 +2115,156 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	return nil
 }
 
+// lookupShard reports what shard discovery knows about shardID: whether it
+// has a registered reader or was already read to the end of the closed shard
+// (known), and whether it is the latter (completed). The caller holds the
+// lock guarding both maps.
+func lookupShard(readers map[string]*dynamoDBShardReader, completed map[string]struct{}, shardID string) shardStatus {
+	if _, exists := completed[shardID]; exists {
+		return shardStatus{known: true, completed: true}
+	}
+	_, exists := readers[shardID]
+	return shardStatus{known: exists}
+}
+
+// pruneCompletedShards forgets completed shards that DescribeStream no longer
+// lists (aged out of the stream's retention window), bounding the set to the
+// closed shards still in retention, and returns the forgotten shard IDs. The
+// caller holds the lock guarding the set.
+func pruneCompletedShards(completed map[string]struct{}, listed []types.Shard) []string {
+	if len(completed) == 0 {
+		return nil
+	}
+	stillListed := make(map[string]struct{}, len(listed))
+	for _, shard := range listed {
+		stillListed[aws.ToString(shard.ShardId)] = struct{}{}
+	}
+	var pruned []string
+	for shardID := range completed {
+		if _, exists := stillListed[shardID]; !exists {
+			delete(completed, shardID)
+			pruned = append(pruned, shardID)
+		}
+	}
+	return pruned
+}
+
+// forgetShards drops the batcher's tracker state for completed shards that
+// aged out of the stream. Normally that state is already gone once the
+// shard's last batch settled (RecordBatcher.CloseShard); this catches entries
+// whose final checkpoint write kept failing (see retryShardFinalization). The
+// shard can no longer be read, so its unpersisted frontier is worthless and
+// is dropped too.
+func forgetShards(batcher *RecordBatcher, shardIDs []string) {
+	for _, shardID := range shardIDs {
+		batcher.forgetShard(shardID, false)
+	}
+}
+
+// retryShardFinalization retries the final checkpoint write of closed shards
+// whose earlier attempt failed (see RecordBatcher.RetryFinalize), once per
+// shard refresh cycle. A failure is logged and retried on the next cycle.
+func (d *dynamoDBCDCInput) retryShardFinalization(ctx context.Context, batcher *RecordBatcher, tableSuffix string) {
+	if err := batcher.RetryFinalize(ctx); err != nil {
+		d.log.Warnf("Failed to persist completion of closed shards%s; retrying on the next shard refresh: %v", tableSuffix, err)
+	}
+}
+
+// markShardCompleted flags a reader that has read its closed shard to the end
+// as exhausted (so the cleanup ticker prunes it) and records the shard in
+// completed (allocated on first use) so later discovery cycles do not
+// re-register it. The caller holds the lock guarding both.
+func markShardCompleted(readers map[string]*dynamoDBShardReader, completed *map[string]struct{}, shardID string) {
+	if reader, exists := readers[shardID]; exists {
+		reader.exhausted = true
+	}
+	if *completed == nil {
+		*completed = make(map[string]struct{})
+	}
+	(*completed)[shardID] = struct{}{}
+}
+
+// shardRefreshInterval is how often coordinators re-list the stream's shards.
+func (d *dynamoDBCDCInput) shardRefreshInterval() time.Duration {
+	if d.refreshInterval > 0 {
+		return d.refreshInterval
+	}
+	return shardRefreshInterval
+}
+
+// shardCleanupInterval is how often coordinators prune exhausted readers.
+func (d *dynamoDBCDCInput) shardCleanupInterval() time.Duration {
+	if d.cleanupInterval > 0 {
+		return d.cleanupInterval
+	}
+	return shardCleanupInterval
+}
+
+// shardReaderState is a coordinator's point-in-time view of one registered
+// reader, copied under the lock guarding the readers map: exhausted is
+// written by the reader goroutine, so the coordinator must not read it from
+// the shared struct unlocked.
+type shardReaderState struct {
+	reader    *dynamoDBShardReader
+	exhausted bool
+}
+
+// snapshotShardReaders copies the registered readers' state. The caller
+// holds the lock guarding readers.
+func snapshotShardReaders(readers map[string]*dynamoDBShardReader) map[string]shardReaderState {
+	out := make(map[string]shardReaderState, len(readers))
+	for shardID, reader := range readers {
+		out[shardID] = shardReaderState{reader: reader, exhausted: reader.exhausted}
+	}
+	return out
+}
+
+// syncShardReaders reconciles a coordinator's running reader goroutines with
+// the registered readers: it starts one (via start) for every non-exhausted
+// reader without a goroutine, and stops goroutines whose reader was removed.
+// startedFor records which reader each goroutine was started for, so a reader
+// that gave up (removing itself) and was then re-registered by discovery gets
+// a fresh goroutine instead of being mistaken for the old one.
+func syncShardReaders(
+	ctx context.Context,
+	readers map[string]shardReaderState,
+	activeShards map[string]context.CancelFunc,
+	startedFor map[string]*dynamoDBShardReader,
+	start func(shardCtx context.Context, shardID string),
+) {
+	for shardID, cancelFn := range activeShards {
+		if state, exists := readers[shardID]; !exists || startedFor[shardID] != state.reader {
+			cancelFn()
+			delete(activeShards, shardID)
+		}
+	}
+	for shardID := range startedFor {
+		if _, running := activeShards[shardID]; !running {
+			delete(startedFor, shardID)
+		}
+	}
+	for shardID, state := range readers {
+		if _, running := activeShards[shardID]; running || state.exhausted {
+			continue
+		}
+		shardCtx, shardCancel := context.WithCancel(ctx)
+		activeShards[shardID] = shardCancel
+		startedFor[shardID] = state.reader
+		start(shardCtx, shardID)
+	}
+}
+
+// countActiveShards counts running readers that have not finished.
+func countActiveShards(readers map[string]shardReaderState, activeShards map[string]context.CancelFunc) int64 {
+	var n int64
+	for shardID := range activeShards {
+		if state, exists := readers[shardID]; exists && !state.exhausted {
+			n++
+		}
+	}
+	return n
+}
+
 // startShardCoordinator spawns goroutines for each shard and manages shard refresh.
 func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 	var shardWg sync.WaitGroup
@@ -1855,38 +2279,28 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 		d.shutSig.TriggerHasStopped()
 	}()
 
-	refreshTicker := time.NewTicker(shardRefreshInterval)
+	refreshTicker := time.NewTicker(d.shardRefreshInterval())
 	defer refreshTicker.Stop()
 
-	cleanupTicker := time.NewTicker(shardCleanupInterval)
+	cleanupTicker := time.NewTicker(d.shardCleanupInterval())
 	defer cleanupTicker.Stop()
 
+	startedFor := map[string]*dynamoDBShardReader{}
 	for {
 		// Get current shard readers
 		d.mu.RLock()
-		currentReaders := make(map[string]*dynamoDBShardReader)
-		maps.Copy(currentReaders, d.shardReaders)
+		currentReaders := snapshotShardReaders(d.shardReaders)
 		d.mu.RUnlock()
 
 		// Start new shard readers for any new shards
-		for shardID, reader := range currentReaders {
-			if _, exists := activeShards[shardID]; !exists && !reader.exhausted {
-				shardCtx, shardCancel := context.WithCancel(ctx)
-				activeShards[shardID] = shardCancel
-				shardWg.Go(func() {
-					d.startShardReader(shardCtx, shardID)
-				})
-			}
-		}
+		syncShardReaders(ctx, currentReaders, activeShards, startedFor, func(shardCtx context.Context, shardID string) {
+			shardWg.Go(func() {
+				d.startShardReader(shardCtx, shardID)
+			})
+		})
 
 		// Update active shards metric (acquire lock once instead of per-shard)
-		activeCount := 0
-		for shardID := range activeShards {
-			if reader, exists := currentReaders[shardID]; exists && !reader.exhausted {
-				activeCount++
-			}
-		}
-		d.metrics.shardsActive.Set(int64(activeCount))
+		d.metrics.shardsActive.Set(countActiveShards(currentReaders, activeShards))
 
 		select {
 		case <-ctx.Done():
@@ -1987,37 +2401,34 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 		readerWg.Wait()
 	}()
 
-	refreshTicker := time.NewTicker(shardRefreshInterval)
+	refreshTicker := time.NewTicker(d.shardRefreshInterval())
 	defer refreshTicker.Stop()
 
-	cleanupTicker := time.NewTicker(shardCleanupInterval)
+	cleanupTicker := time.NewTicker(d.shardCleanupInterval())
 	defer cleanupTicker.Stop()
 
+	startedFor := map[string]*dynamoDBShardReader{}
+	defer func() {
+		// A stopped table no longer contributes to the shards_active gauge.
+		ts.activeShards.Store(0)
+		d.updateActiveShardsMetric()
+	}()
 	for {
 		// Start new shard readers for any new shards
 		ts.mu.RLock()
-		for shardID, reader := range ts.shardReaders {
-			if _, exists := activeShards[shardID]; !exists && !reader.exhausted {
-				shardCtx, shardCancel := context.WithCancel(ctx)
-				activeShards[shardID] = shardCancel
-				readerWg.Go(func() {
-					d.startTableShardReader(shardCtx, tableName, ts, shardID)
-				})
-			}
-		}
+		currentReaders := snapshotShardReaders(ts.shardReaders)
 		ts.mu.RUnlock()
+		syncShardReaders(ctx, currentReaders, activeShards, startedFor, func(shardCtx context.Context, shardID string) {
+			readerWg.Go(func() {
+				d.startTableShardReader(shardCtx, tableName, ts, shardID)
+			})
+		})
 
-		// Update active shards metric
-		activeCount := 0
-		ts.mu.RLock()
-		for shardID := range activeShards {
-			reader, exists := ts.shardReaders[shardID]
-			if exists && !reader.exhausted {
-				activeCount++
-			}
-		}
-		ts.mu.RUnlock()
-		d.metrics.shardsActive.Set(int64(activeCount))
+		// Update active shards metric: each table publishes its own count and
+		// the gauge reports the sum across tables, so one table's coordinator
+		// cannot overwrite another's.
+		ts.activeShards.Store(countActiveShards(currentReaders, activeShards))
+		d.updateActiveShardsMetric()
 
 		select {
 		case <-ctx.Done():
@@ -2050,24 +2461,33 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		return err
 	}
 
-	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) bool {
+	ts.mu.Lock()
+	pruned := pruneCompletedShards(ts.completedShards, shards)
+	ts.mu.Unlock()
+	forgetShards(ts.recordBatcher, pruned)
+	d.retryShardFinalization(ctx, ts.recordBatcher, " (table "+tableName+")")
+
+	newShards := d.prepareNewShards(ctx, ts.checkpointer, &ts.streamArn, shards, func(shardID string) shardStatus {
 		ts.mu.RLock()
 		defer ts.mu.RUnlock()
-		_, exists := ts.shardReaders[shardID]
-		return exists
-	}, " (table "+tableName+")", ts.honorStartFrom.Load())
+		return lookupShard(ts.shardReaders, ts.completedShards, shardID)
+	}, &ts.parentFailures, " (table "+tableName+")", ts.honorStartFrom.Load())
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
 		ts.mu.Lock()
 		for _, s := range newShards {
-			if _, exists := ts.shardReaders[s.shardID]; !exists {
-				ts.shardReaders[s.shardID] = &dynamoDBShardReader{
-					shardID:        s.shardID,
-					iterator:       s.iterator,
-					exhausted:      false,
-					failoverCutoff: s.cutoff,
-				}
+			if lookupShard(ts.shardReaders, ts.completedShards, s.shardID).known {
+				continue
+			}
+			if s.completed {
+				markShardCompleted(ts.shardReaders, &ts.completedShards, s.shardID)
+				continue
+			}
+			ts.shardReaders[s.shardID] = &dynamoDBShardReader{
+				shardID:        s.shardID,
+				iterator:       s.iterator,
+				failoverCutoff: s.cutoff,
 			}
 		}
 		shardCount := len(ts.shardReaders)
@@ -2088,24 +2508,29 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	return nil
 }
 
-func (ts *tableStream) getShardIterator(shardID string) *string {
+func (ts *tableStream) getShardIterator(shardID string) (iterator *string, closed bool) {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
-	reader, exists := ts.shardReaders[shardID]
-	if !exists || reader.exhausted || reader.iterator == nil {
-		return nil
-	}
-	return reader.iterator
+	return readerIterator(ts.shardReaders, shardID)
 }
 
-func (d *dynamoDBCDCInput) getShardIterator(shardID string) *string {
+func (d *dynamoDBCDCInput) getShardIterator(shardID string) (iterator *string, closed bool) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	reader, exists := d.shardReaders[shardID]
-	if !exists || reader.exhausted || reader.iterator == nil {
-		return nil
+	return readerIterator(d.shardReaders, shardID)
+}
+
+// readerIterator returns the iterator of shardID's reader, nil when the reader
+// is gone or exhausted. closed reports a registered, non-exhausted reader
+// holding a nil iterator: GetShardIterator returns no iterator for a closed
+// shard with nothing left to read, so the shard is at its end and must be
+// completed rather than abandoned. The caller holds the lock guarding readers.
+func readerIterator(readers map[string]*dynamoDBShardReader, shardID string) (iterator *string, closed bool) {
+	reader, exists := readers[shardID]
+	if !exists || reader.exhausted {
+		return nil, false
 	}
-	return reader.iterator
+	return reader.iterator, reader.iterator == nil
 }
 
 // lastRecordSequenceNumber returns the sequence number of the final record in a
@@ -2176,12 +2601,7 @@ func (d *dynamoDBCDCInput) refreshExpiredIterator(ctx context.Context, cp *Check
 
 	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint)
 
-	iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-		StreamArn:         &streamArn,
-		ShardId:           &shardID,
-		ShardIteratorType: iteratorType,
-		SequenceNumber:    sequenceNumber,
-	})
+	iter, err := d.acquireShardIterator(ctx, &streamArn, shardID, iteratorType, sequenceNumber)
 	if err != nil {
 		return nil, fmt.Errorf("getting refreshed iterator for shard %s: %w", shardID, err)
 	}
@@ -2250,9 +2670,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		}
 
 		// Get current reader state
-		iterator := ts.getShardIterator(shardID)
+		iterator, closed := ts.getShardIterator(shardID)
 		if iterator == nil {
 			ts.recordBatcher.Release(shardID, reserve)
+			if closed {
+				d.completeTableShard(ctx, tableName, ts, shardID)
+			}
 			return
 		}
 
@@ -2273,11 +2696,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			}
 			if isTrimmedDataAccessError(err) {
 				d.log.Warnf("Shard %s (table %s) trimmed, attempting iterator refresh", shardID, tableName)
-				iterRes, iterErr := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-					StreamArn:         &ts.streamArn,
-					ShardId:           &shardID,
-					ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
-				})
+				iterRes, iterErr := d.acquireShardIterator(ctx, &ts.streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
 				if iterErr == nil {
 					ts.mu.Lock()
 					if reader, ok := ts.shardReaders[shardID]; ok {
@@ -2286,17 +2705,19 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 					ts.mu.Unlock()
 					continue
 				}
-				// Iterator refresh failed — shard is truly gone, mark exhausted and signal coordinator
-				d.log.Warnf("Shard %s (table %s) iterator refresh failed, marking exhausted: %v", shardID, tableName, iterErr)
-				ts.mu.Lock()
-				if reader, ok := ts.shardReaders[shardID]; ok {
-					reader.exhausted = true
+				if isIteratorThrottlingError(iterErr) {
+					wait := boff.NextBackOff()
+					d.log.Debugf("Throttled refreshing trimmed iterator on shard %s (table %s), backing off for %v", shardID, tableName, wait)
+					if err := smithytime.SleepWithContext(ctx, wait); err != nil {
+						return
+					}
+					continue
 				}
-				ts.mu.Unlock()
-				select {
-				case ts.shardRefreshCh <- struct{}{}:
-				default:
-				}
+				// Iterator refresh failed: drop the reader and let discovery
+				// re-register the shard from its checkpoint if it is still
+				// listed (a gone shard is not).
+				d.log.Warnf("Shard %s (table %s) iterator refresh failed, handing it back to shard discovery: %v", shardID, tableName, iterErr)
+				ts.releaseShardReader(shardID)
 				return
 			}
 			if isExpiredIteratorError(err) {
@@ -2311,19 +2732,11 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, ts.checkpointer, ts.streamArn, shardID, lastSeq)
 				if refreshErr != nil {
 					// The stream or shard no longer exists, so the refresh can
-					// never succeed — mark exhausted and signal the coordinator,
-					// mirroring the trimmed-data refresh-failure branch above.
+					// never succeed: hand the shard back to discovery, mirroring
+					// the trimmed-data refresh-failure branch above.
 					if isStreamsResourceNotFoundError(refreshErr) {
-						d.log.Warnf("Shard %s (table %s) no longer exists, marking exhausted: %v", shardID, tableName, refreshErr)
-						ts.mu.Lock()
-						if reader, ok := ts.shardReaders[shardID]; ok {
-							reader.exhausted = true
-						}
-						ts.mu.Unlock()
-						select {
-						case ts.shardRefreshCh <- struct{}{}:
-						default:
-						}
+						d.log.Warnf("Shard %s (table %s) no longer exists, handing it back to shard discovery: %v", shardID, tableName, refreshErr)
+						ts.releaseShardReader(shardID)
 						return
 					}
 					// Refreshing can fail transiently (e.g. throttling or a
@@ -2360,17 +2773,14 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Success - reset backoff
 		boff.Reset()
 
-		// Update iterator
+		// Update iterator. A nil NextShardIterator means the shard is closed
+		// and this page is its last: its records are still delivered below
+		// before the shard is marked completed.
+		shardClosed := false
 		ts.mu.Lock()
 		if reader, ok := ts.shardReaders[shardID]; ok {
 			reader.iterator = getRecords.NextShardIterator
-			if reader.iterator == nil {
-				reader.exhausted = true
-				d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
-				ts.mu.Unlock()
-				ts.recordBatcher.Release(shardID, reserve)
-				return
-			}
+			shardClosed = reader.iterator == nil
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
 				reader.lastSequenceNumber = seq
 			}
@@ -2378,8 +2788,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		ts.mu.Unlock()
 
 		if len(getRecords.Records) == 0 {
-			// No records available: wait before polling again
 			ts.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeTableShard(ctx, tableName, ts, shardID)
+				return
+			}
+			// No records available: wait before polling again
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2397,6 +2811,10 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
 		if len(batch) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeTableShard(ctx, tableName, ts, shardID)
+				return
+			}
 			continue
 		}
 
@@ -2409,13 +2827,11 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		tb := ts.recordBatcher.AddMessages(batch, shardID)
 		ts.recordBatcher.Release(shardID, reserve-len(batch))
 
-		// Track pending ack
-		d.pendingAcks.Add(1)
-
 		// Create ack function. The checkpointer interface value is built
 		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
-		// must still run to settle the batch (draining the tracker) even
-		// when there is no checkpoint store to persist to.
+		// must still run to settle the batch (draining the tracker). Close
+		// does not clear a table stream's checkpointer, so here it is nil
+		// only in tests.
 		var cp checkpointer
 		if ts.checkpointer != nil {
 			cp = ts.checkpointer
@@ -2423,19 +2839,20 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		recordBatcher := ts.recordBatcher
 		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
-			defer d.pendingAcks.Done()
+			d.ackMu.RLock()
+			defer d.ackMu.RUnlock()
 
-			if d.closed.Load() {
+			if d.closed {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveBatch(tb)
+					recordBatcher.RemoveBatch(ackCtx, tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s (table %s): %v", shardID, tableName, err)
-				recordBatcher.RemoveBatch(tb)
+				recordBatcher.RemoveBatch(ackCtx, tb)
 				return err
 			}
 
@@ -2451,14 +2868,50 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		// Send to channel
 		select {
 		case <-ctx.Done():
-			// The batch was never dispatched: untrack it (and its pending
-			// ack) or its messages would pin the tracker budget forever.
-			recordBatcher.RemoveBatch(tb)
-			d.pendingAcks.Done()
+			// The batch was never dispatched: untrack it or its messages
+			// would pin the tracker budget forever.
+			recordBatcher.RemoveBatch(ctx, tb)
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
 		}
+		if shardClosed {
+			d.completeTableShard(ctx, tableName, ts, shardID)
+			return
+		}
+	}
+}
+
+// completeTableShard hands a multi-table shard read to the end of its closed
+// shard to the batcher, which persists the completion once its last batch is
+// acknowledged (see RecordBatcher.CloseShard), then marks it exhausted and
+// completed (see markShardCompleted) and wakes the coordinator so child shards
+// held back behind it start right away. The reader is marked only after
+// CloseShard returns: while the completion write runs the reader is still
+// registered and not exhausted, so the cleanup ticker cannot cancel its
+// context mid-write, and the marker is written before any child is read.
+func (d *dynamoDBCDCInput) completeTableShard(ctx context.Context, tableName string, ts *tableStream, shardID string) {
+	var cp checkpointer
+	if ts.checkpointer != nil {
+		cp = ts.checkpointer
+	}
+	if err := ts.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
+		d.logCompletionFailure(ctx, shardID, " (table "+tableName+")", err)
+	}
+
+	ts.mu.Lock()
+	markShardCompleted(ts.shardReaders, &ts.completedShards, shardID)
+	ts.mu.Unlock()
+	d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
+	signalShardRefresh(ts.shardRefreshCh)
+}
+
+// signalShardRefresh asks a coordinator for an immediate shard refresh
+// without blocking (a pending signal already covers this one).
+func signalShardRefresh(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
 	}
 }
 
@@ -2620,6 +3073,24 @@ func (d *dynamoDBCDCInput) updateTotalShardsMetric() {
 	d.metrics.shardsTracked.Set(total)
 }
 
+// totalActiveShards sums the running shard readers published by every table
+// coordinator.
+func (d *dynamoDBCDCInput) totalActiveShards() int64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	var total int64
+	for _, ts := range d.tableStreams {
+		total += ts.activeShards.Load()
+	}
+	return total
+}
+
+// updateActiveShardsMetric sets the shards_active gauge to the total across
+// table streams, mirroring updateTotalShardsMetric for shards_tracked.
+func (d *dynamoDBCDCInput) updateActiveShardsMetric() {
+	d.metrics.shardsActive.Set(d.totalActiveShards())
+}
+
 // cleanupTableExhaustedShards removes exhausted shards for a specific table
 func (d *dynamoDBCDCInput) cleanupTableExhaustedShards(tableName string, ts *tableStream, activeShards map[string]context.CancelFunc) {
 	ts.mu.Lock()
@@ -2670,6 +3141,62 @@ func (d *dynamoDBCDCInput) cleanupExhaustedShards(activeShards map[string]contex
 	}
 }
 
+// completeShard hands a single-table shard read to the end of its closed shard
+// to the batcher, then marks it exhausted and completed; see
+// completeTableShard.
+func (d *dynamoDBCDCInput) completeShard(ctx context.Context, shardID string) {
+	var cp checkpointer
+	if d.checkpointer != nil {
+		cp = d.checkpointer
+	}
+	if err := d.recordBatcher.CloseShard(ctx, cp, shardID); err != nil {
+		d.logCompletionFailure(ctx, shardID, "", err)
+	}
+
+	d.mu.Lock()
+	markShardCompleted(d.shardReaders, &d.completedShards, shardID)
+	d.mu.Unlock()
+	d.log.Infof("Shard %s exhausted", shardID)
+	signalShardRefresh(d.shardRefreshCh)
+}
+
+// logCompletionFailure reports a failed write of a shard's completion marker.
+// A write cut short by the reader's context being canceled (shutdown) is
+// expected and logged at debug; any other failure is counted as a checkpoint
+// failure. Either way a restart reads the shard again from its last
+// checkpoint.
+func (d *dynamoDBCDCInput) logCompletionFailure(ctx context.Context, shardID, tableSuffix string, err error) {
+	if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+		d.log.Debugf("Completion of shard %s%s not persisted, shutting down; a restart reads it again from its last checkpoint: %v", shardID, tableSuffix, err)
+		return
+	}
+	d.metrics.checkpointFailures.Incr(1)
+	d.log.Errorf("Failed to persist completion of shard %s%s; a restart reads it again from its last checkpoint: %v", shardID, tableSuffix, err)
+}
+
+// releaseShardReader is called by a single-table reader giving up on its
+// shard: it unregisters the reader and asks the coordinator for an immediate
+// refresh. Marking the reader exhausted instead would keep the shard known to
+// discovery until the next cleanup tick, stalling a still-listed shard for up
+// to shardCleanupInterval after a transient error; unregistered, the refresh
+// re-registers it from its checkpoint right away, while a shard that is truly
+// gone is no longer listed and stays dropped.
+func (d *dynamoDBCDCInput) releaseShardReader(shardID string) {
+	d.mu.Lock()
+	delete(d.shardReaders, shardID)
+	d.mu.Unlock()
+	signalShardRefresh(d.shardRefreshCh)
+}
+
+// releaseShardReader is the multi-table form of
+// dynamoDBCDCInput.releaseShardReader.
+func (ts *tableStream) releaseShardReader(shardID string) {
+	ts.mu.Lock()
+	delete(ts.shardReaders, shardID)
+	ts.mu.Unlock()
+	signalShardRefresh(ts.shardRefreshCh)
+}
+
 // startShardReader continuously reads from a single shard and sends batches to the channel
 func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string) {
 	d.log.Debugf("Starting reader for shard %s", shardID)
@@ -2712,9 +3239,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		}
 
 		// Get current reader state
-		iterator := d.getShardIterator(shardID)
+		iterator, closed := d.getShardIterator(shardID)
 		if iterator == nil {
 			d.recordBatcher.Release(shardID, reserve)
+			if closed {
+				d.completeShard(ctx, shardID)
+			}
 			return
 		}
 
@@ -2735,11 +3265,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			}
 			if isTrimmedDataAccessError(err) {
 				d.log.Warnf("Shard %s trimmed, attempting iterator refresh", shardID)
-				iterRes, iterErr := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-					StreamArn:         d.streamArn,
-					ShardId:           &shardID,
-					ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
-				})
+				iterRes, iterErr := d.acquireShardIterator(ctx, d.streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
 				if iterErr == nil {
 					d.mu.Lock()
 					if reader, ok := d.shardReaders[shardID]; ok {
@@ -2748,17 +3274,19 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 					d.mu.Unlock()
 					continue
 				}
-				// Iterator refresh failed — shard is truly gone, mark exhausted and signal coordinator
-				d.log.Warnf("Shard %s iterator refresh failed, marking exhausted: %v", shardID, iterErr)
-				d.mu.Lock()
-				if reader, ok := d.shardReaders[shardID]; ok {
-					reader.exhausted = true
+				if isIteratorThrottlingError(iterErr) {
+					wait := boff.NextBackOff()
+					d.log.Debugf("Throttled refreshing trimmed iterator on shard %s, backing off for %v", shardID, wait)
+					if err := smithytime.SleepWithContext(ctx, wait); err != nil {
+						return
+					}
+					continue
 				}
-				d.mu.Unlock()
-				select {
-				case d.shardRefreshCh <- struct{}{}:
-				default:
-				}
+				// Iterator refresh failed: drop the reader and let discovery
+				// re-register the shard from its checkpoint if it is still
+				// listed (a gone shard is not).
+				d.log.Warnf("Shard %s iterator refresh failed, handing it back to shard discovery: %v", shardID, iterErr)
+				d.releaseShardReader(shardID)
 				return
 			}
 			if isExpiredIteratorError(err) {
@@ -2773,19 +3301,11 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, d.checkpointer, aws.ToString(d.streamArn), shardID, lastSeq)
 				if refreshErr != nil {
 					// The stream or shard no longer exists, so the refresh can
-					// never succeed — mark exhausted and signal the coordinator,
-					// mirroring the trimmed-data refresh-failure branch above.
+					// never succeed: hand the shard back to discovery, mirroring
+					// the trimmed-data refresh-failure branch above.
 					if isStreamsResourceNotFoundError(refreshErr) {
-						d.log.Warnf("Shard %s no longer exists, marking exhausted: %v", shardID, refreshErr)
-						d.mu.Lock()
-						if reader, ok := d.shardReaders[shardID]; ok {
-							reader.exhausted = true
-						}
-						d.mu.Unlock()
-						select {
-						case d.shardRefreshCh <- struct{}{}:
-						default:
-						}
+						d.log.Warnf("Shard %s no longer exists, handing it back to shard discovery: %v", shardID, refreshErr)
+						d.releaseShardReader(shardID)
 						return
 					}
 					// Refreshing can fail transiently (e.g. throttling or a
@@ -2822,17 +3342,14 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Success - reset backoff
 		boff.Reset()
 
-		// Update iterator
+		// Update iterator. A nil NextShardIterator means the shard is closed
+		// and this page is its last: its records are still delivered below
+		// before the shard is marked completed.
+		shardClosed := false
 		d.mu.Lock()
 		if reader, ok := d.shardReaders[shardID]; ok {
 			reader.iterator = getRecords.NextShardIterator
-			if reader.iterator == nil {
-				reader.exhausted = true
-				d.log.Infof("Shard %s exhausted", shardID)
-				d.mu.Unlock()
-				d.recordBatcher.Release(shardID, reserve)
-				return
-			}
+			shardClosed = reader.iterator == nil
 			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
 				reader.lastSequenceNumber = seq
 			}
@@ -2840,8 +3357,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		d.mu.Unlock()
 
 		if len(getRecords.Records) == 0 {
-			// No records available: wait before polling again
 			d.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeShard(ctx, shardID)
+				return
+			}
+			// No records available: wait before polling again
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2855,6 +3376,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
 		if len(batch) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
+			if shardClosed {
+				d.completeShard(ctx, shardID)
+				return
+			}
 			continue
 		}
 
@@ -2867,13 +3392,10 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		tb := d.recordBatcher.AddMessages(batch, shardID)
 		d.recordBatcher.Release(shardID, reserve-len(batch))
 
-		// Track pending ack
-		d.pendingAcks.Add(1)
-
 		// Create ack function. The checkpointer interface value is built
 		// explicitly so a nil *Checkpointer stays a nil interface: AckBatch
 		// must still run to settle the batch (draining the tracker) even
-		// when there is no checkpoint store to persist to.
+		// after Close has cleared the checkpointer.
 		var cp checkpointer
 		if d.checkpointer != nil {
 			cp = d.checkpointer
@@ -2881,20 +3403,21 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		recordBatcher := d.recordBatcher
 		batchLen := len(batch)
 		ackFunc := func(ackCtx context.Context, err error) error {
-			defer d.pendingAcks.Done()
+			d.ackMu.RLock()
+			defer d.ackMu.RUnlock()
 
 			// Check if already closed
-			if d.closed.Load() {
+			if d.closed {
 				d.log.Warn("Received ack after close, dropping")
 				if err == nil {
-					recordBatcher.RemoveBatch(tb)
+					recordBatcher.RemoveBatch(ackCtx, tb)
 				}
 				return nil
 			}
 
 			if err != nil {
 				d.log.Warnf("Batch nacked from shard %s: %v", shardID, err)
-				recordBatcher.RemoveBatch(tb)
+				recordBatcher.RemoveBatch(ackCtx, tb)
 				return err // Propagate nack error
 			}
 
@@ -2910,13 +3433,16 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		// Send to channel
 		select {
 		case <-ctx.Done():
-			// The batch was never dispatched: untrack it (and its pending
-			// ack) or its messages would pin the tracker budget forever.
-			recordBatcher.RemoveBatch(tb)
-			d.pendingAcks.Done()
+			// The batch was never dispatched: untrack it or its messages
+			// would pin the tracker budget forever.
+			recordBatcher.RemoveBatch(ctx, tb)
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
+		}
+		if shardClosed {
+			d.completeShard(ctx, shardID)
+			return
 		}
 	}
 }
@@ -2984,15 +3510,15 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// only persisted once this batch (and everything before it) is acked.
 	resolve := tracker.TrackBatch(segment, lastKey, len(batch))
 
-	// Track pending acks: the global gauge and the snapshot completion gate.
-	d.pendingAcks.Add(1)
+	// Track the pending ack in the snapshot completion gate.
 	ackGate.Add(1)
 
 	ackFunc := func(ackCtx context.Context, _ error) error {
-		defer d.pendingAcks.Done()
 		defer ackGate.Done()
+		d.ackMu.RLock()
+		defer d.ackMu.RUnlock()
 
-		if d.closed.Load() {
+		if d.closed {
 			d.log.Debug("Received snapshot ack after close, dropping")
 			return nil
 		}
@@ -3012,8 +3538,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// Send to channel (with backpressure handling)
 	select {
 	case <-ctx.Done():
-		d.pendingAcks.Done() // Undo the Add(1) above
-		ackGate.Done()
+		ackGate.Done() // Undo the Add(1) above
 		return ctx.Err()
 	case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 		d.log.Debugf("Sent snapshot batch of %d records from segment %d", len(batch), segment)
@@ -3253,8 +3778,15 @@ func (d *dynamoDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 }
 
 func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
-	// Mark as closed to reject new acks
-	d.closed.Store(true)
+	// Wait for the ack functions that are running, then drop all later acks.
+	// Do not wait for the other acks, because they can never come: Benthos
+	// drops a batch at shutdown without its ack when the batch did not get
+	// into the pipeline, and the batches that stay in msgChan are never
+	// delivered. Their records are not checkpointed, so a restart that resumes
+	// from a checkpoint reads them again.
+	d.ackMu.Lock()
+	d.closed = true
+	d.ackMu.Unlock()
 
 	// Trigger graceful shutdown (shutSig is immutable after Connect())
 	d.log.Debug("Initiating graceful shutdown")
@@ -3285,21 +3817,6 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 		d.log.Warn("Timeout waiting for background workers")
 	}
 
-	// Wait for pending acknowledgments with timeout
-	d.log.Debug("Waiting for pending acknowledgments")
-	acksDone := make(chan struct{})
-	go func() {
-		d.pendingAcks.Wait()
-		close(acksDone)
-	}()
-
-	select {
-	case <-acksDone:
-		d.log.Debug("All pending acks completed")
-	case <-time.After(defaultShutdownTimeout):
-		d.log.Warn("Timeout waiting for pending acks, proceeding with shutdown")
-	}
-
 	// Flush single-table mode checkpoints (fields immutable after Connect())
 	d.flushCheckpoint(ctx, d.checkpointer, d.recordBatcher, "single-table")
 
@@ -3313,7 +3830,10 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 		d.flushCheckpoint(ctx, ts.checkpointer, ts.recordBatcher, "table "+tableName)
 	}
 
-	// Clear references to help GC
+	// Clear references to help GC. Keep msgChan and shutSig: ReadBatch reads
+	// them without a lock, and the Benthos auto-retry wrapper can call
+	// ReadBatch from its own goroutine while Close runs. After Close, the
+	// soft stop signal makes ReadBatch return ErrNotConnected.
 	d.mu.Lock()
 	d.dynamoClient = nil
 	d.streamsClient = nil
@@ -3321,8 +3841,6 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	d.keySchema = nil
 	d.checkpointer = nil
 	d.recordBatcher = nil
-	d.msgChan = nil
-	d.shutSig = nil
 	d.tableStreams = nil
 	if d.snapshot != nil {
 		d.snapshot.seqBuffer = nil

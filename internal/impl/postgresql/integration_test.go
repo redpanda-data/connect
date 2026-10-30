@@ -154,6 +154,7 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *pgtes
 
 func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -275,6 +276,7 @@ pg_stream:
 // with the stalled slot blocking WAL retention). See CON-504.
 func TestIntegrationPostgresUnmarshalableRowRoutedWithError(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -376,6 +378,7 @@ pg_stream:
 // restart. See CON-489.
 func TestIntegrationPostgresSnapshotAckBarrier(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -576,6 +579,7 @@ pg_stream:
 
 func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -692,6 +696,7 @@ pg_stream:
 
 func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -788,6 +793,7 @@ pg_stream:
 
 func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	// running tests in the look to test different PostgreSQL versions
 	for _, version := range []string{"17", "16", "15", "14", "13", "12"} {
 		v := version
@@ -924,6 +930,7 @@ pg_stream:
 
 func TestIntegrationTOASTValues(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	for _, replicaIdentity := range []string{"FULL", "DEFAULT", "ALT_UNCHANGED_TOAST"} {
 		t.Run(replicaIdentity, func(t *testing.T) {
@@ -1028,6 +1035,7 @@ pg_stream:
 
 func TestIntegrationSnapshotConsistency(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1138,6 +1146,7 @@ read_until:
 
 func TestIntegrationSnapshotParallel(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1240,6 +1249,7 @@ read_until:
 
 func TestIntegrationPostgresMetadata(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1387,6 +1397,7 @@ postgres_cdc:
 // acknowledge, so confirmed_flush_lsn does not move and Postgres keeps all the WAL.
 func TestIntegrationHeartbeatAdvancesSlotOnQuietTables(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1444,6 +1455,7 @@ func slotPassedLSN(t *testing.T, db *pgtest.TestDB, slotName, lsn string) bool {
 
 func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -1764,6 +1776,7 @@ memory: {}`))
 // bad row to a dead-letter queue.
 func TestIntegrationPostgresDefaultBatchingIsOneRowPerMessage(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1830,6 +1843,7 @@ postgres_cdc:
 // per transaction and the input passes that batch straight through).
 func TestIntegrationPostgresBatchTransactions(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1897,6 +1911,7 @@ postgres_cdc:
 // three batches of three.
 func TestIntegrationPostgresBatchingCountHonoured(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -1967,6 +1982,7 @@ postgres_cdc:
 // slot after everything was acked must not replay any of them.
 func TestIntegrationPostgresLargeTransactionSpansBatches(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 

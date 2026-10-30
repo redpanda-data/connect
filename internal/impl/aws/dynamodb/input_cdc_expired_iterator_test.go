@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -48,6 +50,15 @@ func TestIsStreamsResourceNotFoundError(t *testing.T) {
 	assert.False(t, isStreamsResourceNotFoundError(&dynamodbtypes.ResourceNotFoundException{}))
 	assert.True(t, isStreamsResourceNotFoundError(&types.ResourceNotFoundException{}))
 	assert.True(t, isStreamsResourceNotFoundError(fmt.Errorf("refreshing: %w", &types.ResourceNotFoundException{})))
+}
+
+func TestIsIteratorThrottlingError(t *testing.T) {
+	assert.False(t, isIteratorThrottlingError(nil))
+	assert.False(t, isIteratorThrottlingError(errors.New("boom")))
+	assert.False(t, isIteratorThrottlingError(&types.InternalServerError{}))
+	assert.True(t, isIteratorThrottlingError(&types.LimitExceededException{}))
+	assert.True(t, isIteratorThrottlingError(fmt.Errorf("wrapped: %w", &smithy.GenericAPIError{Code: "LimitExceededException"})))
+	assert.True(t, isIteratorThrottlingError(&smithy.GenericAPIError{Code: "ThrottlingException"}))
 }
 
 func TestResolveResumeIterator(t *testing.T) {
@@ -187,9 +198,9 @@ const testStreamArn = "arn:aws:dynamodb:us-east-1:123456789012:table/test/stream
 
 // TestStartShardReader_ExpiredIteratorShardGone: when a shard's iterator
 // expires AND the shard has since been permanently deleted (GetShardIterator
-// during refresh fails with ResourceNotFoundException), the reader must mark
-// the shard exhausted, signal the coordinator, and return promptly instead of
-// retrying the refresh forever.
+// during refresh fails with ResourceNotFoundException), the reader must hand
+// the shard back to discovery (unregister its reader), signal the
+// coordinator, and return promptly instead of retrying the refresh forever.
 func TestStartShardReader_ExpiredIteratorShardGone(t *testing.T) {
 	transport := &stubStreamsTransport{
 		getRecordsErrorType:       "ExpiredIteratorException",
@@ -233,10 +244,10 @@ func TestStartShardReader_ExpiredIteratorShardGone(t *testing.T) {
 	}
 
 	d.mu.RLock()
-	exhausted := d.shardReaders["shard-001"].exhausted
+	_, registered := d.shardReaders["shard-001"]
 	d.mu.RUnlock()
-	require.True(t, exhausted,
-		"shard should be marked exhausted once refresh confirms it is permanently gone")
+	require.False(t, registered,
+		"the reader must unregister itself so discovery decides whether the shard still exists")
 
 	select {
 	case <-d.shardRefreshCh:
@@ -293,10 +304,10 @@ func TestStartTableShardReader_ExpiredIteratorShardGone(t *testing.T) {
 	}
 
 	ts.mu.RLock()
-	exhausted := ts.shardReaders["shard-001"].exhausted
+	_, registered := ts.shardReaders["shard-001"]
 	ts.mu.RUnlock()
-	require.True(t, exhausted,
-		"shard should be marked exhausted once refresh confirms it is permanently gone")
+	require.False(t, registered,
+		"the reader must unregister itself so discovery decides whether the shard still exists")
 
 	select {
 	case <-ts.shardRefreshCh:
@@ -401,6 +412,9 @@ type readerHarness struct {
 	// (d.shardReaders for single-table, ts.shardReaders for multi-table).
 	shardReaders map[string]*dynamoDBShardReader
 	start        func(ctx context.Context)
+	// completed reports whether the harnessed entry point recorded shard-001
+	// as read to the end of its closed shard.
+	completed func() bool
 }
 
 // readerHarnesses returns one fresh harness factory per reader entry point,
@@ -443,6 +457,11 @@ func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointL
 			}
 			return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
 				d.startTableShardReader(ctx, "table-a", ts, "shard-001")
+			}, completed: func() bool {
+				ts.mu.RLock()
+				defer ts.mu.RUnlock()
+				_, ok := ts.completedShards["shard-001"]
+				return ok
 			}}
 		}
 		d.streamArn = aws.String(testStreamArn)
@@ -450,6 +469,11 @@ func readerHarnessesWithTransport(mkTransport func() aws.HTTPClient, checkpointL
 		d.shardReaders = shardReaders
 		return &readerHarness{batcher: batcher, d: d, shardReaders: shardReaders, start: func(ctx context.Context) {
 			d.startShardReader(ctx, "shard-001")
+		}, completed: func() bool {
+			d.mu.RLock()
+			defer d.mu.RUnlock()
+			_, ok := d.completedShards["shard-001"]
+			return ok
 		}}
 	}
 	return map[string]func() *readerHarness{
@@ -494,6 +518,81 @@ func TestShardReader_CancelledSendUntracksBatch(t *testing.T) {
 			assert.Equal(t, 0, h.batcher.TrackedMessageCount(),
 				"a batch never dispatched must be untracked on reader cancellation")
 		})
+	}
+}
+
+// TestClose_ConcurrentReadBatch: the Benthos auto-retry wrapper calls
+// ReadBatch from its own goroutine, so a ReadBatch call can run while Close
+// runs. Close must not change the fields that ReadBatch reads without a lock.
+// Run with -race.
+func TestClose_ConcurrentReadBatch(t *testing.T) {
+	d := &dynamoDBCDCInput{
+		log:     service.MockResources().Logger(),
+		metrics: newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		msgChan: make(chan asyncMessage),
+		shutSig: shutdown.NewSignaller(),
+	}
+	// Stand in for the coordinator: signal that the workers stopped after
+	// soft stop.
+	go func() {
+		<-d.shutSig.SoftStopChan()
+		d.shutSig.TriggerHasStopped()
+	}()
+
+	readErr := make(chan error, 1)
+	go func() {
+		_, _, err := d.ReadBatch(t.Context())
+		readErr <- err
+	}()
+
+	require.NoError(t, d.Close(t.Context()))
+	select {
+	case err := <-readErr:
+		assert.ErrorIs(t, err, service.ErrNotConnected)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ReadBatch must return after Close")
+	}
+}
+
+// TestClose_DoesNotWaitForAcksThatCannotCome: Close must not wait for the
+// acks of batches that nobody will ack. A batch that stays in the message
+// channel is never delivered. Benthos drops a batch that it read at shutdown
+// without its ack when the batch did not get into the pipeline. Close waited
+// the full shutdown timeout (10s) for both.
+func TestClose_DoesNotWaitForAcksThatCannotCome(t *testing.T) {
+	cases := map[string]bool{
+		"batch in message channel": false,
+		"batch read but not acked": true,
+	}
+	for caseName, readBatch := range cases {
+		for name, mk := range readerHarnesses(twoRecordsPage, 100, 10) {
+			t.Run(caseName+"/"+name, func(t *testing.T) {
+				h := mk()
+
+				// Stand in for the coordinator: run the reader until soft
+				// stop, then close the channel and signal that the workers
+				// stopped.
+				workerCtx, workerCancel := h.d.shutSig.SoftStopCtx(context.Background())
+				go func() {
+					defer workerCancel()
+					h.start(workerCtx)
+					close(h.d.msgChan)
+					h.d.shutSig.TriggerHasStopped()
+				}()
+
+				require.Eventually(t, func() bool {
+					return len(h.d.msgChan) == 1
+				}, 5*time.Second, 5*time.Millisecond, "expected one batch in the message channel")
+				if readBatch {
+					_, _, err := h.d.ReadBatch(t.Context())
+					require.NoError(t, err)
+				}
+
+				start := time.Now()
+				require.NoError(t, h.d.Close(t.Context()))
+				assert.Less(t, time.Since(start), 2*time.Second, "Close must not wait for acks that cannot come")
+			})
+		}
 	}
 }
 
@@ -667,4 +766,225 @@ func TestShardReader_ReleasesReservationOnUnproductiveReads(t *testing.T) {
 			}
 		})
 	}
+}
+
+// closedShardStubTransport serves a single GetRecords page carrying records
+// and no NextShardIterator: the final page of a closed shard.
+type closedShardStubTransport struct {
+	records string
+	pages   atomic.Int64
+}
+
+func (s *closedShardStubTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	if !strings.HasSuffix(target, ".GetRecords") {
+		return nil, fmt.Errorf("closedShardStubTransport: unexpected operation %q", target)
+	}
+	s.pages.Add(1)
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	return &http.Response{
+		StatusCode: 200,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(fmt.Sprintf(`{"Records":%s}`, s.records))),
+		Request:    req,
+	}, nil
+}
+
+// TestShardReaderClosedShardFinalPageDelivered (CON-599): when GetRecords
+// returns a closed shard's last records together with a nil
+// NextShardIterator, those records must still be delivered before the
+// reader stops and records the shard as completed. Returning on the nil
+// iterator first dropped them, and since a completed shard is never read
+// again they would be lost for good.
+func TestShardReaderClosedShardFinalPageDelivered(t *testing.T) {
+	scenarios := map[string]struct {
+		records   string
+		wantBatch int
+	}{
+		"final page with records": {records: twoRecordsPage, wantBatch: 2},
+		"empty final page":        {records: "[]"},
+	}
+	for scenarioName, sc := range scenarios {
+		t.Run(scenarioName, func(t *testing.T) {
+			var transport *closedShardStubTransport
+			mk := func() aws.HTTPClient {
+				transport = &closedShardStubTransport{records: sc.records}
+				return transport
+			}
+			for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+				t.Run(name, func(t *testing.T) {
+					h := mkHarness()
+					done := make(chan struct{})
+					go func() {
+						h.start(t.Context())
+						close(done)
+					}()
+					select {
+					case <-done:
+					case <-time.After(5 * time.Second):
+						t.Fatal("reader should stop once the closed shard is read to the end")
+					}
+
+					if sc.wantBatch > 0 {
+						select {
+						case am := <-h.d.msgChan:
+							assert.Len(t, am.msg, sc.wantBatch, "the closed shard's final records must be delivered")
+						default:
+							t.Fatal("the closed shard's final page was dropped")
+						}
+					} else {
+						assert.Empty(t, h.d.msgChan)
+					}
+					assert.Equal(t, int64(1), transport.pages.Load(), "a closed shard must not be polled past its last page")
+					assert.True(t, h.shardReaders["shard-001"].exhausted, "the reader must be marked exhausted for cleanup")
+					assert.True(t, h.completed(), "the shard must be recorded as completed")
+				})
+			}
+		})
+	}
+}
+
+// scriptedStreamsTransport answers GetRecords and GetShardIterator from
+// per-operation scripts: each call pops the next response, and the last one
+// repeats. A response is either an AWS error type or a success body.
+type scriptedStreamsTransport struct {
+	mu               sync.Mutex
+	getRecords       []scriptedResponse
+	getShardIterator []scriptedResponse
+	calls            map[string]int
+}
+
+type scriptedResponse struct {
+	errType string
+	body    string
+}
+
+func (s *scriptedStreamsTransport) callCount(op string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls[op]
+}
+
+func (s *scriptedStreamsTransport) Do(req *http.Request) (*http.Response, error) {
+	target := req.Header.Get("X-Amz-Target")
+	op := target[strings.LastIndex(target, ".")+1:]
+
+	s.mu.Lock()
+	if s.calls == nil {
+		s.calls = map[string]int{}
+	}
+	var script *[]scriptedResponse
+	switch op {
+	case "GetRecords":
+		script = &s.getRecords
+	case "GetShardIterator":
+		script = &s.getShardIterator
+	default:
+		s.mu.Unlock()
+		return nil, fmt.Errorf("scriptedStreamsTransport: unexpected operation %q", target)
+	}
+	s.calls[op]++
+	resp := (*script)[0]
+	if len(*script) > 1 {
+		*script = (*script)[1:]
+	}
+	s.mu.Unlock()
+
+	hdr := http.Header{}
+	hdr.Set("Content-Type", "application/x-amz-json-1.0")
+	status, body := 200, resp.body
+	if resp.errType != "" {
+		status = 400
+		hdr.Set("X-Amzn-ErrorType", resp.errType)
+		body = fmt.Sprintf(`{"__type":%q,"message":"stubbed for test"}`, resp.errType)
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     hdr,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}, nil
+}
+
+// TestShardReaderTrimmedIteratorRefreshThrottledRetries (CON-599): a
+// throttled GetShardIterator while recovering from TrimmedDataAccessException
+// is transient: the reader backs off and retries instead of giving the shard
+// up.
+func TestShardReaderTrimmedIteratorRefreshThrottledRetries(t *testing.T) {
+	var transport *scriptedStreamsTransport
+	mk := func() aws.HTTPClient {
+		transport = &scriptedStreamsTransport{
+			getRecords: []scriptedResponse{
+				{errType: "TrimmedDataAccessException"},
+				{errType: "TrimmedDataAccessException"},
+				{body: fmt.Sprintf(`{"Records":%s,"NextShardIterator":"iter-next"}`, twoRecordsPage)},
+				{body: `{"Records":[],"NextShardIterator":"iter-next"}`},
+			},
+			getShardIterator: []scriptedResponse{
+				{errType: "LimitExceededException"},
+				{body: `{"ShardIterator":"iter-fresh"}`},
+			},
+		}
+		return transport
+	}
+	for name, mkHarness := range readerHarnessesWithTransport(mk, 100, 1) {
+		t.Run(name, func(t *testing.T) {
+			h := mkHarness()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			go h.start(ctx)
+
+			select {
+			case am := <-h.d.msgChan:
+				assert.Len(t, am.msg, 2)
+			case <-time.After(5 * time.Second):
+				t.Fatalf("the reader must recover after a throttled iterator refresh (calls: %v)", transport.calls)
+			}
+			assert.Equal(t, 2, transport.callCount("GetShardIterator"))
+		})
+	}
+}
+
+// TestShardReaderGiveUpReRegisteredByNextRefresh (CON-599): a reader that
+// gives up on its shard (iterator refresh failed) must unregister itself, so
+// the refresh it triggers re-registers a still-listed shard from its
+// checkpoint right away. Marking it exhausted instead kept the shard known to
+// discovery until the next cleanup tick, stalling it for up to five minutes.
+func TestShardReaderGiveUpReRegisteredByNextRefresh(t *testing.T) {
+	readerTransport := &scriptedStreamsTransport{
+		getRecords:       []scriptedResponse{{errType: "TrimmedDataAccessException"}},
+		getShardIterator: []scriptedResponse{{errType: "InternalServerError"}},
+	}
+	refreshTransport := &refreshStubTransport{shardIDs: []string{"shard-001"}}
+
+	d := newRefreshTestInput(t, refreshTransport)
+	d.conf.batchSize = 10
+	d.conf.pollInterval = 20 * time.Millisecond
+	d.conf.throttleBackoff = 20 * time.Millisecond
+	d.shardReaders["shard-001"] = &dynamoDBShardReader{shardID: "shard-001", iterator: aws.String("initial-iterator")}
+	d.streamsClient = newStubStreamsClient(readerTransport)
+
+	done := make(chan struct{})
+	go func() {
+		d.startShardReader(t.Context(), "shard-001")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reader should give up on a failed iterator refresh")
+	}
+	assert.Empty(t, registeredShards(d), "the reader must unregister itself when giving up")
+	select {
+	case <-d.shardRefreshCh:
+	default:
+		t.Fatal("giving up must trigger an immediate refresh")
+	}
+
+	// The triggered refresh, with no cleanup tick in between.
+	d.streamsClient = newStubStreamsClient(refreshTransport)
+	require.NoError(t, d.refreshShards(t.Context()))
+	assert.ElementsMatch(t, []string{"shard-001"}, registeredShards(d),
+		"a still-listed shard must be re-registered by the refresh the give-up triggered")
 }

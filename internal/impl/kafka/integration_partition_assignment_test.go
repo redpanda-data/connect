@@ -196,6 +196,7 @@ func (g *assignmentGroup) requireEvenPerTopic(assigned assignment) {
 
 func TestIntegrationRedpandaPartitionAssignmentStrategy(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	for _, strategy := range []string{"range", "roundrobin", "sticky", "cooperative-sticky"} {
 		t.Run(strategy, func(t *testing.T) {
@@ -240,6 +241,7 @@ func TestIntegrationRedpandaPartitionAssignmentStrategy(t *testing.T) {
 
 func TestIntegrationRedpandaPartitionAssignmentMigration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	t.Run("no_common_strategy_is_rejected", func(t *testing.T) {
 		t.Parallel()

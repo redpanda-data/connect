@@ -11,6 +11,7 @@ package saphana
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -184,19 +185,35 @@ const hanaColumnTypeCurrentSchemaQuery = `SELECT DATA_TYPE_NAME
 FROM SYS.TABLE_COLUMNS
 WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = ? AND COLUMN_NAME = ?`
 
-// fetchHANAColumnType returns the catalog DATA_TYPE_NAME of a single column.
+// hanaViewColumnTypeQuery and hanaViewColumnTypeCurrentSchemaQuery look a
+// column up in SYS.VIEW_COLUMNS: a view has no SYS.TABLE_COLUMNS rows.
+const hanaViewColumnTypeQuery = `SELECT DATA_TYPE_NAME
+FROM SYS.VIEW_COLUMNS
+WHERE SCHEMA_NAME = ? AND VIEW_NAME = ? AND COLUMN_NAME = ?`
+
+const hanaViewColumnTypeCurrentSchemaQuery = `SELECT DATA_TYPE_NAME
+FROM SYS.VIEW_COLUMNS
+WHERE SCHEMA_NAME = CURRENT_SCHEMA AND VIEW_NAME = ? AND COLUMN_NAME = ?`
+
+// fetchHANAColumnType returns the catalog DATA_TYPE_NAME of a single column of
+// a table, or of a view when SYS.TABLE_COLUMNS has no row for it. The error
+// wraps sql.ErrNoRows when neither catalog view lists the column.
 func fetchHANAColumnType(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string) (string, error) {
-	var (
-		row      *sql.Row
-		dataType string
-	)
+	tableQuery, viewQuery := hanaColumnTypeCurrentSchemaQuery, hanaViewColumnTypeCurrentSchemaQuery
+	args := []any{tableName, columnName}
 	if schemaName != "" {
-		row = db.QueryRowContext(ctx, hanaColumnTypeQuery, schemaName, tableName, columnName)
-	} else {
-		row = db.QueryRowContext(ctx, hanaColumnTypeCurrentSchemaQuery, tableName, columnName)
+		tableQuery, viewQuery = hanaColumnTypeQuery, hanaViewColumnTypeQuery
+		args = []any{schemaName, tableName, columnName}
 	}
-	if err := row.Scan(&dataType); err != nil {
-		return "", fmt.Errorf("querying SYS.TABLE_COLUMNS for column %q of %s: %w", columnName, tableName, err)
+	var dataType string
+	catalog := "SYS.TABLE_COLUMNS"
+	err := db.QueryRowContext(ctx, tableQuery, args...).Scan(&dataType)
+	if errors.Is(err, sql.ErrNoRows) {
+		catalog = "SYS.TABLE_COLUMNS and SYS.VIEW_COLUMNS"
+		err = db.QueryRowContext(ctx, viewQuery, args...).Scan(&dataType)
+	}
+	if err != nil {
+		return "", fmt.Errorf("querying %s for column %q of %s: %w", catalog, columnName, tableName, err)
 	}
 	return dataType, nil
 }

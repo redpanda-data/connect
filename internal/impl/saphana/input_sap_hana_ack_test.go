@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -760,4 +761,359 @@ func TestSAPHANAInputCheckpointAcceptsStateWithoutSource(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resumed)
 	require.Equal(t, int64(7), s.hwm)
+}
+
+// A batch whose checkpoint registration fails (the context ends while the
+// tracker is full at checkpoint_limit) never reaches the framework. Its rows,
+// including the one buffered by the peek-ahead, must be read again rather
+// than skipped by the next ReadBatch.
+func TestSAPHANAInputTrackFailureRewindsPosition(t *testing.T) {
+	res := enterpriseResourcesWithCache()
+	s, mock := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: incrementing
+table: T
+incrementing_column: ID
+incrementing_initial_value: "0"
+poll_interval: 1ms
+fetch_size: 2
+checkpoint_limit: 1
+max_retries: 0
+checkpoint_cache: %s
+`, testCacheName))
+
+	rows := sqlmock.NewRows([]string{"ID"})
+	for i := int64(1); i <= 5; i++ {
+		rows.AddRow(i)
+	}
+	mock.ExpectQuery(testIncQuery).WithArgs(int64(0)).WillReturnRows(rows)
+
+	t.Log("Given: a first batch delivered and not yet acknowledged, filling checkpoint_limit")
+	batch1, ack1, err := s.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, []int64{1, 2}, intsOf(t, decodeBatch(t, batch1), "ID"))
+
+	t.Log("When: the second ReadBatch blocks on the full tracker and its context ends")
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _, err = s.ReadBatch(cancelled)
+	require.ErrorIs(t, err, context.Canceled)
+
+	t.Log("Then: after the first batch is acknowledged the next read re-delivers rows 3 and 4")
+	require.NoError(t, ack1(t.Context(), nil))
+	mock.ExpectQuery(testIncQuery).WithArgs(int64(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"ID"}).AddRow(int64(3)).AddRow(int64(4)).AddRow(int64(5)))
+	batch2, ack2, err := s.ReadBatch(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, []int64{3, 4}, intsOf(t, decodeBatch(t, batch2), "ID"))
+	require.NoError(t, ack2(t.Context(), nil))
+	cp := readCheckpoint(t, res)
+	require.NotNil(t, cp)
+	require.NotNil(t, cp.IncrHWMInt)
+	assert.Equal(t, int64(4), *cp.IncrHWMInt)
+}
+
+func decodeBatch(t *testing.T, batch service.MessageBatch) []map[string]any {
+	t.Helper()
+	out := make([]map[string]any, 0, len(batch))
+	for _, msg := range batch {
+		out = append(out, decodeRow(t, msg))
+	}
+	return out
+}
+
+// Pure timestamp mode checkpoints mid-window once a batch ends on a completed
+// timestamp (the peeked next row is later), so a restart resumes with
+// `ts > T` instead of re-reading the whole window. A tie group spanning the
+// batch boundary keeps the previous checkpoint.
+func TestSAPHANAInputTimestampCheckpointsCompletedTimestamp(t *testing.T) {
+	conf := fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+poll_interval: 1ms
+fetch_size: 2
+max_retries: 0
+timestamp_delay: 0s
+checkpoint_cache: %s
+`, testCacheName)
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1, t2, t3 := base.Add(time.Second), base.Add(2*time.Second), base.Add(3*time.Second)
+	dbNow := base.Add(time.Hour)
+
+	t.Run("batch ends on a completed timestamp", func(t *testing.T) {
+		res := enterpriseResourcesWithCache()
+		s, mock := newTestInput(t, res, conf)
+		t.Log("Given: six rows over three timestamps, two per timestamp, fetch_size 2")
+		mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+			WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+		mock.ExpectQuery(testTSFirstQuery).WithArgs(dbNow).
+			WillReturnRows(sqlmock.NewRows([]string{"TS", "ID"}).
+				AddRow(t1, int64(1)).AddRow(t1, int64(2)).
+				AddRow(t2, int64(3)).AddRow(t2, int64(4)).
+				AddRow(t3, int64(5)).AddRow(t3, int64(6)))
+
+		t.Log("When: the first batch is acknowledged and the input restarts")
+		batch, ack, err := s.ReadBatch(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, []int64{1, 2}, intsOf(t, decodeBatch(t, batch), "ID"))
+		require.NoError(t, ack(t.Context(), nil))
+		cp := readCheckpoint(t, res)
+		require.NotNil(t, cp)
+		require.NotNil(t, cp.TimestampHWM)
+		assert.True(t, t1.Equal(*cp.TimestampHWM), "checkpoint must be the completed timestamp, got %v", *cp.TimestampHWM)
+
+		s2, mock2 := newTestInput(t, res, conf)
+		_, err = s2.loadCheckpoint(t.Context())
+		require.NoError(t, err)
+
+		t.Log("Then: the restarted input resumes after t1 and re-delivers none of its rows")
+		mock2.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+			WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+		mock2.ExpectQuery(testTSWindowQuery).WithArgs(t1, dbNow).
+			WillReturnRows(sqlmock.NewRows([]string{"TS", "ID"}).
+				AddRow(t2, int64(3)).AddRow(t2, int64(4)).
+				AddRow(t3, int64(5)).AddRow(t3, int64(6)))
+		var ids []int64
+		for len(ids) < 4 {
+			batch, ack, err := s2.ReadBatch(t.Context())
+			require.NoError(t, err)
+			require.NoError(t, ack(t.Context(), nil))
+			ids = append(ids, intsOf(t, decodeBatch(t, batch), "ID")...)
+		}
+		assert.Equal(t, []int64{3, 4, 5, 6}, ids)
+		require.NoError(t, mock2.ExpectationsWereMet())
+		cp = readCheckpoint(t, res)
+		require.NotNil(t, cp.TimestampHWM)
+		assert.True(t, dbNow.Equal(*cp.TimestampHWM), "a consumed window checkpoints at its bound, got %v", *cp.TimestampHWM)
+	})
+
+	t.Run("tie group spans the batch boundary", func(t *testing.T) {
+		res := enterpriseResourcesWithCache()
+		s, mock := newTestInput(t, res, conf)
+		t.Log("Given: three rows sharing t1, then one at t2 and one at t3, fetch_size 2")
+		mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+			WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+		mock.ExpectQuery(testTSFirstQuery).WithArgs(dbNow).
+			WillReturnRows(sqlmock.NewRows([]string{"TS", "ID"}).
+				AddRow(t1, int64(1)).AddRow(t1, int64(2)).AddRow(t1, int64(3)).
+				AddRow(t2, int64(4)).AddRow(t3, int64(5)))
+
+		t.Log("When: the first batch, ending inside the t1 group, is acknowledged")
+		_, ack, err := s.ReadBatch(t.Context())
+		require.NoError(t, err)
+		require.NoError(t, ack(t.Context(), nil))
+
+		t.Log("Then: no timestamp is checkpointed, since t1 is not complete")
+		cp := readCheckpoint(t, res)
+		require.NotNil(t, cp)
+		assert.Nil(t, cp.TimestampHWM)
+
+		t.Log("And: the next batch (rows 3 and 4) ends on t2, which the peeked t3 row completes")
+		batch, ack, err := s.ReadBatch(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, []int64{3, 4}, intsOf(t, decodeBatch(t, batch), "ID"))
+		require.NoError(t, ack(t.Context(), nil))
+		cp = readCheckpoint(t, res)
+		require.NotNil(t, cp.TimestampHWM)
+		assert.True(t, t2.Equal(*cp.TimestampHWM), "got %v", *cp.TimestampHWM)
+	})
+}
+
+// gaugeExporter records the latest value of every gauge by name. benthos
+// re-invokes the ctor on each update, so values live on the exporter.
+type gaugeExporter struct {
+	mu     sync.Mutex
+	gauges map[string]int64
+}
+
+func (*gaugeExporter) NewCounterCtor(string, ...string) service.MetricsExporterCounterCtor {
+	return func(...string) service.MetricsExporterCounter { return noopExporterMetric{} }
+}
+
+func (*gaugeExporter) NewTimerCtor(string, ...string) service.MetricsExporterTimerCtor {
+	return func(...string) service.MetricsExporterTimer { return noopExporterMetric{} }
+}
+
+func (e *gaugeExporter) NewGaugeCtor(name string, _ ...string) service.MetricsExporterGaugeCtor {
+	return func(...string) service.MetricsExporterGauge { return gaugeHandle{e: e, name: name} }
+}
+
+func (*gaugeExporter) Close(context.Context) error { return nil }
+
+func (e *gaugeExporter) set(name string, v int64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.gauges[name] = v
+}
+
+func (e *gaugeExporter) get(name string) (int64, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	v, ok := e.gauges[name]
+	return v, ok
+}
+
+type gaugeHandle struct {
+	e    *gaugeExporter
+	name string
+}
+
+func (g gaugeHandle) Set(v int64) {
+	g.e.set(g.name, v)
+}
+
+type noopExporterMetric struct{}
+
+func (noopExporterMetric) Incr(int64)          {}
+func (noopExporterMetric) IncrFloat64(float64) {}
+func (noopExporterMetric) Timing(int64)        {}
+
+// resourcesWithGauges builds licensed resources holding the test cache, with
+// metrics routed to a gaugeExporter.
+func resourcesWithGauges(t *testing.T) (*service.Resources, *gaugeExporter) {
+	t.Helper()
+	exp := &gaugeExporter{gauges: map[string]int64{}}
+	env := service.NewEnvironment()
+	require.NoError(t, env.RegisterMetricsExporter("sap_hana_test_gauges", service.NewConfigSpec(),
+		func(*service.ParsedConfig, *service.Logger) (service.MetricsExporter, error) { return exp, nil }))
+	b := env.NewResourceBuilder()
+	require.NoError(t, b.SetMetricsYAML("sap_hana_test_gauges: {}"))
+	require.NoError(t, b.AddCacheYAML(fmt.Sprintf("label: %s\nmemory: {}", testCacheName)))
+	res, closeFn, err := b.Build()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeFn(context.Background()) })
+	license.InjectTestService(res)
+	return res, exp
+}
+
+// The pending-messages gauge shows batches awaiting acks (a ReadBatch blocked
+// at checkpoint_limit looks idle otherwise), and the lag gauge shows how far
+// the checkpointed timestamp trails the database clock.
+func TestSAPHANAInputLagAndPendingGauges(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+	s, mock := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+poll_interval: 1ms
+fetch_size: 2
+max_retries: 0
+timestamp_delay: 30s
+checkpoint_cache: %s
+`, testCacheName))
+
+	t.Log("Given: a window whose bound is the database clock minus 30s, and rows ten minutes old")
+	upper := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	// The host clock runs an hour behind the database clock; only the offset
+	// read at each poll matters.
+	hostNow := upper.Add(-time.Hour)
+	s.cp.now = func() time.Time { return hostNow }
+	t1, t2, t3 := upper.Add(-11*time.Minute), upper.Add(-10*time.Minute), upper.Add(-9*time.Minute)
+	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(-30)).
+		WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(upper))
+	mock.ExpectQuery(testTSFirstQuery).WithArgs(upper).
+		WillReturnRows(sqlmock.NewRows([]string{"TS"}).AddRow(t1).AddRow(t2).AddRow(t3))
+
+	t.Log("When: a batch is read")
+	_, ack, err := s.ReadBatch(t.Context())
+	require.NoError(t, err)
+
+	t.Log("Then: it is pending until acknowledged, and the ack sets the lag")
+	pending, ok := exp.get("sap_hana_checkpoint_pending_messages")
+	require.True(t, ok)
+	assert.Equal(t, int64(2), pending)
+	_, ok = exp.get("sap_hana_hwm_lag_seconds")
+	assert.False(t, ok, "no lag before a checkpoint resolves")
+
+	require.NoError(t, ack(t.Context(), nil))
+	pending, _ = exp.get("sap_hana_checkpoint_pending_messages")
+	assert.Equal(t, int64(0), pending)
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	// Checkpoint is t2 (the peeked t3 is later); database now is upper+30s.
+	assert.Equal(t, int64((10*time.Minute+30*time.Second)/time.Second), lag)
+
+	t.Log("When: five minutes pass with no poll and no ack, as when ReadBatch is blocked at checkpoint_limit")
+	hostNow = hostNow.Add(5 * time.Minute)
+	s.cp.refreshLag()
+
+	t.Log("Then: the lag keeps growing with the estimated database clock")
+	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
+	assert.Equal(t, int64((15*time.Minute+30*time.Second)/time.Second), lag)
+}
+
+// The lag refresh loop recomputes the gauge on its own, so a stalled pipeline
+// shows a growing lag without any poll or ack.
+func TestSAPHANAInputLagRefreshLoop(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+	c := newCheckpointer(res, &sapHANAInputConfig{checkpointLimit: 10})
+	var mu sync.Mutex
+	hostNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	c.now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return hostNow
+	}
+
+	t.Log("Given: a poll that read the database clock and a checkpoint one minute behind it")
+	c.observeDBClock(hostNow)
+	hwm := hostNow.Add(-time.Minute)
+	c.recordLag(&sapHANACheckpointState{TimestampHWM: &hwm})
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64(60), lag)
+
+	t.Log("When: the refresh loop runs while the host clock moves on by an hour")
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	c.startLagRefresh(stop)
+	mu.Lock()
+	hostNow = hostNow.Add(time.Hour)
+	mu.Unlock()
+
+	t.Log("Then: the gauge catches up without a poll or an ack")
+	assert.Eventually(t, func() bool {
+		lag, _ := exp.get("sap_hana_hwm_lag_seconds")
+		return lag == int64((time.Hour+time.Minute)/time.Second)
+	}, 5*time.Second, 50*time.Millisecond)
+}
+
+// The lag gauge follows the persisted checkpoint: when the cache write fails,
+// a restart resumes from the older position, so the gauge must not move.
+func TestSAPHANAInputLagIgnoresFailedPersist(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+	s, _ := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+checkpoint_cache: %s
+`, testCacheName))
+	c := s.cp
+	hostNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	c.now = func() time.Time { return hostNow }
+	c.observeDBClock(hostNow)
+
+	t.Log("Given: a checkpoint one minute behind the database clock, persisted")
+	older := hostNow.Add(-time.Minute)
+	ack, err := c.track(t.Context(), 1, int64(1), older)
+	require.NoError(t, err)
+	require.NoError(t, ack(t.Context(), nil))
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64(60), lag)
+
+	t.Log("When: a later checkpoint resolves but the cache write fails")
+	c.cacheName = "missing_cache"
+	newer := hostNow.Add(-time.Second)
+	ack, err = c.track(t.Context(), 1, int64(2), newer)
+	require.NoError(t, err)
+	require.NoError(t, ack(t.Context(), nil))
+
+	t.Log("Then: the gauge still shows the persisted checkpoint")
+	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
+	assert.Equal(t, int64(60), lag)
 }

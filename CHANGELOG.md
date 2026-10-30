@@ -3,11 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.116.0 - TBD
+## 4.117.0 - TBD
 
 ### Added
 
 - aerospike: New `aerospike` output. ([@abhilashmandaliya](https://github.com/abhilashmandaliya), [#5020](https://github.com/redpanda-data/connect/pull/5020))
+
+## 4.116.0 - 2026-10-29
+
+### Fixed
+
+- redpanda_migrator: With `schema_registry.translate_ids` enabled, the output no longer rewrites the schema ID in the input message. A batch retried after a failed write was translated a second time, so records either failed forever with `schema ID N not found in registry` or were silently written with the wrong destination schema ID. ([@josephwoodward](https://github.com/josephwoodward), [#5074](https://github.com/redpanda-data/connect/pull/5074))
 
 ## 4.115.1 - 2026-10-23
 
