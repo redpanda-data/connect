@@ -709,6 +709,16 @@ func TestMapInfiniteTimes(t *testing.T) {
 			},
 		},
 		{
+			name: "array elements",
+			mode: "as_string",
+			row: map[string]any{
+				"valid_days": []any{ts, pglogicalstream.PositiveInfinity, nil, pglogicalstream.NegativeInfinity},
+			},
+			want: map[string]any{
+				"valid_days": []any{ts, "infinity", nil, "-infinity"},
+			},
+		},
+		{
 			name: "nil row is kept",
 			mode: "as_null",
 			row:  nil,
@@ -726,9 +736,15 @@ func TestMapInfiniteTimes(t *testing.T) {
 	t.Run("the input row is not changed", func(t *testing.T) {
 		to, err := infiniteTimeMapper("as_string")
 		require.NoError(t, err)
-		row := map[string]any{"valid_to": pglogicalstream.PositiveInfinity}
+		row := map[string]any{
+			"valid_to":   pglogicalstream.PositiveInfinity,
+			"valid_days": []any{pglogicalstream.PositiveInfinity},
+		}
 		mapInfiniteTimes(row, to)
-		require.Equal(t, map[string]any{"valid_to": pglogicalstream.PositiveInfinity}, row)
+		require.Equal(t, map[string]any{
+			"valid_to":   pglogicalstream.PositiveInfinity,
+			"valid_days": []any{pglogicalstream.PositiveInfinity},
+		}, row)
 	})
 
 	t.Run("sentinels marshal to JSON", func(t *testing.T) {

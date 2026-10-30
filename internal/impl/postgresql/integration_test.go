@@ -408,9 +408,9 @@ func TestIntegrationPostgresInfiniteTimestamps(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.mode, func(t *testing.T) {
 			table := "validity_" + tt.mode
-			db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp);", table))
-			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (1, now(), now()::date, now()::timestamp);", table))
-			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (2, 'infinity', '-infinity', 'infinity');", table))
+			db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp, valid_days date[]);", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (1, now(), now()::date, now()::timestamp, ARRAY[now()::date]);", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (2, 'infinity', '-infinity', 'infinity', '{infinity,-infinity}');", table))
 
 			template := fmt.Sprintf(`
 pg_stream:
@@ -460,7 +460,7 @@ pg_stream:
 			}, 30*time.Second, 100*time.Millisecond, "the snapshot must deliver both rows, the infinite one included")
 
 			// Streamed after the snapshot, so this row goes through the pgoutput decoder.
-			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (3, '-infinity', 'infinity', '-infinity');", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (3, '-infinity', 'infinity', '-infinity', '{-infinity,infinity}');", table))
 
 			require.Eventually(t, func() bool {
 				receivedMu.Lock()
@@ -477,17 +477,19 @@ pg_stream:
 
 			require.Equal(t, float64(2), got[1]["id"])
 			require.Equal(t, map[string]any{
-				"id":       float64(2),
-				"valid_to": tt.positiveInfinity,
-				"valid_on": tt.negativeInfinity,
-				"valid_ts": tt.positiveInfinity,
+				"id":         float64(2),
+				"valid_to":   tt.positiveInfinity,
+				"valid_on":   tt.negativeInfinity,
+				"valid_ts":   tt.positiveInfinity,
+				"valid_days": []any{tt.positiveInfinity, tt.negativeInfinity},
 			}, got[1], "snapshot")
 
 			require.Equal(t, map[string]any{
-				"id":       float64(3),
-				"valid_to": tt.negativeInfinity,
-				"valid_on": tt.positiveInfinity,
-				"valid_ts": tt.negativeInfinity,
+				"id":         float64(3),
+				"valid_to":   tt.negativeInfinity,
+				"valid_on":   tt.positiveInfinity,
+				"valid_ts":   tt.negativeInfinity,
+				"valid_days": []any{tt.negativeInfinity, tt.positiveInfinity},
 			}, got[2], "stream")
 
 			require.NoError(t, stream.StopWithin(30*time.Second))
@@ -499,7 +501,8 @@ pg_stream:
 // reads every row of a table whose primary key holds infinite timestamps. The
 // snapshot pages on the primary key and passes the last key back as a query
 // argument, so the decoders must keep the exact infinite value: a nil key
-// after the -infinity row would end the scan there.
+// after the -infinity row would end the scan there. A date array key goes
+// back as a []any with InfiniteTime elements.
 func TestIntegrationPostgresInfinitePrimaryKeySnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -508,6 +511,8 @@ func TestIntegrationPostgresInfinitePrimaryKeySnapshot(t *testing.T) {
 
 	db.MustExec(t, "CREATE TABLE validity_pk (valid_from timestamptz PRIMARY KEY, name text);")
 	db.MustExec(t, "INSERT INTO validity_pk VALUES ('-infinity', 'first'), (now(), 'middle'), ('infinity', 'last');")
+	db.MustExec(t, "CREATE TABLE validity_days_pk (valid_on date[] PRIMARY KEY, name text);")
+	db.MustExec(t, "INSERT INTO validity_days_pk VALUES ('{-infinity}', 'days first'), ('{2026-01-02,infinity}', 'days middle'), ('{infinity}', 'days last');")
 
 	template := fmt.Sprintf(`
 pg_stream:
@@ -518,6 +523,7 @@ pg_stream:
     schema: public
     tables:
        - validity_pk
+       - validity_days_pk
 `, databaseURL)
 
 	var (
@@ -553,11 +559,11 @@ pg_stream:
 	require.Eventually(t, func() bool {
 		receivedMu.Lock()
 		defer receivedMu.Unlock()
-		return len(names) == 3
+		return len(names) == 6
 	}, 30*time.Second, 100*time.Millisecond, "the snapshot must read past the infinite keys")
 
 	receivedMu.Lock()
-	require.ElementsMatch(t, []string{"first", "middle", "last"}, names)
+	require.ElementsMatch(t, []string{"first", "middle", "last", "days first", "days middle", "days last"}, names)
 	receivedMu.Unlock()
 
 	require.NoError(t, stream.StopWithin(30*time.Second))

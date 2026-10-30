@@ -41,6 +41,7 @@ rely on them.
 | UUID | String | string | string |
 | JSON / JSONB | Any | (native) | (native) |
 | INTERVAL, DATERANGE, TSTZRANGE (and their arrays and multiranges) | Any | string | string |
+| DATE[], TIMESTAMP[], TIMESTAMPTZ[] | Any | []any of time.Time | []any of time.Time |
 
 ### Notes
 
@@ -60,6 +61,10 @@ rely on them.
   fallback, and the snapshot path resolves the numeric OID via `resolveTypeName`.
 - **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. The special
   values `infinity` and `-infinity` are handled as for DATE.
+- **DATE[], TIMESTAMP[], TIMESTAMPTZ[]**: Both paths decode the array text with
+  the pgx codec and return `[]any`. A NULL element is `nil`, and an infinite
+  element is `pglogicalstream.InfiniteTime`, which `infinite_timestamps` maps
+  as for a scalar column. The snapshot path used to return the array text.
 - **INTERVAL and time ranges**: Both paths return the raw PostgreSQL text.
   pgx decodes these types to pgtype.Interval and pgtype.Range structs, which
   marshal with internal fields, and it fails to decode the interval `infinity`
