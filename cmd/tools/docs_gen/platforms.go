@@ -310,29 +310,14 @@ func moduleDir(mod string) (string, error) {
 // registrationsOnlyIn returns the components registered in the files of
 // files that other doesn't compile.
 func registrationsOnlyIn(files, other map[string]bool) (map[string]bool, error) {
-	// Only this module and benthos register components. Other dependencies
-	// can also have files that only cgo builds compile, such as a macOS
-	// keychain backend.
-	modDirs, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/redpanda-data/connect/v4", "github.com/redpanda-data/benthos/v4").Output()
+	mods, err := sourceModules()
 	if err != nil {
-		return nil, fmt.Errorf("finding the module directories: %w", err)
-	}
-	var mods []string
-	for d := range strings.FieldsSeq(string(modDirs)) {
-		mods = append(mods, d+string(filepath.Separator))
-	}
-	inModule := func(path string) bool {
-		for _, m := range mods {
-			if strings.HasPrefix(path, m) {
-				return true
-			}
-		}
-		return false
+		return nil, err
 	}
 	keys := map[string]bool{}
 	fset := token.NewFileSet()
 	for path := range files {
-		if other[path] || !inModule(path) {
+		if other[path] || sourceFile(path, mods) == "" {
 			continue
 		}
 		found, err := fileRegistrations(path, files, fset)
@@ -344,6 +329,192 @@ func registrationsOnlyIn(files, other map[string]bool) (map[string]bool, error) 
 		}
 	}
 	return keys, nil
+}
+
+// sourceModule is one of the two modules that register components, with
+// what a banner needs to name a file in it.
+type sourceModule struct {
+	// repo is the GitHub repository, such as redpanda-data/benthos.
+	repo string
+	// version is the module version, empty for the main module and for a
+	// module a replace directive points at a directory.
+	version string
+	// dir is the module's root directory, with a trailing separator.
+	dir string
+}
+
+// sourceModules lists this module and benthos, the only modules that register
+// components. Other dependencies can also have files that only cgo builds
+// compile, such as a macOS keychain backend, so the scans stay inside these.
+func sourceModules() ([]sourceModule, error) {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Path}}\t{{.Version}}\t{{.Dir}}", connectModule, "github.com/redpanda-data/benthos/v4").Output()
+	if err != nil {
+		return nil, fmt.Errorf("finding the module directories: %w", err)
+	}
+	var mods []sourceModule
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		parts := strings.Split(line, "\t")
+		if len(parts) != 3 || parts[2] == "" {
+			return nil, fmt.Errorf("unexpected go list -m output: %q", line)
+		}
+		// github.com/redpanda-data/benthos/v4 -> redpanda-data/benthos
+		repo := strings.TrimPrefix(parts[0], "github.com/")
+		if i := strings.LastIndex(repo, "/v"); i > 0 && strings.Trim(repo[i+2:], "0123456789") == "" {
+			repo = repo[:i]
+		}
+		mods = append(mods, sourceModule{repo: repo, version: parts[1], dir: parts[2] + string(filepath.Separator)})
+	}
+	return mods, nil
+}
+
+// sourceFile names path the way a banner does:
+// redpanda-data/benthos@v4.84.0:internal/impl/pure/processor_mapping.go.
+// It returns "" for a file outside the given modules.
+func sourceFile(path string, mods []sourceModule) string {
+	for _, m := range mods {
+		if rel, ok := strings.CutPrefix(path, m.dir); ok {
+			at := ""
+			if m.version != "" {
+				at = "@" + m.version
+			}
+			return m.repo + at + ":" + filepath.ToSlash(rel)
+		}
+	}
+	return ""
+}
+
+// componentSources maps each component and Bloblang function or method that
+// allComponentsPkg registers, as componentKey and bloblangKey values, to the
+// file that registers it, as sourceFile names it, so the banners can name it.
+// It reads allComponentsPkg with the cgo release build's settings, which
+// compile every documented component. The scan is best effort: a component
+// whose name it can't read (a loop variable, a struct field) is absent and
+// keeps a repository-level banner.
+func componentSources() (map[string]string, error) {
+	b, err := readReleaseBuild(cgoRelease)
+	if err != nil {
+		return nil, err
+	}
+	files, err := b.files(allComponentsPkg)
+	if err != nil {
+		return nil, err
+	}
+	mods, err := sourceModules()
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		if sourceFile(path, mods) != "" {
+			paths = append(paths, path)
+		}
+	}
+	// Sorted so a component registered in two files gets the same one every run.
+	sort.Strings(paths)
+	sources := map[string]string{}
+	fset := token.NewFileSet()
+	for _, path := range paths {
+		for _, k := range fileSources(path, files, fset) {
+			if _, seen := sources[k]; !seen {
+				sources[k] = sourceFile(path, mods)
+			}
+		}
+	}
+	return sources, nil
+}
+
+// bloblangKey is the sources key of a Bloblang function or method.
+func bloblangKey(kind, name string) string { return "bloblang-" + kind + "s/" + name }
+
+// bloblangRegisterKinds maps the suffix of a bloblang.(Must)Register...
+// function to the kind of what it registers.
+func bloblangRegisterKind(fn string) (string, bool) {
+	fn = strings.TrimPrefix(strings.TrimPrefix(fn, "Must"), "Register")
+	fn = strings.TrimPrefix(fn, "Advanced")
+	fn = strings.TrimSuffix(fn, "V2")
+	switch fn {
+	case "Function":
+		return "function", true
+	case "Method":
+		return "method", true
+	}
+	return "", false
+}
+
+// bloblangSpecCtor recognizes the constructors benthos's internal query
+// package builds its Bloblang specs with, returning the kind and the index of
+// the name argument: NewFunctionSpec(category, name, ...) and
+// NewMethodSpec(name, ...), with their Deprecated and Hidden variants.
+func bloblangSpecCtor(fn string) (kind string, nameArg int, ok bool) {
+	fn = strings.TrimPrefix(fn, "New")
+	fn = strings.TrimPrefix(strings.TrimPrefix(fn, "Deprecated"), "Hidden")
+	switch fn {
+	case "FunctionSpec":
+		return "function", 1, true
+	case "MethodSpec":
+		return "method", 0, true
+	}
+	return "", 0, false
+}
+
+// fileSources returns the components and Bloblang functions and methods, as
+// componentKey and bloblangKey values, whose registration the file at path
+// contains and whose name it can read. Unlike fileRegistrations, it skips
+// what it can't read instead of failing: a missing source only costs a
+// banner its file name.
+func fileSources(path string, files map[string]bool, fset *token.FileSet) []string {
+	f, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return nil
+	}
+	var keys []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		// benthos's own Bloblang functions and methods are not registered
+		// through the public package but built in internal/bloblang/query as
+		// NewFunctionSpec(category, name, ...) or NewMethodSpec(name, ...).
+		if id, ok := call.Fun.(*ast.Ident); ok {
+			if kind, nameArg, ok := bloblangSpecCtor(id.Name); ok && len(call.Args) > nameArg {
+				if name, err := registeredName(call.Args[nameArg], filepath.Dir(path), files, fset); err == nil {
+					keys = append(keys, bloblangKey(kind, name))
+				}
+			}
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		x, ok := sel.X.(*ast.Ident)
+		if !ok || !strings.HasPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register") {
+			return true
+		}
+		var key func(name string) string
+		switch x.Name {
+		case "service":
+			group, ok := registerGroups[strings.TrimPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register")]
+			if !ok {
+				return true
+			}
+			key = func(name string) string { return componentKey(group, name) }
+		case "bloblang":
+			kind, ok := bloblangRegisterKind(sel.Sel.Name)
+			if !ok {
+				return true
+			}
+			key = func(name string) string { return bloblangKey(kind, name) }
+		default:
+			return true
+		}
+		if name, err := registeredName(call.Args[0], filepath.Dir(path), files, fset); err == nil {
+			keys = append(keys, key(name))
+		}
+		return true
+	})
+	return keys
 }
 
 // fileRegistrations returns the components, as componentKey values, that the
@@ -461,6 +632,9 @@ type platformSet struct {
 	byKey map[string]componentPlatform
 	// documented is every component in the docs_gen build.
 	documented map[string]bool
+	// sources maps a componentKey or bloblangKey to the file that registers
+	// it, as sourceFile names it, for the banners.
+	sources map[string]string
 }
 
 // newPlatformSet compares the docs_gen schema (full) with the schema of a
@@ -510,6 +684,22 @@ func (p platformSet) get(group, name string) componentPlatform {
 	return p.byKey[componentKey(group, name)]
 }
 
+// source returns the file that registers the component or Bloblang function
+// or method with the given key, or "" when the scan could not read it.
+func (p platformSet) source(key string) string { return p.sources[key] }
+
+// unsourcedKeys returns the documented components with no source file, sorted.
+func (p platformSet) unsourcedKeys() []string {
+	var keys []string
+	for k := range p.documented {
+		if p.sources[k] == "" {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // cloudExcluded reports whether <typeDir>/<name> is a documented component
 // that no Redpanda Cloud pipeline can use. Links to anything else, including
 // pages that aren't components, are left to the Cloud docs build to check.
@@ -539,7 +729,14 @@ func loadPlatforms(full *fullSchema) (platformSet, error) {
 	if err != nil {
 		return platformSet{}, fmt.Errorf("cloud AI schema: %w", err)
 	}
-	return newPlatformSet(full, standard, cloud, cloudAI)
+	p, err := newPlatformSet(full, standard, cloud, cloudAI)
+	if err != nil {
+		return platformSet{}, err
+	}
+	if p.sources, err = componentSources(); err != nil {
+		return platformSet{}, fmt.Errorf("finding the files that register components: %w", err)
+	}
+	return p, nil
 }
 
 func marshalSchema(raw []byte, err error) (*fullSchema, error) {
@@ -623,7 +820,7 @@ func renderCatalog(full *fullSchema, plat platformSet, info plugins.InfoCollecti
 	return b.String(), nil
 }
 
-const (
+var (
 	availabilityBanner      = bannerPrefix + " Availability comes from comparing the component lists of the cgo and standard builds, and from the Redpanda Cloud lists in `internal/plugins/info.csv`. To change it, edit the build constraints or info.csv and run `task docs` in that repository."
 	emptyAvailabilityBanner = bannerPrefix + " The component has no availability notes, so this partial is empty."
 
