@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -107,7 +108,7 @@ The source database must have logical replication enabled, which means its ` + "
 
 This input reads changes through a logical replication slot, which it creates if the slot does not already exist. PostgreSQL retains the write-ahead log (WAL) that the slot still needs, so the input can resume from its last acknowledged position after a restart.
 
-When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `, and then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `. It then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged. If the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
 
 When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
 
@@ -125,7 +126,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | Number
 
 | ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
-| String in RFC 3339 format
+| String in RFC 3339 format, or ` + "`null`" + ` for the infinite values (see Infinite dates and timestamps below)
 
 | ` + "`BYTEA`" + `
 | Base64-encoded string
@@ -161,7 +162,11 @@ This input adds the following metadata fields to each message:
 
 == Unserializable rows
 
-A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+Some rows cannot be marshalled to JSON, in practice because they hold a non-finite floating point value such as NaN or Infinity. Such a row does not stall the stream or get silently dropped. Instead, it is published with its error set and a plain-text rendering of the row as the payload. You can inspect such messages with the ` + "`errored()`" + ` Bloblang function. You can route them with error-handling components, for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + ` or a dead-letter queue. If not handled, they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+
+== Infinite dates and timestamps
+
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation, so both the snapshot and the stream deliver them as ` + "`null`" + `. A message does not show if a ` + "`null`" + ` value is a SQL ` + "`NULL`" + `, ` + "`infinity`" + `, or ` + "`-infinity`" + `.
 
 == Metrics
 
@@ -868,6 +873,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
+				msg.Data = withoutInfiniteTimes(msg.Data)
+				msg.BeforeData = withoutInfiniteTimes(msg.BeforeData)
+
 				var marshalErr error
 				if mb, marshalErr = json.Marshal(msg.Data); marshalErr != nil {
 					// A marshal failure is deterministic (in practice
@@ -1345,4 +1353,30 @@ func (p *pgStreamInput) Close(ctx context.Context) error {
 	case <-p.stopSig.HasStoppedChan():
 	}
 	return nil
+}
+
+// withoutInfiniteTimes returns the row with each infinite date or timestamp
+// value set to nil, which is how the stream has always emitted them. The
+// decoders keep pglogicalstream.InfiniteTime until here so that the snapshot
+// keys stay exact. It copies the row only when it changes a value, because the
+// decoder may still hold the original map.
+func withoutInfiniteTimes(row any) any {
+	m, ok := row.(map[string]any)
+	if !ok {
+		return row
+	}
+	var out map[string]any
+	for k, v := range m {
+		if _, ok := v.(pglogicalstream.InfiniteTime); !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(m)
+		}
+		out[k] = nil
+	}
+	if out == nil {
+		return m
+	}
+	return out
 }
