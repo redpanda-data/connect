@@ -60,6 +60,7 @@ Each log event becomes a separate message with metadata including the log group 
 
 IMPORTANT: This input tracks its position in memory only. If the process restarts, it resumes from `+"`start_time`"+`, or from the beginning of the available logs if `+"`start_time`"+` is not set. With an RFC3339 `+"`start_time`"+`, or with none set, it can emit events it already delivered again (at-least-once). With `+"`start_time: now`"+`, it skips the events written while the pipeline was down. Make downstream processing idempotent or deduplicate the events.
 
+[[credentials-overview]]
 == Credentials
 
 By default, Redpanda Connect uses a shared credentials file when connecting to AWS services. You can also set credentials explicitly at the component level, which allows you to transfer data across accounts. For more information, see xref:guides:cloud/aws.adoc[AWS credentials].

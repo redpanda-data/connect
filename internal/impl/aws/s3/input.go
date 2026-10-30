@@ -181,6 +181,7 @@ input:
 
 To find your account ID and generate R2 API credentials, see https://developers.cloudflare.com/r2/api/tokens/[Cloudflare R2 authentication^].
 
+[[credentials-overview]]
 == Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].
@@ -189,13 +190,13 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 
 This input adds the following metadata fields to each message:
 
-- s3_key
-- s3_bucket
-- s3_last_modified_unix
-- s3_last_modified (RFC3339)
-- s3_content_type
-- s3_content_encoding
-- s3_version_id
+- `+"`s3_key`"+`
+- `+"`s3_bucket`"+`
+- `+"`s3_last_modified_unix`"+`
+- `+"`s3_last_modified`"+` (RFC3339)
+- `+"`s3_content_type`"+`
+- `+"`s3_content_encoding`"+`
+- `+"`s3_version_id`"+`
 - All user defined metadata
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation]. Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).

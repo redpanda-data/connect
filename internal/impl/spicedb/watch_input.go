@@ -51,6 +51,7 @@ This input is useful for applications that need to react to changes in the data 
 
 You need to provide the <<endpoint,endpoint>> of your SpiceDB instance and a <<bearer_token,bearer token>> for authentication.
 
+[[cache-overview]]
 == Cache
 
 You must provide a xref:components:caches/about.adoc[cache resource] in the <<cache,`+"`cache`"+`>> field. The input stores the https://authzed.com/docs/spicedb/concepts/consistency#zedtokens[ZedToken^] of the newest update consumed and acked in this cache in order to start reading from it each time the input is initialised.
