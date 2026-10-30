@@ -531,6 +531,104 @@ func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationNam
 	return pub.allTables
 }
 
+func TestIntegrationValidatePublication(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	exec := func(sql string) {
+		t.Helper()
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+	validate := func(publication string, tables []TableFQN) error {
+		t.Helper()
+		filtered, err := ValidatePublication(ctx, conn, publication, tables)
+		assert.Empty(t, filtered)
+		return err
+	}
+	exec("CREATE TABLE orders (id serial PRIMARY KEY, note text);")
+	exec("CREATE TABLE users (id serial PRIMARY KEY);")
+	exec("CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
+	exec("CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
+
+	schema := `"public"`
+	orders := TableFQN{schema, `"orders"`}
+	users := TableFQN{schema, `"users"`}
+	events := TableFQN{schema, `"events"`}
+
+	err = validate("pub_missing", []TableFQN{orders})
+	require.ErrorIs(t, err, errPublicationNotFound)
+
+	exec("CREATE PUBLICATION pub_some FOR TABLE orders, events;")
+	require.NoError(t, validate("pub_some", []TableFQN{orders}))
+	require.NoError(t, validate("pub_some", nil))
+	// Without publish_via_partition_root the publication lists the
+	// partition, not the partitioned table.
+	require.NoError(t, validate("pub_some", []TableFQN{events}))
+
+	err = validate("pub_some", []TableFQN{orders, users, {schema, `"no_such_table"`}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"public"."users"`)
+	assert.Contains(t, err.Error(), `"public"."no_such_table"`)
+	assert.NotContains(t, err.Error(), `"public"."orders"`)
+
+	// Validation must never alter the publication.
+	tables, _, err := GetPublicationTables(ctx, conn, "pub_some")
+	require.NoError(t, err)
+	assert.NotContains(t, tables, users)
+
+	// A publication listing only some partitions does not cover the
+	// partitioned table, but does cover the partition it lists.
+	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
+	exec("CREATE PUBLICATION pub_partial FOR TABLE events_2026;")
+	err = validate("pub_partial", []TableFQN{events})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"public"."events"`)
+	require.NoError(t, validate("pub_partial", []TableFQN{{schema, `"events_2026"`}}))
+
+	// pub_some lists the partitioned table, so a partition attached later is
+	// covered too.
+	require.NoError(t, validate("pub_some", []TableFQN{events}))
+
+	exec("CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	require.NoError(t, validate("pub_root", []TableFQN{events, {schema, `"events_2027"`}}))
+
+	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
+	require.NoError(t, validate("pub_all", []TableFQN{orders, users, events}))
+
+	// A publication that leaves out updates or deletes would silently drop
+	// them, so it fails, naming the option.
+	exec("CREATE PUBLICATION pub_inserts FOR TABLE orders WITH (publish = 'insert');")
+	err = validate("pub_inserts", []TableFQN{orders})
+	require.ErrorIs(t, err, errPublicationOperations)
+	assert.Contains(t, err.Error(), "does not publish update, delete")
+	assert.Contains(t, err.Error(), "publish")
+
+	// A row filter or a column list (PostgreSQL 15 or later; the container
+	// runs 16) still streams, so it is reported rather than failed.
+	exec("CREATE PUBLICATION pub_rowfilter FOR TABLE orders WHERE (id > 10), users;")
+	filtered, err := ValidatePublication(ctx, conn, "pub_rowfilter", []TableFQN{orders, users})
+	require.NoError(t, err)
+	assert.Equal(t, []TableFQN{orders}, filtered)
+	exec("CREATE PUBLICATION pub_columns FOR TABLE orders (id), users;")
+	filtered, err = ValidatePublication(ctx, conn, "pub_columns", []TableFQN{orders, users})
+	require.NoError(t, err)
+	assert.Equal(t, []TableFQN{orders}, filtered)
+	exec("CREATE PUBLICATION pub_all_columns FOR TABLE orders (id, note);")
+	filtered, err = ValidatePublication(ctx, conn, "pub_all_columns", []TableFQN{orders})
+	require.NoError(t, err)
+	assert.Empty(t, filtered, "a column list naming every column filters nothing")
+}
+
 // TestIntegrationBackfillRequiresTablePublishedAsItself checks the
 // incremental snapshot only accepts a table whose changes stream under its
 // own name, unfiltered, against the publication layouts a DBA can build.
@@ -561,10 +659,11 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 
 	newStream := func(slot string) *Stream {
 		return &Stream{
-			pgVersion:      versionNum / 10000,
-			slotName:       slot,
-			snapshotSchema: "public",
-			logger:         service.MockResources().Logger(),
+			pgVersion:                    versionNum / 10000,
+			slotName:                     slot,
+			snapshotSchema:               "public",
+			externallyManagedPublication: true,
+			logger:                       service.MockResources().Logger(),
 			incSnapshot: incrementalSnapshot{
 				conn:    db,
 				pkCache: map[string][]string{},
