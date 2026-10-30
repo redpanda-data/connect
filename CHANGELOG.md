@@ -27,12 +27,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- aws/dynamodb: Enabled parallel execution of top-level integration tests by isolating test containers, reducing test suite runtime from 145s to 70s. ([@Leward](https://github.com/Leward), [#4988](https://github.com/redpanda-data/connect/pull/4988))
-- aws/dynamodb: Improved test reliability by replacing fixed sleeps with polling in snapshot and CDC integration tests. ([@Leward](https://github.com/Leward), [#4991](https://github.com/redpanda-data/connect/pull/4991))
-- kafka: Enabled parallel execution of slow Kafka integration tests by isolating containers, reducing test suite runtime from 199s to 24s. ([@Leward](https://github.com/Leward), [#5024](https://github.com/redpanda-data/connect/pull/5024))
 - mssqlserver: Adopted the new ticket.Lock package for flush ticket management, replacing duplicate code with shared infrastructure for better maintainability. ([@Leward](https://github.com/Leward), [#4857](https://github.com/redpanda-data/connect/pull/4857))
-- postgresql: Enabled parallel execution of PostgreSQL integration tests by isolating containers, reducing suite runtime from 195s to 32-37s. ([@Leward](https://github.com/Leward), [#5023](https://github.com/redpanda-data/connect/pull/5023))
-- redpanda_migrator: Enabled parallel execution of integration tests using AIO usage limits and container isolation, reducing suite runtime from 397s to 63-72s. ([@Leward](https://github.com/Leward), [#5053](https://github.com/redpanda-data/connect/pull/5053))
 - replication: Refactored flush ticket logic into a reusable ticket.Lock package with improved concurrency handling, cancellation support, and typed Ticket returns for safer API usage. ([@Leward](https://github.com/Leward), [#4856](https://github.com/redpanda-data/connect/pull/4856))
 
 ## 4.115.1 - 2026-10-23
