@@ -38,6 +38,14 @@ const (
 	// checkpoint (DescribeStream keeps listing closed shards for the stream's
 	// 24h retention window). Distinct from the snapshot rows' "Complete".
 	checkpointShardCompletedAttr = "ShardCompleted"
+
+	// checkpointStartMarkerKey is the range key of the start marker row (see
+	// MarkStarted). The "#" keeps it apart from shard IDs, as with the
+	// snapshot rows.
+	checkpointStartMarkerKey = "start#latest"
+	// checkpointStartedAtAttr holds the start time (RFC3339Nano) in the
+	// start marker row.
+	checkpointStartedAtAttr = "StartedAt"
 )
 
 // checkpointDynamoAPI is the subset of the DynamoDB client the Checkpointer
@@ -464,6 +472,73 @@ func (c *Checkpointer) HasAnyState(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("probing checkpoint state for table=%s key=%s: %w", c.tableName, c.hashKeyValue(), err)
 	}
 	return len(result.Items) > 0, nil
+}
+
+// MarkStarted saves the start marker row: the time at which a start_from:
+// latest pipeline with no checkpoint state took its first LATEST iterators. A
+// LATEST iterator has no sequence number to save, so without this row a
+// restart before the first checkpoint row looks like a fresh pipeline and
+// takes LATEST again, which skips the records that were in flight and the
+// records written while the pipeline was down (CON-597). The row also makes
+// HasAnyState true from now on.
+//
+// The write keeps an existing marker, so the row always holds the first start
+// time. In global mode the row carries the stream ARN, so that another region
+// can tell that the marker is not its own (see StartedAt).
+func (c *Checkpointer) MarkStarted(ctx context.Context, at time.Time) error {
+	item := c.checkpointKey(checkpointStartMarkerKey)
+	item[checkpointStartedAtAttr] = &types.AttributeValueMemberS{Value: at.UTC().Format(time.RFC3339Nano)}
+	if c.globalTable {
+		item["StreamArn"] = &types.AttributeValueMemberS{Value: c.streamArn}
+	}
+	_, err := c.svc.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName:                aws.String(c.tableName),
+		Item:                     item,
+		ConditionExpression:      aws.String("attribute_not_exists(#sk)"),
+		ExpressionAttributeNames: map[string]string{"#sk": checkpointRangeKey},
+	})
+	if err != nil {
+		if _, exists := errors.AsType[*types.ConditionalCheckFailedException](err); exists {
+			return nil
+		}
+		return fmt.Errorf("saving start marker for table=%s key=%s: %w", c.tableName, c.hashKeyValue(), err)
+	}
+	return nil
+}
+
+// StartedAt returns the start time that MarkStarted saved, or the zero time
+// when there is no marker. In global mode, a marker that another region's
+// stream saved also gives the zero time: that start time is not a position in
+// this stream.
+func (c *Checkpointer) StartedAt(ctx context.Context) (time.Time, error) {
+	result, err := c.svc.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(c.tableName),
+		Key:       c.checkpointKey(checkpointStartMarkerKey),
+		// Like the HasAnyState probe, this read decides whether a restart
+		// can skip records, so it must see a marker written just before a
+		// crash.
+		ConsistentRead: aws.Bool(true),
+	})
+	if err != nil {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("reading start marker for table=%s key=%s: %w", c.tableName, c.hashKeyValue(), err)
+	}
+	if c.globalTable {
+		if streamAttr, ok := result.Item["StreamArn"].(*types.AttributeValueMemberS); !ok || streamAttr.Value != c.streamArn {
+			return time.Time{}, nil
+		}
+	}
+	attr, ok := result.Item[checkpointStartedAtAttr].(*types.AttributeValueMemberS)
+	if !ok {
+		return time.Time{}, nil
+	}
+	at, err := time.Parse(time.RFC3339Nano, attr.Value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parsing start marker %q for table=%s key=%s: %w", attr.Value, c.tableName, c.hashKeyValue(), err)
+	}
+	return at, nil
 }
 
 type resumeMode int

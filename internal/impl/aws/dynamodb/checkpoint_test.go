@@ -984,3 +984,120 @@ func TestCheckpointerMarkShardCompletedKeepsStoredPosition(t *testing.T) {
 		})
 	}
 }
+
+// startMarkerRow builds the start marker row that MarkStarted writes in
+// global mode.
+func startMarkerRow(streamArn, startedAt string) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{
+		"TableId":   &types.AttributeValueMemberS{Value: "t"},
+		"ShardID":   &types.AttributeValueMemberS{Value: checkpointStartMarkerKey},
+		"StreamArn": &types.AttributeValueMemberS{Value: streamArn},
+		"StartedAt": &types.AttributeValueMemberS{Value: startedAt},
+	}
+}
+
+func TestCheckpointerMarkStarted(t *testing.T) {
+	newCheckpointer := func(putItem func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)) *Checkpointer {
+		return &Checkpointer{
+			tableName:   "cps",
+			sourceTable: "t",
+			streamArn:   "arn:A",
+			svc:         &fakeCheckpointAPI{putItem: putItem},
+			log:         checkpointTestLogger(),
+		}
+	}
+
+	t.Run("writes the marker row once", func(t *testing.T) {
+		var put *dynamodb.PutItemInput
+		c := newCheckpointer(func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			put = in
+			return &dynamodb.PutItemOutput{}, nil
+		})
+
+		require.NoError(t, c.MarkStarted(t.Context(), time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)))
+
+		require.NotNil(t, put)
+		assert.Equal(t, "arn:A", put.Item["StreamArn"].(*types.AttributeValueMemberS).Value)
+		assert.Equal(t, checkpointStartMarkerKey, put.Item["ShardID"].(*types.AttributeValueMemberS).Value)
+		assert.Equal(t, "2026-10-29T10:00:00Z", put.Item["StartedAt"].(*types.AttributeValueMemberS).Value)
+		assert.Equal(t, "attribute_not_exists(#sk)", aws.ToString(put.ConditionExpression))
+		assert.Equal(t, map[string]string{"#sk": "ShardID"}, put.ExpressionAttributeNames)
+	})
+
+	t.Run("keeps an existing marker", func(t *testing.T) {
+		c := newCheckpointer(func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			return nil, &types.ConditionalCheckFailedException{}
+		})
+		require.NoError(t, c.MarkStarted(t.Context(), time.Now()))
+	})
+
+	t.Run("returns a write error", func(t *testing.T) {
+		c := newCheckpointer(func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			return nil, errors.New("throttled")
+		})
+		require.ErrorContains(t, c.MarkStarted(t.Context(), time.Now()), "throttled")
+	})
+}
+
+func TestCheckpointerStartedAt(t *testing.T) {
+	t.Run("no marker", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", nil)
+		got, err := c.StartedAt(t.Context())
+		require.NoError(t, err)
+		assert.True(t, got.IsZero())
+	})
+
+	t.Run("marker of this stream", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+			startMarkerRow("arn:A", "2026-10-29T10:00:00Z"),
+		})
+		got, err := c.StartedAt(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC), got)
+	})
+
+	t.Run("marker of another region's stream", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+			startMarkerRow("arn:B", "2026-10-29T10:00:00Z"),
+		})
+		got, err := c.StartedAt(t.Context())
+		require.NoError(t, err)
+		assert.True(t, got.IsZero())
+	})
+
+	t.Run("non-global marker", func(t *testing.T) {
+		var getIn *dynamodb.GetItemInput
+		c := &Checkpointer{
+			tableName:   "cps",
+			sourceTable: "t",
+			streamArn:   "arn:A",
+			svc: &fakeCheckpointAPI{
+				getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+					getIn = in
+					return &dynamodb.GetItemOutput{Item: map[string]types.AttributeValue{
+						"StreamArn": &types.AttributeValueMemberS{Value: "arn:A"},
+						"ShardID":   &types.AttributeValueMemberS{Value: checkpointStartMarkerKey},
+						"StartedAt": &types.AttributeValueMemberS{Value: "2026-10-29T10:00:00.5Z"},
+					}}, nil
+				},
+			},
+			log: checkpointTestLogger(),
+		}
+		got, err := c.StartedAt(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, time.Date(2026, 10, 29, 10, 0, 0, 500_000_000, time.UTC), got)
+		assert.True(t, aws.ToBool(getIn.ConsistentRead))
+	})
+}
+
+// TestResolveResumeIgnoresStartMarker: in global mode, another region's start
+// marker is not a shard checkpoint, so it must not turn a fresh region into a
+// failover resume.
+func TestResolveResumeIgnoresStartMarker(t *testing.T) {
+	c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+		startMarkerRow("arn:B", "2026-10-29T10:00:00Z"),
+	})
+	got, err := c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.Equal(t, ResumeDecision{Mode: resumeDefault}, got)
+}
