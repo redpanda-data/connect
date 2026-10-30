@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/enterprise/v4
 
 go 1.27.3
 
-require github.com/redpanda-data/connect/v4 v4.116.0
+require github.com/redpanda-data/connect/v4 v4.116.1
 
 require (
 	atomicgo.dev/cursor v0.2.0 // indirect
