@@ -58,8 +58,10 @@ rely on them.
 - **JSON**: Both paths run `json.Unmarshal`, producing a tree of stdlib types
   (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.
-- **Zero datetimes**: CDC delivers invalid datetimes (e.g. `"0000-00-00 00:00:00"`)
-  as strings. `mapMessageColumn` converts these to `nil`.
+- **Date strings**: CDC delivers DATE values, zero datetimes (e.g. `"0000-00-00 00:00:00"`)
+  and every DATETIME before 1970 as strings. `mapMessageColumn` parses these into
+  `time.Time`, and converts zero and partial-zero values (month or day `00`) to `nil`.
+  The snapshot gives `0001-01-01` for a zero value instead.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
   won't encounter.

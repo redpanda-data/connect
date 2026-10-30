@@ -661,6 +661,86 @@ memory: {}
 }`, outBatches[1])
 }
 
+// The binlog decoder gives some DATE and DATETIME values as strings, not as
+// time.Time: every DATETIME before 1970, and zero values. The stream must give
+// the same pre-1970 value as the snapshot, and a zero DATE must not stop it.
+func TestIntegrationMySQLCDCBinlogDateStrings(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`
+    CREATE TABLE old_dates (
+        id INT PRIMARY KEY,
+        d DATE,
+        dt DATETIME,
+        dt6 DATETIME(6)
+    )
+`)
+	db.Exec(`INSERT INTO old_dates VALUES (1, '1965-03-04', '1965-03-04 10:00:00', '1969-12-31 23:59:59.123456')`)
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  checkpoint_cache: memcache
+  tables:
+    - old_dates
+`, dsn)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(`
+label: memcache
+memory: {}
+`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		_ = streamOut.Run(t.Context())
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	require.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1
+	}, time.Minute, 100*time.Millisecond)
+
+	db.Exec(`INSERT INTO old_dates VALUES (2, '1965-03-04', '1965-03-04 10:00:00', '1969-12-31 23:59:59.123456')`)
+	// The default SQL mode rejects zero dates. multiStatements keeps both
+	// statements on one connection.
+	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO old_dates VALUES (3, '0000-00-00', '0000-00-00 00:00:00', NULL)`)
+
+	require.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 3
+	}, 30*time.Second, 100*time.Millisecond)
+
+	outBatchMut.Lock()
+	defer outBatchMut.Unlock()
+	require.JSONEq(t, `{"id": 1, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[0])
+	require.JSONEq(t, `{"id": 2, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[1])
+	require.JSONEq(t, `{"id": 3, "d": null, "dt": null, "dt6": null}`, outBatches[2])
+}
+
 func TestIntegrationMySQLSnapshotConsistency(t *testing.T) {
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 	db.Exec(`

@@ -1065,6 +1065,21 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	return nil
 }
 
+// parseBinlogTime parses a DATE or DATETIME string from the binlog decoder
+// into a time.Time in UTC. It returns nil for a zero or partial-zero value
+// (month or day is 00), such as 0000-00-00 or 2024-00-15.
+func parseBinlogTime(layout, s string) (any, error) {
+	// A zero or partial-zero value has no time.Time form. The stream gives
+	// nil for it, as it did before for zero DATETIME values. The snapshot is
+	// different: the SQL driver gives 0001-01-01 for a zero value, and moves
+	// a partial-zero value to another date (2024-00-15 becomes 2023-12-15).
+	// The stream does not copy that, because it would invent a date.
+	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
+		return nil, nil
+	}
+	return time.Parse(layout, s)
+}
+
 func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	if v == nil {
 		return v, nil
@@ -1138,15 +1153,17 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	case schema.TYPE_DATE:
 		switch d := v.(type) {
 		case string:
-			return time.Parse("2006-01-02", d)
+			return parseBinlogTime("2006-01-02", d)
 		case time.Time:
 			return d, nil
 		default:
 			return nil, fmt.Errorf("expected string or time.Time for date column got: %T", v)
 		}
 	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
-		if _, ok := v.(string); ok {
-			return nil, nil
+		if s, ok := v.(string); ok {
+			// The binlog decoder gives a string for zero values and for every
+			// DATETIME before 1970. time.Parse accepts the optional fraction.
+			return parseBinlogTime("2006-01-02 15:04:05", s)
 		}
 		return v, nil
 	case schema.TYPE_ENUM:
