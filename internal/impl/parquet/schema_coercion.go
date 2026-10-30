@@ -76,39 +76,80 @@ func visitWithSchema(visitor schemaVisitor, value any, schemaNode parquet.Node) 
 
 type encodingCoercionVisitor struct{}
 
-func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
-	logicalType := schemaNode.Type().LogicalType()
-	if logicalType == nil {
-		return value, nil
+// schemaNeedsCoercion reports whether any leaf of the schema has a logical
+// type that needs transforming, letting callers skip the per-row schema walk
+// when it would be a no-op.
+func schemaNeedsCoercion(n parquet.Node) bool {
+	if n.Leaf() {
+		return leafCoercer(n.Type().LogicalType()) != nil
 	}
-	if logicalType.Timestamp != nil {
-		return coerceTimestampForEncode(value, logicalType.Timestamp)
-	} else if logicalType.Date != nil {
-		return coerceDateForEncode(value)
-	} else if logicalType.Time != nil {
-		return coerceTimeForEncode(value, logicalType.Time)
-	} else if logicalType.Json != nil {
-		jsonBytes, err := json.Marshal(value)
-		if err != nil {
-			return nil, fmt.Errorf("encoding value as JSON: %w", err)
+	for _, child := range n.Fields() {
+		if schemaNeedsCoercion(child) {
+			return true
 		}
-		return jsonBytes, nil
-	} else if logicalType.UUID != nil {
-		switch v := value.(type) {
-		case string:
-			id, err := uuid.FromString(v)
-			if err != nil {
-				return nil, fmt.Errorf("parsing string as UUID: %w", err)
-			}
-			return id.Bytes(), nil
-		default:
-			return value, nil
-		}
-	} else if logicalType.Decimal != nil {
-		return coerceDecimalForEncode(value, schemaNode, logicalType.Decimal)
 	}
+	return false
+}
 
+// leafCoerceFn converts a value into the parquet physical representation of a
+// leaf with the given logical type.
+type leafCoerceFn func(value any, schemaNode parquet.Node, lt *format.LogicalType) (any, error)
+
+// leafCoercer returns the coercion for a logical type, or nil when values of
+// that type are written as-is. It is the single source of truth for which
+// logical types are coerced. Each result is a top-level function so that
+// selecting one does not allocate.
+func leafCoercer(lt *format.LogicalType) leafCoerceFn {
+	switch {
+	case lt == nil:
+		return nil
+	case lt.Timestamp != nil:
+		return coerceTimestampLeaf
+	case lt.Date != nil:
+		return coerceDateLeaf
+	case lt.Time != nil:
+		return coerceTimeLeaf
+	case lt.Json != nil:
+		return coerceJSONLeaf
+	case lt.UUID != nil:
+		return coerceUUIDLeaf
+	case lt.Decimal != nil:
+		return coerceDecimalLeaf
+	default:
+		return nil
+	}
+}
+
+func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
+	lt := schemaNode.Type().LogicalType()
+	if c := leafCoercer(lt); c != nil {
+		return c(value, schemaNode, lt)
+	}
 	return value, nil
+}
+
+func coerceTimestampLeaf(value any, _ parquet.Node, lt *format.LogicalType) (any, error) {
+	return coerceTimestampForEncode(value, lt.Timestamp)
+}
+
+func coerceDateLeaf(value any, _ parquet.Node, _ *format.LogicalType) (any, error) {
+	return coerceDateForEncode(value)
+}
+
+func coerceTimeLeaf(value any, _ parquet.Node, lt *format.LogicalType) (any, error) {
+	return coerceTimeForEncode(value, lt.Time)
+}
+
+func coerceJSONLeaf(value any, _ parquet.Node, _ *format.LogicalType) (any, error) {
+	return coerceJSONForEncode(value)
+}
+
+func coerceUUIDLeaf(value any, _ parquet.Node, _ *format.LogicalType) (any, error) {
+	return coerceUUIDForEncode(value)
+}
+
+func coerceDecimalLeaf(value any, schemaNode parquet.Node, lt *format.LogicalType) (any, error) {
+	return coerceDecimalForEncode(value, schemaNode, lt.Decimal)
 }
 
 // coerceTimestampForEncode converts a value into the parquet physical
@@ -294,6 +335,30 @@ func coerceDecimalForEncode(value any, schemaNode parquet.Node, dt *format.Decim
 		return parquetdecimal.EncodeBytes(unscaled, int(dt.Precision)), nil
 	default:
 		return nil, fmt.Errorf("unsupported parquet physical type for decimal: %v", schemaNode.Type().Kind())
+	}
+}
+
+// coerceJSONForEncode serialises a value as JSON bytes for a JSON column.
+func coerceJSONForEncode(value any) (any, error) {
+	jsonBytes, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("encoding value as JSON: %w", err)
+	}
+	return jsonBytes, nil
+}
+
+// coerceUUIDForEncode converts a UUID string into its 16 byte form. Values
+// that are not strings are assumed to already be in a physical form.
+func coerceUUIDForEncode(value any) (any, error) {
+	switch v := value.(type) {
+	case string:
+		id, err := uuid.FromString(v)
+		if err != nil {
+			return nil, fmt.Errorf("parsing string as UUID: %w", err)
+		}
+		return id.Bytes(), nil
+	default:
+		return value, nil
 	}
 }
 
