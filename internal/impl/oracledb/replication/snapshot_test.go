@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -85,7 +86,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -118,7 +119,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -159,7 +160,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -194,7 +195,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -237,7 +238,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -262,4 +263,12 @@ func (p *publisherStub) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.messages)
+}
+
+// messagesCopy returns a copy of the messages published so far, safe to range over while
+// the snapshot is still publishing.
+func (p *publisherStub) messagesCopy() []*replication.MessageEvent {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.messages)
 }
