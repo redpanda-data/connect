@@ -340,29 +340,71 @@ func TestSAPHANAInputTableRef(t *testing.T) {
 	}
 }
 
-// timestamp_initial_value must be valid RFC3339 when the config is parsed. Its
-// offset is checked only on connect, because a resumed checkpoint ignores the
-// value (see TestSAPHANAInputTimestampInitialValueOffsetOnConnect).
+// timestamp_initial_value must be valid RFC3339 when the config is parsed.
+// With a checkpoint_cache its offset is checked only on connect, because a
+// resumed checkpoint ignores the value (see
+// TestSAPHANAInputTimestampInitialValueOffsetOnConnect). Without one the input
+// can never resume, so the offset is checked when the config is parsed.
 func TestSAPHANAInputTimestampInitialValueParse(t *testing.T) {
 	for _, tc := range []struct {
+		name    string
 		value   string
+		cache   bool
 		want    time.Time
 		wantErr string
 	}{
-		{value: "2024-01-01T00:00:00Z", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{value: "2024-01-01T00:00:00.5Z", want: time.Date(2024, 1, 1, 0, 0, 0, 500_000_000, time.UTC)},
-		{value: "2024-01-01T02:00:00+02:00", want: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{value: "2024-01-01 00:00:00", wantErr: "cannot parse"},
+		{
+			name:  "unset without cache",
+			value: "",
+			want:  time.Time{},
+		},
+		{
+			name:  "Z without cache",
+			value: "2024-01-01T00:00:00Z",
+			want:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "fraction without cache",
+			value: "2024-01-01T00:00:00.5Z",
+			want:  time.Date(2024, 1, 1, 0, 0, 0, 500_000_000, time.UTC),
+		},
+		{
+			name:  "+00:00 without cache",
+			value: "2024-01-01T00:00:00+00:00",
+			want:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:    "+02:00 without cache",
+			value:   "2024-01-01T02:00:00+02:00",
+			wantErr: "offset +02:00 is not allowed",
+		},
+		{
+			name:  "+02:00 with cache",
+			value: "2024-01-01T02:00:00+02:00",
+			cache: true,
+			want:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:    "bad syntax with cache",
+			value:   "2024-01-01 00:00:00",
+			cache:   true,
+			wantErr: "cannot parse",
+		},
 	} {
-		t.Run(tc.value, func(t *testing.T) {
-			conf := parseInputConf(t, fmt.Sprintf(`
+		t.Run(tc.name, func(t *testing.T) {
+			yaml := fmt.Sprintf(`
 dsn: hdb://user:pass@host:39017
 mode: timestamp
 table: MY_TABLE
 timestamp_column: TS
 timestamp_initial_value: %q
-`, tc.value))
-			s, err := newSAPHANAInput(conf, enterpriseResources())
+`, tc.value)
+			res := enterpriseResources()
+			if tc.cache {
+				yaml += "checkpoint_cache: " + testCacheName + "\n"
+				res = enterpriseResourcesWithCache()
+			}
+			s, err := newSAPHANAInput(parseInputConf(t, yaml), res)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, "timestamp_initial_value")
 				require.ErrorContains(t, err, tc.wantErr)

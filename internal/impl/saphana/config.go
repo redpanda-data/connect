@@ -248,7 +248,7 @@ input:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldTimestampInitialVal).
-		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. `timestamp_column` has no timezone, so write its wall-clock value as-is, tagged with a `Z` or `+00:00` offset, rather than converting it. Any other offset is rejected when the input starts and its checkpoint has no timestamp high-water mark. When the checkpoint has one, this value is ignored.").
+		Description("Initial high-water mark in RFC3339 format (for example, `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run. `timestamp_column` has no timezone, so write its wall-clock value as-is, tagged with a `Z` or `+00:00` offset, rather than converting it. Any other offset is rejected, unless the input resumes from a checkpoint that has a timestamp high-water mark. In that case this value is ignored.").
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldTimestampDelay).
@@ -438,8 +438,8 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		if c.timestampInitial, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", shFieldTimestampInitialVal, err)
 		}
-		// The offset is checked on connect, and only on a fresh start: a
-		// resumed checkpoint ignores this value.
+		// With a checkpoint_cache the offset is checked on connect, and only
+		// when no timestamp HWM is resumed. Without one it is checked below.
 		s.timestampHWM = c.timestampInitial
 	}
 	if c.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {
@@ -506,6 +506,15 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if err := c.rejectInertFields(conf); err != nil {
 		return nil, err
+	}
+	// Without checkpoint_cache the input never resumes, so Connect would
+	// reject an offset on every attempt, and benthos retries a failed Connect
+	// forever. Reject it here, so the pipeline fails once at startup. An unset
+	// value is the zero time, which is UTC, so it passes.
+	if c.checkpointCache == "" {
+		if _, err := requireUTC(c.timestampInitial); err != nil {
+			return nil, fmt.Errorf("field %q: %w", shFieldTimestampInitialVal, err)
+		}
 	}
 	if c.polls() && c.checkpointCache == "" {
 		s.log.Warnf("No %s is set, so the %s position is kept in memory only: every restart or redeploy reads again from the configured initial value, which re-emits rows already delivered. Set %s to a durable cache resource to resume where the input left off.",
