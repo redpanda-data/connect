@@ -1066,14 +1066,21 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 }
 
 // parseBinlogTime parses a DATE or DATETIME string from the binlog decoder
-// into a time.Time in UTC. It returns nil for a zero or partial-zero value
-// (month or day is 00), such as 0000-00-00 or 2024-00-15.
+// into a time.Time in UTC. It returns nil for a zero or partial-zero date.
 func parseBinlogTime(layout, s string) (any, error) {
-	// A zero or partial-zero value has no time.Time form. The stream gives
-	// nil for it, as it did before for zero DATETIME values. The snapshot is
-	// different: the SQL driver gives 0001-01-01 for a zero value, and moves
-	// a partial-zero value to another date (2024-00-15 becomes 2023-12-15).
-	// The stream does not copy that, because it would invent a date.
+	// go-mysql gives a string for DATE, for a zero DATETIME, and for a
+	// DATETIME before 1970. The string always starts with YYYY-MM-DD.
+	//
+	// MySQL can store a zero date (0000-00-00) and a date with a zero month
+	// or day (2024-00-15, a date where only the year is known). time.Time
+	// cannot hold a zero month or day, so give nil. This loses the known
+	// part of a partial-zero date. We accept that, because the schema type
+	// is a timestamp, and a string does not match it.
+	//
+	// The snapshot gives different values for the same rows: the SQL driver
+	// gives 0001-01-01 for a zero date, and moves 2024-00-15 to 2023-12-15.
+	// Do not copy that here, because it makes a date that is not in the
+	// database.
 	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
 		return nil, nil
 	}
@@ -1161,8 +1168,7 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		}
 	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
 		if s, ok := v.(string); ok {
-			// The binlog decoder gives a string for zero values and for every
-			// DATETIME before 1970. time.Parse accepts the optional fraction.
+			// time.Parse accepts the optional fraction (DATETIME(6)).
 			return parseBinlogTime("2006-01-02 15:04:05", s)
 		}
 		return v, nil
