@@ -358,19 +358,22 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 		case "DATE", "TIMESTAMP", "TIMESTAMPTZ":
 			// The pgx stdlib driver hands back a time.Time for a finite value and
 			// the string "infinity" or "-infinity" for the PostgreSQL special
-			// values, which have no time.Time form. sql.NullTime rejects the
-			// string, so scan the raw driver value and pass both through. The
-			// stream decoder emits the same string, so both paths agree.
+			// values. sql.NullTime rejects the string, so scan the raw driver
+			// value. The stream decoder returns the same InfiniteTime values.
 			scanArgs[i] = new(any)
 			valueGetters[i] = func(v any) (any, error) {
 				switch val := (*v.(*any)).(type) {
 				case nil:
 					return nil, nil
-				case time.Time, string:
+				case time.Time:
 					return val, nil
-				default:
-					return nil, fmt.Errorf("unexpected driver value of type %T for a date or timestamp column", val)
+				case string:
+					switch InfiniteTime(val) {
+					case PositiveInfinity, NegativeInfinity:
+						return InfiniteTime(val), nil
+					}
 				}
+				return nil, fmt.Errorf("unexpected driver value %v of type %T for a date or timestamp column", *v.(*any), *v.(*any))
 			}
 		case "JSON", "JSONB":
 			scanArgs[i] = new(sql.NullString)

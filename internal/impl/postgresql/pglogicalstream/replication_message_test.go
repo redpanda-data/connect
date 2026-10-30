@@ -892,22 +892,22 @@ func TestDecodeTextColumnDataNumericSpecialValues(t *testing.T) {
 
 func TestDecodeTextColumnDataInfiniteTimestamps(t *testing.T) {
 	// PostgreSQL accepts infinity and -infinity in date, timestamp and
-	// timestamptz columns. They have no time.Time form, so the stream emits
-	// the same strings PostgreSQL prints instead of silently returning nil.
+	// timestamptz columns. They have no time.Time form, so the stream decodes
+	// them to InfiniteTime, the same value the snapshot decodes them to.
 	mp := pgtype.NewMap()
 
 	tests := []struct {
 		name string
 		oid  uint32
 		data string
-		want string
+		want InfiniteTime
 	}{
-		{name: "timestamptz infinity", oid: pgtype.TimestamptzOID, data: "infinity", want: "infinity"},
-		{name: "timestamptz -infinity", oid: pgtype.TimestamptzOID, data: "-infinity", want: "-infinity"},
-		{name: "timestamp infinity", oid: pgtype.TimestampOID, data: "infinity", want: "infinity"},
-		{name: "timestamp -infinity", oid: pgtype.TimestampOID, data: "-infinity", want: "-infinity"},
-		{name: "date infinity", oid: pgtype.DateOID, data: "infinity", want: "infinity"},
-		{name: "date -infinity", oid: pgtype.DateOID, data: "-infinity", want: "-infinity"},
+		{name: "timestamptz infinity", oid: pgtype.TimestamptzOID, data: "infinity", want: PositiveInfinity},
+		{name: "timestamptz -infinity", oid: pgtype.TimestamptzOID, data: "-infinity", want: NegativeInfinity},
+		{name: "timestamp infinity", oid: pgtype.TimestampOID, data: "infinity", want: PositiveInfinity},
+		{name: "timestamp -infinity", oid: pgtype.TimestampOID, data: "-infinity", want: NegativeInfinity},
+		{name: "date infinity", oid: pgtype.DateOID, data: "infinity", want: PositiveInfinity},
+		{name: "date -infinity", oid: pgtype.DateOID, data: "-infinity", want: NegativeInfinity},
 	}
 
 	for _, tt := range tests {
