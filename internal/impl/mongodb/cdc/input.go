@@ -236,7 +236,7 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 
 With `+"`incremental_snapshot.enabled: true`"+` the snapshot no longer holds back streaming. This is mutually exclusive with `+"`stream_snapshot`"+`: both read the same documents, so enabling both would deliver everything twice. On a first start the input streams changes immediately and reads every collection in `+"`incremental_snapshot.chunk_size`"+` chunks, in `+"`_id`"+` order, between them. Each chunk is released once the change stream has caught up with the moment it was read, and any document the stream changed meanwhile is dropped from the chunk, so a document is never emitted older than a change already streamed for it. Chunks are read from the primary whatever the read preference in `+"`url`"+`, which still applies to the change stream: a lagging secondary could return documents older than changes already streamed. Progress is stored in `+"`checkpoint_cache`"+` under `+"`incremental_snapshot.checkpoint_cache_key`"+`, so a restart, for example after a credential expiry, continues from the last acknowledged chunk rather than starting over. The progress is written again with every stream position, so a cache with a TTL expires both together.
 
-A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. Turning on `+"`incremental_snapshot.enabled`"+` in a pipeline that already has a stream position stored, whether it ran with `+"`stream_snapshot`"+` or without it, reads nothing: with a stored position and no stored snapshot progress, every collection counts as read. To backfill such a pipeline, set `+"`signal_collection_name`"+` and send a `+"`"+replication.SnapshotSignalType+"`"+` signal. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request.
+A collection added to `+"`collections`"+` is read on the next start, while the others carry on streaming. Turning on `+"`incremental_snapshot.enabled`"+` in a pipeline that already has a stream position stored, whether it ran with `+"`stream_snapshot`"+` or without it, reads nothing: with a stored position and no stored snapshot progress, every collection counts as read. To backfill such a pipeline, set `+"`signal_collection_name`"+` and send a `+"`"+replication.SnapshotSignalType+"`"+` signal. A `+"`"+replication.SnapshotSignalType+"`"+` <<signals,signal>> reads a collection on request, in every snapshot mode: the same chunked read also serves pipelines running with `+"`stream_snapshot`"+` or with no snapshot at all.
 
 Documents from a chunk have the operation set to "read" and the operation time of the chunk read. Collections are read one at a time, so `+"`snapshot_parallelism`"+` and `+"`snapshot_auto_bucket_sharding`"+` do not apply. Chunks are bounded by index ranges rather than comparisons, so a collection whose `+"`_id`"+` values mix BSON types is read in full.
 
@@ -252,7 +252,9 @@ Progress is reported through metrics: `+"`"+metricIncSnapshotRemaining+"`"+` cou
 When `+"`signal_collection_name`"+` is set, documents inserted into that collection control the input while it runs. Each signal has a `+"`type`"+` and a `+"`data`"+` field, which may be an embedded document or a JSON string:
 
 - `+"`"+replication.LogSignalType+"`"+`: logs `+"`data.message`"+` at info level, for example `+"`{\"type\": \""+replication.LogSignalType+"\", \"data\": {\"message\": \"hello\"}}`"+`.
-- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Requires `+"`incremental_snapshot.enabled: true`"+`. Each named collection must also be in `+"`collections`"+`, because the input only watches those for changes. If a signal names any other collection, the input skips the whole signal and logs an error. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
+- `+"`"+replication.SnapshotSignalType+"`"+`: reads the named collections incrementally, alongside streaming, for example `+"`{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`"+` (`+"`tables`"+` is accepted as an alias of `+"`collections`"+`). Each named collection must also be in `+"`collections`"+`, because the input only watches those for changes. If a signal names any other collection, the input skips the whole signal and logs an error. A collection already read is read again, which makes the signal a way to re-read a collection on demand; one still queued or being read is not queued twice.
++
+The read works the same in every snapshot mode. It does not need `+"`incremental_snapshot.enabled`"+`: with `+"`stream_snapshot`"+`, or with no snapshot at all, the named collections are read in `+"`incremental_snapshot.chunk_size`"+` chunks between change events, exactly as described under <<incremental-snapshots,incremental snapshots>>, and the same `+"`retry_cooldown`"+` and duplicate-delivery notes apply. Nothing is read until a signal asks for it, a collection added to `+"`collections`"+` later included: only `+"`incremental_snapshot.enabled`"+` reads one on the next start. Progress is stored under `+"`incremental_snapshot.checkpoint_cache_key`"+` alongside the stream position, so a restart continues a requested read from the last acknowledged chunk rather than losing the request.
 
 Malformed signals and unknown types are logged and skipped. Updates and deletes in the signal collection are ignored.
 
@@ -275,10 +277,10 @@ Size the oplog for consumer lag: a change stream resumes from a position in the 
 
 Each message emitted by this plugin has the following metadata:
 
-- operation: either "insert", "replace", "delete" or "update" for changes streamed. Documents from a snapshot have the operation set to "read".
-- collection: the collection the document was written to.
-- operation_time: the oplog time for when this operation occurred.
-- schema: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
+- `+"`operation`"+`: either "insert", "replace", "delete" or "update" for changes streamed. Documents from a snapshot have the operation set to "read".
+- `+"`collection`"+`: the collection the document was written to.
+- `+"`operation_time`"+`: the oplog time for when this operation occurred.
+- `+"`schema`"+`: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
 
 == Schema Detection
 
@@ -374,18 +376,18 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
   this < 1 => ["field chunk_size must be greater or equal to 1."],
 }`),
 				service.NewStringField(fieldIncSnapshotKey).
-					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nIf you delete the stored progress, or change this key, while a stream position is stored, a restart treats every collection as read. To read a collection again, send a `"+replication.SnapshotSignalType+"` signal. Unlike `postgres_cdc`, a new key does not cause a new read. While `"+fieldIncSnapshotEnabled+"` is `false`, the input discards progress left under this key, so enabling it again later never resumes a read the stream has long since moved past.").
+					Description("The key used to store the incremental snapshot's progress in `"+fieldCheckpointCache+"`, alongside the stream position. Defaults to `"+fieldCheckpointKey+"` with `"+incSnapshotKeySuffix+"` appended, so inputs with distinct `"+fieldCheckpointKey+"` values never share progress.\n\nIf you delete the stored progress, or change this key, while a stream position is stored, a restart treats every collection as read. To read a collection again, send a `"+replication.SnapshotSignalType+"` signal. Unlike `postgres_cdc`, a new key does not cause a new read. The reads a signal requests store their progress here too, whether or not `"+fieldIncSnapshotEnabled+"` is set. While `"+fieldIncSnapshotEnabled+"` is `false` and no `"+fieldSignalCollection+"` is set, nothing keeps the progress current, so the input discards what is left under this key and enabling either later never resumes a read the stream has long since moved past.").
 					ShortDescription("The cache key storing the incremental snapshot's progress. Defaults to one derived from "+fieldCheckpointKey+".").
 					Default(""),
 				service.NewDurationField(fieldIncSnapshotRetryCool).
 					Description("How long the snapshot waits before retrying a chunk read that failed transiently, for example during a replica set election or after a dropped connection. Change events keep streaming meanwhile. Setting it to `0s` retries on the next streamed change.").
 					Default(defaultIncSnapshotRetryCooldown.String()),
 			).
-				Description("Configures chunked snapshotting that runs alongside change streaming.").
+				Description("Configures chunked snapshotting that runs alongside change streaming. With `"+fieldIncSnapshotEnabled+"` every collection is read this way on the first start; the other settings also govern the reads a `"+replication.SnapshotSignalType+"` signal requests through `"+fieldSignalCollection+"`, which work in every snapshot mode.").
 				Version("4.116.0").
 				Advanced(),
 			service.NewStringField(fieldSignalCollection).
-				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` incrementally, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, which requires `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`. Signal inserts are also emitted as regular messages with the `collection` metadata set to this collection, so filter them out downstream if they are not wanted.").
+				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` in `"+fieldIncSnapshot+"."+fieldIncSnapshotChunkSize+"` chunks alongside streaming, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, in every snapshot mode: `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"` is not required. Signal inserts are also emitted as regular messages with the `collection` metadata set to this collection, so filter them out downstream if they are not wanted.").
 				ShortDescription("A collection watched for signal documents that control the input at runtime.").
 				Optional().
 				Version("4.116.0"),
@@ -588,14 +590,18 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 	// Needed when disabled too, to discard stale progress.
 	m.incStateStore = &incStateCache{cacheEntry{resources: m.checkpoint.resources, cacheName: cacheName, cacheKey: key}}
 
-	if !enabled {
+	if enabled {
+		if snapshotEnabled {
+			return fmt.Errorf("%s and %s.%s are mutually exclusive snapshot modes, only one can be enabled", fieldStreamSnapshot, fieldIncSnapshot, fieldIncSnapshotEnabled)
+		}
+		m.incremental = true
+	}
+	if !m.readsIncrementally() {
 		return nil
 	}
-	if snapshotEnabled {
-		return fmt.Errorf("%s and %s.%s are mutually exclusive snapshot modes, only one can be enabled", fieldStreamSnapshot, fieldIncSnapshot, fieldIncSnapshotEnabled)
-	}
-	m.incremental = true
-
+	// The chunk settings govern every incremental read: the first-start read
+	// of every collection with enabled, and the reads a snapshot-execute
+	// signal requests in any mode.
 	if m.incChunkSize, err = inc.FieldInt(fieldIncSnapshotChunkSize); err != nil {
 		return err
 	}
@@ -622,6 +628,15 @@ func (m *mongoCDC) parseIncrementalSnapshot(conf *service.ParsedConfig, snapshot
 // stream position be recovered without skipping changes.
 func (m *mongoCDC) readsSnapshot() bool {
 	return m.snapshotParallelism > 0 || m.incremental
+}
+
+// readsIncrementally reports whether each connection runs an incremental
+// snapshot: with incremental_snapshot.enabled it reads every collection on
+// the first start, and with a signal collection it reads the collections
+// snapshot-execute signals name, in whichever snapshot mode. Only then is
+// the progress under incremental_snapshot.checkpoint_cache_key kept current.
+func (m *mongoCDC) readsIncrementally() bool {
+	return m.incremental || m.signalCollection != ""
 }
 
 type mongoBatch struct {
@@ -693,6 +708,8 @@ type mongoCDC struct {
 	// incremental is incremental_snapshot.enabled. It excludes
 	// stream_snapshot, so snapshotParallelism is 0 with it; use
 	// readsSnapshot to ask whether either kind of snapshot is configured.
+	// The chunk settings are parsed whenever readsIncrementally holds, so a
+	// signal collection carries them without incremental being set.
 	incremental      bool
 	incChunkSize     int
 	incRetryCooldown time.Duration
@@ -907,7 +924,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		resumeToken = nil
 	}
 	var incResume *incrementalsnapshot.State
-	if m.incremental {
+	if m.readsIncrementally() {
 		if incResume, resumeToken, err = m.loadIncSnapshotState(ctx, resumeToken); err != nil {
 			return err
 		}
@@ -970,7 +987,10 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	}
 
 	var incRun *incSnapshotRun
-	if m.incremental {
+	if m.readsIncrementally() {
+		// Without incremental_snapshot.enabled, incResume marks every
+		// collection read, so the run queues nothing until a signal asks: on
+		// a first start the blocking snapshot, if any, covers the collections.
 		if incRun, err = newIncSnapshotRun(m.db, m.collections, m.incChunkSize, m.incRetryCooldown, incResume, m.logger, m.metrics); err != nil {
 			return fmt.Errorf("unable to set up the incremental snapshot: %w", err)
 		}
@@ -1071,6 +1091,13 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 					return
 				}
 				m.client, m.db = client, db
+				// With stream_snapshot and a signal collection the run was
+				// built over the client just disconnected: point its chunk
+				// reads at the new one. Safe here, as the run is only used
+				// on this goroutine.
+				if incRun != nil {
+					incRun.deps.db = db
+				}
 			}
 		}
 		if err := m.readFromStream(ctx, tokenEpoch, cp, opts, incRun); err != nil {
@@ -1360,9 +1387,10 @@ func (m *mongoCDC) recoverFromUnresumablePosition(ctx context.Context, cause err
 }
 
 // discardIncSnapshotProgress removes progress an earlier incremental run left
-// behind. Outside incremental mode nothing keeps it current while the stream
-// position moves on, so a later switch back would otherwise resume a read
-// against a position it no longer belongs to.
+// behind. Without a run (neither incremental_snapshot.enabled nor a signal
+// collection) nothing keeps it current while the stream position moves on, so
+// a later switch back would otherwise resume a read against a position it no
+// longer belongs to.
 func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 	if m.incStateStore == nil {
 		return nil
@@ -1374,7 +1402,7 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	m.logger.Infof("Discarding the incremental snapshot progress stored under %s: only %s.%s: true keeps it current", m.incStateStore.cacheKey, fieldIncSnapshot, fieldIncSnapshotEnabled)
+	m.logger.Infof("Discarding the incremental snapshot progress stored under %s: only %s.%s: true or %s keeps it current", m.incStateStore.cacheKey, fieldIncSnapshot, fieldIncSnapshotEnabled, fieldSignalCollection)
 	if err := m.incStateStore.Delete(ctx); err != nil {
 		return fmt.Errorf("unable to discard incremental snapshot progress: %w", err)
 	}
@@ -1385,23 +1413,48 @@ func (m *mongoCDC) discardIncSnapshotProgress(ctx context.Context) error {
 // stream position to resume it with.
 //
 // Progress is only meaningful against the stream position it was recorded
-// with. Without a position the stream starts afresh, so every collection is
-// read again and any stored progress is ignored. A position without progress
-// is a pipeline that ran before incremental snapshots were enabled, with or
-// without stream_snapshot, so every configured collection is marked done; a
-// signal reads one again.
+// with. Without a position the stream starts afresh and any stored progress
+// is removed: with incremental_snapshot.enabled every collection is read
+// again, and otherwise every collection counts as read, since the blocking
+// snapshot (if any) covers them, and only a signal queues one. A position
+// without progress is a pipeline that ran before incremental reads were
+// enabled, with or without stream_snapshot, so every configured collection
+// is marked done; a signal reads one again.
 //
-// Undecodable progress is cleared and every configured collection read again
-// while the stream resumes from its position, which loses nothing. The token
-// is kept: clearing it would restart the stream from now, skipping every
-// delete since the stored position, which no re-read can recover. Repeated
-// clears trip the same breaker as a corrupt checkpoint.
+// Without incremental_snapshot.enabled a collection the progress does not
+// know, one added to collections since it was stored, is marked read too:
+// only a signal reads in that mode, and the run would otherwise queue it.
+//
+// Undecodable progress is cleared and the stream resumes from its position,
+// which loses nothing: with incremental_snapshot.enabled every configured
+// collection is read again, and otherwise every collection counts as read,
+// so a read a signal had requested is dropped rather than widened to every
+// collection. The token is kept: clearing it would restart the stream from
+// now, skipping every delete since the stored position, which no re-read can
+// recover. Repeated clears trip the same breaker as a corrupt checkpoint.
 func (m *mongoCDC) loadIncSnapshotState(ctx context.Context, resumeToken bson.Raw) (*incrementalsnapshot.State, bson.Raw, error) {
 	m.resumeTokenMu.Lock()
 	m.storedIncState = nil
 	m.resumeTokenMu.Unlock()
 	if resumeToken == nil {
-		return nil, nil, nil
+		// Stale progress must not survive to pair with the position this
+		// start stores: the post-snapshot checkpoint writes the token on its
+		// own, so a crash right after it would otherwise resume a read that
+		// belongs to a position long gone.
+		stale, err := m.incStateStore.get(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to check for incremental snapshot progress: %w", err)
+		}
+		if stale != nil {
+			m.logger.Infof("Discarding the incremental snapshot progress stored under %s: there is no stream position it belongs to", m.incStateStore.cacheKey)
+			if err := m.incStateStore.Delete(ctx); err != nil {
+				return nil, nil, fmt.Errorf("unable to discard incremental snapshot progress: %w", err)
+			}
+		}
+		if m.incremental {
+			return nil, nil, nil
+		}
+		return m.collectionsReadState(), nil, nil
 	}
 
 	state, err := m.incStateStore.Load(ctx)
@@ -1409,24 +1462,66 @@ func (m *mongoCDC) loadIncSnapshotState(ctx context.Context, resumeToken bson.Ra
 		if plan, recoveries := m.planUnresumableRecovery(); plan == unresumableRecoveryRefuseChurn {
 			return nil, nil, fmt.Errorf("the stored incremental snapshot progress cannot be decoded and has been cleared %d times in a row without the change stream ever advancing in between; refusing to clear it again - repair or delete the checkpoint cache entries, then restart the pipeline: %w", recoveries, err)
 		}
-		m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing it to read every collection again while the stream resumes: %v", err)
+		if m.incremental {
+			m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing it to read every collection again while the stream resumes: %v", err)
+		} else {
+			m.logger.Warnf("Stored incremental snapshot progress is corrupt, clearing it while the stream resumes; a read a signal requested is dropped and must be requested again: %v", err)
+		}
 		if derr := m.incStateStore.Delete(ctx); derr != nil {
 			return nil, nil, fmt.Errorf("unable to clear the corrupt incremental snapshot progress: %w", derr)
 		}
-		// No progress with a position queues every configured collection.
-		return nil, resumeToken, nil
+		if m.incremental {
+			// No progress with a position queues every configured collection.
+			return nil, resumeToken, nil
+		}
+		return m.collectionsReadState(), resumeToken, nil
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to load incremental snapshot progress from cache: %w", err)
 	}
 	if state == nil {
 		m.logger.Infof("Resuming a stream with no incremental snapshot progress, treating every configured collection as already read")
-		state = &incrementalsnapshot.State{Version: incrementalsnapshot.CurrentStateVersion}
-		for _, c := range m.collections {
-			state.Tables = append(state.Tables, incrementalsnapshot.TableID{Schema: m.db.Name(), Table: c})
-		}
+		state = m.collectionsReadState()
+	}
+	if !m.incremental {
+		m.markUnknownCollectionsRead(state)
 	}
 	return state, resumeToken, nil
+}
+
+// markUnknownCollectionsRead adds every configured collection the progress
+// does not cover to its read set, so the run does not queue it. One queued or
+// being read is left alone: that is a read a signal requested.
+//
+// Only for runs without incremental_snapshot.enabled, where nothing is read
+// until a signal asks: with it, a collection added to collections since the
+// progress was stored is meant to be read on the next start.
+func (m *mongoCDC) markUnknownCollectionsRead(state *incrementalsnapshot.State) {
+	var added []string
+	for _, c := range m.collections {
+		table := incrementalsnapshot.TableID{Schema: m.db.Name(), Table: c}
+		if slices.Contains(state.Tables, table) || slices.Contains(state.RemainingTables, table) {
+			continue
+		}
+		if state.CurrentTable != nil && *state.CurrentTable == table {
+			continue
+		}
+		state.Tables = append(state.Tables, table)
+		added = append(added, c)
+	}
+	if len(added) > 0 {
+		m.logger.Infof("Treating collections %v, which the stored incremental snapshot progress does not cover, as already read: only a %s signal reads a collection without %s.%s", added, replication.SnapshotSignalType, fieldIncSnapshot, fieldIncSnapshotEnabled)
+	}
+}
+
+// collectionsReadState is the progress of a run that has every configured
+// collection read and nothing queued, so only a signal makes it read one.
+func (m *mongoCDC) collectionsReadState() *incrementalsnapshot.State {
+	state := &incrementalsnapshot.State{Version: incrementalsnapshot.CurrentStateVersion}
+	for _, c := range m.collections {
+		state.Tables = append(state.Tables, incrementalsnapshot.TableID{Schema: m.db.Name(), Table: c})
+	}
+	return state
 }
 
 func (m *mongoCDC) readSnapshot(
