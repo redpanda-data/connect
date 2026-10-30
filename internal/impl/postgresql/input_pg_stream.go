@@ -155,6 +155,9 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 
 | ` + "`POINT`" + `, ` + "`TSRANGE`" + `, ` + "`TSVECTOR`" + `
 | String in its PostgreSQL text form, for example ` + "`\"(45.5,-122.6)\"`" + `, ` + "`\"[2024-01-01 00:00:00,2024-12-31 00:00:00)\"`" + `, or ` + "`\"'brown':3 'fox':4\"`" + `
+
+| ` + "`INTERVAL`" + `, ` + "`DATERANGE`" + `, ` + "`TSTZRANGE`" + `, their multiranges, and arrays of these types or of ` + "`TSRANGE`" + `
+| String in its PostgreSQL text form, for example ` + "`\"1 day 02:03:04\"`" + ` or ` + "`\"[2026-01-02,infinity)\"`" + `. The infinite values stay as ` + "`infinity`" + ` and ` + "`-infinity`" + ` in the text
 |===
 
 == Metadata
@@ -173,7 +176,7 @@ Some rows cannot be marshalled to JSON, in practice because they hold a non-fini
 
 == Infinite dates and timestamps
 
-PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation. By default, both the snapshot and the stream deliver them as ` + "`null`" + `. To emit the strings or sentinel timestamps instead, set <<` + fieldInfiniteTimestamps + `,` + "`" + fieldInfiniteTimestamps + "`" + `>>.
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation. By default, both the snapshot and the stream deliver them as ` + "`null`" + `. To emit the strings or sentinel timestamps instead, set <<` + fieldInfiniteTimestamps + `,` + "`" + fieldInfiniteTimestamps + "`" + `>>. This setting does not apply to intervals and ranges, which keep ` + "`infinity`" + ` in their PostgreSQL text form.
 
 == Metrics
 
