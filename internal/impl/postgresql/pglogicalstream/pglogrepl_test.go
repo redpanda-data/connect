@@ -33,6 +33,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -380,6 +381,154 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	members, err := getPublicationMembers(t.Context(), conn, "pub_partitioned")
 	require.NoError(t, err)
 	assert.Equal(t, events, members, "the publication still lists exactly the partitioned table")
+}
+
+// An empty table list means "replicate every table". When the publication
+// already exists as FOR TABLE, it must be recreated FOR ALL TABLES rather than
+// having every member dropped, which would leave an empty publication that
+// streams nothing.
+func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	_, err = conn.Exec(ctx, `
+		CREATE TABLE listed (id serial PRIMARY KEY, name text);
+		CREATE TABLE unlisted (id serial PRIMARY KEY, name text);
+	`).ReadAll()
+	require.NoError(t, err)
+
+	schema := `"public"`
+	listed := TableFQN{Schema: schema, Table: `"listed"`}
+	unlisted := TableFQN{Schema: schema, Table: `"unlisted"`}
+
+	t.Run("FOR TABLE publication with members", func(t *testing.T) {
+		pub := "pub_with_members"
+		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed;", pub)).ReadAll()
+		require.NoError(t, err)
+		require.False(t, publicationIsForAllTables(t, conn, pub))
+
+		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
+
+		assert.True(t, publicationIsForAllTables(t, conn, pub))
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		require.NoError(t, err)
+		assert.Contains(t, tables, listed)
+		assert.Contains(t, tables, unlisted)
+
+		// Already FOR ALL TABLES: a second call must leave it alone.
+		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
+		assert.True(t, publicationIsForAllTables(t, conn, pub))
+	})
+
+	t.Run("FOR TABLE publication emptied of every member", func(t *testing.T) {
+		// This is what the bug used to leave behind, so a restart must repair it.
+		pub := "pub_without_members"
+		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed; ALTER PUBLICATION %s DROP TABLE listed;", pub, pub)).ReadAll()
+		require.NoError(t, err)
+		require.False(t, publicationIsForAllTables(t, conn, pub))
+
+		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
+
+		assert.True(t, publicationIsForAllTables(t, conn, pub))
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		require.NoError(t, err)
+		assert.Contains(t, tables, listed)
+		assert.Contains(t, tables, unlisted)
+	})
+
+	t.Run("FOR TABLE publication with a table list is altered in place", func(t *testing.T) {
+		pub := "pub_altered"
+		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed;", pub)).ReadAll()
+		require.NoError(t, err)
+
+		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{unlisted}))
+
+		assert.False(t, publicationIsForAllTables(t, conn, pub))
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		require.NoError(t, err)
+		assert.Equal(t, []TableFQN{unlisted}, tables)
+	})
+
+	t.Run("emptied FOR TABLE publication with a table list gets the tables added", func(t *testing.T) {
+		// An empty member list used to be mistaken for FOR ALL TABLES and left
+		// alone, so the configured tables never streamed.
+		pub := "pub_emptied_then_listed"
+		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed; ALTER PUBLICATION %s DROP TABLE listed;", pub, pub)).ReadAll()
+		require.NoError(t, err)
+
+		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{listed}))
+
+		assert.False(t, publicationIsForAllTables(t, conn, pub))
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		require.NoError(t, err)
+		assert.Equal(t, []TableFQN{listed}, tables)
+	})
+
+	t.Run("recreated publication keeps its options", func(t *testing.T) {
+		// publish_via_partition_root is what the incremental snapshot needs for
+		// partitioned tables, so losing it on recreation would break them.
+		pub := "pub_with_options"
+		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed WITH (publish = 'insert', publish_via_partition_root = true);", pub)).ReadAll()
+		require.NoError(t, err)
+
+		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
+
+		assert.True(t, publicationIsForAllTables(t, conn, pub))
+		q, err := sanitize.SQLQuery("SELECT pubinsert, pubupdate, pubdelete, pubtruncate, pubviaroot FROM pg_publication WHERE pubname = $1;", pub)
+		require.NoError(t, err)
+		rows, err := conn.Exec(ctx, q).ReadAll()
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.Len(t, rows[0].Rows, 1)
+		var got []string
+		for _, v := range rows[0].Rows[0] {
+			got = append(got, string(v))
+		}
+		assert.Equal(t, []string{"t", "f", "f", "f", "t"}, got)
+	})
+
+	t.Run("recreating without superuser explains what to do", func(t *testing.T) {
+		pub := "pub_owned_by_non_superuser"
+		_, err := conn.Exec(ctx, fmt.Sprintf(`
+			CREATE ROLE pub_owner LOGIN REPLICATION PASSWORD 'secret';
+			GRANT CREATE ON DATABASE dbname TO pub_owner;
+			CREATE PUBLICATION %s FOR TABLE listed;
+			ALTER PUBLICATION %s OWNER TO pub_owner;
+		`, pub, pub)).ReadAll()
+		require.NoError(t, err)
+
+		ownerConn, err := pgconn.Connect(ctx, strings.Replace(dbURL, "user=user_name", "user=pub_owner", 1))
+		require.NoError(t, err)
+		defer closeConn(t, ownerConn)
+
+		err = CreatePublication(ctx, ownerConn, pub, nil)
+		require.ErrorContains(t, err, "recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables")
+
+		// The failed recreation rolls back, so the publication is untouched.
+		assert.False(t, publicationIsForAllTables(t, conn, pub))
+		tables, _, err := GetPublicationTables(ctx, conn, pub)
+		require.NoError(t, err)
+		assert.Equal(t, []TableFQN{listed}, tables)
+	})
+}
+
+// publicationIsForAllTables reports pg_publication.puballtables for an
+// existing publication.
+func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationName string) bool {
+	t.Helper()
+	pub, err := getPublication(t.Context(), conn, publicationName)
+	require.NoError(t, err)
+	require.True(t, pub.exists, "publication %s must exist", publicationName)
+	return pub.allTables
 }
 
 func TestIntegrationValidatePublication(t *testing.T) {

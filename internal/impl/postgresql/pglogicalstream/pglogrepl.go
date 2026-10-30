@@ -286,12 +286,23 @@ type publicationInfo struct {
 	// The operations the publication streams. Truncates are not read, since
 	// the stream ignores them.
 	insert, update, delete bool
+	// withClause is the body of a CREATE PUBLICATION ... WITH (...) clause
+	// that restores the publication's options, for recreating it.
+	withClause string
 }
 
 func getPublication(ctx context.Context, conn *pgconn.PgConn, publicationName string) (publicationInfo, error) {
+	// The options go through to_jsonb because the newer columns are missing on
+	// older servers, and naming a missing column fails the whole query.
 	pubQuery, err := sanitize.SQLQuery(`
-			SELECT puballtables, pubinsert, pubupdate, pubdelete
-			FROM pg_publication
+			SELECT puballtables,
+				to_jsonb(p) ->> 'pubinsert',
+				to_jsonb(p) ->> 'pubupdate',
+				to_jsonb(p) ->> 'pubdelete',
+				to_jsonb(p) ->> 'pubtruncate',
+				to_jsonb(p) ->> 'pubviaroot',
+				to_jsonb(p) ->> 'pubgencols'
+			FROM pg_publication p
 			WHERE pubname = $1;
 		`, publicationName)
 	if err != nil {
@@ -307,12 +318,40 @@ func getPublication(ctx context.Context, conn *pgconn.PgConn, publicationName st
 	}
 	row := rows[0].Rows[0]
 	return publicationInfo{
-		exists:    true,
-		allTables: string(row[0]) == "t",
-		insert:    string(row[1]) == "t",
-		update:    string(row[2]) == "t",
-		delete:    string(row[3]) == "t",
+		exists:     true,
+		allTables:  string(row[0]) == "t",
+		insert:     string(row[1]) == "true",
+		update:     string(row[2]) == "true",
+		delete:     string(row[3]) == "true",
+		withClause: publicationWithClause(row[1:]),
 	}, nil
+}
+
+// publicationWithClause turns the pg_publication option columns read by
+// getPublication (pubinsert, pubupdate, pubdelete, pubtruncate, pubviaroot,
+// pubgencols, each NULL when the server predates it) into the body of a
+// CREATE PUBLICATION ... WITH (...) clause that restores them.
+func publicationWithClause(opts [][]byte) string {
+	var publish []string
+	for i, op := range []string{"insert", "update", "delete", "truncate"} {
+		if string(opts[i]) == "true" {
+			publish = append(publish, op)
+		}
+	}
+	clause := fmt.Sprintf("publish = '%s'", strings.Join(publish, ", "))
+	switch string(opts[4]) {
+	case "true":
+		clause += ", publish_via_partition_root = true"
+	case "false":
+		clause += ", publish_via_partition_root = false"
+	}
+	switch string(opts[5]) {
+	case "n":
+		clause += ", publish_generated_columns = none"
+	case "s":
+		clause += ", publish_generated_columns = stored"
+	}
+	return clause
 }
 
 // missingOperations names the operations among insert, update and delete
@@ -361,7 +400,9 @@ func publicationSyncPlan(publicationName string, pub publicationInfo, pubTables,
 }
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
-// existing one so that it lists exactly those tables. An empty list creates a FOR ALL TABLES publication.
+// existing one so that it lists exactly those tables. An empty list means FOR ALL TABLES: a new publication is
+// created that way, and an existing FOR TABLE publication is recreated as FOR ALL TABLES, since PostgreSQL has no
+// ALTER PUBLICATION form that switches between the two.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
 	pub, err := getPublication(ctx, conn, publicationName)
 	if err != nil {
@@ -392,6 +433,28 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 			return fmt.Errorf("creating publication: %w", err)
 		}
 
+		return nil
+	}
+
+	if len(tables) == 0 && !pub.allTables {
+		// Every table is wanted. A FOR TABLE publication cannot be widened
+		// with ALTER PUBLICATION, and dropping its members one by one would
+		// only leave an empty publication that streams nothing, so recreate
+		// it with the same options. Both statements run in one implicit
+		// transaction, so the publication never goes missing for a concurrent
+		// reader, and a failed CREATE leaves it as it was.
+		// withClause is built from fixed keywords only, so we can safely
+		// interpolate it into the query
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, pub.withClause))
+		if err != nil {
+			return fmt.Errorf("sanitizing publication recreation query: %w", err)
+		}
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+			if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" {
+				return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
+			}
+			return fmt.Errorf("recreating publication for all tables: %w", err)
+		}
 		return nil
 	}
 

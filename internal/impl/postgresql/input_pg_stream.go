@@ -203,7 +203,7 @@ This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set 
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
-If left empty, and ` + "`" + fieldSelfManagePublication + "`" + ` is ` + "`true`" + `, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+If left empty, and ` + "`" + fieldSelfManagePublication + "`" + ` is ` + "`true`" + `, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. An existing publication of the same name that lists specific tables is dropped and recreated ` + "`FOR ALL TABLES`" + ` with the same options, which requires a superuser. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(replication.CheckpointLimitField("log sequence number (LSN)")).
 		Field(service.NewBoolField(fieldTemporarySlot).
