@@ -1148,7 +1148,6 @@ checkpoint_cache: %s
 	s.cp.now = func() time.Time { return hostNow }
 	_, err = s.loadCheckpoint(t.Context())
 	require.NoError(t, err)
-	s.cp.seedLag(s.timestampHWM) // as Connect does
 	_, ok := exp.get("sap_hana_hwm_lag_seconds")
 	assert.False(t, ok, "no lag before a poll reads the database clock")
 
@@ -1198,7 +1197,6 @@ checkpoint_cache: %s
 	s.cp.now = func() time.Time { return hostNow }
 	_, err := s.loadCheckpoint(t.Context())
 	require.NoError(t, err)
-	s.cp.seedLag(s.timestampHWM) // as Connect does
 
 	t.Log("When: a poll delivers a batch that is never acknowledged")
 	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
@@ -1238,7 +1236,6 @@ timestamp_delay: 0s
 	s.cp.now = func() time.Time { return hostNow }
 	_, err := s.loadCheckpoint(t.Context())
 	require.NoError(t, err)
-	s.cp.seedLag(s.timestampHWM) // as Connect does
 
 	t.Log("When: a poll delivers a batch that is not acknowledged yet")
 	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).

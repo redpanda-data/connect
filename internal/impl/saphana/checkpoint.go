@@ -242,12 +242,12 @@ func (c *checkpointer) observeDBClock(dbNow time.Time) {
 	c.refreshLag()
 }
 
-// seedLag sets the HWM lag gauge's start position at Connect, before any ack
-// resolves, so a restart into a stall shows a growing lag. It also runs
-// without checkpoint_cache, where hwm is timestamp_initial_value (see
-// lagHWM). A zero hwm (no checkpoint and no timestamp_initial_value, or not a
-// timestamp mode) leaves the gauge unset. The gauge appears at the first
-// poll, which gives the database clock.
+// seedLag sets the HWM lag gauge's start position. loadCheckpoint calls it at
+// Connect, before any ack resolves, so a restart into a stall shows a growing
+// lag. It also runs without checkpoint_cache, where hwm is
+// timestamp_initial_value (see lagHWM). A zero hwm (no checkpoint and no
+// timestamp_initial_value, or not a timestamp mode) leaves the gauge unset.
+// The gauge appears at the first poll, which gives the database clock.
 func (c *checkpointer) seedLag(hwm time.Time) {
 	if hwm.IsZero() {
 		return
@@ -326,13 +326,18 @@ func (c *checkpointer) persist(ctx context.Context, cp *sapHANACheckpointState) 
 	return nil
 }
 
-// loadCheckpoint restores persisted HWM state from the cache. It reports
-// whether an incrementing HWM was restored, since that value supersedes the
-// configured initial value.
+// loadCheckpoint restores persisted HWM state from the cache and seeds the
+// HWM lag gauge. It reports whether an incrementing HWM was restored, since
+// that value supersedes the configured initial value.
 func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
 	cp, err := s.cp.load(ctx)
-	if err != nil || cp == nil {
+	if err != nil {
 		return false, err
+	}
+	if cp == nil {
+		// No checkpoint: the timestamp HWM is timestamp_initial_value or zero.
+		s.cp.seedLag(s.timestampHWM)
+		return false, nil
 	}
 	if cp.TimestampHWM != nil {
 		s.timestampHWM = *cp.TimestampHWM
@@ -342,6 +347,9 @@ func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
 		s.hwm = hwm
 	}
 	s.log.Debugf("Loaded checkpoint: ts_hwm=%v incr_hwm=%v", s.timestampHWM, s.hwm)
+	// The timestamp HWM is now the checkpoint's, else timestamp_initial_value
+	// or zero: the position a restart resumes from.
+	s.cp.seedLag(s.timestampHWM)
 	return resumedHWM, nil
 }
 

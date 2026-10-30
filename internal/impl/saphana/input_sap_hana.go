@@ -103,9 +103,6 @@ func (s *sapHANAInput) Connect(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("loading checkpoint: %w", err)
 	}
-	// The timestamp HWM is now the loaded checkpoint, else
-	// timestamp_initial_value, else zero: the position a restart resumes from.
-	s.cp.seedLag(s.timestampHWM)
 	// A persisted checkpoint already carries the HWM with its real type; only
 	// a fresh start binds the configured initial value, which must match the
 	// column's type or go-hdb rejects the parameter on every poll.
