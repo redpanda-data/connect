@@ -616,3 +616,37 @@ func TestBatchSizeValidation(t *testing.T) {
 	conf.batchSize = 1000
 	require.NoError(t, validateDynamoDBCDCConfig(conf))
 }
+
+func TestCheckpointRetryConfig(t *testing.T) {
+	spec := dynamoDBCDCInputConfig()
+	env := service.NewEnvironment()
+
+	parsed, err := spec.ParseYAML(`
+tables: [mytable]
+`, env)
+	require.NoError(t, err)
+	cfg, err := dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.NoError(t, validateDynamoDBCDCConfig(cfg))
+	b := newInputRecordBatcher(cfg, nil, nil, nil)
+	assert.Equal(t, persistRetryInitial, b.retryInitial)
+	assert.Equal(t, persistRetryMax, b.retryMax)
+
+	parsed, err = spec.ParseYAML(`
+tables: [mytable]
+checkpoint_retry_initial_interval: 250ms
+checkpoint_retry_max_interval: 5s
+`, env)
+	require.NoError(t, err)
+	cfg, err = dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.NoError(t, validateDynamoDBCDCConfig(cfg))
+	b = newInputRecordBatcher(cfg, nil, nil, nil)
+	assert.Equal(t, 250*time.Millisecond, b.retryInitial)
+	assert.Equal(t, 5*time.Second, b.retryMax)
+
+	cfg.checkpointRetryMax = 100 * time.Millisecond
+	err = validateDynamoDBCDCConfig(cfg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "checkpoint_retry_max_interval")
+}

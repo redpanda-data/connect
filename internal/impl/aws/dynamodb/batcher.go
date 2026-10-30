@@ -83,12 +83,44 @@ func (c *pinClock) check(now time.Time) (since time.Duration, shouldWarn bool) {
 // To bound checkpoint-table writes, persistence happens only after at least
 // checkpointLimit messages have been acknowledged on a shard since the last
 // persisted checkpoint.
+//
+// All writes to the checkpoint store go through one persister per batcher
+// (Run). The trackers hold the wanted state of every shard (its frontier,
+// the frontier's record time, whether the shard is closed and settled) next
+// to the persisted state, and the persister writes the difference: acks and
+// closes mark a shard dirty and wake it, a failed write stays dirty and is
+// retried with backoff, and Flush writes everything left at shutdown. Acks
+// therefore never wait on the store and never see a write error, and there
+// is exactly one place a failed write is owned.
 type RecordBatcher struct {
 	maxTrackedShards   int
 	maxTrackedMessages int
 	log                *service.Logger
+	// cp is the checkpoint store every write goes to. It is nil only in
+	// tests: finished shards are then forgotten without a write and open
+	// shards never persist.
+	cp checkpointer
+	// failures counts failed checkpoint writes (nil-safe).
+	failures *service.MetricCounter
+	// retryInitial and retryMax bound the persister's retry backoff
+	// (checkpoint_retry_initial_interval/checkpoint_retry_max_interval).
+	retryInitial, retryMax time.Duration
+
+	// wake is signalled (non-blocking, buffered 1) whenever a shard becomes
+	// dirty, so the persister runs a pass; a pass covers every dirty shard,
+	// so one buffered signal is enough.
+	wake chan struct{}
+	// writeMu serializes persister passes: the Run loop and a Flush at
+	// shutdown must never write concurrently, or a late write could step a
+	// shard's row backwards. Never held together with mu across a write.
+	writeMu sync.Mutex
 
 	mu sync.Mutex
+	// dirty holds the shards with a wanted state the persister has not
+	// matched yet: an open shard due a checkpoint, a closed and settled shard
+	// awaiting its final write, or a finished shard still to be forgotten. A
+	// shard stays here until its write lands.
+	dirty map[string]struct{}
 
 	// shards holds the per-shard ordered ack trackers. An entry is removed
 	// once its closed shard has been read to the end and every batch from it
@@ -148,14 +180,7 @@ type trackedBatch struct {
 }
 
 type shardAckTracker struct {
-	// persistMu single-flights checkpoint writes for one shard (see
-	// maybePersist): the holder computes each persist after its previous
-	// write finished, so the durable row only ever moves forward, and every
-	// other ack TryLocks past it - nothing queues behind a slow write, and
-	// b.mu is never held across the write itself, so a hung checkpoint
-	// PutItem cannot park ShouldThrottle/AddMessages and freeze the input.
-	persistMu sync.Mutex
-	tracker   *checkpoint.Uncapped[string]
+	tracker *checkpoint.Uncapped[string]
 	// pending counts acked messages since the last persisted checkpoint.
 	pending int
 	// frontier is the highest contiguous acked sequence ("" until the first
@@ -185,17 +210,21 @@ type shardAckTracker struct {
 	// batch acknowledged, so it may be marked completed.
 	lastTracked string
 	// closed is set by CloseShard once the shard's reader has dispatched its
-	// final batch; closeCP is the store the completion is persisted to.
-	// finalizing is set while finalization (completion write, then forgetting
-	// the entry) is in progress, so only one caller runs it; a failed write
-	// clears it again so the next shard refresh can retry (RetryFinalize).
-	closed     bool
-	closeCP    checkpointer
-	finalizing bool
+	// final batch. done is set once the persister has written the shard's
+	// final position (see CloseShard); the entry is then only waiting to be
+	// forgotten and nothing is written for it again.
+	closed bool
+	done   bool
 }
 
-// NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC.
-func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger) *RecordBatcher {
+func newShardAckTracker() *shardAckTracker {
+	return &shardAckTracker{tracker: checkpoint.NewUncapped[string](), seqTimes: map[string]string{}}
+}
+
+// NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC whose
+// checkpoints are written to cp. failures, when not nil, counts failed
+// checkpoint writes. The persister must be started with Run.
+func NewRecordBatcher(maxTrackedShards, checkpointLimit int, cp checkpointer, failures *service.MetricCounter, log *service.Logger) *RecordBatcher {
 	// Set max tracked messages to 10x the checkpoint limit to allow for some buffering.
 	// This prevents unbounded growth while allowing parallel processing.
 	maxTrackedMessages := max(checkpointLimit*10,
@@ -209,7 +238,13 @@ func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger
 		// the rest stays available to healthy shards (see perShardCap doc).
 		perShardCap:     maxTrackedMessages / 4,
 		log:             log,
+		cp:              cp,
+		failures:        failures,
+		retryInitial:    persistRetryInitial,
+		retryMax:        persistRetryMax,
+		wake:            make(chan struct{}, 1),
 		shards:          make(map[string]*shardAckTracker),
+		dirty:           make(map[string]struct{}),
 		reservedByShard: make(map[string]int),
 	}
 }
@@ -376,7 +411,7 @@ func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) 
 
 	st, ok := b.shards[shardID]
 	if !ok {
-		st = &shardAckTracker{tracker: checkpoint.NewUncapped[string](), seqTimes: map[string]string{}}
+		st = newShardAckTracker()
 		b.shards[shardID] = st
 	}
 
@@ -417,21 +452,19 @@ func (b *RecordBatcher) settleLocked(tb *trackedBatch) bool {
 // RemoveBatch drops a tracked batch without resolving it (used when messages
 // are nacked, acked after close, or never dispatched). The shard's checkpoint
 // frontier stays pinned before this batch, so later acks cannot persist past
-// it and a restart redelivers the dropped records.
-func (b *RecordBatcher) RemoveBatch(ctx context.Context, tb *trackedBatch) {
+// it and a restart redelivers the dropped records. Dropping the last batch of
+// a closed shard hands the shard to the persister (see CloseShard).
+func (b *RecordBatcher) RemoveBatch(tb *trackedBatch) {
 	if b == nil || tb == nil {
 		return
 	}
 	b.mu.Lock()
-	finalize := b.settleLocked(tb) && b.claimFinalizeLocked(tb.shardID)
-	b.mu.Unlock()
-	if finalize {
-		// The last batch of a closed shard was dropped. A write that fails
-		// (for example because ctx is already cancelled at shutdown) leaves
-		// the entry in place for the shutdown flush.
-		if err := b.finalizeShard(ctx, tb.shardID); err != nil {
-			b.log.Errorf("Failed to persist final checkpoint for closed shard %s: %v", tb.shardID, err)
-		}
+	defer b.mu.Unlock()
+	if !b.settleLocked(tb) {
+		return
+	}
+	if st := b.shards[tb.shardID]; st != nil && st.closed && st.inflight == 0 {
+		b.markDirtyLocked(tb.shardID)
 	}
 }
 
@@ -443,140 +476,279 @@ type checkpointer interface {
 
 // CloseShard records that shardID's reader has read its closed shard to the
 // end and dispatched its final batch. Once every tracked batch on the shard
-// has settled (immediately if none is in flight), the shard is finalized:
+// has settled (immediately if none is in flight), the persister writes the
+// shard's final position:
 //
-//   - every dispatched batch acked: the frontier is persisted with the
-//     completion marker (cp.MarkShardCompleted), so a restart skips the
-//     shard instead of re-reading it from a lagging checkpoint;
+//   - every dispatched batch acked (or nothing was delivered from the shard
+//     this run): the frontier is persisted with the completion marker
+//     (cp.MarkShardCompleted), so a restart skips the shard instead of
+//     re-reading it from a lagging checkpoint;
 //   - a batch was dropped (nacked) and pinned the frontier: only the pinned
 //     frontier is persisted, so a restart still redelivers the dropped
 //     records;
 //
-// and the shard's tracker entry is forgotten. A failed write leaves the entry
-// in place so the shutdown flush still persists the frontier, and the write
-// is retried on every shard refresh (RetryFinalize) until it lands or the
-// shard ages out of the stream. cp is nil only after Close has cleared the
-// input's checkpointer (the shutdown flush already persisted what it could)
-// and in tests; the entry is then forgotten without a write.
-func (b *RecordBatcher) CloseShard(ctx context.Context, cp checkpointer, shardID string) error {
+// and forgets the shard's tracker entry. A failed write keeps the entry and
+// is retried by the persister until it lands, the shutdown Flush writes it,
+// or the shard ages out of the stream (ForgetShard).
+func (b *RecordBatcher) CloseShard(shardID string) {
 	if b == nil {
-		return nil
+		return
 	}
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	st, exists := b.shards[shardID]
 	if !exists {
-		b.mu.Unlock()
 		// Nothing was delivered from the shard during this run (empty or
-		// fully filtered final pages): the marker alone records completion
-		// and leaves no tracker state behind.
-		if cp == nil {
-			return nil
-		}
-		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
-		defer cancel()
-		return cp.MarkShardCompleted(setCtx, shardID, "", "")
+		// fully filtered final pages): an empty tracker records the close,
+		// so the marker alone is written and the entry forgotten.
+		st = newShardAckTracker()
+		b.shards[shardID] = st
 	}
 	st.closed = true
-	st.closeCP = cp
-	finalize := b.claimFinalizeLocked(shardID)
-	b.mu.Unlock()
-	if !finalize {
-		return nil
+	if st.inflight == 0 {
+		b.markDirtyLocked(shardID)
 	}
-	return b.finalizeShard(ctx, shardID)
 }
 
-// claimFinalizeLocked reports whether the caller must finalize shardID now:
-// the shard is closed, nothing is in flight on it, and no one else has
-// claimed finalization. Callers must hold b.mu.
-func (b *RecordBatcher) claimFinalizeLocked(shardID string) bool {
-	st, exists := b.shards[shardID]
-	if !exists || !st.closed || st.finalizing || st.inflight > 0 {
-		return false
+// markDirtyLocked queues shardID for the persister and wakes it. Callers
+// must hold b.mu.
+func (b *RecordBatcher) markDirtyLocked(shardID string) {
+	b.dirty[shardID] = struct{}{}
+	select {
+	case b.wake <- struct{}{}:
+	default:
 	}
-	st.finalizing = true
-	return true
 }
 
-// RetryFinalize finalizes every closed, fully settled shard whose earlier
-// finalization failed (see CloseShard). Nothing else triggers finalization
-// on such a shard - it is closed, so no batch is added, and settled, so no
-// ack arrives - and without this its entry would linger against
-// maxTrackedShards until the shard aged out of the stream (up to 24 hours).
-// Shard discovery calls it once per refresh cycle.
-func (b *RecordBatcher) RetryFinalize(ctx context.Context) error {
+// Default persister retry backoff: a failed pass is retried after
+// persistRetryInitial, doubling up to persistRetryMax while the store keeps
+// failing. Waking acks do not cut the wait short. The input overrides both
+// from checkpoint_retry_initial_interval and checkpoint_retry_max_interval.
+const (
+	persistRetryInitial = time.Second
+	persistRetryMax     = 30 * time.Second
+)
+
+// Run is the batcher's persister: it writes the dirty shards to the
+// checkpoint store whenever an ack or close wakes it and retries failed
+// writes with backoff, until ctx is done. Run it in one goroutine per
+// batcher. Whatever is left unpersisted when it stops is written by Flush.
+func (b *RecordBatcher) Run(ctx context.Context) {
+	if b == nil {
+		return
+	}
+	backoff := b.retryInitial
+	var retry <-chan time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-b.wake:
+			if retry != nil {
+				// A failed write is waiting out its backoff; the retry pass
+				// covers whatever just became dirty as well.
+				continue
+			}
+		case <-retry:
+			retry = nil
+		}
+		if err := b.persist(ctx, false); err != nil {
+			if ctx.Err() != nil {
+				// Shutting down: Flush takes over what is left.
+				return
+			}
+			b.log.Warnf("Failed to persist checkpoints, retrying in %v: %v", backoff, err)
+			retry = time.After(backoff)
+			backoff = min(backoff*2, b.retryMax)
+			continue
+		}
+		backoff = b.retryInitial
+	}
+}
+
+// Flush writes every unpersisted frontier and every pending final position
+// to the checkpoint store, ignoring checkpoint_limit. It is called at
+// shutdown once Run has stopped; writes are serialized with Run regardless.
+func (b *RecordBatcher) Flush(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	b.mu.Lock()
-	var claimed []string
-	for shardID := range b.shards {
-		if b.claimFinalizeLocked(shardID) {
-			claimed = append(claimed, shardID)
-		}
-	}
-	b.mu.Unlock()
+	return b.persist(ctx, true)
+}
 
+// shardWrite is one store write planned by the persister for a shard.
+type shardWrite struct {
+	shardID string
+	st      *shardAckTracker
+	// final is a closed, settled shard's last write; the entry is marked done
+	// and forgotten once it lands. complete writes the completion marker
+	// (MarkShardCompleted) instead of a plain checkpoint (Set).
+	final, complete bool
+	seq, seqTime    string
+	persisted       string
+	// pending is the shard's pending count when the write was planned; only
+	// that much is subtracted once it lands, so acks settled during the
+	// write keep counting toward the next checkpoint.
+	pending int
+}
+
+// persist runs one persister pass: it plans the writes for the dirty shards
+// (every shard when force is set, ignoring checkpoint_limit), performs them
+// outside b.mu, and records what landed. A shard whose write fails stays
+// dirty; the pass carries on with the other shards and reports the joined
+// errors. Each write is bounded by defaultAPICallTimeout.
+func (b *RecordBatcher) persist(ctx context.Context, force bool) error {
+	b.writeMu.Lock()
+	defer b.writeMu.Unlock()
+
+	writes, finished := b.planWrites(force)
+	for _, shardID := range finished {
+		b.forgetFinishedShard(shardID)
+	}
 	var errs error
-	for _, shardID := range claimed {
-		errs = errors.Join(errs, b.finalizeShard(ctx, shardID))
+	for _, w := range writes {
+		if err := ctx.Err(); err != nil {
+			b.requeue(w.shardID)
+			errs = errors.Join(errs, err)
+			continue
+		}
+		if err := b.write(ctx, w, force); err != nil {
+			b.requeue(w.shardID)
+			errs = errors.Join(errs, err)
+		}
 	}
 	return errs
 }
 
-// finalizeShard persists a closed, fully settled shard's final position (see
-// CloseShard) and forgets its tracker entry. On a failed write the claim
-// taken by claimFinalizeLocked is released so RetryFinalize can try again.
-func (b *RecordBatcher) finalizeShard(ctx context.Context, shardID string) error {
+// planWrites takes the dirty shards (all shards when force is set) off the
+// dirty set and decides what each one needs: a write, forgetting (its final
+// write already landed), or nothing yet. A shard an ack dirties again while
+// its write is in flight re-enters the set and is picked up by the next pass.
+func (b *RecordBatcher) planWrites(force bool) (writes []shardWrite, finished []string) {
 	b.mu.Lock()
-	st, exists := b.shards[shardID]
-	b.mu.Unlock()
-	if !exists {
-		return nil
+	defer b.mu.Unlock()
+
+	var limit int
+	if b.cp != nil {
+		limit = b.cp.CheckpointLimit()
 	}
+	var candidates []string
+	if force {
+		for shardID := range b.shards {
+			candidates = append(candidates, shardID)
+		}
+	} else {
+		for shardID := range b.dirty {
+			candidates = append(candidates, shardID)
+		}
+	}
+	sort.Strings(candidates)
 
-	// Wait out any checkpoint write an earlier ack still has in flight, so
-	// the final write is the last one to land on the shard's row. A write
-	// abandoned on timeout can still arrive later; the store then rejects it
-	// rather than letting it clear the completion marker (see
-	// Checkpointer.Set).
-	st.persistMu.Lock()
-	defer st.persistMu.Unlock()
+	for _, shardID := range candidates {
+		delete(b.dirty, shardID)
+		st := b.shards[shardID]
+		switch {
+		case st == nil:
+		case st.done:
+			finished = append(finished, shardID)
+		case st.closed && st.inflight == 0:
+			writes = append(writes, shardWrite{
+				shardID: shardID, st: st, final: true,
+				complete: st.frontier == st.lastTracked,
+				seq:      st.frontier, seqTime: st.frontierTime, persisted: st.persisted, pending: st.pending,
+			})
+		case b.cp != nil && st.hasUnpersistedFrontier() && (force || st.pending >= limit):
+			writes = append(writes, shardWrite{
+				shardID: shardID, st: st,
+				seq: st.frontier, seqTime: st.frontierTime, persisted: st.persisted, pending: st.pending,
+			})
+		}
+	}
+	return writes, finished
+}
 
+// requeue puts a shard whose write did not land back on the dirty set.
+func (b *RecordBatcher) requeue(shardID string) {
 	b.mu.Lock()
-	frontier, frontierTime, persisted := st.frontier, st.frontierTime, st.persisted
-	fullyAcked := frontier == st.lastTracked
-	cp := st.closeCP
-	b.mu.Unlock()
+	defer b.mu.Unlock()
+	if _, exists := b.shards[shardID]; exists {
+		b.dirty[shardID] = struct{}{}
+	}
+}
 
-	// cp is nil after Close (see CloseShard).
-	if cp != nil {
-		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+// write performs one planned write and records it. cp is nil only in tests:
+// a final write then forgets the entry without touching a store.
+//
+// A plain write abandoned on timeout can still land server-side after a
+// later one and step the durable row backwards (bounded redelivery after a
+// crash inside that window, never loss). Stream sequence numbers are
+// variable-length numeric strings, so a lexicographic ConditionExpression
+// guarding forward-only movement could wrongly reject legitimate newer
+// writes forever - a frozen checkpoint, strictly worse than the race it would
+// close. What a late plain write can never do is replace the shard's
+// completion marker: the store rejects it (see Checkpointer.Set).
+func (b *RecordBatcher) write(ctx context.Context, w shardWrite, force bool) error {
+	if b.cp != nil {
 		var err error
 		switch {
-		case fullyAcked:
-			err = cp.MarkShardCompleted(setCtx, shardID, frontier, frontierTime)
-		case frontier != "" && frontier != persisted:
-			err = cp.Set(setCtx, shardID, frontier, frontierTime)
+		case w.complete:
+			err = callStore(ctx, func(ctx context.Context) error {
+				return b.cp.MarkShardCompleted(ctx, w.shardID, w.seq, w.seqTime)
+			})
+		case w.seq != "" && w.seq != w.persisted:
+			err = callStore(ctx, func(ctx context.Context) error {
+				return b.cp.Set(ctx, w.shardID, w.seq, w.seqTime)
+			})
 		}
-		cancel()
 		if err != nil {
-			b.mu.Lock()
-			st.finalizing = false
-			b.mu.Unlock()
+			if ctx.Err() == nil {
+				// Not a shutdown: a write the store refused.
+				b.failures.Incr(1)
+			}
 			return err
 		}
 	}
 
 	b.mu.Lock()
-	st.persisted = frontier
-	st.pending = 0
+	w.st.persisted = w.seq
+	// Subtract only what this write covered; acks settled while it was in
+	// flight keep counting toward the next checkpoint.
+	w.st.pending = max(0, w.st.pending-w.pending)
+	if w.final {
+		w.st.done = true
+	}
 	b.mu.Unlock()
-	b.ForgetShard(shardID)
-	if fullyAcked {
-		b.log.Debugf("Shard %s completed at sequence %s", shardID, frontier)
+
+	switch {
+	case w.final && w.complete:
+		b.log.Debugf("Shard %s completed at sequence %s", w.shardID, w.seq)
+	case w.final:
+		b.log.Debugf("Closed shard %s checkpointed at pinned sequence %s", w.shardID, w.seq)
+	case force:
+		b.log.Infof("Flushed checkpoint for shard %s at sequence %s", w.shardID, w.seq)
+	default:
+		b.log.Debugf("Checkpointed shard %s at sequence %s", w.shardID, w.seq)
+	}
+	if w.final {
+		b.forgetFinishedShard(w.shardID)
 	}
 	return nil
+}
+
+// callStore runs one store write under the API call timeout.
+func callStore(ctx context.Context, fn func(context.Context) error) error {
+	setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+	defer cancel()
+	return fn(setCtx)
+}
+
+// forgetFinishedShard drops a done shard's entry. It cannot normally fail (a
+// finished shard has nothing in flight or reserved), but if it does the
+// shard is requeued so a later pass drops it.
+func (b *RecordBatcher) forgetFinishedShard(shardID string) {
+	if !b.ForgetShard(shardID) {
+		b.requeue(shardID)
+	}
 }
 
 // ForgetShard drops shardID's tracker entry once nothing is in flight or
@@ -604,6 +776,7 @@ func (b *RecordBatcher) forgetShard(shardID string, requirePersisted bool) bool 
 		return false
 	}
 	delete(b.shards, shardID)
+	delete(b.dirty, shardID)
 	return true
 }
 
@@ -633,26 +806,27 @@ func (st *shardAckTracker) hasUnpersistedFrontier() bool {
 	return st.frontier != "" && st.frontier != st.persisted
 }
 
-// AckBatch marks a tracked batch as acknowledged, advances the shard's
-// contiguous frontier, and persists a checkpoint once enough messages have
-// been acked since the last persisted position. Settlement goes through the
-// handle returned by AddMessages (see trackedBatch); repeat settles no-op.
-func (b *RecordBatcher) AckBatch(
-	ctx context.Context,
-	cp checkpointer,
-	tb *trackedBatch,
-) error {
+// AckBatch marks a tracked batch as acknowledged and advances the shard's
+// contiguous frontier. Once enough messages have been acked since the last
+// persisted position (checkpoint_limit), or the batch was the last one in
+// flight on a closed shard, the shard is handed to the persister (Run); the
+// ack itself never waits on the store and never sees a write error.
+// Settlement goes through the handle returned by AddMessages (see
+// trackedBatch); repeat settles no-op.
+//
+// The only error is the max_tracked_shards guard. The batch is settled and
+// the shard queued for persistence regardless: swallowing the settle would
+// leak tracked messages and permanently pin ShouldThrottle, and skipping the
+// persist would silently freeze durable checkpoints for as long as the guard
+// trips.
+func (b *RecordBatcher) AckBatch(tb *trackedBatch) error {
 	if b == nil || tb == nil {
 		return nil
 	}
-
-	// Settle under b.mu only, never waiting on another ack's in-flight
-	// checkpoint write: batch settlement (and with it TryReserve and
-	// AddMessages) stays wait-free even when the checkpoint store is slow.
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if !b.settleLocked(tb) {
 		// Already settled (nacked or double-acked); nothing to do.
-		b.mu.Unlock()
 		return nil
 	}
 	st := b.shards[tb.shardID]
@@ -660,100 +834,23 @@ func (b *RecordBatcher) AckBatch(
 		st.advanceFrontier(*frontier)
 	}
 	st.pending += tb.size
-	shardsOverCap := len(b.shards) > b.maxTrackedShards
-	finalize := b.claimFinalizeLocked(tb.shardID)
-	b.mu.Unlock()
 
-	var persistErr error
-	if cp != nil {
-		persistErr = b.maybePersist(ctx, cp, st, tb.shardID)
+	var limit int
+	if b.cp != nil {
+		limit = b.cp.CheckpointLimit()
 	}
-	if finalize {
-		// The last batch of a closed shard settled: persist its completion
-		// and forget the shard (see CloseShard).
-		persistErr = errors.Join(persistErr, b.finalizeShard(ctx, tb.shardID))
+	if (st.closed && st.inflight == 0) || (st.hasUnpersistedFrontier() && st.pending >= limit) {
+		b.markDirtyLocked(tb.shardID)
 	}
-	if cp == nil {
-		// cp is nil after Close (see CloseShard): settlement still drains the
-		// tracker, there is just nothing left to persist to.
-		return persistErr
+	if len(b.shards) > b.maxTrackedShards {
+		return fmt.Errorf("checkpoint map exceeded maximum size (%d shards) - possible memory leak", b.maxTrackedShards)
 	}
-	if shardsOverCap {
-		// The batch is settled and the frontier persisted above regardless:
-		// swallowing the settle would leak tracked messages and permanently
-		// pin ShouldThrottle, and skipping persists would silently freeze
-		// durable checkpoints for as long as the guard trips.
-		return errors.Join(
-			fmt.Errorf("checkpoint map exceeded maximum size (%d shards) - possible memory leak", b.maxTrackedShards),
-			persistErr,
-		)
-	}
-	return persistErr
-}
-
-// maybePersist writes a shard's checkpoint once enough messages have been
-// acked since the last persisted position AND the contiguous frontier has
-// moved past it (a pinned frontier - nacked batch ahead in stream order -
-// accumulates pending acks without persisting).
-//
-// Writes are single-flighted per shard: whoever holds persistMu re-checks
-// after each successful write, so progress settled during the write is
-// picked up immediately, and every other ack skips past without blocking.
-// Anything left unpersisted when the writes stop is carried by the shard's
-// next ack or the shutdown flush (PendingCheckpoints/FlushCheckpoints).
-// b.mu is never held across the store write.
-func (b *RecordBatcher) maybePersist(ctx context.Context, cp checkpointer, st *shardAckTracker, shardID string) error {
-	if !st.persistMu.TryLock() {
-		return nil
-	}
-	defer st.persistMu.Unlock()
-
-	for {
-		b.mu.Lock()
-		due := st.pending >= cp.CheckpointLimit() && st.hasUnpersistedFrontier()
-		persistSeq := st.frontier
-		persistTime := st.frontierTime
-		pendingAtCompute := st.pending
-		b.mu.Unlock()
-		if !due {
-			return nil
-		}
-
-		// Bound the write so a hung request surfaces as a retryable error
-		// (the ack context is typically deadline-free) instead of pinning
-		// the shard's persist slot indefinitely. An abandoned write can in
-		// principle still land server-side after a later one and step the
-		// durable row backwards (bounded redelivery after a crash inside
-		// that window, never loss). Stream sequence numbers are
-		// variable-length numeric strings, so a lexicographic
-		// ConditionExpression guarding forward-only movement could wrongly
-		// reject legitimate newer writes forever - a frozen checkpoint,
-		// strictly worse than the race it would close. What the write can
-		// never do is replace the shard's completion marker once
-		// finalizeShard has written it: the store rejects a plain write on
-		// a completed row (see Checkpointer.Set).
-		setCtx, cancel := context.WithTimeout(ctx, defaultAPICallTimeout)
-		err := cp.Set(setCtx, shardID, persistSeq, persistTime)
-		cancel()
-		if err != nil {
-			// Bookkeeping untouched: pending keeps accumulating and the next
-			// ack on this shard retries the write from the newest frontier.
-			return err
-		}
-
-		b.mu.Lock()
-		st.persisted = persistSeq
-		// Subtract only what this write covered; acks settled while it was
-		// in flight keep counting toward the next persist.
-		st.pending -= pendingAtCompute
-		b.mu.Unlock()
-		b.log.Debugf("Checkpointed shard %s at sequence %s", shardID, persistSeq)
-	}
+	return nil
 }
 
 // PendingCheckpoints returns, per shard, the highest contiguous acked
-// sequence that has not been persisted yet. Used to flush checkpoints on
-// shutdown.
+// sequence that has not been persisted yet (what a Flush would write).
+// Exported for testing and diagnostics.
 func (b *RecordBatcher) PendingCheckpoints() map[string]CheckpointValue {
 	b.mu.Lock()
 	defer b.mu.Unlock()
