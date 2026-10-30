@@ -22,7 +22,7 @@ All notable changes to this project will be documented in this file.
 - oracledb_cdc: Fixed timestamp precision handling in Oracle CDC to correctly preserve timestamp values. ([@josephwoodward](https://github.com/josephwoodward), [#5022](https://github.com/redpanda-data/connect/pull/5022))
 - postgres_cdc: Fixed publication recreation to handle switching between FOR TABLE and FOR ALL TABLES modes correctly. ([@squiidz](https://github.com/squiidz), [#5029](https://github.com/redpanda-data/connect/pull/5029))
 - postgres_cdc: Fixed PostgreSQL CDC to skip emitting empty records for Type, Truncate, and Origin WAL messages. ([@nvanthao](https://github.com/nvanthao), [#5084](https://github.com/redpanda-data/connect/pull/5084))
-- redpanda_migrator: Fixed concurrent schema registration conflicts by serializing source schema ID registration to prevent duplicate destination IDs. ([@Leward](https://github.com/Leward), [#5055](https://github.com/redpanda-data/connect/pull/5055))
+- redpanda_migrator: With `schema_registry.translate_ids` enabled, the output no longer rewrites the schema ID in the input message. A batch retried after a failed write was translated a second time, so records either failed forever with `schema ID N not found in registry` or were silently written with the wrong destination schema ID. ([@josephwoodward](https://github.com/josephwoodward), [#5074](https://github.com/redpanda-data/connect/pull/5074))
 - sap_hana: Fixed fractional timestamp precision, session loss handling, and credential refresh behavior in SAP HANA CDC with real hardware testing. ([@squiidz](https://github.com/squiidz), [#5063](https://github.com/redpanda-data/connect/pull/5063))
 
 ### Changed
@@ -34,12 +34,6 @@ All notable changes to this project will be documented in this file.
 - postgresql: Enabled parallel execution of PostgreSQL integration tests by isolating containers, reducing suite runtime from 195s to 32-37s. ([@Leward](https://github.com/Leward), [#5023](https://github.com/redpanda-data/connect/pull/5023))
 - redpanda_migrator: Enabled parallel execution of integration tests using AIO usage limits and container isolation, reducing suite runtime from 397s to 63-72s. ([@Leward](https://github.com/Leward), [#5053](https://github.com/redpanda-data/connect/pull/5053))
 - replication: Refactored flush ticket logic into a reusable ticket.Lock package with improved concurrency handling, cancellation support, and typed Ticket returns for safer API usage. ([@Leward](https://github.com/Leward), [#4856](https://github.com/redpanda-data/connect/pull/4856))
-
-## 4.116.0 - 2026-10-29
-
-### Fixed
-
-- redpanda_migrator: With `schema_registry.translate_ids` enabled, the output no longer rewrites the schema ID in the input message. A batch retried after a failed write was translated a second time, so records either failed forever with `schema ID N not found in registry` or were silently written with the wrong destination schema ID. ([@josephwoodward](https://github.com/josephwoodward), [#5074](https://github.com/redpanda-data/connect/pull/5074))
 
 ## 4.115.1 - 2026-10-23
 
