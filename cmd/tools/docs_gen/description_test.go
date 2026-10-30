@@ -108,8 +108,10 @@ func TestRenderDescriptionPartial(t *testing.T) {
 	excluded := func(_, name string) bool { return name == "grok" }
 
 	got := renderDescriptionPartial(c, "inputs", componentPlatform{CgoOnly: true}, excluded)
-	assert.Contains(t, got, "// tag::meta[]\n:description: Consumes messages from a ZeroMQ socket.\n:status: beta\n:page-cgo-only: true\n// end::meta[]\n")
-	assert.Contains(t, got, "// tag::body[]\n[CAUTION]\n====\nThis component is in beta.")
+	assert.Contains(t, got, "// tag::meta[]\n:description: Consumes messages from a ZeroMQ socket.\n:status: beta\n:page-beta: true\n:page-cgo-only: true\n// end::meta[]\n",
+		"beta components set page-beta, which shows the docs UI beta badge in the page header")
+	assert.Contains(t, got, "// tag::body[]\nConsumes messages", "beta components get the badge instead of a notice")
+	assert.NotContains(t, got, "[CAUTION]")
 	assert.Contains(t, got, "ifndef::env-cloud[]\nIntroduced in version 4.1.0.\nendif::[]")
 	assert.Contains(t, got, "// tag::footnotes[]\n== Patterns\n\nUse xref:components:processors/grok.adoc[grok].\n// end::footnotes[]\n")
 	assert.NotContains(t, got, "ifdef::env-cloud[]", "components that Cloud doesn't include keep their links")
@@ -123,9 +125,18 @@ func TestRenderDescriptionPartial(t *testing.T) {
 	assert.Contains(t, deprecated, "// tag::body[]\n[WARNING]\n====\nThis component is deprecated")
 	assert.Contains(t, deprecated, "// tag::footnotes[]\n// end::footnotes[]\n", "the footnotes tag is always present")
 
+	assert.NotContains(t, deprecated, ":page-beta:")
+
+	c.Status = "experimental"
+	experimental := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil)
+	assert.Contains(t, experimental, ":status: experimental\n")
+	assert.NotContains(t, experimental, ":page-beta:", "the docs UI has no experimental badge")
+	assert.Contains(t, experimental, "// tag::body[]\n[CAUTION]\n====\nThis component is experimental.")
+
 	c.Status = "stable"
 	stable := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil)
 	assert.Contains(t, stable, ":status: stable\n")
+	assert.NotContains(t, stable, ":page-beta:")
 	assert.Contains(t, stable, "// tag::body[]\nConsumes messages", "stable components get no notice")
 
 	for _, tag := range []string{"meta", "body", "footnotes"} {
