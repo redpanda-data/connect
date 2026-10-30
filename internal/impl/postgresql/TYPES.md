@@ -51,7 +51,8 @@ rely on them.
 - **DATE**: Mapped to Timestamp schema type. Both paths return `time.Time`.
   The special values `infinity` and `-infinity` have no `time.Time` form.
   Both paths decode them to `pglogicalstream.InfiniteTime`, which keeps the
-  snapshot keys exact, and the input emits them as `nil`.
+  snapshot keys exact. The input emits them as set by `infinite_timestamps`:
+  `nil` (the default), the strings, or sentinel timestamps.
 - **TIME / TIMETZ**: Returned as raw PostgreSQL text strings. The CDC path
   bypasses pgtype.Time to avoid struct values. Note: timetz (OID 1266) is not
   in pgx's default type map; the CDC path handles it via a `string(data)`
