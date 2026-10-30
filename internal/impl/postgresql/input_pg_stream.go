@@ -107,7 +107,7 @@ The source database must have logical replication enabled, which means its ` + "
 
 This input reads changes through a logical replication slot, which it creates if the slot does not already exist. PostgreSQL retains the write-ahead log (WAL) that the slot still needs, so the input can resume from its last acknowledged position after a restart.
 
-When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `. It then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `. It then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged. If the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
 
 When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
 
@@ -161,7 +161,7 @@ This input adds the following metadata fields to each message:
 
 == Unserializable rows
 
-A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) does not stall the stream or get silently dropped. Instead, it is published with its error set and a plain-text rendering of the row as the payload. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue). If not handled, they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+Some rows cannot be marshalled to JSON, in practice because they hold a non-finite floating point value such as NaN or Infinity. Such a row does not stall the stream or get silently dropped. Instead, it is published with its error set and a plain-text rendering of the row as the payload. You can inspect such messages with the ` + "`errored()`" + ` Bloblang function. You can route them with error-handling components, for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + ` or a dead-letter queue. If not handled, they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
 
 == Infinite dates and timestamps
 
