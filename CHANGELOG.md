@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- aws/dynamodb: Fixed shutdown hang by settling undelivered CDC batches on close instead of waiting indefinitely for their acknowledgments. ([@Leward](https://github.com/Leward), [#4989](https://github.com/redpanda-data/connect/pull/4989))
+- aws_dynamodb_cdc: Fixed shutdown hang by settling undelivered CDC batches on close instead of waiting indefinitely for their acknowledgments. ([@Leward](https://github.com/Leward), [#4989](https://github.com/redpanda-data/connect/pull/4989))
 - aws_dynamodb_cdc: Fixed shard completion tracking to prevent re-reading exhausted shards after cleanup and improved child shard ordering based on parent completion. ([@squiidz](https://github.com/squiidz), [#5001](https://github.com/redpanda-data/connect/pull/5001))
 - aws_dynamodb_cdc: Fixed shard completion marker handling to prevent late plain checkpoint writes from overwriting completion state. ([@squiidz](https://github.com/squiidz), [#5014](https://github.com/redpanda-data/connect/pull/5014))
 - aws_kinesis: Fixed shard handover by allowing takeover of shards with no committed sequence number in the claim. ([@squiidz](https://github.com/squiidz), [#5028](https://github.com/redpanda-data/connect/pull/5028))
