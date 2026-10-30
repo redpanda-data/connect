@@ -134,10 +134,12 @@ It is the consumer’s responsibility to perform idempotency checks when process
 
 == Upgrading
 
-The TigerBeetle client version must not be newer than the cluster version, as it will fail
-with an error message if so.
+Requires TigerBeetle cluster version 0.16.78 or greater.
 
-Requires TigerBeetle cluster version 0.16.57 or greater.`).
+A cluster older than this version rejects the connection, and the input logs
+` + "`Client was evicted; release too new.`" + `
+A newer version of Redpanda Connect can require a newer cluster version.
+Upgrade the cluster before you upgrade Redpanda Connect.`).
 		Fields(
 			service.NewStringField(fieldClusterID).
 				Description("The TigerBeetle unique 128-bit cluster ID.").
