@@ -99,6 +99,8 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 
 Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
 
+A zero date such as `+"`0000-00-00`"+` has no timestamp form. When streamed, it becomes `+"`null`"+`. In the snapshot, it becomes `+"`0001-01-01T00:00:00Z`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+` when streamed, but the snapshot moves it to a nearby valid date.
+
 == Metadata
 
 This input adds the following metadata fields to each message:
