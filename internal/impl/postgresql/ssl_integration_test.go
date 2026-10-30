@@ -213,6 +213,7 @@ func TestIntegrationSSLVerifyFull(t *testing.T) {
 	}
 
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	certs, cleanup := generateCerts(t)
 	defer cleanup()

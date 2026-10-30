@@ -16,9 +16,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"go/ast"
+	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -136,10 +141,11 @@ func TestRenderCatalog(t *testing.T) {
 	assert.Contains(t, out, `"categories": []`, "empty lists stay arrays, not null")
 }
 
-// TestPlatformsFromBuilds lists the real standard and docs_gen builds with go
-// list and checks the components that build constraints are known to gate.
-// It needs a Go toolchain, so -short skips it. The docs task runs it with
-// x_benthos_extra, where it checks the exact cgo-only list.
+// TestPlatformsFromBuilds lists the real release builds with go list and
+// pins the exact cloud-only and cgo-only sets, so a component that moves
+// between distributions fails it until the expected sets are updated. It also
+// fails when a release build registers a component that docs_gen doesn't
+// document. It needs a Go toolchain, so -short skips it.
 func TestPlatformsFromBuilds(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs go list on the real builds")
@@ -149,15 +155,168 @@ func TestPlatformsFromBuilds(t *testing.T) {
 	plat, err := loadPlatforms(raw)
 	require.NoError(t, err)
 
-	assert.False(t, plat.get("inputs", "kafka_franz").CgoOnly)
-	assert.False(t, plat.get("processors", "a2a_message").CgoOnly, "Cloud-only isn't cgo-only")
-	gated := map[string]bool{"inputs/zmq4": true, "outputs/zmq4": true, "processors/ffi": true, "inputs/tigerbeetle_cdc": true}
-	for _, k := range plat.cgoOnlyKeys() {
-		assert.True(t, gated[k], "unexpected cgo-only component %v", k)
+	// These come from go list on the builds in .goreleaser, whatever tags
+	// this test runs with.
+	cgoOnly, err := cgoOnlyComponents()
+	require.NoError(t, err)
+	cloudOnly, err := cloudOnlyComponents()
+	require.NoError(t, err)
+	got := platformSets{CloudOnly: sortedKeys(cloudOnly), CgoOnly: sortedKeys(cgoOnly)}
+	if *updatePlatformSets {
+		writePlatformSets(t, got)
 	}
+	want := readPlatformSets(t)
+	assertSameSet(t, "cloud_only", want.CloudOnly, got.CloudOnly)
+	assertSameSet(t, "cgo_only", want.CgoOnly, got.CgoOnly)
 	if builtWithAllComponents {
-		assert.Equal(t, []string{"inputs/tigerbeetle_cdc", "inputs/zmq4", "outputs/zmq4", "processors/ffi"}, plat.cgoOnlyKeys())
+		assertSameSet(t, "cgo_only (cgoOnlyKeys)", want.CgoOnly, plat.cgoOnlyKeys())
 	}
+
+	builds := map[string]map[string]bool{}
+	for _, name := range []string{standardRelease, cgoRelease, cloudRelease} {
+		b, err := readReleaseBuild(name)
+		require.NoError(t, err)
+		builds[name] = buildRegistrations(t, b)
+	}
+	for k := range cloudOnly {
+		assert.True(t, builds[cloudRelease][k], "cloud-only %v isn't registered by the Cloud build", k)
+		assert.False(t, builds[standardRelease][k], "cloud-only %v is registered by the standard build", k)
+	}
+	for k := range cgoOnly {
+		assert.True(t, builds[cgoRelease][k], "cgo-only %v isn't registered by the cgo build", k)
+		assert.False(t, builds[standardRelease][k], "cgo-only %v is registered by the standard build", k)
+	}
+	for _, k := range plat.cgoOnlyKeys() {
+		assert.True(t, cgoOnly[k], "%v is cgo-only in the platform set but not in the cgo build comparison", k)
+	}
+
+	// Sentinels, to show that real builds were compared. If one of these
+	// components moves to another distribution, pick another sentinel.
+	assert.True(t, cloudOnly["processors/a2a_message"], "a2a_message is in the Cloud build only")
+	assert.True(t, cgoOnly["processors/ffi"], "ffi is in the cgo build only")
+	assert.False(t, plat.get("processors", "a2a_message").CgoOnly, "Cloud-only isn't cgo-only")
+
+	// docs_gen documents only allcomponents, so a component that a release
+	// build registers and allcomponents doesn't would ship without docs.
+	report, err := undocumentedReport()
+	require.NoError(t, err)
+	for _, u := range report {
+		t.Errorf("%v/%v is registered by the %v build(s) but not documented: add its package to cmd/tools/docs_gen/allcomponents", u.Type, u.Name, strings.Join(u.Builds, ", "))
+	}
+}
+
+var updatePlatformSets = flag.Bool("update", false, "rewrite "+platformSetsFile+" from the real release builds")
+
+// platformSetsFile holds the expected cloud-only and cgo-only sets, which
+// decide the cloudOnly and requiresCgo flags in the published connector data.
+// Rewrite it with go test ./cmd/tools/docs_gen -run TestPlatformsFromBuilds -update.
+const platformSetsFile = "testdata/platform_sets.json"
+
+type platformSets struct {
+	CloudOnly []string `json:"cloud_only"`
+	CgoOnly   []string `json:"cgo_only"`
+}
+
+func readPlatformSets(t *testing.T) platformSets {
+	t.Helper()
+	b, err := os.ReadFile(platformSetsFile)
+	require.NoError(t, err)
+	var s platformSets
+	require.NoError(t, json.Unmarshal(b, &s))
+	return s
+}
+
+func writePlatformSets(t *testing.T, s platformSets) {
+	t.Helper()
+	b, err := json.MarshalIndent(s, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(platformSetsFile), 0o755))
+	require.NoError(t, os.WriteFile(platformSetsFile, append(b, '\n'), 0o644))
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// assertSameSet fails with the components added to and removed from the
+// expected set, so a change to the published flags shows in review.
+func assertSameSet(t *testing.T, name string, want, got []string) {
+	t.Helper()
+	wantSet, gotSet := map[string]bool{}, map[string]bool{}
+	for _, k := range want {
+		wantSet[k] = true
+	}
+	for _, k := range got {
+		gotSet[k] = true
+	}
+	var added, removed []string
+	for _, k := range got {
+		if !wantSet[k] {
+			added = append(added, k)
+		}
+	}
+	for _, k := range want {
+		if !gotSet[k] {
+			removed = append(removed, k)
+		}
+	}
+	if len(added) > 0 || len(removed) > 0 {
+		t.Errorf("%v changed: added %v, removed %v. If the change is intended, rerun go test ./cmd/tools/docs_gen -run TestPlatformsFromBuilds -update and commit %v", name, added, removed, filepath.Join("cmd/tools/docs_gen", platformSetsFile))
+	}
+}
+
+// buildRegistrations returns every component that a register call in the
+// connect or benthos files of build b names. It reads all of the build's
+// files, not only the ones another build lacks, and skips calls whose name it
+// can't read, so it checks the comparison independently of
+// registrationsOnlyIn.
+func buildRegistrations(t *testing.T, b releaseBuild) map[string]bool {
+	t.Helper()
+	files, err := b.files(b.main)
+	require.NoError(t, err)
+	modDirs, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", connectModule, "github.com/redpanda-data/benthos/v4").Output()
+	require.NoError(t, err)
+	mods := strings.Fields(string(modDirs))
+	keys := map[string]bool{}
+	fset := token.NewFileSet()
+	for path := range files {
+		inModule := false
+		for _, m := range mods {
+			inModule = inModule || strings.HasPrefix(path, m+string(filepath.Separator))
+		}
+		if !inModule || strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		require.NoError(t, err)
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "service" {
+				return true
+			}
+			group, ok := registerGroups[strings.TrimPrefix(strings.TrimPrefix(sel.Sel.Name, "Must"), "Register")]
+			if !ok {
+				return true
+			}
+			if name, err := registeredName(call.Args[0], filepath.Dir(path), files, fset); err == nil {
+				keys[componentKey(group, name)] = true
+			}
+			return true
+		})
+	}
+	return keys
 }
 
 func TestFileRegistrations(t *testing.T) {
