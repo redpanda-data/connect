@@ -159,7 +159,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Version("4.99.0"),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables (or, for large tables split into range chunks, table chunks) that will be processed in parallel during the snapshot processing stage. Tables are only split into chunks when this is greater than 1.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff, failing the snapshot only if none becomes available in time. See `" + ociFieldSnapshotConnBackoff + "`.").
+		Description("Specifies a number of tables (or, for large tables split into range chunks, table chunks) that are processed in parallel during the snapshot processing stage. Tables are only split into chunks when this is greater than 1.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff, failing the snapshot only if none becomes available in time. See `" + ociFieldSnapshotConnBackoff + "`.").
 		Version("4.69.0").
 		Default(1).
 		LintRule(`root = if this <= 0 { [ "` + ociFieldMaxParallelSnapshotTables + ` must be greater than 0" ] }`),
