@@ -3,6 +3,38 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.116.0 - 2026-10-30
+
+### Added
+
+- mongodb_cdc: Added incremental snapshot mode with configurable signal collection for on-demand snapshot re-execution alongside streaming changes. ([@squiidz](https://github.com/squiidz), [#4996](https://github.com/redpanda-data/connect/pull/4996))
+- sftp: Added cache_mode configuration to enable re-consumption of files when their modification time changes in addition to initial consumption. ([@rockdatasrl001](https://github.com/rockdatasrl001), [#5064](https://github.com/redpanda-data/connect/pull/5064))
+
+### Fixed
+
+- aws/dynamodb: Fixed shutdown hang by settling undelivered CDC batches on close instead of waiting indefinitely for their acknowledgments. ([@Leward](https://github.com/Leward), [#4989](https://github.com/redpanda-data/connect/pull/4989))
+- aws_dynamodb_cdc: Fixed shard completion tracking to prevent re-reading exhausted shards after cleanup and improved child shard ordering based on parent completion. ([@squiidz](https://github.com/squiidz), [#5001](https://github.com/redpanda-data/connect/pull/5001))
+- aws_dynamodb_cdc: Fixed shard completion marker handling to prevent late plain checkpoint writes from overwriting completion state. ([@squiidz](https://github.com/squiidz), [#5014](https://github.com/redpanda-data/connect/pull/5014))
+- aws_kinesis: Fixed shard handover by allowing takeover of shards with no committed sequence number in the claim. ([@squiidz](https://github.com/squiidz), [#5028](https://github.com/redpanda-data/connect/pull/5028))
+- kafka: Fixed concurrent map access in franz writer and restored dispatch signal for produced records to fix ordered partition input blocking. ([@Jeffail](https://github.com/Jeffail), [#5033](https://github.com/redpanda-data/connect/pull/5033))
+- migrator: Fixed message redelivery to preserve original schema ID instead of reassigning during re-delivery. ([@josephwoodward](https://github.com/josephwoodward), [#5074](https://github.com/redpanda-data/connect/pull/5074))
+- mongodb_cdc: Fixed snapshot signal behavior to work correctly in all snapshot modes and handle collections unknown to stored progress. ([@squiidz](https://github.com/squiidz), [#5066](https://github.com/redpanda-data/connect/pull/5066))
+- oracledb_cdc: Fixed timestamp precision handling in Oracle CDC to correctly preserve timestamp values. ([@josephwoodward](https://github.com/josephwoodward), [#5022](https://github.com/redpanda-data/connect/pull/5022))
+- postgres_cdc: Fixed publication recreation to handle switching between FOR TABLE and FOR ALL TABLES modes correctly. ([@squiidz](https://github.com/squiidz), [#5029](https://github.com/redpanda-data/connect/pull/5029))
+- postgres_cdc: Fixed PostgreSQL CDC to skip emitting empty records for Type, Truncate, and Origin WAL messages. ([@nvanthao](https://github.com/nvanthao), [#5084](https://github.com/redpanda-data/connect/pull/5084))
+- redpanda_migrator: Fixed concurrent schema registration conflicts by serializing source schema ID registration to prevent duplicate destination IDs. ([@Leward](https://github.com/Leward), [#5055](https://github.com/redpanda-data/connect/pull/5055))
+- sap_hana: Fixed fractional timestamp precision, session loss handling, and credential refresh behavior in SAP HANA CDC with real hardware testing. ([@squiidz](https://github.com/squiidz), [#5063](https://github.com/redpanda-data/connect/pull/5063))
+
+### Changed
+
+- aws/dynamodb: Enabled parallel execution of top-level integration tests by isolating test containers, reducing test suite runtime from 145s to 70s. ([@Leward](https://github.com/Leward), [#4988](https://github.com/redpanda-data/connect/pull/4988))
+- aws/dynamodb: Improved test reliability by replacing fixed sleeps with polling in snapshot and CDC integration tests. ([@Leward](https://github.com/Leward), [#4991](https://github.com/redpanda-data/connect/pull/4991))
+- kafka: Enabled parallel execution of slow Kafka integration tests by isolating containers, reducing test suite runtime from 199s to 24s. ([@Leward](https://github.com/Leward), [#5024](https://github.com/redpanda-data/connect/pull/5024))
+- mssqlserver: Adopted the new ticket.Lock package for flush ticket management, replacing duplicate code with shared infrastructure for better maintainability. ([@Leward](https://github.com/Leward), [#4857](https://github.com/redpanda-data/connect/pull/4857))
+- postgresql: Enabled parallel execution of PostgreSQL integration tests by isolating containers, reducing suite runtime from 195s to 32-37s. ([@Leward](https://github.com/Leward), [#5023](https://github.com/redpanda-data/connect/pull/5023))
+- redpanda_migrator: Enabled parallel execution of integration tests using AIO usage limits and container isolation, reducing suite runtime from 397s to 63-72s. ([@Leward](https://github.com/Leward), [#5053](https://github.com/redpanda-data/connect/pull/5053))
+- replication: Refactored flush ticket logic into a reusable ticket.Lock package with improved concurrency handling, cancellation support, and typed Ticket returns for safer API usage. ([@Leward](https://github.com/Leward), [#4856](https://github.com/redpanda-data/connect/pull/4856))
+
 ## 4.116.0 - 2026-10-29
 
 ### Fixed
