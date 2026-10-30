@@ -16,12 +16,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -159,10 +161,15 @@ func TestPlatformsFromBuilds(t *testing.T) {
 	require.NoError(t, err)
 	cloudOnly, err := cloudOnlyComponents()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]bool{"inputs/tigerbeetle_cdc": true, "inputs/zmq4": true, "outputs/zmq4": true, "processors/ffi": true}, cgoOnly)
-	assert.Equal(t, map[string]bool{"processors/a2a_message": true}, cloudOnly)
+	got := platformSets{CloudOnly: sortedKeys(cloudOnly), CgoOnly: sortedKeys(cgoOnly)}
+	if *updatePlatformSets {
+		writePlatformSets(t, got)
+	}
+	want := readPlatformSets(t)
+	assertSameSet(t, "cloud_only", want.CloudOnly, got.CloudOnly)
+	assertSameSet(t, "cgo_only", want.CgoOnly, got.CgoOnly)
 	if builtWithAllComponents {
-		assert.Equal(t, []string{"inputs/tigerbeetle_cdc", "inputs/zmq4", "outputs/zmq4", "processors/ffi"}, plat.cgoOnlyKeys())
+		assertSameSet(t, "cgo_only (cgoOnlyKeys)", want.CgoOnly, plat.cgoOnlyKeys())
 	}
 
 	builds := map[string]map[string]bool{}
@@ -183,13 +190,84 @@ func TestPlatformsFromBuilds(t *testing.T) {
 		assert.True(t, cgoOnly[k], "%v is cgo-only in the platform set but not in the cgo build comparison", k)
 	}
 
+	// Sentinels, to show that real builds were compared. If one of these
+	// components moves to another distribution, pick another sentinel.
+	assert.True(t, cloudOnly["processors/a2a_message"], "a2a_message is in the Cloud build only")
+	assert.True(t, cgoOnly["processors/ffi"], "ffi is in the cgo build only")
 	assert.False(t, plat.get("processors", "a2a_message").CgoOnly, "Cloud-only isn't cgo-only")
 
 	// docs_gen documents only allcomponents, so a component that a release
 	// build registers and allcomponents doesn't would ship without docs.
 	report, err := undocumentedReport()
 	require.NoError(t, err)
-	assert.Empty(t, report, "components a release build registers and allcomponents doesn't")
+	for _, u := range report {
+		t.Errorf("%v/%v is registered by the %v build(s) but not documented: add its package to cmd/tools/docs_gen/allcomponents", u.Type, u.Name, strings.Join(u.Builds, ", "))
+	}
+}
+
+var updatePlatformSets = flag.Bool("update", false, "rewrite "+platformSetsFile+" from the real release builds")
+
+// platformSetsFile holds the expected cloud-only and cgo-only sets, which
+// decide the cloudOnly and requiresCgo flags in the published connector data.
+// Rewrite it with go test ./cmd/tools/docs_gen -run TestPlatformsFromBuilds -update.
+const platformSetsFile = "testdata/platform_sets.json"
+
+type platformSets struct {
+	CloudOnly []string `json:"cloud_only"`
+	CgoOnly   []string `json:"cgo_only"`
+}
+
+func readPlatformSets(t *testing.T) platformSets {
+	t.Helper()
+	b, err := os.ReadFile(platformSetsFile)
+	require.NoError(t, err)
+	var s platformSets
+	require.NoError(t, json.Unmarshal(b, &s))
+	return s
+}
+
+func writePlatformSets(t *testing.T, s platformSets) {
+	t.Helper()
+	b, err := json.MarshalIndent(s, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(platformSetsFile), 0o755))
+	require.NoError(t, os.WriteFile(platformSetsFile, append(b, '\n'), 0o644))
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// assertSameSet fails with the components added to and removed from the
+// expected set, so a change to the published flags shows in review.
+func assertSameSet(t *testing.T, name string, want, got []string) {
+	t.Helper()
+	wantSet, gotSet := map[string]bool{}, map[string]bool{}
+	for _, k := range want {
+		wantSet[k] = true
+	}
+	for _, k := range got {
+		gotSet[k] = true
+	}
+	var added, removed []string
+	for _, k := range got {
+		if !wantSet[k] {
+			added = append(added, k)
+		}
+	}
+	for _, k := range want {
+		if !gotSet[k] {
+			removed = append(removed, k)
+		}
+	}
+	if len(added) > 0 || len(removed) > 0 {
+		t.Errorf("%v changed: added %v, removed %v. If the change is intended, rerun go test ./cmd/tools/docs_gen -run TestPlatformsFromBuilds -update and commit %v", name, added, removed, filepath.Join("cmd/tools/docs_gen", platformSetsFile))
+	}
 }
 
 // buildRegistrations returns every component that a register call in the
