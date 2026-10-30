@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -125,7 +126,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | Number
 
 | ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
-| String in RFC 3339 format, or ` + "`\"infinity\"`" + ` and ` + "`\"-infinity\"`" + ` for the infinite values (see Infinite dates and timestamps below)
+| String in RFC 3339 format, or ` + "`null`" + ` for the infinite values (see Infinite dates and timestamps below)
 
 | ` + "`BYTEA`" + `
 | Base64-encoded string
@@ -165,7 +166,7 @@ Some rows cannot be marshalled to JSON, in practice because they hold a non-fini
 
 == Infinite dates and timestamps
 
-PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation, so both the snapshot and the stream deliver them as the strings ` + "`\"infinity\"`" + ` and ` + "`\"-infinity\"`" + `.
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation, so both the snapshot and the stream deliver them as ` + "`null`" + `. A message does not show if a ` + "`null`" + ` value is a SQL ` + "`NULL`" + `, ` + "`infinity`" + `, or ` + "`-infinity`" + `.
 
 == Metrics
 
@@ -871,6 +872,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
+				msg.Data = withoutInfiniteTimes(msg.Data)
+				msg.BeforeData = withoutInfiniteTimes(msg.BeforeData)
+
 				var marshalErr error
 				if mb, marshalErr = json.Marshal(msg.Data); marshalErr != nil {
 					// A marshal failure is deterministic (in practice
@@ -1348,4 +1352,30 @@ func (p *pgStreamInput) Close(ctx context.Context) error {
 	case <-p.stopSig.HasStoppedChan():
 	}
 	return nil
+}
+
+// withoutInfiniteTimes returns the row with each infinite date or timestamp
+// value set to nil, which is how the stream has always emitted them. The
+// decoders keep pglogicalstream.InfiniteTime until here so that the snapshot
+// keys stay exact. It copies the row only when it changes a value, because the
+// decoder may still hold the original map.
+func withoutInfiniteTimes(row any) any {
+	m, ok := row.(map[string]any)
+	if !ok {
+		return row
+	}
+	var out map[string]any
+	for k, v := range m {
+		if _, ok := v.(pglogicalstream.InfiniteTime); !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(m)
+		}
+		out[k] = nil
+	}
+	if out == nil {
+		return m
+	}
+	return out
 }

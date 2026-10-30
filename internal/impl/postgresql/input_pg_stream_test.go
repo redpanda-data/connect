@@ -648,3 +648,53 @@ batching:
 	require.NoError(t, inFlight.ackFn(t.Context(), nil))
 	require.Equal(t, []string{"0/25"}, acker.acked(), "acknowledging the earlier batch confirms through the filtered position")
 }
+
+func TestWithoutInfiniteTimes(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	tests := []struct {
+		name string
+		row  any
+		want any
+	}{
+		{
+			name: "infinite values become nil",
+			row: map[string]any{
+				"id":       1,
+				"valid_to": pglogicalstream.PositiveInfinity,
+				"valid_on": pglogicalstream.NegativeInfinity,
+			},
+			want: map[string]any{
+				"id":       1,
+				"valid_to": nil,
+				"valid_on": nil,
+			},
+		},
+		{
+			name: "finite values and strings are kept",
+			row: map[string]any{
+				"valid_to": ts,
+				"note":     "infinity",
+			},
+			want: map[string]any{
+				"valid_to": ts,
+				"note":     "infinity",
+			},
+		},
+		{
+			name: "nil row is kept",
+			row:  nil,
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, withoutInfiniteTimes(tt.row))
+		})
+	}
+
+	t.Run("the input row is not changed", func(t *testing.T) {
+		row := map[string]any{"valid_to": pglogicalstream.PositiveInfinity}
+		withoutInfiniteTimes(row)
+		require.Equal(t, map[string]any{"valid_to": pglogicalstream.PositiveInfinity}, row)
+	})
+}
