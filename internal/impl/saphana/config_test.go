@@ -340,78 +340,79 @@ func TestSAPHANAInputTableRef(t *testing.T) {
 	}
 }
 
-// timestamp_initial_value must be valid RFC3339 when the config is parsed.
-// With a checkpoint_cache its offset is checked only on connect, because a
-// resumed checkpoint ignores the value (see
-// TestSAPHANAInputTimestampInitialValueOffsetOnConnect). Without one the input
-// can never resume, so the offset is checked when the config is parsed.
-func TestSAPHANAInputTimestampInitialValueParse(t *testing.T) {
+// timestamp_initial_value is compared against a TIMESTAMP column, which has no
+// timezone. Released versions accept any offset and bind the value as the UTC
+// instant, so an offset other than Z or +00:00 keeps that meaning (a pipeline
+// already running must keep its start point) and only logs a warning.
+func TestSAPHANAInputTimestampInitialValueOffset(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		value   string
-		cache   bool
-		want    time.Time
-		wantErr string
+		name     string
+		value    string
+		want     time.Time
+		wantWarn string
+		wantErr  string
 	}{
 		{
-			name:  "unset without cache",
-			value: "",
-			want:  time.Time{},
-		},
-		{
-			name:  "Z without cache",
+			name:  "Z",
 			value: "2024-01-01T00:00:00Z",
 			want:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:  "fraction without cache",
+			name:  "fraction",
 			value: "2024-01-01T00:00:00.5Z",
 			want:  time.Date(2024, 1, 1, 0, 0, 0, 500_000_000, time.UTC),
 		},
 		{
-			name:  "+00:00 without cache",
+			name:  "+00:00",
 			value: "2024-01-01T00:00:00+00:00",
 			want:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:    "+02:00 without cache",
-			value:   "2024-01-01T02:00:00+02:00",
-			wantErr: "offset +02:00 is not allowed",
+			name:     "+02:00",
+			value:    "2024-01-01T02:00:00+02:00",
+			want:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			wantWarn: "offset +02:00 is read as the UTC instant 2024-01-01T00:00:00Z",
 		},
 		{
-			name:  "+02:00 with cache",
-			value: "2024-01-01T02:00:00+02:00",
-			cache: true,
-			want:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			name:     "-05:00",
+			value:    "2023-12-31T19:00:00-05:00",
+			want:     time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			wantWarn: "offset -05:00 is read as the UTC instant 2024-01-01T00:00:00Z",
 		},
 		{
-			name:    "bad syntax with cache",
+			name:    "bad syntax",
 			value:   "2024-01-01 00:00:00",
-			cache:   true,
 			wantErr: "cannot parse",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			yaml := fmt.Sprintf(`
+			var buf bytes.Buffer
+			logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, nil)))
+			res := service.MockResources(service.MockResourcesOptUseLogger(logger))
+			license.InjectTestService(res)
+			conf := parseInputConf(t, fmt.Sprintf(`
 dsn: hdb://user:pass@host:39017
 mode: timestamp
 table: MY_TABLE
 timestamp_column: TS
 timestamp_initial_value: %q
-`, tc.value)
-			res := enterpriseResources()
-			if tc.cache {
-				yaml += "checkpoint_cache: " + testCacheName + "\n"
-				res = enterpriseResourcesWithCache()
-			}
-			s, err := newSAPHANAInput(parseInputConf(t, yaml), res)
+`, tc.value))
+
+			s, err := newSAPHANAInput(conf, res)
+
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, "timestamp_initial_value")
 				require.ErrorContains(t, err, tc.wantErr)
 				return
 			}
 			require.NoError(t, err)
-			assert.True(t, tc.want.Equal(s.conf.timestampInitial), "got %v", s.conf.timestampInitial)
+			assert.Equal(t, tc.want, s.timestampHWM)
+			if tc.wantWarn != "" {
+				assert.Contains(t, buf.String(), "level=WARN")
+				assert.Contains(t, buf.String(), tc.wantWarn)
+			} else {
+				assert.NotContains(t, buf.String(), "timestamp_initial_value")
+			}
 		})
 	}
 }
