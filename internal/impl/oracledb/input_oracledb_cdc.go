@@ -171,7 +171,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 	).
 	Field(service.NewBackOffField(ociFieldSnapshotConnBackoff, false, replication.DefaultSnapshotConnBackoff()).
 		Description("Instead of failing a snapshot, the connector retries acquiring a connection when the database has no capacity for another one, for example when `" + ociFieldMaxParallelSnapshotTables + "` exceeds its `processes` or `sessions` limits. Readers wait for a connection to be released, retrying with exponential backoff, and the snapshot fails if a reader can't get one within `" + ociFieldSnapshotConnBackoff + ".max_elapsed_time`.").
-		Version("4.116.0").
+		Version("4.117.0").
 		Advanced(),
 	).
 	// logminer config
