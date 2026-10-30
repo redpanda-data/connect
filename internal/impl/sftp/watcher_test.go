@@ -49,8 +49,6 @@ func TestDecideWatcherActionPathModeMatchesLegacy(t *testing.T) {
 		{name: "pending follow-up poll", val: "!", found: true, followUpPoll: true},
 		{name: "done first poll", val: "@", found: true, followUpPoll: false},
 		{name: "done follow-up poll", val: "@", found: true, followUpPoll: true},
-		{name: "done with mod time", val: "@2026-01-01T00:00:00Z", found: true, followUpPoll: false},
-		{name: "pending with mod time", val: "!2026-01-01T00:00:00Z", found: true, followUpPoll: false},
 	}
 
 	for _, tt := range tests {
@@ -58,6 +56,34 @@ func TestDecideWatcherActionPathModeMatchesLegacy(t *testing.T) {
 			t.Parallel()
 			got := decideWatcherAction([]byte(tt.val), tt.found, tt.followUpPoll, watcherCacheModePath, modTime)
 			assert.Equal(t, legacy([]byte(tt.val), tt.found, tt.followUpPoll), got)
+		})
+	}
+}
+
+// TestDecideWatcherActionPathModeModTimeValues covers values written by
+// path_and_mod_time mode that path mode encounters after a switch back.
+func TestDecideWatcherActionPathModeModTimeValues(t *testing.T) {
+	t.Parallel()
+
+	modTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		val          string
+		followUpPoll bool
+		want         watcherAction
+	}{
+		{name: "pending with mod time first poll", val: "!2026-01-01T00:00:00Z", followUpPoll: false, want: watcherProcess},
+		{name: "pending with mod time follow-up poll", val: "!2026-01-01T00:00:00Z", followUpPoll: true, want: watcherSkip},
+		{name: "done with mod time first poll", val: "@2026-01-01T00:00:00Z", followUpPoll: false, want: watcherSkip},
+		{name: "done with mod time follow-up poll", val: "@2026-01-01T00:00:00Z", followUpPoll: true, want: watcherSkip},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := decideWatcherAction([]byte(tt.val), true, tt.followUpPoll, watcherCacheModePath, modTime)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

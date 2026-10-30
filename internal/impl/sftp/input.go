@@ -103,7 +103,8 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 						"When an existing cache is switched to `path_and_mod_time`, each entry written in `path` mode is overwritten in the cache with the file's current modification time the next time the file is polled. "+
 						"Only the cache entry changes: the file is not read again, nothing is sent to the output, and the file on the SFTP server is not modified. "+
 						"With a topic-backed cache such as `redpanda`, this produces one new record per file to the cache topic, not to the pipeline's output. "+
-						"This cannot be undone, so a file that was modified after it was last consumed but before the switch is never consumed again unless its cache entry is removed.").
+						"This cannot be undone, so a file that was modified after it was last consumed but before the switch is never consumed again unless its cache entry is removed. "+
+						"Downgrading to a Redpanda Connect version without `cache_mode` while files are pending leaves those files unconsumed until their cache entries are removed.").
 					ShortDescription("What the watcher stores in the cache per file: `path` alone, or `path_and_mod_time` to re-consume modified files.").
 					Version("4.116.0").
 					Default(watcherCacheModePathName).
@@ -609,7 +610,9 @@ const (
 // false when cache.Get returned service.ErrKeyNotFound.
 func decideWatcherAction(val []byte, found, followUpPoll bool, mode watcherCacheMode, current time.Time) watcherAction {
 	if mode == watcherCacheModePath {
-		if !found || (!followUpPoll && string(val) == "!") {
+		// Pending values written in path_and_mod_time mode carry a modification
+		// time, and are recovered on the first poll like a bare pending marker.
+		if !found || (!followUpPoll && len(val) > 0 && val[0] == watcherPendingPrefix) {
 			return watcherProcess
 		}
 		return watcherSkip
