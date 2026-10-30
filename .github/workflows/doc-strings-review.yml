@@ -50,15 +50,20 @@ jobs:
     if: >-
       !github.event.pull_request.draft &&
       github.event.pull_request.head.repo.full_name == github.repository
-    # v5.55.0 (2026-10-19): the connect surface covers helper constructors,
-    # cross-file constants, Bloblang, ShortDescription, and rpk connect
-    # help. The review diffs a merge checkout against its first parent, so
-    # changes that reached main after the PR's base are not attributed to
-    # the PR, and it saves the docs MCP answers it saw as an artifact.
+    # v5.59.1 (2026-10-30): connect suggestions no longer tell authors to
+    # run task docs and commit regenerated docs, which connect stopped
+    # committing in #4863. v5.58.0 (2026-10-28): callers can turn
+    # committable suggestions off with committable_suggestions. Since
+    # v5.55.0, the connect surface also
+    # checks env-cloud conditionals in spec strings and rejects whitespace
+    # inside a conditional directive's brackets (v5.56.0), lines that a
+    # human reviewer other than the author wrote on the PR are not reviewed
+    # again (v5.56.0), and the review covers only the lines a PR changed
+    # (v5.56.1).
     # The reusable workflow resolves the doc-tools CLI version from its own
     # ref, so this SHA pins the review logic and the CLI together and a bump
     # moves both.
-    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@560c4301d2f98c2e5e158daa70fa2d3760859bda # v5.55.0
+    uses: redpanda-data/docs-extensions-and-macros/.github/workflows/doc-strings-review.yml@ee137140fa313d9173d7d91169fba4af8cd91708 # v5.59.1
     permissions:
       contents: read
       pull-requests: write
@@ -87,6 +92,10 @@ jobs:
       # failure, so pin it here rather than rely on the reusable default.
       gateway_model: us.anthropic.claude-sonnet-5
       surfaces: connect
+      # Connect's review policy forbids committable suggestions, so each
+      # rewrite goes in a ```text block the author can copy, with no commit
+      # button.
+      committable_suggestions: false
     secrets:
       # No anthropic_api_key: the reusable workflow only reads it when
       # use_adp_gateway is off, so passing it would just expose a long-lived
