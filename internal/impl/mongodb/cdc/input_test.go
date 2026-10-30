@@ -898,6 +898,17 @@ incremental_snapshot:
 `,
 			errContains: "field incremental_snapshot.retry_cooldown must not be negative",
 		},
+		{
+			// A signal collection reads on demand with the same chunk
+			// settings, so they are checked without enabled too.
+			name: "chunk_size above checkpoint_limit with only a signal collection",
+			extra: `checkpoint_limit: 100
+signal_collection_name: signals
+incremental_snapshot:
+  chunk_size: 101
+`,
+			errContains: "field incremental_snapshot.chunk_size (101) must not exceed checkpoint_limit (100)",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -962,6 +973,18 @@ incremental_snapshot:
 			extra: `stream_snapshot: true
 `,
 			wantKey: "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
+		},
+		{
+			name: "a signal collection without enabled carries the chunk settings for on-demand reads",
+			extra: `stream_snapshot: true
+signal_collection_name: signals
+incremental_snapshot:
+  chunk_size: 10
+`,
+			wantKey:       "mongodb_cdc_checkpoint" + incSnapshotKeySuffix,
+			wantChunkSize: 10,
+			wantCooldown:  defaultIncSnapshotRetryCooldown,
+			wantSignal:    "signals",
 		},
 	}
 	for _, tc := range tests {

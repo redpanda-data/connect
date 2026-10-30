@@ -112,10 +112,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 		}
 		message.Data = values
 		message.BeforeData = values
-	case *TruncateMessage:
-	case *TypeMessage:
-	case *OriginMessage:
-	case *LogicalDecodingMessage:
+	case *TruncateMessage, *TypeMessage, *OriginMessage, *LogicalDecodingMessage:
 		return nil, nil
 	default:
 		return nil, nil

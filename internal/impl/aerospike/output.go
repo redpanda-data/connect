@@ -70,7 +70,7 @@ func retryableIgnoreLint() string {
 func outputSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
-		Version("4.116.0").
+		Version("4.117.0").
 		Categories("Services").
 		Summary("Writes messages to an Aerospike cluster as records, batched and keyed by an interpolated primary key or digest.").
 		Description(`

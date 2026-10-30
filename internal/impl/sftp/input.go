@@ -40,6 +40,7 @@ const (
 	siFieldWatcherMinimumAge   = "minimum_age"
 	siFieldWatcherPollInterval = "poll_interval"
 	siFieldWatcherCache        = "cache"
+	siFieldWatcherCacheMode    = "cache_mode"
 )
 
 func sftpInputSpec() *service.ConfigSpec {
@@ -92,6 +93,22 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("A xref:components:caches/about.adoc[cache resource] for storing the paths of files already consumed.").
 					ShortDescription("A cache resource storing the paths of files already consumed.").
 					Default(""),
+				service.NewStringEnumField(siFieldWatcherCacheMode, watcherCacheModePathName, watcherCacheModePathAndModTimeName).
+					Description("Controls what the watcher stores in the cache for each consumed file. "+
+						"`path` records only the path, so a consumed file is never consumed again. "+
+						"`path_and_mod_time` also records the file's modification time, and consumes a previously consumed file again if its modification time changes. "+
+						"Re-consumed files are emitted again in full, so downstream consumers may see duplicate data; "+
+						"the `sftp_mod_time` metadata field can be used to tell versions apart. "+
+						"SFTP reports modification times in whole seconds, so changes are only reliably detected when `minimum_age` is at least `1s`. "+
+						"When an existing cache is switched to `path_and_mod_time`, each entry written in `path` mode is overwritten in the cache with the file's current modification time the next time the file is polled. "+
+						"Only the cache entry changes: the file is not read again, nothing is sent to the output, and the file on the SFTP server is not modified. "+
+						"With a topic-backed cache such as `redpanda`, this produces one new record per file to the cache topic, not to the pipeline's output. "+
+						"This cannot be undone, so a file that was modified after it was last consumed but before the switch is never consumed again unless its cache entry is removed. "+
+						"Downgrading to a Redpanda Connect version without `cache_mode` while files are pending leaves those files unconsumed until their cache entries are removed.").
+					ShortDescription("What the watcher stores in the cache per file: `path` alone, or `path_and_mod_time` to re-consume modified files.").
+					Version("4.116.0").
+					Default(watcherCacheModePathName).
+					Advanced(),
 			).Description("An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.").
 				ShortDescription("An experimental mode that periodically rescans the target paths for new files to consume.").
 				Version("3.42.0"),
@@ -129,6 +146,7 @@ type sftpReader struct {
 	watcherCache        string
 	watcherPollInterval time.Duration
 	watcherMinAge       time.Duration
+	watcherCacheMode    watcherCacheMode
 
 	stateLock       sync.Mutex
 	scanner         codec.DeprecatedFallbackStream
@@ -177,6 +195,13 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 			}
 			if s.watcherMinAge, err = wConf.FieldDuration(siFieldWatcherMinimumAge); err != nil {
 				return
+			}
+			var cacheModeStr string
+			if cacheModeStr, err = wConf.FieldString(siFieldWatcherCacheMode); err != nil {
+				return
+			}
+			if s.watcherCacheMode, err = parseWatcherCacheMode(cacheModeStr); err != nil {
+				return nil, err
 			}
 			if !mgr.HasCache(s.watcherCache) {
 				return nil, fmt.Errorf("cache resource %q was not found", s.watcherCache)
@@ -230,6 +255,7 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 			pollInterval: s.watcherPollInterval,
 			minAge:       s.watcherMinAge,
 			targetPaths:  s.paths,
+			cacheMode:    s.watcherCacheMode,
 		}
 
 		return nil
@@ -400,17 +426,17 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 	}
 
 	var file *sftp.File
-	var path string
 	for {
-		var ok bool
-		var err error
-		path, ok, err = s.pathProvider.Next(ctx)
+		// polled carries the modification time seen when the path was found,
+		// which is what gets recorded on ack.
+		polled, ok, err := s.pathProvider.Next(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("finding next file path: %w", err)
 		}
 		if !ok {
 			return nil, service.ErrEndOfInput
 		}
+		path := polled.path
 
 		client, err := s.sftpClientPool.Acquire(ctx)
 		if err != nil {
@@ -426,7 +452,7 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 				// with the error as we'll want to reprocess it again later.
 				err = nil
 			}
-			if ackErr := s.pathProvider.Ack(ctx, path, err); ackErr != nil {
+			if ackErr := s.pathProvider.Ack(ctx, polled, err); ackErr != nil {
 				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %s", path)
 			}
 
@@ -452,9 +478,20 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 			},
 		}
 
+		// The ack records the poll-time modification time, because that is the
+		// one that passed minimum_age. Modification times have one-second
+		// resolution, so the open-time value can belong to a second in which a
+		// writer is still changing the file, and recording it could hide that
+		// change from a later poll. The open-time value identifies the
+		// version that is actually read, so it is used for metadata only.
+		info := fileInfo{
+			path:    path,
+			modTime: stat.ModTime(),
+		}
+
 		details := service.NewScannerSourceDetails()
 		details.SetName(path)
-		scanner, err := s.scannerCtor.Create(f, s.newCodecAckFn(client, path), details)
+		scanner, err := s.scannerCtor.Create(f, s.newCodecAckFn(client, polled), details)
 		if err != nil {
 			if err = f.Close(); err != nil {
 				s.log.Errorf("Failed to close file %q: %s", path, err)
@@ -464,19 +501,17 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 
 		s.stateLock.Lock()
 		s.scanner = scanner
-		s.currentFileInfo = fileInfo{
-			path:    path,
-			modTime: stat.ModTime(),
-		}
+		s.currentFileInfo = info
 		s.stateLock.Unlock()
 
 		return scanner, nil
 	}
 }
 
-func (s *sftpReader) newCodecAckFn(client *sftp.Client, path string) service.AckFunc {
+func (s *sftpReader) newCodecAckFn(client *sftp.Client, info fileInfo) service.AckFunc {
+	path := info.path
 	return func(ctx context.Context, aErr error) error {
-		if err := s.pathProvider.Ack(ctx, path, aErr); err != nil {
+		if err := s.pathProvider.Ack(ctx, info, aErr); err != nil {
 			s.log.With("error", err).Warnf("Failed to acknowledge path: %s", path)
 		}
 		if aErr != nil {
@@ -498,25 +533,115 @@ func (s *sftpReader) newCodecAckFn(client *sftp.Client, path string) service.Ack
 }
 
 type pathProvider interface {
-	Next(context.Context) (string, bool, error)
-	Ack(context.Context, string, error) error
+	Next(context.Context) (fileInfo, bool, error)
+	Ack(ctx context.Context, info fileInfo, err error) error
 }
 
 type staticPathProvider struct {
 	expandedPaths []string
 }
 
-func (s *staticPathProvider) Next(context.Context) (string, bool, error) {
+func (s *staticPathProvider) Next(context.Context) (fileInfo, bool, error) {
 	if len(s.expandedPaths) == 0 {
-		return "", false, nil
+		return fileInfo{}, false, nil
 	}
 	path := s.expandedPaths[0]
 	s.expandedPaths = s.expandedPaths[1:]
-	return path, true, nil
+	return fileInfo{path: path}, true, nil
 }
 
-func (*staticPathProvider) Ack(context.Context, string, error) error {
+func (*staticPathProvider) Ack(context.Context, fileInfo, error) error {
 	return nil
+}
+
+type watcherCacheMode int
+
+const (
+	watcherCacheModePath           watcherCacheMode = iota // "path" (default)
+	watcherCacheModePathAndModTime                         // "path_and_mod_time"
+)
+
+const (
+	watcherCacheModePathName           = "path"
+	watcherCacheModePathAndModTimeName = "path_and_mod_time"
+)
+
+func parseWatcherCacheMode(v string) (watcherCacheMode, error) {
+	switch v {
+	case watcherCacheModePathName:
+		return watcherCacheModePath, nil
+	case watcherCacheModePathAndModTimeName:
+		return watcherCacheModePathAndModTime, nil
+	default:
+		return watcherCacheModePath, fmt.Errorf("unknown watcher cache_mode %q", v)
+	}
+}
+
+const (
+	watcherPendingPrefix = '!'
+	watcherDonePrefix    = '@'
+)
+
+// parseWatcherMarker splits a stored cache value into its marker byte and, when
+// present, its encoded modification time. hasModTime is false for the legacy
+// bare markers, and modTimeErr is set when a modification time is present but
+// cannot be parsed.
+func parseWatcherMarker(val []byte) (marker byte, modTime time.Time, hasModTime bool, modTimeErr error) {
+	if len(val) == 0 {
+		return 0, time.Time{}, false, nil
+	}
+	marker = val[0]
+	if len(val) == 1 {
+		return marker, time.Time{}, false, nil
+	}
+	modTime, modTimeErr = time.Parse(time.RFC3339Nano, string(val[1:]))
+	return marker, modTime, true, modTimeErr
+}
+
+type watcherAction int
+
+const (
+	watcherSkip     watcherAction = iota
+	watcherProcess                // queue the path and write pending marker
+	watcherBackfill               // do not queue; write done marker with current mtime
+)
+
+// decideWatcherAction classifies a cache entry for a polled file. found is
+// false when cache.Get returned service.ErrKeyNotFound.
+func decideWatcherAction(val []byte, found, followUpPoll bool, mode watcherCacheMode, current time.Time) watcherAction {
+	if mode == watcherCacheModePath {
+		// Pending values written in path_and_mod_time mode carry a modification
+		// time, and are recovered on the first poll like a bare pending marker.
+		if !found || (!followUpPoll && len(val) > 0 && val[0] == watcherPendingPrefix) {
+			return watcherProcess
+		}
+		return watcherSkip
+	}
+
+	if !found {
+		return watcherProcess
+	}
+
+	marker, stored, hasModTime, err := parseWatcherMarker(val)
+	switch marker {
+	case watcherPendingPrefix:
+		// Any pending value, including legacy ones, is recovered on the first
+		// poll and considered in flight afterwards.
+		if followUpPoll {
+			return watcherSkip
+		}
+		return watcherProcess
+	case watcherDonePrefix:
+		if !hasModTime {
+			return watcherBackfill
+		}
+		if err != nil || !stored.Equal(current) {
+			return watcherProcess
+		}
+		return watcherSkip
+	default:
+		return watcherProcess
+	}
 }
 
 type watcherPathProvider struct {
@@ -526,31 +651,32 @@ type watcherPathProvider struct {
 	pollInterval time.Duration
 	minAge       time.Duration
 	targetPaths  []string
+	cacheMode    watcherCacheMode
 
-	expandedPaths []string
+	expandedPaths []fileInfo
 	nextPoll      time.Time
 	followUpPoll  bool
 }
 
-func (w *watcherPathProvider) Next(ctx context.Context) (string, bool, error) {
+func (w *watcherPathProvider) Next(ctx context.Context) (fileInfo, bool, error) {
 	for {
 		if len(w.expandedPaths) > 0 {
-			nextPath := w.expandedPaths[0]
+			next := w.expandedPaths[0]
 			w.expandedPaths = w.expandedPaths[1:]
-			return nextPath, true, nil
+			return next, true, nil
 		}
 
 		if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
 			select {
 			case <-time.After(waitFor):
 			case <-ctx.Done():
-				return "", false, ctx.Err()
+				return fileInfo{}, false, ctx.Err()
 			}
 		}
 		w.nextPoll = time.Now().Add(w.pollInterval)
 
 		if err := w.findNewPaths(ctx); err != nil {
-			return "", false, fmt.Errorf("expanding new paths: %w", err)
+			return fileInfo{}, false, fmt.Errorf("expanding new paths: %w", err)
 		}
 		w.followUpPoll = true
 	}
@@ -593,19 +719,27 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 					continue
 				}
 
-				// We process it if the marker is a pending symbol (!) and we're
-				// polling for the first time, or if the path isn't found in the
-				// cache.
-				//
 				// If we got an unexpected error obtaining a marker for this
 				// path from the cache then we skip that path because the
 				// watcher will eventually poll again, and the cache.Get
 				// operation will re-run.
-				if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
-					w.expandedPaths = append(w.expandedPaths, path)
-					if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
+				v, err := cache.Get(ctx, path)
+				found := err == nil
+				if err != nil && !errors.Is(err, service.ErrKeyNotFound) {
+					continue
+				}
+
+				switch decideWatcherAction(v, found, w.followUpPoll, w.cacheMode, info.ModTime()) {
+				case watcherProcess:
+					w.expandedPaths = append(w.expandedPaths, fileInfo{path: path, modTime: info.ModTime()})
+					if err = cache.Set(ctx, path, w.pendingMarker(info.ModTime()), nil); err != nil {
 						// Mark the file target as pending so that we do not reprocess it
 						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to mark path as pending")
+					}
+				case watcherBackfill:
+					w.mgr.Logger().With("path", path).Debug("Backfilling legacy done marker with modification time")
+					if err = cache.Set(ctx, path, w.doneMarker(info.ModTime()), nil); err != nil {
+						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to backfill modification time for path")
 					}
 				}
 			}
@@ -617,12 +751,27 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 	return nil
 }
 
-func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (outErr error) {
+func (w *watcherPathProvider) pendingMarker(modTime time.Time) []byte {
+	return w.marker(watcherPendingPrefix, modTime)
+}
+
+func (w *watcherPathProvider) doneMarker(modTime time.Time) []byte {
+	return w.marker(watcherDonePrefix, modTime)
+}
+
+func (w *watcherPathProvider) marker(prefix byte, modTime time.Time) []byte {
+	if w.cacheMode == watcherCacheModePath {
+		return []byte{prefix}
+	}
+	return append([]byte{prefix}, modTime.UTC().Format(time.RFC3339Nano)...)
+}
+
+func (w *watcherPathProvider) Ack(ctx context.Context, info fileInfo, err error) (outErr error) {
 	if cerr := w.mgr.AccessCache(ctx, w.cacheName, func(cache service.Cache) {
 		if err == nil {
-			outErr = cache.Set(ctx, name, []byte("@"), nil)
+			outErr = cache.Set(ctx, info.path, w.doneMarker(info.modTime), nil)
 		} else {
-			_ = cache.Delete(ctx, name)
+			_ = cache.Delete(ctx, info.path)
 		}
 	}); cerr != nil {
 		outErr = cerr

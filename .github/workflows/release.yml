@@ -210,17 +210,50 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
+      # -version also writes the connector data the Bloblang playground and
+      # other site tools read, attachments/connect-<version>.json. The date is
+      # the tag commit's, in UTC, so a rerun writes the same file. A tag whose
+      # docs_gen predates the flag (a docs_tag rerun of an older release) gets
+      # the partials only. The flag list comes from the built generator's -h
+      # output, which every docs_gen that writes partials prints with -dir, so
+      # output without -dir means the probe failed rather than that the flag
+      # is missing.
       - name: Generate the reference docs
-        run: CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen
+        id: generate
+        run: |
+          set -euo pipefail
+          args=()
+          rc=0
+          usage=$(CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen -h 2>&1) || rc=$?
+          if [ "$rc" -ne 0 ] || ! grep -qE '^ +-dir( |$)' <<< "$usage"; then
+            echo "$usage"
+            echo "::error::Couldn't read the flags of docs_gen at $DOCS_TAG (exit code $rc), so can't tell whether it writes the connector data."
+            exit 1
+          fi
+          if grep -qE '^ +-version( |$)' <<< "$usage"; then
+            date=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ)
+            args=(-version "${DOCS_TAG#v}" -date "$date")
+            echo "connect_json=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::docs_gen at $DOCS_TAG has no -version flag, so the docs asset has no connector data."
+          fi
+          CGO_ENABLED=1 go run -tags x_benthos_extra ./cmd/tools/docs_gen "${args[@]}"
       # Releases from before the generator wrote partials produce full pages
       # instead. Their asset must stay missing, so the docs build falls back
       # to a release that has real partials.
       - name: Check the layout of the generated docs
+        env:
+          CONNECT_JSON: ${{ steps.generate.outputs.connect_json }}
         run: |
           set -euo pipefail
           c=docs/modules/components
           if [ -d "$c/pages" ]; then
             echo "::error::$DOCS_TAG predates the generated partials (docs_gen wrote $c/pages), so it gets no docs asset."
+            exit 1
+          fi
+          json="$c/attachments/connect-${DOCS_TAG#v}.json"
+          if [ "${CONNECT_JSON:-}" = true ] && ! jq -e '.version and (.inputs | length > 0) and (.["bloblang-functions"] | length > 0)' "$json" > /dev/null; then
+            echo "::error::The generated docs have no valid connector data at $json."
             exit 1
           fi
           for d in partials/fields partials/descriptions partials/availability examples/common examples/advanced; do
