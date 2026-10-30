@@ -99,6 +99,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 						"`path_and_mod_time` also records the file's modification time, and consumes a previously consumed file again if its modification time changes. "+
 						"Re-consumed files are emitted again in full, so downstream consumers may see duplicate data; "+
 						"the `sftp_mod_time` metadata field can be used to tell versions apart. "+
+						"SFTP reports modification times in whole seconds, so changes are only reliably detected when `minimum_age` is at least `1s`. "+
 						"When an existing cache is switched to `path_and_mod_time`, each entry written in `path` mode is overwritten in the cache with the file's current modification time the next time the file is polled. "+
 						"Only the cache entry changes: the file is not read again, nothing is sent to the output, and the file on the SFTP server is not modified. "+
 						"With a topic-backed cache such as `redpanda`, this produces one new record per file to the cache topic, not to the pipeline's output. "+
@@ -424,25 +425,23 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 	}
 
 	var file *sftp.File
-	var path string
 	for {
-		var ok bool
-		var err error
-		path, ok, err = s.pathProvider.Next(ctx)
+		// polled carries the modification time seen when the path was found,
+		// which is what gets recorded on ack.
+		polled, ok, err := s.pathProvider.Next(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("finding next file path: %w", err)
 		}
 		if !ok {
 			return nil, service.ErrEndOfInput
 		}
+		path := polled.path
 
 		client, err := s.sftpClientPool.Acquire(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("acquiring SFTP client: %w", err)
 		}
 
-		// No trustworthy modification time is available when opening or
-		// statting the file failed, so the zero time is used.
 		handleErr := func(err error) {
 			s.log.With("path", path, "err", err.Error()).Warn("Failed to open previously identified file")
 
@@ -452,7 +451,7 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 				// with the error as we'll want to reprocess it again later.
 				err = nil
 			}
-			if ackErr := s.pathProvider.Ack(ctx, fileInfo{path: path}, err); ackErr != nil {
+			if ackErr := s.pathProvider.Ack(ctx, polled, err); ackErr != nil {
 				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %s", path)
 			}
 
@@ -478,8 +477,12 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 			},
 		}
 
-		// The open-time modification time identifies the version of the file
-		// that is actually read, so it is what gets recorded on ack.
+		// The ack records the poll-time modification time, because that is the
+		// one that passed minimum_age. Modification times have one-second
+		// resolution, so the open-time value can belong to a second in which a
+		// writer is still changing the file, and recording it could hide that
+		// change from a later poll. The open-time value identifies the
+		// version that is actually read, so it is used for metadata only.
 		info := fileInfo{
 			path:    path,
 			modTime: stat.ModTime(),
@@ -487,7 +490,7 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 
 		details := service.NewScannerSourceDetails()
 		details.SetName(path)
-		scanner, err := s.scannerCtor.Create(f, s.newCodecAckFn(client, info), details)
+		scanner, err := s.scannerCtor.Create(f, s.newCodecAckFn(client, polled), details)
 		if err != nil {
 			if err = f.Close(); err != nil {
 				s.log.Errorf("Failed to close file %q: %s", path, err)
@@ -529,7 +532,7 @@ func (s *sftpReader) newCodecAckFn(client *sftp.Client, info fileInfo) service.A
 }
 
 type pathProvider interface {
-	Next(context.Context) (string, bool, error)
+	Next(context.Context) (fileInfo, bool, error)
 	Ack(ctx context.Context, info fileInfo, err error) error
 }
 
@@ -537,13 +540,13 @@ type staticPathProvider struct {
 	expandedPaths []string
 }
 
-func (s *staticPathProvider) Next(context.Context) (string, bool, error) {
+func (s *staticPathProvider) Next(context.Context) (fileInfo, bool, error) {
 	if len(s.expandedPaths) == 0 {
-		return "", false, nil
+		return fileInfo{}, false, nil
 	}
 	path := s.expandedPaths[0]
 	s.expandedPaths = s.expandedPaths[1:]
-	return path, true, nil
+	return fileInfo{path: path}, true, nil
 }
 
 func (*staticPathProvider) Ack(context.Context, fileInfo, error) error {
@@ -647,30 +650,30 @@ type watcherPathProvider struct {
 	targetPaths  []string
 	cacheMode    watcherCacheMode
 
-	expandedPaths []string
+	expandedPaths []fileInfo
 	nextPoll      time.Time
 	followUpPoll  bool
 }
 
-func (w *watcherPathProvider) Next(ctx context.Context) (string, bool, error) {
+func (w *watcherPathProvider) Next(ctx context.Context) (fileInfo, bool, error) {
 	for {
 		if len(w.expandedPaths) > 0 {
-			nextPath := w.expandedPaths[0]
+			next := w.expandedPaths[0]
 			w.expandedPaths = w.expandedPaths[1:]
-			return nextPath, true, nil
+			return next, true, nil
 		}
 
 		if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
 			select {
 			case <-time.After(waitFor):
 			case <-ctx.Done():
-				return "", false, ctx.Err()
+				return fileInfo{}, false, ctx.Err()
 			}
 		}
 		w.nextPoll = time.Now().Add(w.pollInterval)
 
 		if err := w.findNewPaths(ctx); err != nil {
-			return "", false, fmt.Errorf("expanding new paths: %w", err)
+			return fileInfo{}, false, fmt.Errorf("expanding new paths: %w", err)
 		}
 		w.followUpPoll = true
 	}
@@ -725,7 +728,7 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 
 				switch decideWatcherAction(v, found, w.followUpPoll, w.cacheMode, info.ModTime()) {
 				case watcherProcess:
-					w.expandedPaths = append(w.expandedPaths, path)
+					w.expandedPaths = append(w.expandedPaths, fileInfo{path: path, modTime: info.ModTime()})
 					if err = cache.Set(ctx, path, w.pendingMarker(info.ModTime()), nil); err != nil {
 						// Mark the file target as pending so that we do not reprocess it
 						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to mark path as pending")

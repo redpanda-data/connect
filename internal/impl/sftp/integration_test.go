@@ -748,15 +748,113 @@ type countingPathProvider struct {
 	onNext func(calls int)
 }
 
-func (c *countingPathProvider) Next(context.Context) (string, bool, error) {
+func (c *countingPathProvider) Next(context.Context) (fileInfo, bool, error) {
 	if c.calls >= c.total {
-		return "", false, nil
+		return fileInfo{}, false, nil
 	}
 	c.calls++
 	c.onNext(c.calls)
-	return c.path, true, nil
+	return fileInfo{path: c.path}, true, nil
 }
 
 func (*countingPathProvider) Ack(context.Context, fileInfo, error) error {
 	return nil
+}
+
+// TestIntegrationSFTPWatcherModTimeRecordedFromPoll checks that in
+// path_and_mod_time mode the ack records the modification time seen by the
+// poll, not the one seen when the file was opened. Modification times have
+// one-second resolution, so a writer can change a file again within the second
+// in which it was opened. Recording the open-time value would make every later
+// poll skip the file and lose that change.
+func TestIntegrationSFTPWatcherModTimeRecordedFromPoll(t *testing.T) {
+	integration.CheckSkip(t)
+
+	emu := runEmulator(t)
+	dir := "/upload/modtime"
+	require.NoError(t, emu.client.MkdirAll(dir))
+	path := dir + "/a.txt"
+
+	// The times are set explicitly so the test does not depend on timing.
+	now := time.Now().Truncate(time.Second)
+	polledTime := now.Add(-time.Hour)
+	openedTime := now.Add(-30 * time.Minute)
+
+	writeSFTPFile(t, emu.client, path, "v1")
+	require.NoError(t, emu.client.Chtimes(path, polledTime, polledTime))
+
+	reader := readSFTPInput(t, emu, dir+"/*.txt", "to_the_end", true)
+	reader.pathProvider = &hookPathProvider{
+		inner: &watcherPathProvider{
+			clientPool:   reader.sftpClientPool,
+			mgr:          reader.mgr,
+			cacheName:    reader.watcherCache,
+			pollInterval: reader.watcherPollInterval,
+			targetPaths:  reader.paths,
+			cacheMode:    watcherCacheModePathAndModTime,
+		},
+		// A writer changes the file after the poll queued it and before the
+		// reader opens it.
+		afterNext: func(fileInfo) {
+			writeSFTPFile(t, emu.client, path, "v2")
+			require.NoError(t, emu.client.Chtimes(path, openedTime, openedTime))
+		},
+	}
+	ctx := t.Context()
+
+	batch, ackFn, err := reader.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, batch, 1)
+	content, err := batch[0].AsBytes()
+	require.NoError(t, err)
+	assert.Equal(t, "v2", string(content))
+
+	// The metadata still describes the version that was read.
+	modTime, ok := batch[0].MetaGetMut("sftp_mod_time")
+	require.True(t, ok)
+	require.IsType(t, time.Time{}, modTime)
+	assert.True(t, openedTime.Equal(modTime.(time.Time)), "sftp_mod_time = %v, want %v", modTime, openedTime)
+
+	// The writer changes the file again in the same second it was opened, so
+	// its modification time does not change.
+	writeSFTPFile(t, emu.client, path, "v2+more")
+	require.NoError(t, emu.client.Chtimes(path, openedTime, openedTime))
+	require.NoError(t, ackFn(ctx, nil))
+
+	type readResult struct {
+		content string
+		err     error
+	}
+	results := make(chan readResult, 1)
+	go func() {
+		content, err := readOneFile(ctx, reader)
+		results <- readResult{content: content, err: err}
+	}()
+	select {
+	case res := <-results:
+		require.NoError(t, res.err)
+		assert.Equal(t, "v2+more", res.content)
+	case <-time.After(5 * time.Second):
+		t.Fatal("watcher did not consume the change made in the second the file was opened")
+	}
+}
+
+// hookPathProvider wraps a pathProvider and runs afterNext once, after the
+// first path is returned and before the reader opens it.
+type hookPathProvider struct {
+	inner     pathProvider
+	afterNext func(fileInfo)
+}
+
+func (h *hookPathProvider) Next(ctx context.Context) (fileInfo, bool, error) {
+	info, ok, err := h.inner.Next(ctx)
+	if ok && err == nil && h.afterNext != nil {
+		h.afterNext(info)
+		h.afterNext = nil
+	}
+	return info, ok, err
+}
+
+func (h *hookPathProvider) Ack(ctx context.Context, info fileInfo, err error) error {
+	return h.inner.Ack(ctx, info, err)
 }
