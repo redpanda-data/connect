@@ -125,7 +125,7 @@ func (h *hdfsWriter) WriteBatch(_ context.Context, batch service.MessageBatch) e
 		}
 		filePath := filepath.Join(directory, path)
 
-		if err := h.client.MkdirAll(directory, os.ModeDir|0o644); err != nil {
+		if err := h.client.MkdirAll(directory, os.ModeDir|0o755); err != nil {
 			return err
 		}
 
