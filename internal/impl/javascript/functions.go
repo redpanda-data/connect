@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"github.com/dop251/goja"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 type jsFunction func(call goja.FunctionCall, rt *goja.Runtime, l *service.Logger) (any, error)
@@ -130,7 +131,7 @@ benthos.v0_msg_set_structured(result);
 
 			req, err := http.NewRequest(method, url, payloadReader)
 			if err != nil {
-				return nil, err
+				return nil, redact.Error(err, redact.Conns(url))
 			}
 
 			// Parse HTTP headers
@@ -142,7 +143,7 @@ benthos.v0_msg_set_structured(result);
 			// Do request
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
-				return nil, err
+				return nil, redact.Error(err, redact.Conns(url))
 			}
 			defer resp.Body.Close()
 

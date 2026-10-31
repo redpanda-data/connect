@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -232,4 +232,39 @@ func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error))
 	t.Cleanup(ts.Close)
 
 	return ts.URL
+}
+
+func TestClientURLCredentials(t *testing.T) {
+	const pass = "S3cretPass"
+
+	var gotUser, gotPass string
+	var gotOK bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUser, gotPass, gotOK = r.BasicAuth()
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error_code":40403,"message":"Schema not found"}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	credURL := "http://user:" + pass + "@" + ts.Listener.Addr().String()
+
+	client, err := NewClient(credURL, noopReqSign, nil, service.MockResources())
+	require.NoError(t, err)
+
+	_, err = client.GetSchemaByID(t.Context(), 1, false)
+	require.Error(t, err)
+	require.True(t, gotOK, "userinfo must be sent as basic auth")
+	require.Equal(t, "user", gotUser)
+	require.Equal(t, pass, gotPass)
+
+	// Point the client at a closed port, so the error comes from the transport
+	// and includes the request URL.
+	ts.Close()
+	_, err = client.GetSchemaByID(t.Context(), 1, false)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), pass)
+
+	_, err = NewClient("http://user:"+pass+"@bad host", noopReqSign, nil, service.MockResources())
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), pass)
 }

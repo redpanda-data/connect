@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -28,6 +28,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -382,7 +383,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		userTables []replication.UserDefinedTable
 		cachedLSN  replication.LSN
 	)
-	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
+	if i.db, err = sqlredact.Open("mssql", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("connecting to microsoft sql server: %s", err)
 	}
 

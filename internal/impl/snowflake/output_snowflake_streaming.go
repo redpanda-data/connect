@@ -15,7 +15,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	neturl "net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -492,7 +492,7 @@ func newSnowflakeStreamer(
 		if err != nil {
 			return nil, err
 		}
-		_, err := neturl.Parse(url)
+		_, err := redact.ParseURL(url)
 		if err != nil {
 			return nil, fmt.Errorf("invalid url: %w", err)
 		}

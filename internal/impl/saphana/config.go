@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -382,6 +383,10 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	var err error
 	if c.dsn, err = conf.FieldString(shFieldDSN); err != nil {
 		return nil, err
+	}
+	// go-hdb echoes parts of a DSN that fails to parse, such as the password.
+	if _, err = redact.ParseURL(c.dsn); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", shFieldDSN, err)
 	}
 	if c.fetchSize, err = conf.FieldInt(shFieldFetchSize); err != nil {
 		return nil, err

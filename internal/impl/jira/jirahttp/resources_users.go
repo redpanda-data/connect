@@ -16,16 +16,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // searchUsersPage is a function which gets a single page of issues using startAt offset strategy
 // The maxResults can be overridden by the processor parameters (up to 5000 - default 50).
 func (j *Client) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]any, error) {
-	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/users/search")
+	apiUrl, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/users/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}

@@ -15,9 +15,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // SearchRolesResource retrieves all Jira roles and returns them as a batch
@@ -72,7 +72,7 @@ func (j *Client) SearchRolesResource(
 
 // searchRoles fetches all Jira roles from the API and returns them as a list.
 func (j *Client) searchRoles(ctx context.Context) ([]any, error) {
-	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/role")
+	apiUrl, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/role")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
