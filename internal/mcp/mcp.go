@@ -199,7 +199,7 @@ func NewServer(
 	}
 
 	// Add metrics middleware to track all MCP method calls
-	mcpMetrics := metrics.NewMetrics(resources.Metrics())
+	mcpMetrics := metrics.NewMetrics(resources.Metrics(), resWrapper.HasTool)
 	s.AddReceivingMiddleware(mcpMetrics.ReceivingMiddleware)
 	s.AddSendingMiddleware(mcpMetrics.SendingMiddleware)
 
