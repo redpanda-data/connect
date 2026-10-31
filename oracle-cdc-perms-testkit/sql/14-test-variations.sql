@@ -1,0 +1,52 @@
+-- Per-test grant mutations applied to the RESTRICTED user (C##REDPANDA) between runs.
+-- These were run ad-hoc as SYS in CDB$ROOT during testing — collected here as one
+-- reference file. Each block is independent; run only the block for the test you want,
+-- and undo it (the paired statement) before the next test. Do NOT run this file
+-- top-to-bottom.
+
+-- ============================================================================
+-- Test 3: remove FLASHBACK ANY TABLE → connector fails at startup with
+-- "no user tables found for given include and exclude filters"
+-- (ALL_TABLES visibility is lost).
+-- ============================================================================
+-- REVOKE FLASHBACK ANY TABLE FROM C##REDPANDA CONTAINER=ALL;
+-- undo:
+-- GRANT FLASHBACK ANY TABLE TO C##REDPANDA CONTAINER=ALL;
+
+-- ============================================================================
+-- Tests 4 / 4b: no ANY grants at all — replace FLASHBACK ANY TABLE with a
+-- per-table FLASHBACK object grant. Streaming works; snapshot still blocked
+-- (ORA-41900, zero rows). The object grant is PDB-local.
+-- ============================================================================
+-- REVOKE FLASHBACK ANY TABLE FROM C##REDPANDA CONTAINER=ALL;
+-- ALTER SESSION SET CONTAINER = FREEPDB1;
+-- GRANT FLASHBACK ON space_app.t_channel_def TO C##REDPANDA;
+-- undo:
+-- REVOKE FLASHBACK ON space_app.t_channel_def FROM C##REDPANDA;  -- (in FREEPDB1)
+-- GRANT FLASHBACK ANY TABLE TO C##REDPANDA CONTAINER=ALL;        -- (in CDB$ROOT)
+
+-- ============================================================================
+-- Test 5: SELECT ANY DICTIONARY in place of FLASHBACK ANY TABLE — does NOT
+-- restore ALL_TABLES visibility (only DBA_TABLES, which the connector doesn't
+-- query); connector fails with "no user tables found".
+-- ============================================================================
+-- REVOKE FLASHBACK ANY TABLE FROM C##REDPANDA CONTAINER=ALL;
+-- GRANT SELECT ANY DICTIONARY TO C##REDPANDA CONTAINER=ALL;
+-- undo:
+-- REVOKE SELECT ANY DICTIONARY FROM C##REDPANDA CONTAINER=ALL;
+-- GRANT FLASHBACK ANY TABLE TO C##REDPANDA CONTAINER=ALL;
+
+-- ============================================================================
+-- Extra visibility probes (23ai): each of these ANY-privileges alone also made
+-- the source table visible in ALL_TABLES on 23ai. Pre-23 versions enumerate a
+-- different privilege list in the ALL_TABLES view text, so verify on the target
+-- version (see the DBA probe in the README).
+-- ============================================================================
+-- GRANT LOCK ANY TABLE TO C##REDPANDA CONTAINER=ALL;   -- visible on 23ai
+-- GRANT READ ANY TABLE TO C##REDPANDA CONTAINER=ALL;   -- visible on 23ai (but re-enables snapshots!)
+
+-- ============================================================================
+-- Quick visibility check, connected AS the CDC user:
+-- ============================================================================
+-- SELECT COUNT(*) FROM all_tables WHERE owner = 'SPACE_APP';
+-- SELECT COUNT(*) FROM all_tab_columns WHERE owner = 'SPACE_APP' AND table_name = 'T_CHANNEL_DEF';
