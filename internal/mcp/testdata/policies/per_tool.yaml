@@ -1,0 +1,16 @@
+roles:
+  - id: mcp.connect
+    permissions:
+      - dataplane_mcpserver_initialize
+      - dataplane_mcpserver_tools_list
+  - id: mcp.tool_caller
+    permissions:
+      - dataplane_mcpserver_tools_call
+
+bindings:
+  - role: mcp.connect
+    principal: User:test@example.com
+    scope: organization/test-org/resourcegroup/default/dataplane/mcp-server
+  - role: mcp.tool_caller
+    principal: User:test@example.com
+    scope: organization/test-org/resourcegroup/default/dataplane/mcp-server/tools/test-processor
