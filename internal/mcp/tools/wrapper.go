@@ -350,7 +350,7 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 			"properties": map[string]any{
 				"count": map[string]any{
 					"type":        "number",
-					"description": "The number of messages to read from this input before returning the results.",
+					"description": "The number of messages to read from this input before returning the results. Fewer messages are returned if the input ends first.",
 					"default":     1,
 				},
 			},
@@ -374,7 +374,13 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 			for len(resBatch) < count {
 				tmpBatch, ackFn, err := i.ReadBatch(ctx)
 				if err != nil {
-					iErr = err
+					// Messages read so far have already been acknowledged, so the
+					// input ending before count is reached is only an error if
+					// nothing was read.
+					endedAfterReading := errors.Is(err, service.ErrEndOfInput) && len(resBatch) > 0
+					if !endedAfterReading {
+						iErr = err
+					}
 					return
 				}
 
