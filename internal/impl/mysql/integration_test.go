@@ -13,14 +13,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	gomysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -739,6 +744,153 @@ memory: {}
 	require.JSONEq(t, `{"id": 1, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[0])
 	require.JSONEq(t, `{"id": 2, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[1])
 	require.JSONEq(t, `{"id": 3, "d": null, "dt": null, "dt6": null}`, outBatches[2])
+}
+
+// The parseBinlogTime comment says when go-mysql gives a string for a DATE or
+// DATETIME value. This test reads the binlog with go-mysql directly, so it
+// fails if that rule is wrong or if a go-mysql upgrade changes it. It then
+// gives each raw value to mapMessageColumn, as the input does.
+func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`CREATE TABLE raw_dates (id INT PRIMARY KEY, dt DATETIME, d DATE)`)
+
+	tests := []struct {
+		name       string
+		column     string
+		value      string
+		wantString bool
+		want       any
+	}{
+		{
+			name:       "earliest datetime",
+			column:     "dt",
+			value:      "1000-01-01 00:00:00",
+			wantString: true,
+			want:       time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "datetime one second before 1970",
+			column:     "dt",
+			value:      "1969-12-31 23:59:59",
+			wantString: true,
+			want:       time.Date(1969, 12, 31, 23, 59, 59, 0, time.UTC),
+		},
+		{
+			name:       "datetime at 1970",
+			column:     "dt",
+			value:      "1970-01-01 00:00:00",
+			wantString: false,
+			want:       time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "datetime after 1970",
+			column:     "dt",
+			value:      "2024-06-01 12:00:00",
+			wantString: false,
+			want:       time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "zero datetime",
+			column:     "dt",
+			value:      "0000-00-00 00:00:00",
+			wantString: true,
+			want:       nil,
+		},
+		{
+			name:       "partial zero datetime",
+			column:     "dt",
+			value:      "2024-00-15 10:00:00",
+			wantString: true,
+			want:       nil,
+		},
+		{
+			name:       "date before 1970",
+			column:     "d",
+			value:      "1965-03-04",
+			wantString: true,
+			want:       time.Date(1965, 3, 4, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "date after 1970",
+			column:     "d",
+			value:      "2024-06-01",
+			wantString: true,
+			want:       time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "zero date",
+			column:     "d",
+			value:      "0000-00-00",
+			wantString: true,
+			want:       nil,
+		},
+	}
+	columns := map[string]struct {
+		index int
+		col   gomysqlschema.TableColumn
+	}{
+		"dt": {index: 1, col: gomysqlschema.TableColumn{Name: "dt", Type: gomysqlschema.TYPE_DATETIME}},
+		"d":  {index: 2, col: gomysqlschema.TableColumn{Name: "d", Type: gomysqlschema.TYPE_DATE}},
+	}
+
+	var file, doDB, ignoreDB, gtidSet string
+	var pos uint32
+	require.NoError(t, db.QueryRow("SHOW MASTER STATUS").Scan(&file, &pos, &doDB, &ignoreDB, &gtidSet))
+
+	cfg, err := mysql.ParseDSN(dsn)
+	require.NoError(t, err)
+	host, portStr, err := net.SplitHostPort(cfg.Addr)
+	require.NoError(t, err)
+	port, err := strconv.ParseUint(portStr, 10, 16)
+	require.NoError(t, err)
+	syncer := replication.NewBinlogSyncer(replication.BinlogSyncerConfig{
+		ServerID:  100,
+		Flavor:    gomysql.MySQLFlavor,
+		Host:      host,
+		Port:      uint16(port),
+		User:      cfg.User,
+		Password:  cfg.Passwd,
+		ParseTime: true, // The same setting as the mysql_cdc input.
+	})
+	t.Cleanup(syncer.Close)
+	streamer, err := syncer.StartSync(gomysql.Position{Name: file, Pos: pos})
+	require.NoError(t, err)
+
+	// The default SQL mode rejects zero dates. multiStatements keeps both
+	// statements on one connection.
+	var values []string
+	for i, tt := range tests {
+		if tt.column == "dt" {
+			values = append(values, fmt.Sprintf("(%d, '%s', NULL)", i, tt.value))
+		} else {
+			values = append(values, fmt.Sprintf("(%d, NULL, '%s')", i, tt.value))
+		}
+	}
+	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO raw_dates VALUES ` + strings.Join(values, ", "))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	var rows [][]any
+	for len(rows) < len(tests) {
+		ev, err := streamer.GetEvent(ctx)
+		require.NoError(t, err)
+		if re, ok := ev.Event.(*replication.RowsEvent); ok && string(re.Table.Table) == "raw_dates" {
+			rows = append(rows, re.Rows...)
+		}
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := columns[tt.column]
+			raw := rows[i][c.index]
+			_, isString := raw.(string)
+			assert.Equal(t, tt.wantString, isString, "go-mysql gave %T: %v", raw, raw)
+
+			got, err := mapMessageColumn(raw, c.col)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestIntegrationMySQLSnapshotConsistency(t *testing.T) {
