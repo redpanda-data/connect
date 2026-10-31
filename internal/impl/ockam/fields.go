@@ -23,7 +23,7 @@ import (
 func seedBrokersField() *service.ConfigField {
 	return service.NewStringListField("seed_brokers").Optional().
 		Description("The address of the Kafka broker that the Ockam node's Kafka Outlet connects to. This field is only used, and is then required, when `route_to_kafka_outlet` is set to `self`. Only one address is used: the first list item, up to its first comma. If the list contains more than one item, a warning is logged.").
-		ShortDescription("The Kafka broker address for the Ockam Kafka Outlet. Only used when `route_to_kafka_outlet` is `self`.").
+		ShortDescription("The Kafka broker address for the Ockam Kafka Outlet. Only used when route_to_kafka_outlet is set to self.").
 		Example([]string{"localhost:9092"})
 }
 
