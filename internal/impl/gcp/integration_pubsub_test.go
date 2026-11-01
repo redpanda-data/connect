@@ -22,7 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
+	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -65,8 +66,10 @@ func TestIntegrationGCPPubSub(t *testing.T) {
 		}
 		defer client.Close()
 
-		ok, err := client.Topic(dummyTopic).Exists(ctx)
-		return err == nil && ok
+		_, err = client.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{
+			Topic: client.Publisher(dummyTopic).String(),
+		})
+		return err == nil
 	}, time.Minute, time.Second)
 
 	template := `
@@ -94,7 +97,9 @@ input:
 			client, err := pubsub.NewClient(ctx, dummyProject)
 			require.NoError(t, err)
 
-			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", vars.ID))
+			_, err = client.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{
+				Name: client.Publisher(fmt.Sprintf("topic-%v", vars.ID)).String(),
+			})
 			require.NoError(t, err)
 
 			client.Close()
