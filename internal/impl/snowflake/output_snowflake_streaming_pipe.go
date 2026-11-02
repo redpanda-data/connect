@@ -249,7 +249,7 @@ The same policy applies to a message this output cannot send at all: one that sp
 }`).
 		Example(
 			"Simple at-least-once ingestion",
-			`The minimal config: no `+"`offset_token`"+` or `+"`channel_name`"+`, so rows land at-least-once through a single channel named after the pipe, whatever the input. To move to exactly-once later, add `+"`offset_token`"+` together with a *new* `+"`channel_name`"+` (see `+"`offset_token`"+`'s docs), scoped per partition if the input is partitioned.`,
+			`The minimal config: no `+"`offset_token`"+` or `+"`channel_name`"+`, so rows land at-least-once through a single channel named after the pipe, whatever the input. To move to exactly-once later, add `+"`offset_token`"+` together with a *new* `+"`channel_name`"+` (see the `+"`offset_token`"+` field), scoped per partition if the input is partitioned.`,
 			`
 input:
   generate:
