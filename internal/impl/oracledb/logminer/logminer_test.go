@@ -387,9 +387,9 @@ func TestMinedCheckpointSCN(t *testing.T) {
 	}
 }
 
-// TestCheckpointMinedPositionThrottle verifies that the mined position is marked at most once per
-// minedCheckpointInterval. Each mark can write the checkpoint and waits for earlier batches, so a mark
-// after every mining cycle is too frequent.
+// TestCheckpointMinedPositionThrottle verifies that a checkpoint of the mined position is requested at most
+// once per checkpointRequestInterval. Each request can write the checkpoint and waits for earlier batches, so
+// a request after every mining cycle is too frequent.
 func TestCheckpointMinedPositionThrottle(t *testing.T) {
 	ctx := t.Context()
 	pub := &publisherStub{}
@@ -399,9 +399,9 @@ func TestCheckpointMinedPositionThrottle(t *testing.T) {
 	lm.currentSCN = 100
 	require.NoError(t, lm.checkpointMinedPosition(ctx, start))
 	lm.currentSCN = 200
-	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(minedCheckpointInterval-time.Second)))
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(checkpointRequestInterval-time.Second)))
 	lm.currentSCN = 300
-	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(minedCheckpointInterval)))
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(checkpointRequestInterval)))
 
 	assert.Equal(t, []replication.SCN{100, 300}, pub.windows)
 }

@@ -75,9 +75,9 @@ type LogMiner struct {
 	lobWarner lobReplayWarner
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
-	// lastMinedCheckpoint is when checkpointMinedPosition last called
-	// CheckpointWindow. It limits the marks to one per minedCheckpointInterval.
-	lastMinedCheckpoint time.Time
+	// lastCheckpointRequest is when checkpointMinedPosition last called CheckpointWindow.
+	// Used for rate-limiting checkpoint requests.
+	lastCheckpointRequest time.Time
 
 	publishLagMetric     *service.MetricTimer
 	timeToFirstRowMetric *service.MetricTimer
@@ -433,26 +433,26 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 // logMinerRangeClause is the SCN range every contents query starts with.
 const logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
 
-// minedCheckpointInterval is the minimum time between two marks of the mined
-// position. Each mark can write the checkpoint, and with the default Oracle
-// checkpoint cache that write makes new redo to mine. It also waits until
-// earlier batches are dispatched. Archive logs are kept for hours, so a mark
-// every few seconds is enough.
-const minedCheckpointInterval = 10 * time.Second
+// checkpointRequestInterval is the minimum time between two checkpoint
+// requests for the mined position. These requests move the checkpoint forward
+// when the monitored tables are quiet, so it does not point to archive logs
+// that the database removed (see batchPublisher.CheckpointWindow).
+const checkpointRequestInterval = 10 * time.Second
 
-// checkpointMinedPosition marks the mined position with the publisher, at most
-// once per minedCheckpointInterval. It also marks after cycles with no rows for
-// the monitored tables. See ChangePublisher.CheckpointWindow.
+// checkpointMinedPosition requests a checkpoint of the mined position from the
+// publisher, at most once per checkpointRequestInterval. It also requests one
+// after cycles with no rows for the monitored tables. See
+// ChangePublisher.CheckpointWindow.
 func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) error {
-	if now.Sub(lm.lastMinedCheckpoint) < minedCheckpointInterval {
+	if now.Sub(lm.lastCheckpointRequest) < checkpointRequestInterval {
 		return nil
 	}
 	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""))
 	if !ok {
-		// Nothing was marked, so the next cycle tries again.
+		// Nothing was requested, so the next cycle tries again.
 		return nil
 	}
-	lm.lastMinedCheckpoint = now
+	lm.lastCheckpointRequest = now
 	return lm.publisher.CheckpointWindow(ctx, replication.SCN(scn))
 }
 
