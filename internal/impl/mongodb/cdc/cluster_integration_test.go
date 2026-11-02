@@ -392,6 +392,60 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	}, time.Minute, 250*time.Millisecond)
 }
 
+// TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority starts
+// the input while the primary has applied a write that a majority has not. A
+// new change stream starts one tick after the last applied write, so it never
+// returns that write, and a majority chunk read before the write commits does
+// not see it. The snapshot must wait for the majority snapshot to reach the
+// stream start, or the write is lost.
+func TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority(t *testing.T) {
+	integration.CheckSkip(t)
+	// Starts its own containers on its own network.
+	t.Parallel()
+	primary, secondary := startTwoNodeReplicaSet(t)
+	uri := primary.uri(true)
+	h := newIncrementalHarnessOn(t, uri, connectTo(t, uri))
+	h.seed("foo", 3)
+
+	const stopRepl = `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "%s"})`
+	secondary.eval(fmt.Sprintf(stopRepl, "alwaysOn"))
+	t.Cleanup(func() {
+		_, _ = evalOn(context.Background(), secondary.container, fmt.Sprintf(stopRepl, "off"))
+	})
+	// Applied on the primary only: a majority of two needs the secondary.
+	w1 := h.db.Collection("foo", options.Collection().SetWriteConcern(writeconcern.W1()))
+	_, err := w1.UpdateOne(t.Context(), bson.M{"_id": 1}, bson.M{"$inc": bson.M{"v": 1}})
+	require.NoError(t, err)
+
+	input := strings.NewReplacer(
+		"  username: mongoadmin\n", "",
+		"  password: secret\n", "",
+		"  signal_collection_name: signals\n", "",
+		"    - 'foo'\n    - 'bar'\n", "    - 'foo'\n",
+	).Replace(incrementalInput)
+	stream := h.stream(input)
+	wait := stream.RunAsync(t)
+
+	// Keep replication stopped until the input has released a chunk of foo,
+	// which misses the write, or waits for the majority snapshot to catch up.
+	waiting := fmt.Sprintf(`db.getSiblingDB("admin").aggregate([{$currentOp: {}}, {$match: {ns: "%s.$cmd", "command.find": "foo", "command.readConcern.afterClusterTime": {$exists: true}}}]).toArray().length > 0`, h.db.Name())
+	require.Eventually(t, func() bool {
+		if len(h.logs.matching("Incremental snapshot reading collection foo")) > 0 {
+			return true
+		}
+		out, err := evalOn(t.Context(), primary.container, waiting)
+		return err == nil && out == "true"
+	}, time.Minute, 100*time.Millisecond, "the input neither read foo nor waited for the majority snapshot")
+	secondary.eval(fmt.Sprintf(stopRepl, "off"))
+
+	h.waitReads("foo", 3)
+	stream.Stop(t)
+	wait()
+
+	got := replayChecked(t, h.output)
+	assert.Equal(t, map[string]float64{"foo/0": 0, "foo/1": 1, "foo/2": 0}, got.of("foo"), "the write before the stream start was lost")
+}
+
 // TestIntegrationIncSnapshotDepsReadFromPrimary connects with
 // readPreference=secondary to a replica set whose only secondary has stopped
 // replicating. The secondary does not vote, so a majority write commits on the
