@@ -78,6 +78,15 @@ type CommitConfig struct {
 	ManifestMergeEnabled bool
 	MaxSnapshotAge       time.Duration
 	MaxRetries           int
+	// UnsupportedUpdateRetryInterval is how long a catalog's refusal of an
+	// optional update (snapshot expiry, the manifest-merge property) stands
+	// before the update is tried again, and how often the failed-expiry
+	// warning may repeat. A verdict rests on one 400 and one landed retry,
+	// strong evidence but not proof (a non-conforming catalog could map a
+	// transient failure to 400), so it is re-probed rather than permanent: a
+	// refusing catalog costs one wasted round trip per interval, a mis-verdict
+	// heals within it. Zero or negative means the default of one hour.
+	UnsupportedUpdateRetryInterval time.Duration
 	// SkipFormatUpgrade leaves the table at its existing format version instead
 	// of upgrading to v2. Set for copy-on-write, which only ever writes plain
 	// data files (no v2 delete files) and so works on a v1 table — avoiding an
@@ -112,15 +121,9 @@ type CommitConfig struct {
 	UnsupportedUpdates *unsupportedUpdates
 }
 
-// unsupportedReprobeAfter is how long a refusal verdict stands before the
-// update is tried once more. A verdict rests on one 400 and one landed
-// retry, which is strong evidence but not proof (a non-conforming catalog
-// could map a transient requirement failure to 400), so rather than disable
-// retention for the life of the process on that evidence, the update is
-// re-probed at this interval: a genuinely refusing catalog costs one wasted
-// round trip per interval, a mis-verdict heals itself within it. A var so
-// tests can shorten it.
-var unsupportedReprobeAfter = time.Hour
+// defaultUnsupportedUpdateRetryInterval backs
+// CommitConfig.UnsupportedUpdateRetryInterval when it is unset.
+const defaultUnsupportedUpdateRetryInterval = time.Hour
 
 // unsupportedUpdates records, per table, which optional updates the catalog
 // has refused and until when that verdict stands. It also carries the
@@ -134,7 +137,7 @@ type unsupportedUpdates struct {
 	// for the life of the table, so once per table is enough.
 	manifestMergeWarnOnce sync.Once
 	// expiryStageWarnAfter rate-limits the "could not stage expiry" warning
-	// to once per unsupportedReprobeAfter per table. Not once-ever: the
+	// to once per UnsupportedUpdateRetryInterval per table. Not once-ever: the
 	// cause (a ref left pointing at a removed snapshot, say) can be fixed
 	// and recur, and retention silently stopping a second time must not be
 	// silent.
@@ -143,13 +146,13 @@ type unsupportedUpdates struct {
 
 // warnExpiryStage reports whether the expiry-staging warning may be logged
 // now, and if so arms the next window.
-func (u *unsupportedUpdates) warnExpiryStage() bool {
+func (u *unsupportedUpdates) warnExpiryStage(every time.Duration) bool {
 	now := time.Now().UnixNano()
 	next := u.expiryStageWarnAfter.Load()
 	if now < next {
 		return false
 	}
-	return u.expiryStageWarnAfter.CompareAndSwap(next, now+int64(unsupportedReprobeAfter))
+	return u.expiryStageWarnAfter.CompareAndSwap(next, now+int64(every))
 }
 
 func newUnsupportedUpdates() *unsupportedUpdates { return &unsupportedUpdates{} }
@@ -159,14 +162,14 @@ func refusedNow(until *atomic.Int64) bool {
 	return u != 0 && time.Now().UnixNano() < u
 }
 
-func refuse(until *atomic.Int64) {
-	until.Store(time.Now().Add(unsupportedReprobeAfter).UnixNano())
+func refuse(until *atomic.Int64, for_ time.Duration) {
+	until.Store(time.Now().Add(for_).UnixNano())
 }
 
-func (u *unsupportedUpdates) refusesExpiry() bool    { return refusedNow(&u.expiryUntil) }
-func (u *unsupportedUpdates) refuseExpiry()          { refuse(&u.expiryUntil) }
-func (u *unsupportedUpdates) refusesMergeProp() bool { return refusedNow(&u.mergePropUntil) }
-func (u *unsupportedUpdates) refuseMergeProp()       { refuse(&u.mergePropUntil) }
+func (u *unsupportedUpdates) refusesExpiry() bool             { return refusedNow(&u.expiryUntil) }
+func (u *unsupportedUpdates) refuseExpiry(d time.Duration)    { refuse(&u.expiryUntil, d) }
+func (u *unsupportedUpdates) refusesMergeProp() bool          { return refusedNow(&u.mergePropUntil) }
+func (u *unsupportedUpdates) refuseMergeProp(d time.Duration) { refuse(&u.mergePropUntil, d) }
 
 // StaleSchemaError is returned when data was written with a schema
 // that no longer matches the table's current schema.
@@ -247,6 +250,9 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	// but callers constructing a committer directly get the same safety here.
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
+	}
+	if cfg.UnsupportedUpdateRetryInterval <= 0 {
+		cfg.UnsupportedUpdateRetryInterval = defaultUnsupportedUpdateRetryInterval
 	}
 	stripper := newPropertyStrippingCatalog(cat, cfg.ProhibitedKeys)
 	writes := newWriteRecorder()
@@ -770,7 +776,7 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// that extra dropped, in a fixed order: first expiry (trial 1), then the
 	// merge property as well (trial 2). The trial attempt landing proves the
 	// catalog refuses the extra just dropped, and the matching refusal is
-	// recorded (for unsupportedReprobeAfter) with a warning. A trial
+	// recorded (for UnsupportedUpdateRetryInterval) with a warning. A trial
 	// attempt that does NOT land outright (a 409, an ambiguous response, a
 	// repeat 400) proves nothing: the extras stay dropped for the rest of
 	// this call so the data can still get through, no flag is set, and the
@@ -801,11 +807,11 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		}
 		switch trial {
 		case 1:
-			c.unsupported.refuseExpiry()
-			c.logger.Warnf("Catalog rejected a commit carrying snapshot expiry but accepted it without; pausing %s for this table for %s and leaving snapshot retention to external maintenance meanwhile. If this catalog does support snapshot expiry the rejection was transient and expiry resumes at the next probe. Rejection was: %v", ioFieldMaxSnapshotAge, unsupportedReprobeAfter, trialErr)
+			c.unsupported.refuseExpiry(c.cfg.UnsupportedUpdateRetryInterval)
+			c.logger.Warnf("Catalog rejected a commit carrying snapshot expiry but accepted it without; pausing %s for this table for %s and leaving snapshot retention to external maintenance meanwhile. If this catalog does support snapshot expiry the rejection was transient and expiry resumes at the next probe. Rejection was: %v", ioFieldMaxSnapshotAge, c.cfg.UnsupportedUpdateRetryInterval, trialErr)
 		case 2:
-			c.unsupported.refuseMergeProp()
-			c.logger.Warnf("Catalog rejected a commit setting table property %s but accepted it without; %s is paused for this table for %s and it keeps one manifest per commit meanwhile. Rejection was: %v", table.ManifestMergeEnabledKey, ioFieldManifestMergeEnabled, unsupportedReprobeAfter, trialErr)
+			c.unsupported.refuseMergeProp(c.cfg.UnsupportedUpdateRetryInterval)
+			c.logger.Warnf("Catalog rejected a commit setting table property %s but accepted it without; %s is paused for this table for %s and it keeps one manifest per commit meanwhile. Rejection was: %v", table.ManifestMergeEnabledKey, ioFieldManifestMergeEnabled, c.cfg.UnsupportedUpdateRetryInterval, trialErr)
 		}
 	}
 	budget := c.cfg.MaxRetries
@@ -1112,11 +1118,11 @@ func (c *committer) expiryRemovedSnapshots(txn *table.Transaction) bool {
 // A local staging error (metadata iceberg-go cannot walk, e.g. a ref left
 // pointing at a snapshot another engine already removed) must not take the
 // data commit down with it: retention is a maintenance concern, delivery is
-// not. It is logged at most once an hour per table and the commit proceeds without
+// not. It is logged at most once per UnsupportedUpdateRetryInterval per table and the commit proceeds without
 // expiry. The bool reports whether expiry was requested on txn.
 func (c *committer) stageSnapshotExpiry(txn *table.Transaction) bool {
 	if err := txn.ExpireSnapshots(table.WithOlderThan(c.cfg.MaxSnapshotAge), table.WithPostCommit(false)); err != nil {
-		if c.unsupported.warnExpiryStage() {
+		if c.unsupported.warnExpiryStage(c.cfg.UnsupportedUpdateRetryInterval) {
 			c.logger.Warnf("Could not stage snapshot expiry for this table; committing without it and leaving snapshot retention to external maintenance until the cause is fixed: %v", err)
 		}
 		return false

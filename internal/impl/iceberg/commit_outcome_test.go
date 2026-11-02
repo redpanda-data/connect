@@ -594,19 +594,18 @@ func TestUnsupportedVerdictSurvivesCommitterRecreation(t *testing.T) {
 	assert.Len(t, cat.meta.Snapshots(), 3)
 }
 
-// TestRefusalVerdictIsReprobed: a refusal stands for unsupportedReprobeAfter,
-// then the update is tried once more. A genuinely refusing catalog pays one
-// rejected round trip per interval; a mis-verdict heals itself.
+// TestRefusalVerdictIsReprobed: a refusal stands for
+// commit.unsupported_update_retry_interval, then the update is tried once
+// more. A genuinely refusing catalog pays one rejected round trip per
+// interval; a mis-verdict heals itself.
 func TestRefusalVerdictIsReprobed(t *testing.T) {
-	saved := unsupportedReprobeAfter
-	unsupportedReprobeAfter = 150 * time.Millisecond
-	t.Cleanup(func() { unsupportedReprobeAfter = saved })
+	const interval = 150 * time.Millisecond
 
 	ctx := t.Context()
 	_, mem := newTestTable(t)
 	cat := &expiryRejectingCatalog{memCatalog: mem}
 	const age = 50 * time.Millisecond
-	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age, UnsupportedUpdateRetryInterval: interval})
 
 	require.NoError(t, appendOne(t, ctx, c))
 	time.Sleep(age + 50*time.Millisecond)
@@ -614,7 +613,7 @@ func TestRefusalVerdictIsReprobed(t *testing.T) {
 	require.Equal(t, 1, cat.rejected)
 	require.True(t, c.unsupported.refusesExpiry())
 
-	time.Sleep(unsupportedReprobeAfter + 50*time.Millisecond)
+	time.Sleep(interval + 50*time.Millisecond)
 	require.False(t, c.unsupported.refusesExpiry(), "the verdict must lapse")
 	require.NoError(t, appendOne(t, ctx, c))
 	assert.Equal(t, 2, cat.rejected, "expiry is re-probed once the verdict lapses")

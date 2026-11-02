@@ -139,7 +139,6 @@ func (s *prohibitedKeySet) add(key string) bool {
 	return true
 }
 
-// snapshot returns the current keys; nil when the set is empty.
 // has reports whether key has been learned as prohibited.
 func (s *prohibitedKeySet) has(key string) bool {
 	s.mu.RLock()
@@ -148,6 +147,7 @@ func (s *prohibitedKeySet) has(key string) bool {
 	return ok
 }
 
+// snapshot returns the current keys; nil when the set is empty.
 func (s *prohibitedKeySet) snapshot() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
