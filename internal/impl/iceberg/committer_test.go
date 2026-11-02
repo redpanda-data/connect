@@ -14,10 +14,8 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog"
@@ -54,14 +52,14 @@ func (m *memCatalog) CommitTable(_ context.Context, _ table.Identifier, _ []tabl
 	return meta, m.metadataLocation, nil
 }
 
-func (m *memCatalog) snapshot() *table.Table {
-	return table.New(
-		m.ident,
-		m.meta,
-		m.metadataLocation,
-		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil },
-		m,
-	)
+func (m *memCatalog) snapshot() *table.Table { return tableBoundTo(m, m) }
+
+// tableBoundTo returns a LocalFS-backed table handle over mem's current
+// metadata whose commits go to cat: mem itself, or a wrapper around it whose
+// CommitTable must see every commit (scriptedCatalog, flakyCatalog, ...).
+func tableBoundTo(mem *memCatalog, cat table.CatalogIO) *table.Table {
+	return table.New(mem.ident, mem.meta, mem.metadataLocation,
+		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil }, cat)
 }
 
 // newTestTable creates an iceberg table backed by an in-memory catalog and the
@@ -175,6 +173,7 @@ const (
 	commitLandThenUnknown                          // apply the update but report ErrCommitStateUnknown (landed, ambiguous 5xx)
 	commitUnknownNoLand                            // do NOT apply the update and report ErrCommitStateUnknown (5xx before applying)
 	commitLandThenServerError                      // apply the update but report a NON-sentinel ambiguous 5xx (rest.ErrServerError)
+	commitBadRequest                               // do NOT apply the update and report rest.ErrBadRequest (definitive 400)
 )
 
 // scriptedCatalog drives per-call CommitTable outcomes so tests can model the
@@ -211,6 +210,8 @@ func (c *scriptedCatalog) CommitTable(ctx context.Context, ident table.Identifie
 		// iceberg-go maps only 500/502/503/504 to ErrCommitStateUnknown; other
 		// 5xx surface as ErrServerError. Equally ambiguous, different sentinel.
 		applies, retErr = true, fmt.Errorf("%w: internal error", rest.ErrServerError)
+	case commitBadRequest:
+		applies, retErr = false, fmt.Errorf("%w: rejected", rest.ErrBadRequest)
 	}
 
 	if applies {
@@ -224,15 +225,7 @@ func (c *scriptedCatalog) CommitTable(ctx context.Context, ident table.Identifie
 	return c.meta, c.metadataLocation, nil
 }
 
-func (c *scriptedCatalog) snapshot() *table.Table {
-	return table.New(
-		c.ident,
-		c.meta,
-		c.metadataLocation,
-		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil },
-		c,
-	)
-}
+func (c *scriptedCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
 
 // countDataFileRefs counts how many live data-file entries in the table's
 // current snapshot reference path. A correctly committed file appears exactly
@@ -408,27 +401,6 @@ func TestStaleSchemaErrorOnAllEntryPoints(t *testing.T) {
 		e := &StaleSchemaError{WriterSchemaID: 5, CurrentSchemaID: 3}
 		assert.Equal(t, "stale schema: data written with schema 5 but table is at schema 3", e.Error())
 	})
-}
-
-// TestCommitStampsMaxSnapshotAge (T-20) proves a committer configured with a
-// non-zero MaxSnapshotAge stamps MaxSnapshotAgeMsKey into the committed snapshot's
-// summary (via the shared props map in commitLocked).
-func TestCommitStampsMaxSnapshotAge(t *testing.T) {
-	ctx := t.Context()
-	tbl, cat := newTestTable(t)
-	const age = 48 * time.Hour
-	c, err := NewCommitter(tbl, cat, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age}, reloadFn(cat), service.MockResources().Logger())
-	require.NoError(t, err)
-	defer c.Close()
-
-	df := synthDataFile(t, tbl.Spec(), fmt.Sprintf("%s/data/age-%s.parquet", tbl.Location(), uuid.New()))
-	require.NoError(t, c.Commit(ctx, CommitInput{Files: []iceberg.DataFile{df}, SchemaID: c.currentSchemaID()}))
-
-	snap := cat.snapshot().CurrentSnapshot()
-	require.NotNil(t, snap)
-	require.NotNil(t, snap.Summary)
-	assert.Equal(t, strconv.FormatInt(age.Milliseconds(), 10), snap.Summary.Properties[table.MaxSnapshotAgeMsKey],
-		"the committed snapshot summary must carry the configured max snapshot age")
 }
 
 // TestNewCommitterClampsMaxRetries (CORR-4) proves a configured MaxRetries below 1
