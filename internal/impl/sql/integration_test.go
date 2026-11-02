@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -1118,26 +1119,46 @@ func TestIntegrationMSSQL(t *testing.T) {
 	}
 
 	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", mp.Port())
-	require.Eventually(t, func() bool {
+	// lastErr keeps the error of the last try. Without it, a failed wait only says "Condition never satisfied".
+	var lastErr error
+	ready := assert.Eventually(t, func() bool {
 		if db != nil {
 			db.Close()
 		}
-		db, err = sql.Open("mssql", dsn)
-		if err != nil {
+		db, lastErr = sql.Open("mssql", dsn)
+		if lastErr != nil {
 			return false
 		}
-		if err = db.Ping(); err != nil {
+		if lastErr = db.Ping(); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
-		if _, err := createTable("footable"); err != nil {
+		if _, lastErr = createTable("footable"); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
 		return true
 	}, 3*time.Minute, time.Second)
+	if !ready {
+		// The port can be open while SQL Server is not ready, or the container can stop after the port wait (for
+		// example exit code 139). Log the container state and logs to show which case it is.
+		if state, stateErr := ctr.State(t.Context()); stateErr != nil {
+			t.Logf("Cannot get the SQL Server container state: %v", stateErr)
+		} else {
+			t.Logf("SQL Server container state: status=%s exit_code=%d oom_killed=%v error=%q",
+				state.Status, state.ExitCode, state.OOMKilled, state.Error)
+		}
+		if logs, logsErr := ctr.Logs(t.Context()); logsErr != nil {
+			t.Logf("Cannot get the SQL Server container logs: %v", logsErr)
+		} else {
+			b, _ := io.ReadAll(logs)
+			logs.Close()
+			t.Logf("SQL Server container logs:\n%s", b)
+		}
+		require.FailNow(t, "SQL Server is not ready", "last error: %v", lastErr)
+	}
 
 	testSuite(t, "mssql", dsn, createTable)
 }
