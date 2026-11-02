@@ -128,7 +128,7 @@ func cmdRun(args []string) error {
 		pkgOutFile := filepath.Join(outputDir, fname)
 
 		tag := strings.TrimSuffix(fname, ".txt")
-		out.PackageHeader(tag, i+1, total, short)
+		pout := out.Package(tag, i+1, total, short, false)
 
 		// Check cache from current run directory.
 		var cached PackageCache
@@ -141,24 +141,24 @@ func cmdRun(args []string) error {
 		for _, t := range compactCacheEntries(cached.Tests) {
 			switch t.Result {
 			case ResultPass:
-				out.TestPass(t.TestName, "", true)
+				pout.TestPass(t.TestName, "", true)
 			case ResultSkip:
-				out.TestSkip(t.TestName, "", t.SkipReason, true)
+				pout.TestSkip(t.TestName, "", t.SkipReason, true)
 			case ResultFail:
-				out.TestFail(t.TestName, "", pkgOutFile, t.FailLine, true)
+				pout.TestFail(t.TestName, "", pkgOutFile, t.FailLine, true)
 			}
 		}
 
 		// If complete and all passed, close and move on.
 		if cached.Complete && cached.Overall() == ResultPass {
 			debugf("found cached result for %s: complete", short)
-			out.Info(fmt.Sprintf("● %s (cached)", short))
-			out.PackageDone()
+			pout.Info(fmt.Sprintf("● %s (cached)", short))
+			pout.Done()
 			passed++
 			continue
 		}
 
-		res := runPackageTest(pkg, short, pkgOutFile, cached, out)
+		res := runPackageTest(pkg, short, pkgOutFile, cached, pout)
 
 		switch res.status {
 		case ResultPass:
@@ -168,7 +168,7 @@ func cmdRun(args []string) error {
 		case ResultSkip:
 			skipped++
 		}
-		out.PackageResult(short, res.status, res.duration)
+		pout.Result(short, res.status, res.duration)
 	}
 
 	// Final report.
@@ -192,7 +192,7 @@ type packageResult struct {
 
 // runPackageTest executes `go test -json` for a single package, parses JSON
 // events, streams filtered output, and returns the result.
-func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache, out *Output) packageResult {
+func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache, out *PackageOutput) packageResult {
 	result := packageResult{outFile: outFile}
 
 	// Count existing lines without loading the file into memory (fix #4).
