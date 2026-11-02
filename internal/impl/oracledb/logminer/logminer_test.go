@@ -839,6 +839,7 @@ func newLogMiner(pub Publisher, cache TransactionCache) *LogMiner {
 		cfg:              NewDefaultConfig(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		lobInsertTxns:    make(map[sqlredo.TransactionID]struct{}),
 	}
 }
 
