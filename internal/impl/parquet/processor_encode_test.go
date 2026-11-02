@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/stretchr/testify/assert"
@@ -883,6 +884,221 @@ func TestParquetEncodeBigDecimalRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "BigDecimal")
 }
 
+// TestParquetEncodeCoercionPlanMatchesFullWalk confirms that pruning the
+// schema down to the fields that need coercing gives the same rows as coercing
+// every leaf, and that a schema with nothing to coerce has no plan at all.
+func TestParquetEncodeCoercionPlanMatchesFullWalk(t *testing.T) {
+	plainConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+schema:
+  - { name: b, type: BOOLEAN }
+  - { name: i32, type: INT32 }
+  - { name: i64, type: INT64, optional: true }
+  - { name: f, type: FLOAT }
+  - { name: d, type: DOUBLE, repeated: true }
+  - { name: raw, type: BYTE_ARRAY }
+  - { name: s, type: UTF8 }
+  - { name: bson, type: BSON }
+  - { name: e, type: ENUM }
+  - name: nested
+    optional: true
+    fields:
+      - { name: s, type: UTF8 }
+      - { name: xs, type: INT64, repeated: true }
+`, nil)
+	require.NoError(t, err)
+	plainProc, err := newParquetEncodeProcessorFromConfig(plainConf, nil)
+	require.NoError(t, err)
+	assert.Nil(t, plainProc.coercion)
+
+	mixedConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+schema:
+  - { name: id, type: INT64 }
+  - { name: s, type: UTF8 }
+  - { name: ts, type: TIMESTAMP }
+  - { name: opt_ts, type: TIMESTAMP, optional: true }
+  - { name: uid, type: UUID }
+  - { name: doc, type: JSON }
+  - name: nested
+    optional: true
+    fields:
+      - { name: s, type: UTF8 }
+      - { name: ts, type: TIMESTAMP }
+      - name: plain
+        fields:
+          - { name: n, type: INT64 }
+`, nil)
+	require.NoError(t, err)
+	mixedProc, err := newParquetEncodeProcessorFromConfig(mixedConf, nil)
+	require.NoError(t, err)
+	require.NotNil(t, mixedProc.coercion)
+
+	for _, row := range []string{
+		`{"id":1,"s":"a","ts":"2026-10-30T12:00:00Z","opt_ts":"2026-10-30T13:00:00Z","uid":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","doc":{"k":[1,2]},"nested":{"s":"b","ts":1700000000000,"plain":{"n":3}}}`,
+		`{"id":2,"s":"c","ts":1700000000000,"opt_ts":null,"uid":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","doc":null,"nested":null}`,
+		`{"id":3,"ts":"2026-10-30T12:00:00Z","uid":"6ba7b812-9dad-11d1-80b4-00c04fd430c8","doc":"str"}`,
+	} {
+		parse := func() any {
+			ms, err := service.NewMessage([]byte(row)).AsStructuredMut()
+			require.NoError(t, err)
+			return scrubJSONNumbers(ms)
+		}
+		want, err := visitWithSchema(encodingCoercionVisitor{}, parse(), mixedProc.schema)
+		require.NoError(t, err)
+		got, err := mixedProc.coercion.apply(parse())
+		require.NoError(t, err)
+		assert.Equal(t, want, got, row)
+	}
+}
+
+// TestParquetEncodeCoercesRepeatedAndMapValues confirms that logical type
+// coercion reaches each element of a repeated column and each value of a map.
+func TestParquetEncodeCoercesRepeatedAndMapValues(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "tss", Type: schema.Array, Children: []schema.Common{{Type: schema.Timestamp}}},
+			{Name: "m", Type: schema.Map, Children: []schema.Common{{Type: schema.Timestamp}}},
+			{Name: "objs", Type: schema.Array, Children: []schema.Common{{
+				Type:     schema.Object,
+				Children: []schema.Common{{Name: "ts", Type: schema.Timestamp}},
+			}}},
+		},
+	}
+
+	msg := service.NewMessage([]byte(`{
+  "tss": ["2026-10-30T12:00:00Z", "2026-10-30T12:00:01Z"],
+  "m": {"a": "2026-10-30T12:00:02Z"},
+  "objs": [{"ts": "2026-10-30T12:00:03Z"}, {"ts": 1700000000000000}]
+}`))
+	msg.MetaSetMut("schema_meta", commonSchema.ToAny())
+
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema_meta", &parquet.Uncompressed, parquet.Microsecond)
+	require.NoError(t, err)
+
+	out, err := proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0], 1)
+	encoded, err := out[0][0].AsBytes()
+	require.NoError(t, err)
+
+	base := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	micros := func(secs int) int64 { return base.Add(time.Duration(secs) * time.Second).UnixMicro() }
+
+	assert.Equal(t, []int64{micros(0), micros(1)}, readInt64Column(t, encoded, "tss"))
+	assert.Equal(t, []int64{micros(2)}, readInt64Column(t, encoded, "m", "key_value", "value"))
+	assert.Equal(t, []int64{micros(3), 1700000000000000}, readInt64Column(t, encoded, "objs", "ts"))
+}
+
+// TestParquetEncodeCoercionRejectsNonObjectGroup confirms that a non-object
+// value for a group that needs coercing is reported as an error rather than a
+// panic.
+func TestParquetEncodeCoercionRejectsNonObjectGroup(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{{
+			Name:     "g",
+			Type:     schema.Object,
+			Children: []schema.Common{{Name: "ts", Type: schema.Timestamp}},
+		}},
+	}
+
+	msg := service.NewMessage([]byte(`{"g":"oops"}`))
+	msg.MetaSetMut("schema_meta", commonSchema.ToAny())
+
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema_meta", &parquet.Uncompressed, parquet.Microsecond)
+	require.NoError(t, err)
+
+	_, err = proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected an object, got string")
+}
+
+// readInt64Column returns every value of the int64 column at path in the
+// first row group of a parquet file.
+func readInt64Column(t *testing.T, encoded []byte, path ...string) []int64 {
+	t.Helper()
+
+	pf, err := parquet.OpenFile(bytes.NewReader(encoded), int64(len(encoded)))
+	require.NoError(t, err)
+	col, ok := pf.Schema().Lookup(path...)
+	require.True(t, ok, "column %v not found", path)
+
+	rowsReader := pf.RowGroups()[0].Rows()
+	defer rowsReader.Close()
+
+	var vals []int64
+	rowBuf := make([]parquet.Row, 16)
+	for {
+		n, err := rowsReader.ReadRows(rowBuf)
+		for _, row := range rowBuf[:n] {
+			for _, v := range row {
+				if v.Column() == col.ColumnIndex && !v.IsNull() {
+					vals = append(vals, v.Int64())
+				}
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return vals
+		}
+		require.NoError(t, err)
+	}
+}
+
+// TestParquetEncodeDynamicSchemaRecomputesCoercion confirms that the coercion
+// decision is made per batch from the schema_metadata schema, not carried
+// over from the previous batch.
+func TestParquetEncodeDynamicSchemaRecomputesCoercion(t *testing.T) {
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema_meta", &parquet.Uncompressed, parquet.Microsecond)
+	require.NoError(t, err)
+	require.Nil(t, proc.coercion)
+
+	plainSchema := &schema.Common{
+		Type:     schema.Object,
+		Children: []schema.Common{{Name: "id", Type: schema.Int64}},
+	}
+	timestampSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "id", Type: schema.Int64},
+			{Name: "ts", Type: schema.Timestamp},
+		},
+	}
+
+	encode := func(s *schema.Common, row string) []byte {
+		msg := service.NewMessage([]byte(row))
+		msg.MetaSetMut("schema_meta", s.ToAny())
+		out, err := proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
+		require.NoError(t, err)
+		require.Len(t, out, 1)
+		require.Len(t, out[0], 1)
+		b, err := out[0][0].AsBytes()
+		require.NoError(t, err)
+		return b
+	}
+
+	encode(plainSchema, `{"id":1}`)
+	tsFile := encode(timestampSchema, `{"id":2,"ts":"2026-10-30T12:00:00Z"}`)
+	encode(plainSchema, `{"id":3}`)
+
+	pf, err := parquet.OpenFile(bytes.NewReader(tsFile), int64(len(tsFile)))
+	require.NoError(t, err)
+	tsCol, ok := pf.Schema().Lookup("ts")
+	require.True(t, ok)
+
+	rowBuf := make([]parquet.Row, 1)
+	rowsReader := pf.RowGroups()[0].Rows()
+	defer rowsReader.Close()
+	n, err := rowsReader.ReadRows(rowBuf)
+	if !errors.Is(err, io.EOF) {
+		require.NoError(t, err)
+	}
+	require.Equal(t, 1, n)
+
+	want := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC).UnixMicro()
+	assert.Equal(t, want, rowBuf[0][tsCol.ColumnIndex].Int64())
+}
+
 type encodeBenchColumn struct {
 	name, typ string
 	value     func(row int) any
@@ -948,6 +1164,12 @@ func BenchmarkParquetEncode(b *testing.B) {
 	})
 	b.Run("schema=plain/columns=10", func(b *testing.B) {
 		benchmarkParquetEncode(b, plainBenchColumns(10), rows)
+	})
+	b.Run("schema=mixed/columns=100", func(b *testing.B) {
+		cols := append(plainBenchColumns(99),
+			encodeBenchColumn{"ts", "TIMESTAMP", func(int) any { return "2026-10-30T12:00:00Z" }},
+		)
+		benchmarkParquetEncode(b, cols, rows)
 	})
 	b.Run("schema=coercing/columns=10", func(b *testing.B) {
 		cols := append(plainBenchColumns(7),

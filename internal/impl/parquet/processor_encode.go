@@ -290,7 +290,7 @@ type parquetEncodeProcessor struct {
 	schemaMeta      string
 	compressionType compress.Codec
 	timestampUnit   parquet.TimeUnit
-	needsCoercion   bool // schemas with no logical types can skip expensive coercion
+	coercion        *encodeCoercionPlan // nil when rows need no coercion
 }
 
 func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, schemaMeta string, compressionType compress.Codec, timestampUnit parquet.TimeUnit) (*parquetEncodeProcessor, error) {
@@ -302,7 +302,7 @@ func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, s
 		timestampUnit:   timestampUnit,
 	}
 	if schema != nil {
-		s.needsCoercion = schemaNeedsCoercion(schema)
+		s.coercion = newEncodeCoercionPlan(schema)
 	}
 	return s, nil
 }
@@ -335,7 +335,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 	}
 
 	schema := s.schema
-	needsCoercion := s.needsCoercion
+	coercion := s.coercion
 	if s.schemaMeta != "" {
 		metaAny, exists := batch[0].MetaGetMut(s.schemaMeta)
 		if !exists {
@@ -346,7 +346,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 		if schema, err = parquetSchemaFromCommon(metaAny, s.timestampUnit); err != nil {
 			return nil, err
 		}
-		needsCoercion = schemaNeedsCoercion(schema)
+		coercion = newEncodeCoercionPlan(schema)
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -365,10 +365,10 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
 
-		if !needsCoercion {
+		if coercion == nil {
 			continue
 		}
-		if rows[i], err = visitWithSchema(encodingCoercionVisitor{}, rows[i], schema); err != nil {
+		if rows[i], err = coercion.apply(rows[i]); err != nil {
 			return nil, fmt.Errorf("coercing logical types: %w", err)
 		}
 	}

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSchemaNeedsCoercion(t *testing.T) {
+func TestNewEncodeCoercionPlanNeedsCoercion(t *testing.T) {
 	tests := []struct {
 		name string
 		node parquet.Node
@@ -67,8 +67,8 @@ func TestSchemaNeedsCoercion(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.want, schemaNeedsCoercion(test.node))
-			assert.Equal(t, test.want, schemaNeedsCoercion(parquet.NewSchema("", test.node)))
+			assert.Equal(t, test.want, newEncodeCoercionPlan(test.node) != nil)
+			assert.Equal(t, test.want, newEncodeCoercionPlan(parquet.NewSchema("", test.node)) != nil)
 		})
 	}
 }
