@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"strconv"
 	"strings"
@@ -169,16 +170,13 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 			createTopic(t, seed, topic)
 
 			t.Log("And: OTel Collector")
-			collectorHTTPPort, err := integration.GetFreePort()
-			require.NoError(t, err)
-			collectorGRPCPort, err := integration.GetFreePort()
-			require.NoError(t, err)
+			collectorHTTPPort := freePortBelowEphemeral(t)
+			collectorGRPCPort := freePortBelowEphemeral(t)
 			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType, collectorHTTPPort, collectorGRPCPort)
 			t.Logf("OTel Collector endpoints - HTTP: %s, gRPC: %s", collectorHTTP, collectorGRPC)
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
-			producerPort, err := integration.GetFreePort()
-			require.NoError(t, err)
+			producerPort := freePortBelowEphemeral(t)
 			ps := startStream(t, producerConfig(tc.transport, tc.encoding, producerPort, seed, srURL, topic))
 			waitForListening(t, producerPort)
 			runOtelgen(t, otelgenCommand(tc.signalType, tc.transport, producerPort, *soakRate, *soakDuration))
@@ -394,6 +392,27 @@ func startStream(t *testing.T, confYAML string) *service.Stream {
 	})
 
 	return stream
+}
+
+// freePortBelowEphemeral returns a free TCP port between 20000 and 32767.
+//
+// integration.GetFreePort returns a port from the Linux ephemeral range (32768-60999 by default), and Docker publishes
+// the ports of other containers on random ports from the same range. When other test packages run at the same time,
+// a container can take the port before this test binds it: the otlp input then fails with "address already in use",
+// and waitForListening connects to the Docker proxy instead. Docker does not pick ports below the ephemeral range.
+func freePortBelowEphemeral(t *testing.T) int {
+	t.Helper()
+	for range 100 {
+		port := 20000 + rand.IntN(32768-20000)
+		l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+		if err != nil {
+			continue
+		}
+		require.NoError(t, l.Close())
+		return port
+	}
+	require.FailNow(t, "no free port between 20000 and 32767")
+	return 0
 }
 
 func waitForListening(t *testing.T, port int) {
