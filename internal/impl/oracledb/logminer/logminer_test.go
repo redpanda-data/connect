@@ -820,14 +820,21 @@ func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMi
 	}
 }
 
-type publisherStub struct{ messages []*replication.MessageEvent }
+type publisherStub struct {
+	messages []*replication.MessageEvent
+	// windows are the SCNs passed to CheckpointWindow, in call order.
+	windows []replication.SCN
+}
 
 func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent) error {
 	p.messages = append(p.messages, msg)
 	return nil
 }
 
-func (*publisherStub) CheckpointWindow(context.Context, replication.SCN) error { return nil }
+func (p *publisherStub) CheckpointWindow(_ context.Context, scn replication.SCN) error {
+	p.windows = append(p.windows, scn)
+	return nil
+}
 
 func (*publisherStub) Close() {}
 

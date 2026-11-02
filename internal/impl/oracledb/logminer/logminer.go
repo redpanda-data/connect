@@ -435,7 +435,7 @@ const logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
 // ChangePublisher.CheckpointWindow.
 func (lm *LogMiner) checkpointMinedPosition(ctx context.Context) error {
 	lobInFlight := len(lm.lobStates) > 0 || len(lm.pendingLOBWrites) > 0
-	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.txnCache.LowWatermarkSCN(""), lobInFlight)
+	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""), lobInFlight)
 	if !ok {
 		return nil
 	}
@@ -445,7 +445,8 @@ func (lm *LogMiner) checkpointMinedPosition(ctx context.Context) error {
 // minedCheckpointSCN returns the SCN that is safe to checkpoint after a mining
 // cycle, and false if there is none. It stays below open transactions, as the
 // commit path does. The low watermark also counts transactions with only LOB
-// events (see TransactionCache.IncludeInLowWatermark). lobInFlight is an extra,
+// events (see TransactionCache.IncludeInLowWatermark) and the transactions of an
+// open LOB replay (see LogMiner.lowWatermarkSCN). lobInFlight is an extra,
 // conservative guard: it skips the checkpoint while LOB state is in memory.
 func minedCheckpointSCN(currentSCN, lowWatermark uint64, lobInFlight bool) (uint64, bool) {
 	if lobInFlight {
@@ -663,7 +664,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if txn != nil {
 			// If other transactions are still open, we must not advance the
 			// checkpoint past their start SCN - 1.
-			safeCheckpointSCN := capBelowOpenTxn(redoEvent.SCN, lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID))
+			safeCheckpointSCN := capBelowOpenTxn(redoEvent.SCN, lm.lowWatermarkSCN(redoEvent.TransactionID))
 
 			if lm.cfg.LOBEnabled {
 				// Replay deferred LOB_WRITEs (BASICFILE DISABLE STORAGE IN ROW) before
