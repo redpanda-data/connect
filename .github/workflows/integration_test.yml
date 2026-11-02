@@ -54,6 +54,12 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      # Linux AIO events are shared by all containers on the host, and the default limit is 65536. Redpanda and
+      # MySQL reserve them at startup, so packages that run at the same time use them up, and containers fail
+      # with "io_setup() failed with EAGAIN" or exit early.
+      - name: Raise the AIO limit
+        run: sudo sysctl -w fs.aio-max-nr=1048576
+
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
@@ -177,6 +183,13 @@ jobs:
           else
             echo "go_mod=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Linux AIO events are shared by all containers on the host, and the default limit is 65536. Redpanda and
+      # MySQL reserve them at startup, so packages that run at the same time use them up, and containers fail
+      # with "io_setup() failed with EAGAIN" or exit early.
+      - name: Raise the AIO limit
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
+        run: sudo sysctl -w fs.aio-max-nr=1048576
 
       # On a pull request the filter comes from the detect step. An empty
       # filter means every package in packages.json, which does not fit the
