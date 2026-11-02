@@ -40,7 +40,7 @@ require (
 	github.com/Azure/go-amqp v1.7.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.49.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.38.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.31.0
 	github.com/IBM/sarama v1.61.1
 	github.com/Jeffail/checkpoint v1.1.0
 	github.com/Jeffail/gabs/v2 v2.7.0
@@ -49,9 +49,9 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
-	github.com/SAP/go-hdb v1.20.1
+	github.com/SAP/go-hdb v1.16.8
 	github.com/a2aproject/a2a-go v0.3.15
-	github.com/apache/arrow-go/v18 v18.8.0
+	github.com/apache/arrow-go/v18 v18.7.0
 	github.com/apache/iceberg-go v0.6.1-0.20260817231015-4390d2af2bb0
 	github.com/apache/pulsar-client-go v0.21.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.1
@@ -100,7 +100,7 @@ require (
 	github.com/dustin/go-humanize v1.1.0
 	github.com/ebitengine/purego v0.11.2
 	github.com/eclipse/paho.mqtt.golang v1.5.1
-	github.com/elastic/elastic-transport-go/v8 v8.11.0
+	github.com/elastic/elastic-transport-go/v8 v8.9.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.7
 	github.com/elastic/go-elasticsearch/v9 v9.3.1
 	github.com/fatih/color v1.19.0
@@ -168,7 +168,7 @@ require (
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.115.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/rs/xid v1.6.0
-	github.com/sashabaranov/go-openai v1.43.0
+	github.com/sashabaranov/go-openai v1.41.2
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/slack-go/slack v0.32.0
 	github.com/smira/go-statsd v1.3.4
