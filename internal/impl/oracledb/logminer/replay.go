@@ -122,7 +122,7 @@ func (r *lobReplay) hasOpenOtherThan(id sqlredo.TransactionID) bool {
 		return false
 	}
 	others := len(r.txns)
-	if _, ok := r.txns[id]; ok {
+	if _, exists := r.txns[id]; exists {
 		others--
 	}
 	return others > 0
