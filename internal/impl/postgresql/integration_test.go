@@ -1450,10 +1450,13 @@ postgres_cdc:
 }
 
 // slotPassedLSN returns true if the confirmed_flush_lsn of the slot is after lsn.
+//
+// confirmed_flush_lsn is NULL until the slot is ready to stream, and on a busy host that can take some time after the
+// slot appears. COALESCE makes NULL count as "not passed" instead of a scan error, which would fail the test.
 func slotPassedLSN(t *testing.T, db *pgtest.TestDB, slotName, lsn string) bool {
 	t.Helper()
 	var passed bool
-	query := "SELECT pg_wal_lsn_diff(confirmed_flush_lsn, $2) > 0 FROM pg_replication_slots WHERE slot_name = $1"
+	query := "SELECT COALESCE(pg_wal_lsn_diff(confirmed_flush_lsn, $2) > 0, false) FROM pg_replication_slots WHERE slot_name = $1"
 	err := db.QueryRow(query, slotName, lsn).Scan(&passed)
 	assert.NoError(t, err)
 	return passed
