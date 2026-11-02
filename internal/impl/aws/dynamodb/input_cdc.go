@@ -469,8 +469,7 @@ type tableStream struct {
 	// gauge (see updateActiveShardsMetric).
 	activeShards atomic.Int64
 
-	// start tells discovery where to start a shard of this table that has no
-	// checkpoint.
+	// start tells where a shard of this table without a checkpoint starts.
 	start startPolicy
 }
 
