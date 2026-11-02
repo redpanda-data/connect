@@ -77,6 +77,7 @@ type Snapshot struct {
 	commitTimestamp         time.Time                  // Oracle server time at snapshot prepare
 	connBackoff             backoff.ExponentialBackOff // template for acquireSnapshotConn's retries
 	connCapacityWarnOnce    sync.Once                  // warns once when workers wait for a connection
+	connsInUse              atomic.Int32               // snapshot connections held by workers
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -469,7 +470,9 @@ func (s *Snapshot) withSnapshotConn(ctx context.Context, fn func(conn *sql.Conn)
 	if conn, err = s.acquireSnapshotConn(ctx); err != nil {
 		return fmt.Errorf("acquiring snapshot connection: %w", withConnectionCapacityHint(err))
 	}
+	s.connsInUse.Add(1)
 	defer func() {
+		s.connsInUse.Add(-1)
 		if closeErr := conn.Close(); closeErr != nil {
 			// snapshot has completed at this point so logging the error is sufficient.
 			s.log.Errorf("Closing snapshot connection: %v", closeErr)
@@ -499,7 +502,9 @@ func (s *Snapshot) withSnapshotConn(ctx context.Context, fn func(conn *sql.Conn)
 // another connection, it waits and retries, using the configured backoff, rather than
 // failing the snapshot: once workers hold connections, each one they return to the pool is
 // reused by the next acquire, so the snapshot continues with as many workers as the
-// database allows. It gives up once the backoff's max elapsed time passes.
+// database allows. It gives up once the backoff's max elapsed time passes, but only while
+// no other worker holds a connection: until then the snapshot is still progressing, though
+// each connection returned may be reused by the next chunk to start rather than this one.
 func (s *Snapshot) acquireSnapshotConn(ctx context.Context) (*sql.Conn, error) {
 	retry := s.connBackoff // each acquire needs its own backoff state
 	retry.Reset()
@@ -510,7 +515,11 @@ func (s *Snapshot) acquireSnapshotConn(ctx context.Context) (*sql.Conn, error) {
 		}
 		delay := retry.NextBackOff()
 		if delay == backoff.Stop {
-			return nil, err
+			if s.connsInUse.Load() == 0 {
+				return nil, err
+			}
+			retry.Reset()
+			delay = retry.NextBackOff()
 		}
 		s.connCapacityWarnOnce.Do(func() {
 			s.log.Warnf("Database has no capacity for another snapshot connection, so snapshot workers will wait for one to be released; lower max_parallel_snapshot_tables to stay within the database's processes and sessions limits: %v", err)

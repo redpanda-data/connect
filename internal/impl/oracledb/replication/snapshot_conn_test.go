@@ -9,13 +9,20 @@
 package replication
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io"
 	"testing"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	goora "github.com/sijms/go-ora/v2/network"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsConnectionCapacityError(t *testing.T) {
@@ -42,4 +49,48 @@ func TestIsConnectionCapacityError(t *testing.T) {
 			assert.Equal(t, tt.want, isConnectionCapacityError(tt.err))
 		})
 	}
+}
+
+// noCapacityConnector is a driver.Connector whose every connection attempt fails as if
+// the database had no room for another connection.
+type noCapacityConnector struct{}
+
+func (noCapacityConnector) Connect(context.Context) (driver.Conn, error) {
+	return nil, goora.NewOracleError(12516)
+}
+
+func (noCapacityConnector) Driver() driver.Driver { return nil }
+
+func TestAcquireSnapshotConnGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
+	newSnapshot := func(t *testing.T) *Snapshot {
+		t.Helper()
+		db := sql.OpenDB(noCapacityConnector{})
+		t.Cleanup(func() { _ = db.Close() })
+		connBackoff := backoff.NewExponentialBackOff()
+		connBackoff.InitialInterval = time.Millisecond
+		connBackoff.MaxInterval = 5 * time.Millisecond
+		connBackoff.MaxElapsedTime = 20 * time.Millisecond
+		return &Snapshot{dbPool: db, connBackoff: *connBackoff, log: service.MockResources().Logger()}
+	}
+
+	t.Run("no other connection held", func(t *testing.T) {
+		s := newSnapshot(t)
+
+		_, err := s.acquireSnapshotConn(t.Context())
+
+		var oraErr *goora.OracleError
+		require.ErrorAs(t, err, &oraErr, "Expected the capacity error once max elapsed time passes")
+		assert.Equal(t, 12516, oraErr.ErrCode)
+	})
+
+	t.Run("another connection held", func(t *testing.T) {
+		s := newSnapshot(t)
+		s.connsInUse.Add(1)
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		defer cancel()
+
+		_, err := s.acquireSnapshotConn(ctx)
+
+		assert.ErrorIs(t, err, context.DeadlineExceeded, "Expected to keep waiting past max elapsed time while another connection is held")
+	})
 }

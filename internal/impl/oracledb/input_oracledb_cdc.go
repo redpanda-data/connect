@@ -159,7 +159,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Version("4.99.0"),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables (or, for large tables split into range chunks, table chunks) that are processed in parallel during the snapshot processing stage. Tables are only split into chunks when this is greater than 1.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff, failing the snapshot only if none becomes available in time. See `" + ociFieldSnapshotConnBackoff + "`.").
+		Description("Specifies a number of tables (or, for large tables split into range chunks, table chunks) that are processed in parallel during the snapshot processing stage. Tables are only split into chunks when this is greater than 1.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff, failing the snapshot only if no reader can get a connection in time. See `" + ociFieldSnapshotConnBackoff + "`.").
 		Version("4.69.0").
 		Default(1).
 		LintRule(`root = if this <= 0 { [ "` + ociFieldMaxParallelSnapshotTables + ` must be greater than 0" ] }`),
@@ -170,7 +170,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		LintRule(`root = if this <= 0 { [ "` + ociFieldSnapshotMaxBatchSize + ` must be greater than 0" ] }`),
 	).
 	Field(service.NewBackOffField(ociFieldSnapshotConnBackoff, false, replication.DefaultSnapshotConnBackoff()).
-		Description("Instead of failing a snapshot, the connector retries acquiring a connection when the database has no capacity for another one, for example when `" + ociFieldMaxParallelSnapshotTables + "` exceeds its `processes` or `sessions` limits. Readers wait for a connection to be released, retrying with exponential backoff, and the snapshot fails if a reader can't get one within `" + ociFieldSnapshotConnBackoff + ".max_elapsed_time`.").
+		Description("Instead of failing a snapshot, the connector retries acquiring a connection when the database has no capacity for another one, for example when `" + ociFieldMaxParallelSnapshotTables + "` exceeds its `processes` or `sessions` limits. Readers wait for a connection to be released, retrying with exponential backoff. The snapshot fails only if a reader can't get one within `" + ociFieldSnapshotConnBackoff + ".max_elapsed_time` while no other reader holds a connection; while another reader holds one, the snapshot is still progressing, so the reader keeps waiting.").
 		Version("4.117.0").
 		Advanced(),
 	).
