@@ -15,20 +15,45 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 )
 
-// dockerCleanup removes all Docker containers between test packages.
-// Skipped in CI environments.
-func dockerCleanup() {
+// sessionLabel is the label that testcontainers-go puts on each container and
+// network it starts. Its value is TESTCONTAINERS_SESSION_ID when that is set.
+const sessionLabel = "org.testcontainers.sessionId"
+
+// packageSessionID returns the testcontainers session ID for one package of
+// this runner process. The runner sets it as TESTCONTAINERS_SESSION_ID, so that
+// dockerCleanup can find the containers of that package and no others.
+//
+// testcontainers-go already gives each go test process its own session ID, but
+// it derives that ID from the parent PID, so the runner cannot know it.
+func packageSessionID(runnerPID int, pkgPath string) string {
+	return fmt.Sprintf("rpcn-it-%d-%s", runnerPID, strings.TrimSuffix(pkgFilename(pkgPath), ".txt"))
+}
+
+// dockerCleanup removes the containers and networks of one testcontainers
+// session after its package is done. Containers of other sessions, for example
+// other packages that run at the same time, stay. Skipped in CI environments.
+func dockerCleanup(sessionID string) {
 	if os.Getenv("CI") != "" {
 		return
 	}
 
-	listCmd := exec.Command("docker", "ps", "-aq", "--filter", "label=org.testcontainers=true")
-	out, err := listCmd.Output()
+	filter := "label=" + sessionLabel + "=" + sessionID
+	// Remove the containers first, because Docker does not remove a network
+	// that a container still uses.
+	dockerRemove([]string{"ps", "-aq", "--filter", filter}, "rm", "-f")
+	dockerRemove([]string{"network", "ls", "-q", "--filter", filter}, "network", "rm")
+}
+
+// dockerRemove runs the list command and then the remove command on the IDs
+// that it prints. It does nothing when the list is empty or fails.
+func dockerRemove(list []string, remove ...string) {
+	out, err := exec.Command("docker", list...).Output()
 	if err != nil {
 		return
 	}
@@ -36,6 +61,5 @@ func dockerCleanup() {
 	if len(ids) == 0 {
 		return
 	}
-	args := append([]string{"rm", "-f"}, ids...)
-	_ = exec.Command("docker", args...).Run()
+	_ = exec.Command("docker", append(remove, ids...)...).Run()
 }

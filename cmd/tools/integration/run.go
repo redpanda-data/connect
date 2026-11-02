@@ -150,7 +150,8 @@ func cmdRun(args []string) error {
 			continue
 		}
 
-		res := runPackageTest(pkg, short, pkgOutFile, cached, out)
+		sessionID := packageSessionID(os.Getpid(), pkg.Path)
+		res := runPackageTest(pkg, short, pkgOutFile, sessionID, cached, out)
 
 		switch res.status {
 		case ResultPass:
@@ -162,7 +163,7 @@ func cmdRun(args []string) error {
 		}
 		out.PackageResult(short, res.status, res.duration)
 
-		dockerCleanup()
+		dockerCleanup(sessionID)
 	}
 
 	// Final report.
@@ -185,8 +186,9 @@ type packageResult struct {
 }
 
 // runPackageTest executes `go test -json` for a single package, parses JSON
-// events, streams filtered output, and returns the result.
-func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache, out *Output) packageResult {
+// events, streams filtered output, and returns the result. The containers of
+// the package get the testcontainers session ID sessionID.
+func runPackageTest(pkg TestPackage, short, outFile, sessionID string, cached PackageCache, out *Output) packageResult {
 	result := packageResult{outFile: outFile}
 
 	// Count existing lines without loading the file into memory (fix #4).
@@ -244,7 +246,7 @@ func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache,
 	}
 	goArgs = append(goArgs, pkg.Path)
 	cmd := exec.Command("go", goArgs...)
-	cmd.Env = os.Environ()
+	cmd.Env = append(os.Environ(), "TESTCONTAINERS_SESSION_ID="+sessionID)
 	if runArgs.race {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
 	}
