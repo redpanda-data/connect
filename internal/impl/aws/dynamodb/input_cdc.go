@@ -1942,11 +1942,11 @@ func (p *parentPrepareFailures) prune(listed map[string]struct{}) {
 // startPolicy.current). The caller reads it once per cycle, so all shards of
 // the cycle start in the same way.
 //
-// The order does not apply while start_from: latest applies (the first
-// discovery of a new pipeline). Then every shard starts at LATEST, so a
-// parent has no unread records that its child could overtake. If discovery
-// held the child back, the child would start at TRIM_HORIZON on a later
-// cycle and deliver records that the user asked to skip.
+// With startType LATEST (the first discovery of a new pipeline under
+// start_from: latest), a child shard is not held back. Every shard then
+// starts at LATEST, so a parent has no older updates that its child can
+// overtake. If the child was held back, it would start at TRIM_HORIZON on a
+// later cycle and deliver records that the user asked to skip.
 func (d *dynamoDBCDCInput) prepareNewShards(ctx context.Context, cp *Checkpointer, streamArn *string, shards []types.Shard, status func(string) shardStatus, parents *parentPrepareFailures, tableSuffix string, startType types.ShardIteratorType) []preparedShard {
 	var (
 		prepared     []preparedShard
