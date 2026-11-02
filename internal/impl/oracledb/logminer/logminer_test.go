@@ -346,7 +346,6 @@ func TestMinedCheckpointSCN(t *testing.T) {
 		name         string
 		currentSCN   uint64
 		lowWatermark uint64
-		lobInFlight  bool
 		wantSCN      uint64
 		wantOK       bool
 	}{
@@ -372,12 +371,6 @@ func TestMinedCheckpointSCN(t *testing.T) {
 			wantOK:       true,
 		},
 		{
-			name:         "lob in flight skips the checkpoint",
-			currentSCN:   1000,
-			lowWatermark: math.MaxUint64,
-			lobInFlight:  true,
-		},
-		{
 			name:         "low watermark of 1 gives 0 and is skipped",
 			currentSCN:   1000,
 			lowWatermark: 1,
@@ -385,7 +378,7 @@ func TestMinedCheckpointSCN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotSCN, gotOK := minedCheckpointSCN(tt.currentSCN, tt.lowWatermark, tt.lobInFlight)
+			gotSCN, gotOK := minedCheckpointSCN(tt.currentSCN, tt.lowWatermark)
 			assert.Equal(t, tt.wantOK, gotOK)
 			if tt.wantOK {
 				assert.Equal(t, tt.wantSCN, gotSCN)
@@ -411,6 +404,23 @@ func TestCheckpointMinedPositionThrottle(t *testing.T) {
 	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(minedCheckpointInterval)))
 
 	assert.Equal(t, []replication.SCN{100, 300}, pub.windows)
+}
+
+// TestCheckpointMinedPositionOpenLOBTransaction verifies that an open transaction with only LOB events caps
+// the mined checkpoint below its start, and does not stop it. Its first LOB event puts it in the low watermark.
+func TestCheckpointMinedPositionOpenLOBTransaction(t *testing.T) {
+	ctx := t.Context()
+	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`
+
+	lm, pub, cache := newLOBReplayMiner(t)
+	lm.currentSCN = 100
+	require.NoError(t, cache.StartTransaction(ctx, "open", 30))
+	require.NoError(t, lm.processRedoEvent(ctx, lobEv(31, "open", sqlredo.OpSelectLobLocator, locator)))
+	require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(32, "open", "abc", 1)))
+	require.NotEmpty(t, lm.lobStates)
+
+	require.NoError(t, lm.checkpointMinedPosition(ctx, time.Now()))
+	assert.Equal(t, []replication.SCN{29}, pub.windows)
 }
 
 // TestBasicfileOORInferFromLOBOnlyUpdate covers the exact CI failure scenario where:

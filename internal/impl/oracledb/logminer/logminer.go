@@ -447,8 +447,7 @@ func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) 
 	if now.Sub(lm.lastMinedCheckpoint) < minedCheckpointInterval {
 		return nil
 	}
-	lobInFlight := len(lm.lobStates) > 0 || len(lm.pendingLOBWrites) > 0
-	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""), lobInFlight)
+	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""))
 	if !ok {
 		// Nothing was marked, so the next cycle tries again.
 		return nil
@@ -461,12 +460,9 @@ func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) 
 // cycle, and false if there is none. It stays below open transactions, as the
 // commit path does. The low watermark also counts transactions with only LOB
 // events (see TransactionCache.IncludeInLowWatermark) and the transactions of an
-// open LOB replay (see LogMiner.lowWatermarkSCN). lobInFlight is an extra,
-// conservative guard: it skips the checkpoint while LOB state is in memory.
-func minedCheckpointSCN(currentSCN, lowWatermark uint64, lobInFlight bool) (uint64, bool) {
-	if lobInFlight {
-		return 0, false
-	}
+// open LOB replay (see LogMiner.lowWatermarkSCN), so LOB state in memory needs
+// no extra check.
+func minedCheckpointSCN(currentSCN, lowWatermark uint64) (uint64, bool) {
 	scn := capBelowOpenTxn(currentSCN, lowWatermark)
 	return scn, scn > 0
 }
