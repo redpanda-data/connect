@@ -25,11 +25,16 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -228,6 +233,37 @@ input:
 			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
 			integration.StreamTestOptVarSet("VAR3", connString),
 		)
+	})
+
+	t.Run("blob_storage_append_create_race", func(t *testing.T) {
+		// Two writers append to a new blob. Both get BlobNotFound. Writer A creates the blob and appends. Then
+		// writer B calls Create. This test seeds the blob as writer A, and makes writer B see a fake BlobNotFound.
+		containerName := dummyContainer + "-create-race"
+		blobName := dummyPrefix + "/data.txt"
+
+		seedClient, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = seedClient.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+		seedBlob := seedClient.ServiceClient().NewContainerClient(containerName).NewAppendBlobClient(blobName)
+		_, err = seedBlob.Create(t.Context(), nil)
+		require.NoError(t, err)
+		_, err = seedBlob.AppendBlock(t.Context(), streaming.NopCloser(strings.NewReader("first")), nil)
+		require.NoError(t, err)
+
+		raceClient, err := azblob.NewClientFromConnectionString(connString, &azblob.ClientOptions{
+			PerCallPolicies: []policy.Policy{&blobNotFoundOnFirstAppendPolicy{}},
+		})
+		require.NoError(t, err)
+		w := &azureBlobStorageWriter{conf: bsoConfig{client: raceClient}}
+		require.NoError(t, w.uploadBlob(t.Context(), containerName, blobName, "APPEND", []byte("second")))
+
+		resp, err := seedClient.DownloadStream(t.Context(), containerName, blobName, nil)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		content, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "firstsecond", string(content))
 	})
 
 	t.Run("queue_storage", func(t *testing.T) {
@@ -555,4 +591,23 @@ enable_content_response_on_write: true
 			assert.Contains(t, data, "blobfish")
 		}
 	})
+}
+
+// blobNotFoundOnFirstAppendPolicy is an Azure pipeline policy that tests use to open the race window in uploadBlob.
+// It returns a fake BlobNotFound response for the first Append Block request and does not send that request.
+// It sends all other requests.
+type blobNotFoundOnFirstAppendPolicy struct {
+	done atomic.Bool
+}
+
+func (p *blobNotFoundOnFirstAppendPolicy) Do(req *policy.Request) (*http.Response, error) {
+	if req.Raw().URL.Query().Get("comp") == "appendblock" && p.done.CompareAndSwap(false, true) {
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Header:     http.Header{"X-Ms-Error-Code": []string{string(bloberror.BlobNotFound)}},
+			Body:       http.NoBody,
+			Request:    req.Raw(),
+		}, nil
+	}
+	return req.Next()
 }
