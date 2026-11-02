@@ -54,6 +54,12 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      # Linux AIO events are shared by all containers on the host, and the default limit is 65536. Redpanda and
+      # MySQL reserve them at startup, so packages that run at the same time use them up, and containers fail
+      # with "io_setup() failed with EAGAIN" or exit early.
+      - name: Raise the AIO limit
+        run: sudo sysctl -w fs.aio-max-nr=1048576
+
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
@@ -173,6 +179,12 @@ jobs:
 
       - name: Verify Integration Tests Registry
         run: task test:integration:verify
+
+      # Linux AIO events are shared by all containers on the host, and the default limit is 65536. Redpanda and
+      # MySQL reserve them at startup, so packages that run at the same time use them up, and containers fail
+      # with "io_setup() failed with EAGAIN" or exit early.
+      - name: Raise the AIO limit
+        run: sudo sysctl -w fs.aio-max-nr=1048576
 
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
