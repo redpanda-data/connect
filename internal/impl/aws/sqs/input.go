@@ -89,6 +89,7 @@ func sqsInputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Consume messages from an AWS SQS URL.`).
 		Description(`
+[[credentials-overview]]
 == Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS
@@ -100,9 +101,9 @@ xref:guides:cloud/aws.adoc[AWS credentials].
 
 This input adds the following metadata fields to each message:
 
-- sqs_message_id
-- sqs_receipt_handle
-- sqs_approximate_receive_count
+- `+"`sqs_message_id`"+`
+- `+"`sqs_receipt_handle`"+`
+- `+"`sqs_approximate_receive_count`"+`
 - All message attributes
 
 You can access these metadata fields using

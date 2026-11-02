@@ -105,7 +105,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 						"With a topic-backed cache such as `redpanda`, this produces one new record per file to the cache topic, not to the pipeline's output. "+
 						"This cannot be undone, so a file that was modified after it was last consumed but before the switch is never consumed again unless its cache entry is removed. "+
 						"Downgrading to a Redpanda Connect version without `cache_mode` while files are pending leaves those files unconsumed until their cache entries are removed.").
-					ShortDescription("What the watcher stores in the cache per file: `path` alone, or `path_and_mod_time` to re-consume modified files.").
+					ShortDescription("What the watcher stores in the cache per file: path alone, or path_and_mod_time to re-consume modified files.").
 					Version("4.116.0").
 					Default(watcherCacheModePathName).
 					Advanced(),

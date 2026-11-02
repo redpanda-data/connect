@@ -109,6 +109,7 @@ openssl pkcs8 -in rsa_key_original.p8 -topk8 -v2 des3 -out rsa_key.p8
 
 Please consult the https://linux.die.net/man/1/pkcs8[pkcs8 command documentation^] for details on PKCS#5 algorithms.
 
+[[batching-overview]]
 == Batching
 
 It's common to want to upload messages to Snowflake as batched archives. The easiest way to do this is to batch your
@@ -118,6 +119,7 @@ processor.
 
 For the optimal batch size, please consult the Snowflake https://docs.snowflake.com/en/user-guide/data-load-considerations-prepare.html[documentation^].
 
+[[snowpipe-overview]]
 == Snowpipe
 
 Given a table called `+"`BENTHOS_TBL`"+` with one column of type `+"`variant`"+`:

@@ -125,7 +125,7 @@ require (
 	github.com/jackc/pgio v1.0.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jhump/protoreflect v1.18.0
-	github.com/klauspost/compress v1.20.0
+	github.com/klauspost/compress v1.20.3
 	github.com/lib/pq v1.12.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
@@ -190,10 +190,10 @@ require (
 	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.333.0
 	github.com/twmb/avro v1.8.0
-	github.com/twmb/franz-go v1.21.6
-	github.com/twmb/franz-go/pkg/kadm v1.18.0
-	github.com/twmb/franz-go/pkg/kfake v0.0.0-20260812145205-b8814509d953 // untagged; same monorepo commit as franz-go v1.21.6
-	github.com/twmb/franz-go/pkg/kmsg v1.13.1
+	github.com/twmb/franz-go v1.22.2
+	github.com/twmb/franz-go/pkg/kadm v1.19.0
+	github.com/twmb/franz-go/pkg/kfake v0.0.0-20261013022759-7b6cac30a57a // untagged; same monorepo commit as franz-go v1.22.2
+	github.com/twmb/franz-go/pkg/kmsg v1.15.0
 	github.com/twmb/franz-go/pkg/sr v1.8.0
 	github.com/twmb/go-cache v1.3.0
 	github.com/urfave/cli/v2 v2.27.7
@@ -463,7 +463,7 @@ require (
 	github.com/paulmach/orb v0.12.0 // indirect
 	github.com/petermattis/goid v0.0.0-20260226131333-17d1149c6ac6 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
-	github.com/pierrec/lz4/v4 v4.1.29 // indirect
+	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/pingcap/errors v0.11.5-0.20250523034308-74f78ae071ee // indirect
 	github.com/pingcap/failpoint v0.0.0-20251231045439-91d91e123837 // indirect
 	github.com/pingcap/log v1.1.1-0.20241212030209-7e3ff8601a2a // indirect
