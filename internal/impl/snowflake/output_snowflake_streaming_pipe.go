@@ -186,7 +186,7 @@ Defaults to a single constant channel, `+"`<database-name>.<schema-name>.<pipe-n
 			service.NewInterpolatedStringField(ssopFieldOffsetToken).
 				Description(`The offset token used for exactly-once delivery. Each message's token is compared to the channel's last committed token (numerically when both are integers, otherwise byte-wise as strings); a message whose token is not newer is dropped as a duplicate. Delivery to the output must therefore be ordered, and messages within a batch must be in increasing token order; a retried batch may be dropped as duplicate if later batches succeeded meanwhile, so use a dead-letter queue for failures.
 
-Non-integer tokens *must be fixed-width* for string order to be meaningful (`+"`0/F`"+` sorts after `+"`0/10`"+`). `+"`postgres_cdc`"+`'s `+"`@lsn`"+` already is; zero-pad anything you assemble yourself.
+Non-integer tokens *must be fixed-width* for string order to be meaningful (`+"`0/F`"+` sorts after `+"`0/10`"+`). the `+"`@lsn`"+` metadata from `+"`postgres_cdc`"+` already is; zero-pad anything you assemble yourself.
 
 If unset, nothing is deduplicated and delivery is at-least-once; a retried batch spanning several channels re-appends on every channel that already landed.
 
@@ -269,7 +269,7 @@ output:
 			"Exactly once CDC into Snowflake",
 			`How to send data from a PostgreSQL table into Snowflake exactly once using Postgres Logical Replication.
 
-NOTE: A single ordered stream feeding the default channel, so `+"`max_in_flight: 1`"+` is required (see `+"`"+ssopFieldChannelName+"`"+`'s docs). To run at-least-once instead, remove `+"`"+ssopFieldOffsetToken+"`"+` (on a fresh `+"`"+ssopFieldChannelName+"`"+` if the pipeline has already run).`,
+NOTE: A single ordered stream feeding the default channel, so `+"`max_in_flight: 1`"+` is required (see the `+"`"+ssopFieldChannelName+"`"+` field). To run at-least-once instead, remove `+"`"+ssopFieldOffsetToken+"`"+` (on a fresh `+"`"+ssopFieldChannelName+"`"+` if the pipeline has already run).`,
 			`
 input:
   postgres_cdc:
