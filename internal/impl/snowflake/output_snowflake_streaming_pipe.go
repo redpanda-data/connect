@@ -186,7 +186,7 @@ Defaults to a single constant channel, `+"`<database-name>.<schema-name>.<pipe-n
 			service.NewInterpolatedStringField(ssopFieldOffsetToken).
 				Description(`The offset token used for exactly-once delivery. Each message's token is compared to the channel's last committed token (numerically when both are integers, otherwise byte-wise as strings); a message whose token is not newer is dropped as a duplicate. Delivery to the output must therefore be ordered, and messages within a batch must be in increasing token order; a retried batch may be dropped as duplicate if later batches succeeded meanwhile, so use a dead-letter queue for failures.
 
-Non-integer tokens *must be fixed-width* for string order to be meaningful (`+"`0/F`"+` sorts after `+"`0/10`"+`). the `+"`@lsn`"+` metadata from `+"`postgres_cdc`"+` already is; zero-pad anything you assemble yourself.
+Non-integer tokens *must be fixed-width* for string order to be meaningful (`+"`0/F`"+` sorts after `+"`0/10`"+`). The `+"`@lsn`"+` metadata from `+"`postgres_cdc`"+` already is; zero-pad anything you assemble yourself.
 
 If unset, nothing is deduplicated and delivery is at-least-once; a retried batch spanning several channels re-appends on every channel that already landed.
 
