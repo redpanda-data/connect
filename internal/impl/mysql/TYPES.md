@@ -61,7 +61,8 @@ rely on them.
 - **Date strings**: CDC delivers DATE values, zero datetimes (e.g. `"0000-00-00 00:00:00"`)
   and every DATETIME before 1970 as strings. `mapMessageColumn` parses these into
   `time.Time`, and converts zero and partial-zero values (month or day `00`) to `nil`.
-  The snapshot gives `0001-01-01` for a zero value instead.
+  The snapshot turns off the driver's `parseTime`, scans these columns as strings,
+  and parses them with the same `parseMySQLTime`, so both paths give `nil`.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
   won't encounter.

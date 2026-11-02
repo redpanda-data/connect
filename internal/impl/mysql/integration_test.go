@@ -11,6 +11,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -746,7 +747,7 @@ memory: {}
 	require.JSONEq(t, `{"id": 3, "d": null, "dt": null, "dt6": null}`, outBatches[2])
 }
 
-// The parseBinlogTime comment says when go-mysql gives a string for a DATE or
+// The parseMySQLTime comment says when go-mysql gives a string for a DATE or
 // DATETIME value. This test reads the binlog with go-mysql directly, so it
 // fails if that rule is wrong or if a go-mysql upgrade changes it. It then
 // gives each raw value to mapMessageColumn, as the input does.
@@ -891,6 +892,88 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// The snapshot must give the same value as the stream for a zero or
+// partial-zero date: null. A stored 0001-01-01 must stay a date. A zero date
+// in a primary key must not stop the snapshot, because the next batch starts
+// after the last key that it read.
+func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`CREATE TABLE zero_dates (id INT PRIMARY KEY, d DATE, dt DATETIME, ts TIMESTAMP NULL)`)
+	db.Exec(`CREATE TABLE zero_date_keys (d DATE PRIMARY KEY)`)
+	// The default SQL mode rejects zero dates. multiStatements keeps both
+	// statements on one connection.
+	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO zero_dates VALUES
+        (1, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00'),
+        (2, '2024-00-15', '2024-00-15 10:00:00', '2024-00-15 10:00:00'),
+        (3, '2024-12-00', '2024-12-00 10:00:00', '2024-12-00 10:00:00'),
+        (4, '0001-01-01', '0001-01-01 00:00:00', '2024-06-01 12:00:00')`)
+	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO zero_date_keys VALUES ('0000-00-00'), ('2024-00-15'), ('2024-06-01')`)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.AddCacheYAML(`
+label: memcache
+memory: {}
+`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 1
+  checkpoint_cache: memcache
+  tables:
+    - zero_dates
+    - zero_date_keys
+`, dsn)))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		_ = streamOut.Run(t.Context())
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	want := []string{
+		`{"id": 1, "d": null, "dt": null, "ts": null}`,
+		`{"id": 2, "d": null, "dt": null, "ts": null}`,
+		`{"id": 3, "d": null, "dt": null, "ts": null}`,
+		`{"id": 4, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": "2024-06-01T12:00:00Z"}`,
+		`{"d": null}`,
+		`{"d": null}`,
+		`{"d": "2024-06-01T00:00:00Z"}`,
+	}
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		require.Len(c, outBatches, len(want))
+		var got, wantNorm []any
+		for i := range want {
+			var g, w any
+			require.NoError(c, json.Unmarshal([]byte(outBatches[i]), &g))
+			require.NoError(c, json.Unmarshal([]byte(want[i]), &w))
+			got = append(got, g)
+			wantNorm = append(wantNorm, w)
+		}
+		assert.ElementsMatch(c, wantNorm, got)
+	}, 30*time.Second, 100*time.Millisecond)
 }
 
 func TestIntegrationMySQLSnapshotConsistency(t *testing.T) {
