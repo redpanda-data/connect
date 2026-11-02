@@ -2535,9 +2535,7 @@ func lastRecordSequenceNumber(records []types.Record) string {
 // The zero value starts every shard at TRIM_HORIZON, so a policy that was
 // never loaded cannot skip records.
 type startPolicy struct {
-	// latest is true while current returns LATEST: from load on a new
-	// pipeline with start_from: latest, until the first discovery cycle that
-	// adds shards. Discovery reads it once per cycle through current.
+	// latest is true while shards without a checkpoint start at LATEST.
 	latest atomic.Bool
 }
 
@@ -2547,6 +2545,9 @@ func (p *startPolicy) load(ctx context.Context, cp *Checkpointer, startFrom stri
 	if err != nil {
 		return fmt.Errorf("probing checkpoint state: %w", err)
 	}
+	// State in the store means a restart. Then a shard without a checkpoint
+	// can have records that no run delivered, for example a child shard
+	// created while the pipeline was down, so it starts at TRIM_HORIZON.
 	p.latest.Store(startFrom == "latest" && !hasState)
 	return nil
 }
