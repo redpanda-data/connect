@@ -398,21 +398,8 @@ func TestIntegrationOracleDBCDCIdleCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	tests := []struct {
-		name           string
-		windowStrategy string
-	}{
-		{
-			name:           "scn_window",
-			windowStrategy: "scn_window",
-		},
-		{
-			name:           "redo_volume",
-			windowStrategy: "redo_volume",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, windowStrategy := range []string{"scn_window", "redo_volume"} {
+		t.Run(windowStrategy, func(t *testing.T) {
 			t.Parallel()
 
 			connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -439,7 +426,7 @@ oracledb_cdc:
   checkpoint_cache_table_name: `+db.CheckpointTable()+`
   snapshot_mode: none
   logminer:
-    window_strategy: `+tc.windowStrategy+`
+    window_strategy: `+windowStrategy+`
     min_scn_window_size: 0
     backoff_interval: 1s
   include: ["`+strings.ToUpper(tracked)+`"]
