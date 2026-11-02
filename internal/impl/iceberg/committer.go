@@ -251,6 +251,9 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
 	}
+	// Same shape for the retry interval: config lint rejects a non-positive
+	// value at startup, so this only covers callers constructing a committer
+	// directly (tests), where the zero value should mean "the default".
 	if cfg.UnsupportedUpdateRetryInterval <= 0 {
 		cfg.UnsupportedUpdateRetryInterval = defaultUnsupportedUpdateRetryInterval
 	}

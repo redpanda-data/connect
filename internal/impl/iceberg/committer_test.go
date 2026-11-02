@@ -27,6 +27,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	// Registers the standard Bloblang methods (parse_duration) that the
+	// commit field lint rules use.
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
 // memCatalog is a minimal in-memory table.CatalogIO used to drive transaction
@@ -463,6 +467,52 @@ iceberg:
 				assert.NotEmpty(t, found, "expected a max_retries lint, got: %v", lints)
 			} else {
 				assert.Empty(t, found, "expected no max_retries lint, got: %v", found)
+			}
+		})
+	}
+}
+
+// TestUnsupportedUpdateRetryIntervalLint pins the config lint rule: a zero or
+// negative unsupported_update_retry_interval must produce a lint error rather
+// than being silently replaced by the default inside NewCommitter.
+func TestUnsupportedUpdateRetryIntervalLint(t *testing.T) {
+	linter := service.GlobalEnvironment().NewComponentConfigLinter()
+	base := func(extra string) string {
+		return `
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+  storage:
+    aws_s3:
+      bucket: b
+` + extra
+	}
+	cases := []struct {
+		name     string
+		extra    string
+		wantLint bool
+	}{
+		{"default (no commit block)", "", false},
+		{"explicit valid", "  commit:\n    unsupported_update_retry_interval: 10m\n", false},
+		{"zero", "  commit:\n    unsupported_update_retry_interval: 0s\n", true},
+		{"negative", "  commit:\n    unsupported_update_retry_interval: -1h\n", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lints, err := linter.LintOutputYAML([]byte(base(tc.extra)))
+			require.NoError(t, err)
+			var found []string
+			for _, l := range lints {
+				if strings.Contains(l.Error(), ioFieldUnsupportedRetry) {
+					found = append(found, l.Error())
+				}
+			}
+			if tc.wantLint {
+				assert.NotEmpty(t, found, "expected an %s lint, got: %v", ioFieldUnsupportedRetry, lints)
+			} else {
+				assert.Empty(t, found, "expected no %s lint, got: %v", ioFieldUnsupportedRetry, found)
 			}
 		})
 	}
