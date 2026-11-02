@@ -394,6 +394,25 @@ func TestMinedCheckpointSCN(t *testing.T) {
 	}
 }
 
+// TestCheckpointMinedPositionThrottle verifies that the mined position is marked at most once per
+// minedCheckpointInterval. Each mark can write the checkpoint and waits for earlier batches, so a mark
+// after every mining cycle is too frequent.
+func TestCheckpointMinedPositionThrottle(t *testing.T) {
+	ctx := t.Context()
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default())))
+	start := time.Unix(1_700_000_000, 0)
+
+	lm.currentSCN = 100
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start))
+	lm.currentSCN = 200
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(minedCheckpointInterval-time.Second)))
+	lm.currentSCN = 300
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(minedCheckpointInterval)))
+
+	assert.Equal(t, []replication.SCN{100, 300}, pub.windows)
+}
+
 // TestBasicfileOORInferFromLOBOnlyUpdate covers the exact CI failure scenario where:
 //   - A BASICFILE DISABLE STORAGE IN ROW LOB column (OOL_COL) has its LOB_WRITE events
 //     arrive before any DML event; all are deferred.

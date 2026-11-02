@@ -472,7 +472,7 @@ oracledb_cdc:
 				scn, err := savedSCN()
 				require.NoError(c, err)
 				assert.GreaterOrEqual(c, scn, targetSCN, "saved checkpoint must reach the database SCN")
-			}, 15*time.Second, time.Second)
+			}, 30*time.Second, time.Second, "the mined position is marked about every 10 seconds")
 		})
 	}
 }

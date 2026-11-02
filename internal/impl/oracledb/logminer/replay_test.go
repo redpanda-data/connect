@@ -304,7 +304,7 @@ func TestCheckpointMinedPositionInterruptedLOBReplay(t *testing.T) {
 	require.Equal(t, uint64(30), replay.fromSCN)
 	lm.lobReplay = replay
 
-	require.NoError(t, lm.checkpointMinedPosition(ctx))
+	require.NoError(t, lm.checkpointMinedPosition(ctx, time.Now()))
 	for _, scn := range pub.windows {
 		assert.Less(t, scn, replication.SCN(replay.fromSCN), "checkpoint must stay below the start of the interrupted LOB replay")
 	}
