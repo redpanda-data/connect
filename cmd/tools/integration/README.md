@@ -22,6 +22,7 @@ task test:integration
 | `--race` | Enable race detector (sets `CGO_ENABLED=1`) |
 | `--unit` | Run all tests, not just integration tests |
 | `--cover-profile` | Generate coverage profile per package (`.cov` files) |
+| `--parallel` | Number of packages to test at the same time (default: 1) |
 
 `--output-dir` and `--clean` are mutually exclusive.
 
@@ -44,6 +45,8 @@ go run ./cmd/tools/integration run kafka redis
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
 
 - **Docker Cleanup** -- Each package gets its own `TESTCONTAINERS_SESSION_ID`. After a package is done, the runner removes the containers and networks of that session to prevent resource leaks. Containers of other sessions stay, also orphans from an interrupted earlier run. Skipped in CI environments.
+
+- **Parallel Packages** -- `--parallel N` tests up to N packages at the same time. The runner starts them in the order of [`packages.json`](packages.json). Each package writes its terminal output and its `index.md` section as one block when it is done, so the packages show in the order they finish. Keep the default of 1 on a small Docker VM: packages that run at the same time share its CPU and memory.
 
 - **Race Detection** -- The `--race` flag enables Go's race detector with `CGO_ENABLED=1` set automatically.
 
