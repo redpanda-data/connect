@@ -344,13 +344,10 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 	return ranges, method, nil
 }
 
-// sampleChunkRanges samples table's primary key keyspace and splits it into up to
-// maxWorkers roughly even ranges. Tables that are too small or lack optimizer statistics
-// (needed to size the sample) get a single unbounded range.
-//
-// Row SAMPLE is used rather than SAMPLE BLOCK: it reads the whole primary key index, but
-// returns keys spread across the keyspace. SAMPLE BLOCK picks whole multiblock reads, so it
-// returns either no rows or a few contiguous runs of keys, which skews the chunks.
+// sampleChunkRanges splits table's primary key keyspace into up to maxWorkers roughly even
+// ranges by sampling it. Tables that are too small or have no optimizer statistics get a
+// single unbounded range. It uses row SAMPLE because SAMPLE BLOCK returns contiguous runs
+// of keys, which skews the chunks.
 func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
 	const (
 		// overSampleFactor is the number of primary key samples drawn per worker when planning
