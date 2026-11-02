@@ -595,6 +595,210 @@ mongodb_cdc:
 	assert.Equal(t, 4, got.signals, "signal inserts emitted")
 }
 
+// signalsOnlyInput reads on demand: no snapshot of its own, incremental or
+// blocking, so only a snapshot-execute signal reads a collection.
+const signalsOnlyInput = `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  username: mongoadmin
+  password: secret
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  incremental_snapshot:
+    chunk_size: 20
+  signal_collection_name: signals
+  collections:
+    - 'foo'
+    - 'bar'
+    - 'markers'
+`
+
+// streamSnapshotSignalsInput is signalsOnlyInput with the blocking snapshot
+// on the first start.
+const streamSnapshotSignalsInput = `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  username: mongoadmin
+  password: secret
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  stream_snapshot: true
+  incremental_snapshot:
+    chunk_size: 20
+  signal_collection_name: signals
+  collections:
+    - 'foo'
+    - 'bar'
+    - 'markers'
+`
+
+// waitStreamed inserts marker documents into the markers collection until one
+// is streamed, which proves the input is past any snapshot and streaming. A
+// first start without a stored position streams from the moment it connects,
+// so a marker written before that is never delivered and another is written.
+func (h *incrementalHarness) waitStreamed(prefix string) {
+	h.t.Helper()
+	written := 0
+	require.Eventually(h.t, func() bool {
+		written++
+		if _, err := h.db.Collection("markers").InsertOne(h.t.Context(), bson.M{"_id": fmt.Sprintf("%s-%d", prefix, written), "v": 0}); err != nil {
+			h.t.Logf("marker insert failed: %v", err)
+			return false
+		}
+		r := replay(h.output)
+		for i := 1; i <= written; i++ {
+			if _, ok := r.docs[fmt.Sprintf("markers/%s-%d", prefix, i)]; ok {
+				return true
+			}
+		}
+		return false
+	}, time.Minute, 250*time.Millisecond, "streaming did not deliver a %s marker", prefix)
+}
+
+func TestIntegrationMongoCDCSignalsWithStreamSnapshot(t *testing.T) {
+	t.Parallel()
+	h := newIncrementalHarness(t)
+	h.seed("foo", 30)
+	h.seed("bar", 50)
+	h.db.CreateCollection(t, "signals")
+	h.db.CreateCollection(t, "markers")
+
+	// The blocking snapshot reads everything once; a signal then re-reads
+	// bar alongside streaming, with no incremental_snapshot.enabled.
+	first := h.stream(streamSnapshotSignalsInput)
+	wait := first.RunAsync(t)
+	h.waitReads("foo", 30)
+	h.waitReads("bar", 50)
+	h.waitStreamed("first")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"bar"}}})
+	h.waitReads("bar", 100)
+	first.Stop(t)
+	wait()
+	afterFirst := replayChecked(t, h.output).readCount
+
+	// A restart resumes the stream: no snapshot runs again, and a signal
+	// still reads on demand.
+	second := h.stream(streamSnapshotSignalsInput)
+	wait = second.RunAsync(t)
+	h.waitStreamed("second")
+	assert.Equal(t, afterFirst, replayChecked(t, h.output).readCount, "the restart re-read collections")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"foo"}}})
+	h.waitReads("foo", 60)
+	second.Stop(t)
+	wait()
+
+	got := replayChecked(t, h.output)
+	assert.Equal(t, 100, got.readByColl["bar"], "bar read by the blocking snapshot and once by the signal")
+	assert.Equal(t, 60, got.readByColl["foo"], "foo read by the blocking snapshot and once by the signal")
+	assert.Equal(t, 2, got.signals, "signal inserts emitted")
+}
+
+func TestIntegrationMongoCDCSignalsWithoutSnapshot(t *testing.T) {
+	t.Parallel()
+	h := newIncrementalHarness(t)
+	h.seed("foo", 30)
+	h.seed("bar", 50)
+	h.db.CreateCollection(t, "signals")
+	h.db.CreateCollection(t, "markers")
+
+	stream := h.stream(signalsOnlyInput)
+	wait := stream.RunAsync(t)
+	h.waitStreamed("marker")
+	require.Zero(t, replayChecked(t, h.output).readCount, "nothing is read before a signal asks")
+
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"foo"}}})
+	h.waitReads("foo", 30)
+	stream.Stop(t)
+	wait()
+
+	got := replayChecked(t, h.output)
+	assert.Equal(t, 30, got.readByColl["foo"])
+	assert.Zero(t, got.readByColl["bar"], "only the signalled collection is read")
+	for i := range 30 {
+		assert.Equal(t, 1, got.reads[fmt.Sprintf("foo/%d", i)], "document %d read once", i)
+	}
+}
+
+func TestIntegrationMongoCDCSignalsNewCollectionWaitsForSignal(t *testing.T) {
+	t.Parallel()
+	h := newIncrementalHarness(t)
+	h.seed("foo", 30)
+	h.seed("bar", 50)
+	h.db.CreateCollection(t, "signals")
+	h.db.CreateCollection(t, "markers")
+
+	// A spell without bar in collections stores progress that does not know
+	// it.
+	withoutBar := strings.Replace(signalsOnlyInput, "    - 'bar'\n", "", 1)
+	first := h.stream(withoutBar)
+	wait := first.RunAsync(t)
+	h.waitStreamed("first")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"foo"}}})
+	h.waitReads("foo", 30)
+	first.Stop(t)
+	wait()
+
+	// Adding bar reads nothing without incremental_snapshot.enabled: only a
+	// signal does. The run logs what it queues as it is set up, before any
+	// chunk could be released, so the log is the check that cannot race the
+	// read.
+	second := h.stream(signalsOnlyInput)
+	wait = second.RunAsync(t)
+	h.waitStreamed("second")
+	require.Empty(t, h.logs.matching("queued collections [bar]"), "the added collection was queued without a signal")
+	require.NotEmpty(t, h.logs.matching("Treating collections [bar]"), "the added collection was not marked read")
+	got := replayChecked(t, h.output)
+	require.Zero(t, got.readByColl["bar"], "the added collection was read without a signal")
+	require.Equal(t, 30, got.readCount, "the restart re-read collections")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"bar"}}})
+	h.waitReads("bar", 50)
+	second.Stop(t)
+	wait()
+
+	got = replayChecked(t, h.output)
+	assert.Len(t, h.logs.matching("queued collections [bar]"), 1, "bar queued by the signal alone")
+	assert.Equal(t, 50, got.readByColl["bar"], "bar read once by the signal")
+	assert.Equal(t, 30, got.readByColl["foo"], "foo read once by the signal")
+}
+
+func TestIntegrationMongoCDCSignalsResumeAfterRestart(t *testing.T) {
+	t.Parallel()
+	h := newIncrementalHarness(t)
+	const n = 6000
+	h.seed("foo", n)
+	h.db.CreateCollection(t, "bar")
+	h.db.CreateCollection(t, "signals")
+	h.db.CreateCollection(t, "markers")
+
+	// Stop part-way through the requested read.
+	first := h.stream(signalsOnlyInput)
+	wait := first.RunAsync(t)
+	h.waitStreamed("marker")
+	h.db.InsertOne(t, "signals", bson.M{"type": "snapshot-execute", "data": bson.M{"collections": bson.A{"foo"}}})
+	h.waitReads("foo", 1000)
+	first.Stop(t)
+	wait()
+	stoppedAt := replayChecked(t, h.output).readByColl["foo"]
+	require.Less(t, stoppedAt, n, "the read finished before the restart, so nothing was resumed")
+
+	// The request outlives the restart: the signal insert is behind the
+	// stored position, so only the stored progress can carry it on.
+	second := h.stream(signalsOnlyInput)
+	wait = second.RunAsync(t)
+	h.waitReads("foo", n)
+	second.Stop(t)
+	wait()
+
+	got := replayChecked(t, h.output)
+	for i := range n {
+		require.Positive(t, got.reads[fmt.Sprintf("foo/%d", i)], "document %d was never read", i)
+	}
+	assert.Less(t, got.readByColl["foo"], n+stoppedAt, "the restart started over: %d reads, %d before the stop", got.readByColl["foo"], stoppedAt)
+	t.Logf("%d reads before the stop, %d in total for %d documents", stoppedAt, got.readByColl["foo"], n)
+}
+
 func TestIntegrationMongoCDCIncrementalSnapshotMixedIDTypes(t *testing.T) {
 	t.Parallel()
 	h := newIncrementalHarness(t)
@@ -675,11 +879,24 @@ func TestIntegrationMongoCDCSignalCollectionWithPrePostImages(t *testing.T) {
 
 	stream := h.stream(strings.Replace(incrementalInput, "  signal_collection_name: signals\n", "  signal_collection_name: signals\n  document_mode: pre_and_post_images\n", 1))
 	wait := stream.RunAsync(t)
-	h.db.InsertOne(t, "foo", bson.M{"_id": 0, "v": 0})
+	// The first start streams from the position at connect time, so a write
+	// landing before the change stream opens is never delivered: keep writing
+	// until one arrives.
+	written := 0
 	require.Eventually(t, func() bool {
-		_, ok := replay(h.output).docs["foo/0"]
-		return ok
-	}, time.Minute, 100*time.Millisecond, "streaming did not start")
+		written++
+		if _, err := h.db.Collection("foo").InsertOne(t.Context(), bson.M{"_id": fmt.Sprintf("start-%d", written), "v": 0}); err != nil {
+			t.Logf("insert failed: %v", err)
+			return false
+		}
+		r := replay(h.output)
+		for i := 1; i <= written; i++ {
+			if _, ok := r.docs[fmt.Sprintf("foo/start-%d", i)]; ok {
+				return true
+			}
+		}
+		return false
+	}, time.Minute, 250*time.Millisecond, "streaming did not start")
 
 	h.db.InsertOne(t, "signals", bson.M{"_id": "s1", "type": "log", "data": bson.M{"message": "first"}})
 	require.Eventually(t, func() bool { return len(h.logs.matching("first")) > 0 }, 20*time.Second, 100*time.Millisecond, "log signal not seen: %v", h.logs.matching("ERROR"))
@@ -715,8 +932,13 @@ func TestIntegrationMongoCDCIncrementalSnapshotModeRoundTrip(t *testing.T) {
 	stoppedAt := replayChecked(t, h.output).readByColl["foo"]
 	require.Less(t, stoppedAt, n)
 	// A spell with stream_snapshot (blocking) and a stream position stored: no snapshot, and
-	// the progress it cannot keep current is discarded.
-	blocking := h.stream(strings.Replace(incrementalInput, "  incremental_snapshot:\n    enabled: true\n", "  stream_snapshot: true\n  incremental_snapshot:\n    enabled: false\n", 1))
+	// the progress it cannot keep current is discarded. The signal collection
+	// goes too: with one, the on-demand run would keep the progress current
+	// and carry the read on instead.
+	blocking := h.stream(strings.NewReplacer(
+		"  incremental_snapshot:\n    enabled: true\n", "  stream_snapshot: true\n  incremental_snapshot:\n    enabled: false\n",
+		"  signal_collection_name: signals\n", "",
+	).Replace(incrementalInput))
 	wait = blocking.RunAsync(t)
 	h.db.InsertOne(t, "bar", bson.M{"_id": "blocking-marker", "v": 0})
 	require.Eventually(t, func() bool {

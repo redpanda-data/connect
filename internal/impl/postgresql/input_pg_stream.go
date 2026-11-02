@@ -152,12 +152,12 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 == Metadata
 
 This input adds the following metadata fields to each message:
-- table: Name of the table that the message originated from
-- operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
-- lsn: the log sequence number in postgres
-- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
-- commit_ts_ms: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
-- before: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's REPLICA IDENTITY setting - with the default identity only key columns are present, with REPLICA IDENTITY FULL all columns are present.
+- ` + "`table`" + `: Name of the table that the message originated from.
+- ` + "`operation`" + `: Type of operation that generated the message: ` + "`read`" + `, ` + "`insert`" + `, ` + "`update`" + `, or ` + "`delete`" + `. ` + "`read`" + ` is from messages that are read in the initial snapshot phase. This will also be ` + "`begin`" + ` and ` + "`commit`" + ` if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled.
+- ` + "`lsn`" + `: The log sequence number in PostgreSQL.
+- ` + "`schema`" + `: The table schema in benthos common schema format, compatible with processors like ` + "`parquet_encode`" + `.
+- ` + "`commit_ts_ms`" + `: The commit timestamp of the transaction as a Unix millisecond timestamp. Not set for snapshot reads.
+- ` + "`before`" + `: The pre-change state of the row for update and delete operations, in benthos common schema format. For updates, availability depends on the table's ` + "`REPLICA IDENTITY`" + ` setting - with the default identity only key columns are present, with ` + "`REPLICA IDENTITY FULL`" + ` all columns are present.
 
 == Unserializable rows
 
@@ -202,7 +202,7 @@ This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set 
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
-If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. An existing publication of the same name that lists specific tables is dropped and recreated ` + "`FOR ALL TABLES`" + ` with the same options, which requires a superuser. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(replication.CheckpointLimitField("log sequence number (LSN)")).
 		Field(service.NewBoolField(fieldTemporarySlot).
@@ -243,8 +243,9 @@ Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" +
 		Field(service.NewDurationField(fieldHeartbeatInterval).
 			Description("The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.\n\n" +
 				"Heartbeat messages are useful when you subscribe to data changes from tables with low activity, while other tables in the database have higher-frequency updates. Without new messages to acknowledge, PostgreSQL cannot reclaim the WAL, which can exhaust the local disk. Heartbeat messages allow Redpanda Connect to periodically acknowledge new messages even when no data updates occur. Each acknowledgement advances the committed point in the WAL, which ensures that PostgreSQL can safely reclaim older log segments.\n\n" +
-				"Set `heartbeat_interval` to `0s` to disable heartbeats.\n\n" +
-				"Heartbeats also pace `" + fieldIncSnapshot + "`. On a quiet table they're the only thing that advances the snapshot. This interval keeps the slot current, and `" + fieldIncSnapshot + "." + fieldIncSnapshotHeartbeatInterval + "` applies alongside it: the more frequent of the two wins for the life of the input. A non-zero value is still required here.").Version("4.48.0").
+				"Each heartbeat message has the prefix `redpanda_connect_<slot_name>`, where `<slot_name>` is the value of `" + fieldSlotName + "`. Its content is `{\"type\":\"heartbeat\"}`. This input does not pass heartbeats to the pipeline. Other logical decoding consumers of the same database can receive them, so filter on this prefix to ignore them.\n\n" +
+				"Set `heartbeat_interval` to `0s` to disable heartbeats. The input rejects `0s` when `" + fieldIncSnapshot + "." + fieldIncSnapshotEnabled + "` is `true`, because the incremental snapshot would never advance on a quiet table.\n\n" +
+				"Heartbeats also pace `" + fieldIncSnapshot + "`. On a quiet table they're the only thing that advances the snapshot. This interval keeps the slot current, and `" + fieldIncSnapshot + "." + fieldIncSnapshotHeartbeatInterval + "` applies alongside it: the more frequent of the two wins for the life of the input.").Version("4.48.0").
 			ShortDescription("Interval at which to write heartbeat messages, keeping the replication slot current on low-traffic tables.").
 			Default("1h").
 			Example("0s").

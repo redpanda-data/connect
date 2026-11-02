@@ -28,6 +28,7 @@ import (
 
 func TestIntegrationSignallingConfiguration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -222,6 +223,7 @@ postgres_cdc:
 
 func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -275,6 +277,7 @@ postgres_cdc:
 // of the detected signal in input_pg_stream.go).
 func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -335,6 +338,7 @@ postgres_cdc:
 
 func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -384,6 +388,7 @@ postgres_cdc:
 // does not collapse the publication down to just the signal table.
 func TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 

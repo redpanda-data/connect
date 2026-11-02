@@ -150,3 +150,38 @@ func NewGroupsMigratorForTesting(
 		commitedOffsets: make(map[string]map[string]map[int32][2]int64),
 	}
 }
+
+func NewMigratorForSchemaIDTranslationTesting(t *testing.T, strict bool, idMap map[int]int, topics ...string) *Migrator {
+	t.Helper()
+
+	m := &Migrator{
+		topic: topicMigrator{knownTopics: make(map[string]TopicMapping)},
+		sr: schemaRegistryMigrator{
+			conf: SchemaRegistryMigratorConfig{
+				Enabled:      true,
+				TranslateIDs: true,
+				Strict:       strict,
+			},
+			src:     &sr.Client{},
+			dst:     &sr.Client{},
+			schemas: make(map[int]schemaState),
+		},
+		log: service.MockResources().Logger(),
+		src: &kgo.Client{},
+	}
+	m.topic.log, m.sr.log = m.log, m.log
+	for srcID, dstID := range idMap {
+		m.sr.setSchemaSynced(sr.SubjectSchema{Subject: "s", Version: 1, ID: srcID}, schemaInfo{Subject: "s", Version: 1, ID: dstID})
+	}
+	for _, topic := range topics {
+		m.topic.knownTopics[topic] = TopicMapping{
+			Src: TopicInfo{Topic: topic, Partitions: 1},
+			Dst: TopicInfo{Topic: topic, Partitions: 1},
+		}
+	}
+	return m
+}
+
+func (m *Migrator) MessageBatchToFranzRecords(batch service.MessageBatch) ([]kgo.Record, error) {
+	return m.messageBatchToFranzRecords(batch)
+}
