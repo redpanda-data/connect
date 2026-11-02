@@ -435,15 +435,15 @@ oracledb_cdc:
     count: 1`, func(context.Context, service.MessageBatch) error { return nil })
 			t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
 
-			// Step 1: get a first checkpoint from a change on the monitored table.
+			t.Log("Given: a first checkpoint from a row on the monitored table")
 			db.MustExec("INSERT INTO " + tracked + " (id) VALUES (DEFAULT)")
 			require.Eventually(t, func() bool {
 				_, err := savedSCN()
 				return err == nil
 			}, 30*time.Second, 500*time.Millisecond, "no checkpoint saved for the monitored table")
 
-			// Step 2: move the database SCN forward with commits on a table the input does not
-			// monitor. The input mines this range but delivers no messages.
+			t.Log("When: 100 commits on the table that is not monitored")
+			// The commits move the database SCN forward. The input mines this range but delivers no messages.
 			db.MustExec(`
 	BEGIN
 		FOR i IN 1..100 LOOP
@@ -454,7 +454,8 @@ oracledb_cdc:
 			var targetSCN replication.SCN
 			require.NoError(t, db.QueryRowContext(t.Context(), "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&targetSCN))
 
-			// Step 3: the saved checkpoint must reach the SCN from step 2 with no new message.
+			t.Log("Then: the saved checkpoint reaches the target SCN")
+			// No new message is delivered, so only the mined position can move the checkpoint.
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				scn, err := savedSCN()
 				require.NoError(c, err)
