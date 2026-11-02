@@ -1082,20 +1082,36 @@ func TestIntegrationMSSQL(t *testing.T) {
 	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
-	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("1433/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"ACCEPT_EULA": "Y",
-			"SA_PASSWORD": testPassword,
-		}),
-		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
-		// when it runs in parallel with the other tests, so set the deadline explicitly.
-		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
-			wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
-		),
+	// When other test packages load the Docker host, SQL Server 2025 can crash in sqlpal.dll a few seconds after
+	// the start ("This program has encountered a fatal error"). The port can be open before that, so also wait for
+	// the log line that the mssql module waits for. The log wait fails as soon as the container exits, and then the
+	// test starts a new container.
+	const maxAttempts = 3
+	var (
+		ctr testcontainers.Container
+		err error
 	)
-	testcontainers.CleanupContainer(t, ctr)
+	for attempt := 1; ; attempt++ {
+		ctr, err = testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
+			testcontainers.WithImagePlatform("linux/amd64"),
+			testcontainers.WithExposedPorts("1433/tcp"),
+			testcontainers.WithEnv(map[string]string{
+				"ACCEPT_EULA": "Y",
+				"SA_PASSWORD": testPassword,
+			}),
+			// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
+			// when it runs in parallel with the other tests, so set the deadline explicitly.
+			testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
+				wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
+				wait.ForLog("Recovery is complete.").WithStartupTimeout(3*time.Minute),
+			),
+		)
+		testcontainers.CleanupContainer(t, ctr)
+		if err == nil || attempt == maxAttempts {
+			break
+		}
+		t.Logf("SQL Server start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+	}
 	require.NoError(t, err)
 
 	mp, err := ctr.MappedPort(t.Context(), "1433/tcp")
