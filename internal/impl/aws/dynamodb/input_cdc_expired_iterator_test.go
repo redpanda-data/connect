@@ -123,41 +123,20 @@ func TestResolveResumeIterator(t *testing.T) {
 func TestStartPolicyCurrent(t *testing.T) {
 	cases := []struct {
 		name       string
-		startFrom  string
-		honor      bool
+		latest     bool
 		positioned bool
 		want       types.ShardIteratorType
 	}{
 		{
-			name:      "fresh pipeline honors latest",
-			startFrom: "latest",
-			honor:     true,
-			want:      types.ShardIteratorTypeLatest,
-		},
-		{
-			name:      "fresh pipeline honors trim_horizon",
-			startFrom: "trim_horizon",
-			honor:     true,
-			want:      types.ShardIteratorTypeTrimHorizon,
+			name:   "fresh pipeline honors latest",
+			latest: true,
+			want:   types.ShardIteratorTypeLatest,
 		},
 		{
 			name:       "rotation child ignores latest",
-			startFrom:  "latest",
-			honor:      true,
+			latest:     true,
 			positioned: true,
 			want:       types.ShardIteratorTypeTrimHorizon,
-		},
-		{
-			name:      "restart with state ignores latest",
-			startFrom: "latest",
-			honor:     false,
-			want:      types.ShardIteratorTypeTrimHorizon,
-		},
-		{
-			name:      "trim_horizon on a restart with state",
-			startFrom: "trim_horizon",
-			honor:     false,
-			want:      types.ShardIteratorTypeTrimHorizon,
 		},
 		{
 			name: "zero value starts at trim_horizon",
@@ -167,8 +146,7 @@ func TestStartPolicyCurrent(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var p startPolicy
-			p.startFrom = tc.startFrom
-			p.honor.Store(tc.honor)
+			p.latest.Store(tc.latest)
 			if tc.positioned {
 				p.positioned()
 			}
@@ -177,24 +155,50 @@ func TestStartPolicyCurrent(t *testing.T) {
 	}
 }
 
-// TestStartPolicyLoad: load honors start_from only when the checkpoint store
-// has no state for the stream, and fails when the probe fails, so a stream
-// never guesses that it is fresh.
+// TestStartPolicyLoad: load honors start_from: latest only when the checkpoint
+// store has no state for the stream, and fails when the probe fails, so a
+// stream never guesses that it is fresh.
 func TestStartPolicyLoad(t *testing.T) {
-	t.Run("fresh pipeline", func(t *testing.T) {
-		var p startPolicy
-		require.NoError(t, p.load(t.Context(), globalCheckpointerWithPartition(t, testStreamArn, nil), "latest"))
-		assert.Equal(t, types.ShardIteratorTypeLatest, p.current())
-	})
-
-	t.Run("restart with state", func(t *testing.T) {
-		cp := globalCheckpointerWithPartition(t, testStreamArn, []map[string]dynamodbtypes.AttributeValue{
-			shardRow(testStreamArn, "shard-1", "00001", ""),
+	cases := []struct {
+		name      string
+		startFrom string
+		rows      []map[string]dynamodbtypes.AttributeValue
+		want      types.ShardIteratorType
+	}{
+		{
+			name:      "fresh pipeline honors latest",
+			startFrom: "latest",
+			want:      types.ShardIteratorTypeLatest,
+		},
+		{
+			name:      "fresh pipeline honors trim_horizon",
+			startFrom: "trim_horizon",
+			want:      types.ShardIteratorTypeTrimHorizon,
+		},
+		{
+			name:      "restart with state ignores latest",
+			startFrom: "latest",
+			rows: []map[string]dynamodbtypes.AttributeValue{
+				shardRow(testStreamArn, "shard-1", "00001", ""),
+			},
+			want: types.ShardIteratorTypeTrimHorizon,
+		},
+		{
+			name:      "trim_horizon on a restart with state",
+			startFrom: "trim_horizon",
+			rows: []map[string]dynamodbtypes.AttributeValue{
+				shardRow(testStreamArn, "shard-1", "00001", ""),
+			},
+			want: types.ShardIteratorTypeTrimHorizon,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var p startPolicy
+			require.NoError(t, p.load(t.Context(), globalCheckpointerWithPartition(t, testStreamArn, tc.rows), tc.startFrom))
+			assert.Equal(t, tc.want, p.current())
 		})
-		var p startPolicy
-		require.NoError(t, p.load(t.Context(), cp, "latest"))
-		assert.Equal(t, types.ShardIteratorTypeTrimHorizon, p.current())
-	})
+	}
 
 	t.Run("probe error", func(t *testing.T) {
 		cp := newTestCheckpointer(t)

@@ -2536,11 +2536,10 @@ func lastRecordSequenceNumber(records []types.Record) string {
 // The zero value starts every shard at TRIM_HORIZON, so a policy that was
 // never loaded cannot skip records.
 type startPolicy struct {
-	// startFrom is the start_from config value. load sets it.
-	startFrom string
-	// honor is true while start_from applies: from load on a new pipeline
-	// until the first discovery cycle that adds shards.
-	honor atomic.Bool
+	// latest is true while current returns LATEST: from load on a new
+	// pipeline with start_from: latest, until the first discovery cycle that
+	// adds shards. Discovery reads it once per cycle through current.
+	latest atomic.Bool
 }
 
 // load reads the checkpoint state from cp and sets the policy for startFrom.
@@ -2549,15 +2548,14 @@ func (p *startPolicy) load(ctx context.Context, cp *Checkpointer, startFrom stri
 	if err != nil {
 		return fmt.Errorf("probing checkpoint state: %w", err)
 	}
-	p.startFrom = startFrom
-	p.honor.Store(!hasState)
+	p.latest.Store(startFrom == "latest" && !hasState)
 	return nil
 }
 
 // current returns where this discovery cycle starts a shard that has no
 // checkpoint: LATEST or TRIM_HORIZON.
 func (p *startPolicy) current() types.ShardIteratorType {
-	if p.startFrom == "latest" && p.honor.Load() {
+	if p.latest.Load() {
 		return types.ShardIteratorTypeLatest
 	}
 	return types.ShardIteratorTypeTrimHorizon
@@ -2571,7 +2569,7 @@ func (p *startPolicy) current() types.ShardIteratorType {
 // Call it only for a cycle that added shards. If a cycle added nothing,
 // start_from must still apply to the next cycle.
 func (p *startPolicy) positioned() {
-	p.honor.Store(false)
+	p.latest.Store(false)
 }
 
 // resolveResumeIterator decides which iterator type and sequence number to use
