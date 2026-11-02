@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -983,4 +984,186 @@ func TestCheckpointerMarkShardCompletedKeepsStoredPosition(t *testing.T) {
 			}
 		})
 	}
+}
+
+// startStoreCheckpointer builds a non-global Checkpointer for stream "arn:A"
+// on a sharedStoreAPI store. Query returns every row of the store, which is
+// one partition in these tests.
+func startStoreCheckpointer(store map[string]map[string]types.AttributeValue) *Checkpointer {
+	api := sharedStoreAPI(store)
+	api.query = func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		return &dynamodb.QueryOutput{Items: slices.Collect(maps.Values(store))}, nil
+	}
+	return &Checkpointer{
+		tableName:   "cps",
+		sourceTable: "t",
+		streamArn:   "arn:A",
+		svc:         api,
+		log:         checkpointTestLogger(),
+	}
+}
+
+// TestCheckpointerPrepareStart: start_from applies only when the store has
+// no state. Under start_from: latest, a restart gives a shard without a
+// checkpoint the start cutoff, so it skips only the records from before the
+// first start (CON-597).
+func TestCheckpointerPrepareStart(t *testing.T) {
+	cases := []struct {
+		name       string
+		startFrom  string
+		rows       map[string]map[string]types.AttributeValue
+		wantFresh  bool
+		wantResume ResumeDecision
+	}{
+		{
+			name:       "new pipeline with trim_horizon",
+			startFrom:  "trim_horizon",
+			wantFresh:  true,
+			wantResume: ResumeDecision{Mode: resumeDefault},
+		},
+		{
+			name:      "restart before the first checkpoint",
+			startFrom: "latest",
+			rows: map[string]map[string]types.AttributeValue{
+				"arn:A|start#latest": {
+					"StreamArn": &types.AttributeValueMemberS{Value: "arn:A"},
+					"ShardID":   &types.AttributeValueMemberS{Value: "start#latest"},
+					"StartedAt": &types.AttributeValueMemberS{Value: "2026-10-29T10:00:00Z"},
+				},
+			},
+			wantFresh: false,
+			wantResume: ResumeDecision{
+				Mode:   resumeDefault,
+				Cutoff: time.Date(2026, 10, 29, 9, 55, 0, 0, time.UTC),
+			},
+		},
+		{
+			name:      "restart of a pipeline from before the marker",
+			startFrom: "latest",
+			rows: map[string]map[string]types.AttributeValue{
+				"arn:A|shard-1": {
+					"StreamArn":      &types.AttributeValueMemberS{Value: "arn:A"},
+					"ShardID":        &types.AttributeValueMemberS{Value: "shard-1"},
+					"SequenceNumber": &types.AttributeValueMemberS{Value: "00001"},
+				},
+			},
+			wantFresh:  false,
+			wantResume: ResumeDecision{Mode: resumeDefault},
+		},
+		{
+			name:      "restart with trim_horizon ignores the marker",
+			startFrom: "trim_horizon",
+			rows: map[string]map[string]types.AttributeValue{
+				"arn:A|start#latest": {
+					"StreamArn": &types.AttributeValueMemberS{Value: "arn:A"},
+					"ShardID":   &types.AttributeValueMemberS{Value: "start#latest"},
+					"StartedAt": &types.AttributeValueMemberS{Value: "2026-10-29T10:00:00Z"},
+				},
+			},
+			wantFresh:  false,
+			wantResume: ResumeDecision{Mode: resumeDefault},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := map[string]map[string]types.AttributeValue{}
+			maps.Copy(store, tc.rows)
+			c := startStoreCheckpointer(store)
+
+			fresh, err := c.PrepareStart(t.Context(), tc.startFrom)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantFresh, fresh)
+
+			got, err := c.ResolveResume(t.Context(), "shard-2")
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantResume, got)
+			assert.Len(t, store, len(tc.rows), "only a new pipeline with latest saves a marker")
+		})
+	}
+
+	t.Run("restart reads the marker of the first start", func(t *testing.T) {
+		store := map[string]map[string]types.AttributeValue{}
+		before := time.Now().Truncate(time.Second)
+
+		fresh, err := startStoreCheckpointer(store).PrepareStart(t.Context(), "latest")
+		require.NoError(t, err)
+		assert.True(t, fresh)
+		require.Contains(t, store, "arn:A|start#latest")
+		saved, err := time.Parse(time.RFC3339Nano, store["arn:A|start#latest"]["StartedAt"].(*types.AttributeValueMemberS).Value)
+		require.NoError(t, err)
+		assert.False(t, saved.Before(before), "the marker must hold the start time of the first run")
+
+		restarted := startStoreCheckpointer(store)
+		fresh, err = restarted.PrepareStart(t.Context(), "latest")
+		require.NoError(t, err)
+		assert.False(t, fresh)
+		got, err := restarted.ResolveResume(t.Context(), "shard-1")
+		require.NoError(t, err)
+		assert.Equal(t, ResumeDecision{Mode: resumeDefault, Cutoff: saved.Add(-startMarkerMargin)}, got)
+
+		require.NoError(t, restarted.markStarted(t.Context(), time.Now()))
+		assert.Equal(t, saved.UTC().Format(time.RFC3339Nano), store["arn:A|start#latest"]["StartedAt"].(*types.AttributeValueMemberS).Value,
+			"a later markStarted must keep the first start time")
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		probeErr := startStoreCheckpointer(map[string]map[string]types.AttributeValue{})
+		probeErr.svc.(*fakeCheckpointAPI).query = func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+			return nil, errors.New("access denied")
+		}
+		_, err := probeErr.PrepareStart(t.Context(), "latest")
+		require.ErrorContains(t, err, "probing checkpoint state")
+
+		writeErr := startStoreCheckpointer(map[string]map[string]types.AttributeValue{})
+		writeErr.svc.(*fakeCheckpointAPI).putItem = func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			return nil, errors.New("throttled")
+		}
+		_, err = writeErr.PrepareStart(t.Context(), "latest")
+		require.ErrorContains(t, err, "saving start marker")
+	})
+}
+
+// startMarkerRow builds the start marker row that markStarted writes in
+// global mode.
+func startMarkerRow(streamArn, startedAt string) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{
+		"TableId":   &types.AttributeValueMemberS{Value: "t"},
+		"ShardID":   &types.AttributeValueMemberS{Value: checkpointStartMarkerKey},
+		"StreamArn": &types.AttributeValueMemberS{Value: streamArn},
+		"StartedAt": &types.AttributeValueMemberS{Value: startedAt},
+	}
+}
+
+// TestCheckpointerStartedAtGlobal: in global mode, another region's marker is
+// not a start position in this stream.
+func TestCheckpointerStartedAtGlobal(t *testing.T) {
+	t.Run("marker of this stream", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+			startMarkerRow("arn:A", "2026-10-29T10:00:00Z"),
+		})
+		got, err := c.startedAt(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC), got)
+	})
+
+	t.Run("marker of another region's stream", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+			startMarkerRow("arn:B", "2026-10-29T10:00:00Z"),
+		})
+		got, err := c.startedAt(t.Context())
+		require.NoError(t, err)
+		assert.True(t, got.IsZero())
+	})
+}
+
+// TestResolveResumeIgnoresStartMarker: in global mode, another region's start
+// marker is not a shard checkpoint, so it must not turn a fresh region into a
+// failover resume.
+func TestResolveResumeIgnoresStartMarker(t *testing.T) {
+	c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
+		startMarkerRow("arn:B", "2026-10-29T10:00:00Z"),
+	})
+	got, err := c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.Equal(t, ResumeDecision{Mode: resumeDefault}, got)
 }

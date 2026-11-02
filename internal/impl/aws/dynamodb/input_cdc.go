@@ -200,7 +200,7 @@ This input emits the following metrics:
 - `+"`dynamodb_cdc_snapshot_buffer_overflow`"+` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
 - `+"`dynamodb_cdc_snapshot_segment_duration`"+` - Time taken by each snapshot scan segment to complete (timer)
 - `+"`dynamodb_cdc_checkpoint_failures`"+` - Number of failed checkpoint writes to the checkpoint table (counter)
-- `+"`dynamodb_cdc_failover_skipped`"+` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
+- `+"`dynamodb_cdc_failover_skipped`"+` - Records skipped because they predate the resume cutoff: on a global-table failover replay, or on a `+"`start_from: latest`"+` restart for a shard without a checkpoint (counter)
 
 == Global table checkpoints (multi-region failover)
 
@@ -257,7 +257,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBPollInterval).
 				Advanced(),
 			service.NewStringEnumField(dciFieldStartFrom, "trim_horizon", "latest").
-				Description("Where to start reading on a genuinely fresh pipeline (no checkpoint state exists yet under this `checkpoint_namespace` for the stream). `trim_horizon` starts from the oldest available record, `latest` starts from new records.\n\n`latest` is honoured only on that first discovery: once any checkpoint state exists, shards discovered later - rotation children found by the periodic refresh, and any checkpoint-less shard after a restart - always start at `trim_horizon` so their backlog is never skipped. In practice a restart under `latest` therefore replays from each shard's oldest retained record rather than only new records; at-least-once delivery takes precedence over the configured start position.").
+				Description("Where to start reading on a genuinely fresh pipeline (no checkpoint state exists yet under this `checkpoint_namespace` for the stream). `trim_horizon` starts from the oldest available record, `latest` starts from new records.\n\n`latest` is honoured only on that first discovery: once any checkpoint state exists, shards discovered later - rotation children found by the periodic refresh, and any checkpoint-less shard after a restart - always start at `trim_horizon` so their backlog is never skipped. At-least-once delivery takes precedence over the configured start position.\n\nWith `latest`, the first run saves its start time in the checkpoint table. On a restart, a shard without a checkpoint starts at `trim_horizon` and skips the records from more than 5 minutes before that start time. So a restart before the first checkpoint does not skip the records written while the pipeline was down, and it can deliver again some records from the 5 minutes before the first start.").
 				ShortDescription("Where a fresh pipeline starts: trim_horizon for the oldest record, or latest. After any checkpoint state exists, new shards always start at trim_horizon.").
 				Default("trim_horizon"),
 			service.NewIntField(dciFieldCheckpointLimit).
@@ -553,7 +553,7 @@ type dynamoDBCDCMetrics struct {
 	snapshotBufferOverflow  *service.MetricCounter // Counts buffer overflow events
 	snapshotSegmentDuration *service.MetricTimer   // Tracks segment scan duration
 	checkpointFailures      *service.MetricCounter // Counts checkpoint write failures
-	failoverSkipped         *service.MetricCounter // Counts records skipped during global-table failover replay
+	failoverSkipped         *service.MetricCounter // Counts records skipped before a failover or restart cutoff
 }
 
 // newDynamoDBCDCMetrics builds the input's metric set (shared with tests so
@@ -581,7 +581,11 @@ type dynamoDBShardReader struct {
 	// where reading left off if the current iterator expires (see
 	// refreshExpiredIterator).
 	lastSequenceNumber string
-	failoverCutoff     time.Time // global-table failover: skip records at/under this time
+	// failoverCutoff is the time before which the reader skips records (see
+	// shouldSkipFailoverRecord). It is set for a global-table failover resume,
+	// and for a shard without a checkpoint on a start_from: latest restart
+	// (see Checkpointer.startCutoff). Zero means no skip.
+	failoverCutoff time.Time
 }
 
 // snapshotState encapsulates all state related to snapshot scanning.
@@ -1177,11 +1181,11 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	// start_from only applies to a genuinely fresh pipeline: if any checkpoint
 	// state already exists, shards without checkpoints are rotation children
 	// created while we were down and must be read from TRIM_HORIZON.
-	hasState, err := d.checkpointer.HasAnyState(ctx)
+	fresh, err := d.checkpointer.PrepareStart(ctx, d.conf.startFrom)
 	if err != nil {
-		return fmt.Errorf("probing checkpoint state: %w", err)
+		return fmt.Errorf("preparing start position: %w", err)
 	}
-	d.honorStartFrom.Store(!hasState)
+	d.honorStartFrom.Store(fresh)
 
 	d.log.Infof("Connected to DynamoDB stream: %s", *d.streamArn)
 
@@ -1300,9 +1304,9 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	// state already exists for this table, shards without checkpoints are
 	// rotation children created while we were down and must be read from
 	// TRIM_HORIZON.
-	hasState, err := checkpointer.HasAnyState(ctx)
+	fresh, err := checkpointer.PrepareStart(ctx, d.conf.startFrom)
 	if err != nil {
-		return false, fmt.Errorf("probing checkpoint state for table %s: %w", tableName, err)
+		return false, fmt.Errorf("preparing start position for table %s: %w", tableName, err)
 	}
 
 	// Re-check under write lock before inserting (another goroutine may have
@@ -1326,7 +1330,7 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 		shardReaders:   make(map[string]*dynamoDBShardReader),
 		shardRefreshCh: make(chan struct{}, 1),
 	}
-	ts.honorStartFrom.Store(!hasState)
+	ts.honorStartFrom.Store(fresh)
 
 	d.tableStreams[tableName] = ts
 	d.log.Infof("Initialized table stream for %s (stream ARN: %s)", tableName, streamArn)
@@ -1787,7 +1791,12 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		d.log.Infof("Failover resume for shard %s%s from trim horizon, skipping records at/before %s", shardID, tableSuffix, cutoff.Format(time.RFC3339))
 	default:
 		iteratorType = initialIteratorType(d.conf.startFrom, honorStartFrom)
-		d.log.Infof("Starting shard %s%s from %s", shardID, tableSuffix, iteratorType)
+		cutoff = decision.Cutoff
+		if cutoff.IsZero() {
+			d.log.Infof("Starting shard %s%s from %s", shardID, tableSuffix, iteratorType)
+		} else {
+			d.log.Infof("Starting shard %s%s from %s, skipping records before %s, the first start of the pipeline", shardID, tableSuffix, iteratorType, cutoff.Format(time.RFC3339))
+		}
 	}
 
 	iter, err := d.acquireShardIterator(ctx, streamArn, shardID, iteratorType, sequenceNumber)
@@ -2925,6 +2934,9 @@ func signalShardRefresh(ch chan struct{}) {
 // position were never processed in the prior region. Skipping only records
 // strictly before the cutoff replays that boundary second (acceptable
 // duplicates) rather than dropping it, preserving at-least-once delivery.
+//
+// The same check applies the start cutoff of a start_from: latest restart
+// (see Checkpointer.startCutoff).
 func shouldSkipFailoverRecord(record types.Record, failoverCutoff time.Time) bool {
 	if failoverCutoff.IsZero() || record.Dynamodb == nil || record.Dynamodb.ApproximateCreationDateTime == nil {
 		return false
