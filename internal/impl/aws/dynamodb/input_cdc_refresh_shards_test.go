@@ -215,7 +215,6 @@ func (s *refreshStubTransport) Do(req *http.Request) (*http.Response, error) {
 func newRefreshTestInput(t *testing.T, transport *refreshStubTransport) *dynamoDBCDCInput {
 	t.Helper()
 	return &dynamoDBCDCInput{
-		conf:           dynamoDBCDCConfig{startFrom: "trim_horizon"},
 		log:            service.MockResources().Logger(),
 		metrics:        newDynamoDBCDCMetrics(service.MockResources().Metrics()),
 		streamsClient:  newStubStreamsClient(transport),
@@ -325,7 +324,6 @@ func TestRefreshTableShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 	transport.setFailShards("shard-002")
 
 	d := &dynamoDBCDCInput{
-		conf:          dynamoDBCDCConfig{startFrom: "trim_horizon"},
 		log:           service.MockResources().Logger(),
 		metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
 		streamsClient: newStubStreamsClient(transport),
@@ -401,7 +399,6 @@ func TestRefreshShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
 func TestRefreshTableShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
 	transport := &refreshStubTransport{shardIDs: []string{"shard-closed", "shard-open"}}
 	d := &dynamoDBCDCInput{
-		conf:          dynamoDBCDCConfig{startFrom: "trim_horizon"},
 		log:           service.MockResources().Logger(),
 		metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
 		streamsClient: newStubStreamsClient(transport),
@@ -455,7 +452,6 @@ func TestRefreshTableShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.
 func tableRefreshHarness(t *testing.T, transport *refreshStubTransport, cp *Checkpointer) (*dynamoDBCDCInput, *tableStream, func() []string) {
 	t.Helper()
 	d := &dynamoDBCDCInput{
-		conf:          dynamoDBCDCConfig{startFrom: "trim_horizon"},
 		log:           service.MockResources().Logger(),
 		metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
 		streamsClient: newStubStreamsClient(transport),
@@ -873,7 +869,6 @@ func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
 
 	d := &dynamoDBCDCInput{
 		conf: dynamoDBCDCConfig{
-			startFrom:       "trim_horizon",
 			batchSize:       10,
 			pollInterval:    2 * time.Millisecond,
 			throttleBackoff: 2 * time.Millisecond,
@@ -1021,7 +1016,6 @@ func TestShardCoordinatorReadsClosedShardOnceMultiTable(t *testing.T) {
 
 	d := &dynamoDBCDCInput{
 		conf: dynamoDBCDCConfig{
-			startFrom:       "trim_horizon",
 			batchSize:       10,
 			pollInterval:    2 * time.Millisecond,
 			throttleBackoff: 2 * time.Millisecond,
