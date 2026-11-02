@@ -2522,15 +2522,21 @@ func lastRecordSequenceNumber(records []types.Record) string {
 	return ""
 }
 
-// startPolicy tells shard discovery where to start a shard that has no
-// checkpoint. The single-table input and each tableStream have one:
-//   - load sets it when the stream connects.
-//   - current gives the start position for one discovery cycle.
-//   - positioned stops start_from after the first cycle that adds shards.
+// startPolicy decides, for one stream, where a shard without a checkpoint
+// starts.
 //
-// start_from applies only to the first shards of a new pipeline. Later
-// shards, such as child shards or all shards after a restart, start at
-// TRIM_HORIZON, so start_from: latest cannot skip their unread records.
+// LATEST starts after the newest record in the shard. TRIM_HORIZON starts at
+// the oldest record that the stream still keeps (up to 24 hours old). See
+// https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_streams_GetShardIterator.html.
+//
+// start_from: latest asks to skip the records from before the pipeline first
+// started, not the records that come after.
+//
+// When start_from is latest:
+//   - On a new pipeline, shards start at LATEST until the first discovery
+//     cycle that adds shards.
+//   - After that, new shards start at TRIM_HORIZON. A child shard, or a
+//     shard found after a restart, can have records that no run delivered.
 //
 // The zero value starts every shard at TRIM_HORIZON, so a policy that was
 // never loaded cannot skip records.
