@@ -18,8 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/cenkalti/backoff/v4"
 	goora "github.com/sijms/go-ora/v2/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -152,12 +152,9 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	return s.scn, nil
 }
 
-// Read launches N go routines (based on maxWorkers) and starts the process of
-// iterating through each table, reading rows based on maxBatchSize, sending the row as a
-// replication.MessageEvent to the configured publisher. Large, unfiltered, PK'd tables are
-// split into independent range chunks (see planTableTasks) so a single big table can't
-// starve every other table of workers; every table's task(s) are flattened into one shared
-// pool bounded by maxWorkers, mirroring pglogicalstream's processSnapshot.
+// Read snapshots every table on up to maxWorkers workers, publishing each row as a
+// MessageEvent in pages of maxBatchSize. Tables are planned into tasks (see planTableTasks),
+// splitting large ones into key ranges, and all tasks share one worker pool.
 func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error {
 	if maxWorkers <= 0 {
 		return fmt.Errorf("snapshot max workers must be greater than 0, got %d", maxWorkers)
