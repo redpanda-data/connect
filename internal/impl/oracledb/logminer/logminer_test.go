@@ -762,6 +762,7 @@ func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMi
 		cfg:              NewDefaultConfig(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		lobInsertTxns:    make(map[sqlredo.TransactionID]struct{}),
 	}
 }
 
