@@ -74,21 +74,138 @@ func visitWithSchema(visitor schemaVisitor, value any, schemaNode parquet.Node) 
 	}
 }
 
+// encodingCoercionVisitor coerces a single leaf value for encoding.
 type encodingCoercionVisitor struct{}
 
-// schemaNeedsCoercion reports whether any leaf of the schema has a logical
-// type that needs transforming, letting callers skip the per-row schema walk
-// when it would be a no-op.
-func schemaNeedsCoercion(n parquet.Node) bool {
-	if n.Leaf() {
-		return leafCoercer(n.Type().LogicalType()) != nil
+// encodeCoercionPlan is the subset of a schema that needs coercing before
+// encoding, resolved once per schema so that each row only visits the fields
+// that lead to a coerced leaf. A nil plan means rows can be written as-is.
+type encodeCoercionPlan struct {
+	node     parquet.Node
+	repeated bool
+	optional bool
+
+	// Set for leaves.
+	coerce leafCoerceFn
+	lt     *format.LogicalType
+
+	// Set for MAP nodes, applied to every value of the map.
+	mapValue *encodeCoercionPlan
+
+	// Set for groups, holding only the children that need coercing.
+	fields []encodeCoercionField
+}
+
+type encodeCoercionField struct {
+	name string
+	plan *encodeCoercionPlan
+}
+
+// newEncodeCoercionPlan returns the coercion plan for a schema node, or nil
+// when no leaf beneath it has a logical type that needs coercing.
+func newEncodeCoercionPlan(n parquet.Node) *encodeCoercionPlan {
+	p := &encodeCoercionPlan{
+		node:     n,
+		repeated: n.Repeated(),
+		optional: n.Optional(),
 	}
+
+	if n.Leaf() {
+		p.lt = n.Type().LogicalType()
+		if p.coerce = leafCoercer(p.lt); p.coerce == nil {
+			return nil
+		}
+		return p
+	}
+
+	if lt := n.Type().LogicalType(); lt != nil && lt.Map != nil {
+		// A MAP node is a repeated key_value group, but its values arrive as
+		// a map[string]any. Keys are always strings, so only the value node
+		// can need coercing.
+		valueNode := mapValueNode(n)
+		if valueNode == nil {
+			return nil
+		}
+		if p.mapValue = newEncodeCoercionPlan(valueNode); p.mapValue == nil {
+			return nil
+		}
+		return p
+	}
+
 	for _, child := range n.Fields() {
-		if schemaNeedsCoercion(child) {
-			return true
+		if childPlan := newEncodeCoercionPlan(child); childPlan != nil {
+			p.fields = append(p.fields, encodeCoercionField{name: child.Name(), plan: childPlan})
 		}
 	}
-	return false
+	if len(p.fields) == 0 {
+		return nil
+	}
+	return p
+}
+
+// mapValueNode returns the value node of a MAP node's key_value group.
+func mapValueNode(n parquet.Node) parquet.Node {
+	for _, kv := range n.Fields() {
+		for _, f := range kv.Fields() {
+			if f.Name() == "value" {
+				return f
+			}
+		}
+	}
+	return nil
+}
+
+// apply coerces value in place according to the plan and returns the result.
+func (p *encodeCoercionPlan) apply(value any) (any, error) {
+	if p.repeated {
+		if elems, ok := value.([]any); ok {
+			for i := range elems {
+				var err error
+				if elems[i], err = p.applyElement(elems[i]); err != nil {
+					return nil, fmt.Errorf("visiting [%d]: %w", i, err)
+				}
+			}
+			return elems, nil
+		}
+	}
+	return p.applyElement(value)
+}
+
+func (p *encodeCoercionPlan) applyElement(value any) (any, error) {
+	if p.coerce != nil {
+		if p.optional && value == nil {
+			return nil, nil
+		}
+		return p.coerce(value, p.node, p.lt)
+	}
+	if value == nil {
+		return nil, nil
+	}
+
+	obj, ok := value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected an object, got %T", value)
+	}
+
+	if p.mapValue != nil {
+		for k, v := range obj {
+			var err error
+			if obj[k], err = p.mapValue.apply(v); err != nil {
+				return nil, fmt.Errorf("visiting [%s]: %w", k, err)
+			}
+		}
+		return obj, nil
+	}
+
+	for _, f := range p.fields {
+		if v, exists := obj[f.name]; exists {
+			var err error
+			if obj[f.name], err = f.plan.apply(v); err != nil {
+				return nil, fmt.Errorf("visiting [%s]: %w", f.name, err)
+			}
+		}
+	}
+	return obj, nil
 }
 
 // leafCoerceFn converts a value into the parquet physical representation of a
