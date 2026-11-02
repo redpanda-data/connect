@@ -1054,6 +1054,22 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			nextTS := nextTimestamp(ts)
 			opts = opts.SetStartAtOperationTime(&nextTS)
 		}
+		if incRun != nil {
+			// The chunk reads must see every write the stream skips: refer to
+			// incSnapshotDeps.Prepare. Without a token the stream starts after
+			// the majority optime, so it skips no write a majority read misses.
+			start := resumeToken
+			if start == nil {
+				start = initialResumeToken
+			}
+			if start != nil {
+				if at, err := resumeTokenTimestamp(start); err != nil {
+					m.logger.Debugf("Unable to read the stream start from its resume token, the incremental snapshot does not wait for it: %v", err)
+				} else {
+					incRun.deps.streamStart = at
+				}
+			}
+		}
 		cp := checkpoint.NewCapped[streamPosition](int64(m.checkpointLimit))
 		if resumeToken == nil && !m.incremental {
 			g, gctx := errgroup.WithContext(ctx)
