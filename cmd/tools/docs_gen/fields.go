@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -352,6 +353,48 @@ func (w *writer) snippets(key string, c componentSpec) {
 	common, advanced := componentSnippets(c)
 	w.write(filepath.Join("examples/common", base), common)
 	w.write(filepath.Join("examples/advanced", base), advanced)
+	w.write(filepath.Join("partials/config", key, c.Name+".adoc"), renderConfigPartial(common, advanced))
+}
+
+// renderConfigPartial renders the config snippets of a component page. When
+// the Common and Advanced snippets differ it writes both as tabs. When they
+// are the same, as for a component with no advanced fields, it writes one
+// code block, so the page doesn't show two identical tabs. The partial holds
+// the YAML itself, the same YAML as the example files, which stay for pages
+// that still include them.
+func renderConfigPartial(common, advanced string) string {
+	for _, s := range []string{common, advanced} {
+		if err := checkVerbatimYAML(s); err != nil {
+			panic(err)
+		}
+	}
+	codeBlock := func(snippet string) string {
+		return "```yml\n" + strings.TrimSuffix(snippet, "\n") + "\n```\n"
+	}
+	if common == advanced {
+		return generatedBanner + "\n\n" + codeBlock(common)
+	}
+	return generatedBanner + "\n\n[tabs]\n======\nCommon::\n+\n--\n\n" + codeBlock(common) +
+		"\n--\nAdvanced::\n+\n--\n\n" + codeBlock(advanced) + "\n--\n======\n"
+}
+
+// asciidocDirective matches lines that Asciidoctor would act on inside a
+// code block in an AsciiDoc file: preprocessor directives and the fence that
+// closes the block. Included YAML files are never preprocessed, but YAML
+// written into a partial is.
+var asciidocDirective = regexp.MustCompile("(?m)^(?:(?:include|ifdef|ifndef|ifeval|endif)::|```)")
+
+// checkVerbatimYAML reports a snippet line that would not render verbatim
+// inside a code block of an AsciiDoc partial.
+func checkVerbatimYAML(snippet string) error {
+	if loc := asciidocDirective.FindStringIndex(snippet); loc != nil {
+		line := snippet[loc[0]:]
+		if i := strings.IndexByte(line, '\n'); i >= 0 {
+			line = line[:i]
+		}
+		return fmt.Errorf("config snippet line %q would not render verbatim in an AsciiDoc partial:\n%s", line, snippet)
+	}
+	return nil
 }
 
 // componentSnippets renders the Common and Advanced snippets for a component.
@@ -453,9 +496,15 @@ func configFields(fields []fieldSpec, indent int, includeAdvanced bool) []string
 }
 
 // configPlaceholder is the value a snippet shows for a field with no default,
-// chosen by type so the snippet still has the right shape.
-func configPlaceholder(f fieldSpec) string {
+// chosen by type so the snippet still has the right shape. A required string
+// field with a fixed list of options shows the first option, because an
+// empty string is not a value it accepts. An optional one keeps the empty
+// string, since any option would turn on behaviour the reader didn't ask
+// for.
+func configPlaceholder(f fieldSpec, indent int) string {
 	switch {
+	case !f.IsOptional && (f.Kind == "scalar" || f.Kind == "") && f.Type == "string" && firstOption(f) != "":
+		return yamlScalar(firstOption(f), strings.Repeat(" ", indent+2))
 	case f.Kind == "array" || f.Kind == "2darray":
 		return "[]"
 	case f.Kind == "map" || f.Type == "object" || componentTypes[f.Type]:
@@ -468,6 +517,18 @@ func configPlaceholder(f fieldSpec) string {
 	return `""`
 }
 
+// firstOption returns the first of the values a field accepts, or "" when
+// the field takes any value.
+func firstOption(f fieldSpec) string {
+	if len(f.AnnotatedOptions) > 0 {
+		return f.AnnotatedOptions[0][0]
+	}
+	if len(f.Options) > 0 {
+		return f.Options[0]
+	}
+	return ""
+}
+
 func configLeaf(f fieldSpec, indent int) string {
 	pad := strings.Repeat(" ", indent)
 	if !f.hasDefault() {
@@ -475,7 +536,7 @@ func configLeaf(f fieldSpec, indent int) string {
 		if f.IsOptional {
 			comment = "# No default (optional)"
 		}
-		return pad + f.Name + ": " + configPlaceholder(f) + " " + comment
+		return pad + f.Name + ": " + configPlaceholder(f, indent) + " " + comment
 	}
 	v := f.defaultValue()
 	if !isNonEmptyCollection(v) {
