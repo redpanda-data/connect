@@ -250,6 +250,7 @@ To use with AWS Glue Data Catalog:
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
 
+[[storage-overview]]
 == Storage
 
 === Azure Blob Storage (ADLS Gen2)

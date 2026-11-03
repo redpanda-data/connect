@@ -160,7 +160,11 @@ jobs:
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
+      # A pull request that touches nothing under internal/impl/ has no packages to
+      # test; without this guard the empty filter runs every package and the step
+      # times out.
       - name: Run Integration Tests
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         env:
           FILTER: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}

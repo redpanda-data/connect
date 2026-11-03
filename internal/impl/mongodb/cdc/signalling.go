@@ -96,7 +96,9 @@ func parseSnapshotCollections(data []byte) ([]string, error) {
 }
 
 // handleSignal acts on a change event inserting into the signal collection.
-// run is the connection's incremental snapshot, nil when there is none.
+// run is the connection's incremental snapshot, which every connection with a
+// signal collection has, whatever the snapshot mode; nil only guards a caller
+// that forgot it.
 //
 // Nothing here fails the stream: a signal that cannot be honoured is logged and
 // skipped, since redelivering it would fail the same way.
@@ -118,7 +120,7 @@ func (m *mongoCDC) handleSignal(event bson.Raw, run *incSnapshotRun) {
 		log.Infof("%s", sig.Message)
 	case replication.SnapshotSignalType:
 		if run == nil {
-			log.Warnf("%v: set %s.%s: true", replication.ErrSnapshotDisabled, fieldIncSnapshot, fieldIncSnapshotEnabled)
+			log.Errorf("Skipping signal: this connection has no incremental snapshot run to queue it on")
 			return
 		}
 		collections, err := parseSnapshotCollections(data)
