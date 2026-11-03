@@ -276,10 +276,10 @@ func (m *Monitor) checkPublication(ctx context.Context) {
 	}
 	m.lastMissingFromPublication = current
 	if current == "" {
-		m.logger.Infof("Publication %s includes every configured table again", m.publication)
+		m.logger.Infof("Publication %s includes every configured table again; changes made while a table was missing from it were not captured, so request an incremental snapshot of that table to backfill them", m.publication)
 		return
 	}
-	m.logger.Errorf("Publication %s no longer includes table(s) %s, so their changes are not being streamed: add them back with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables",
+	m.logger.Errorf("Publication %s no longer includes table(s) %s, so PostgreSQL is not capturing their changes and they are lost: add them back with ALTER PUBLICATION %s ADD TABLE and request an incremental snapshot of them to backfill the missed changes, or remove them from the input's tables",
 		m.publication, current, m.publication)
 }
 
