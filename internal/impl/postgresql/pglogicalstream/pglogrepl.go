@@ -419,16 +419,15 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		// Every table is wanted. A FOR TABLE publication cannot be widened
 		// with ALTER PUBLICATION, and dropping its members one by one would
 		// only leave an empty publication that streams nothing, so recreate
-		// it with the same options. Both statements run in one implicit
-		// transaction, so the publication never goes missing for a concurrent
-		// reader, and a failed CREATE leaves it as it was.
+		// it with the same options. Done atomically, the publication never
+		// goes missing for a concurrent reader, and a failed CREATE leaves it
+		// as it was.
 		// withClause is built from fixed keywords only, so we can safely
 		// interpolate it into the query
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, pub.withClause))
-		if err != nil {
-			return fmt.Errorf("sanitizing publication recreation query: %w", err)
-		}
-		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+		if err := execAtomic(ctx, conn,
+			"DROP PUBLICATION "+publicationName,
+			fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES WITH (%s)", publicationName, pub.withClause),
+		); err != nil {
 			if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" {
 				return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
 			}
@@ -454,31 +453,40 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return err
 	}
 
-	// All the statements go in one simple query, which PostgreSQL runs in one
-	// implicit transaction, so a failure on one table rolls back the others.
-	// It uses ADD and DROP, not SET TABLE: SET would also remove the row
-	// filters, column lists and TABLES IN SCHEMA members that a user may have
-	// set on a publication created ahead of time.
+	// ADD and DROP, not SET TABLE: SET would also remove the row filters,
+	// column lists and TABLES IN SCHEMA members that a user may have set on a
+	// publication created ahead of time. Done atomically, a failure on one
+	// table leaves the others as they were.
 	var stmts []string
 	for _, dropTable := range tablesToRemoveFromPublication {
-		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable.String()))
+		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s", publicationName, dropTable.String()))
 	}
 	for _, addTable := range tablesToAddToPublication {
-		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
+		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s", publicationName, addTable.String()))
 	}
 	// Only the owner may run ALTER PUBLICATION. Sending no query here lets a
 	// role that does not own a matching publication use it.
 	if len(stmts) == 0 {
 		return nil
 	}
-	sq, err := sanitize.SQLQuery(strings.Join(stmts, " "))
-	if err != nil {
-		return fmt.Errorf("sanitizing publication tables query: %w", err)
-	}
-	if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+	if err := execAtomic(ctx, conn, stmts...); err != nil {
 		return fmt.Errorf("updating publication tables: %w", err)
 	}
 	return nil
+}
+
+// execAtomic sends stmts as one simple query. PostgreSQL runs all the
+// statements of a simple query in one implicit transaction, so if one fails,
+// it rolls back the others. This holds only when conn is not in an explicit
+// transaction and no statement is BEGIN or COMMIT. A statement that cannot run
+// in a transaction block, such as CREATE INDEX CONCURRENTLY, fails.
+func execAtomic(ctx context.Context, conn *pgconn.PgConn, stmts ...string) error {
+	sq, err := sanitize.SQLQuery(strings.Join(stmts, "; ") + ";")
+	if err != nil {
+		return fmt.Errorf("sanitizing query: %w", err)
+	}
+	_, err = conn.Exec(ctx, sq).ReadAll()
+	return err
 }
 
 // getPublicationMembers returns the tables a publication lists itself, from
