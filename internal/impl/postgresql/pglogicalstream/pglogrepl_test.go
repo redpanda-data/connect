@@ -672,7 +672,15 @@ func testValidatePublication(t *testing.T, version int) {
 func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, dbURL := createDockerInstance(t)
+	for _, version := range []int{12, 14, 17} {
+		t.Run(strconv.Itoa(version), func(t *testing.T) {
+			testBackfillRequiresTablePublishedAsItself(t, version)
+		})
+	}
+}
+
+func testBackfillRequiresTablePublishedAsItself(t *testing.T, version int) {
+	_, dbURL := createDockerInstanceVersion(t, version)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 
@@ -690,13 +698,9 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
 	exec("CREATE TABLE orders (id int PRIMARY KEY, note text);")
 
-	// The column list check is only built from PostgreSQL 15.
-	var versionNum int
-	require.NoError(t, db.QueryRowContext(ctx, "SHOW server_version_num").Scan(&versionNum))
-
 	newStream := func(slot string) *Stream {
 		return &Stream{
-			pgVersion:                    versionNum / 10000,
+			pgVersion:                    version,
 			slotName:                     slot,
 			snapshotSchema:               "public",
 			externallyManagedPublication: true,
@@ -711,10 +715,29 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 	events2027 := incrementalsnapshot.TableID{Schema: "public", Table: "events_2027"}
 	orders := incrementalsnapshot.TableID{Schema: "public", Table: "orders"}
 
+	exec("CREATE PUBLICATION pglog_stream_plain FOR TABLE orders;")
+	require.NoError(t, newStream("plain").checkBackfillable(ctx, orders))
+
+	// FOR ALL TABLES lists every table, partitions as leaves.
+	exec("CREATE PUBLICATION pglog_stream_all FOR ALL TABLES;")
+	s := newStream("all")
+	require.NoError(t, s.checkBackfillable(ctx, orders))
+	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+
+	if version < 13 {
+		// Before PostgreSQL 13 only leaves can be published, and their
+		// changes stream under the leaf names.
+		exec("CREATE PUBLICATION pglog_stream_leaves FOR TABLE events_2026, events_2027;")
+		s = newStream("leaves")
+		require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+		require.NoError(t, s.checkBackfillable(ctx, events2027))
+		return
+	}
+
 	// Every leaf is listed, so the parent counts as covered, but its changes
 	// stream under the leaf names even with publish_via_partition_root.
 	exec("CREATE PUBLICATION pglog_stream_leaves FOR TABLE events_2026, events_2027 WITH (publish_via_partition_root = true);")
-	s := newStream("leaves")
+	s = newStream("leaves")
 	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
 	require.NoError(t, s.checkBackfillable(ctx, events2027), "a leaf listed as itself streams as itself")
 
@@ -732,6 +755,10 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
 	require.NoError(t, s.checkBackfillable(ctx, events2027))
 
+	if version < 15 {
+		return
+	}
+
 	// A row filter or column list streams only part of the table.
 	exec("CREATE PUBLICATION pglog_stream_filtered FOR TABLE orders WHERE (id > 10);")
 	err = newStream("filtered").checkBackfillable(ctx, orders)
@@ -739,14 +766,6 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 	assert.Contains(t, err.Error(), "row filter or a column list")
 	exec("CREATE PUBLICATION pglog_stream_columns FOR TABLE orders (id);")
 	require.ErrorIs(t, newStream("columns").checkBackfillable(ctx, orders), errSignalRejected)
-	exec("CREATE PUBLICATION pglog_stream_plain FOR TABLE orders;")
-	require.NoError(t, newStream("plain").checkBackfillable(ctx, orders))
-
-	// FOR ALL TABLES lists every table, partitions as leaves.
-	exec("CREATE PUBLICATION pglog_stream_all FOR ALL TABLES;")
-	s = newStream("all")
-	require.NoError(t, s.checkBackfillable(ctx, orders))
-	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
 }
 
 func TestIntegrationStartReplication(t *testing.T) {
