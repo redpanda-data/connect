@@ -441,14 +441,16 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	return endSCN >= dbCurrentSCN, nil
 }
 
-// logMinerRangeClause is the SCN range every contents query starts with.
-const logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
+const (
+	// logMinerRangeClause is the SCN range every contents query starts with.
+	logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
 
-// checkpointRequestInterval is the minimum time between two checkpoint
-// requests for the mined position. These requests move the checkpoint forward
-// when the monitored tables are quiet, so it does not point to archive logs
-// that the database removed (see batchPublisher.CheckpointWindow).
-const checkpointRequestInterval = 10 * time.Second
+	// checkpointRequestInterval is the minimum time between two checkpoint
+	// requests for the mined position. These requests move the checkpoint forward
+	// when the monitored tables are quiet, so it does not point to archive logs
+	// that the database removed (see batchPublisher.CheckpointWindow).
+	checkpointRequestInterval = 10 * time.Second
+)
 
 // checkpointMinedPosition requests a checkpoint of the mined position from the
 // publisher, at most once per checkpointRequestInterval. It also requests one
