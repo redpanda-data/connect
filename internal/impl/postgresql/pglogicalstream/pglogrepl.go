@@ -276,7 +276,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 }
 
 // CreatePublication makes the publication with the given name publish exactly the given tables. An empty list means
-// FOR ALL TABLES. Each case runs in one implicit transaction, so a failure never leaves the publication half changed.
+// FOR ALL TABLES.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
 	// puballtables must be read from pg_publication: pg_publication_tables
 	// lists every table for a FOR ALL TABLES publication and nothing for a
@@ -308,16 +308,16 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	allTables := exists && string(rows[0].Rows[0][0]) == "t"
 
 	// The table names are sanitized, so we can safely interpolate them into the queries below.
-	var stmt string
+	var stmts []string
 	switch {
 	case !exists && len(tables) == 0:
-		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES;", publicationName)
+		stmts = append(stmts, fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES;", publicationName))
 	case !exists:
 		tableNames := make([]string, 0, len(tables))
 		for _, table := range tables {
 			tableNames = append(tableNames, table.String())
 		}
-		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE %s;", publicationName, strings.Join(tableNames, ", "))
+		stmts = append(stmts, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE %s;", publicationName, strings.Join(tableNames, ", ")))
 	case len(tables) == 0 && allTables:
 		return nil
 	case len(tables) == 0:
@@ -328,7 +328,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		// goes missing for a concurrent reader, and a failed CREATE leaves it
 		// as it was. The WITH clause is built from fixed keywords only, so we
 		// can safely interpolate it into the query.
-		stmt = fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(rows[0].Rows[0][1:]))
+		stmts = append(stmts, fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(rows[0].Rows[0][1:])))
 	default:
 		pubTables, err := GetPublicationTables(ctx, conn, publicationName)
 		if err != nil {
@@ -339,37 +339,36 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		// any TABLES IN SCHEMA members, which a user may have set on a
 		// publication created ahead of time. DROP TABLE fails on a FOR ALL
 		// TABLES publication, because PostgreSQL cannot narrow one.
-		var alters []string
+		//
+		// Only the owner may run ALTER PUBLICATION, and nothing runs when no
+		// table differs. A publication that another role created ahead of time
+		// then keeps working.
+		//
+		// Each statement runs as its own query, so a failure part way leaves
+		// the statements before it applied.
 		for _, table := range pubTables {
 			if !slices.Contains(tables, table) {
-				alters = append(alters, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, table.String()))
+				stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, table.String()))
 			}
 		}
 		for _, table := range tables {
 			if !slices.Contains(pubTables, table) {
-				alters = append(alters, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, table.String()))
+				stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, table.String()))
 			}
 		}
-		// Only the owner may run ALTER PUBLICATION, so skip it when nothing
-		// changes. A publication that another role created ahead of time then
-		// keeps working.
-		if len(alters) == 0 {
-			return nil
-		}
-		// The statements run in one implicit transaction, so a failure on one
-		// table rolls back the others.
-		stmt = strings.Join(alters, " ")
 	}
 
-	sq, err := sanitize.SQLQuery(stmt)
-	if err != nil {
-		return fmt.Errorf("sanitizing publication statement: %w", err)
-	}
-	if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
-		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" && exists && len(tables) == 0 {
-			return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
+	for _, stmt := range stmts {
+		sq, err := sanitize.SQLQuery(stmt)
+		if err != nil {
+			return fmt.Errorf("sanitizing publication statement: %w", err)
 		}
-		return fmt.Errorf("updating publication %s: %w", publicationName, err)
+		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+			if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42501" && exists && len(tables) == 0 {
+				return fmt.Errorf("recreating publication %s FOR ALL TABLES needs a superuser: recreate it FOR ALL TABLES as a superuser, or list the tables to replicate in tables: %w", publicationName, err)
+			}
+			return fmt.Errorf("updating publication %s: %w", publicationName, err)
+		}
 	}
 	return nil
 }
