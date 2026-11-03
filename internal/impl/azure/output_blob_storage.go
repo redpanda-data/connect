@@ -19,7 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -50,6 +51,8 @@ const (
 	bsoMaxTagsPermitted = 10
 	// bsoMaxTagKeyLength is the maximum length of a blob index tag key.
 	bsoMaxTagKeyLength = 128
+	// bsoMaxTagValueLength is the maximum length of a blob index tag value.
+	bsoMaxTagValueLength = 256
 	// bsoTagAllowedSpecialChars are the non-alphanumeric characters permitted
 	// within blob index tag keys and values.
 	bsoTagAllowedSpecialChars = " +-./:=_"
@@ -76,16 +79,11 @@ func bsoValidateTagKey(key string) error {
 	return nil
 }
 
-type bsoTagPair struct {
-	key   string
-	value *service.InterpolatedString
-}
-
 type bsoConfig struct {
 	client            *azblob.Client
 	Container         *service.InterpolatedString
 	Path              *service.InterpolatedString
-	Tags              []bsoTagPair
+	Tags              map[string]*service.InterpolatedString
 	BlobType          *service.InterpolatedString
 	PublicAccessLevel *service.InterpolatedString
 }
@@ -106,24 +104,20 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 		return
 	}
 
-	var tagMap map[string]*service.InterpolatedString
-	if tagMap, err = pConf.FieldInterpolatedStringMap(bsoFieldTags); err != nil {
+	if conf.Tags, err = pConf.FieldInterpolatedStringMap(bsoFieldTags); err != nil {
 		return
 	}
-	if len(tagMap) > bsoMaxTagsPermitted {
-		err = fmt.Errorf("at most %d blob index tags are permitted, got %d", bsoMaxTagsPermitted, len(tagMap))
+	if len(conf.Tags) > bsoMaxTagsPermitted {
+		err = fmt.Errorf("at most %d blob index tags are permitted, got %d", bsoMaxTagsPermitted, len(conf.Tags))
 		return
 	}
-	conf.Tags = make([]bsoTagPair, 0, len(tagMap))
-	for k, v := range tagMap {
+	// Validate in key order so that a config with several invalid keys always
+	// reports the same one.
+	for _, k := range slices.Sorted(maps.Keys(conf.Tags)) {
 		if err = bsoValidateTagKey(k); err != nil {
 			return
 		}
-		conf.Tags = append(conf.Tags, bsoTagPair{key: k, value: v})
 	}
-	sort.Slice(conf.Tags, func(i, j int) bool {
-		return conf.Tags[i].key < conf.Tags[j].key
-	})
 
 	if conf.BlobType, err = pConf.FieldInterpolatedString(bsoFieldBlobType); err != nil {
 		return
@@ -167,7 +161,7 @@ output:
     path: ${!counter()}-${!timestamp_unix_nano()}.txt
     tags:
       Environment: production
-      Source: ${!meta("kafka_topic")}
+      Source: ${!@kafka_topic}
 `+"```"+`
 
 Only values support interpolation; keys are static and are validated against Azure's limits at startup. Values are resolved per message and so are only rejected once Azure sees them.
@@ -189,11 +183,11 @@ When `+"`blob_type`"+` is `+"`APPEND`"+` the tags describe the blob rather than 
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringMapField(bsoFieldTags).
-				Description(fmt.Sprintf("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of %d tags are permitted, tag keys must be between 1 and 128 characters, and tag values must be between 0 and 256 characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).", bsoMaxTagsPermitted)).
+				Description(fmt.Sprintf("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of %d tags are permitted, tag keys must be between 1 and %d characters, and tag values must be between 0 and %d characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).", bsoMaxTagsPermitted, bsoMaxTagKeyLength, bsoMaxTagValueLength)).
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"Environment": "production",
-					"Source":      `${!meta("kafka_topic")}`,
+					"Source":      `${!@kafka_topic}`,
 				}).
 				Advanced(),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
@@ -225,6 +219,23 @@ func init() {
 			}
 			return
 		})
+}
+
+// resolveTags interpolates the configured blob index tag values against msg.
+// It returns nil when no tags are configured.
+func (c *bsoConfig) resolveTags(msg *service.Message) (map[string]string, error) {
+	if len(c.Tags) == 0 {
+		return nil, nil
+	}
+	tags := make(map[string]string, len(c.Tags))
+	for k, v := range c.Tags {
+		tagVal, err := v.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("tag %v interpolation: %w", k, err)
+		}
+		tags[k] = tagVal
+	}
+	return tags, nil
 }
 
 type azureBlobStorageWriter struct {
@@ -331,16 +342,9 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 		return err
 	}
 
-	var blobTags map[string]string
-	if len(a.conf.Tags) > 0 {
-		blobTags = make(map[string]string, len(a.conf.Tags))
-		for _, pair := range a.conf.Tags {
-			tagVal, err := pair.value.TryString(msg)
-			if err != nil {
-				return fmt.Errorf("tag %v interpolation: %w", pair.key, err)
-			}
-			blobTags[pair.key] = tagVal
-		}
+	blobTags, err := a.conf.resolveTags(msg)
+	if err != nil {
+		return err
 	}
 
 	if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes, blobTags); err != nil {

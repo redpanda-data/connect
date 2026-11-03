@@ -73,19 +73,6 @@ func TestBlobStorageOutputTagsConfig(t *testing.T) {
 		assert.EqualError(t, err, fmt.Sprintf("at most %d blob index tags are permitted, got %d", bsoMaxTagsPermitted, bsoMaxTagsPermitted+1))
 	})
 
-	t.Run("keys are sorted deterministically", func(t *testing.T) {
-		// Enough keys that an unsorted implementation is vanishingly unlikely to
-		// produce this order by chance via Go's randomised map iteration.
-		conf, err := bsoParseTagsConf(t, "tags:\n  hotel: h\n  golf: g\n  foxtrot: f\n  echo: e\n  delta: d\n  charlie: c\n  bravo: b\n  alpha: a\n")
-		require.NoError(t, err)
-
-		keys := make([]string, 0, len(conf.Tags))
-		for _, pair := range conf.Tags {
-			keys = append(keys, pair.key)
-		}
-		assert.Equal(t, []string{"alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"}, keys)
-	})
-
 	t.Run("invalid keys are rejected at config time", func(t *testing.T) {
 		for _, test := range []struct {
 			name   string
@@ -95,12 +82,12 @@ func TestBlobStorageOutputTagsConfig(t *testing.T) {
 			{
 				name:   "empty key",
 				key:    `"": value`,
-				errStr: `blob index tag key "" must be between 1 and 128 characters, got 0`,
+				errStr: fmt.Sprintf(`blob index tag key "" must be between 1 and %d characters, got 0`, bsoMaxTagKeyLength),
 			},
 			{
 				name:   "over-long key",
 				key:    strings.Repeat("k", bsoMaxTagKeyLength+1) + ": value",
-				errStr: fmt.Sprintf("blob index tag key %q must be between 1 and 128 characters, got %d", strings.Repeat("k", bsoMaxTagKeyLength+1), bsoMaxTagKeyLength+1),
+				errStr: fmt.Sprintf("blob index tag key %q must be between 1 and %d characters, got %d", strings.Repeat("k", bsoMaxTagKeyLength+1), bsoMaxTagKeyLength, bsoMaxTagKeyLength+1),
 			},
 			{
 				name:   "unsupported character",
@@ -124,23 +111,41 @@ func TestBlobStorageOutputTagsConfig(t *testing.T) {
 	})
 
 	t.Run("values are interpolated per message", func(t *testing.T) {
-		conf, err := bsoParseTagsConf(t, "tags:\n  Static: fixed\n  Topic: ${! meta(\"kafka_topic\") }\n")
+		conf, err := bsoParseTagsConf(t, "tags:\n  Static: fixed\n  Topic: ${! @kafka_topic }\n")
 		require.NoError(t, err)
-		require.Len(t, conf.Tags, 2)
 
 		msg := service.NewMessage([]byte("hello world"))
 		msg.MetaSetMut("kafka_topic", "orders")
 
-		resolved := make(map[string]string, len(conf.Tags))
-		for _, pair := range conf.Tags {
-			val, err := pair.value.TryString(msg)
-			require.NoError(t, err)
-			resolved[pair.key] = val
-		}
-
+		tags, err := conf.resolveTags(msg)
+		require.NoError(t, err)
 		assert.Equal(t, map[string]string{
 			"Static": "fixed",
 			"Topic":  "orders",
-		}, resolved)
+		}, tags)
+	})
+
+	t.Run("no tags resolve to nil", func(t *testing.T) {
+		conf, err := bsoParseTagsConf(t, "")
+		require.NoError(t, err)
+
+		tags, err := conf.resolveTags(service.NewMessage([]byte("hello world")))
+		require.NoError(t, err)
+		assert.Nil(t, tags)
+	})
+
+	t.Run("interpolation errors name the tag", func(t *testing.T) {
+		conf, err := bsoParseTagsConf(t, "tags:\n  Doc: ${! this.missing.number() }\n")
+		require.NoError(t, err)
+
+		_, err = conf.resolveTags(service.NewMessage([]byte(`{}`)))
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "tag Doc interpolation")
+	})
+
+	t.Run("invalid keys are reported in key order", func(t *testing.T) {
+		_, err := bsoParseTagsConf(t, "tags:\n  \"z!\": a\n  \"b!\": b\n  \"m!\": c\n")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, `blob index tag key "b!"`)
 	})
 }
