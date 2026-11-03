@@ -275,18 +275,20 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication makes the publication with the given name publish exactly the given tables. An empty list means
-// FOR ALL TABLES.
+// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables, or alters an
+// existing one so that it lists exactly those tables. An empty list means FOR ALL TABLES: a new publication is
+// created that way, and an existing FOR TABLE publication is recreated as FOR ALL TABLES, since PostgreSQL has no
+// ALTER PUBLICATION form that switches between the two.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
-	// puballtables must be read from pg_publication: pg_publication_tables
-	// lists every table for a FOR ALL TABLES publication and nothing for a
-	// FOR TABLE publication that has had all of its tables dropped, so the
-	// table list alone cannot tell them apart. The options are read too, so
-	// that a recreated publication keeps them. They go through to_jsonb
-	// because the newer columns are missing on older servers, and naming a
-	// missing column fails the whole query.
+	// Check if publication exists. puballtables must be read from here:
+	// pg_publication_tables lists every table for a FOR ALL TABLES publication
+	// and nothing for a FOR TABLE publication that has had all of its tables
+	// dropped, so the table list alone cannot tell them apart. The options are
+	// read too, so that a recreated publication keeps them. They go through
+	// to_jsonb because the newer columns are missing on older servers, and
+	// naming a missing column fails the whole query.
 	pubQuery, err := sanitize.SQLQuery(`
-			SELECT puballtables,
+			SELECT pubname, puballtables,
 				to_jsonb(p) ->> 'pubinsert',
 				to_jsonb(p) ->> 'pubupdate',
 				to_jsonb(p) ->> 'pubdelete',
@@ -299,36 +301,50 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	if err != nil {
 		return fmt.Errorf("sanitizing publication query: %w", err)
 	}
-	rows, err := conn.Exec(ctx, pubQuery).ReadAll()
+
+	result := conn.Exec(ctx, pubQuery)
+
+	rows, err := result.ReadAll()
 	if err != nil {
 		return fmt.Errorf("checking publication existence: %w", err)
 	}
+
+	tablesClause := "FOR ALL TABLES"
+	if len(tables) > 0 {
+		var sb strings.Builder
+		sb.WriteString("FOR TABLE ")
+		for i, table := range tables {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(table.String())
+		}
+		tablesClause = sb.String()
+	}
+
 	exists := len(rows) > 0 && len(rows[0].Rows) > 0
 	// The simple query protocol returns booleans as text: "t" or "f".
-	allTables := exists && string(rows[0].Rows[0][0]) == "t"
+	allTables := exists && string(rows[0].Rows[0][1]) == "t"
 
 	// The table names are sanitized, so we can safely interpolate them into the queries below.
 	var stmts []string
 	switch {
-	case !exists && len(tables) == 0:
-		stmts = append(stmts, fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES;", publicationName))
 	case !exists:
-		tableNames := make([]string, 0, len(tables))
-		for _, table := range tables {
-			tableNames = append(tableNames, table.String())
-		}
-		stmts = append(stmts, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE %s;", publicationName, strings.Join(tableNames, ", ")))
+		stmts = append(stmts, fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
 	case len(tables) == 0 && allTables:
+		// A FOR ALL TABLES publication already covers every table, so nothing
+		// to do.
 		return nil
 	case len(tables) == 0:
-		// A FOR TABLE publication cannot be widened with ALTER PUBLICATION,
-		// and dropping its members would only leave an empty publication that
-		// streams nothing, so recreate it with the same options. Both
-		// statements run in one implicit transaction, so the publication never
-		// goes missing for a concurrent reader, and a failed CREATE leaves it
-		// as it was. The WITH clause is built from fixed keywords only, so we
-		// can safely interpolate it into the query.
-		stmts = append(stmts, fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(rows[0].Rows[0][1:])))
+		// Every table is wanted. A FOR TABLE publication cannot be widened
+		// with ALTER PUBLICATION, and dropping its members one by one would
+		// only leave an empty publication that streams nothing, so recreate
+		// it with the same options. Both statements run in one implicit
+		// transaction, so the publication never goes missing for a concurrent
+		// reader, and a failed CREATE leaves it as it was.
+		// withClause is built from fixed keywords only, so we can safely
+		// interpolate it into the query
+		stmts = append(stmts, fmt.Sprintf("DROP PUBLICATION %s; CREATE PUBLICATION %s FOR ALL TABLES WITH (%s);", publicationName, publicationName, publicationWithClause(rows[0].Rows[0][2:])))
 	default:
 		pubTables, err := GetPublicationTables(ctx, conn, publicationName)
 		if err != nil {
@@ -336,16 +352,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		}
 		// Only add and drop the tables that differ. SET TABLE would also
 		// remove the row filters and column lists of the tables that stay, and
-		// any TABLES IN SCHEMA members, which a user may have set on a
-		// publication created ahead of time. DROP TABLE fails on a FOR ALL
-		// TABLES publication, because PostgreSQL cannot narrow one.
-		//
-		// Only the owner may run ALTER PUBLICATION, and nothing runs when no
-		// table differs. A publication that another role created ahead of time
-		// then keeps working.
-		//
-		// Each statement runs as its own query, so a failure part way leaves
-		// the statements before it applied.
+		// any TABLES IN SCHEMA members.
 		for _, table := range pubTables {
 			if !slices.Contains(tables, table) {
 				stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, table.String()))
@@ -370,6 +377,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 			return fmt.Errorf("updating publication %s: %w", publicationName, err)
 		}
 	}
+
 	return nil
 }
 
