@@ -456,12 +456,9 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// All the statements go in one simple query, which PostgreSQL runs in one
 	// implicit transaction, so a failure on one table rolls back the others.
-	// SET TABLE is not used: it would also remove the row filters and column
-	// lists of the tables that stay, and any TABLES IN SCHEMA members, which a
-	// user may have set on a publication created ahead of time. Only the
-	// tables that differ get a statement. Only the owner may run ALTER
-	// PUBLICATION, so a publication that another role created ahead of time
-	// keeps working when its table list already matches.
+	// It uses ADD and DROP, not SET TABLE: SET would also remove the row
+	// filters, column lists and TABLES IN SCHEMA members that a user may have
+	// set on a publication created ahead of time.
 	var stmts []string
 	for _, dropTable := range tablesToRemoveFromPublication {
 		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable.String()))
@@ -469,7 +466,8 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	for _, addTable := range tablesToAddToPublication {
 		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
 	}
-	// Send no query when no table differs.
+	// Only the owner may run ALTER PUBLICATION. Sending no query here lets a
+	// role that does not own a matching publication use it.
 	if len(stmts) == 0 {
 		return nil
 	}
