@@ -276,7 +276,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 }
 
 // CreatePublication makes the publication with the given name publish exactly the given tables. An empty list means
-// FOR ALL TABLES. Each case runs at most one statement, so a failure never leaves the publication half changed.
+// FOR ALL TABLES. Each case runs in one implicit transaction, so a failure never leaves the publication half changed.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
 	// puballtables must be read from pg_publication: pg_publication_tables
 	// lists every table for a FOR ALL TABLES publication and nothing for a
@@ -307,19 +307,17 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	// The simple query protocol returns booleans as text: "t" or "f".
 	allTables := exists && string(rows[0].Rows[0][0]) == "t"
 
-	tableNames := make([]string, 0, len(tables))
-	for _, table := range tables {
-		tableNames = append(tableNames, table.String())
-	}
-	// The table names are sanitized, so we can safely interpolate them into the query.
-	tableClause := "TABLE " + strings.Join(tableNames, ", ")
-
+	// The table names are sanitized, so we can safely interpolate them into the queries below.
 	var stmt string
 	switch {
 	case !exists && len(tables) == 0:
 		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR ALL TABLES;", publicationName)
 	case !exists:
-		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR %s;", publicationName, tableClause)
+		tableNames := make([]string, 0, len(tables))
+		for _, table := range tables {
+			tableNames = append(tableNames, table.String())
+		}
+		stmt = fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE %s;", publicationName, strings.Join(tableNames, ", "))
 	case len(tables) == 0 && allTables:
 		return nil
 	case len(tables) == 0:
@@ -336,18 +334,31 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		if err != nil {
 			return fmt.Errorf("getting publication tables: %w", err)
 		}
+		// Only add and drop the tables that differ. SET TABLE would also
+		// remove the row filters and column lists of the tables that stay, and
+		// any TABLES IN SCHEMA members, which a user may have set on a
+		// publication created ahead of time. DROP TABLE fails on a FOR ALL
+		// TABLES publication, because PostgreSQL cannot narrow one.
+		var alters []string
+		for _, table := range pubTables {
+			if !slices.Contains(tables, table) {
+				alters = append(alters, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, table.String()))
+			}
+		}
+		for _, table := range tables {
+			if !slices.Contains(pubTables, table) {
+				alters = append(alters, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, table.String()))
+			}
+		}
 		// Only the owner may run ALTER PUBLICATION, so skip it when nothing
 		// changes. A publication that another role created ahead of time then
 		// keeps working.
-		if len(pubTables) == len(tables) && !slices.ContainsFunc(tables, func(table TableFQN) bool {
-			return !slices.Contains(pubTables, table)
-		}) {
+		if len(alters) == 0 {
 			return nil
 		}
-		// SET TABLE replaces the member list and keeps the publication
-		// options. It fails on a FOR ALL TABLES publication, because
-		// PostgreSQL cannot narrow one.
-		stmt = fmt.Sprintf("ALTER PUBLICATION %s SET %s;", publicationName, tableClause)
+		// The statements run in one implicit transaction, so a failure on one
+		// table rolls back the others.
+		stmt = strings.Join(alters, " ")
 	}
 
 	sq, err := sanitize.SQLQuery(stmt)
