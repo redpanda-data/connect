@@ -420,6 +420,9 @@ func TestIntegrationOracleDBCDCIdleCheckpoint(t *testing.T) {
 				return replication.SCNFromBytes(raw)
 			}
 
+			// min_scn_window_size: 0 is required. The 100 commits below can move the SCN by fewer
+			// than the default 1000. That skips the mining cycle, so the checkpoint does not reach
+			// targetSCN.
 			stream := oracledbtest.StartPipelineAndWaitForStreaming(t, `
 oracledb_cdc:
   connection_string: `+connStr+`
