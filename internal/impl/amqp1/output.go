@@ -44,6 +44,7 @@ func amqp1OutputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Sends messages to an AMQP (1.0) server.").
 		Description(`
+[[metadata-overview]]
 == Metadata
 
 Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.

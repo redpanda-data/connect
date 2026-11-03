@@ -22,7 +22,10 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/appendblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -155,8 +158,15 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 		_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(bytes.NewReader(message)), nil)
 		if err != nil {
 			if isErrorCode(err, bloberror.BlobNotFound) {
-				_, err := appendBlobClient.Create(ctx, nil)
-				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) {
+				// Another write can create the blob and append to it before this Create. Without If-None-Match,
+				// Create replaces that blob and its data is lost. With it, Create fails if the blob exists. Azurite
+				// returns BlobAlreadyExists (409). The REST docs give 412 for a failed If-None-Match on writes.
+				_, err := appendBlobClient.Create(ctx, &appendblob.CreateOptions{
+					AccessConditions: &blob.AccessConditions{
+						ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfNoneMatch: to.Ptr(azcore.ETagAny)},
+					},
+				})
+				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) && !isErrorCode(err, bloberror.ConditionNotMet) {
 					return fmt.Errorf("creating append blob: %w", err)
 				}
 
