@@ -29,7 +29,7 @@ require (
 	cloud.google.com/go/pubsub v1.51.1
 	cloud.google.com/go/spanner v1.96.1
 	cloud.google.com/go/storage v1.70.0
-	connectrpc.com/connect v1.21.0
+	connectrpc.com/connect v1.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.3
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
 	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.5.0
