@@ -346,43 +346,36 @@ func TestMinedCheckpointSCN(t *testing.T) {
 		name         string
 		currentSCN   uint64
 		lowWatermark uint64
-		wantSCN      uint64
-		wantOK       bool
+		want         replication.SCN
 	}{
 		{
 			name:         "no open transaction checkpoints the mined position",
 			currentSCN:   1000,
 			lowWatermark: math.MaxUint64,
-			wantSCN:      1000,
-			wantOK:       true,
+			want:         1000,
 		},
 		{
 			name:         "open transaction below current SCN caps the checkpoint",
 			currentSCN:   1000,
 			lowWatermark: 900,
-			wantSCN:      899,
-			wantOK:       true,
+			want:         899,
 		},
 		{
 			name:         "open transaction above current SCN does not cap it",
 			currentSCN:   1000,
 			lowWatermark: 1500,
-			wantSCN:      1000,
-			wantOK:       true,
+			want:         1000,
 		},
 		{
-			name:         "low watermark of 1 gives 0 and is skipped",
+			name:         "low watermark of 1 gives an invalid SCN",
 			currentSCN:   1000,
 			lowWatermark: 1,
+			want:         replication.InvalidSCN,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotSCN, gotOK := minedCheckpointSCN(tt.currentSCN, tt.lowWatermark)
-			assert.Equal(t, tt.wantOK, gotOK)
-			if tt.wantOK {
-				assert.Equal(t, tt.wantSCN, gotSCN)
-			}
+			assert.Equal(t, tt.want, minedCheckpointSCN(tt.currentSCN, tt.lowWatermark))
 		})
 	}
 }

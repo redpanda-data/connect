@@ -460,24 +460,23 @@ func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) 
 	if now.Sub(lm.lastCheckpointRequest) < checkpointRequestInterval {
 		return nil
 	}
-	scn, ok := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""))
-	if !ok {
+	scn := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""))
+	if !scn.IsValid() {
 		// Nothing was requested, so the next cycle tries again.
 		return nil
 	}
 	lm.lastCheckpointRequest = now
-	return lm.publisher.CheckpointWindow(ctx, replication.SCN(scn))
+	return lm.publisher.CheckpointWindow(ctx, scn)
 }
 
 // minedCheckpointSCN returns the SCN that is safe to checkpoint after a mining
-// cycle, and false if there is none. It stays below open transactions, as the
+// cycle, or InvalidSCN if there is none. It stays below open transactions, as the
 // commit path does. The low watermark also counts transactions with only LOB
 // events (see TransactionCache.IncludeInLowWatermark) and the transactions of an
 // open LOB replay (see LogMiner.lowWatermarkSCN), so LOB state in memory needs
 // no extra check.
-func minedCheckpointSCN(currentSCN, lowWatermark uint64) (uint64, bool) {
-	scn := capBelowOpenTxn(currentSCN, lowWatermark)
-	return scn, scn > 0
+func minedCheckpointSCN(currentSCN, lowWatermark uint64) replication.SCN {
+	return replication.SCN(capBelowOpenTxn(currentSCN, lowWatermark))
 }
 
 // capBelowOpenTxn caps scn at lowWatermark-1, the last SCN before the oldest
