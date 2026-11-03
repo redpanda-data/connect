@@ -26,6 +26,14 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
+// signalTestStandbyTimeout is the pg_standby_timeout of the signal tests that
+// wait 5 s for a streamed row. A Postgres 16+ logical walsender can miss the
+// wakeup for a commit. It then sends that commit only when something else
+// wakes it, usually the next standby status update from the input. With the
+// default of 10s, the row can arrive after the 5 s wait. Postgres fixed the
+// same race for physical walsenders only, in postgres/postgres@782d9cf8bf.
+const signalTestStandbyTimeout = "1s"
+
 func TestIntegrationSignallingConfiguration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -83,10 +91,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_uuid_id
     stream_snapshot: true
     signal_table_name: uuid_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - uuid_test_events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 		// Wait for the initial snapshot to complete before inserting a signal.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -129,10 +138,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_jsonb_data
     stream_snapshot: true
     signal_table_name: jsonb_data_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - jsonb_test_events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 		// Wait for the initial snapshot to complete before inserting a signal.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -293,10 +303,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_detect_only
     stream_snapshot: true
     signal_table_name: rpcn_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -354,10 +365,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_malformed
     stream_snapshot: true
     signal_table_name: rpcn_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
