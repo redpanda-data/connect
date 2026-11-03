@@ -29,7 +29,9 @@ import (
 // signalTestStandbyTimeout is the pg_standby_timeout of the signal tests that
 // wait 5 s for a row. Postgres 16+ can hold back a streamed commit until the
 // next standby status update, and the 10s default is longer than the wait.
-// postgres/postgres@782d9cf8bf fixed this for physical replication only.
+// postgres/postgres@782d9cf8bf fixed this for physical replication only. The
+// logical case is discussed in
+// https://postgr.es/m/mvx5bs7q.33b99c32-67d8-4373-8611-7a8250fb2fd3@we.are.superhuman.com
 const signalTestStandbyTimeout = "1s"
 
 func TestIntegrationSignallingConfiguration(t *testing.T) {
