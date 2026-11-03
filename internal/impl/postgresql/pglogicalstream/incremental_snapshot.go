@@ -57,8 +57,8 @@ type incrementalSnapshot struct {
 	pkCache map[string][]string
 	// lastTable is only used to log a transition between tables.
 	lastTable *incrementalsnapshot.TableID
-	// replicated is the set a signal may ask for, nil when the publication
-	// is FOR ALL TABLES and so accepts any.
+	// replicated is the set a signal may ask for, nil when the input's
+	// tables is empty and so accepts any the publication replicates.
 	replicated map[incrementalsnapshot.TableID]struct{}
 	// backfilling tells the heartbeat whether it still owes transaction ids.
 	backfilling atomic.Bool
@@ -96,7 +96,8 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 	}
 
 	// A signal may only ask for a replicated table. An empty DBTables means
-	// the publication is FOR ALL TABLES, so leave the set nil to accept any.
+	// the publication decides, so leave the set nil to accept any:
+	// checkDedupReachable checks the table is in the publication.
 	if len(config.DBTables) > 0 {
 		s.incSnapshot.replicated = make(map[incrementalsnapshot.TableID]struct{}, len(config.DBTables))
 		for _, name := range config.DBTables {
@@ -256,8 +257,12 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	if err := s.checkKeyTypesBindable(ctx, table); err != nil {
 		return nil, err
 	}
-	if err := s.checkDedupReachable(ctx, table); err != nil {
-		return nil, err
+	// An externally managed publication can change mid-run, so its check is
+	// not cached here: refer to checkBackfillable and FetchChunk.
+	if !s.externallyManagedPublication {
+		if err := s.checkDedupReachable(ctx, table); err != nil {
+			return nil, err
+		}
 	}
 
 	s.incSnapshot.pkCache[key] = cols
@@ -357,8 +362,10 @@ func (s *Stream) warnToastFidelity(ctx context.Context, table incrementalsnapsho
 // A row filter or a column list means the stream carries only some rows or
 // columns, which a backfill would then emit anyway.
 //
-// The result is cached with the key columns, so changing the publication
-// takes effect on the next restart rather than mid-run.
+// For a connector-managed publication the result is cached with the key
+// columns, so flipping the publication option takes effect on the next
+// restart rather than mid-run. An externally managed one is checked on every
+// signal and every chunk instead.
 func (s *Stream) checkDedupReachable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	publication := "pglog_stream_" + s.slotName
 	q, err := publishedAsItselfQuery(s.pgVersion, publication, table.Schema, table.Table, tableFQN(table).String())
@@ -555,13 +562,37 @@ func (d incrementalSnapshotDeps) FetchChunk(ctx context.Context, table increment
 	}
 	readCtx, cancel := context.WithTimeout(ctx, incSnapshotReadTimeout)
 	defer cancel()
+	// An externally managed publication can drop the table mid-backfill, and
+	// its writes would then stop streaming and could no longer be
+	// deduplicated, so each chunk checks first. A table no longer streamed
+	// fails the backfill rather than emitting rows that may revert writes.
+	if d.stream.externallyManagedPublication {
+		if err := d.stream.checkDedupReachable(readCtx, table); err != nil {
+			if errors.Is(err, incrementalsnapshot.ErrTableUnusable) {
+				return nil, fmt.Errorf("aborting the backfill of table %s: %w", table, err)
+			}
+			return nil, d.stream.incSnapshotNoteRead(retryableReadErr(err, readCtx, ctx))
+		}
+	}
 	rows, err := d.stream.fetchIncrementalChunk(readCtx, table, pkColumnsUnquoted, query, args)
 	return rows, d.stream.incSnapshotNoteRead(retryableReadErr(err, readCtx, ctx))
 }
 
-// resolveIncrementalPK backs Deps.ResolvePrimaryKey.
+// resolveIncrementalPK backs Deps.ResolvePrimaryKey. It is what checks a
+// table resumed from a checkpoint, which no signal checked this run, so an
+// externally managed publication is checked here too: a table it no longer
+// streams as itself is then dropped from the queue rather than backfilled.
 func (s *Stream) resolveIncrementalPK(ctx context.Context, table incrementalsnapshot.TableID) ([]string, error) {
-	return s.incrementalPKColumns(ctx, table)
+	cols, err := s.incrementalPKColumns(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+	if s.externallyManagedPublication {
+		if err := s.checkDedupReachable(ctx, table); err != nil {
+			return nil, err
+		}
+	}
+	return cols, nil
 }
 
 // incrementalStreamedRowPK makes the PrimaryKey that OnStreamedRow matches
@@ -899,7 +930,12 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 		return fmt.Errorf("%w: %w", errSignalRejected, err)
 	}
 	// The backfill pages by key, so a table without one can never be read.
-	if _, err := s.incrementalPKColumns(ctx, table); err != nil {
+	// For a connector-managed publication this also runs checkDedupReachable.
+	_, err := s.incrementalPKColumns(ctx, table)
+	if err == nil && s.externallyManagedPublication {
+		err = s.checkDedupReachable(ctx, table)
+	}
+	if err != nil {
 		if errors.Is(err, incrementalsnapshot.ErrTableUnusable) {
 			return fmt.Errorf("%w: %w", errSignalRejected, err)
 		}
@@ -912,7 +948,7 @@ func (s *Stream) checkBackfillable(ctx context.Context, table incrementalsnapsho
 
 func (s *Stream) checkReplicated(table incrementalsnapshot.TableID) error {
 	if s.incSnapshot.replicated == nil {
-		return nil // FOR ALL TABLES
+		return nil // the publication decides
 	}
 	if _, replicated := s.incSnapshot.replicated[table]; replicated {
 		return nil
