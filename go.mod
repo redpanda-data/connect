@@ -159,7 +159,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.16.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.23.0
-	github.com/redpanda-data/benthos/v4 v4.84.0
+	github.com/redpanda-data/benthos/v4 v4.84.1-0.20261030191824-661616fc0dc0
 	github.com/redpanda-data/common-go/authz v0.3.0
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
