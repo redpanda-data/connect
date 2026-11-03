@@ -837,7 +837,7 @@ func TestLOBOnlyTransactionWithoutStartIsPublished(t *testing.T) {
 	assert.Equal(t, replication.SCN(140), pub.messages[0].CheckpointSCN)
 }
 
-func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
+func newLogMiner(pub Publisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher:        pub,
 		txnCache:         cache,

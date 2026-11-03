@@ -37,12 +37,23 @@ var (
 	errCodeRedoLogHeaderMismatch = 1368
 )
 
+// Publisher is the ChangePublisher that LogMiner sends change events and
+// checkpoint requests to. The snapshot does not checkpoint the mined position,
+// so this method is not part of replication.ChangePublisher.
+type Publisher interface {
+	replication.ChangePublisher
+	// CheckpointWindow records that every change up to scn is published, also
+	// when there were no rows for the monitored tables. scn becomes the resume
+	// position when every batch published before the call is acked.
+	CheckpointWindow(ctx context.Context, scn replication.SCN) error
+}
+
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
 	cfg          *Config
 	tables       []replication.UserTable
-	publisher    replication.ChangePublisher
+	publisher    Publisher
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
@@ -86,7 +97,7 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
 // txnCache sets the transaction buffer implementation; pass nil to use the default in-memory cache.
-func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher Publisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
 	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
@@ -442,7 +453,7 @@ const checkpointRequestInterval = 10 * time.Second
 // checkpointMinedPosition requests a checkpoint of the mined position from the
 // publisher, at most once per checkpointRequestInterval. It also requests one
 // after cycles with no rows for the monitored tables. See
-// ChangePublisher.CheckpointWindow.
+// publisher.CheckpointWindow.
 func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) error {
 	if now.Sub(lm.lastCheckpointRequest) < checkpointRequestInterval {
 		return nil
