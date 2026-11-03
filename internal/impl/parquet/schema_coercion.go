@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"time"
 
@@ -155,23 +156,29 @@ func mapValueNode(n parquet.Node) parquet.Node {
 	return nil
 }
 
-// apply coerces value in place according to the plan and returns the result.
-func (p *encodeCoercionPlan) apply(value any) (any, error) {
+// apply coerces value according to the plan and returns the result. When
+// mutable is false value is left unchanged, and every container on the plan's
+// path is copied rather than modified.
+func (p *encodeCoercionPlan) apply(value any, mutable bool) (any, error) {
 	if p.repeated {
 		if elems, ok := value.([]any); ok {
-			for i := range elems {
+			out := elems
+			if !mutable {
+				out = make([]any, len(elems))
+			}
+			for i, elem := range elems {
 				var err error
-				if elems[i], err = p.applyElement(elems[i]); err != nil {
+				if out[i], err = p.applyElement(elem, mutable); err != nil {
 					return nil, fmt.Errorf("visiting [%d]: %w", i, err)
 				}
 			}
-			return elems, nil
+			return out, nil
 		}
 	}
-	return p.applyElement(value)
+	return p.applyElement(value, mutable)
 }
 
-func (p *encodeCoercionPlan) applyElement(value any) (any, error) {
+func (p *encodeCoercionPlan) applyElement(value any, mutable bool) (any, error) {
 	if p.coerce != nil {
 		if p.optional && value == nil {
 			return nil, nil
@@ -186,26 +193,30 @@ func (p *encodeCoercionPlan) applyElement(value any) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected an object, got %T", value)
 	}
+	out := obj
+	if !mutable {
+		out = maps.Clone(obj)
+	}
 
 	if p.mapValue != nil {
 		for k, v := range obj {
 			var err error
-			if obj[k], err = p.mapValue.apply(v); err != nil {
+			if out[k], err = p.mapValue.apply(v, mutable); err != nil {
 				return nil, fmt.Errorf("visiting [%s]: %w", k, err)
 			}
 		}
-		return obj, nil
+		return out, nil
 	}
 
 	for _, f := range p.fields {
 		if v, exists := obj[f.name]; exists {
 			var err error
-			if obj[f.name], err = f.plan.apply(v); err != nil {
+			if out[f.name], err = f.plan.apply(v, mutable); err != nil {
 				return nil, fmt.Errorf("visiting [%s]: %w", f.name, err)
 			}
 		}
 	}
-	return obj, nil
+	return out, nil
 }
 
 // leafCoerceFn converts a value into the parquet physical representation of a

@@ -14,36 +14,54 @@
 
 package parquet
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"maps"
+	"slices"
+)
 
-func scrubJSONNumbers(v any) any {
-	switch t := v.(type) {
-	case json.Number:
-		if i, err := t.Int64(); err == nil {
-			return i
-		}
-		if f, err := t.Float64(); err == nil {
-			return f
-		}
-		return 0
-	case map[string]any:
-		scrubJSONNumbersObj(t)
-		return t
-	case []any:
-		scrubJSONNumbersArr(t)
-		return t
-	}
+// scrubJSONNumbers replaces json.Number values with int64 or float64. When
+// mutable is false v is left unchanged, and any container holding a replaced
+// value is copied rather than modified.
+func scrubJSONNumbers(v any, mutable bool) any {
+	v, _ = scrubJSONNumbersChanged(v, mutable)
 	return v
 }
 
-func scrubJSONNumbersObj(obj map[string]any) {
-	for k, v := range obj {
-		obj[k] = scrubJSONNumbers(v)
+// scrubJSONNumbersChanged is scrubJSONNumbers that also reports whether
+// anything was replaced.
+func scrubJSONNumbersChanged(v any, mutable bool) (any, bool) {
+	switch t := v.(type) {
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return i, true
+		}
+		if f, err := t.Float64(); err == nil {
+			return f, true
+		}
+		return 0, true
+	case map[string]any:
+		out, owned, changed := t, mutable, false
+		for k, child := range t {
+			if newChild, ok := scrubJSONNumbersChanged(child, mutable); ok {
+				if !owned {
+					out, owned = maps.Clone(t), true
+				}
+				out[k], changed = newChild, true
+			}
+		}
+		return out, changed
+	case []any:
+		out, owned, changed := t, mutable, false
+		for i, child := range t {
+			if newChild, ok := scrubJSONNumbersChanged(child, mutable); ok {
+				if !owned {
+					out, owned = slices.Clone(t), true
+				}
+				out[i], changed = newChild, true
+			}
+		}
+		return out, changed
 	}
-}
-
-func scrubJSONNumbersArr(arr []any) {
-	for i, v := range arr {
-		arr[i] = scrubJSONNumbers(v)
-	}
+	return v, false
 }
