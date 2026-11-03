@@ -521,6 +521,38 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 	})
 }
 
+// All the ADD and DROP statements run in one implicit transaction, so a
+// failure on one table leaves the publication as it was.
+func TestIntegrationCreatePublicationFailureLeavesTablesUnchanged(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	_, err = conn.Exec(ctx, `
+		CREATE TABLE dropped (id serial PRIMARY KEY, name text);
+		CREATE TABLE added (id serial PRIMARY KEY, name text);
+		CREATE PUBLICATION pub_atomic FOR TABLE dropped;
+	`).ReadAll()
+	require.NoError(t, err)
+
+	dropped := TableFQN{Schema: `"public"`, Table: `"dropped"`}
+	added := TableFQN{Schema: `"public"`, Table: `"added"`}
+	missing := TableFQN{Schema: `"public"`, Table: `"missing"`}
+	require.Error(t, CreatePublication(ctx, conn, "pub_atomic", []TableFQN{added, missing}))
+
+	tables, _, err := GetPublicationTables(ctx, conn, "pub_atomic")
+	require.NoError(t, err)
+	assert.Equal(t, []TableFQN{dropped}, tables)
+}
+
 // publicationIsForAllTables reports pg_publication.puballtables for an
 // existing publication.
 func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationName string) bool {

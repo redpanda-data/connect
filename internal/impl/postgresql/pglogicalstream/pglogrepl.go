@@ -454,28 +454,31 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return err
 	}
 
-	// remove tables from publication
+	// All the statements go in one simple query, which PostgreSQL runs in one
+	// implicit transaction, so a failure on one table rolls back the others.
+	// SET TABLE is not used: it would also remove the row filters and column
+	// lists of the tables that stay, and any TABLES IN SCHEMA members, which a
+	// user may have set on a publication created ahead of time.
+	var stmts []string
 	for _, dropTable := range tablesToRemoveFromPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf(`ALTER PUBLICATION %s DROP TABLE %s;`, publicationName, dropTable.String()))
-		if err != nil {
-			return fmt.Errorf("sanitizing drop table query: %w", err)
-		}
-		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
-			return fmt.Errorf("removing table from publication: %w", err)
-		}
+		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable.String()))
 	}
-
-	// add tables to publication
 	for _, addTable := range tablesToAddToPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
-		if err != nil {
-			return fmt.Errorf("sanitizing add table query: %w", err)
-		}
-		if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
-			return fmt.Errorf("adding table to publication: %w", err)
-		}
+		stmts = append(stmts, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
 	}
-
+	// Only the owner may run ALTER PUBLICATION, so nothing runs when no table
+	// differs. A publication that another role created ahead of time then
+	// keeps working.
+	if len(stmts) == 0 {
+		return nil
+	}
+	sq, err := sanitize.SQLQuery(strings.Join(stmts, " "))
+	if err != nil {
+		return fmt.Errorf("sanitizing publication tables query: %w", err)
+	}
+	if _, err := conn.Exec(ctx, sq).ReadAll(); err != nil {
+		return fmt.Errorf("updating publication tables: %w", err)
+	}
 	return nil
 }
 
