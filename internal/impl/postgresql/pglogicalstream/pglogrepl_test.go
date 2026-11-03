@@ -553,6 +553,117 @@ func TestIntegrationCreatePublicationFailureLeavesTablesUnchanged(t *testing.T) 
 	assert.Equal(t, []TableFQN{dropped}, tables)
 }
 
+// The docs suggest creating the publication ahead of time, so that the
+// replication user does not need to own it. When it already lists the
+// configured tables, CreatePublication must not run ALTER PUBLICATION, which
+// only the owner may run.
+func TestIntegrationCreatePublicationLeavesMatchingPublicationAlone(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
+	defer cancel()
+
+	owner, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, owner)
+
+	_, err = owner.Exec(ctx, `
+		CREATE TABLE listed (id serial PRIMARY KEY, name text);
+		CREATE PUBLICATION pub_precreated FOR TABLE listed;
+		CREATE ROLE replicator LOGIN REPLICATION PASSWORD 'secret';
+	`).ReadAll()
+	require.NoError(t, err)
+
+	replicatorURL := strings.Replace(dbURL, "user=user_name", "user=replicator", 1)
+	require.NotEqual(t, dbURL, replicatorURL)
+	replicator, err := pgconn.Connect(ctx, replicatorURL)
+	require.NoError(t, err)
+	defer closeConn(t, replicator)
+
+	listed := TableFQN{Schema: `"public"`, Table: `"listed"`}
+	require.NoError(t, CreatePublication(ctx, replicator, "pub_precreated", []TableFQN{listed}))
+}
+
+// A publication that the user created ahead of time can have row filters,
+// column lists, and TABLES IN SCHEMA members. When the table list changes,
+// CreatePublication must only add and drop tables, and keep that state on
+// the members that stay. ALTER PUBLICATION ... SET TABLE would remove it.
+func TestIntegrationCreatePublicationKeepsMembersThatStay(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	_, err = conn.Exec(ctx, `
+		CREATE SCHEMA other;
+		CREATE TABLE other.in_schema (id serial PRIMARY KEY, name text);
+		CREATE TABLE filtered (id serial PRIMARY KEY, tenant int, name text);
+		CREATE TABLE added (id serial PRIMARY KEY, name text);
+	`).ReadAll()
+	require.NoError(t, err)
+
+	inSchema := TableFQN{Schema: `"other"`, Table: `"in_schema"`}
+	filtered := TableFQN{Schema: `"public"`, Table: `"filtered"`}
+	added := TableFQN{Schema: `"public"`, Table: `"added"`}
+
+	t.Run("row filter and column list", func(t *testing.T) {
+		_, err := conn.Exec(ctx, "CREATE PUBLICATION pub_filtered FOR TABLE filtered (id, tenant) WHERE (tenant = 1);").ReadAll()
+		require.NoError(t, err)
+
+		require.NoError(t, CreatePublication(ctx, conn, "pub_filtered", []TableFQN{filtered, added}))
+
+		rows, err := conn.Exec(ctx, `
+			SELECT tablename, array_to_string(attnames, ','), coalesce(rowfilter, '')
+			FROM pg_publication_tables
+			WHERE pubname = 'pub_filtered'
+			ORDER BY tablename;
+		`).ReadAll()
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		var got []string
+		for _, row := range rows[0].Rows {
+			got = append(got, fmt.Sprintf("%s (%s) %s", row[0], row[1], row[2]))
+		}
+		assert.Equal(t, []string{
+			"added (id,name) ",
+			"filtered (id,tenant) (tenant = 1)",
+		}, got)
+	})
+
+	t.Run("TABLES IN SCHEMA", func(t *testing.T) {
+		_, err := conn.Exec(ctx, "CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA other;").ReadAll()
+		require.NoError(t, err)
+
+		require.NoError(t, CreatePublication(ctx, conn, "pub_schema", []TableFQN{inSchema, added}))
+
+		rows, err := conn.Exec(ctx, `
+			SELECT n.nspname
+			FROM pg_publication_namespace pn
+			JOIN pg_publication p ON p.oid = pn.pnpubid
+			JOIN pg_namespace n ON n.oid = pn.pnnspid
+			WHERE p.pubname = 'pub_schema';
+		`).ReadAll()
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.Len(t, rows[0].Rows, 1)
+		assert.Equal(t, "other", string(rows[0].Rows[0][0]))
+
+		tables, _, err := GetPublicationTables(ctx, conn, "pub_schema")
+		require.NoError(t, err)
+		assert.Equal(t, []TableFQN{inSchema, added}, tables)
+	})
+}
+
 // publicationIsForAllTables reports pg_publication.puballtables for an
 // existing publication.
 func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationName string) bool {
