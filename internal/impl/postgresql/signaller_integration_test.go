@@ -27,11 +27,9 @@ import (
 )
 
 // signalTestStandbyTimeout is the pg_standby_timeout of the signal tests that
-// wait 5 s for a streamed row. A Postgres 16+ logical walsender can miss the
-// wakeup for a commit. It then sends that commit only when something else
-// wakes it, usually the next standby status update from the input. With the
-// default of 10s, the row can arrive after the 5 s wait. Postgres fixed the
-// same race for physical walsenders only, in postgres/postgres@782d9cf8bf.
+// wait 5 s for a row. Postgres 16+ can hold back a streamed commit until the
+// next standby status update, and the 10s default is longer than the wait.
+// postgres/postgres@782d9cf8bf fixed this for physical replication only.
 const signalTestStandbyTimeout = "1s"
 
 func TestIntegrationSignallingConfiguration(t *testing.T) {
