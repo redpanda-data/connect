@@ -617,14 +617,15 @@ func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
 	}
 }
 
-// snapshotSequenceBuffer tracks the snapshot start time of each item the snapshot emitted. CDC events use it to skip
-// versions of an item that the snapshot already emitted.
+// snapshotSequenceBuffer tracks the snapshot start time of each item the
+// snapshot emitted. CDC events use it to skip versions of an item that the
+// snapshot already emitted.
 //
 // Architecture: Lock-free sharded hash table design
 //
-// Instead of a single map[string]string with one lock (which would cause severe contention
-// with parallel snapshot segment readers), this uses 32 independent shards, each with its
-// own lock. Keys are distributed across shards using FNV-1a hash.
+// Instead of a single map with one lock (which would cause severe contention
+// with parallel snapshot segment readers), this uses 32 independent shards,
+// each with its own lock. Keys are distributed across shards using FNV-1a hash.
 //
 // Concurrency improvement: 10-30x less lock contention on high-core machines
 //
@@ -648,9 +649,10 @@ type snapshotSequenceBuffer struct {
 type bufferShard struct {
 	mu sync.RWMutex
 
-	// sequences maps an item key to the snapshot start time. It stores time.Time, not a formatted string, because the
-	// snapshot start is in the host zone and the stream record time is in UTC. Strings in different zones do not compare
-	// in time order.
+	// sequences maps an item key to the snapshot start time. It stores
+	// time.Time, not a formatted string, because the snapshot start is in the
+	// host zone and the stream record time is in UTC. Strings in different
+	// zones do not compare in time order.
 	sequences map[string]time.Time
 }
 
