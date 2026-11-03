@@ -16,12 +16,15 @@ package parquet
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -940,13 +944,252 @@ schema:
 		parse := func() any {
 			ms, err := service.NewMessage([]byte(row)).AsStructuredMut()
 			require.NoError(t, err)
-			return scrubJSONNumbers(ms)
+			return ms
 		}
-		want, err := visitWithSchema(encodingCoercionVisitor{}, parse(), mixedProc.schema)
+		want, err := visitWithSchema(encodingCoercionVisitor{}, scrubJSONNumbers(parse(), true), mixedProc.schema)
 		require.NoError(t, err)
-		got, err := mixedProc.coercion.apply(parse())
-		require.NoError(t, err)
-		assert.Equal(t, want, got, row)
+		for _, mutable := range []bool{true, false} {
+			got, err := mixedProc.coercion.apply(scrubJSONNumbers(parse(), mutable), mutable)
+			require.NoError(t, err)
+			assert.Equal(t, want, got, row)
+		}
+	}
+}
+
+// TestParquetEncodeLeavesInputUnchanged confirms that encoding, whether it
+// succeeds or fails part way through a batch, never modifies the input
+// messages, since a failed batch carries on downstream for error handling.
+func TestParquetEncodeLeavesInputUnchanged(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "id", Type: schema.Int64},
+			{Name: "ts", Type: schema.Timestamp},
+			{Name: "tss", Type: schema.Array, Children: []schema.Common{{Type: schema.Timestamp}}},
+			{Name: "ns", Type: schema.Array, Children: []schema.Common{{Type: schema.Int64}}},
+			{Name: "m", Type: schema.Map, Children: []schema.Common{{Type: schema.Timestamp}}},
+			{Name: "g", Type: schema.Object, Children: []schema.Common{
+				{Name: "n", Type: schema.Int64},
+				{Name: "uid", Type: schema.UUID},
+			}},
+		},
+	}
+	const (
+		validRow   = `{"id":1,"ts":"2026-10-30T12:00:00Z","tss":["2026-10-30T12:00:01Z"],"ns":[1,2],"m":{"a":"2026-10-30T12:00:02Z"},"g":{"n":2,"uid":"6ba7b810-9dad-11d1-80b4-00c04fd430c8"}}`
+		invalidRow = `{"id":2,"ts":"not a timestamp","tss":[],"ns":[3],"m":{},"g":{"n":3,"uid":"6ba7b811-9dad-11d1-80b4-00c04fd430c8"}}`
+	)
+
+	newStructured := func(raw string) *service.Message {
+		var v any
+		dec := json.NewDecoder(strings.NewReader(raw))
+		dec.UseNumber()
+		require.NoError(t, dec.Decode(&v))
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(v)
+		return msg
+	}
+	newBytes := func(raw string) *service.Message {
+		return service.NewMessage([]byte(raw))
+	}
+
+	for _, input := range []struct {
+		name   string
+		newMsg func(string) *service.Message
+	}{
+		{"structured", newStructured},
+		{"bytes", newBytes},
+	} {
+		for _, test := range []struct {
+			name    string
+			rows    []string
+			wantErr bool
+		}{
+			{"success", []string{validRow, validRow}, false},
+			{"failure", []string{validRow, invalidRow}, true},
+		} {
+			t.Run(input.name+"/"+test.name, func(t *testing.T) {
+				var batch service.MessageBatch
+				var want []any
+				for _, r := range test.rows {
+					msg := input.newMsg(r)
+					msg.MetaSetMut("schema_meta", commonSchema.ToAny())
+					batch = append(batch, msg)
+
+					w, err := newStructured(r).AsStructured()
+					require.NoError(t, err)
+					want = append(want, w)
+				}
+
+				proc, err := newParquetEncodeProcessor(nil, nil, "schema_meta", &parquet.Uncompressed, parquet.Microsecond)
+				require.NoError(t, err)
+
+				_, err = proc.ProcessBatch(t.Context(), batch)
+				if test.wantErr {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+
+				for i, msg := range batch {
+					got, err := msg.AsStructured()
+					require.NoError(t, err)
+					assert.Equal(t, want[i], got, "message %d structured contents", i)
+					if input.name == "bytes" {
+						raw, err := msg.AsBytes()
+						require.NoError(t, err)
+						assert.JSONEq(t, test.rows[i], string(raw), "message %d bytes", i)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestParquetEncodeConcurrentSharedBatch encodes the same batch from several
+// goroutines at once, as a broker fan_out does when each output runs
+// parquet_encode (https://github.com/redpanda-data/connect/issues/2885). Run
+// with -race to catch writes to the shared messages.
+func TestParquetEncodeConcurrentSharedBatch(t *testing.T) {
+	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+schema:
+  - { name: id, type: INT64 }
+  - { name: as, type: DOUBLE, repeated: true }
+  - { name: ts, type: TIMESTAMP }
+  - { name: uid, type: UUID }
+  - name: nested
+    fields:
+      - { name: n, type: INT64 }
+      - { name: ts, type: TIMESTAMP }
+`, nil)
+	require.NoError(t, err)
+	proc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+	require.NoError(t, err)
+
+	const raw = `{"id":3,"as":[0.1,0.2],"ts":"2026-10-30T12:00:00Z","uid":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","nested":{"n":4,"ts":"2026-10-30T12:00:01Z"}}`
+
+	// Structured input either holds json.Number values, which scrubbing
+	// replaces, or native numbers, which leave coercion as the only change.
+	for _, input := range []string{"structured_json_number", "structured_native", "bytes"} {
+		t.Run(input, func(t *testing.T) {
+			var batch service.MessageBatch
+			for range 10 {
+				if input == "bytes" {
+					batch = append(batch, service.NewMessage([]byte(raw)))
+					continue
+				}
+				var v any
+				dec := json.NewDecoder(strings.NewReader(raw))
+				dec.UseNumber()
+				require.NoError(t, dec.Decode(&v))
+				if input == "structured_native" {
+					v = scrubJSONNumbers(v, true)
+				}
+				msg := service.NewMessage(nil)
+				msg.SetStructuredMut(v)
+				batch = append(batch, msg)
+			}
+
+			var wg sync.WaitGroup
+			errs := make([]error, 8)
+			for i := range errs {
+				wg.Go(func() {
+					_, errs[i] = proc.ProcessBatch(t.Context(), batch)
+				})
+			}
+			wg.Wait()
+			for _, err := range errs {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// checkParquetProc is a processor that passes each message to a check.
+type checkParquetProc func(*service.Message)
+
+func (c checkParquetProc) Process(_ context.Context, m *service.Message) (service.MessageBatch, error) {
+	c(m)
+	return service.MessageBatch{m}, nil
+}
+
+func (checkParquetProc) Close(context.Context) error { return nil }
+
+// TestParquetEncodeFanOut reproduces the pipeline from
+// https://github.com/redpanda-data/connect/issues/2885, where a broker fans the
+// same messages out to several outputs that each encode them with a shared
+// parquet_encode resource. Run with -race to catch writes to the documents the
+// outputs share.
+func TestParquetEncodeFanOut(t *testing.T) {
+	const doc = `{"id":1,"as":[0.1,0.2],"ts":"2026-10-30T12:00:00Z","nested":{"n":2,"ts":"2026-10-30T12:00:01Z"}}`
+
+	for _, input := range []struct {
+		name    string
+		mapping string
+	}{
+		{"structured", "root = " + doc},
+		{"bytes", "root = " + strconv.Quote(doc)},
+	} {
+		t.Run(input.name, func(t *testing.T) {
+			env := service.NewEnvironment()
+
+			var encoded, failed atomic.Int64
+			require.NoError(t, env.RegisterProcessor("check_parquet", service.NewConfigSpec(),
+				func(*service.ParsedConfig, *service.Resources) (service.Processor, error) {
+					return checkParquetProc(func(m *service.Message) {
+						if b, err := m.AsBytes(); m.GetError() != nil || err != nil || !bytes.HasPrefix(b, []byte("PAR1")) {
+							failed.Add(1)
+						} else {
+							encoded.Add(1)
+						}
+					}), nil
+				}))
+
+			const outputs, batches = 4, 50
+			var conf strings.Builder
+			fmt.Fprintf(&conf, `
+input:
+  generate:
+    count: %d
+    interval: ""
+    batch_size: 10
+    mapping: %s
+
+processor_resources:
+  - label: parquet_encoder
+    parquet_encode:
+      schema:
+        - { name: id, type: INT64 }
+        - { name: as, type: DOUBLE, repeated: true }
+        - { name: ts, type: TIMESTAMP }
+        - name: nested
+          fields:
+            - { name: n, type: INT64 }
+            - { name: ts, type: TIMESTAMP }
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+`, batches*10, strconv.Quote(input.mapping))
+			for range outputs {
+				conf.WriteString(`
+      - drop: {}
+        processors:
+          - resource: parquet_encoder
+          - check_parquet: {}
+`)
+			}
+
+			builder := env.NewStreamBuilder()
+			require.NoError(t, builder.SetYAML(conf.String()))
+			require.NoError(t, builder.SetLoggerYAML("level: none"))
+			strm, err := builder.Build()
+			require.NoError(t, err)
+			require.NoError(t, strm.Run(t.Context()))
+
+			assert.Zero(t, failed.Load())
+			assert.Equal(t, int64(outputs*batches), encoded.Load())
+		})
 	}
 }
 
@@ -1137,23 +1380,39 @@ func benchmarkParquetEncode(b *testing.B, cols []encodeBenchColumn, rows int) {
 	proc, err := newParquetEncodeProcessorFromConfig(pConf, nil)
 	require.NoError(b, err)
 
-	batch := make(service.MessageBatch, rows)
-	for i := range batch {
+	newRow := func(i int) map[string]any {
 		row := make(map[string]any, len(cols))
 		for _, c := range cols {
 			row[c.name] = c.value(i)
 		}
-		batch[i] = service.NewMessage(nil)
-		batch[i].SetStructuredMut(row)
+		return row
 	}
 
-	b.ReportAllocs()
-	for b.Loop() {
-		if _, err := proc.ProcessBatch(b.Context(), batch); err != nil {
-			b.Fatal(err)
-		}
+	// Structured input is what a mapping processor upstream leaves behind,
+	// whereas raw JSON bytes are what most inputs produce.
+	for _, input := range []string{"structured", "bytes"} {
+		b.Run("input="+input, func(b *testing.B) {
+			batch := make(service.MessageBatch, rows)
+			for i := range batch {
+				if input == "structured" {
+					batch[i] = service.NewMessage(nil)
+					batch[i].SetStructuredMut(newRow(i))
+					continue
+				}
+				raw, err := json.Marshal(newRow(i))
+				require.NoError(b, err)
+				batch[i] = service.NewMessage(raw)
+			}
+
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := proc.ProcessBatch(b.Context(), batch); err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*rows), "ns/row")
+		})
 	}
-	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*rows), "ns/row")
 }
 
 func BenchmarkParquetEncode(b *testing.B) {

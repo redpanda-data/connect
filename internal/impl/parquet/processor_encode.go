@@ -352,23 +352,33 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 	buf := bytes.NewBuffer(nil)
 	pWtr := parquet.NewGenericWriter[any](buf, schema, parquet.Compression(s.compressionType))
 
-	batch = batch.Copy()
 	rows := make([]any, len(batch))
 	for i, m := range batch {
-		ms, err := m.AsStructuredMut()
+		// The input messages must be left unchanged in case encoding fails.
+		// Raw bytes are parsed into a copy that we own and can modify in
+		// place. Structured contents are shared with the input, so they are
+		// read without a deep clone and copied only where they change.
+		mutable := m.HasBytes()
+		var ms any
+		var err error
+		if mutable {
+			ms, err = m.Copy().AsStructuredMut()
+		} else {
+			ms, err = m.AsStructured()
+		}
 		if err != nil {
 			return nil, err
 		}
 
 		var isObj bool
-		if rows[i], isObj = scrubJSONNumbers(ms).(map[string]any); !isObj {
+		if rows[i], isObj = scrubJSONNumbers(ms, mutable).(map[string]any); !isObj {
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
 
 		if coercion == nil {
 			continue
 		}
-		if rows[i], err = coercion.apply(rows[i]); err != nil {
+		if rows[i], err = coercion.apply(rows[i], mutable); err != nil {
 			return nil, fmt.Errorf("coercing logical types: %w", err)
 		}
 	}
@@ -380,7 +390,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 		return nil, err
 	}
 
-	outMsg := batch[0]
+	outMsg := batch[0].Copy()
 	outMsg.SetBytes(buf.Bytes())
 	return []service.MessageBatch{{outMsg}}, nil
 }
