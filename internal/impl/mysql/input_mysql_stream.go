@@ -103,10 +103,10 @@ Column values keep their MySQL types where an equivalent exists. Integer, `+"`YE
 
 This input adds the following metadata fields to each message:
 
-- operation: The type of operation (insert, update, delete, or read for snapshot messages)
-- table: The name of the table
-- binlog_position: The binlog position (for CDC messages only, not set for snapshot messages)
-- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
+- `+"`operation`"+`: The type of operation (`+"`insert`"+`, `+"`update`"+`, `+"`delete`"+`, or `+"`read`"+` for snapshot messages).
+- `+"`table`"+`: The name of the table.
+- `+"`binlog_position`"+`: The binlog position (for CDC messages only, not set for snapshot messages).
+- `+"`schema`"+`: The table schema in benthos common schema format, compatible with processors like `+"`parquet_encode`"+`.
 `).
 	Fields(
 		service.NewStringAnnotatedEnumField(fieldMySQLFlavor, map[string]string{

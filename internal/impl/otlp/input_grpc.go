@@ -135,7 +135,7 @@ You can specify an optional rate limit resource using the `+"`rate_limit`"+` fie
 			).Description("TLS configuration for gRPC.").
 				Advanced(),
 			service.NewStringField(giFieldAuthToken).
-				Description("Optional bearer token for authentication. When set, requests must include 'authorization: Bearer <token>' metadata.").
+				Description("Optional bearer token for authentication. When set, requests must include the `authorization: Bearer <token>` metadata.").
 				Default("").
 				Secret().
 				Advanced(),

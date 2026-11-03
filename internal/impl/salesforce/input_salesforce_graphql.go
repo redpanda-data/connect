@@ -68,7 +68,7 @@ Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in
 
 	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewStringField(sfgqlFieldQuery).
-			Description("The GraphQL query document as a single string. Must target the Salesforce UIAPI schema (`uiapi.query.*` or `uiapi.mutation.*`). Typically follows the UIAPI convention of nested `edges { node { field { value } } }`. Variables are referenced with `$name` and supplied via the `variables` field. For automatic pagination, include `pageInfo { hasNextPage endCursor }` in the relevant connection.").
+			Description("The GraphQL query document as a single string. Must target the Salesforce UIAPI schema (`+uiapi.query.*+` or `+uiapi.mutation.*+`). Typically follows the UIAPI convention of nested `edges { node { field { value } } }`. Variables are referenced with `$name` and supplied via the `variables` field. For automatic pagination, include `pageInfo { hasNextPage endCursor }` in the relevant connection.").
 			ShortDescription("The GraphQL query document, as a single string targeting the Salesforce UIAPI schema.").
 			Example(`query Accounts { uiapi { query { Account { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }`).
 			Example(`query Accounts($first: Int) { uiapi { query { Account(first: $first) { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }`)).

@@ -110,6 +110,7 @@ Metadata values are sent along with the payload as attributes with the data type
 
 The fields `+"`message_group_id`, `message_deduplication_id` and `delay_seconds`"+` can be set dynamically using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations], which are resolved individually for each message of a batch.
 
+[[credentials-overview]]
 == Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].`+service.OutputPerformanceDocs(true, true)).
