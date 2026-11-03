@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -108,7 +109,13 @@ func closeConn(t testing.TB, conn *pgconn.PgConn) {
 }
 
 func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
-	ctr, err := testcontainers.Run(t.Context(), "postgres:16",
+	return createDockerInstanceVersion(t, 16)
+}
+
+// createDockerInstanceVersion starts the given major version of PostgreSQL
+// with logical replication enabled.
+func createDockerInstanceVersion(t *testing.T, version int) (cleanup func(), dbURL string) {
+	ctr, err := testcontainers.Run(t.Context(), fmt.Sprintf("postgres:%d", version),
 		testcontainers.WithExposedPorts("5432/tcp"),
 		testcontainers.WithEnv(map[string]string{
 			"POSTGRES_PASSWORD": "secret",
@@ -534,7 +541,18 @@ func publicationIsForAllTables(t *testing.T, conn *pgconn.PgConn, publicationNam
 func TestIntegrationValidatePublication(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
+	// External mode supports PostgreSQL 12 or later. 12 cannot publish a
+	// partitioned table, 13 adds publish_via_partition_root and 15 adds row
+	// filters and column lists, which the queries read as NULL before then.
+	for _, version := range []int{12, 14, 17} {
+		t.Run(strconv.Itoa(version), func(t *testing.T) {
+			testValidatePublication(t, version)
+		})
+	}
+}
+
+func testValidatePublication(t *testing.T, version int) {
+	cleanup, dbURL := createDockerInstanceVersion(t, version)
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
@@ -568,7 +586,13 @@ func TestIntegrationValidatePublication(t *testing.T) {
 	err = validate("pub_missing", []TableFQN{orders})
 	require.ErrorIs(t, err, errPublicationNotFound)
 
-	exec("CREATE PUBLICATION pub_some FOR TABLE orders, events;")
+	// Before PostgreSQL 13 a partitioned table is published through its
+	// partitions only.
+	if version >= 13 {
+		exec("CREATE PUBLICATION pub_some FOR TABLE orders, events;")
+	} else {
+		exec("CREATE PUBLICATION pub_some FOR TABLE orders, events_2026;")
+	}
 	require.NoError(t, validate("pub_some", []TableFQN{orders}))
 	require.NoError(t, validate("pub_some", nil))
 	// Without publish_via_partition_root the publication lists the
@@ -595,13 +619,6 @@ func TestIntegrationValidatePublication(t *testing.T) {
 	assert.Contains(t, err.Error(), `"public"."events"`)
 	require.NoError(t, validate("pub_partial", []TableFQN{{schema, `"events_2026"`}}))
 
-	// pub_some lists the partitioned table, so a partition attached later is
-	// covered too.
-	require.NoError(t, validate("pub_some", []TableFQN{events}))
-
-	exec("CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
-	require.NoError(t, validate("pub_root", []TableFQN{events, {schema, `"events_2027"`}}))
-
 	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
 	require.NoError(t, validate("pub_all", []TableFQN{orders, users, events}))
 
@@ -613,8 +630,28 @@ func TestIntegrationValidatePublication(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not publish update, delete")
 	assert.Contains(t, err.Error(), "publish")
 
-	// A row filter or a column list (PostgreSQL 15 or later; the container
-	// runs 16) still streams, so it is reported rather than failed.
+	if version < 13 {
+		// pub_some lists events_2026 only, so the partition attached later
+		// leaves the partitioned table uncovered.
+		err = validate("pub_some", []TableFQN{events})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"public"."events"`)
+		return
+	}
+
+	// pub_some lists the partitioned table, so a partition attached later is
+	// covered too.
+	require.NoError(t, validate("pub_some", []TableFQN{events}))
+
+	exec("CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	require.NoError(t, validate("pub_root", []TableFQN{events, {schema, `"events_2027"`}}))
+
+	if version < 15 {
+		return
+	}
+
+	// A row filter or a column list still streams, so it is reported rather
+	// than failed.
 	exec("CREATE PUBLICATION pub_rowfilter FOR TABLE orders WHERE (id > 10), users;")
 	filtered, err := ValidatePublication(ctx, conn, "pub_rowfilter", []TableFQN{orders, users})
 	require.NoError(t, err)
