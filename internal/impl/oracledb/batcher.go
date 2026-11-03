@@ -532,11 +532,14 @@ func (b *batchPublisher) CheckpointWindow(ctx context.Context, scn replication.S
 	}
 	// Resolve at once: if all earlier batches are acked, this persists scn.
 	// Otherwise the last outstanding ack persists it.
-	if resolved := resolveFn(); resolved != nil && resolved.IsValid() {
+	resolved := resolveFn()
+	if resolved != nil && resolved.IsValid() {
 		// Best effort: the next call retries.
 		if err := b.cacheSCN(ctx, *resolved); err != nil {
 			b.log.Warnf("Unable to save window checkpoint SCN %s, retrying on the next call: %v", *resolved, err)
+			return nil
 		}
+		b.log.Debugf("Checkpointed mined position SCN %s (keeps the checkpoint moving while the monitored tables are idle)", *resolved)
 	}
 	return nil
 }
