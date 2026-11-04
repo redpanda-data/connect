@@ -100,20 +100,31 @@ type checkpointer struct {
 	// sits at checkpoint_limit when ReadBatch is blocked behind unacked
 	// batches, which an idle table never shows.
 	mPending *service.MetricGauge
-	// mLag is, in the timestamp modes, how far the checkpointed timestamp HWM
-	// trails the database clock, in seconds. It is refreshed every
-	// lagRefreshInterval as well as on each poll and ack, so it keeps growing
-	// when a window never closes or acks stop (ReadBatch then blocks at
-	// checkpoint_limit and neither polls nor acks happen), and stays near
-	// timestamp_delay on an idle table.
+	// mLag is, in the timestamp modes, how far lagHWM trails the database
+	// clock, in seconds. refreshLag sets it every lagRefreshInterval as well
+	// as on each poll and ack, so it keeps growing when a window never closes
+	// or acks stop (ReadBatch then blocks at checkpoint_limit and neither
+	// polls nor acks happen), and stays near timestamp_delay on an idle
+	// table. It is unset until the first poll gives the database clock.
 	mLag *service.MetricGauge
 	// clockOffsetNanos is the database clock minus the host clock at the
 	// latest timestamp-mode poll, so the database clock can be estimated
 	// between polls. clockKnown is false until the first poll.
 	clockOffsetNanos atomic.Int64
 	clockKnown       atomic.Bool
-	// lagHWM is the timestamp HWM of the latest persisted checkpoint, nil
-	// until one is persisted.
+	// lagHWM is the timestamp HWM that mLag measures from. refreshLag reads
+	// it. seedLag sets it at Connect from the loaded checkpoint, else
+	// timestamp_initial_value, and recordLag moves it after each resolved
+	// ack. With checkpoint_cache, recordLag runs only after a successful
+	// persist, so lagHWM is always the position a restart would resume from.
+	// Without checkpoint_cache, a restart always resumes from
+	// timestamp_initial_value. A gauge measured from that value for the whole
+	// run would grow forever and could not show a stall. So persist always
+	// succeeds, and lagHWM follows the acknowledged in-memory position. Before
+	// the first ack, that position is timestamp_initial_value, so the gauge
+	// shows the full lag from it, as on a first start with a cache. lagHWM is
+	// nil while there is no position (no checkpoint, no initial value and no
+	// resolved ack), and the gauge then stays unset.
 	lagHWM atomic.Pointer[time.Time]
 	// now is the host clock, replaced in tests.
 	now      func() time.Time
@@ -211,8 +222,10 @@ func (c *checkpointer) track(ctx context.Context, batchLen int, hwm any, tsHWM t
 			c.log.Warnf("Failed to save checkpoint: %v", saveErr)
 			return nil
 		}
-		// Only a persisted checkpoint moves the lag gauge, so it never shows
-		// a position a restart would not resume from.
+		// With checkpoint_cache, only a persisted checkpoint moves the lag
+		// gauge, so it never shows a position a restart would not resume
+		// from. Without one, persist always succeeds and the gauge follows
+		// the acknowledged in-memory position (see lagHWM).
 		c.recordLag(*cp)
 		return nil
 	}, nil
@@ -229,6 +242,19 @@ func (c *checkpointer) observeDBClock(dbNow time.Time) {
 	c.refreshLag()
 }
 
+// seedLag sets the HWM lag gauge's start position. loadCheckpoint calls it at
+// Connect, before any ack resolves, so a restart into a stall shows a growing
+// lag. It also runs without checkpoint_cache, where hwm is
+// timestamp_initial_value (see lagHWM). A zero hwm (no checkpoint and no
+// timestamp_initial_value, or not a timestamp mode) leaves the gauge unset.
+// The gauge appears at the first poll, which gives the database clock.
+func (c *checkpointer) seedLag(hwm time.Time) {
+	if hwm.IsZero() {
+		return
+	}
+	c.lagHWM.Store(&hwm)
+}
+
 // recordLag remembers a persisted checkpoint's timestamp HWM for the lag
 // gauge. It does nothing outside the timestamp modes.
 func (c *checkpointer) recordLag(cp *sapHANACheckpointState) {
@@ -240,9 +266,8 @@ func (c *checkpointer) recordLag(cp *sapHANACheckpointState) {
 	c.refreshLag()
 }
 
-// refreshLag sets the HWM lag gauge from the estimated database clock and the
-// latest persisted timestamp HWM. It does nothing before the first poll or
-// the first persisted checkpoint.
+// refreshLag sets the HWM lag gauge from the estimated database clock and
+// lagHWM. It does nothing before the first poll or while lagHWM is nil.
 func (c *checkpointer) refreshLag() {
 	hwm := c.lagHWM.Load()
 	if hwm == nil || !c.clockKnown.Load() {
@@ -301,13 +326,18 @@ func (c *checkpointer) persist(ctx context.Context, cp *sapHANACheckpointState) 
 	return nil
 }
 
-// loadCheckpoint restores persisted HWM state from the cache. It reports
-// whether an incrementing HWM was restored, since that value supersedes the
-// configured initial value.
+// loadCheckpoint restores persisted HWM state from the cache and seeds the
+// HWM lag gauge. It reports whether an incrementing HWM was restored, since
+// that value supersedes the configured initial value.
 func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
 	cp, err := s.cp.load(ctx)
-	if err != nil || cp == nil {
+	if err != nil {
 		return false, err
+	}
+	if cp == nil {
+		// No checkpoint: the timestamp HWM is timestamp_initial_value or zero.
+		s.cp.seedLag(s.timestampHWM)
+		return false, nil
 	}
 	if cp.TimestampHWM != nil {
 		s.timestampHWM = *cp.TimestampHWM
@@ -317,6 +347,9 @@ func (s *sapHANAInput) loadCheckpoint(ctx context.Context) (bool, error) {
 		s.hwm = hwm
 	}
 	s.log.Debugf("Loaded checkpoint: ts_hwm=%v incr_hwm=%v", s.timestampHWM, s.hwm)
+	// The timestamp HWM is now the checkpoint's, else timestamp_initial_value
+	// or zero: the position a restart resumes from.
+	s.cp.seedLag(s.timestampHWM)
 	return resumedHWM, nil
 }
 

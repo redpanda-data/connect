@@ -1,5 +1,11 @@
 name: Integration Tests
 
+# Superseded pull request runs used a relatively large part of the 32-core runner time. Thus, a new push to a pull
+# request cancels the run of the previous push. Other events use the run ID as the key, so they are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   schedule:
     # Run every day at 1AM UTC
