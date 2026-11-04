@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/testcontainers/testcontainers-go"
 )
 
 var runArgs struct {
@@ -106,6 +108,12 @@ func cmdRun(args []string) error {
 	}
 	out.Header(fmt.Sprintf("%s (%d packages)", headerLabel, total))
 	out.Info("Output: " + outputDir)
+	// The runner does not remove containers itself. Without Ryuk, the
+	// containers of tests that do not terminate them stay. ReadConfig reads
+	// the same env var and properties file as the test binaries.
+	if testcontainers.ReadConfig().Config.RyukDisabled {
+		out.Error("Warning: Ryuk is disabled. Containers will not be cleaned up and will accumulate.")
+	}
 	out.Blank()
 
 	var (
@@ -161,8 +169,6 @@ func cmdRun(args []string) error {
 			skipped++
 		}
 		out.PackageResult(short, res.status, res.duration)
-
-		dockerCleanup()
 	}
 
 	// Final report.
