@@ -15,8 +15,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/fatih/color"
@@ -66,6 +68,34 @@ func TestOutputBufferedPackagesDoNotInterleave(t *testing.T) {
 		"- PASS TestRedis (2.00s)\n\n"+
 		"## kafka\n\n"+
 		"- PASS TestKafka (1.00s)\n\n", string(index))
+}
+
+// TestOutputBufferedPackagesConcurrent fails under -race, or with a broken
+// block, when Output.mu does not guard the writes of PackageOutput.done.
+func TestOutputBufferedPackagesConcurrent(t *testing.T) {
+	out, term, indexPath := newTestOutput(t, true)
+
+	const total = 16
+	var wg sync.WaitGroup
+	for i := range total {
+		wg.Go(func() {
+			name := fmt.Sprintf("pkg%d", i)
+			p := out.Package(name, i+1, total, name)
+			p.TestPass("Test"+name, "1.00s", false)
+			p.Result(ResultPass, 0)
+		})
+	}
+	wg.Wait()
+
+	index, err := os.ReadFile(indexPath)
+	require.NoError(t, err)
+	for i := range total {
+		name := fmt.Sprintf("pkg%d", i)
+		assert.Contains(t, term.String(),
+			fmt.Sprintf("[%d/%d] %s\n  PASS Test%s (1.00s)\n✓ %s\n\n", i+1, total, name, name, name))
+		assert.Contains(t, string(index),
+			fmt.Sprintf("## %s\n\n- PASS Test%s (1.00s)\n\n", name, name))
+	}
 }
 
 func TestOutputStreamedPackageWritesAtOnce(t *testing.T) {
