@@ -253,10 +253,8 @@ postgres_cdc:
 		}
 	})
 
-	// Non-integer keys, run through the real decoders. The window keys rows
-	// by the formatted key, so if the snapshot and streaming paths disagree
-	// on a type no live row evicts its buffered copy and the stale snapshot
-	// row lands after the update that superseded it.
+	// Checks the snapshot and streaming decoders format non-integer keys
+	// identically, or dedup misses and a stale snapshot row overwrites the update.
 	for _, keyed := range []struct {
 		name    string
 		table   string
@@ -279,7 +277,7 @@ postgres_cdc:
 			keyCols: []string{"id", "tenant"},
 		},
 	} {
-		t.Run("Concurrent Updates/"+keyed.name, func(t *testing.T) {
+		t.Run("KeyDecoding/"+keyed.name, func(t *testing.T) {
 			t.Parallel()
 			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 			require.NoError(t, err)
@@ -405,7 +403,7 @@ postgres_cdc:
 		})
 	}
 
-	t.Run("Concurrent Updates", func(t *testing.T) {
+	t.Run("UpdateRacesChunkReads", func(t *testing.T) {
 		// Whichever order the two occur in, the consumer must end on the updated
 		// value: an update committing before its chunk is read is already in the
 		// snapshot's result, and one committing after must evict the buffered
@@ -742,13 +740,17 @@ label: snap_cache_resume
 file:
   directory: '%s'`, cacheDir)
 
-		runPartial := func(minRows int) []incrementalSnapshotRow {
+		// untilDrained additionally waits for the queue to drain before stopping,
+		// so the checkpoint left behind has the table marked finished.
+		runPartial := func(minRows int, untilDrained bool) []incrementalSnapshotRow {
 			var (
 				mu   sync.Mutex
 				rows []incrementalSnapshotRow
 			)
 
+			logs := pgtest.NewTestLogCapture()
 			stop := runIncSnapshotStream(t, incSnapshotStream{
+				logs:      logs,
 				inputYAML: template,
 				cacheYAML: cacheTemplate,
 				consume: func(_ context.Context, batch service.MessageBatch) error {
@@ -784,6 +786,17 @@ file:
 				return len(rows) >= minRows
 			}, 60*time.Second, 20*time.Millisecond, "did not observe the minimum number of rows before stopping")
 
+			if untilDrained {
+				require.Eventually(t, func() bool {
+					for _, m := range logs.Messages() {
+						if strings.Contains(m, "Incremental snapshot: queue empty") {
+							return true
+						}
+					}
+					return false
+				}, 60*time.Second, 50*time.Millisecond, "the backfill queue never drained")
+			}
+
 			stop()
 
 			mu.Lock()
@@ -792,13 +805,16 @@ file:
 		}
 
 		// Stop early, leaving the backfill (and its checkpoint) partway through.
-		firstRun := runPartial(10)
+		firstRun := runPartial(10, false)
 		require.NotEmpty(t, firstRun)
 		require.Less(t, len(firstRun), numRows, "first run should not have completed the entire backfill; the test can't exercise resume otherwise")
 
 		// Reuses the same slot and cache directory: a correct resume picks up
 		// from the checkpoint, so none of the first run's rows should reappear.
-		secondRun := runPartial(numRows - len(firstRun))
+		// The second run's signal is skipped as the table is still being read.
+		// It waits for the queue to drain so the checkpoint it leaves has
+		// flights finished.
+		secondRun := runPartial(numRows-len(firstRun), true)
 
 		firstIDs := make(map[int64]struct{}, len(firstRun))
 		for _, r := range firstRun {
@@ -824,6 +840,20 @@ file:
 		assert.Len(t, allCounts, int(totalRows), "expected exactly %d distinct rows across both runs combined", totalRows)
 		for id, count := range allCounts {
 			assert.Equal(t, 1, count, "row id %d observed %d times across both runs, expected exactly once", id, count)
+		}
+
+		// flights is now FINISHED in the checkpoint the next run loads, so this
+		// signal must re-queue it and deliver the whole table again.
+		thirdRun := runPartial(numRows, false)
+		thirdReads := make(map[int64]int, numRows)
+		for _, r := range thirdRun {
+			if r.operation == "read" {
+				thirdReads[r.id]++
+			}
+		}
+		assert.Len(t, thirdReads, numRows, "a finished table signalled again after a restart should be backfilled in full")
+		for id, count := range thirdReads {
+			assert.Equal(t, 1, count, "row id %d read %d times in the third run, expected exactly once", id, count)
 		}
 	})
 
@@ -978,6 +1008,9 @@ postgres_cdc:
 			"a products change must arrive before the cart backfill completes; if it does not, replication was paused for the backfill")
 	})
 
+	// If another session takes an ACCESS EXCLUSIVE lock (VACUUM FULL, ALTER
+	// TABLE, ...) a table being snapshotted it must time out and retry rather
+	// than stall the replication loop.
 	t.Run("Keeps Streaming While The Snapshotted Table Is Locked", func(t *testing.T) {
 		const (
 			// More rows than one commit can drain, so the backfill is still
@@ -1133,6 +1166,27 @@ postgres_cdc:
 		})
 		require.NoError(t, <-lockAcquired, "failed to acquire the ACCESS EXCLUSIVE lock on cart")
 		require.True(t, lockHeld.Load(), "lock should be reported held immediately after acquisition")
+
+		// Re-signalling cart while it is still being backfilled must not queue
+		// it a second time, or it would be read twice. Sent straight after the
+		// lock lands, while cart is certainly unfinished, so the signal cannot
+		// race the backfill completing and legitimately re-queue it.
+		logCount := func(substr string) int {
+			var n int
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, substr) {
+					n++
+				}
+			}
+			return n
+		}
+		signalIncrementalSnapshot(t, db, "test_slot_backfill_locked", "cart")
+		require.Eventually(t, func() bool {
+			return logCount("already queued or being backfilled") >= 1
+		}, 10*time.Second, 50*time.Millisecond,
+			"a repeat signal for a table still being backfilled was not reported as already queued")
+		assert.Equal(t, 1, logCount("Incremental snapshot: signal queued"),
+			"the repeat signal must not queue cart a second time")
 
 		// One statement, so one commit: Coordinator.OnCommit retries the
 		// deferred plan per commit, and separate inserts would each cost

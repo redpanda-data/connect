@@ -1,5 +1,14 @@
 version: "3"
 
+# Running order (CDC / snapshot):
+# - task bench:up              # start PostgreSQL with wal_level=logical and create the tables
+# - task psql:data:users       # load data
+# - task psql:data:products    # optional
+# - task psql:data:cart        # optional
+# - task bench:run
+# - task bench:reset           # drop the replication slot and logs before the next run
+# - task bench:down
+
 vars:
   PG_DSN: '{{.PG_DSN | default "postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable"}}'
   PG_USER: '{{.PG_USER | default "postgres"}}'
@@ -11,6 +20,37 @@ vars:
   KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
 
 tasks:
+
+  bench:up:
+    desc: Start PostgreSQL and create the benchmark tables
+    cmds:
+      - task: postgres:up
+      - task: psql:create
+
+  bench:down:
+    desc: Teardown benchmark
+    cmd: docker rm -fv postgres-bench
+
+  bench:reset:
+    desc: Clear benchmark in preparation for a new run
+    cmds:
+      - task: psql:drop-slot
+      # Recreated empty, as the file cache does not create its directory.
+      - cmd: rm -rf ./checkpoints && mkdir -p ./checkpoints
+      - cmd: rm -f ./benchmark_results.json
+      - cmd: rm -f ./benchmark_logs.log
+
+  bench:run:
+    desc: Run snapshot benchmark with current table data
+    env:
+      PG_DSN: '{{.PG_DSN}}'
+    cmds:
+      - task: psql:drop-slot
+      - task: psql:analyze
+      - |
+        go run ../../../../cmd/redpanda-connect/main.go run \
+          ./benchmark_config.yaml 2>&1 | tee benchmark_logs.log
+
   # ── PostgreSQL container ──────────────────────────────────────────────────────
 
   postgres:up:
@@ -54,6 +94,11 @@ tasks:
     cmds:
       - psql {{.PG_DSN}} < cart.sql
 
+  psql:analyze:
+    desc: Analyse the benchmark tables so the snapshot can report progress against their row estimates
+    cmds:
+      - psql {{.PG_DSN}} -c "ANALYZE public.users, public.products, public.cart;"
+
   psql:truncate:
     desc: Truncate all benchmark tables
     cmds:
@@ -76,15 +121,14 @@ tasks:
       - |
         psql {{.PG_DSN}} -c "INSERT INTO public.rpcn_signal_table (type, data) VALUES ('log', '{\"message\": \"Signal message\"}');"
 
-  # ── CDC / Snapshot benchmarks ────────────────────────────────────────────────
-
-  bench:run:
-    desc: Run snapshot benchmark with current table data
-    env:
-      PG_DSN: '{{.PG_DSN}}'
+  psql:signal:snapshot-execute:cart:
+    desc: Insert a snapshot-execute signal into public.rpcn_signal_table to incrementally backfill cart
+    deps: [psql:create:signal-table]
     cmds:
-      - task psql:drop-slot
-      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+      - |
+        psql {{.PG_DSN}} -c "INSERT INTO public.rpcn_signal_table (type, data) VALUES ('snapshot-execute', '{\"tables\": [\"cart\"]}');"
+
+  # ── CDC / Snapshot benchmarks ────────────────────────────────────────────────
 
   bench:run:cdc:
     desc: Run CDC benchmark (stream_snapshot=false) — start first, then insert data in a second terminal
@@ -92,7 +136,10 @@ tasks:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
-      - go run ../../../../cmd/redpanda-connect/main.go run --set input.postgres_cdc.stream_snapshot=false ./benchmark_config.yaml
+      - |
+        go run ../../../../cmd/redpanda-connect/main.go run \
+          --set input.postgres_cdc.stream_snapshot=false \
+          ./benchmark_config.yaml
 
   bench:users:
     desc: "Truncate, load 150K large users rows, run snapshot benchmark (e.g. task bench:users CORES=2 BATCH=1000)"
@@ -105,9 +152,11 @@ tasks:
       - task psql:drop-slot
       - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
       - task psql:data:users
+      - task psql:analyze
       - |
         {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../cmd/redpanda-connect/main.go run \
           --set input.postgres_cdc.batching.count={{.BATCH}} \
+          --set input.postgres_cdc.stream_snapshot=true \
           ./benchmark_config.yaml
 
   bench:cart:
@@ -121,9 +170,11 @@ tasks:
       - task psql:drop-slot
       - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
       - task psql:data:cart
+      - task psql:analyze
       - |
         {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../cmd/redpanda-connect/main.go run \
           --set input.postgres_cdc.batching.count={{.BATCH}} \
+          --set input.postgres_cdc.stream_snapshot=true \
           ./benchmark_config.yaml
 
   # ── Kafka → PostgreSQL benchmarks (vs Kafka Connect JDBC Sink) ───────────────

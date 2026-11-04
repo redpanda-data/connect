@@ -337,9 +337,8 @@ already-read snapshot rows cannot be detected.
 A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all (for
 example, because the connection resets), the stream restarts and the signal is read again, so the request is not lost.
 
-Each table joins the back of the backfill queue. A table this run already covers is skipped and
-logged, so a repeated signal does not re-read it. To read one again, point
-` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.
+Each table joins the back of the backfill queue. A table already queued or being backfilled is skipped and
+logged. A table whose backfill has finished is read again from the start.
 
 **Tables with large (TOASTed) column values**
 
@@ -376,7 +375,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
-				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so a `"+replication.SnapshotSignalType+"` signal reads a table again.").
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so the next snapshot starts from scratch. A `"+replication.SnapshotSignalType+"` signal does not need this: it reads a finished table again on its own.").
 				Default(incsnapshot.DefaultIncSnapshotCheckpointKey),
 		).
 			Description("Configures chunked snapshotting that runs alongside replication streaming.").
@@ -790,9 +789,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !p.flushBatcher(ctx, pgStream, cp, batcher, st) {
-				break
-			}
+			// On failure flushBatcher has signalled a soft stop, which ends the loop.
+			p.flushBatcher(ctx, pgStream, cp, batcher, st)
 		case batch := <-pgStream.Messages():
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
 				// Snapshot fully emitted. Flush any buffered rows, then block
