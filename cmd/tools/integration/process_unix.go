@@ -38,22 +38,26 @@ const interruptGrace = 30 * time.Second
 // them.
 func interruptProcessGroup(cmd *exec.Cmd) (waited func()) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	done := make(chan struct{})
+	// exec calls Cancel from its own goroutine, and Wait returns only after
+	// Cancel returns. So the returned func reads kill without a data race.
+	var kill *time.Timer
 	cmd.Cancel = func() error {
-		pgid := -cmd.Process.Pid
-		go func() {
-			select {
-			case <-done:
-			case <-time.After(interruptGrace):
-				_ = syscall.Kill(pgid, syscall.SIGKILL)
-			}
-		}()
-		err := syscall.Kill(pgid, syscall.SIGINT)
+		pid := cmd.Process.Pid
+		kill = time.AfterFunc(interruptGrace, func() {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		})
+		err := syscall.Kill(-pid, syscall.SIGINT)
 		if errors.Is(err, syscall.ESRCH) {
 			// The group is gone. Tell exec that this is not an error.
 			return os.ErrProcessDone
 		}
 		return err
 	}
-	return func() { close(done) }
+	// Stop the SIGKILL when the group has exited, because the system can
+	// then give its ID to a new process group.
+	return func() {
+		if kill != nil {
+			kill.Stop()
+		}
+	}
 }

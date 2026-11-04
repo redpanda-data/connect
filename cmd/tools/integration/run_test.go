@@ -37,14 +37,19 @@ func fakeGo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "go.log")
-	script := `#!/bin/sh
+	// Keep "trap : INT". With "trap '' INT", the fake test binary starts with
+	// SIGINT ignored, and a shell cannot trap a signal that was ignored on entry.
+	// Keep the short sleep loop too. With one "sleep 10", the trap did not run
+	// on every try.
+	const script = `#!/bin/sh
 trap : INT
-sh -c 'trap "echo interrupted >> ` + logFile + `; exit 2" INT
-echo started >> ` + logFile + `
+sh -c 'trap "echo interrupted >> \"$FAKE_GO_LOG\"; exit 2" INT
+echo started >> "$FAKE_GO_LOG"
 i=0; while [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done'
 exit 1
 `
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "go"), []byte(script), 0o755))
+	t.Setenv("FAKE_GO_LOG", logFile)
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return logFile
 }
