@@ -99,7 +99,7 @@ func cmdRun(args []string) error {
 
 	debugf("resolved run dir: %s", outputDir)
 
-	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"))
+	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"), false)
 	total := len(packages)
 
 	headerLabel := "Integration Tests"
@@ -128,7 +128,7 @@ func cmdRun(args []string) error {
 		pkgOutFile := filepath.Join(outputDir, fname)
 
 		tag := strings.TrimSuffix(fname, ".txt")
-		pout := out.Package(tag, i+1, total, short, false)
+		pout := out.Package(tag, i+1, total, short)
 
 		// Check cache from current run directory.
 		var cached PackageCache
@@ -152,8 +152,7 @@ func cmdRun(args []string) error {
 		// If complete and all passed, close and move on.
 		if cached.Complete && cached.Overall() == ResultPass {
 			debugf("found cached result for %s: complete", short)
-			pout.Info(fmt.Sprintf("● %s (cached)", short))
-			pout.Done()
+			pout.Cached()
 			passed++
 			continue
 		}
@@ -168,7 +167,7 @@ func cmdRun(args []string) error {
 		case ResultSkip:
 			skipped++
 		}
-		pout.Result(short, res.status, res.duration)
+		pout.Result(res.status, res.duration)
 	}
 
 	// Final report.

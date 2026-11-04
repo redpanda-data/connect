@@ -36,6 +36,12 @@ type Output struct {
 	mu        sync.Mutex
 	term      io.Writer
 	indexPath string
+	// buffered tells Package to give each package a buffer for its terminal
+	// text, so that packages that run at the same time do not mix their
+	// lines. When it is false, a package writes to the terminal at once. This
+	// is only readable when one package runs at a time, but it shows the RUN
+	// lines of a long package while it runs.
+	buffered bool
 
 	greenPr  *color.Color
 	redPr    *color.Color
@@ -44,14 +50,16 @@ type Output struct {
 	boldPr   *color.Color
 }
 
-// NewOutput creates a new Output.
-func NewOutput(term io.Writer, indexPath string) *Output {
+// NewOutput creates a new Output. Set buffered when packages run at the same
+// time.
+func NewOutput(term io.Writer, indexPath string, buffered bool) *Output {
 	if os.Getenv("FORCE_COLOR") != "" || os.Getenv("CI") != "" {
 		color.NoColor = false
 	}
 	return &Output{
 		term:      term,
 		indexPath: indexPath,
+		buffered:  buffered,
 		greenPr:   color.New(color.FgGreen),
 		redPr:     color.New(color.FgRed),
 		yellowPr:  color.New(color.FgYellow),
@@ -85,33 +93,31 @@ func (o *Output) Blank() {
 // runs the package uses it.
 type PackageOutput struct {
 	o *Output
+	// short is the short package name in the header and result lines.
+	short string
 	// term is where the terminal text goes: the terminal itself for a
 	// streamed package, termBuf for a buffered package.
 	term io.Writer
 	// termBuf holds the terminal text of a buffered package until the package
-	// is done. It is nil for a streamed package.
+	// is done. It is nil for a streamed package. It is not derived from term
+	// with a type assertion, because Output.term can also be a *bytes.Buffer
+	// (as in tests), and a streamed package would then write its text twice.
 	termBuf *bytes.Buffer
 	md      bytes.Buffer
 }
 
-// Package starts the output of one package and writes its header. A streamed
-// package writes to the terminal at once, which is only readable when one
-// package runs at a time. A buffered package writes its terminal text as one
-// block when it is done, so packages that run at the same time do not mix
-// their lines.
-func (o *Output) Package(tag string, num, total int, short string, buffered bool) *PackageOutput {
-	p := &PackageOutput{o: o, term: o.term}
-	if buffered {
+// Package starts the output of one package and writes its header. When
+// Output.buffered is set, the terminal text of the package is written as one
+// block when the package is done.
+func (o *Output) Package(tag string, num, total int, short string) *PackageOutput {
+	p := &PackageOutput{o: o, short: short, term: o.term}
+	if o.buffered {
 		p.termBuf = &bytes.Buffer{}
 		p.term = p.termBuf
 	}
 	o.boldPr.Fprintf(p.term, "[%d/%d] %s\n", num, total, short)
 	fmt.Fprintf(&p.md, "## %s\n\n", tag)
 	return p
-}
-
-func (p *PackageOutput) Info(text string) {
-	p.o.dimPr.Fprintln(p.term, text)
 }
 
 func (p *PackageOutput) Error(text string) {
@@ -190,34 +196,36 @@ func (p *PackageOutput) replaceLastMDLine(replacement string) {
 }
 
 // Result writes the package result and ends the package output.
-func (p *PackageOutput) Result(short string, status TestResult, duration time.Duration) {
+func (p *PackageOutput) Result(status TestResult, duration time.Duration) {
 	switch status {
 	case ResultPass:
-		p.o.greenPr.Fprintf(p.term, "✓ %s%s\n", short, fmtDuration(duration))
+		p.o.greenPr.Fprintf(p.term, "✓ %s%s\n", p.short, fmtDuration(duration))
 	case ResultFail:
-		p.o.redPr.Fprintf(p.term, "✗ %s%s\n", short, fmtDuration(duration))
+		p.o.redPr.Fprintf(p.term, "✗ %s%s\n", p.short, fmtDuration(duration))
 	case ResultSkip:
-		p.o.yellowPr.Fprintf(p.term, "⊘ %s (skipped)\n", short)
+		p.o.yellowPr.Fprintf(p.term, "⊘ %s (skipped)\n", p.short)
 	}
-	p.Done()
+	p.done()
 }
 
-// Done ends the package output without a result line.
-func (p *PackageOutput) Done() {
+// Cached writes the line of a package that passed in an earlier run and ends
+// the package output.
+func (p *PackageOutput) Cached() {
+	p.o.dimPr.Fprintf(p.term, "● %s (cached)\n", p.short)
+	p.done()
+}
+
+// done writes the buffered terminal text and the markdown section of the
+// package.
+func (p *PackageOutput) done() {
 	fmt.Fprintln(p.term)
 	fmt.Fprintln(&p.md)
-	p.o.writePackage(p)
-}
 
-// writePackage writes the buffered terminal text and the markdown section of
-// a package that is done.
-func (o *Output) writePackage(p *PackageOutput) {
+	o := p.o
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if p.termBuf != nil {
-		if _, err := o.term.Write(p.termBuf.Bytes()); err != nil {
-			log.Fatal("failed to write package results to terminal: ", err)
-		}
+		_, _ = p.termBuf.WriteTo(o.term)
 	}
 	o.writeFile(os.O_WRONLY|os.O_APPEND, func(f *os.File) {
 		if _, err := f.Write(p.md.Bytes()); err != nil {
