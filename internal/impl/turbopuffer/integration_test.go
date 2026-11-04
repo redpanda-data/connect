@@ -48,10 +48,14 @@ api_key: %q
 region: %q
 namespace: %q
 operation: '${! meta("operation") }'
-id: root = this.id
+id: root = json("id")
 document_mapping: |
   root = this
   root.id = deleted()
+schema:
+  title:
+    type: string
+    full_text_search: true
 max_retries: 2
 `, apiKey, region, namespace), service.NewEnvironment())
 	require.NoError(t, err)
@@ -72,9 +76,7 @@ max_retries: 2
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		_, deleteErr := ns.DeleteAll(cleanupCtx, tpuf.NamespaceDeleteAllParams{})
-		if deleteErr != nil {
-			t.Logf("failed to clean up turbopuffer namespace %q: %v", namespace, deleteErr)
-		}
+		assert.NoError(t, deleteErr, "clean up turbopuffer namespace %q", namespace)
 	})
 
 	message := func(operation, title string) *service.Message {
@@ -92,7 +94,7 @@ max_retries: 2
 
 	query := func() *tpuf.NamespaceQueryResponse {
 		res, queryErr := ns.Query(t.Context(), tpuf.NamespaceQueryParams{
-			RankBy:            tpuf.NewRankByAttribute("id", "asc"),
+			RankBy:            tpuf.NewRankByTextBM25("title", "after"),
 			TopK:              tpuf.Int(10),
 			IncludeAttributes: tpuf.IncludeAttributesParam{Bool: tpuf.Bool(true)},
 			Consistency:       tpuf.NamespaceQueryParamsConsistency{Level: "strong"},

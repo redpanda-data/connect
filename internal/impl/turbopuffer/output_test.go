@@ -107,7 +107,7 @@ base_url: %s
 max_retries: 0
 namespace: '${! meta("namespace") }'
 operation: '${! meta("operation") }'
-id: root = this.id
+id: root = json("id")
 document_mapping: root = this.document
 schema:
   text:
@@ -191,6 +191,37 @@ func TestOutputGroupsWritesByNamespace(t *testing.T) {
 	assert.ElementsMatch(t, []string{"/gcp-us-central1/v2/namespaces/one", "/gcp-us-central1/v2/namespaces/two"}, paths)
 }
 
+func TestOutputMappingsUseMessageContentAndMetadata(t *testing.T) {
+	server, requests := newTestServer(t)
+	conf, err := outputSpec().ParseYAML(fmt.Sprintf(`
+api_key: tpuf_test
+region: gcp-us-central1
+base_url: %s/REGION
+max_retries: 0
+namespace: '${! meta("namespace") }'
+operation: upsert
+id: root = meta("id")
+document_mapping: |
+  root.text = content().string()
+  root.source = meta("source")
+`, server.URL), service.NewEnvironment())
+	require.NoError(t, err)
+	w, err := newOutputWriter(conf, service.MockResources())
+	require.NoError(t, err)
+
+	msg := service.NewMessage([]byte("hello wikipedia"))
+	msg.MetaSetMut("namespace", "wikipedia")
+	msg.MetaSetMut("id", "page-1")
+	msg.MetaSetMut("source", "kafka")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{msg}))
+
+	req := <-requests
+	row := req.body["upsert_rows"].([]any)[0].(map[string]any)
+	assert.Equal(t, "page-1", row["id"])
+	assert.Equal(t, "hello wikipedia", row["text"])
+	assert.Equal(t, "kafka", row["source"])
+}
+
 func TestOutputSplitsDuplicateIDsIntoOrderedRequests(t *testing.T) {
 	server, requests := newTestServer(t)
 	w := newTestWriter(t, server.URL+"/REGION")
@@ -249,6 +280,19 @@ id: root = this.id
 	require.NoError(t, err)
 	_, err = newOutputWriter(conf, service.MockResources())
 	require.ErrorContains(t, err, "REGION")
+}
+
+func TestOutputConfigRejectsNegativeMaxRetries(t *testing.T) {
+	conf, err := outputSpec().ParseYAML(`
+api_key: tpuf_test
+region: gcp-us-central1
+max_retries: -1
+namespace: wikipedia
+id: root = json("id")
+`, service.NewEnvironment())
+	require.NoError(t, err)
+	_, err = newOutputWriter(conf, service.MockResources())
+	require.ErrorContains(t, err, "max_retries must not be negative")
 }
 
 func TestOutputReturnsPerMessageErrors(t *testing.T) {

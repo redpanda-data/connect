@@ -63,7 +63,11 @@ func outputSpec() *service.ConfigSpec {
 
 The `+"`namespace`"+` and `+"`operation`"+` fields are interpolated for each message. A batch can therefore target multiple namespaces and contain a mixture of operations. Requests with duplicate document IDs are split automatically because turbopuffer requires IDs to be unique within a write request.
 
-Writes are delivered at least once. Use stable document IDs and set `+"`max_in_flight: 1`"+` when writes to the same document must retain input order.`+service.OutputPerformanceDocs(true, true)).
+Writes are delivered at least once. Use stable document IDs and set `+"`max_in_flight: 1`"+` when writes to the same document must retain input order.
+
+The client retries transient failures before it reports per-message errors to Redpanda Connect. If a request fails, the output does not send later requests for the same namespace. This behavior keeps document updates in order when Redpanda Connect retries the messages.
+
+The `+"`schema`"+` field is sent with every write request. Schema changes must be compatible with the existing namespace. The output reads the API key when it starts, so restart the stream after you rotate the key.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(fieldAPIKey).
 				Secret().
@@ -76,31 +80,43 @@ Writes are delivered at least once. Use stable document IDs and set `+"`max_in_f
 				Default("").
 				Advanced().
 				LintRule(`root = if this != "" && !this.contains("REGION") { ["must contain a REGION placeholder"] }`).
-				Description("An optional custom turbopuffer API base URL. This is primarily useful for tests and proxies and must contain a `REGION` placeholder."),
+				Description("An optional custom turbopuffer API base URL. This is primarily useful for tests and proxies and must contain a `REGION` placeholder.").
+				Example("https://REGION.example.com"),
 			service.NewIntField(fieldMaxRetries).
 				Default(2).
 				Advanced().
 				LintRule(`root = if this < 0 { ["must not be negative"] }`).
-				Description("The maximum number of retries performed by the turbopuffer client for transient failures."),
+				Description("The maximum number of retries for connection errors and HTTP 408, 409, 429, and 5xx responses. The client uses server retry headers or exponential backoff between attempts."),
 			service.NewInterpolatedStringField(fieldNamespace).
 				Description("The turbopuffer namespace to write to.").
 				Example("wikipedia").
 				Example(`${! meta("namespace") }`),
-			service.NewInterpolatedStringField(fieldOperation).
+			service.NewInterpolatedStringEnumField(fieldOperation, operationUpsert, operationPatch, operationDelete).
 				Default(operationUpsert).
 				Description("The operation to perform. Must resolve to `upsert`, `patch`, or `delete`.").
 				Example(`${! meta("operation") }`),
 			service.NewBloblangField(fieldID).
-				Description("A Bloblang mapping that extracts a string or unsigned integer document ID.").
-				Example("root = this.id"),
+				Description("A Bloblang mapping that extracts a string or unsigned integer document ID. Use `json()` to read message fields and `meta()` to read message metadata.").
+				Example(`root = json("id")`).
+				Example(`root = meta("kafka_key")`),
 			service.NewBloblangField(fieldDocumentMapping).
 				Default("root = this").
 				Description("A Bloblang mapping that extracts the document attributes for upsert and patch operations. The configured ID overwrites any `id` attribute returned by this mapping.").
-				Example("root = this.document"),
-			service.NewAnyField(fieldSchema).
+				Example("root = this.document").
+				Example("root = this.merge(metadata())"),
+			service.NewAnyMapField(fieldSchema).
 				Optional().
 				Advanced().
-				Description("An optional turbopuffer namespace schema sent with each write request."),
+				Description("An optional turbopuffer namespace schema sent with each write request. Turbopuffer infers undeclared attributes. Schema updates must be compatible with the existing namespace schema.").
+				Example(map[string]any{
+					"title": map[string]any{
+						"type":             "string",
+						"full_text_search": true,
+					},
+					"embedding": map[string]any{
+						"type": "[1024]f32",
+					},
+				}),
 			service.NewStringEnumField(fieldDistanceMetric, string(tpuf.DistanceMetricCosineDistance), string(tpuf.DistanceMetricEuclideanSquared)).
 				Optional().
 				Advanced().
@@ -114,7 +130,7 @@ output:
     api_key: ${TURBOPUFFER_API_KEY}
     region: gcp-us-central1
     namespace: wikipedia
-    id: root = this.page_id
+    id: root = json("page_id")
     document_mapping: |
       root.title = this.title
       root.text = this.text
@@ -184,6 +200,9 @@ func newOutputWriter(conf *service.ParsedConfig, _ *service.Resources) (*outputW
 	maxRetries, err := conf.FieldInt(fieldMaxRetries)
 	if err != nil {
 		return nil, err
+	}
+	if maxRetries < 0 {
+		return nil, fmt.Errorf("%s must not be negative", fieldMaxRetries)
 	}
 
 	clientOptions := []option.RequestOption{
@@ -304,14 +323,12 @@ func (w *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 func (w *outputWriter) buildRequests(batch service.MessageBatch) ([]pendingWrite, error) {
 	namespaceExec := batch.InterpolationExecutor(w.namespace)
 	operationExec := batch.InterpolationExecutor(w.operation)
+	idExec := batch.BloblangExecutor(w.id)
+	documentExec := batch.BloblangExecutor(w.documentMapping)
 
 	var requests []pendingWrite
 	currentRequest := map[string]int{}
 	for i := range batch {
-		input, err := batch[i].AsStructured()
-		if err != nil {
-			return nil, fmt.Errorf("parsing message %d as structured data: %w", i, err)
-		}
 		namespace, err := namespaceExec.TryString(i)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", fieldNamespace, err)
@@ -328,7 +345,7 @@ func (w *outputWriter) buildRequests(batch service.MessageBatch) ([]pendingWrite
 			return nil, fmt.Errorf("%s %q must be one of upsert, patch, or delete", fieldOperation, operation)
 		}
 
-		rawID, err := w.id.Query(input)
+		rawID, err := idExec.QueryValue(i)
 		if err != nil {
 			return nil, fmt.Errorf("executing %s: %w", fieldID, err)
 		}
@@ -363,9 +380,16 @@ func (w *outputWriter) buildRequests(batch service.MessageBatch) ([]pendingWrite
 		case operationDelete:
 			request.params.Deletes = append(request.params.Deletes, id)
 		case operationUpsert, operationPatch:
-			rawDocument, err := w.documentMapping.Query(input)
+			mappedDocument, err := documentExec.Query(i)
 			if err != nil {
 				return nil, fmt.Errorf("executing %s: %w", fieldDocumentMapping, err)
+			}
+			if mappedDocument == nil {
+				return nil, fmt.Errorf("executing %s: %w", fieldDocumentMapping, bloblang.ErrRootDeleted)
+			}
+			rawDocument, err := mappedDocument.AsStructured()
+			if err != nil {
+				return nil, fmt.Errorf("extracting %s result: %w", fieldDocumentMapping, err)
 			}
 			document, ok := rawDocument.(map[string]any)
 			if !ok {
