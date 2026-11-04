@@ -43,7 +43,7 @@ go run ./cmd/tools/integration run kafka redis
 
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
 
-- **Docker Cleanup** -- Testcontainers are removed between packages to prevent resource leaks. Skipped in CI environments.
+- **Docker Cleanup** -- Testcontainers and their anonymous volumes are removed between packages to prevent resource leaks. Named volumes stay. Skipped in CI environments.
 
 - **Race Detection** -- The `--race` flag enables Go's race detector with `CGO_ENABLED=1` set automatically.
 

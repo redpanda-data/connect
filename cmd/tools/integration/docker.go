@@ -20,8 +20,9 @@ import (
 	"strings"
 )
 
-// dockerCleanup removes all Docker containers between test packages.
-// Skipped in CI environments.
+// dockerCleanup removes all testcontainers containers and their anonymous
+// volumes between test packages. Named volumes stay. Skipped in CI
+// environments.
 func dockerCleanup() {
 	if os.Getenv("CI") != "" {
 		return
@@ -36,6 +37,9 @@ func dockerCleanup() {
 	if len(ids) == 0 {
 		return
 	}
-	args := append([]string{"rm", "-f"}, ids...)
+	// Images that declare VOLUME, for example MySQL and Postgres, give each
+	// container an anonymous volume. Without -v these volumes stay and fill the
+	// Docker disk.
+	args := append([]string{"rm", "-f", "-v"}, ids...)
 	_ = exec.Command("docker", args...).Run()
 }
