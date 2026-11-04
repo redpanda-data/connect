@@ -35,9 +35,10 @@ func packageSessionID(runnerPID int, pkgPath string) string {
 	return fmt.Sprintf("rpcn-it-%d-%s", runnerPID, strings.TrimSuffix(pkgFilename(pkgPath), ".txt"))
 }
 
-// dockerCleanup removes the containers and networks of one testcontainers
-// session after its package is done. Containers of other sessions, for example
-// other packages that run at the same time, stay. Skipped in CI environments.
+// dockerCleanup removes the containers, their anonymous volumes, and the
+// networks of one testcontainers session after its package is done. Containers
+// of other sessions, for example other packages that run at the same time,
+// stay. Named volumes stay too. Skipped in CI environments.
 func dockerCleanup(sessionID string) {
 	if os.Getenv("CI") != "" {
 		return
@@ -45,8 +46,10 @@ func dockerCleanup(sessionID string) {
 
 	filter := "label=" + sessionLabel + "=" + sessionID
 	// Remove the containers first, because Docker does not remove a network
-	// that a container still uses.
-	dockerRemove([]string{"ps", "-aq", "--filter", filter}, "rm", "-f")
+	// that a container still uses. Images that declare VOLUME, for example
+	// MySQL and Postgres, give each container an anonymous volume, and without
+	// -v these volumes stay and fill the Docker disk.
+	dockerRemove([]string{"ps", "-aq", "--filter", filter}, "rm", "-f", "-v")
 	dockerRemove([]string{"network", "ls", "-q", "--filter", filter}, "network", "rm")
 }
 
