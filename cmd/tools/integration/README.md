@@ -43,7 +43,7 @@ go run ./cmd/tools/integration run kafka redis
 
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
 
-- **Docker Cleanup** -- Testcontainers are removed between packages to prevent resource leaks. Skipped in CI environments.
+- **Docker Cleanup** -- Ryuk, the testcontainers reaper, removes the containers, networks, and volumes of each package about 10 seconds after its test binary exits, also when the run is interrupted or crashes. Keep Ryuk on: with `TESTCONTAINERS_RYUK_DISABLED=true`, the containers of tests that do not terminate them stay.
 
 - **Race Detection** -- The `--race` flag enables Go's race detector with `CGO_ENABLED=1` set automatically.
 
