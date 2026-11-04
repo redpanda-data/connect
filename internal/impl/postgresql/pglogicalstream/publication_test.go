@@ -27,7 +27,7 @@ func TestPublicationSyncPlan(t *testing.T) {
 		tables    []TableFQN
 		wantAdd   []TableFQN
 		wantDrop  []TableFQN
-		wantErr   bool
+		wantErr   error
 	}{
 		{
 			name: "FOR ALL TABLES publication without a table list is left alone",
@@ -41,7 +41,20 @@ func TestPublicationSyncPlan(t *testing.T) {
 			pub:       publicationInfo{exists: true, allTables: true},
 			pubTables: []TableFQN{a, b, c},
 			tables:    []TableFQN{a},
-			wantErr:   true,
+			wantErr:   errAllTablesPublication,
+		},
+		{
+			// A FOR TABLES IN SCHEMA publication streams every table in the
+			// schema, which pg_publication_rel does not list.
+			name:      "schema publication with a table list is an error",
+			pub:       publicationInfo{exists: true, schemas: []string{"public"}},
+			pubTables: []TableFQN{a},
+			tables:    []TableFQN{a},
+			wantErr:   errSchemaPublication,
+		},
+		{
+			name: "schema publication without a table list is left alone",
+			pub:  publicationInfo{exists: true, schemas: []string{"public"}},
 		},
 		{
 			// A FOR TABLE publication with every table dropped lists nothing,
@@ -69,14 +82,46 @@ func TestPublicationSyncPlan(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			add, drop, err := publicationSyncPlan("pub", test.pub, test.pubTables, test.tables)
-			if test.wantErr {
-				require.ErrorIs(t, err, errAllTablesPublication)
+			if test.wantErr != nil {
+				require.ErrorIs(t, err, test.wantErr)
 			} else {
 				require.NoError(t, err)
 			}
 			assert.Equal(t, test.wantAdd, add)
 			assert.Equal(t, test.wantDrop, drop)
 		})
+	}
+}
+
+func TestPublicationSyncPlanErrorsGiveSafeFix(t *testing.T) {
+	a := TableFQN{Schema: `"public"`, Table: `"a"`}
+	b := TableFQN{Schema: `"public"`, Table: `"b"`}
+
+	// Dropping the publication and creating it in separate transactions
+	// leaves changes that commit in between decoded with no publication, so
+	// the fix recreates it in one transaction with its own options.
+	_, _, err := publicationSyncPlan("pub", publicationInfo{exists: true, allTables: true, withClause: "publish = 'insert, update', publish_via_partition_root = true"}, nil, []TableFQN{a, b})
+	require.ErrorIs(t, err, errAllTablesPublication)
+	assert.Contains(t, err.Error(), `BEGIN; DROP PUBLICATION pub; CREATE PUBLICATION pub FOR TABLE "public"."a", "public"."b" WITH (publish = 'insert, update', publish_via_partition_root = true); COMMIT;`)
+
+	_, _, err = publicationSyncPlan("pub", publicationInfo{exists: true, schemas: []string{"public", "Sales"}}, nil, []TableFQN{a})
+	require.ErrorIs(t, err, errSchemaPublication)
+	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub DROP TABLES IN SCHEMA "public", "Sales";`)
+	assert.NotContains(t, err.Error(), "DROP PUBLICATION")
+}
+
+func TestUnpublishedTableQueries(t *testing.T) {
+	q, err := unpublishedTableQuery("pglog_stream_slot", `"public"."it's"`)
+	require.NoError(t, err)
+	// Read through to_jsonb, so the query runs before PostgreSQL 13 too.
+	assert.Contains(t, q, "to_jsonb(p) ->> 'pubviaroot'")
+	assert.Contains(t, q, `to_regclass( '"public"."it''s"' )`)
+
+	for _, build := range []func(string, string) (string, error){publishedAncestorQuery, publishedPartitionsQuery} {
+		q, err := build("pglog_stream_slot", `"public"."it's"`)
+		require.NoError(t, err)
+		assert.Contains(t, q, "pt.pubname =  'pglog_stream_slot' ")
+		assert.Contains(t, q, "format('%I.%I', pt.schemaname, pt.tablename)")
 	}
 }
 

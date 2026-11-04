@@ -974,18 +974,18 @@ func TestSnapshotSignalRejectsUndedupableTable(t *testing.T) {
 	}
 
 	t.Run("a table not published under its own name is rejected", func(t *testing.T) {
-		// A partitioned parent published through its partitions, a partition
-		// published through its root, or a table missing from the
-		// publication.
+		// The fake reports no partitioning, so this is a table missing from
+		// the publication. TestIntegrationBackfillRequiresTablePublishedAsItself
+		// covers the partitioned causes and their messages.
 		s := newStream(true, false)
 
 		_, err := s.incrementalPKColumns(t.Context(), events)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, incrementalsnapshot.ErrTableUnusable,
 			"unusable, so a signal is rejected and a resumed queue entry is dropped rather than backfilled undedupable")
-		assert.Contains(t, err.Error(), "publish_via_partition_root",
-			"the message must name the publication option that would make it work")
-		assert.Contains(t, err.Error(), "pglog_stream_test_slot", "and the publication it applies to")
+		assert.Contains(t, err.Error(), "Add the table to the input's tables",
+			"the message must give the fix for the cause")
+		assert.Contains(t, err.Error(), "pglog_stream_test_slot", "and name the publication it applies to")
 
 		// The signal path turns that into a rejection: logged and skipped,
 		// not a stream restart.
