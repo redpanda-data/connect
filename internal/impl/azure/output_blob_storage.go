@@ -63,13 +63,8 @@ const (
 // worth rejecting at config time rather than failing every message. Tag values
 // are interpolated per message and so cannot be checked here.
 func bsoValidateTagKey(key string) error {
-	for _, r := range key {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case strings.ContainsRune(bsoTagAllowedSpecialChars, r):
-		default:
-			return fmt.Errorf("blob index tag key %q contains unsupported character %q, only alphanumerics and the characters %q are permitted", key, r, bsoTagAllowedSpecialChars)
-		}
+	if r, ok := bsoFirstInvalidTagChar(key); ok {
+		return fmt.Errorf("blob index tag key %q contains unsupported character %q, only alphanumerics and the characters %q are permitted", key, r, bsoTagAllowedSpecialChars)
 	}
 	// Only ASCII characters reach here, so byte length matches the character
 	// count Azure counts against the limit.
@@ -77,6 +72,36 @@ func bsoValidateTagKey(key string) error {
 		return fmt.Errorf("blob index tag key %q must be between 1 and %d characters, got %d", key, bsoMaxTagKeyLength, l)
 	}
 	return nil
+}
+
+// bsoValidateTagValue checks an interpolated blob index tag value against the
+// length and character set limits imposed by Azure. Azure rejects the whole
+// upload for a bad value, so checking first gives a clearer error. The error
+// names the key but not the value, because the value can hold message data.
+func bsoValidateTagValue(key, value string) error {
+	if r, ok := bsoFirstInvalidTagChar(value); ok {
+		return fmt.Errorf("blob index tag %q value contains unsupported character %q, only alphanumerics and the characters %q are permitted", key, r, bsoTagAllowedSpecialChars)
+	}
+	// Only ASCII characters reach here, so byte length matches the character
+	// count Azure counts against the limit.
+	if l := len(value); l > bsoMaxTagValueLength {
+		return fmt.Errorf("blob index tag %q value must be at most %d characters, got %d", key, bsoMaxTagValueLength, l)
+	}
+	return nil
+}
+
+// bsoFirstInvalidTagChar returns the first rune of s that Azure does not
+// permit in a blob index tag key or value.
+func bsoFirstInvalidTagChar(s string) (rune, bool) {
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune(bsoTagAllowedSpecialChars, r):
+		default:
+			return r, true
+		}
+	}
+	return 0, false
 }
 
 type bsoConfig struct {
@@ -164,7 +189,7 @@ output:
       Source: ${!@kafka_topic}
 `+"```"+`
 
-Only values support interpolation; keys are static and are validated against Azure's limits at startup. Values are resolved per message and so are only rejected once Azure sees them.
+Keys and values can contain only alphanumerics, spaces, and the characters `+"`+ - . / : = _`"+`. Only values support interpolation. Keys are static and are checked against Azure's limits at startup. Values are resolved and checked per message, and a message with an invalid value fails before any upload.
 
 If authenticating with `+"`storage_sas_token`"+`, the token must include the `+"`t`"+` (tags) permission.
 
@@ -233,6 +258,9 @@ func (c *bsoConfig) resolveTags(msg *service.Message) (map[string]string, error)
 		tagVal, err := v.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("tag %v interpolation: %w", k, err)
+		}
+		if err := bsoValidateTagValue(k, tagVal); err != nil {
+			return nil, err
 		}
 		tags[k] = tagVal
 	}

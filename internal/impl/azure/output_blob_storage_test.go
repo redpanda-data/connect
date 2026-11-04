@@ -143,6 +143,54 @@ func TestBlobStorageOutputTagsConfig(t *testing.T) {
 		assert.ErrorContains(t, err, "tag Doc interpolation")
 	})
 
+	t.Run("invalid values are rejected before upload", func(t *testing.T) {
+		for _, test := range []struct {
+			name   string
+			value  string
+			errStr string
+		}{
+			{
+				name:   "unsupported character",
+				value:  "bad!value",
+				errStr: `blob index tag "Doc" value contains unsupported character '!', only alphanumerics and the characters " +-./:=_" are permitted`,
+			},
+			{
+				name:   "over-long value",
+				value:  strings.Repeat("v", bsoMaxTagValueLength+1),
+				errStr: fmt.Sprintf(`blob index tag "Doc" value must be at most %d characters, got %d`, bsoMaxTagValueLength, bsoMaxTagValueLength+1),
+			},
+			{
+				name:   "non-ASCII character",
+				value:  "café",
+				errStr: `blob index tag "Doc" value contains unsupported character 'é', only alphanumerics and the characters " +-./:=_" are permitted`,
+			},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				conf, err := bsoParseTagsConf(t, "tags:\n  Doc: ${! content() }\n")
+				require.NoError(t, err)
+
+				_, err = conf.resolveTags(service.NewMessage([]byte(test.value)))
+				require.Error(t, err)
+				assert.EqualError(t, err, test.errStr)
+			})
+		}
+	})
+
+	t.Run("values at the length limits are accepted", func(t *testing.T) {
+		conf, err := bsoParseTagsConf(t, "tags:\n  Doc: ${! content() }\n")
+		require.NoError(t, err)
+
+		for _, value := range []string{
+			"",
+			strings.Repeat("v", bsoMaxTagValueLength),
+			"a+b-c.d/e:f=g_h i",
+		} {
+			tags, err := conf.resolveTags(service.NewMessage([]byte(value)))
+			require.NoError(t, err)
+			assert.Equal(t, map[string]string{"Doc": value}, tags)
+		}
+	})
+
 	t.Run("invalid keys are reported in key order", func(t *testing.T) {
 		_, err := bsoParseTagsConf(t, "tags:\n  \"z!\": a\n  \"b!\": b\n  \"m!\": c\n")
 		require.Error(t, err)
