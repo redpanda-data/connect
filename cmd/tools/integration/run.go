@@ -16,17 +16,14 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -117,16 +114,7 @@ func cmdRun(args []string) error {
 		skipped int
 	)
 
-	// On a signal, stop the package that runs, remove its containers, and start
-	// no more packages. Local runs often disable Ryuk, so nothing else removes
-	// the containers of an interrupted run.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	defer stop()
-
 	for i, pkg := range packages {
-		if ctx.Err() != nil {
-			break
-		}
 		short := pkgShort(pkg.Path)
 		fname := pkgFilename(pkg.Path)
 		pkgOutFile := filepath.Join(outputDir, fname)
@@ -163,7 +151,7 @@ func cmdRun(args []string) error {
 		}
 
 		sessionID := packageSessionID(os.Getpid(), pkg.Path)
-		res := runPackageTest(ctx, pkg, short, pkgOutFile, sessionID, cached, out)
+		res := runPackageTest(pkg, short, pkgOutFile, sessionID, cached, out)
 
 		switch res.status {
 		case ResultPass:
@@ -184,9 +172,6 @@ func cmdRun(args []string) error {
 	out.Summary(passed, failed, skipped)
 	out.Info(sep)
 
-	if ctx.Err() != nil {
-		return errors.New("integration tests interrupted")
-	}
 	if failed > 0 {
 		return errors.New("integration tests failed")
 	}
@@ -202,10 +187,8 @@ type packageResult struct {
 
 // runPackageTest executes `go test -json` for a single package, parses JSON
 // events, streams filtered output, and returns the result. The containers of
-// the package get the testcontainers session ID sessionID. When ctx is
-// canceled, go test and its test binary get SIGINT, and runPackageTest returns
-// after they exit.
-func runPackageTest(ctx context.Context, pkg TestPackage, short, outFile, sessionID string, cached PackageCache, out *Output) packageResult {
+// the package get the testcontainers session ID sessionID.
+func runPackageTest(pkg TestPackage, short, outFile, sessionID string, cached PackageCache, out *Output) packageResult {
 	result := packageResult{outFile: outFile}
 
 	// Count existing lines without loading the file into memory (fix #4).
@@ -262,8 +245,7 @@ func runPackageTest(ctx context.Context, pkg TestPackage, short, outFile, sessio
 		goArgs = append(goArgs, "-coverprofile="+coverFile)
 	}
 	goArgs = append(goArgs, pkg.Path)
-	cmd := exec.CommandContext(ctx, "go", goArgs...)
-	waited := interruptProcessGroup(cmd)
+	cmd := exec.Command("go", goArgs...)
 	cmd.Env = append(os.Environ(), "TESTCONTAINERS_SESSION_ID="+sessionID)
 	if runArgs.race {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
@@ -364,20 +346,15 @@ func runPackageTest(ctx context.Context, pkg TestPackage, short, outFile, sessio
 	writeEvent(f, TestEvent{Action: ActionEndRun})
 
 	exitErr := cmd.Wait()
-	waited()
 
 	if stderrBuf.Len() > 0 {
 		debugf("go test stderr: %s", stderrBuf.String())
 	}
 
-	// Tests that started but never finished timed out, or were interrupted.
+	// Tests that started but never finished are assumed to have timed out.
 	if exitErr != nil {
-		reason := "timeout"
-		if ctx.Err() != nil {
-			reason = "interrupted"
-		}
 		for testName := range startedTests {
-			out.TestFail(testName, reason, outFile, lineNum, false)
+			out.TestFail(testName, "timeout", outFile, lineNum, false)
 			result.tests = append(result.tests, CacheEntry{
 				TestName: testName,
 				Result:   ResultFail,
