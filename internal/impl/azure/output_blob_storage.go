@@ -184,6 +184,7 @@ When `+"`blob_type`"+` is `+"`APPEND`"+` the tags describe the blob rather than 
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringMapField(bsoFieldTags).
 				Description(fmt.Sprintf("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of %d tags are permitted, tag keys must be between 1 and %d characters, and tag values must be between 0 and %d characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).", bsoMaxTagsPermitted, bsoMaxTagKeyLength, bsoMaxTagValueLength)).
+				Version("4.117.0").
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"Environment": "production",
