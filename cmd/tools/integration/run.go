@@ -24,10 +24,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
+	"golang.org/x/sync/errgroup"
 )
 
 var runArgs struct {
@@ -125,10 +125,19 @@ func cmdRun(args []string) error {
 	}
 	out.Blank()
 
+	// Go blocks while runArgs.parallel packages run, so the packages start in
+	// the registry order of packages.json. Each package writes only its own
+	// slot of results, so the count below needs no lock.
 	results := make([]TestResult, total)
-	forEachParallel(total, runArgs.parallel, func(i int) {
-		results[i] = runPackage(packages[i], i+1, total, outputDir, out)
-	})
+	var g errgroup.Group
+	g.SetLimit(runArgs.parallel)
+	for i, pkg := range packages {
+		g.Go(func() error {
+			results[i] = runPackage(pkg, i+1, total, outputDir, out)
+			return nil
+		})
+	}
+	_ = g.Wait()
 
 	var passed, failed, skipped int
 	for _, r := range results {
@@ -154,26 +163,6 @@ func cmdRun(args []string) error {
 	return nil
 }
 
-// forEachParallel calls fn for each index in [0, n), with at most parallel
-// calls at the same time. It starts the calls in index order, so the registry
-// order of packages.json is also the start order.
-func forEachParallel(n, parallel int, fn func(i int)) {
-	next := make(chan int)
-	var wg sync.WaitGroup
-	for range parallel {
-		wg.Go(func() {
-			for i := range next {
-				fn(i)
-			}
-		})
-	}
-	for i := range n {
-		next <- i
-	}
-	close(next)
-	wg.Wait()
-}
-
 // runPackage tests one package, or prints its cached result, and returns its
 // result. num is the 1-based position of the package in the run.
 func runPackage(pkg TestPackage, num, total int, outputDir string, out *Output) TestResult {
@@ -182,8 +171,6 @@ func runPackage(pkg TestPackage, num, total int, outputDir string, out *Output) 
 	pkgOutFile := filepath.Join(outputDir, fname)
 
 	tag := strings.TrimSuffix(fname, ".txt")
-	// Packages that run at the same time buffer their terminal text, so that
-	// their lines do not mix.
 	pout := out.Package(tag, num, total, short)
 
 	// Check cache from current run directory.
