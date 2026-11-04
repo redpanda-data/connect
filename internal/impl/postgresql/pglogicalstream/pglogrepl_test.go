@@ -279,6 +279,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	// syncing it to one fails instead of streaming every table.
 	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{{schema, `"test_table"`}})
 	require.ErrorIs(t, err, errAllTablesPublication)
+	assert.Contains(t, err.Error(), `BEGIN; DROP PUBLICATION test_publication; CREATE PUBLICATION test_publication FOR TABLE "public"."test_table" WITH (`)
 	_, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.True(t, forAllTables)
@@ -394,6 +395,55 @@ func TestIntegrationCreatePublication(t *testing.T) {
 // already exists as FOR TABLE, it must be recreated FOR ALL TABLES rather than
 // having every member dropped, which would leave an empty publication that
 // streams nothing.
+func TestIntegrationCreatePublicationRejectsSchemaPublication(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	_, err = conn.Exec(ctx, `
+CREATE TABLE t (id int PRIMARY KEY);
+CREATE TABLE u (id int PRIMARY KEY);
+CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA public;
+`).ReadAll()
+	require.NoError(t, err)
+
+	// The schema streams u too, so keeping it while adding t would stream a
+	// table that is not configured.
+	tableT := TableFQN{Schema: `"public"`, Table: `"t"`}
+	err = CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT})
+	require.ErrorIs(t, err, errSchemaPublication)
+	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub_schema DROP TABLES IN SCHEMA "public";`)
+	members, err := getPublicationMembers(ctx, conn, "pub_schema")
+	require.NoError(t, err)
+	assert.Empty(t, members, "the publication is left as it was")
+
+	// Following the fix lets the next sync add the configured table.
+	_, err = conn.Exec(ctx, `ALTER PUBLICATION pub_schema DROP TABLES IN SCHEMA "public";`).ReadAll()
+	require.NoError(t, err)
+	require.NoError(t, CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT}))
+	tables, allTables, err := GetPublicationTables(ctx, conn, "pub_schema")
+	require.NoError(t, err)
+	assert.False(t, allTables)
+	assert.Equal(t, []TableFQN{tableT}, tables)
+
+	// Without a table list every table is wanted, so a schema publication is
+	// recreated FOR ALL TABLES as before.
+	_, err = conn.Exec(ctx, `CREATE PUBLICATION pub_schema_all FOR TABLES IN SCHEMA public;`).ReadAll()
+	require.NoError(t, err)
+	require.NoError(t, CreatePublication(ctx, conn, "pub_schema_all", nil))
+	_, allTables, err = GetPublicationTables(ctx, conn, "pub_schema_all")
+	require.NoError(t, err)
+	assert.True(t, allTables)
+}
+
 func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -722,23 +772,35 @@ func testBackfillRequiresTablePublishedAsItself(t *testing.T, version int) {
 	exec("CREATE PUBLICATION pglog_stream_all FOR ALL TABLES;")
 	s := newStream("all")
 	require.NoError(t, s.checkBackfillable(ctx, orders))
-	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	err = s.checkBackfillable(ctx, events)
+	require.ErrorIs(t, err, errSignalRejected)
+	if version < 13 {
+		assert.Contains(t, err.Error(), "Backfill its partitions instead")
+	} else {
+		assert.Contains(t, err.Error(), "Set publish_via_partition_root = true on the publication")
+	}
 
 	if version < 13 {
 		// Before PostgreSQL 13 only leaves can be published, and their
 		// changes stream under the leaf names.
 		exec("CREATE PUBLICATION pglog_stream_leaves FOR TABLE events_2026, events_2027;")
 		s = newStream("leaves")
-		require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+		err = s.checkBackfillable(ctx, events)
+		require.ErrorIs(t, err, errSignalRejected)
+		assert.Contains(t, err.Error(), "Backfill its partitions instead")
 		require.NoError(t, s.checkBackfillable(ctx, events2027))
 		return
 	}
 
-	// Every leaf is listed, so the parent counts as covered, but its changes
-	// stream under the leaf names even with publish_via_partition_root.
+	// Every leaf is listed, but the parent itself is not in the publication,
+	// so its changes stream under the leaf names even with
+	// publish_via_partition_root.
 	exec("CREATE PUBLICATION pglog_stream_leaves FOR TABLE events_2026, events_2027 WITH (publish_via_partition_root = true);")
 	s = newStream("leaves")
-	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	err = s.checkBackfillable(ctx, events)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "does not include table public.events")
+	assert.Contains(t, err.Error(), `ALTER PUBLICATION pglog_stream_leaves ADD TABLE "public"."events";`)
 	require.NoError(t, s.checkBackfillable(ctx, events2027), "a leaf listed as itself streams as itself")
 
 	// The root published via the root streams a leaf's changes as the root.
@@ -747,13 +809,22 @@ func testBackfillRequiresTablePublishedAsItself(t *testing.T, version int) {
 	require.NoError(t, s.checkBackfillable(ctx, events))
 	err = s.checkBackfillable(ctx, events2027)
 	require.ErrorIs(t, err, errSignalRejected)
-	assert.Contains(t, err.Error(), "under its own name")
+	assert.Contains(t, err.Error(), "stream under its partitioned ancestor events")
+	assert.Contains(t, err.Error(), "Backfill events instead")
 
 	// The root without the option streams under the leaf names.
 	exec("CREATE PUBLICATION pglog_stream_noroot FOR TABLE events;")
 	s = newStream("noroot")
-	require.ErrorIs(t, s.checkBackfillable(ctx, events), errSignalRejected)
+	err = s.checkBackfillable(ctx, events)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "stream under its partition names")
+	assert.Contains(t, err.Error(), "Set publish_via_partition_root = true on the publication")
 	require.NoError(t, s.checkBackfillable(ctx, events2027))
+
+	// A table that is not in the publication at all.
+	err = s.checkBackfillable(ctx, orders)
+	require.ErrorIs(t, err, errSignalRejected)
+	assert.Contains(t, err.Error(), "does not include table public.orders")
 
 	if version < 15 {
 		return
