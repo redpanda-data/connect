@@ -125,6 +125,17 @@ func cmdRun(args []string) error {
 	}
 	out.Blank()
 
+	if runArgs.parallel > 1 && total > 1 {
+		start := time.Now()
+		if err := prebuildDeps(packages); err != nil {
+			// The package workers build again and report the real error.
+			out.Info(fmt.Sprintf("Build of shared dependencies failed: %v", err))
+		} else {
+			out.Info(fmt.Sprintf("Built shared dependencies in %s", time.Since(start).Round(time.Second)))
+		}
+		out.Blank()
+	}
+
 	// Go blocks while runArgs.parallel packages run, so the packages start in
 	// the registry order of packages.json. Each package writes only its own
 	// slot of results, so the count below needs no lock.
@@ -161,6 +172,74 @@ func cmdRun(args []string) error {
 		return errors.New("integration tests failed")
 	}
 	return nil
+}
+
+// prebuildDeps compiles the dependencies of the test binaries of pkgs into the
+// build cache, before the package workers start. Each worker runs its own
+// `go test` process, and processes do not share builds that are in progress.
+// Without this step, on a cold cache, all workers compile the same
+// dependencies at the same time. That wastes CPU that the Docker VM needs.
+//
+// It uses `go build` and not `go test -run '^$'`, because `go test` runs the
+// test binary, and a TestMain can start containers. The build flags must match
+// the flags of runPackageTest that change the compiled code (-tags and
+// -race), or the cache entries do not match.
+func prebuildDeps(pkgs []TestPackage) error {
+	paths := make([]string, len(pkgs))
+	for i, pkg := range pkgs {
+		paths[i] = pkg.Path
+	}
+	buildFlags := []string{"-tags", "integration"}
+	if runArgs.race {
+		buildFlags = append(buildFlags, "-race")
+	}
+
+	listArgs := append([]string{"list", "-deps", "-test", "-f", "{{if not .ForTest}}{{.ImportPath}}{{end}}"}, buildFlags...)
+	listArgs = append(listArgs, paths...)
+	var stderr bytes.Buffer
+	list := goCommand(listArgs...)
+	list.Stderr = &stderr
+	listOut, err := list.Output()
+	if err != nil {
+		return fmt.Errorf("go list: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+
+	buildArgs := append(append([]string{"build"}, buildFlags...), buildablePackages(string(listOut))...)
+	debugf("prebuilding %d packages", len(buildArgs)-len(buildFlags)-1)
+	stderr.Reset()
+	build := goCommand(buildArgs...)
+	build.Stderr = &stderr
+	if err := build.Run(); err != nil {
+		return fmt.Errorf("go build: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+// buildablePackages returns the import paths in the output of
+// `go list -deps -test -f '{{if not .ForTest}}{{.ImportPath}}{{end}}'` that
+// `go build` can compile. The template prints an empty line for the test
+// variants of packages, and the list also has the generated "pkg.test" main
+// packages, which only `go test` can build.
+func buildablePackages(listOut string) []string {
+	var pkgs []string
+	for line := range strings.Lines(listOut) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasSuffix(line, ".test") {
+			continue
+		}
+		pkgs = append(pkgs, line)
+	}
+	return pkgs
+}
+
+// goCommand returns a go command with the environment of runPackageTest.
+func goCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("go", args...)
+	cmd.Env = os.Environ()
+	if runArgs.race {
+		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
+	}
+	return cmd
 }
 
 // runPackage tests one package, or prints its cached result, and returns its
@@ -270,11 +349,7 @@ func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache,
 		goArgs = append(goArgs, "-coverprofile="+coverFile)
 	}
 	goArgs = append(goArgs, pkg.Path)
-	cmd := exec.Command("go", goArgs...)
-	cmd.Env = os.Environ()
-	if runArgs.race {
-		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
-	}
+	cmd := goCommand(goArgs...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
