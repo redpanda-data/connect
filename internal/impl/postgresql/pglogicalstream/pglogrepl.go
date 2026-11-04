@@ -275,8 +275,11 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// publicationInfo describes an existing publication.
+// publicationInfo is what getPublication reads from pg_publication about a
+// publication.
 type publicationInfo struct {
+	// exists is false when there is no publication with that name. The other
+	// fields are then zero.
 	exists bool
 	// allTables is pg_publication.puballtables. It must be read from there:
 	// pg_publication_tables lists every table for a FOR ALL TABLES
@@ -574,14 +577,12 @@ func publishedAsItselfQuery(pgVersion int, publication, schema, table, fqn strin
 // GetPublicationTables returns the tables a publication replicates, and
 // whether it is FOR ALL TABLES. For a FOR ALL TABLES publication the list is
 // every table in the database.
-// Arguments, in order: list of the tables, exist for all tables, error.
-func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
+func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) (tables []TableFQN, allTables bool, err error) {
 	pub, err := getPublication(ctx, conn, publicationName)
 	if err != nil {
 		return nil, false, err
 	}
-	tables, err := publicationTables(ctx, conn, publicationName)
-	if err != nil {
+	if tables, err = publicationTables(ctx, conn, publicationName); err != nil {
 		return nil, false, err
 	}
 	return tables, pub.allTables, nil
