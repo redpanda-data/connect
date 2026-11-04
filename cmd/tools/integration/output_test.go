@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestOutput(t *testing.T, buffered bool) (*Output, *bytes.Buffer, string) {
+func newTestOutput(t *testing.T) (*Output, *bytes.Buffer, string) {
 	t.Helper()
 	t.Setenv("CI", "")
 	t.Setenv("FORCE_COLOR", "")
@@ -34,13 +34,13 @@ func newTestOutput(t *testing.T, buffered bool) (*Output, *bytes.Buffer, string)
 
 	var term bytes.Buffer
 	indexPath := filepath.Join(t.TempDir(), "index.md")
-	out := NewOutput(&term, indexPath, buffered)
+	out := NewOutput(&term, indexPath)
 	out.Header("Integration Tests (2 packages)")
 	return out, &term, indexPath
 }
 
-func TestOutputBufferedPackagesDoNotInterleave(t *testing.T) {
-	out, term, indexPath := newTestOutput(t, true)
+func TestOutputPackagesDoNotInterleave(t *testing.T) {
+	out, term, indexPath := newTestOutput(t)
 
 	kafka := out.Package("kafka", 1, 2, "kafka")
 	redis := out.Package("redis", 2, 2, "redis")
@@ -68,19 +68,8 @@ func TestOutputBufferedPackagesDoNotInterleave(t *testing.T) {
 		"- PASS TestKafka (1.00s)\n\n", string(index))
 }
 
-func TestOutputStreamedPackageWritesAtOnce(t *testing.T) {
-	out, term, _ := newTestOutput(t, false)
-
-	kafka := out.Package("kafka", 1, 1, "kafka")
-	kafka.TestRun("TestKafka")
-
-	assert.Equal(t, "Integration Tests (2 packages)\n"+
-		"[1/1] kafka\n"+
-		"  RUN  TestKafka\n", term.String())
-}
-
 func TestOutputCachedPackage(t *testing.T) {
-	out, term, indexPath := newTestOutput(t, true)
+	out, term, indexPath := newTestOutput(t)
 
 	kafka := out.Package("kafka", 1, 1, "kafka")
 	kafka.TestPass("TestKafka", "", true)
