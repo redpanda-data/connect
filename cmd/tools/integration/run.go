@@ -99,7 +99,7 @@ func cmdRun(args []string) error {
 
 	debugf("resolved run dir: %s", outputDir)
 
-	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"))
+	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"), false)
 	total := len(packages)
 
 	headerLabel := "Integration Tests"
@@ -190,7 +190,7 @@ type packageResult struct {
 }
 
 // runPackageTest executes `go test -json` for a single package, parses JSON
-// events, writes filtered output to out, and returns the result.
+// events, streams filtered output, and returns the result.
 func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache, out *PackageOutput) packageResult {
 	result := packageResult{outFile: outFile}
 
@@ -289,6 +289,7 @@ func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache,
 				sawRun = true
 				if !pe.IsSubtest {
 					startedTests[pe.Test] = struct{}{}
+					out.TestRun(pe.Test)
 				}
 			case ActionPass:
 				sawPass = true

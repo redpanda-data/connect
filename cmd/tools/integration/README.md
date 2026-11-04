@@ -37,9 +37,6 @@ go run ./cmd/tools/integration run kafka redis
 
 - **Error Links** -- Failed tests include a direct file:line reference to the output log (e.g. `FAIL TestFoo (0.5s) -> .integration/20260326094101/kafka.txt:42`), allowing immediate navigation to the failure context.
 
-- **Package Output** -- Each package writes its lines to the terminal and to `index.md` as one block when it is done.
-  To follow a package while it runs, use `tail -f` on its file in the output directory, for example `.integration/20260326094101/kafka.txt`.
-
 - **Subtest Compaction** -- When all subtests of a parent pass, they are collapsed into a single parent entry. When any subtest fails, all subtests are shown individually so failures remain visible.
 
 - **Timeout Detection** -- Tests that start (`=== RUN`) but never finish (`--- PASS/FAIL/SKIP`) are detected as timed out and reported as failures with an error link.
