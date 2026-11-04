@@ -112,7 +112,7 @@ func cmdRun(args []string) error {
 	// containers of tests that do not terminate them stay. ReadConfig reads
 	// the same env var and properties file as the test binaries.
 	if testcontainers.ReadConfig().Config.RyukDisabled {
-		out.Error("Warning: Ryuk is disabled (TESTCONTAINERS_RYUK_DISABLED or ryuk.disabled), so containers of this run can stay. Set it to false.")
+		out.Error("Warning: Ryuk is disabled. Containers will not be cleaned up and will accumulate.")
 	}
 	out.Blank()
 
