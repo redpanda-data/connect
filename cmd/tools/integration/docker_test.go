@@ -51,7 +51,7 @@ func TestDockerCleanupRemovesOnlyTheSession(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"ps -aq --filter label=org.testcontainers.sessionId=rpcn-it-42-kafka",
-		"rm -f -v c1",
+		"rm -f c1",
 		"network ls -q --filter label=org.testcontainers.sessionId=rpcn-it-42-kafka",
 		"network rm n1",
 	}, strings.Split(strings.TrimSpace(string(data)), "\n"))
