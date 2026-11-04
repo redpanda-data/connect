@@ -1,5 +1,14 @@
 name: Integration Tests
 
+# A new push to a pull request cancels the run of the previous push. Before, the superseded runs continued on the
+# 32-core runner. In October 2026, these runs were about $244 (26%) of the integration test cost for pull requests.
+# Other events use the run ID as the group key, so a schedule, workflow_dispatch or /integration run never cancels
+# another run and is never cancelled. The setting is at the workflow level, so a cancel stops all jobs of the run
+# together, and a cancelled check-author-access job cannot block a job of a later run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   schedule:
     # Run every day at 1AM UTC
