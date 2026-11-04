@@ -416,8 +416,13 @@ func (s *Stream) unpublishedTableError(ctx context.Context, publication string, 
 		}
 	}
 
-	// Partitioned tables can only be published from PostgreSQL 13.
-	if partitioned && !viaRoot && s.pgVersion >= 13 {
+	// Before PostgreSQL 13 only partitions can be published, and their
+	// changes always stream under the partition names.
+	if partitioned && s.pgVersion < 13 {
+		return fmt.Errorf("%w: PostgreSQL %d streams the changes of partitioned table %s under its partition names, so they cannot be deduplicated against the backfill. Backfill its partitions instead",
+			incrementalsnapshot.ErrTableUnusable, s.pgVersion, table)
+	}
+	if partitioned && !viaRoot {
 		q, err := publishedPartitionsQuery(publication, fqn)
 		if err != nil {
 			return fmt.Errorf("sanitizing publication query: %w", err)
