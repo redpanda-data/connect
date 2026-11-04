@@ -248,7 +248,9 @@ func TestSnapshotSignalChecksExternallyManagedPublication(t *testing.T) {
 
 		err := s.checkBackfillable(t.Context(), events)
 		require.ErrorIs(t, err, errSignalRejected, "rejected and logged, not a stream restart")
-		assert.Contains(t, err.Error(), "publication pglog_stream_test_slot does not stream table public.events")
+		assert.Contains(t, err.Error(), "publication pglog_stream_test_slot does not include table public.events")
+		assert.Contains(t, err.Error(), `ALTER PUBLICATION pglog_stream_test_slot ADD TABLE "public"."events";`,
+			"the input does not manage the publication, so the fix is to add the table to it")
 	})
 
 	t.Run("a table in an externally managed publication is accepted", func(t *testing.T) {
