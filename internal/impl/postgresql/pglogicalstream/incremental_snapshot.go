@@ -1101,22 +1101,25 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 		return nil
 	}
 
-	added := s.incSnapshot.coordinator.AddTables(tables)
+	added := s.incSnapshot.coordinator.RequeueTables(tables)
 	if len(added) > 0 {
 		// The heartbeat must carry transaction ids again: on a quiet table
 		// it is the only thing that advances the backfill.
 		s.incSnapshot.backfilling.Store(true)
 	}
 	if len(added) == 0 {
-		s.logger.Warnf("Incremental snapshot: signal asked for %v, all of which this run already covers, so nothing was queued", tables)
+		s.logger.Warnf("Incremental snapshot: signal asked for %v, all of which are already queued or being backfilled, so nothing was queued", tables)
 		return nil
 	}
 	for _, table := range added {
+		// Reset on queueing, not on the table-start transition, which fires
+		// after the first chunk is already counted.
+		s.monitor.ResetSnapshotTable(tableFQN(table))
 		s.warnToastFidelity(ctx, table)
 	}
 	s.logger.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
 	if len(added) < len(tables) {
-		s.logger.Warnf("Incremental snapshot: signal asked for %v but this run already covers some of them, so only %v was queued", tables, added)
+		s.logger.Warnf("Incremental snapshot: signal asked for %v but some are already queued or being backfilled, so only %v was queued", tables, added)
 	}
 	return nil
 }

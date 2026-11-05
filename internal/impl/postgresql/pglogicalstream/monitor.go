@@ -162,6 +162,16 @@ func (m *Monitor) TrackSnapshotTable(ctx context.Context, table TableFQN) {
 	m.tableStat[table] = estimate
 }
 
+// ResetSnapshotTable clears a re-queued table's progress and row estimate so
+// its next snapshot counts from zero against a fresh estimate.
+func (m *Monitor) ResetSnapshotTable(table TableFQN) {
+	m.snapshotMu.Lock()
+	defer m.snapshotMu.Unlock()
+	delete(m.snapshotProgress, table)
+	delete(m.tableStat, table)
+	delete(m.estimateFailed, table)
+}
+
 // we need to read the tables stat to calculate the snapshot ingestion progress.
 //
 // Construction only, so it takes no lock: nothing else can see the maps yet.
