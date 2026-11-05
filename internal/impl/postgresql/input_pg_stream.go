@@ -272,11 +272,11 @@ For more information about AWS credentials configuration, see the xref:guides:cl
 			Optional()).
 		Field(service.NewStringField(fieldSignalTableName).
 			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
-exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `,
-since the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
-it in both places is rejected at startup. It must have at least these columns; startup validation checks
-column names only, not types, so a wrong column type (for example ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `)
-is only caught at runtime, on the first signal row read:
+exist in the schema configured via the ` + "`schema`" + ` field. It must not also appear in ` + "`" + fieldTables + "`" + `.
+The signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. Startup validation checks column names only, not types.
+A wrong column type (for example ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `) is only caught at runtime,
+on the first signal row read. The table must have at least these columns:
 
 - **id**: any type representable as a string (for example ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
 - **type**: should be ` + "`VARCHAR`" + ` or another string type (the signal type, see supported signals below)
@@ -320,11 +320,11 @@ with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('` + replication.SnapshotSignalType + `', '{"tables": ["orders", "customers"]}');
 ` + "```" + `
 
-Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
-an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
+Each table must appear in ` + "`" + fieldTables + "`" + `, or that list must be empty, replicating everything.
+An unreplicated table has no live changes to deduplicate its backfill against, so a write landing
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
 by. A table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
-may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
+may not be ` + "`bytea`" + `. Its value is read back and bound as the next chunk's bound, and raw bytes
 survive neither that nor the checkpoint.
 
 **Partitioned tables**
@@ -343,13 +343,13 @@ logged. A table whose backfill has finished is read again from the start.
 **Tables with large (TOASTed) column values**
 
 Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
-omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
-under the default replica identity there is nothing in the message to recover it from, so
+omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead.
+Under the default replica identity there is nothing in the message to recover it from, so
 ` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
-buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
+buffered, the backfilled copy that held the real value is dropped as a duplicate. This leaves the
 placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
 makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
-set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.`).Version("4.105.0").
+set for the backfill and reverted afterwards. It takes a brief lock but rewrites nothing.`).Version("4.105.0").
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
@@ -375,7 +375,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
-				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so the next snapshot starts from scratch. A `"+replication.SnapshotSignalType+"` signal does not need this: it reads a finished table again on its own.").
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so the next snapshot starts from scratch. To snapshot a finished table again, send a `"+replication.SnapshotSignalType+"` signal instead. It doesn't need the key changed.").
 				Default(incsnapshot.DefaultIncSnapshotCheckpointKey),
 		).
 			Description("Configures chunked snapshotting that runs alongside replication streaming.").
