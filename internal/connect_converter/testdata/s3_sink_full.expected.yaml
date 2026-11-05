@@ -1,0 +1,21 @@
+# Converted from Kafka Connect connector "s3-sink" (class=io.confluent.connect.s3.S3SinkConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - localhost:9092 # TODO: set your Redpanda/Kafka broker(s)
+    topics:
+      - test-topic
+    consumer_group: connect-s3-sink # TODO: confirm consumer group
+pipeline:
+  processors:
+    - avro:
+        operator: from_json
+        encoding: binary
+        schema: "" # TODO: provide the Avro `schema` (or `schema_path`) to encode records as Avro
+output:
+  aws_s3:
+    bucket: confluent-kafka-connect-s3-testing
+    region: us-west-2
+    path: ${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.avro # TODO: review object path/partitioning
+    batching:
+      count: 3

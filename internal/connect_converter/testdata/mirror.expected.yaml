@@ -1,0 +1,14 @@
+# Converted from Kafka Connect connector "mm" (class=org.apache.kafka.connect.mirror.MirrorSourceConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - src:9092
+    topics:
+      - orders
+    regexp_topics: true
+    consumer_group: mm-rpcn # TODO: confirm consumer group name
+output:
+  redpanda:
+    seed_brokers:
+      - dst:9092
+    topic: ${! @kafka_topic } # TODO: no source.cluster.alias — set the target topic naming policy if you use DefaultReplicationPolicy
