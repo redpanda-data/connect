@@ -624,8 +624,9 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 	}()
 
 	assert.Eventually(t, func() bool {
@@ -758,8 +759,9 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1103,8 +1105,9 @@ read_until:
 	license.InjectTestService(streamOut.Resources())
 	streamStopped := make(chan any, 1)
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 		streamStopped <- nil
 	}()
 	// Let the writer write a little more

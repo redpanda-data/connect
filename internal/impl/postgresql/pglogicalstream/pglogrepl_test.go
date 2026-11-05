@@ -880,7 +880,11 @@ func TestIntegrationStartReplication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// The test can read the last WAL message before Exec returns. Wait for the
+	// goroutine before the test returns, because then t.Context() is canceled.
+	execDone := make(chan struct{})
 	go func() {
+		defer close(execDone)
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 		defer cancel()
 
@@ -1001,6 +1005,7 @@ drop table t;
 	commit, _, err := isCommitMessage(xld.WALData)
 	require.NoError(t, err)
 	assert.True(t, commit)
+	<-execDone
 }
 
 func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
