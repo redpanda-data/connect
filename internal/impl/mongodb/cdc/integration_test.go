@@ -68,9 +68,22 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 	return wg.Wait
 }
 
+// stopOnceRun calls stop again while the stream has not run yet.
+func stopOnceRun(t *testing.T, stop func() error) error {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		err := stop()
+		if err == nil || err.Error() != "stream has not been run yet" || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (s *streamHelper) Stop(t *testing.T) {
 	stream := s.getStream(t)
-	require.NoError(t, stream.Stop(t.Context()))
+	require.NoError(t, stopOnceRun(t, func() error { return stream.Stop(t.Context()) }))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	require.Same(t, s.current, stream)
@@ -79,7 +92,7 @@ func (s *streamHelper) Stop(t *testing.T) {
 
 func (s *streamHelper) StopWithin(t *testing.T, d time.Duration) {
 	stream := s.getStream(t)
-	require.NoError(t, stream.StopWithin(d))
+	require.NoError(t, stopOnceRun(t, func() error { return stream.StopWithin(d) }))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	require.Same(t, s.current, stream)
@@ -88,7 +101,7 @@ func (s *streamHelper) StopWithin(t *testing.T, d time.Duration) {
 
 func (s *streamHelper) StopNow(t *testing.T) {
 	stream := s.getStream(t)
-	require.ErrorIs(t, context.DeadlineExceeded, stream.StopWithin(0))
+	require.ErrorIs(t, context.DeadlineExceeded, stopOnceRun(t, func() error { return stream.StopWithin(0) }))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	require.Same(t, s.current, stream)
