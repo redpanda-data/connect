@@ -1422,9 +1422,12 @@ postgres_cdc:
 
 	require.Eventually(t, func() bool {
 		var count int
-		err := db.QueryRow("SELECT count(*) FROM pg_replication_slots WHERE slot_name IN ($1, $2)", heartbeatSlot, noHeartbeatSlot).Scan(&count)
+		// A logical slot shows in pg_replication_slots while its creation waits for running transactions, and its
+		// confirmed_flush_lsn stays NULL until then. Postgres then sets it to the consistent point. If targetLSN is
+		// captured before that point, the slot without heartbeats seems to pass targetLSN.
+		err := db.QueryRow("SELECT count(*) FROM pg_replication_slots WHERE slot_name IN ($1, $2) AND confirmed_flush_lsn IS NOT NULL", heartbeatSlot, noHeartbeatSlot).Scan(&count)
 		return err == nil && count == 2
-	}, 10*time.Second, 50*time.Millisecond, "replication slots were not created in time")
+	}, 30*time.Second, 50*time.Millisecond, "replication slots were not ready to stream in time")
 
 	// Write only to a table that the inputs do not subscribe to.
 	for range 5 {
@@ -1444,13 +1447,10 @@ postgres_cdc:
 }
 
 // slotPassedLSN returns true if the confirmed_flush_lsn of the slot is after lsn.
-//
-// confirmed_flush_lsn is NULL until the slot is ready to stream, and on a busy host that can take some time after the
-// slot appears. COALESCE makes NULL count as "not passed" instead of a scan error, which would fail the test.
 func slotPassedLSN(t *testing.T, db *pgtest.TestDB, slotName, lsn string) bool {
 	t.Helper()
 	var passed bool
-	query := "SELECT COALESCE(pg_wal_lsn_diff(confirmed_flush_lsn, $2) > 0, false) FROM pg_replication_slots WHERE slot_name = $1"
+	query := "SELECT pg_wal_lsn_diff(confirmed_flush_lsn, $2) > 0 FROM pg_replication_slots WHERE slot_name = $1"
 	err := db.QueryRow(query, slotName, lsn).Scan(&passed)
 	assert.NoError(t, err)
 	return passed
