@@ -65,6 +65,7 @@ output:
     max_in_flight: 1
     batching:
       count: 10
+      period: 100ms
     metadata:
       include_patterns: ["otel_.*"]
 `, inputType, port, encoding, srURL, broker, topic)
@@ -257,6 +258,15 @@ func runOtelgen(t *testing.T, cmd []string) {
 		},
 		Started: true,
 	})
+	testcontainers.CleanupContainer(t, container)
+	if err != nil && container != nil {
+		// Show what telemetrygen did before the wait failed.
+		if logs, logErr := container.Logs(ctx); logErr == nil {
+			b, _ := io.ReadAll(logs)
+			logs.Close()
+			t.Logf("otelgen logs:\n%s", string(b))
+		}
+	}
 	require.NoError(t, err)
 
 	state, err := container.State(ctx)
