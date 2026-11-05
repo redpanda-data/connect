@@ -1001,6 +1001,9 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 		return nil
 	}
 	for _, table := range added {
+		// Reset on queueing, not on the table-start transition, which fires
+		// after the first chunk is already counted.
+		s.monitor.ResetSnapshotTable(tableFQN(table))
 		s.warnToastFidelity(ctx, table)
 	}
 	s.logger.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
