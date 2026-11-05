@@ -258,6 +258,7 @@ func runOtelgen(t *testing.T, cmd []string) {
 		},
 		Started: true,
 	})
+	testcontainers.CleanupContainer(t, container)
 	if err != nil && container != nil {
 		// Show what telemetrygen did before the wait failed.
 		if logs, logErr := container.Logs(ctx); logErr == nil {
