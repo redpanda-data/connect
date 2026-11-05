@@ -160,10 +160,13 @@ func TestPublicationSyncPlanErrorsGiveSafeFix(t *testing.T) {
 	require.ErrorIs(t, err, errAllTablesPublication)
 	assert.Contains(t, err.Error(), `BEGIN; DROP PUBLICATION pub; CREATE PUBLICATION pub FOR TABLE "public"."a", "public"."b" WITH (publish = 'insert, update', publish_via_partition_root = true); COMMIT;`)
 
-	_, _, err = publicationSyncPlan("pub", publicationInfo{exists: true, schemas: []string{"public", "Sales"}}, nil, []TableFQN{a})
+	// Dropping the schemas before adding the tables leaves changes to the
+	// tables that commit in between decoded with the tables in no
+	// publication, so the fix swaps them in one statement.
+	_, _, err = publicationSyncPlan("pub", publicationInfo{exists: true, schemas: []string{"public", "Sales"}}, nil, []TableFQN{a, b})
 	require.ErrorIs(t, err, errSchemaPublication)
-	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub DROP TABLES IN SCHEMA "public", "Sales";`)
-	assert.NotContains(t, err.Error(), "DROP PUBLICATION")
+	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub SET TABLE "public"."a", "public"."b";`)
+	assert.NotContains(t, err.Error(), "DROP")
 }
 
 func TestUnpublishedTableQueries(t *testing.T) {

@@ -463,8 +463,9 @@ func publicationTablesClause(tables []TableFQN) string {
 // The input does not drop the publication itself. Its changes are decoded
 // with the catalog as of each change, so changes that commit while the
 // publication is missing make the slot fail at that position (PostgreSQL 17
-// and earlier) or are skipped (PostgreSQL 18). The errors give a fix that
-// never leaves it missing.
+// and earlier) or are skipped (PostgreSQL 18), and changes to a table that is
+// briefly in no publication are skipped. The errors give a fix that never
+// leaves the publication missing or a configured table out of it.
 func publicationSyncPlan(publicationName string, pub publicationInfo, pubTables, tables []TableFQN) (add, drop []TableFQN, err error) {
 	if pub.allTables {
 		if len(tables) > 0 {
@@ -474,12 +475,11 @@ func publicationSyncPlan(publicationName string, pub publicationInfo, pubTables,
 		return nil, nil, nil
 	}
 	if len(pub.schemas) > 0 && len(tables) > 0 {
-		var drops []string
-		for _, schema := range pub.schemas {
-			drops = append(drops, sanitize.QuotePostgresIdentifier(schema))
-		}
-		return nil, nil, fmt.Errorf("%w: %s streams every table in schemas %s, not only the configured tables. Set self_manage_publication to false to stream from it as is, or remove the schemas from it, and the input adds the configured tables on the next connect: ALTER PUBLICATION %s DROP TABLES IN SCHEMA %s;",
-			errSchemaPublication, publicationName, strings.Join(pub.schemas, ", "), publicationName, strings.Join(drops, ", "))
+		// SET TABLE replaces the schemas and the tables in one statement, so
+		// the configured tables stay published throughout. FOR TABLES IN
+		// SCHEMA needs PostgreSQL 15, which also accepts SET TABLE.
+		return nil, nil, fmt.Errorf("%w: %s streams every table in schemas %s, not only the configured tables. Set self_manage_publication to false to stream from it as is, or replace the schemas with the configured tables in one statement, so that they stay in it while changes commit: ALTER PUBLICATION %s SET %s;",
+			errSchemaPublication, publicationName, strings.Join(pub.schemas, ", "), publicationName, strings.TrimPrefix(publicationTablesClause(tables), "FOR "))
 	}
 	for _, table := range tables {
 		if !slices.Contains(pubTables, table) {
