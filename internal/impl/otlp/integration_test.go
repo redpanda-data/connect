@@ -65,6 +65,7 @@ output:
     max_in_flight: 1
     batching:
       count: 10
+      period: 100ms
     metadata:
       include_patterns: ["otel_.*"]
 `, inputType, port, encoding, srURL, broker, topic)
@@ -245,11 +246,9 @@ func runOtelgen(t *testing.T, cmd []string) {
 	ctx := t.Context()
 
 	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
-		Image: "ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest",
-		Cmd:   cmd,
-		// telemetrygen runs for soakDuration, and then it must start and flush. That takes about 3s alone, but more
-		// than 30s when other test packages load the Docker host.
-		WaitingFor: wait.ForExit().WithExitTimeout((*soakDuration) + 90*time.Second),
+		Image:      "ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest",
+		Cmd:        cmd,
+		WaitingFor: wait.ForExit().WithExitTimeout((*soakDuration) + 30*time.Second),
 		// telemetrygen reaches the collector (published on the host) via
 		// host.docker.internal, which only resolves automatically on Docker
 		// Desktop. Map it to the host gateway so the container can reach the
