@@ -65,3 +65,13 @@ On resume, the runner picks the latest timestamped directory and appends new res
 ## Package List
 
 The list of packages and their timeouts is defined in [`packages.json`](packages.json).
+
+## Affected Packages
+
+The `affected` subcommand reads changed file paths on stdin and prints the packages in `packages.json` whose tests depend on them, as `GITHUB_OUTPUT` lines. The pull request job in `integration_test.yml` uses it to build its filter.
+
+```bash
+git diff --name-only origin/main...HEAD | go run ./cmd/tools/integration affected
+```
+
+A change to a Go package selects every package whose test binary (`go list -test -deps`) includes it. A `_test.go` file or a file under `testdata/` selects only its own package. When the run would select more than `--max-packages` packages (default 20), `filters` is empty and `budget_exceeded=true`.

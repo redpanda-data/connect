@@ -126,25 +126,6 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/checkout@v6
 
-      - name: Detect changed packages
-        if: ${{ github.event_name == 'pull_request' }}
-        id: detect
-        run: |
-          CHANGED=$(git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD)
-          FILTERS=$(
-            printf '%s\n' "${CHANGED}" \
-              | { grep '^internal/impl/' || true; } \
-              | cut -d/ -f3 \
-              | sort -u \
-              | tr '\n' ' '
-          )
-          echo "filters=${FILTERS}" >> "$GITHUB_OUTPUT"
-          if printf '%s\n' "${CHANGED}" | grep -qxE 'go\.(mod|sum)'; then
-            echo "go_mod=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "go_mod=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -163,16 +144,34 @@ jobs:
       - name: Verify Integration Tests Registry
         run: task test:integration:verify
 
-      # On a pull request the filter is the list of changed internal/impl/
-      # packages. An empty filter means every package in packages.json, which
-      # does not fit the 30-minute budget, so a pull request never runs it:
-      # - go.mod and go.sum unchanged: skip and say so in the summary
-      #   (workflow, docs and tooling changes).
-      # - go.mod or go.sum changed: fail and ask for /integration <packages>,
-      #   so a dependency change does not pass without any integration run.
-      #   The /integration run reports on main, not on this PR, so this check
-      #   stays red while the PR changes go.mod or go.sum; a maintainer merges
-      #   once that run passes.
+      # The filter is every package in packages.json whose test binary
+      # (go list -test -deps) includes a package this PR changes, so a change
+      # to shared code such as internal/license runs the components that use
+      # it. A _test.go or testdata/ change only runs its own package. Over the
+      # package budget, filters is empty and budget_exceeded is true.
+      - name: Detect changed packages
+        if: ${{ github.event_name == 'pull_request' }}
+        id: detect
+        run: |
+          CHANGED=$(git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD)
+          printf '%s\n' "${CHANGED}" | go run ./cmd/tools/integration affected >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "${CHANGED}" | grep -qxE 'go\.(mod|sum)'; then
+            echo "go_mod=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go_mod=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # On a pull request the filter comes from the detect step. An empty
+      # filter means every package in packages.json, which does not fit the
+      # 30-minute budget, so a pull request never runs it:
+      # - No package depends on the change and go.mod and go.sum are
+      #   unchanged: skip and say so in the summary (workflow, docs and
+      #   tooling changes).
+      # - go.mod or go.sum changed, or the change reaches more packages than
+      #   the budget allows: fail and ask for /integration <packages>, so the
+      #   change does not pass without any integration run. The /integration
+      #   run reports on main, not on this PR, so this check stays red; a
+      #   maintainer merges once that run passes.
       # The run-integration-tests label is not checked: auto-label-integration
       # adds it to every pull request from a write-access author.
       # A comment or a dispatch passes its own filter through unchanged. A bare
@@ -188,14 +187,22 @@ jobs:
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}
         timeout-minutes: 30
 
-      - name: No component package changed
-        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod != 'true' }}
-        run: echo "No files under internal/impl/ changed; the filtered integration run was skipped." >> "$GITHUB_STEP_SUMMARY"
+      - name: No integration test depends on the change
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod != 'true' && steps.detect.outputs.budget_exceeded != 'true' }}
+        run: echo "No integration test package depends on the files this pull request changes; the filtered integration run was skipped." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require a package filter
-        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && steps.detect.outputs.go_mod == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && steps.detect.outputs.filters == '' && (steps.detect.outputs.go_mod == 'true' || steps.detect.outputs.budget_exceeded == 'true') }}
+        env:
+          AFFECTED: ${{ steps.detect.outputs.affected }}
+          BUDGET_EXCEEDED: ${{ steps.detect.outputs.budget_exceeded }}
         run: |
-          MSG="No files under internal/impl/ changed, so there is no package filter, and the full suite does not fit this job's 30-minute budget. Comment /integration <packages> on this PR (for example /integration kafka aws) to run the packages this change affects. That run reports on main, not on this PR, so this check stays red for as long as this PR changes go.mod or go.sum; a maintainer can merge once the /integration run passes."
+          if [[ "${BUDGET_EXCEEDED}" == "true" ]]; then
+            REASON="The tests of these packages depend on the files this pull request changes, which is more than this job's 30-minute budget can run: ${AFFECTED}."
+          else
+            REASON="go.mod or go.sum changed and no integration test package depends on the other files this pull request changes, and the full suite does not fit this job's 30-minute budget."
+          fi
+          MSG="${REASON} Comment /integration <packages> on this PR (for example /integration kafka aws) to run the packages this change affects. That run reports on main, not on this PR, so this check stays red; a maintainer can merge once the /integration run passes."
           echo "::error title=Integration filter required::${MSG}"
           echo "${MSG}" >> "$GITHUB_STEP_SUMMARY"
           exit 1
