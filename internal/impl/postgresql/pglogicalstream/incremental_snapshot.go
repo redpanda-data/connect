@@ -156,7 +156,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 // warnUndedupableTables reports at startup the tables a signal would be
 // rejected for, so an operator does not have to discover it by signalling
-// one. Refer to checkDedupReachable for why they cannot be backfilled.
+// one. Refer to checkPublishedAsItself for why they cannot be backfilled.
 //
 // Advisory only: these tables replicate normally, and a configuration
 // listing one is not an error -- it is only a backfill that cannot work. So
@@ -256,7 +256,7 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	if err := s.checkKeyTypesBindable(ctx, table); err != nil {
 		return nil, err
 	}
-	if err := s.checkDedupReachable(ctx, table); err != nil {
+	if err := s.checkPublishedAsItself(ctx, table); err != nil {
 		return nil, err
 	}
 
@@ -338,36 +338,107 @@ func (s *Stream) warnToastFidelity(ctx context.Context, table incrementalsnapsho
 		table, table)
 }
 
-// checkDedupReachable rejects a table whose streamed changes would arrive
-// under a different name than its backfilled rows are buffered under, leaving
-// the window buffer no way to deduplicate them.
+// checkPublishedAsItself rejects a table that a backfill cannot keep
+// consistent with the stream. The publication must stream all rows and
+// columns of the table, under the table's own name.
 //
-// PostgreSQL publishes a partitioned table's changes under its leaf
-// partitions' identities unless the publication sets
-// publish_via_partition_root. OnStreamedRow is then never called for the
-// parent, so a row updated while its chunk is buffered is followed by the
-// stale snapshot copy -- silently reverting a committed write.
+// If the changes stream under another name, a backfill can revert a
+// committed write. OnStreamedRow drops a buffered snapshot row only when a
+// change streams with the same table name and key. With another name, a row
+// updated while its chunk is buffered is still sent from the snapshot, and
+// its old value replaces the new one downstream. Changes stream under
+// another name when:
+//   - the table is partitioned and the publication does not set
+//     publish_via_partition_root (changes use the leaf partition names).
+//   - the table is a partition published through an ancestor with
+//     publish_via_partition_root (changes use the name of the topmost
+//     published ancestor).
 //
-// The result is cached with the key columns, so flipping the publication
-// option takes effect on the next restart rather than mid-run.
-func (s *Stream) checkDedupReachable(ctx context.Context, table incrementalsnapshot.TableID) error {
+// If the publication streams only part of the table (a row filter or a
+// column list), or none of it, the backfill sends rows or columns that the
+// stream never sends, and no streamed change updates them later.
+//
+// pg_publication_tables lists each table under the name its changes stream
+// with, and with its row filter and column list, so one query checks all of
+// this: the table must be listed there as itself, unfiltered. When it is not,
+// unpublishedTableError reads which of the cases above applies.
+//
+// The result is cached with the key columns, so a change to the publication
+// has an effect at the next restart, not during the run.
+func (s *Stream) checkPublishedAsItself(ctx context.Context, table incrementalsnapshot.TableID) error {
 	publication := "pglog_stream_" + s.slotName
-	q, err := partitionDedupQuery(tableFQN(table).String(), publication)
+	q, err := publishedAsItselfQuery(s.pgVersion, publication, table.Schema, table.Table, tableFQN(table).String())
 	if err != nil {
-		return fmt.Errorf("sanitizing partition query: %w", err)
+		return fmt.Errorf("sanitizing publication query: %w", err)
 	}
 
-	var partitioned, viaRoot bool
-	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&partitioned, &viaRoot); err != nil {
-		return fmt.Errorf("reading partition state for table %s: %w", table, err)
+	var listed, filtered bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&listed, &filtered); err != nil {
+		return fmt.Errorf("reading publication state for table %s: %w", table, err)
 	}
-	// Gated on the publication rather than on being partitioned at all, so
-	// this releases itself once the publication carries the option.
-	if partitioned && !viaRoot {
-		return fmt.Errorf("%w: table %s is partitioned and publication %s does not set publish_via_partition_root, so its changes stream under the partition names and cannot be deduplicated against the backfill",
-			incrementalsnapshot.ErrTableUnusable, table, publication)
+	if !listed {
+		return s.unpublishedTableError(ctx, publication, table)
+	}
+	if filtered {
+		return fmt.Errorf("%w: publication %s streams table %s with a row filter or a column list, so a backfill would send rows or columns the stream never sends",
+			incrementalsnapshot.ErrTableUnusable, publication, table)
 	}
 	return nil
+}
+
+// unpublishedTableError returns the error for a table that the publication
+// does not stream under its own name, with the fix for the cause that
+// applies.
+func (s *Stream) unpublishedTableError(ctx context.Context, publication string, table incrementalsnapshot.TableID) error {
+	fqn := tableFQN(table).String()
+	q, err := unpublishedTableQuery(publication, fqn)
+	if err != nil {
+		return fmt.Errorf("sanitizing publication query: %w", err)
+	}
+	var partitioned, partition, viaRoot bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&partitioned, &partition, &viaRoot); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("reading partitioning of table %s: %w", table, err)
+	}
+
+	if partition && viaRoot {
+		q, err := publishedAncestorQuery(publication, fqn)
+		if err != nil {
+			return fmt.Errorf("sanitizing publication query: %w", err)
+		}
+		var ancestor string
+		err = s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&ancestor)
+		if err == nil {
+			return fmt.Errorf("%w: publication %s sets publish_via_partition_root, so the changes of partition %s stream under its partitioned ancestor %s and cannot be deduplicated against the backfill. Backfill %s instead",
+				incrementalsnapshot.ErrTableUnusable, publication, table, ancestor, ancestor)
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("reading published ancestor of table %s: %w", table, err)
+		}
+	}
+
+	// Before PostgreSQL 13 only partitions can be published, and their
+	// changes always stream under the partition names.
+	if partitioned && s.pgVersion < 13 {
+		return fmt.Errorf("%w: PostgreSQL %d streams the changes of partitioned table %s under its partition names, so they cannot be deduplicated against the backfill. Backfill its partitions instead",
+			incrementalsnapshot.ErrTableUnusable, s.pgVersion, table)
+	}
+	if partitioned && !viaRoot {
+		q, err := publishedPartitionsQuery(publication, fqn)
+		if err != nil {
+			return fmt.Errorf("sanitizing publication query: %w", err)
+		}
+		var published bool
+		if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&published); err != nil {
+			return fmt.Errorf("reading published partitions of table %s: %w", table, err)
+		}
+		if published {
+			return fmt.Errorf("%w: publication %s does not set publish_via_partition_root, so the changes of partitioned table %s stream under its partition names and cannot be deduplicated against the backfill. Set publish_via_partition_root = true on the publication. This changes the table name that every consumer of the publication sees from the partition names to %s",
+				incrementalsnapshot.ErrTableUnusable, publication, table, table)
+		}
+	}
+
+	return fmt.Errorf("%w: publication %s does not include table %s, so the stream never sends its changes. Add the table to the input's tables",
+		incrementalsnapshot.ErrTableUnusable, publication, table)
 }
 
 // resolveIncrementalPKColumns reads the primary key columns of the table.

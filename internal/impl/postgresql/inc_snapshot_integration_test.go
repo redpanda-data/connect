@@ -549,7 +549,7 @@ postgres_cdc:
 		}
 	})
 
-	for _, version := range []string{"17", "16", "15", "14", "13"} {
+	for _, version := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
 		// On a quiet table only the heartbeat produces the COMMIT that advances
 		// the snapshot, and pgoutput decodes the heartbeat message on PostgreSQL
 		// 15 and later only. Run on each version, because a change to the plugin
