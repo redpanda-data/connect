@@ -624,7 +624,6 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		// t.Context() is canceled when the test returns, which can be before Run returns.
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			assert.NoError(t, err)
 		}
@@ -760,7 +759,6 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		// t.Context() is canceled when the test returns, which can be before Run returns.
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			assert.NoError(t, err)
 		}
@@ -1107,7 +1105,6 @@ read_until:
 	license.InjectTestService(streamOut.Resources())
 	streamStopped := make(chan any, 1)
 	go func() {
-		// t.Context() is canceled when the test returns, which can be before Run returns.
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			assert.NoError(t, err)
 		}
