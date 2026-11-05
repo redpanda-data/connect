@@ -156,7 +156,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 // warnUndedupableTables reports at startup the tables a signal would be
 // rejected for, so an operator does not have to discover it by signalling
-// one. Refer to checkDedupReachable for why they cannot be backfilled.
+// one. Refer to checkPublishedAsItself for why they cannot be backfilled.
 //
 // Advisory only: these tables replicate normally, and a configuration
 // listing one is not an error -- it is only a backfill that cannot work. So
