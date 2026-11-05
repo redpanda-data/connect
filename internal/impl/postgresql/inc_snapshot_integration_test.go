@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -854,6 +855,108 @@ file:
 		assert.Len(t, thirdReads, numRows, "a finished table signalled again after a restart should be backfilled in full")
 		for id, count := range thirdReads {
 			assert.Equal(t, 1, count, "row id %d read %d times in the third run, expected exactly once", id, count)
+		}
+	})
+
+	t.Run("Re-Signal After Incremental Snapshot Completes In The Same Run", func(t *testing.T) {
+		// Unlike Resume's third run, the stream is not restarted between the
+		// two signals, so the second one finds the finished table in the live
+		// coordinator rather than in a checkpoint.
+		t.Parallel()
+		databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+		require.NoError(t, err)
+
+		const (
+			numRows  = 200
+			slotName = "test_slot_incremental_resignal"
+		)
+		db.MustExec(t, `INSERT INTO flights (name, created_at) SELECT 'pre', NOW() FROM generate_series(1, $1)`, numRows)
+
+		var (
+			mu    sync.Mutex
+			reads = make(map[int64]int, numRows)
+			total int
+		)
+		readCounts := func() (map[int64]int, int) {
+			mu.Lock()
+			defer mu.Unlock()
+			return maps.Clone(reads), total
+		}
+
+		logs := pgtest.NewTestLogCapture()
+		queueEmptied := func() int {
+			var n int
+			for _, m := range logs.Messages() {
+				if strings.Contains(m, "Incremental snapshot: queue empty") {
+					n++
+				}
+			}
+			return n
+		}
+
+		runIncSnapshotStream(t, incSnapshotStream{
+			logs: logs,
+			inputYAML: fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: %s
+    schema: public
+    heartbeat_interval: 100ms
+    tables:
+      - flights
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 20
+        checkpoint_cache: snap_cache
+`, databaseURL, slotName),
+			consume: func(_ context.Context, batch service.MessageBatch) error {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, msg := range batch {
+					if op, _ := msg.MetaGet("operation"); op != "read" {
+						continue
+					}
+					data, err := msg.AsStructured()
+					if err != nil {
+						return err
+					}
+					id, err := data.(map[string]any)["id"].(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					reads[id]++
+					total++
+				}
+				return nil
+			},
+		})
+
+		// Waits for the reads before the log: rows are handed to the pipeline
+		// before the queue is reported empty, but may reach consume after it.
+		waitForPass := func(pass int) {
+			t.Helper()
+			require.Eventually(t, func() bool {
+				_, n := readCounts()
+				return n >= pass*numRows && queueEmptied() >= pass
+			}, 60*time.Second, 50*time.Millisecond, "backfill pass %d did not complete", pass)
+		}
+
+		signalIncrementalSnapshot(t, db, slotName, "flights")
+		waitForPass(1)
+
+		signalIncrementalSnapshot(t, db, slotName, "flights")
+		waitForPass(2)
+
+		got, n := readCounts()
+		assert.Equal(t, 2*numRows, n, "expected each pass to read the table exactly once")
+		assert.Len(t, got, numRows)
+		for id, count := range got {
+			assert.Equal(t, 2, count, "row id %d read %d times, expected once per signal", id, count)
+		}
+		for _, m := range logs.Messages() {
+			assert.NotContains(t, m, "already queued or being backfilled",
+				"the second signal arrived after the first snapshot completed, so it must not be skipped")
 		}
 	})
 
