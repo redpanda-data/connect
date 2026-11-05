@@ -68,18 +68,17 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 	return wg.Wait
 }
 
-// stopOnceRun calls stop until the stream has run, and returns the last error.
-// RunAsync calls Run in a goroutine, and on a busy runner the test can stop the
-// stream before that goroutine creates it. Then Stop returns "stream has not
-// been run yet". benthos has no sentinel for this error, so compare the text.
+// stopOnceRun calls stop again while the stream has not run yet.
 func stopOnceRun(t *testing.T, stop func() error) error {
 	t.Helper()
-	var err error
-	require.Eventually(t, func() bool {
-		err = stop()
-		return err == nil || err.Error() != "stream has not been run yet"
-	}, 30*time.Second, 10*time.Millisecond, "stream never ran")
-	return err
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		err := stop()
+		if err == nil || err.Error() != "stream has not been run yet" || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func (s *streamHelper) Stop(t *testing.T) {
