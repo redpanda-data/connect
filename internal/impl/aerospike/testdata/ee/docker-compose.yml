@@ -1,0 +1,65 @@
+# Local Enterprise cluster for integration_ee_test.go (all tickets, not only 1687).
+# Requires an EE feature key. The server image is pinned to 8.1. The tools
+# image uses its own version line and is pinned to 13.1.0.
+#
+#   as-ee-1 + as-ee-2  unsecured RF=2, ns test + sc
+#   as-ee-sec          security + TLS (user rpcn / rpcnpass)
+#   as-ee-tools        aql / asadm / asinfo on the Compose network
+
+# Docker Desktop project name (not the Aerospike cluster-name).
+name: aero-redpanda-ee
+
+services:
+  as-ee-1:
+    image: aerospike/aerospike-server-enterprise:8.1
+    container_name: as-ee-1
+    hostname: as-ee-1
+    ports:
+      - "3100:3000"
+    volumes:
+      - ./as-ee-1.conf:/opt/rpcn/aerospike.conf:ro
+      - ./smd/ee-1:/opt/aerospike/smd
+      - ${AEROSPIKE_FEATURE_KEY:?set AEROSPIKE_FEATURE_KEY to your features.conf}:/opt/rpcn/features.conf:ro
+    command: ["--config-file", "/opt/rpcn/aerospike.conf"]
+
+  as-ee-2:
+    image: aerospike/aerospike-server-enterprise:8.1
+    container_name: as-ee-2
+    hostname: as-ee-2
+    ports:
+      - "3110:3000"
+    volumes:
+      - ./as-ee-2.conf:/opt/rpcn/aerospike.conf:ro
+      - ./smd/ee-2:/opt/aerospike/smd
+      - ${AEROSPIKE_FEATURE_KEY:?set AEROSPIKE_FEATURE_KEY to your features.conf}:/opt/rpcn/features.conf:ro
+    command: ["--config-file", "/opt/rpcn/aerospike.conf"]
+    depends_on:
+      - as-ee-1
+
+  as-ee-sec:
+    image: aerospike/aerospike-server-enterprise:8.1
+    container_name: as-ee-sec
+    hostname: as-ee-sec
+    ports:
+      - "3200:3000"
+      - "4333:4333"
+    volumes:
+      - ./as-ee-sec.conf:/opt/rpcn/aerospike.conf:ro
+      - ./smd/ee-sec:/opt/aerospike/smd
+      - ./certs:/opt/rpcn/certs:ro
+      - ${AEROSPIKE_FEATURE_KEY:?set AEROSPIKE_FEATURE_KEY to your features.conf}:/opt/rpcn/features.conf:ro
+    command: ["--config-file", "/opt/rpcn/aerospike.conf"]
+
+  as-ee-tools:
+    image: aerospike/aerospike-tools:13.1.0
+    container_name: as-ee-tools
+    hostname: as-ee-tools
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./certs:/opt/rpcn/certs:ro
+      - ./astools.conf:/etc/aerospike/astools.conf:ro
+      - ./aql-ee.sh:/usr/local/bin/aql-ee:ro
+    depends_on:
+      - as-ee-1
+      - as-ee-2
+      - as-ee-sec

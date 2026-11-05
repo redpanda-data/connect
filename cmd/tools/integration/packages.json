@@ -1,4 +1,5 @@
 [
+  {"path":"./internal/impl/aerospike","timeout":"10m"},
   {"path":"./internal/impl/amqp09"},
   {"path":"./internal/impl/amqp1"},
   {"path":"./internal/impl/arc"},
