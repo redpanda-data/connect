@@ -413,18 +413,26 @@ CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA public;
 	tableT := TableFQN{Schema: `"public"`, Table: `"t"`}
 	err = CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT})
 	require.ErrorIs(t, err, errSchemaPublication)
-	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub_schema DROP TABLES IN SCHEMA "public";`)
+	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub_schema SET TABLE "public"."t";`)
 	members, err := getPublicationMembers(ctx, conn, "pub_schema")
 	require.NoError(t, err)
 	assert.Empty(t, members, "the publication is left as it was")
 
-	// Following the fix lets the next sync add the configured table.
-	_, err = conn.Exec(ctx, `ALTER PUBLICATION pub_schema DROP TABLES IN SCHEMA "public";`).ReadAll()
+	// The fix swaps the schema for the configured table in one statement,
+	// so t is published as soon as it runs and the next sync has nothing
+	// left to do.
+	_, err = conn.Exec(ctx, `ALTER PUBLICATION pub_schema SET TABLE "public"."t";`).ReadAll()
 	require.NoError(t, err)
-	require.NoError(t, CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT}))
 	tables, allTables, err := GetPublicationTables(ctx, conn, "pub_schema")
 	require.NoError(t, err)
 	assert.False(t, allTables)
+	assert.Equal(t, []TableFQN{tableT}, tables)
+	pub, err := getPublication(ctx, conn, "pub_schema")
+	require.NoError(t, err)
+	assert.Empty(t, pub.schemas)
+	require.NoError(t, CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT}))
+	tables, _, err = GetPublicationTables(ctx, conn, "pub_schema")
+	require.NoError(t, err)
 	assert.Equal(t, []TableFQN{tableT}, tables)
 
 	// Without a table list every table is wanted, so a schema publication is
