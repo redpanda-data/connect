@@ -156,7 +156,6 @@ file:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				// t.Context() is canceled when the test returns, which can be before Run returns.
 				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 					assert.NoError(t, err)
 				}
@@ -523,7 +522,6 @@ memory: {}
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		// t.Context() is canceled when the test returns, which can be before Run returns.
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			assert.NoError(t, err)
 		}
@@ -731,7 +729,6 @@ file:
 
 	streamStopped := make(chan any, 1)
 	go func() {
-		// t.Context() is canceled when the test returns, which can be before Run returns.
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			assert.NoError(t, err)
 		}
@@ -854,7 +851,6 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		// t.Context() is canceled when the test returns, which can be before Run returns.
 		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			assert.NoError(t, err)
 		}
