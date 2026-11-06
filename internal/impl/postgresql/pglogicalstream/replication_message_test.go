@@ -996,3 +996,50 @@ func TestDecodeTextColumnDataTimeRangesAndIntervals(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeTextColumnDataInfiniteTimeArrays(t *testing.T) {
+	// pgx decodes an infinite array element to pgtype.InfinityModifier, which
+	// marshals to the number 1 or -1. The stream decodes it to InfiniteTime,
+	// as for a scalar column.
+	mp := pgtype.NewMap()
+
+	tests := []struct {
+		typeName string
+		data     string
+		want     []any
+	}{
+		{
+			typeName: "_date",
+			data:     "{2026-01-02,infinity,-infinity,NULL}",
+			want:     []any{time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), PositiveInfinity, NegativeInfinity, nil},
+		},
+		{
+			typeName: "_timestamp",
+			data:     `{"2026-01-02 03:04:05",-infinity}`,
+			want:     []any{time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), NegativeInfinity},
+		},
+		{
+			typeName: "_timestamptz",
+			data:     `{infinity,"2026-01-02 03:04:05+00"}`,
+			want:     []any{PositiveInfinity, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.typeName, func(t *testing.T) {
+			dt, ok := mp.TypeForName(tt.typeName)
+			require.True(t, ok)
+			got, err := decodeTextColumnData(mp, []byte(tt.data), dt.OID, -1)
+			require.NoError(t, err)
+			require.IsType(t, []any{}, got)
+			require.Len(t, got, len(tt.want))
+			for i, want := range tt.want {
+				if ts, ok := want.(time.Time); ok {
+					assert.True(t, ts.Equal(got.([]any)[i].(time.Time)), "element %d", i)
+					continue
+				}
+				assert.Equal(t, want, got.([]any)[i], "element %d", i)
+			}
+		})
+	}
+}

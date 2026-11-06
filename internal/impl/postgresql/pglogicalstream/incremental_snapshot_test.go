@@ -175,6 +175,9 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"timestamptz_infinity", "timestamptz", "'infinity'::timestamptz"},
 		{"timestamp_neg_infinity", "timestamp", "'-infinity'::timestamp"},
 		{"date_infinity", "date", "'infinity'::date"},
+		// The snapshot used to return the array text and the stream a []any.
+		{"date_array_infinity", "date[]", "'{2026-01-02,infinity}'::date[]"},
+		{"timestamptz_array_infinity", "timestamptz[]", "'{-infinity,\"2026-01-02 03:04:05+00\"}'::timestamptz[]"},
 		{"float8", "double precision", "0.1"},
 		{"bool", "boolean", "true"},
 		{"inet", "inet", "'192.168.0.1/24'::inet"},
