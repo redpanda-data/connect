@@ -63,13 +63,13 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 == Metadata
 
 This input adds the following metadata fields to each message:
-- database_schema (The database schema for the table where the message originates from)
-- schema (The table schema in benthos common schema format, compatible with processors like parquet_encode)
+- ` + "`database_schema`" + ` (The database schema for the table where the message originates from)
+- schema (The table schema in benthos common schema format, compatible with processors like ` + "`parquet_encode`" + `)
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message: ` + "`read`" + `, ` + "`delete`" + `, ` + "`insert`" + `, or ` + "`update_before`" + ` and ` + "`update_after`" + `. ` + "`read`" + ` is from messages that are read in the initial snapshot phase.)
 - lsn (The commit Log Sequence Number of the change, from the change table column ` + "`__$start_lsn`" + `. Not present on snapshot (` + "`read`" + `) messages.)
 - seqval (The position of the change in the transaction log, from the change table column ` + "`__$seqval`" + `, as a hexadecimal string with a ` + "`0x`" + ` prefix. Not present on snapshot (` + "`read`" + `) messages.)
-- command_id (The order of the statement within its transaction, from the change table column ` + "`__$command_id`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+- ` + "`command_id`" + ` (The order of the statement within its transaction, from the change table column ` + "`__$command_id`" + `. Not present on snapshot (` + "`read`" + `) messages.)
 
 == Ordering
 
@@ -85,7 +85,7 @@ When using the default Microsoft SQL Server based cache, the Connect user requir
 
 == Performance
 
-This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer, and delivery is inherently bursty: short idle periods followed by large batches are normal under heavy write load and reflect the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth (CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints) rather than CPU; the input itself needs very little CPU to keep pace with the capture job.
+This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer. Delivery is inherently bursty: short idle periods followed by large batches are normal under heavy write load. This reflects the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth rather than CPU. CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints. The input itself needs very little CPU to keep pace with the capture job.
 
 Operational notes:
 
