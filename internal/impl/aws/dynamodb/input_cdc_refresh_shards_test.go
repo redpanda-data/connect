@@ -372,7 +372,7 @@ func TestRefreshShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.T) {
 	d.mu.Lock()
 	d.shardReaders["shard-closed"].iterator = nil
 	d.mu.Unlock()
-	d.completeShard(t.Context(), "shard-closed")
+	d.completeShard("shard-closed")
 
 	// The cleanup ticker prunes the exhausted reader.
 	d.cleanupExhaustedShards(map[string]context.CancelFunc{})
@@ -430,7 +430,7 @@ func TestRefreshTableShardsCompletedShardNotRediscoveredAfterCleanup(t *testing.
 	ts.mu.Lock()
 	ts.shardReaders["shard-closed"].iterator = nil
 	ts.mu.Unlock()
-	d.completeTableShard(t.Context(), "test", ts, "shard-closed")
+	d.completeTableShard("test", ts, "shard-closed")
 
 	d.cleanupTableExhaustedShards("test", ts, map[string]context.CancelFunc{})
 	require.ElementsMatch(t, []string{"shard-open"}, tableShards())
@@ -500,7 +500,7 @@ func TestRefreshShardsChildHeldBackUntilParentCompleted(t *testing.T) {
 			"the child must wait for its listed parent; a child of an unlisted parent must not")
 		assert.Zero(t, transport.iteratorCallsFor("shard-child"))
 
-		d.completeShard(t.Context(), "shard-parent")
+		d.completeShard("shard-parent")
 		select {
 		case <-d.shardRefreshCh:
 		default:
@@ -517,7 +517,7 @@ func TestRefreshShardsChildHeldBackUntilParentCompleted(t *testing.T) {
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-orphan"}, tableShards())
 
-		d.completeTableShard(t.Context(), "test", ts, "shard-parent")
+		d.completeTableShard("test", ts, "shard-parent")
 		select {
 		case <-ts.shardRefreshCh:
 		default:
@@ -656,13 +656,14 @@ func TestRefreshShardsSkipsShardMarkedCompleted(t *testing.T) {
 func TestRefreshShardsForgetsAgedOutShardTrackerState(t *testing.T) {
 	transport := &refreshStubTransport{shardIDs: []string{"shard-closed"}}
 	d := newRefreshTestInput(t, transport)
-	d.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
 	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: errors.New("boom")}
+	d.recordBatcher = NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger())
 
 	require.NoError(t, d.refreshShards(t.Context()))
 	tb := d.recordBatcher.AddMessages(createTestMessages(2, "shard-closed", 1), "shard-closed")
-	require.NoError(t, d.recordBatcher.CloseShard(t.Context(), cp, "shard-closed"))
-	require.Error(t, d.recordBatcher.AckBatch(t.Context(), cp, tb))
+	d.recordBatcher.CloseShard("shard-closed")
+	require.NoError(t, d.recordBatcher.AckBatch(tb))
+	require.Error(t, d.recordBatcher.persist(t.Context(), false), "the completion write fails")
 	d.mu.Lock()
 	markShardCompleted(d.shardReaders, &d.completedShards, "shard-closed")
 	d.mu.Unlock()
@@ -673,63 +674,8 @@ func TestRefreshShardsForgetsAgedOutShardTrackerState(t *testing.T) {
 	transport.mu.Unlock()
 	require.NoError(t, d.refreshShards(t.Context()))
 	assert.Zero(t, d.recordBatcher.TrackedShardCount())
-}
-
-// TestRefreshShardsRetriesFailedCompletionWrite (CON-601): a closed shard
-// whose completion write failed is finalized again on the next refresh
-// cycle while it is still listed, instead of lingering against
-// max_tracked_shards until it ages out of the stream.
-func TestRefreshShardsRetriesFailedCompletionWrite(t *testing.T) {
-	transport := &refreshStubTransport{shardIDs: []string{"shard-closed"}}
-	d := newRefreshTestInput(t, transport)
-	d.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
-	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: errors.New("boom")}
-
-	require.NoError(t, d.refreshShards(t.Context()))
-	tb := d.recordBatcher.AddMessages(createTestMessages(2, "shard-closed", 1), "shard-closed")
-	require.NoError(t, d.recordBatcher.CloseShard(t.Context(), cp, "shard-closed"))
-	require.Error(t, d.recordBatcher.AckBatch(t.Context(), cp, tb))
-	d.mu.Lock()
-	markShardCompleted(d.shardReaders, &d.completedShards, "shard-closed")
-	d.mu.Unlock()
-	require.Equal(t, 1, d.recordBatcher.TrackedShardCount())
-
-	require.NoError(t, d.refreshShards(t.Context()), "a failed retry must not fail the refresh cycle")
-	require.Equal(t, 1, d.recordBatcher.TrackedShardCount())
-
-	cp.setErrors(nil, nil)
-	require.NoError(t, d.refreshShards(t.Context()))
-	seq, completed := cp.completedAt("shard-closed")
-	assert.True(t, completed, "the refresh cycle must retry the completion write")
-	assert.Equal(t, "00002", seq)
-	assert.Zero(t, d.recordBatcher.TrackedShardCount())
-	assert.Equal(t, 1, transport.iteratorCallCount(), "no new iterator may be acquired for the completed shard")
-}
-
-// TestRefreshTableShardsRetriesFailedCompletionWrite (CON-601): the
-// multi-table coordinator retries failed completion writes the same way.
-func TestRefreshTableShardsRetriesFailedCompletionWrite(t *testing.T) {
-	transport := &refreshStubTransport{shardIDs: []string{"shard-closed"}}
-	d, ts, _ := tableRefreshHarness(t, transport, newTestCheckpointer(t))
-	ts.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
-	cp := &mockCheckpointer{checkpointLimit: 1000, completeErr: errors.New("boom")}
-
-	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
-	tb := ts.recordBatcher.AddMessages(createTestMessages(2, "shard-closed", 1), "shard-closed")
-	require.NoError(t, ts.recordBatcher.CloseShard(t.Context(), cp, "shard-closed"))
-	require.Error(t, ts.recordBatcher.AckBatch(t.Context(), cp, tb))
-	ts.mu.Lock()
-	markShardCompleted(ts.shardReaders, &ts.completedShards, "shard-closed")
-	ts.mu.Unlock()
-	require.Equal(t, 1, ts.recordBatcher.TrackedShardCount())
-
-	cp.setErrors(nil, nil)
-	require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
-	seq, completed := cp.completedAt("shard-closed")
-	assert.True(t, completed, "the table refresh cycle must retry the completion write")
-	assert.Equal(t, "00002", seq)
-	assert.Zero(t, ts.recordBatcher.TrackedShardCount())
-	assert.Equal(t, 1, transport.iteratorCallCount(), "no new iterator may be acquired for the completed shard")
+	persistNow(t, d.recordBatcher)
+	assert.Zero(t, cp.calls(), "a forgotten shard is never written")
 }
 
 // TestUpdateActiveShardsMetricSumsTables: each table coordinator publishes
@@ -886,7 +832,7 @@ func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
 		streamsClient:   newStubStreamsClient(transport),
 		streamArn:       aws.String(testStreamArn),
 		checkpointer:    cp,
-		recordBatcher:   NewRecordBatcher(100, 1000, service.MockResources().Logger()),
+		recordBatcher:   NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger()),
 		shardReaders:    map[string]*dynamoDBShardReader{},
 		shardRefreshCh:  make(chan struct{}, 1),
 		msgChan:         make(chan asyncMessage, 10),
@@ -902,6 +848,8 @@ func TestShardCoordinatorReadsClosedShardOnce(t *testing.T) {
 		d.startShardCoordinator(ctx)
 		close(coordinatorDone)
 	}()
+	// In production Connect starts the persister next to the coordinator.
+	runPersister(t, d.recordBatcher)
 	defer func() {
 		cancel()
 		<-coordinatorDone
@@ -992,7 +940,7 @@ func TestRefreshShardsTrimmedParentCheckpointDoesNotStallChildren(t *testing.T) 
 		require.NoError(t, d.refreshShards(t.Context()))
 		assertParentResumedFromTrimHorizon(t, transport, registeredShards(d))
 
-		d.completeShard(t.Context(), "shard-parent")
+		d.completeShard("shard-parent")
 		require.NoError(t, d.refreshShards(t.Context()))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, registeredShards(d),
 			"the child must be released once the parent's retained tail is read")
@@ -1005,7 +953,7 @@ func TestRefreshShardsTrimmedParentCheckpointDoesNotStallChildren(t *testing.T) 
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assertParentResumedFromTrimHorizon(t, transport, tableShards())
 
-		d.completeTableShard(t.Context(), "test", ts, "shard-parent")
+		d.completeTableShard("test", ts, "shard-parent")
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		assert.ElementsMatch(t, []string{"shard-parent", "shard-child"}, tableShards())
 	})
@@ -1041,7 +989,7 @@ func TestShardCoordinatorReadsClosedShardOnceMultiTable(t *testing.T) {
 		tableName:      "test",
 		streamArn:      testStreamArn,
 		checkpointer:   cp,
-		recordBatcher:  NewRecordBatcher(100, 1000, service.MockResources().Logger()),
+		recordBatcher:  NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger()),
 		shardReaders:   map[string]*dynamoDBShardReader{},
 		shardRefreshCh: make(chan struct{}, 1),
 	}
@@ -1053,6 +1001,9 @@ func TestShardCoordinatorReadsClosedShardOnceMultiTable(t *testing.T) {
 		d.startTableStreamCoordinator(ctx, "test", ts)
 		close(coordinatorDone)
 	}()
+	// In production startTableCoordinator starts the persister next to the
+	// coordinator.
+	runPersister(t, ts.recordBatcher)
 	defer func() {
 		cancel()
 		<-coordinatorDone
@@ -1246,7 +1197,7 @@ func TestRefreshShardsWarnsOnLongChildWait(t *testing.T) {
 		d := newRefreshTestInput(t, newTransport())
 		run(t, d, &d.parentFailures,
 			func() error { return d.refreshShards(t.Context()) },
-			func() { d.completeShard(t.Context(), "shard-parent") },
+			func() { d.completeShard("shard-parent") },
 			func() []string { return registeredShards(d) })
 	})
 
@@ -1254,7 +1205,7 @@ func TestRefreshShardsWarnsOnLongChildWait(t *testing.T) {
 		d, ts, tableShards := tableRefreshHarness(t, newTransport(), newTestCheckpointer(t))
 		run(t, d, &ts.parentFailures,
 			func() error { return d.refreshTableShards(t.Context(), "test", ts) },
-			func() { d.completeTableShard(t.Context(), "test", ts, "shard-parent") },
+			func() { d.completeTableShard("test", ts, "shard-parent") },
 			tableShards)
 	})
 }
@@ -1304,15 +1255,16 @@ func TestShardReaderNilIteratorCompletesClosedShard(t *testing.T) {
 	t.Run("single-table", func(t *testing.T) {
 		d := newRefreshTestInput(t, newTransport())
 		d.conf.batchSize = 10
-		d.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
 		cp, marked := markRecordingCheckpointer(t, nil)
 		d.checkpointer = cp
+		d.recordBatcher = NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger())
 
 		require.NoError(t, d.refreshShards(t.Context()))
 		require.ElementsMatch(t, []string{"shard-parent"}, registeredShards(d))
 
 		d.startShardReader(t.Context(), "shard-parent")
 
+		persistNow(t, d.recordBatcher)
 		assert.Equal(t, []string{"shard-parent"}, marked(), "the closed shard must be marked completed")
 		assert.True(t, lookupShard(d.shardReaders, d.completedShards, "shard-parent").completed)
 		select {
@@ -1328,13 +1280,14 @@ func TestShardReaderNilIteratorCompletesClosedShard(t *testing.T) {
 		cp, marked := markRecordingCheckpointer(t, nil)
 		d, ts, tableShards := tableRefreshHarness(t, newTransport(), cp)
 		d.conf.batchSize = 10
-		ts.recordBatcher = NewRecordBatcher(100, 1000, service.MockResources().Logger())
+		ts.recordBatcher = NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger())
 
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
 		require.ElementsMatch(t, []string{"shard-parent"}, tableShards())
 
 		d.startTableShardReader(t.Context(), "test", ts, "shard-parent")
 
+		persistNow(t, ts.recordBatcher)
 		assert.Equal(t, []string{"shard-parent"}, marked())
 		assert.True(t, lookupShard(ts.shardReaders, ts.completedShards, "shard-parent").completed)
 		require.NoError(t, d.refreshTableShards(t.Context(), "test", ts))
@@ -1435,122 +1388,3 @@ func (h levelRecorder) Handle(_ context.Context, r slog.Record) error {
 
 func (h levelRecorder) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h levelRecorder) WithGroup(string) slog.Handler      { return h }
-
-// TestCompleteShardCompletionWriteFailure (CON-599): a failed completion
-// write counts as a checkpoint failure and is logged at error, except when it
-// failed only because the reader's context was canceled (shutdown), which is
-// expected and logged at debug without being counted.
-func TestCompleteShardCompletionWriteFailure(t *testing.T) {
-	tests := []struct {
-		name      string
-		cancelCtx bool
-		markErr   func(context.Context) error
-		wantCount int64
-		wantLevel slog.Level
-	}{
-		{
-			name:      "store error",
-			markErr:   func(context.Context) error { return errors.New("stubbed store failure") },
-			wantCount: 1,
-			wantLevel: slog.LevelError,
-		},
-		{
-			name:      "shutdown",
-			cancelCtx: true,
-			markErr:   func(ctx context.Context) error { return ctx.Err() },
-			wantCount: 0,
-			wantLevel: slog.LevelDebug,
-		},
-	}
-	for _, tt := range tests {
-		for _, multiTable := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/multi-table=%v", tt.name, multiTable), func(t *testing.T) {
-				metrics, exporter := newCountingMetrics(t)
-				var (
-					mu     sync.Mutex
-					levels []slog.Level
-				)
-				logger := service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "shard-parent", mu: &mu, levels: &levels}))
-				cp, _ := markRecordingCheckpointer(t, tt.markErr)
-
-				ctx, cancel := context.WithCancel(t.Context())
-				defer cancel()
-				if tt.cancelCtx {
-					cancel()
-				}
-
-				d, ts, _ := tableRefreshHarness(t, &refreshStubTransport{}, cp)
-				d.log = logger
-				d.metrics = newDynamoDBCDCMetrics(metrics)
-				if multiTable {
-					ts.recordBatcher = NewRecordBatcher(100, 1000, logger)
-					d.completeTableShard(ctx, "test", ts, "shard-parent")
-				} else {
-					d.checkpointer = cp
-					d.recordBatcher = NewRecordBatcher(100, 1000, logger)
-					d.shardReaders = map[string]*dynamoDBShardReader{}
-					d.shardRefreshCh = make(chan struct{}, 1)
-					d.completeShard(ctx, "shard-parent")
-				}
-
-				assert.Equal(t, tt.wantCount, exporter.counter(metricCheckpointFailures))
-				mu.Lock()
-				defer mu.Unlock()
-				var failureLevels []slog.Level
-				for _, l := range levels {
-					if l != slog.LevelInfo {
-						failureLevels = append(failureLevels, l)
-					}
-				}
-				assert.Equal(t, []slog.Level{tt.wantLevel}, failureLevels)
-			})
-		}
-	}
-}
-
-// TestCompleteShardCleanupDuringCompletionWrite (CON-599): a cleanup tick that
-// lands while a closed shard's completion marker is being written must not
-// cancel the reader's context and fail the write. The reader is marked
-// exhausted only after the write returns, so cleanup leaves it alone until
-// then, and children are released only once the marker is stored.
-func TestCompleteShardCleanupDuringCompletionWrite(t *testing.T) {
-	for _, multiTable := range []bool{false, true} {
-		t.Run(fmt.Sprintf("multi-table=%v", multiTable), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-
-			var (
-				d       *dynamoDBCDCInput
-				ts      *tableStream
-				cleanup func()
-			)
-			cp, marked := markRecordingCheckpointer(t, func(ctx context.Context) error {
-				cleanup()
-				return ctx.Err()
-			})
-			d, ts, _ = tableRefreshHarness(t, &refreshStubTransport{}, cp)
-			reader := &dynamoDBShardReader{shardID: "shard-parent"}
-			if multiTable {
-				ts.recordBatcher = NewRecordBatcher(100, 1000, d.log)
-				ts.shardReaders["shard-parent"] = reader
-				cleanup = func() {
-					d.cleanupTableExhaustedShards("test", ts, map[string]context.CancelFunc{"shard-parent": cancel})
-				}
-				d.completeTableShard(ctx, "test", ts, "shard-parent")
-			} else {
-				d.checkpointer = cp
-				d.recordBatcher = NewRecordBatcher(100, 1000, d.log)
-				d.shardReaders = map[string]*dynamoDBShardReader{"shard-parent": reader}
-				d.shardRefreshCh = make(chan struct{}, 1)
-				cleanup = func() {
-					d.cleanupExhaustedShards(map[string]context.CancelFunc{"shard-parent": cancel})
-				}
-				d.completeShard(ctx, "shard-parent")
-			}
-
-			require.NoError(t, ctx.Err(), "cleanup must not cancel a reader whose completion write is running")
-			assert.Equal(t, []string{"shard-parent"}, marked(), "the completion marker must be stored")
-			assert.True(t, reader.exhausted, "the reader must be marked exhausted once the write returns")
-		})
-	}
-}

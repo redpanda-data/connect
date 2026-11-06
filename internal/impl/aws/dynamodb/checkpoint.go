@@ -616,21 +616,6 @@ type CheckpointValue struct {
 	ApproxCreationTime string
 }
 
-// FlushCheckpoints writes all pending checkpoints to DynamoDB.
-func (c *Checkpointer) FlushCheckpoints(ctx context.Context, checkpoints map[string]CheckpointValue) error {
-	for shardID, v := range checkpoints {
-		if v.SequenceNumber == "" {
-			continue
-		}
-		if err := c.Set(ctx, shardID, v.SequenceNumber, v.ApproxCreationTime); err != nil {
-			c.log.Errorf("Failed to flush checkpoint for shard %s: %v", shardID, err)
-			return err
-		}
-		c.log.Infof("Flushed checkpoint for shard %s at sequence %s", shardID, v.SequenceNumber)
-	}
-	return nil
-}
-
 // SnapshotProgress retrieves the snapshot checkpoint.
 func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoint, error) {
 	checkpoint := NewSnapshotCheckpoint()

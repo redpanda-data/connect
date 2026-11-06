@@ -216,7 +216,7 @@ func testSetKeepsCompletionMarker(t *testing.T, client *dynamodb.Client) {
 
 	require.NoError(t, cp.MarkShardCompleted(t.Context(), "shard-1", "seq-9", ""))
 	require.NoError(t, cp.Set(t.Context(), "shard-1", "seq-7", ""), "a late plain write is not an error")
-	require.NoError(t, cp.FlushCheckpoints(t.Context(), map[string]CheckpointValue{"shard-1": {SequenceNumber: "seq-8"}}))
+	require.NoError(t, cp.Set(t.Context(), "shard-1", "seq-8", ""), "the shutdown flush goes through the same guarded write")
 	seq, completed, err := cp.getShardRow(t.Context(), "shard-1")
 	require.NoError(t, err)
 	assert.True(t, completed)

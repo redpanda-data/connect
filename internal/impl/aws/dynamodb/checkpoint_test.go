@@ -680,7 +680,7 @@ func TestCheckpointerShardCompletionMarkerRoundTrip(t *testing.T) {
 }
 
 // TestCheckpointerSetKeepsCompletionMarker (CON-600): a plain checkpoint
-// write landing after the completion marker (a maybePersist Set that timed
+// write landing after the completion marker (a persister Set that timed
 // out client-side but still reaches the server, or the shutdown flush) must
 // leave the completed row intact, so a restart still skips the shard. The
 // write is conditional on the marker being absent and a rejected write is not
@@ -695,9 +695,7 @@ func TestCheckpointerSetKeepsCompletionMarker(t *testing.T) {
 
 		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", ""))
 		require.NoError(t, c.Set(t.Context(), "shard-done", "seq-7", ""), "a late plain write is not an error")
-		require.NoError(t, c.FlushCheckpoints(t.Context(), map[string]CheckpointValue{
-			"shard-done": {SequenceNumber: "seq-8"},
-		}), "the shutdown flush goes through the same guarded write")
+		require.NoError(t, c.Set(t.Context(), "shard-done", "seq-8", ""), "the shutdown flush goes through the same guarded write")
 
 		d, err := c.ResolveResume(t.Context(), "shard-done")
 		require.NoError(t, err)
