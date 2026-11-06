@@ -15,6 +15,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -31,7 +32,9 @@ import (
 // an unknown root or field, a value of the wrong kind, or an unknown
 // component. The other types (required fields, enum options, custom rules,
 // Bloblang) fire on the empty placeholders a snippet shows for fields with no
-// default, so the test allows them.
+// default, so the test allows them. The one exception is an option lint on
+// a required enum field, which shows its first option; see
+// filledPlaceholderLint.
 var structuralLints = map[service.LintType]bool{
 	service.LintFailedRead:        true,
 	service.LintUnknown:           true,
@@ -96,11 +99,36 @@ func structuralErrors(t *testing.T, linter *service.StreamConfigLinter, conf str
 		for _, s := range skip {
 			skipped = skipped || l.What == s
 		}
-		if structuralLints[l.Type] && !skipped {
+		if (structuralLints[l.Type] || filledPlaceholderLint(conf, l)) && !skipped {
 			errs = append(errs, l.Error())
 		}
 	}
 	return errs
+}
+
+// emptyPlaceholder matches the line of a field with no default that shows
+// an empty value. Any other value on such a line is the first option of a
+// required enum field.
+var (
+	noDefaultLine    = regexp.MustCompile(` # No default \((?:required|optional)\)$`)
+	emptyPlaceholder = regexp.MustCompile(`: (?:""|\[\]|\{\}|0|false) # No default \((?:required|optional)\)$`)
+)
+
+// filledPlaceholderLint reports whether a lint rejects the option shown for
+// a field with no default, on the given line (from 1). The snippet shows the
+// field's first option, so it must be valid. Rules that span fields, such as
+// one option needing another field, can still fire there.
+func filledPlaceholderLint(conf string, l service.Lint) bool {
+	if !strings.Contains(l.What, "is not a valid option") {
+		return false
+	}
+	line := l.Line
+	lines := strings.Split(conf, "\n")
+	if line < 1 || line > len(lines) {
+		return false
+	}
+	text := lines[line-1]
+	return noDefaultLine.MatchString(text) && !emptyPlaceholder.MatchString(text)
 }
 
 func newSnippetLinter() *service.StreamConfigLinter {
@@ -162,6 +190,7 @@ func TestSnippetLintCatchesBadShapes(t *testing.T) {
 		"map rendered as fields": lintableConfig("processor", "processor:\n  label: \"\"\n  workflow:\n    branches:\n      request_map: \"\"\n      processors: []\n"),
 		"string for a map":       "output:\n  label: \"\"\n  kafka:\n    addresses: []\n    topic: \"\"\n    static_headers: \"\"\n",
 		"bare key reads as null": "output:\n  label: \"\"\n  kafka:\n    addresses: []\n    topic: \"\"\n    sasl:\n    static_headers: {}\n    tls:\n",
+		"invalid option shown":   "input:\n  label: \"\"\n  socket:\n    network: udp6 # No default (required)\n    address: \"\" # No default (required)\n",
 	}
 	for name, conf := range bad {
 		t.Run(name, func(t *testing.T) {
