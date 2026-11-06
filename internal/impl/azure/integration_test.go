@@ -17,6 +17,7 @@ package azure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -30,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
@@ -294,34 +296,8 @@ input:
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cosmosStartupTimeout := 30 * time.Second
-	if deadline, ok := t.Deadline(); ok {
-		cosmosStartupTimeout = time.Until(deadline) - 100*time.Millisecond
-	}
-
-	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("8081/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			// The bigger the value, the longer it takes for the container to start up.
-			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "4",
-			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
-			// Override the emulator's advertised IP so the SDK doesn't try to connect to
-			// the container's internal Docker bridge IP (e.g. 172.17.0.x).
-			"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
-		}),
-		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
-		),
-	)
-	testcontainers.CleanupContainer(t, cosmosCtr)
-	require.NoError(t, err)
-
-	cosmosHost, err := cosmosCtr.Host(t.Context())
-	require.NoError(t, err)
-	cosmosPortM, err := cosmosCtr.MappedPort(t.Context(), "8081/tcp")
-	require.NoError(t, err)
-	cosmosPort := cosmosPortM.Port()
+	// The proxy below sends each request to the emulator container in cosmosTarget. Each start attempt sets it.
+	var cosmosTarget atomic.Pointer[url.URL]
 
 	// Start a HTTP -> HTTPS proxy server on a background goroutine to work around the self-signed certificate that the
 	// CosmosDB container provides, because unfortunately, it doesn't expose a plain HTTP endpoint.
@@ -332,13 +308,10 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	listener, err := net.Listen("tcp", ":8081")
 	require.NoError(t, err)
 	srv := &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		url, err := url.Parse("https://" + cosmosHost + ":" + cosmosPort)
-		require.NoError(t, err)
-
 		customTransport := http.DefaultTransport.(*http.Transport).Clone()
 		customTransport.TLSClientConfig = securetls.WithInsecureSkipVerify(securetls.SecurityLevelNormal)
 
-		p := httputil.NewSingleHostReverseProxy(url)
+		p := httputil.NewSingleHostReverseProxy(cosmosTarget.Load())
 		p.Transport = customTransport
 		// Don't log proxy errors, but return an error downstream
 		p.ErrorHandler = func(rw http.ResponseWriter, _ *http.Request, _ error) {
@@ -357,22 +330,120 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
 
-	require.Eventually(t, func() bool {
+	// getCert returns nil when the emulator serves its certificate through the proxy.
+	getCert := func() error {
 		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
 		if err != nil {
-			return false
+			return err
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return false
+			return fmt.Errorf("status %s", resp.Status)
 		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return false
+			return err
 		}
-		return len(body) > 0
-	}, cosmosStartupTimeout, time.Second, "Failed to start CosmosDB emulator")
+		if len(body) == 0 {
+			return errors.New("empty certificate")
+		}
+		return nil
+	}
+
+	// errEmulatorExited marks a start attempt that failed because the emulator container stopped.
+	errEmulatorExited := errors.New("emulator container is not running")
+
+	// startEmulator starts an emulator container and waits until it serves its certificate. In CI, this is 6-15s
+	// after the port wait. The wait stops before the package timeout, so that the test can log why the emulator is not
+	// ready. The wait stops early when the container stops.
+	startEmulator := func() (testcontainers.Container, error) {
+		cosmosStartupTimeout := 30 * time.Second
+		if deadline, ok := t.Deadline(); ok {
+			cosmosStartupTimeout = time.Until(deadline) - 100*time.Millisecond
+		}
+
+		ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
+			testcontainers.WithImagePlatform("linux/amd64"),
+			testcontainers.WithExposedPorts("8081/tcp"),
+			testcontainers.WithEnv(map[string]string{
+				// The bigger the value, the longer it takes for the container to start up.
+				"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "4",
+				"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
+				// Override the emulator's advertised IP so the SDK doesn't try to connect to
+				// the container's internal Docker bridge IP (e.g. 172.17.0.x).
+				"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
+			}),
+			testcontainers.WithWaitStrategy(
+				wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
+			),
+		)
+		testcontainers.CleanupContainer(t, ctr)
+		if err != nil {
+			return ctr, fmt.Errorf("%w: %w", errEmulatorExited, err)
+		}
+
+		host, err := ctr.Host(t.Context())
+		if err != nil {
+			return ctr, err
+		}
+		port, err := ctr.MappedPort(t.Context(), "8081/tcp")
+		if err != nil {
+			return ctr, err
+		}
+		cosmosTarget.Store(&url.URL{Scheme: "https", Host: net.JoinHostPort(host, port.Port())})
+
+		deadline := time.Now().Add(min(cosmosStartupTimeout, 2*time.Minute))
+		for {
+			err := getCert()
+			if err == nil {
+				return ctr, nil
+			}
+			if state, stateErr := ctr.State(t.Context()); stateErr == nil && !state.Running {
+				return ctr, fmt.Errorf("%w (status=%s exit_code=%d): %w", errEmulatorExited, state.Status, state.ExitCode, err)
+			}
+			if time.Now().After(deadline) {
+				return ctr, err
+			}
+			select {
+			case <-t.Context().Done():
+				return ctr, err
+			case <-time.After(time.Second):
+			}
+		}
+	}
+
+	// When other test packages load the Docker host, the emulator can crash a few seconds after the start
+	// ("ASSERT: Expression=(!currentWorker->IsPreemptiveOnEntry())") and the container exits with code 1. Then the
+	// test starts a new container. An emulator that runs but is not ready is not started again.
+	const maxAttempts = 3
+	var cosmosCtr testcontainers.Container
+	for attempt := 1; ; attempt++ {
+		cosmosCtr, err = startEmulator()
+		if !errors.Is(err, errEmulatorExited) || attempt == maxAttempts {
+			break
+		}
+		t.Logf("Cosmos DB emulator start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+	}
+	if err != nil {
+		if cosmosCtr == nil {
+			require.FailNow(t, "Failed to start CosmosDB emulator", "error: %v", err)
+		}
+		if state, err := cosmosCtr.State(t.Context()); err != nil {
+			t.Logf("Cannot get the Cosmos DB emulator container state: %v", err)
+		} else {
+			t.Logf("Cosmos DB emulator container state: status=%s exit_code=%d oom_killed=%v error=%q",
+				state.Status, state.ExitCode, state.OOMKilled, state.Error)
+		}
+		if logs, err := cosmosCtr.Logs(t.Context()); err != nil {
+			t.Logf("Cannot get the Cosmos DB emulator container logs: %v", err)
+		} else {
+			b, _ := io.ReadAll(logs)
+			logs.Close()
+			t.Logf("Cosmos DB emulator container logs:\n%s", b)
+		}
+		require.FailNow(t, "Failed to start CosmosDB emulator", "last error: %v", err)
+	}
 
 	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dummyDatabase := "Asgard"
@@ -389,21 +460,56 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		client, err := azcosmos.NewClientWithKey("http://127.0.0.1:"+servicePort, cred, nil)
 		require.NoError(t, err)
 
-		_, err = client.CreateDatabase(ctx, azcosmos.DatabaseProperties{
-			ID: databaseID,
-		}, nil)
-		require.NoError(t, err)
-
 		db, err := client.NewDatabase(databaseID)
 		require.NoError(t, err)
 
-		_, err = db.CreateContainer(ctx, azcosmos.ContainerProperties{
-			ID: dummyContainer,
-			PartitionKeyDefinition: azcosmos.PartitionKeyDefinition{
-				Paths: []string{"/" + dummyPartitionKeyField},
-			},
-		}, nil)
-		require.NoError(t, err)
+		// The certificate is available before the emulator can create containers. Under load, CreateContainer can
+		// fail with 408 Request Timeout after the SDK retries. Try again until ctx stops. A try can fail after the
+		// emulator created the resource, so 409 Conflict means that the resource exists.
+		isConflict := func(err error) bool {
+			rErr, ok := errors.AsType[*azcore.ResponseError](err)
+			return ok && rErr.StatusCode == http.StatusConflict
+		}
+		create := func() error {
+			_, err := client.CreateDatabase(ctx, azcosmos.DatabaseProperties{ID: databaseID}, nil)
+			if err != nil && !isConflict(err) {
+				return fmt.Errorf("create database: %w", err)
+			}
+			_, err = db.CreateContainer(ctx, azcosmos.ContainerProperties{
+				ID: dummyContainer,
+				PartitionKeyDefinition: azcosmos.PartitionKeyDefinition{
+					Paths: []string{"/" + dummyPartitionKeyField},
+				},
+			}, nil)
+			if err != nil && !isConflict(err) {
+				return fmt.Errorf("create container: %w", err)
+			}
+			// A new container can reply 408 Request Timeout to the first writes, also after CreateContainer passed.
+			// The output test then fails on its first batch. Write a probe item to the partition that the tests use,
+			// until the write passes. Upsert is safe to repeat. The probe item has no "foo" field, so the input query
+			// does not return it.
+			probe := fmt.Appendf(nil, `{"id":"probe","%s":"%s"}`, dummyPartitionKeyField, dummyPartitionKeyValue)
+			ctr, err := db.NewContainer(dummyContainer)
+			if err != nil {
+				return fmt.Errorf("get container: %w", err)
+			}
+			if _, err := ctr.UpsertItem(ctx, azcosmos.NewPartitionKeyString(dummyPartitionKeyValue), probe, nil); err != nil {
+				return fmt.Errorf("write probe item: %w", err)
+			}
+			return nil
+		}
+		for {
+			err := create()
+			if err == nil {
+				return
+			}
+			t.Logf("Cosmos DB setup failed, trying again: %v", err)
+			select {
+			case <-ctx.Done():
+				require.NoError(t, err)
+			case <-time.After(time.Second):
+			}
+		}
 	}
 
 	t.Run("cosmosdb output -> input roundtrip", func(t *testing.T) {
