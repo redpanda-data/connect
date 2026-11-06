@@ -153,6 +153,14 @@ func StartPipelineWithLogger(t *testing.T, cfg string, logger *slog.Logger, cons
 	})
 }
 
+// StartPipelineWithBuilder is StartPipeline, but configure can change the
+// builder before it is built, for example to add a cache resource. configure
+// must set the logger if the test needs one.
+func StartPipelineWithBuilder(t *testing.T, cfg string, consume service.MessageBatchHandlerFunc, configure func(*service.StreamBuilder)) *service.Stream {
+	t.Helper()
+	return startPipeline(t, cfg, consume, configure)
+}
+
 func startPipeline(t *testing.T, cfg string, consume service.MessageBatchHandlerFunc, setLogger func(*service.StreamBuilder)) *service.Stream {
 	t.Helper()
 
@@ -415,7 +423,7 @@ func createSchemas(t *testing.T, db *sql.DB, oracleScript bool, users ...string)
 		require.NoError(t, err)
 	}
 	for _, user := range users {
-		require.NoError(t, dropUser(ctx, conn.ExecContext, user))
+		require.NoError(t, DropUser(ctx, conn.ExecContext, user))
 		for _, q := range []string{
 			"CREATE USER " + user + " IDENTIFIED BY testdb123",
 			"GRANT CONNECT, RESOURCE, DBA TO " + user,
@@ -442,15 +450,15 @@ func createSchemas(t *testing.T, db *sql.DB, oracleScript bool, users ...string)
 			}
 		}
 		for _, user := range users {
-			if err := dropUser(ctx, conn.ExecContext, user); err != nil {
+			if err := DropUser(ctx, conn.ExecContext, user); err != nil {
 				t.Errorf("dropping test schema %s: %v", user, err)
 			}
 		}
 	})
 }
 
-// dropUser drops the user with CASCADE. It ignores ORA-01918 (user does not exist).
-func dropUser(ctx context.Context, exec func(context.Context, string, ...any) (sql.Result, error), user string) error {
+// DropUser drops the user with CASCADE. It ignores ORA-01918 (user does not exist).
+func DropUser(ctx context.Context, exec func(context.Context, string, ...any) (sql.Result, error), user string) error {
 	_, err := exec(ctx, "DROP USER "+user+" CASCADE")
 	if err != nil && strings.Contains(err.Error(), "ORA-01918") {
 		return nil
@@ -535,7 +543,7 @@ func SetupCDBTestWithPDB(t *testing.T) (string, *TestDB, string) {
 	// C##RPCN.CDC_CHECKPOINT_<PDBNAME>, so the common user must exist as C##RPCN.
 	// Common users require the C## prefix but do not need _ORACLE_SCRIPT workaround.
 	ctx := t.Context()
-	require.NoError(t, dropUser(ctx, cfg.dbConn.ExecContext, `"C##RPCN"`))
+	require.NoError(t, DropUser(ctx, cfg.dbConn.ExecContext, `"C##RPCN"`))
 	for _, q := range []string{
 		`CREATE USER "C##RPCN" IDENTIFIED BY rpcn123`,
 		`GRANT CONNECT, RESOURCE TO "C##RPCN"`,
@@ -545,7 +553,7 @@ func SetupCDBTestWithPDB(t *testing.T) (string, *TestDB, string) {
 		require.NoError(t, err, q)
 	}
 	t.Cleanup(func() {
-		if err := dropUser(context.Background(), cfg.dbConn.ExecContext, `"C##RPCN"`); err != nil {
+		if err := DropUser(context.Background(), cfg.dbConn.ExecContext, `"C##RPCN"`); err != nil {
 			t.Errorf("dropping C##RPCN: %v", err)
 		}
 	})
