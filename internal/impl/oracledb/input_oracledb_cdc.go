@@ -171,7 +171,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 	).
 	Field(service.NewBackOffField(ociFieldSnapshotConnBackoff, false, replication.DefaultSnapshotConnBackoff()).
 		Description("Instead of failing a snapshot, the connector retries acquiring a connection when the database has no capacity for another one, for example when `" + ociFieldMaxParallelSnapshotTables + "` exceeds its `processes` or `sessions` limits. Readers wait for a connection to be released, retrying with exponential backoff. The snapshot fails only if a reader can't get one within `" + ociFieldSnapshotConnBackoff + ".max_elapsed_time` while no other reader holds a connection. While another reader holds one, the snapshot is still progressing, so the reader keeps waiting.").
-		Version("4.117.0").
+		Version("4.118.0").
 		Advanced(),
 	).
 	// logminer config
@@ -252,7 +252,7 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 
 Each query must project every column of the table's primary key (all columns of a composite key), even if it otherwise selects only a subset of columns. During a snapshot, Redpanda Connect pages through a table's rows by filtering and sorting on the full primary key against the query's own result set. If a primary key column isn't projected, the snapshot fails part-way through, after the first batch of rows is read.
 
-A table with a query here is never split into parallel chunks, whatever ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is set to: a single reader pages through it in one ` + "`READ ONLY`" + ` transaction. It is also read without flashback queries (` + "`AS OF SCN`" + `), so it reflects the table when that transaction starts rather than the SCN captured at the start of the snapshot.`).Version("4.101.0").
+A table with a query here is never split into parallel chunks, whatever ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is set to. A single reader pages through it in one ` + "`READ ONLY`" + ` transaction. It is also read without flashback queries (` + "`AS OF SCN`" + `), so it reflects the table when that transaction starts rather than the SCN captured at the start of the snapshot.`).Version("4.101.0").
 		ShortDescription("A map of fully-qualified table names to SELECT queries, overriding the default snapshot query per table.").
 		Example(map[string]any{
 			"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
