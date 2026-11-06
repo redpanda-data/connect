@@ -15,8 +15,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	goora "github.com/sijms/go-ora/v2/network"
 	"golang.org/x/sync/errgroup"
 
@@ -26,30 +28,36 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
-// errCodeInvalidIdentifier is Oracle's ORA-00904, raised when a query references a
-// column that doesn't exist in its source. Used to detect a custom snapshot filter
-// that doesn't project all of a table's primary key columns - see querySnapshotTable.
-const errCodeInvalidIdentifier = 904
+const (
+	// errCodeInvalidIdentifier (ORA-00904) flags a custom snapshot filter that doesn't
+	// select every primary key column.
+	errCodeInvalidIdentifier = 904
+	// errCodeFlashbackTableChanged (ORA-01466) is a transient AS OF SCN error raised just
+	// after the SCN is captured; see withFlashbackRetry.
+	errCodeFlashbackTableChanged = 1466
+	// errCodeInsufficientPrivileges (ORA-01031) on an AS OF SCN read usually means a missing
+	// FLASHBACK grant; see withFlashbackPrivilegeHint.
+	errCodeInsufficientPrivileges = 1031
+)
 
-// Snapshot is responsible for creating snapshots of existing tables based on the Tables
-// configuration value.
+// errNoPrimaryKey means a table has no primary key, so planTableTasks falls back to a full scan.
+var errNoPrimaryKey = errors.New("no primary key found")
+
+// Snapshot reads the existing rows of the configured tables as of a single SCN.
 type Snapshot struct {
-	dbPool                  *sql.DB
 	tables                  []UserTable
 	filters                 map[string]string
 	publisher               ChangePublisher
+	db                      *snapshotDB
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
-	pdbName                 string
 	scn                     SCN       // published as part of snapshot read metadata
 	commitTimestamp         time.Time // Oracle server time at snapshot prepare
 }
 
-// NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
-// It does this by creating a transaction with snapshot level isolation before paging
-// through rows, sending them to be batched.
+// NewSnapshot returns a Snapshot of tables that publishes rows to publisher.
 func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
@@ -57,43 +65,35 @@ func NewSnapshot(ctx context.Context,
 	publisher ChangePublisher,
 	lobEnabled bool,
 	pdbName string,
+	connBackoff *backoff.ExponentialBackOff,
 	logger *service.Logger,
 	metrics *service.Metrics,
 ) (*Snapshot, error) {
-	db, err := sql.Open("oracle", connectionString)
+	db, err := newSnapshotDB(ctx, connectionString, pdbName, connBackoff, logger)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
+		return nil, err
 	}
-
-	if err := ApplyNLSSettings(ctx, db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("configuring nls for snapshot session: %w", err)
-	}
-
-	s := &Snapshot{
-		dbPool:                  db,
+	return &Snapshot{
+		db:                      db,
 		tables:                  tables,
 		filters:                 filters,
 		publisher:               publisher,
 		lobEnabled:              lobEnabled,
-		pdbName:                 pdbName,
 		snapshotStatusMetric:    metrics.NewGauge("oracledb_cdc_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("oracledb_cdc_snapshot_rows_total", "table"),
 		log:                     logger,
 		scn:                     InvalidSCN,
-	}
-	return s, nil
+	}, nil
 }
 
-// Prepare prepares the snapshot by starting a transaction with appropriate isolation level.
-// Returns the current SCN for the snapshot.
+// Prepare captures and returns the current SCN that every snapshot read is pinned to.
 func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	if len(s.tables) == 0 {
 		return InvalidSCN, errors.New("no tables provided")
 	}
 
 	var currentSCN SCN
-	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
+	if err := s.db.pool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
@@ -104,21 +104,46 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	return s.scn, nil
 }
 
-// Read launches N go routines (based on maxWorkers) and starts the process of
-// iterating through each table, reading rows based on maxBatchSize, sending the row as a
-// replication.MessageEvent to the configured publisher.
+// Read snapshots every table on up to maxWorkers workers, publishing each row as a
+// MessageEvent, with large tables split into key-range tasks that share the workers.
 func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error {
+	if maxWorkers <= 0 {
+		return fmt.Errorf("snapshot max workers must be greater than 0, got %d", maxWorkers)
+	}
+	if maxBatchSize <= 0 {
+		return fmt.Errorf("snapshot max batch size must be greater than 0, got %d", maxBatchSize)
+	}
+
 	s.log.Infof("Starting snapshot of %d table(s) using %d configured readers", len(s.tables), maxWorkers)
 
 	for _, table := range s.tables {
 		s.snapshotStatusMetric.Set(0, table.FullName())
 	}
 
+	// Tasks start in list order, so tables that can't be chunked go first: their single
+	// serial scan then overlaps the chunk work instead of running alone at the tail.
+	var serialTasks, chunkTasks []func(context.Context) error
+	for _, table := range s.tables {
+		tableTasks, err := s.planTableTasks(ctx, table, maxWorkers, maxBatchSize)
+		if err != nil {
+			return fmt.Errorf("planning snapshot for table '%s': %w", table.FullName(), err)
+		}
+		if len(tableTasks) == 1 {
+			serialTasks = append(serialTasks, tableTasks...)
+		} else {
+			chunkTasks = append(chunkTasks, tableTasks...)
+		}
+	}
+	snapshotTasks := append(serialTasks, chunkTasks...)
+
+	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(snapshotTasks), len(s.tables), min(len(snapshotTasks), maxWorkers), maxWorkers)
+
+	s.db.setWorkers(maxWorkers)
+
 	wg, ctx := errgroup.WithContext(ctx)
 	wg.SetLimit(maxWorkers)
-
-	for _, table := range s.tables {
-		wg.Go(s.snapshotTable(ctx, table, maxBatchSize))
+	for _, task := range snapshotTasks {
+		wg.Go(func() error { return task(ctx) })
 	}
 
 	if err := wg.Wait(); err != nil {
@@ -128,131 +153,378 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 	return nil
 }
 
-// snapshotTable is responsible for managing the entire process of replicating
-// data from the table specified.
-func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchSize int) func() error {
-	return func() error {
-		var (
-			err       error
-			tx        *sql.Tx
-			tableName = table.FullName()
-		)
-		l := s.log.With("src_table", tableName)
-		customQuery, hasFilter := s.filters[tableName]
-		if hasFilter {
-			l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
-		} else {
-			l.Infof("Launching snapshot of table '%s'", tableName)
-		}
+// Close closes the snapshot's database connections.
+func (s *Snapshot) Close() error {
+	if s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
 
-		switch {
-		case s.pdbName != "":
-			var conn *sql.Conn
-			if conn, err = s.dbPool.Conn(ctx); err != nil {
-				return fmt.Errorf("acquiring snapshot connection: %w", err)
-			}
-			defer func() {
-				if err := conn.Close(); err != nil {
-					// snapshot has completed at this point so logging the error is sufficient.
-					s.log.Errorf("Closing snapshot connection: %v", err)
-				}
-			}()
+// tableCompletionTracker marks a table complete once all of its tasks have succeeded.
+type tableCompletionTracker struct {
+	remaining atomic.Int32
+	rows      atomic.Int64
+	snapshot  *Snapshot
+	table     UserTable
+}
 
-			if _, err = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+s.pdbName); err != nil {
-				return fmt.Errorf("switching session to PDB '%s' for snapshot: %w", s.pdbName, err)
-			}
-			defer func() {
-				if _, err := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); err != nil {
-					// logging the error is sufficient here, connection will be closed in defer call above.
-					s.log.Errorf("Switching session back to root container: %v", err)
-				}
-			}()
-			// Use context.Background() to prevent database/sql from spawning an
-			// awaitDone goroutine that races with our explicit Rollback below.
-			// The go-ora v2 driver has an unsynchronized field in Session that
-			// causes a data race between BreakConnection (from awaitDone) and
-			// IsBreak (from our Rollback). Transaction lifetime is managed
-			// manually via the defer and explicit Rollback at the end.
-			if tx, err = conn.BeginTx(context.Background(), nil); err != nil {
-				return fmt.Errorf("beginning snapshot transaction: %w", err)
-			}
-		default:
-			// Non-CDB mode: use db.BeginTx directly — no *Conn needed.
-			// See CDB path comment above for why context.Background() is used.
-			if tx, err = s.dbPool.BeginTx(context.Background(), nil); err != nil {
-				return fmt.Errorf("beginning snapshot transaction: %w", err)
-			}
-		}
+func newTableCompletionTracker(s *Snapshot, table UserTable, taskCount int) *tableCompletionTracker {
+	t := &tableCompletionTracker{snapshot: s, table: table}
+	t.remaining.Store(int32(taskCount))
+	return t
+}
 
-		// In Oracle, READ ONLY transactions automatically provide serializable isolation
-		if _, err = tx.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("setting transaction read-only: %w", err)
+// done records a successful task's rows, marking the table complete after its last task.
+func (t *tableCompletionTracker) done(rowsProcessed int) {
+	t.rows.Add(int64(rowsProcessed))
+	if t.remaining.Add(-1) == 0 {
+		t.snapshot.snapshotStatusMetric.Set(1, t.table.FullName())
+		t.snapshot.log.With("src_table", t.table.FullName()).Infof("Table snapshot completed, %d rows processed", t.rows.Load())
+	}
+}
+
+// planTableTasks returns the tasks that snapshot table: one keyset task for a filtered
+// table, key-range chunks for an enforced primary key that can be split, else one full scan.
+func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorkers, maxBatchSize int) ([]func(context.Context) error, error) {
+	tableName := table.FullName()
+	l := s.log.With("src_table", tableName)
+	customQuery, hasFilter := s.filters[tableName]
+
+	if hasFilter {
+		l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
+		tracker := newTableCompletionTracker(s, table, 1)
+		return []func(context.Context) error{s.snapshotTableWithFilterTask(table, maxBatchSize, customQuery, tracker)}, nil
+	}
+
+	// fullScan is the single-task fallback for tables that can't be chunked (1 worker config, no pks etc)
+	fullScan := func() []func(context.Context) error {
+		l.Infof("Launching snapshot of table '%s'", tableName)
+		tracker := newTableCompletionTracker(s, table, 1)
+		return []func(context.Context) error{s.snapshotTableFullScanTask(table, maxBatchSize, tracker)}
+	}
+
+	// Skip PK lookup and keyspace sampling entirely for single worker
+	if maxWorkers <= 1 {
+		return fullScan(), nil
+	}
+
+	var (
+		pks      []string
+		enforced bool
+	)
+	if err := s.db.withConn(ctx, func(db *sql.Conn) (err error) {
+		pks, enforced, err = getTablePrimaryKeys(ctx, db, table)
+		return err
+	}); err != nil {
+		if !errors.Is(err, errNoPrimaryKey) {
+			return nil, err
 		}
-		defer func() {
+		return fullScan(), nil
+	}
+
+	// Chunk bounds and keyset pages assume every row has a unique, non-null key. Oracle
+	// only guarantees that for an ENABLED VALIDATED primary key: a DISABLE or NOVALIDATE
+	// key (e.g. the RELY DISABLE NOVALIDATE keys common in warehouse schemas) can hold
+	// NULLs, which match no range bound and would be silently dropped, and duplicates,
+	// which the strict lower bound skips when they straddle a page boundary.
+	if !enforced {
+		l.Infof("Primary key of table '%s' is not enabled and validated, so it will be snapshotted without parallel chunking", tableName)
+		return fullScan(), nil
+	}
+
+	ranges, method, err := s.planChunkRanges(ctx, table, pks, maxWorkers)
+	if err != nil {
+		return nil, err
+	}
+	if len(ranges) <= 1 {
+		return fullScan(), nil
+	}
+
+	l.Infof("Launching snapshot of table '%s' split into %d parallel chunks by %s", tableName, len(ranges), method)
+
+	tracker := newTableCompletionTracker(s, table, len(ranges))
+	tasks := make([]func(context.Context) error, 0, len(ranges))
+	for _, r := range ranges {
+		tasks = append(tasks, s.scanTableRangeTask(table, pks, r.min, r.max, maxBatchSize, tracker))
+	}
+	return tasks, nil
+}
+
+// chunkRange is a (min, max] primary key range of a table, where a nil bound is unbounded.
+// The lower bound is exclusive so the first page of a chunk uses the same "> lastSeen" keyset
+// predicate as every later page.
+type chunkRange struct {
+	min map[string]any
+	max map[string]any
+}
+
+// planChunkRanges splits table's keyspace into ranges, interpolating single numeric or date
+// keys between MIN and MAX and sampling the rest, and returns the method used for logs.
+func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) (ranges []chunkRange, method string, err error) {
+	const interpolatedRangesPerWorker = 16
+	plan := func(db *sql.Conn) error {
+		if len(pkCols) == 1 {
+			keyType, err := getInterpolableKeyType(ctx, db, table, pkCols[0])
 			if err != nil {
-				if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-					l.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
-				}
-			}
-		}()
-
-		var numRowsProcessed int
-		if hasFilter {
-			// Custom filters may join or aggregate, so a physical-order scan can't safely
-			// assume every row maps to a stable ROWID/heap position; keep the PK-keyset
-			// pagination path for these.
-			var tablePks []string
-			if tablePks, err = getTablePrimaryKeys(ctx, tx, table); err != nil {
 				return err
 			}
+			if keyType != keyTypeNotInterpolable {
+				numRanges := min(maxWorkers, 256) * interpolatedRangesPerWorker
+				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, numRanges)
+				if err != nil {
+					return err
+				}
+				occupied, err := countOccupiedRanges(ctx, db, table, pkCols[0], keyType, s.scn, numRanges, len(bounds))
+				if err != nil {
+					return err
+				}
+				// Equal-width ranges only balance when keys are spread across MIN..MAX. An
+				// outlier (e.g. a sentinel ID far beyond the rest) leaves most ranges empty
+				// and every real row in a few of them, so sample the keyspace instead.
+				if occupied*2 >= len(bounds)+1 {
+					ranges, method = rangesFromBounds(bounds), "interpolating its key range"
+					return nil
+				}
+				s.log.With("src_table", table.FullName()).Infof("Only %d of %d interpolated key ranges of table '%s' hold rows, so its key range will be sampled instead", occupied, len(bounds)+1, table.FullName())
+			}
+		}
+		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, maxWorkers)
+		method = "sampling its key range"
+		return err
+	}
 
+	if err = s.db.withConn(ctx, plan); err != nil {
+		return nil, "", fmt.Errorf("planning chunk ranges: %w", err)
+	}
+	return ranges, method, nil
+}
+
+// sampleChunkRanges splits table's keyspace into up to maxWorkers even ranges by sampling
+// rows, returning one unbounded range when the table has no optimizer statistics.
+func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
+	const (
+		// overSampleFactor is the number of primary key samples drawn per worker when planning
+		// chunks: enough to split the keyspace evenly while keeping the sample query cheap.
+		overSampleFactor = 32
+	)
+	numSamples := min(maxWorkers, 256) * overSampleFactor
+
+	numRows, err := getTableRowCount(ctx, db, table)
+	if err != nil {
+		return nil, err
+	}
+	if numRows <= 0 {
+		s.log.With("src_table", table.FullName()).Infof("Table '%s' has no optimizer statistics, so it will be snapshotted without parallel chunking; gather statistics with DBMS_STATS.GATHER_TABLE_STATS to enable it", table.FullName())
+		return []chunkRange{{}}, nil
+	}
+	sampleClause := fmt.Sprintf("SAMPLE (%.4f)", samplePercent(numSamples, numRows))
+	samples, err := sampleTableKeyspace(ctx, db, table, pkCols, s.scn, sampleClause, numSamples)
+	if err != nil {
+		return nil, err
+	}
+	return splitChunkRanges(samples, maxWorkers), nil
+}
+
+// splitChunkRanges splits sorted key samples into at most maxWorkers ranges covering the whole keyspace.
+func splitChunkRanges(samples []map[string]any, maxWorkers int) []chunkRange {
+	// Round up so there are at most maxWorkers ranges. max(1, ...) avoids chunkSize=0
+	// when there are no samples, which would otherwise loop forever below.
+	chunkSize := max(1, (len(samples)+maxWorkers-1)/maxWorkers)
+	var bounds []map[string]any
+	for i := chunkSize; i < len(samples); i += chunkSize {
+		bounds = append(bounds, samples[i])
+	}
+	return rangesFromBounds(bounds)
+}
+
+// rangesFromBounds turns sorted, distinct bounds into contiguous ranges covering the whole keyspace.
+func rangesFromBounds(bounds []map[string]any) []chunkRange {
+	ranges := make([]chunkRange, 0, len(bounds)+1)
+	var prev map[string]any
+	for _, bound := range bounds {
+		ranges = append(ranges, chunkRange{min: prev, max: bound})
+		prev = bound
+	}
+	return append(ranges, chunkRange{min: prev, max: nil})
+}
+
+// keyType classifies a primary key column by how interpolateKeyBounds can split it.
+type keyType int
+
+const (
+	keyTypeNotInterpolable keyType = iota
+	keyTypeInteger
+	keyTypeNumber
+	keyTypeDatetime
+)
+
+// getInterpolableKeyType reports whether column is a NUMBER, FLOAT, DATE or TIMESTAMP that
+// can be interpolated between its MIN and MAX.
+func getInterpolableKeyType(ctx context.Context, db DBQuerier, table UserTable, column string) (keyType, error) {
+	var (
+		dataType string
+		scale    sql.NullInt64
+	)
+	if err := db.QueryRowContext(ctx,
+		`SELECT DATA_TYPE, DATA_SCALE FROM ALL_TAB_COLUMNS WHERE OWNER = :1 AND TABLE_NAME = :2 AND COLUMN_NAME = :3`,
+		table.Schema, table.Name, column,
+	).Scan(&dataType, &scale); err != nil {
+		return keyTypeNotInterpolable, fmt.Errorf("getting type of column %s of table '%s': %w", column, table.FullName(), err)
+	}
+	switch {
+	case dataType == "NUMBER" && scale.Valid && scale.Int64 == 0:
+		return keyTypeInteger, nil
+	case dataType == "NUMBER", dataType == "FLOAT":
+		return keyTypeNumber, nil
+	case dataType == "DATE", strings.HasPrefix(dataType, "TIMESTAMP") && !strings.Contains(dataType, "TIME ZONE"):
+		return keyTypeDatetime, nil
+	default:
+		return keyTypeNotInterpolable, nil
+	}
+}
+
+// interpolateKeyBounds returns the sorted bounds that split column's MIN to MAX as of scn
+// into numRanges equal-width ranges, or none if the table has fewer than two keys.
+func interpolateKeyBounds(ctx context.Context, db DBQuerier, table UserTable, column string, kt keyType, scn SCN, numRanges int) ([]map[string]any, error) {
+	return queryKeyspace(ctx, db, table, interpolatedBoundsQuery(table, column, kt, scn, numRanges)+` ORDER BY 1`)
+}
+
+// countOccupiedRanges returns how many interpolated ranges hold a row as of scn, by counting
+// the distinct first keys after each bound with cheap index probes.
+func countOccupiedRanges(ctx context.Context, db DBQuerier, table UserTable, column string, kt keyType, scn SCN, numRanges, numBounds int) (int, error) {
+	if numBounds == 0 {
+		return 1, nil
+	}
+	q := fmt.Sprintf(`SELECT COUNT(DISTINCT "N") FROM (
+		SELECT (SELECT MIN("%[1]s") FROM "%[2]s"."%[3]s" AS OF SCN %[4]d WHERE "%[1]s" > "BOUNDS"."%[1]s") "N"
+		FROM (%[5]s) "BOUNDS"
+	)`, column, table.Schema, table.Name, uint64(scn), interpolatedBoundsQuery(table, column, kt, scn, numRanges))
+
+	nextKeys, err := withFlashbackRetry(ctx, func() (n int, err error) {
+		err = db.QueryRowContext(ctx, q).Scan(&n)
+		return n, err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("counting occupied key ranges of table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
+	}
+	return 1 + nextKeys, nil
+}
+
+// interpolatedBoundsQuery returns the unordered query behind interpolateKeyBounds.
+func interpolatedBoundsQuery(table UserTable, column string, kt keyType, scn SCN, numRanges int) string {
+	bound := `"LO" + ("HI" - "LO") * (LEVEL / %[1]d)`
+	if kt == keyTypeInteger {
+		bound = `FLOOR(` + bound + `)`
+	}
+	q := `SELECT DISTINCT "B" AS "%[2]s" FROM (
+		SELECT ` + bound + ` "B", "LO", "HI"
+		FROM (SELECT MIN("%[2]s") "LO", MAX("%[2]s") "HI" FROM "%[3]s"."%[4]s" AS OF SCN %[5]d)
+		WHERE "LO" < "HI" CONNECT BY LEVEL < %[1]d
+	) WHERE "B" > "LO" AND "B" < "HI"`
+	return fmt.Sprintf(q, max(numRanges, 1), column, table.Schema, table.Name, uint64(scn))
+}
+
+// snapshotTableWithFilterTask returns a task that pages through table's custom filter query
+// by primary key in a read-only transaction, without chunking.
+func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int, customQuery string, tracker *tableCompletionTracker) func(context.Context) error {
+	tableName := table.FullName()
+	l := s.log.With("src_table", tableName)
+	return func(ctx context.Context) error {
+		var numRowsProcessed int
+		err := s.db.withReadOnlyTxn(ctx, func(tx *sql.Tx) error {
+			tablePks, _, err := getTablePrimaryKeys(ctx, tx, table)
+			if err != nil {
+				return err
+			}
 			l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
+
 			lastSeenPksValues := map[string]any{}
 			for _, pk := range tablePks {
 				lastSeenPksValues[pk] = nil
 			}
 
-			var batchCount int
+			var pksForQuery map[string]any
 			for {
-				var pksForQuery map[string]any
-				if numRowsProcessed > 0 {
-					pksForQuery = lastSeenPksValues
-				}
-				batchCount, err = s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName, customQuery)
+				batchCount, err := s.processBatch(ctx, tx, table, tablePks, pksForQuery, nil, lastSeenPksValues, maxBatchSize, tableName, customQuery, InvalidSCN)
 				if err != nil {
 					return fmt.Errorf("processing snapshot batch: %w", err)
 				}
 
 				numRowsProcessed += batchCount
+				pksForQuery = lastSeenPksValues
 				if batchCount < maxBatchSize {
 					break
 				}
 			}
-		} else {
-			// No Filter: whole table scan through single unordered cursor is faster due to no
-			// random i/o that ORDER BY forces
-			if numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName); err != nil {
-				return fmt.Errorf("processing snapshot table scan: %w", err)
-			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-
-		if err := tx.Rollback(); err != nil {
-			l.Errorf("Failed rollback snapshot transaction: %v", err)
-		}
-		s.snapshotStatusMetric.Set(1, tableName)
-		l.Infof("Table snapshot completed, %d rows processed", numRowsProcessed)
-
+		tracker.done(numRowsProcessed)
 		return nil
 	}
 }
 
-// processBatch queries and processes a single page of rows from a snapshot table.
-// pksForQuery is passed to querySnapshotTable for cursor-based pagination (nil on first batch).
-// lastSeenPksValues is mutated in place with the PK values from the last row of the batch,
-// so the caller can pass it as pksForQuery on the next iteration.
-func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName, customQuery string) (batchCount int, err error) {
-	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize, customQuery)
+// snapshotTableFullScanTask returns a task that reads an unchunked table in one full scan.
+func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, tracker *tableCompletionTracker) func(context.Context) error {
+	tableName := table.FullName()
+	return func(ctx context.Context) error {
+		var numRowsProcessed int
+		err := s.db.withReadOnlyTxn(ctx, func(tx *sql.Tx) (err error) {
+			numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("processing snapshot table scan: %w", err)
+		}
+		tracker.done(numRowsProcessed)
+		return nil
+	}
+}
+
+// scanTableRangeTask returns a task that pages through one (minExclusive, maxInclusive]
+// key range of table AS OF the snapshot SCN, so every chunk reads the same point in time.
+func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclusive, maxInclusive map[string]any, maxBatchSize int, tracker *tableCompletionTracker) func(context.Context) error {
+	tableName := table.FullName()
+	l := s.log.With("src_table", tableName)
+	return func(ctx context.Context) error {
+		var numRowsProcessed int
+		err := s.db.withConn(ctx, func(db *sql.Conn) error {
+			lastSeenPksValues := map[string]any{}
+			for _, pk := range pkCols {
+				lastSeenPksValues[pk] = nil
+			}
+
+			pksForQuery := minExclusive
+			for {
+				batchCount, err := s.processBatch(ctx, db, table, pkCols, pksForQuery, maxInclusive, lastSeenPksValues, maxBatchSize, tableName, "", s.scn)
+				if err != nil {
+					return fmt.Errorf("processing snapshot range batch: %w", err)
+				}
+
+				numRowsProcessed += batchCount
+				pksForQuery = lastSeenPksValues
+				if batchCount < maxBatchSize {
+					break
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		l.Debugf("Finished scanning range chunk (%+v %+v], %d rows processed", minExclusive, maxInclusive, numRowsProcessed)
+		tracker.done(numRowsProcessed)
+		return nil
+	}
+}
+
+// processBatch publishes one page of rows after pksForQuery, up to maxInclusivePkVal, and
+// stores the last row's keys in lastSeenPksValues for the next page.
+func (s *Snapshot) processBatch(ctx context.Context, db DBQuerier, table UserTable, tablePks []string, pksForQuery, maxInclusivePkVal map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName, customQuery string, scn SCN) (batchCount int, err error) {
+	batchRows, err := querySnapshotTable(ctx, db, table, tablePks, pksForQuery, maxInclusivePkVal, maxBatchSize, customQuery, scn)
 	if err != nil {
 		return 0, fmt.Errorf("execute snapshot table query: %w", err)
 	}
@@ -331,8 +603,8 @@ func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []st
 	return nil
 }
 
-// snapshotTableFullScan performs a single, full unordered scan so Oracle's optimizer
-// picks a full table scan (sequential multiblock reads) over random disk I/O when ordered.
+// snapshotTableFullScan publishes every row of table from one unordered scan, which Oracle
+// reads with fast sequential multiblock I/O.
 func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int, tableName string) (numRowsProcessed int, err error) {
 	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
 	rows, err := tx.QueryContext(ctx, q)
@@ -388,10 +660,12 @@ func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table 
 	return numRowsProcessed, nil
 }
 
-func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
+// getTablePrimaryKeys returns table's primary key columns in order, and whether the key is
+// ENABLED and VALIDATED, the only state that guarantees unique, non-null keys.
+func getTablePrimaryKeys(ctx context.Context, db DBQuerier, table UserTable) (pks []string, enforced bool, err error) {
 	// ALL_CONSTRAINTS/ALL_CONS_COLUMNS work in any container context after ALTER SESSION SET CONTAINER.
 	pkSQL := `
-	SELECT acc.column_name
+	SELECT acc.column_name, ac.status, ac.validated
 	FROM all_constraints ac
 	JOIN all_cons_columns acc
 		ON ac.constraint_name = acc.constraint_name
@@ -402,96 +676,208 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 	ORDER BY acc.position`
 	pkArgs := []any{table.Name, table.Schema}
 
-	rows, err := tx.QueryContext(ctx, pkSQL, pkArgs...)
+	rows, err := db.QueryContext(ctx, pkSQL, pkArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("get primary key: %w", err)
+		return nil, false, fmt.Errorf("get primary key: %w", err)
 	}
 	defer rows.Close()
 
-	var pks []string
+	// A table has at most one primary key constraint, so status and validated are the
+	// same on every row.
+	var status, validated string
 	for rows.Next() {
 		var pk string
-		if err := rows.Scan(&pk); err != nil {
-			return nil, err
+		if err := rows.Scan(&pk, &status, &validated); err != nil {
+			return nil, false, err
 		}
 		pks = append(pks, pk)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
+		return nil, false, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
 	}
 	if len(pks) == 0 {
-		return nil, fmt.Errorf("can't find a primary key for table '%s', does it exist and have one set?", table.FullName())
+		return nil, false, fmt.Errorf("%w for table '%s'", errNoPrimaryKey, table.FullName())
 	}
 
-	return pks, nil
+	return pks, status == "ENABLED" && validated == "VALIDATED", nil
 }
 
-func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int, customQuery string) (*sql.Rows, error) {
+// getTableRowCount returns table's optimizer statistics row count, or 0 if unknown.
+func getTableRowCount(ctx context.Context, db DBQuerier, table UserTable) (int64, error) {
+	var numRows sql.NullInt64
+	if err := db.QueryRowContext(ctx,
+		`SELECT NUM_ROWS FROM ALL_TABLES WHERE OWNER = :1 AND TABLE_NAME = :2`,
+		table.Schema, table.Name,
+	).Scan(&numRows); err != nil {
+		return 0, fmt.Errorf("getting statistics for table '%s': %w", table.FullName(), err)
+	}
+	return max(numRows.Int64, 0), nil
+}
+
+// samplePercent returns the SAMPLE percentage expected to draw numSamples of total rows,
+// capped just below 100, which Oracle rejects (ORA-30562).
+func samplePercent(numSamples int, total int64) float64 {
+	const maxSamplePercent = 99.9999
+	return min(maxSamplePercent, max(0.0001, 100.0*float64(numSamples)/float64(max(total, 1))))
+}
+
+// sampleTableKeyspace returns up to maxKeys sorted primary key samples as of scn, thinned
+// to every k-th key so they spread evenly across the keyspace.
+func sampleTableKeyspace(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, scn SCN, sampleClause string, maxKeys int) ([]map[string]any, error) {
+	quoted := make([]string, len(pkCols))
+	for i, col := range pkCols {
+		quoted[i] = `"` + col + `"`
+	}
+	cols := strings.Join(quoted, ", ")
+	q := `SELECT %[1]s FROM (
+		SELECT %[1]s, ROW_NUMBER() OVER (ORDER BY %[1]s) "RPCN__RN", COUNT(*) OVER () "RPCN__CNT"
+		FROM "%[2]s"."%[3]s" %[4]s AS OF SCN %[5]d
+	) WHERE MOD("RPCN__RN", CEIL("RPCN__CNT" / %[6]d)) = 0 ORDER BY %[1]s`
+	return queryKeyspace(ctx, db, table, fmt.Sprintf(q, cols, table.Schema, table.Name, sampleClause, uint64(scn), max(maxKeys, 1)))
+}
+
+// queryKeyspace runs a flashback query for table's key values, returning each row as a chunk bound.
+func queryKeyspace(ctx context.Context, db DBQuerier, table UserTable, query string) ([]map[string]any, error) {
+	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
+		return db.QueryContext(ctx, query)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying keyspace of table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
+	}
+	defer rows.Close()
+
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, fmt.Errorf("fetching column types of keyspace of table '%s': %w", table.FullName(), err)
+	}
+	values, mappers := prepSnapshotScannerAndMappers(types)
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("fetching columns of keyspace of table '%s': %w", table.FullName(), err)
+	}
+
+	var keys []map[string]any
+	for rows.Next() {
+		if err := rows.Scan(values...); err != nil {
+			return nil, fmt.Errorf("scanning key of table '%s': %w", table.FullName(), err)
+		}
+		row := make(map[string]any, len(columns))
+		for i, col := range columns {
+			v, err := mappers[i](values[i])
+			if err != nil {
+				return nil, fmt.Errorf("decoding key column %s of table '%s': %w", col, table.FullName(), err)
+			}
+			row[col] = v
+		}
+		keys = append(keys, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating keys of table '%s': %w", table.FullName(), err)
+	}
+	return keys, nil
+}
+
+// buildLexicographicBoundExpr expands a composite key comparison such as (a, b) > (x, y)
+// into (a > x) OR (a = x AND b > y), since Oracle has no tuple comparison.
+func buildLexicographicBoundExpr(pk []string, boundVals map[string]any, op string, paramIdx *int) (expr string, args []any) {
+	strictOp := op
+	if op == "<=" {
+		strictOp = "<"
+	}
+
+	var sb strings.Builder
+	for i := range pk {
+		if i > 0 {
+			sb.WriteString(" OR ")
+		}
+		sb.WriteString("(")
+		for j := range i {
+			if j > 0 {
+				sb.WriteString(" AND ")
+			}
+			*paramIdx++
+			fmt.Fprintf(&sb, `"%s" = :%d`, pk[j], *paramIdx)
+			args = append(args, boundVals[pk[j]])
+		}
+		if i > 0 {
+			sb.WriteString(" AND ")
+		}
+		cmp := strictOp
+		if i == len(pk)-1 {
+			cmp = op
+		}
+		*paramIdx++
+		fmt.Fprintf(&sb, `"%s" %s :%d`, pk[i], cmp, *paramIdx)
+		args = append(args, boundVals[pk[i]])
+		sb.WriteString(")")
+	}
+	return sb.String(), args
+}
+
+// querySnapshotTable fetches the next keyset page of table, or of customQuery, after
+// lastSeenPkVal and up to maxInclusivePkVal, reading the base table AS OF scn when valid.
+func querySnapshotTable(ctx context.Context, db DBQuerier, table UserTable, pk []string, lastSeenPkVal, maxInclusivePkVal map[string]any, limit int, customQuery string, scn SCN) (*sql.Rows, error) {
+	baseTableRef := fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
+	flashback := customQuery == "" && scn != InvalidSCN
+	if flashback {
+		baseTableRef = fmt.Sprintf("%s AS OF SCN %d", baseTableRef, scn)
+	}
+
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
-	if lastSeenPkVal == nil {
+	if lastSeenPkVal == nil && maxInclusivePkVal == nil {
 		// No cursor: use custom query directly to avoid a redundant wrapping subquery.
 		var base string
 		if customQuery != "" {
 			base = customQuery
 		} else {
-			base = fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
+			base = "SELECT * FROM " + baseTableRef
 		}
 		q := strings.Join([]string{base, buildOrderByClause(pk), fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit)}, " ")
-		return tx.QueryContext(ctx, q)
+		rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
+			return db.QueryContext(ctx, q)
+		})
+		if err != nil && flashback {
+			err = withFlashbackPrivilegeHint(err, table)
+		}
+		return rows, err
 	}
 
-	// Cursor pagination requires a WHERE clause; wrap the custom query in a subquery so the
-	// added WHERE does not conflict with any WHERE already present in customQuery.
+	// Bounded pagination requires a WHERE clause; wrap the custom query in a subquery so
+	// the added WHERE does not conflict with any WHERE already present in customQuery.
 	var tableSource string
 	if customQuery != "" {
 		tableSource = fmt.Sprintf("(%s) t", customQuery)
 	} else {
-		tableSource = fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
+		tableSource = baseTableRef
 	}
+
+	var (
+		args     []any
+		paramIdx int
+		clauses  []string
+	)
+	if lastSeenPkVal != nil {
+		expr, exprArgs := buildLexicographicBoundExpr(pk, lastSeenPkVal, ">", &paramIdx)
+		clauses = append(clauses, "("+expr+")")
+		args = append(args, exprArgs...)
+	}
+	if maxInclusivePkVal != nil {
+		expr, exprArgs := buildLexicographicBoundExpr(pk, maxInclusivePkVal, "<=", &paramIdx)
+		clauses = append(clauses, "("+expr+")")
+		args = append(args, exprArgs...)
+	}
+
 	snapshotQueryParts := []string{
 		"SELECT * FROM " + tableSource,
+		"WHERE " + strings.Join(clauses, " AND "),
+		buildOrderByClause(pk),
+		fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit),
 	}
-
-	// Build lexicographic comparison for composite keys
-	// For pk [col1, col2, col3], generates:
-	// WHERE (col1 > ?) OR (col1 = ? AND col2 > ?) OR (col1 = ? AND col2 = ? AND col3 > ?)
-	// Oracle uses positional parameters (:1, :2, etc.) or named parameters
-	var (
-		lastSeenPkVals []any
-		paramIdx       int
-		where          strings.Builder
-	)
-
-	where.WriteString("WHERE ")
-	for i := range pk {
-		if i > 0 {
-			where.WriteString(" OR ")
-		}
-		where.WriteString("(")
-		// Add equality conditions for all previous columns
-		for j := range i {
-			if j > 0 {
-				where.WriteString(" AND ")
-			}
-			paramIdx++
-			fmt.Fprintf(&where, `"%s" = :%d`, pk[j], paramIdx)
-			lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[j]])
-		}
-		// Add greater-than condition for current column
-		if i > 0 {
-			where.WriteString(" AND ")
-		}
-		paramIdx++
-		fmt.Fprintf(&where, `"%s" > :%d`, pk[i], paramIdx)
-		lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[i]])
-		where.WriteString(")")
-	}
-
-	snapshotQueryParts = append(snapshotQueryParts, where.String())
-	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
 	q := strings.Join(snapshotQueryParts, " ")
-	rows, err := tx.QueryContext(ctx, q, lastSeenPkVals...)
+	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
+		return db.QueryContext(ctx, q, args...)
+	})
 	if err != nil {
 		var oraErr *goora.OracleError
 		if customQuery != "" && errors.As(err, &oraErr) && oraErr.ErrCode == errCodeInvalidIdentifier {
@@ -500,20 +886,12 @@ func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []s
 				"so every primary key column must be included in the filter's SELECT list even if it otherwise selects only a subset of columns",
 				err, table.FullName(), strings.Join(pk, ", "))
 		}
+		if flashback {
+			err = withFlashbackPrivilegeHint(err, table)
+		}
 		return nil, err
 	}
 	return rows, nil
-}
-
-// Close safely closes all open connections opened for the snapshotting process.
-// It should be called after a non-recoverale error or once the snapshot process has completed.
-func (s *Snapshot) Close() error {
-	if s.dbPool != nil {
-		if err := s.dbPool.Close(); err != nil {
-			return fmt.Errorf("closing database connection: %w", err)
-		}
-	}
-	return nil
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
@@ -526,12 +904,8 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 	return
 }
 
-// SnapshotScanDest returns the scan destination and value mapper for a column
-// with the given go-ora driver type name (sql.ColumnType.DatabaseTypeName())
-// and decimal metadata. It is exported so tests can pin its classification of
-// every driver type-name spelling against the schema mapping's — the two are
-// separate case-sensitive enumerations of the same fact and have drifted
-// before (see TestSnapshotScannerSchemaParity).
+// SnapshotScanDest returns the scan destination and value mapper for a column of the given
+// go-ora type name, and is exported so tests can check it against the schema mapping.
 func SnapshotScanDest(dbTypeName, colName string, precision, scale int64, hasDecimalSize bool) (val any, mapper func(any) (any, error)) {
 	stringMapping := func(mapper func(s string) (any, error)) func(any) (any, error) {
 		return func(v any) (any, error) {
@@ -612,8 +986,7 @@ func buildOrderByClause(pk []string) string {
 	return "ORDER BY " + strings.Join(quoted, ", ")
 }
 
-// buildColumnMeta extracts lightweight type metadata from sql.ColumnType values
-// for carrying through MessageEvent to the schema cache.
+// buildColumnMeta returns the column type metadata that MessageEvent carries to the schema cache.
 func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 	meta := make([]ColumnMeta, len(types))
 	for i, ct := range types {
@@ -630,11 +1003,8 @@ func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 	return meta
 }
 
-// IsLOBTypeName reports whether the given go-ora driver type name denotes a
-// large-object column, whose value is nulled in snapshot rows when
-// lob_enabled is false. Exported so tests can pin its classification against
-// the schema mapping and scan-destination enumerations of the same spellings
-// (see TestSnapshotScannerSchemaParity).
+// IsLOBTypeName reports whether a go-ora type name is a large object, whose value is nulled
+// in snapshot rows when lob_enabled is false.
 func IsLOBTypeName(dbType string) bool {
 	switch dbType {
 	case "CLOB", "NCLOB", "BLOB", "LONG", "LONG RAW",
@@ -655,4 +1025,40 @@ func snapshotValueMapper[T any](v any) (any, error) {
 		return nil, nil
 	}
 	return s.V, nil
+}
+
+// withFlashbackPrivilegeHint adds the missing FLASHBACK grant to an ORA-01031 from an AS OF SCN read.
+func withFlashbackPrivilegeHint(err error, table UserTable) error {
+	var oraErr *goora.OracleError
+	if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeInsufficientPrivileges {
+		return err
+	}
+	return fmt.Errorf("%w\n\nParallel snapshot chunks read table '%s' with flashback queries (AS OF SCN), which require the FLASHBACK privilege in addition to SELECT: "+
+		"GRANT FLASHBACK ON %s TO <user>, or GRANT FLASHBACK ANY TABLE TO <user>. Alternatively, set max_parallel_snapshot_tables to 1 to snapshot without flashback queries",
+		err, table.FullName(), table.FullName())
+}
+
+// withFlashbackRetry retries fn on the transient ORA-01466 that AS OF SCN reads can hit just after Prepare.
+func withFlashbackRetry[T any](ctx context.Context, fn func() (T, error)) (result T, err error) {
+	// The race window closes within a few hundred milliseconds, so this isn't configurable.
+	const (
+		flashbackRetryAttempts = 5
+		flashbackRetryDelay    = 100 * time.Millisecond
+	)
+	for range flashbackRetryAttempts {
+		result, err = fn()
+		if err == nil {
+			return result, nil
+		}
+		var oraErr *goora.OracleError
+		if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeFlashbackTableChanged {
+			return result, err
+		}
+		select {
+		case <-time.After(flashbackRetryDelay):
+		case <-ctx.Done():
+			return result, ctx.Err()
+		}
+	}
+	return result, err
 }
