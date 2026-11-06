@@ -26,14 +26,8 @@ import (
 const interpolationNotice = "This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]."
 
 var (
-	betaPrefix     = regexp.MustCompile(`(?i)^\s*BETA:\s*`)
-	blankLineRuns  = regexp.MustCompile(`\n{2,}`)
-	numericLooking = regexp.MustCompile(`^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$`)
-	yamlBoolLike   = regexp.MustCompile(`(?i)^(true|false|null|yes|no|on|off)$`)
-	yamlSpecial    = regexp.MustCompile("[:\\[\\]{},&>|%@`\"]")
-	yamlSpecialNQ  = regexp.MustCompile("[:\\[\\]{},&>|%@`]")
-	// YAML 1.1 reads an unquoted 0x value as a number, so 0x1E0F3 becomes 123123.
-	yamlHex = regexp.MustCompile(`^0[xX][0-9A-Fa-f]+$`)
+	betaPrefix    = regexp.MustCompile(`(?i)^\s*BETA:\s*`)
+	blankLineRuns = regexp.MustCompile(`\n{2,}`)
 	// interpolationPhrase finds a description that mentions interpolation
 	// functions without linking them.
 	interpolationPhrase = regexp.MustCompile(`(?i)interpolation functions`)
@@ -219,21 +213,7 @@ func renderFieldExamples(f fieldSpec) string {
 	for i, raw := range f.Examples {
 		ex := decodeValue(raw)
 		if arr, ok := ex.([]any); ok && f.Kind == "array" {
-			hasObjects := false
-			for _, item := range arr {
-				switch item.(type) {
-				case map[string]any, []any:
-					hasObjects = true
-				}
-			}
-			if hasObjects {
-				b.WriteString(renderYAMLList(f.Name, arr))
-			} else {
-				b.WriteString(f.Name + ":\n")
-				for _, item := range arr {
-					b.WriteString("  - " + quoteListScalar(item) + "\n")
-				}
-			}
+			b.WriteString(yamlStringify(map[string]any{f.Name: arr}, yamlPlain))
 		} else {
 			switch t := ex.(type) {
 			case map[string]any, []any, nil:
@@ -253,68 +233,6 @@ func renderFieldExamples(f fieldSpec) string {
 	}
 	b.WriteString("----\n\n")
 	return b.String()
-}
-
-// quoteListScalar renders one item of a list of scalars.
-func quoteListScalar(item any) string {
-	if s, ok := item.(string); ok {
-		// A value that starts with a quote keeps it, as in the Postgres
-		// example `"MyCaseSensitiveTable"`, so it is wrapped in the other
-		// kind of quotes.
-		if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
-			return yamlQuotedString(s, "    ", false)
-		}
-		if s == "" || s == "*" || yamlBoolLike.MatchString(s) || numericLooking.MatchString(s) ||
-			yamlHex.MatchString(s) || yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
-			return doubleQuote(s)
-		}
-		return s
-	}
-	s := jsString(item)
-	if yamlSpecial.MatchString(s) || strings.IndexFunc(s, jsIsSpace) >= 0 {
-		return doubleQuote(s)
-	}
-	return s
-}
-
-// doubleQuote renders s as a YAML double-quoted scalar. A JSON string is one,
-// and jsonStringify also escapes control characters.
-func doubleQuote(s string) string {
-	return jsonStringify(s)
-}
-
-// renderYAMLList renders a list whose items include objects.
-func renderYAMLList(name string, items []any) string {
-	var b strings.Builder
-	b.WriteString(name + ":\n")
-	for _, item := range items {
-		switch t := item.(type) {
-		case string, bool, json.Number:
-			b.WriteString("  - " + quoteSpecialScalar(jsString(t)) + "\n")
-		default:
-			lines := strings.Split(strings.TrimSpace(yamlStringify(item, yamlPlain)), "\n")
-			for i, l := range lines {
-				if i == 0 {
-					b.WriteString("  - " + l)
-				} else {
-					b.WriteString("\n    " + l)
-				}
-			}
-			b.WriteString("\n")
-		}
-	}
-	b.WriteString("\n")
-	return b.String()
-}
-
-func quoteSpecialScalar(s string) string {
-	if strings.HasPrefix(s, `"`) || strings.HasPrefix(s, "'") {
-		return yamlQuotedString(s, "    ", false)
-	}
-	if s == "*" || yamlSpecialNQ.MatchString(s) {
-		return doubleQuote(s)
-	}
-	return s
 }
 
 func indentLines(s, indent string) string {
