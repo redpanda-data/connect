@@ -46,6 +46,19 @@ const (
 	sreFieldAvroInputEnc   = "input_encoding"
 	sreFieldAvroRecordName = "record_name"
 	sreFieldAvroNamespace  = "namespace"
+
+	sreFieldAvroBigDecimalAs        = "big_decimal_as"
+	sreFieldAvroBigDecimalPrecision = "big_decimal_precision"
+	sreFieldAvroBigDecimalScale     = "big_decimal_scale"
+	sreFieldAvroAnyAs               = "any_as"
+)
+
+// The decimal a BigDecimal field becomes by default with big_decimal_as set to
+// decimal: the widest precision Avro readers commonly accept, with enough
+// fractional digits for most data that has no declared scale.
+const (
+	defaultAvroBigDecimalPrecision = 38
+	defaultAvroBigDecimalScale     = 10
 )
 
 func schemaRegistryEncoderConfig() *service.ConfigSpec {
@@ -141,6 +154,27 @@ This is independent of `+"`raw_json`"+`, which does not affect how values are re
 			service.NewStringField(sreFieldAvroNamespace).
 				Description("The Avro namespace for the root record type when encoding from a common schema (schema_metadata mode).").
 				Default("").Optional(),
+			service.NewStringAnnotatedEnumField(sreFieldAvroBigDecimalAs, map[string]string{
+				avroBigDecimalAsError:   "Fail the encode with an error naming the field.",
+				avroBigDecimalAsDecimal: "Encode as an Avro `decimal` with `big_decimal_precision` and `big_decimal_scale`. A value with more fractional digits than the scale, or more digits than the precision, fails to encode rather than being rounded.",
+				avroBigDecimalAsString:  "Encode as an Avro `string` holding the decimal text. Lossless, but sinks see a string column rather than a number.",
+			}).
+				Description("How to encode fields of the common schema type BigDecimal (schema_metadata mode only). Avro's `decimal` needs a fixed precision and scale, which a BigDecimal does not carry: CDC inputs report numeric columns declared without them as BigDecimal, such as Oracle `NUMBER` and PostgreSQL `NUMERIC`. Setting this here costs nothing per message, unlike rewriting the schema in a mapping, as the encoder for each schema is built once.").
+				ShortDescription("How to encode BigDecimal fields, which have no fixed precision and scale: fail, as a fixed decimal, or as decimal text.").
+				Advanced().Default(avroBigDecimalAsError).Version("4.116.0"),
+			service.NewIntField(sreFieldAvroBigDecimalPrecision).
+				Description("The precision of the Avro `decimal` that BigDecimal fields are encoded as when `big_decimal_as` is `decimal`, from 1 to 38.").
+				Advanced().Default(defaultAvroBigDecimalPrecision).Version("4.116.0"),
+			service.NewIntField(sreFieldAvroBigDecimalScale).
+				Description("The scale of the Avro `decimal` that BigDecimal fields are encoded as when `big_decimal_as` is `decimal`, from 0 to `big_decimal_precision`.").
+				Advanced().Default(defaultAvroBigDecimalScale).Version("4.116.0"),
+			service.NewStringAnnotatedEnumField(sreFieldAvroAnyAs, map[string]string{
+				avroAnyAsBytes:      "Encode as Avro `bytes`. Only a value that is already a string or bytes encodes; an object or array fails.",
+				avroAnyAsJSONString: "Encode as an Avro `string` holding the value's JSON text. A value that is already a string is kept as it is.",
+			}).
+				Description("How to encode fields of the common schema type Any (schema_metadata mode only). CDC inputs report columns of types they do not map as Any, such as PostgreSQL `JSON` and `JSONB`, whose values are objects and arrays that Avro `bytes` cannot hold.").
+				ShortDescription("How to encode Any fields, such as JSON columns: as bytes, or as JSON text.").
+				Advanced().Default(avroAnyAsBytes).Version("4.116.0"),
 		).Description("Configuration for Avro encoding.").Version("4.83.0"),
 	)
 
@@ -191,6 +225,7 @@ type schemaRegistryEncoder struct {
 	normalize      bool
 	recordName     string
 	namespace      string
+	avroOpts       avroCommonOpts
 	metaEncoders   map[string]cachedSchemaEncoder
 	metaCacheMut   sync.RWMutex
 	metaRequestMut sync.Mutex
@@ -265,6 +300,10 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if conf.Contains(sreFieldAvro, sreFieldAvroNamespace) {
 		namespace, _ = conf.FieldString(sreFieldAvro, sreFieldAvroNamespace)
 	}
+	avroOpts, err := avroCommonOptsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
 
 	// Cross-validate: schema_metadata and format must be set together.
 	if schemaMeta != "" && format == "" {
@@ -296,6 +335,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	s.normalize = normalize
 	s.recordName = recordName
 	s.namespace = namespace
+	s.avroOpts = avroOpts
 	if schemaMeta != "" {
 		s.metaEncoders = map[string]cachedSchemaEncoder{}
 		// Start the metadata-mode purge goroutine. The registry-pull refresh
@@ -642,14 +682,14 @@ func (s *schemaRegistryEncoder) getOrCreateMetaEncoder(ctx context.Context, meta
 		if recordName == "" {
 			recordName = sanitizeAvroName(subject)
 		}
-		avroJSON, aErr := commonToAvroSchema(common, recordName, s.namespace)
+		avroJSON, aErr := commonToAvroSchema(common, recordName, s.namespace, s.avroOpts)
 		if aErr != nil {
 			return nil, 0, fmt.Errorf("converting common schema to Avro: %w", aErr)
 		}
 		schemaStr = avroJSON
 		schemaType = franz_sr.TypeAvro
 
-		encoder, err = s.newAvroEncoder(avroJSON)
+		encoder, err = s.newAvroEncoder(avroJSON, commonToAvroValueCoercer(common, s.avroOpts))
 		if err != nil {
 			return nil, 0, err
 		}
@@ -726,6 +766,32 @@ func (s *schemaRegistryEncoder) purgeStaleMetaEncoders() {
 		}
 		s.metaCacheMut.Unlock()
 	}
+}
+
+func avroCommonOptsFromParsed(conf *service.ParsedConfig) (opts avroCommonOpts, err error) {
+	if opts.bigDecimalAs, err = conf.FieldString(sreFieldAvro, sreFieldAvroBigDecimalAs); err != nil {
+		return
+	}
+	var precision, scale int
+	if precision, err = conf.FieldInt(sreFieldAvro, sreFieldAvroBigDecimalPrecision); err != nil {
+		return
+	}
+	if scale, err = conf.FieldInt(sreFieldAvro, sreFieldAvroBigDecimalScale); err != nil {
+		return
+	}
+	if precision < int(schema.DecimalMinPrecision) || precision > int(schema.DecimalMaxPrecision) {
+		err = fmt.Errorf("%v.%v must be between %d and %d, got %d",
+			sreFieldAvro, sreFieldAvroBigDecimalPrecision, schema.DecimalMinPrecision, schema.DecimalMaxPrecision, precision)
+		return
+	}
+	if scale < 0 || scale > precision {
+		err = fmt.Errorf("%v.%v must be between 0 and %v.%v (%d), got %d",
+			sreFieldAvro, sreFieldAvroBigDecimalScale, sreFieldAvro, sreFieldAvroBigDecimalPrecision, precision, scale)
+		return
+	}
+	opts.bigDecimalPrecision, opts.bigDecimalScale = int32(precision), int32(scale)
+	opts.anyAs, err = conf.FieldString(sreFieldAvro, sreFieldAvroAnyAs)
+	return
 }
 
 func extractFingerprint(metaAny any) (string, error) {

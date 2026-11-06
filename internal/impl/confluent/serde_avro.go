@@ -168,13 +168,25 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schemaRef fr
 	if err != nil {
 		return nil, err
 	}
-	return s.newAvroEncoder(schemaSpec)
+	return s.newAvroEncoder(schemaSpec, nil)
 }
 
-func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, error) {
+// newAvroEncoder returns the encoder for avroJSON. When coerce is not nil, it
+// converts each message's values to the shapes of their Avro fields first, see
+// commonToAvroValueCoercer.
+func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string, coerce avroValueCoercer) (schemaEncoder, error) {
 	schema, err := avro.Parse(avroJSON)
 	if err != nil {
 		return nil, fmt.Errorf("parsing Avro schema: %w", err)
+	}
+	encode := func(m *service.Message, native any) error {
+		if coerce != nil {
+			var cErr error
+			if native, cErr = coerce(native); cErr != nil {
+				return cErr
+			}
+		}
+		return encodeAvro(m, schema, native)
 	}
 
 	switch s.avroInputEnc {
@@ -193,7 +205,7 @@ func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, 
 			if err := schema.DecodeJSON(b, &native); err != nil {
 				return err
 			}
-			return encodeAvro(m, schema, native)
+			return encode(m, native)
 		}, nil
 	case avroInputEncNative:
 		// Every message is Go and plain JSON values. Encode is the only
@@ -205,7 +217,7 @@ func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, 
 			if err != nil {
 				return fmt.Errorf("extracting structured data: %w", err)
 			}
-			return encodeAvro(m, schema, native)
+			return encode(m, native)
 		}, nil
 	}
 
@@ -245,7 +257,7 @@ func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, 
 			if b, err := m.AsBytes(); err == nil {
 				var native any
 				if err := schema.DecodeJSON(b, &native); err == nil {
-					return encodeAvro(m, schema, native)
+					return encode(m, native)
 				}
 			}
 		}
@@ -253,7 +265,7 @@ func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, 
 		if err != nil {
 			return fmt.Errorf("extracting structured data: %w", err)
 		}
-		return encodeAvro(m, schema, native)
+		return encode(m, native)
 	}, nil
 }
 
