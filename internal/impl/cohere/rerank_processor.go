@@ -50,7 +50,13 @@ This processor sends document strings to the https://docs.cohere.com/reference/r
 
 To learn more about reranking, see the https://docs.cohere.com/docs/rerank-2[Cohere API documentation^].
 
-The output of this processor is an array of objects, each containing a "document" field with the original document content, a "relevance_score" field indicating how relevant it is to the query, and an index field that refers to the document's position within the input documents array. The objects are ordered by their relevance score (highest first).
+The output of this processor is an array of objects. Each object has the following fields:
+
+- `+"`document`"+`: The original document content.
+- `+"`relevance_score`"+`: How relevant the document is to the query.
+- `+"`index`"+`: The document's position within the input documents array.
+
+The objects are ordered by their relevance score (highest first).
 
 		`).
 		Version("4.53.0").
