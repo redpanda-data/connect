@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -317,9 +318,7 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 
-	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
-
-	db, connectionString, err := openAndEnableCDC(t.Context(), ctr, dbName)
+	db, connectionString, err := createDatabaseWithCDC(t.Context(), ctr, dbName, t.Logf, func() {})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
@@ -394,7 +393,42 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 	return nil
 }
 
-func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbName string) (*sql.DB, string, error) {
+// errCDCLeftover is the error of openAndEnableCDC when the database has the cdc schema or user, but CDC is not
+// enabled. A failed sp_cdc_enable_db can leave them, for example when it is the victim of a deadlock on a busy
+// server. sp_cdc_enable_db fails while they exist, so a retry on the same database cannot succeed.
+var errCDCLeftover = errors.New("the cdc schema or user exists, but CDC is not enabled")
+
+// createDatabaseWithCDC creates dbName and enables CDC on it. When errCDCLeftover stops the enable, it creates the
+// database again and retries. afterCreate runs after each create; tests use it to make the leftover state.
+func createDatabaseWithCDC(
+	ctx context.Context,
+	ctr *tcmssql.MSSQLServerContainer,
+	dbName string,
+	logf func(format string, args ...any),
+	afterCreate func(),
+) (*sql.DB, string, error) {
+	const maxAttempts = 3
+	for attempt := 1; ; attempt++ {
+		if err := createDatabase(ctx, ctr, dbName); err != nil {
+			return nil, "", err
+		}
+		afterCreate()
+		db, connStr, err := openAndEnableCDC(ctx, ctr, dbName, logf)
+		if !errors.Is(err, errCDCLeftover) || attempt == maxAttempts {
+			return db, connStr, err
+		}
+		logf("enable CDC on %q attempt %d/%d failed, creating the database again: %v", dbName, attempt, maxAttempts, err)
+	}
+}
+
+// openAndEnableCDC connects to dbName and enables CDC on it. logf receives the error of each failed try, because
+// only the last error is returned and the first error often has the cause.
+func openAndEnableCDC(
+	ctx context.Context,
+	ctr *tcmssql.MSSQLServerContainer,
+	dbName string,
+	logf func(format string, args ...any),
+) (*sql.DB, string, error) {
 	connStr, err := ctr.ConnectionString(ctx, "database="+dbName, "encrypt=disable")
 	if err != nil {
 		return nil, "", fmt.Errorf("connection string: %w", err)
@@ -452,13 +486,21 @@ func openAndEnableCDC(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, db
 		}
 		if openErr != nil {
 			lastErr = openErr
+			logf("enable CDC on %q failed, trying again: %v", dbName, openErr)
 			db.Close()
 			db = nil
+			if strings.Contains(openErr.Error(), "a database user named 'cdc' or a schema named 'cdc' already exists") {
+				lastErr = fmt.Errorf("%w: %w", errCDCLeftover, openErr)
+				return true
+			}
 			return false
 		}
 
 		return true
 	})
+	if errors.Is(lastErr, errCDCLeftover) {
+		return nil, "", fmt.Errorf("enable CDC on %q: %w", dbName, lastErr)
+	}
 	if !ok {
 		if db != nil {
 			db.Close()
