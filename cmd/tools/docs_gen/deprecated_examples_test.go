@@ -163,39 +163,22 @@ func deprecatedExampleUses(t *testing.T) []deprecatedUse {
 	return uses
 }
 
-// knownDeprecatedExamples are the examples that used deprecated items when
-// this test was added. Each one should be rewritten and removed from this
-// list. The test fails on a deprecated use in any other example, and on an
-// entry here that no longer uses anything deprecated.
+// knownDeprecatedExamples are the examples that still use deprecated items.
+// They are registered in benthos and are fixed by
+// https://github.com/redpanda-data/benthos/pull/553. Remove these
+// entries once connect bumps to a benthos release that includes it. The test
+// fails on a deprecated use in any other example, and on an entry here that
+// no longer uses anything deprecated.
 var knownDeprecatedExamples = map[string]bool{
-	// Registered in benthos, so the fix belongs there.
 	`buffers/system_window example "Counting Passengers at Traffic"`:     true, // meta()
 	`inputs/read_until example "Consume N Messages"`:                     true, // kafka input
 	`inputs/read_until example "Read from a kafka and close when empty"`: true, // kafka input
-	`outputs/drop_on example "Dropping failed HTTP requests"`:            true, // kafka input
+	`outputs/drop_on example "Dropping failed HTTP requests"`:            true, // kafka output
 	`processors/cached example "Cached Enrichment"`:                      true, // meta()
 	`processors/dedupe example "Deduplicate based on Kafka key"`:         true, // meta()
 	`processors/group_by example "Grouped Processing"`:                   true, // meta()
 	`processors/metric example "Counter"`:                                true, // meta()
 	`processors/metric example "Gauge"`:                                  true, // meta()
-
-	// Registered in connect.
-	`bloblang-functions/with_schema_registry_header example 2`:              true, // meta()
-	`outputs/elasticsearch_v8 example "Indexing documents from Redpanda"`:   true, // meta()
-	`outputs/elasticsearch_v8 example "Indexing documents from S3"`:         true, // meta()
-	`outputs/elasticsearch_v9 example "Indexing documents from Redpanda"`:   true, // meta()
-	`outputs/elasticsearch_v9 example "Indexing documents from S3"`:         true, // meta()
-	`outputs/snowflake_put example "Kafka / realtime brokers"`:              true, // meta()
-	`outputs/sql_insert example "Table Insert (MySQL)"`:                     true, // meta()
-	`outputs/sql_raw example "Conditional CDC Queries (PostgreSQL)"`:        true, // meta()
-	`outputs/sql_raw example "Table Insert (MySQL)"`:                        true, // meta()
-	`processors/aws_dynamodb_partiql example "Insert"`:                      true, // meta()
-	`processors/azure_cosmosdb example "Patch documents"`:                   true, // meta()
-	`processors/parquet_decode example "Reading Parquet Files from AWS S3"`: true, // meta()
-	`processors/redis example "Querying Cardinality"`:                       true, // meta()
-	`processors/redis_script example "Running a script"`:                    true, // meta()
-	`processors/sql_insert example "Table Insert (MySQL)"`:                  true, // meta()
-	`processors/sql_raw example "Table Insert (MySQL)"`:                     true, // meta()
 }
 
 // Published examples must not teach deprecated components, fields, Bloblang

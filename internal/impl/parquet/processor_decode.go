@@ -77,7 +77,7 @@ input:
 output:
   file:
     codec: lines
-    path: './foos/${! meta("s3_key") }.jsonl'
+    path: './foos/${! @s3_key }.jsonl'
 `)
 }
 
