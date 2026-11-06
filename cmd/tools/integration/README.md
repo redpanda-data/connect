@@ -42,6 +42,7 @@ go run ./cmd/tools/integration run kafka redis
 - **Timeout Detection** -- Tests that start (`=== RUN`) but never finish (`--- PASS/FAIL/SKIP`) are detected as timed out and reported as failures with an error link.
 
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
+- **Per-Package cgo** -- A package in [`packages.json`](packages.json) with `"cgo": true` runs with `CGO_ENABLED=1`, also when CI sets `CGO_ENABLED=0`. Use it for packages that build only with cgo.
 
 - **Docker Cleanup** -- Ryuk, the testcontainers reaper, is on by default. It removes the containers, networks, and volumes of each package about 10 seconds after its test binary exits, also when the run is interrupted or crashes. If you disable it (`TESTCONTAINERS_RYUK_DISABLED=true`), containers will not be cleaned up and will accumulate.
 

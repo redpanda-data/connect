@@ -43,6 +43,8 @@ type testPackage struct {
 	Timeout    string `json:"timeout,omitempty"`
 	Skip       bool   `json:"skip,omitempty"`
 	SkipReason string `json:"skip_reason,omitempty"`
+	// CGO must match the field in cmd/tools/integration, so that generate keeps it when it rewrites packages.json.
+	CGO bool `json:"cgo,omitempty"`
 }
 
 func main() {
