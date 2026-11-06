@@ -169,14 +169,21 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 		s.snapshotStatusMetric.Set(0, table.FullName())
 	}
 
-	var snapshotTasks []func(context.Context) error
+	// Tasks start in list order, so tables that can't be chunked go first: their single
+	// serial scan then overlaps the chunk work instead of running alone at the tail.
+	var serialTasks, chunkTasks []func(context.Context) error
 	for _, table := range s.tables {
 		tableTasks, err := s.planTableTasks(ctx, table, maxWorkers, maxBatchSize)
 		if err != nil {
 			return fmt.Errorf("planning snapshot for table '%s': %w", table.FullName(), err)
 		}
-		snapshotTasks = append(snapshotTasks, tableTasks...)
+		if len(tableTasks) == 1 {
+			serialTasks = append(serialTasks, tableTasks...)
+		} else {
+			chunkTasks = append(chunkTasks, tableTasks...)
+		}
 	}
+	snapshotTasks := append(serialTasks, chunkTasks...)
 
 	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(snapshotTasks), len(s.tables), min(len(snapshotTasks), maxWorkers), maxWorkers)
 
