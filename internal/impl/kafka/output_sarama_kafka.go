@@ -136,12 +136,12 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").Version("4.26.0").
+				Description("Enable the idempotent write producer option, so that retries do not write duplicate messages. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available. When enabled, the output waits for acknowledgement from all in-sync replicas, as if `ack_replicas` is `true`, and sends one request at a time on each broker connection.").Version("4.26.0").
 				ShortDescription("Enable the idempotent write producer option. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(false).
 				Advanced(),
 			service.NewBoolField(oskFieldAckReplicas).
-				Description("Ensure that messages have been copied across all replicas before acknowledging receipt.").
+				Description("Ensure that messages have been copied across all replicas before acknowledging receipt. This is always `true` when `idempotent_write` is `true`.").
 				Advanced().Default(false),
 			service.NewIntField(oskFieldMaxMsgBytes).
 				Description("The maximum size in bytes of messages sent to the target topic.").
@@ -478,10 +478,16 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return nil, err
 	}
 
-	if ackReplicas {
+	if ackReplicas || config.Producer.Idempotent {
 		config.Producer.RequiredAcks = sarama.WaitForAll
 	} else {
 		config.Producer.RequiredAcks = sarama.WaitForLocal
+	}
+	if config.Producer.Idempotent {
+		// sarama rejects an idempotent producer with more than one request in
+		// flight per broker connection, because a retry can then reorder the
+		// sequence numbers.
+		config.Net.MaxOpenRequests = 1
 	}
 
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
