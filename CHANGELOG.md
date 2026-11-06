@@ -3,31 +3,20 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.117.0 - 2026-11-05
+## 4.117.0 - 2026-11-06
 
 ### Added
 
-- general: Release notes now include connector platform compatibility data (cloudOnly, requiresCgo, cloudSupported) in connect-<version>.json for use by documentation tools and the Bloblang playground. ([@JakeSCahill](https://github.com/JakeSCahill), [#4947](https://github.com/redpanda-data/connect/pull/4947))
-- mssqlserver_cdc: MSSQL Server CDC documentation now documents the snapshot isolation prerequisite (ALLOW_SNAPSHOT_ISOLATION ON) required for initial snapshots. ([@bfbarkhouse-redpanda](https://github.com/bfbarkhouse-redpanda), [#5160](https://github.com/redpanda-data/connect/pull/5160))
 - oracledb: Oracle CDC now keeps the checkpoint current when monitored tables are idle by marking the mined position after each mining cycle, preventing archive log aging errors on restart. ([@Leward](https://github.com/Leward), [#4860](https://github.com/redpanda-data/connect/pull/4860))
-- oracledb: Added CheckpointWindow API to the batch publisher that persists the checkpoint SCN even when no batches are being acknowledged, addressing ORA-01291 errors during idle periods. ([@Leward](https://github.com/Leward), [#4860](https://github.com/redpanda-data/connect/pull/4860))
 - postgres_cdc: PostgreSQL CDC now supports self-managed publications with the self_manage_publication option, allowing external management of logical replication publications. ([@squiidz](https://github.com/squiidz), [#5000](https://github.com/redpanda-data/connect/pull/5000))
-- postgres_cdc: PostgreSQL CDC now supports re-snapshotting tables that were previously snapshotted in the same process. ([@josephwoodward](https://github.com/josephwoodward), [#5145](https://github.com/redpanda-data/connect/pull/5145))
-- postgresql: PostgreSQL documentation now describes the heartbeat message prefix and content written by logical decoding messages. ([@JakeSCahill](https://github.com/JakeSCahill), [#5086](https://github.com/redpanda-data/connect/pull/5086))
+- postgres_cdc: PostgreSQL CDC now supports re-snapshotting tables that were previously snapshotted in the same process. ([@josephwoodward](https://github.com/josephwoodward), [#5094](https://github.com/redpanda-data/connect/pull/5094))
 - sap_hana: SAP HANA input is now available in the Redpanda Cloud distribution. ([@bfbarkhouse-redpanda](https://github.com/bfbarkhouse-redpanda), [#5090](https://github.com/redpanda-data/connect/pull/5090))
+- parquet_encode: Introduce fast path that enables skipping coercion ([@josephwoodward](https://github.com/josephwoodward), [#5145](https://github.com/redpanda-data/connect/pull/5145))
 
 ### Fixed
 
 - azure: Azure append blob writer no longer loses data when concurrent writes occur to new blobs by using conditional creation with If-None-Match. ([@Leward](https://github.com/Leward), [#5108](https://github.com/redpanda-data/connect/pull/5108))
-- general: Fixed documentation rendering issues with inline code formatting in doc strings that display incorrectly on the docs site. ([@JakeSCahill](https://github.com/JakeSCahill), [#5004](https://github.com/redpanda-data/connect/pull/5004))
-- kafka: Upgraded franz-go to v1.22.2 to fix a critical bug where idempotent batches already written by the broker could lose acknowledged records through incorrect duplicate handling. ([@Leward](https://github.com/Leward), [#5100](https://github.com/redpanda-data/connect/pull/5100))
 - sap_hana: SAP HANA CDC now seeds the HWM lag gauge from the resume checkpoint at connect time, preventing incorrect healthy appearance during restarts into stalls. ([@Leward](https://github.com/Leward), [#5078](https://github.com/redpanda-data/connect/pull/5078))
-
-### Changed
-
-- general: Standardized formatting of metadata field names and operation values as inline code across all CDC connectors for consistency with documentation site. ([@Leward](https://github.com/Leward), [#5070](https://github.com/redpanda-data/connect/pull/5070))
-- postgres_cdc: PostgreSQL CDC now requires backfilled tables to be published under their own names and validates that publications cover all configured tables. ([@squiidz](https://github.com/squiidz), [#5000](https://github.com/redpanda-data/connect/pull/5000))
-- postgresql: PostgreSQL incremental snapshots now reject zero heartbeat_interval values as documented. ([@JakeSCahill](https://github.com/JakeSCahill), [#5093](https://github.com/redpanda-data/connect/pull/5093))
 
 ## 4.116.0 - 2026-10-30
 
