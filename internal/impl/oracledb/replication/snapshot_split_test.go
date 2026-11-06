@@ -44,10 +44,10 @@ func TestSplitChunkRanges(t *testing.T) {
 
 			require.Len(t, ranges, tt.wantRanges)
 			assert.LessOrEqual(t, len(ranges), tt.maxWorkers, "a table must never be split into more chunks than workers")
-			assert.Nil(t, ranges[0].Min, "the first range must be unbounded below")
-			assert.Nil(t, ranges[len(ranges)-1].Max, "the last range must be unbounded above")
+			assert.Nil(t, ranges[0].min, "the first range must be unbounded below")
+			assert.Nil(t, ranges[len(ranges)-1].max, "the last range must be unbounded above")
 			for i := 1; i < len(ranges); i++ {
-				assert.Equal(t, ranges[i-1].Max, ranges[i].Min, "range %d must start where range %d ends", i, i-1)
+				assert.Equal(t, ranges[i-1].max, ranges[i].min, "range %d must start where range %d ends", i, i-1)
 			}
 		})
 	}

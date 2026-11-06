@@ -15,15 +15,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	goora "github.com/sijms/go-ora/v2/network"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/replication/chunkedsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -119,24 +120,36 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 		s.snapshotStatusMetric.Set(0, table.FullName())
 	}
 
-	tableTasks := make([][]chunkedsnapshot.Task, 0, len(s.tables))
-	var numTasks int
+	// Tasks start in list order, so tables that can't be chunked go first: their single
+	// serial scan then overlaps the chunk work instead of running alone at the tail.
+	var serialTasks, chunkTasks []func(context.Context) error
 	for _, table := range s.tables {
-		tasks, err := s.planTableTasks(ctx, table, maxWorkers, maxBatchSize)
+		tableTasks, err := s.planTableTasks(ctx, table, maxWorkers, maxBatchSize)
 		if err != nil {
 			return fmt.Errorf("planning snapshot for table '%s': %w", table.FullName(), err)
 		}
-		tableTasks = append(tableTasks, tasks)
-		numTasks += len(tasks)
+		if len(tableTasks) == 1 {
+			serialTasks = append(serialTasks, tableTasks...)
+		} else {
+			chunkTasks = append(chunkTasks, tableTasks...)
+		}
 	}
+	snapshotTasks := append(serialTasks, chunkTasks...)
 
-	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", numTasks, len(s.tables), min(numTasks, maxWorkers), maxWorkers)
+	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(snapshotTasks), len(s.tables), min(len(snapshotTasks), maxWorkers), maxWorkers)
 
 	s.db.setWorkers(maxWorkers)
 
-	if err := chunkedsnapshot.Run(ctx, maxWorkers, tableTasks); err != nil {
+	wg, ctx := errgroup.WithContext(ctx)
+	wg.SetLimit(maxWorkers)
+	for _, task := range snapshotTasks {
+		wg.Go(func() error { return task(ctx) })
+	}
+
+	if err := wg.Wait(); err != nil {
 		return fmt.Errorf("processing snapshots: %w", err)
 	}
+
 	return nil
 }
 
@@ -148,30 +161,47 @@ func (s *Snapshot) Close() error {
 	return s.db.Close()
 }
 
-// newTableCompletion returns a Completion that marks table as snapshotted after its last task.
-func (s *Snapshot) newTableCompletion(table UserTable, tasks int) *chunkedsnapshot.Completion {
-	return chunkedsnapshot.NewCompletion(tasks, func(rows int64) {
-		s.snapshotStatusMetric.Set(1, table.FullName())
-		s.log.With("src_table", table.FullName()).Infof("Table snapshot completed, %d rows processed", rows)
-	})
+// tableCompletionTracker marks a table complete once all of its tasks have succeeded.
+type tableCompletionTracker struct {
+	remaining atomic.Int32
+	rows      atomic.Int64
+	snapshot  *Snapshot
+	table     UserTable
+}
+
+func newTableCompletionTracker(s *Snapshot, table UserTable, taskCount int) *tableCompletionTracker {
+	t := &tableCompletionTracker{snapshot: s, table: table}
+	t.remaining.Store(int32(taskCount))
+	return t
+}
+
+// done records a successful task's rows, marking the table complete after its last task.
+func (t *tableCompletionTracker) done(rowsProcessed int) {
+	t.rows.Add(int64(rowsProcessed))
+	if t.remaining.Add(-1) == 0 {
+		t.snapshot.snapshotStatusMetric.Set(1, t.table.FullName())
+		t.snapshot.log.With("src_table", t.table.FullName()).Infof("Table snapshot completed, %d rows processed", t.rows.Load())
+	}
 }
 
 // planTableTasks returns the tasks that snapshot table: one keyset task for a filtered
 // table, key-range chunks for an enforced primary key that can be split, else one full scan.
-func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorkers, maxBatchSize int) ([]chunkedsnapshot.Task, error) {
+func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorkers, maxBatchSize int) ([]func(context.Context) error, error) {
 	tableName := table.FullName()
 	l := s.log.With("src_table", tableName)
 	customQuery, hasFilter := s.filters[tableName]
 
 	if hasFilter {
 		l.Infof("Launching snapshot of table '%s' with snapshot filter", tableName)
-		return []chunkedsnapshot.Task{s.snapshotTableWithFilterTask(table, maxBatchSize, customQuery, s.newTableCompletion(table, 1))}, nil
+		tracker := newTableCompletionTracker(s, table, 1)
+		return []func(context.Context) error{s.snapshotTableWithFilterTask(table, maxBatchSize, customQuery, tracker)}, nil
 	}
 
 	// fullScan is the single-task fallback for tables that can't be chunked (1 worker config, no pks etc)
-	fullScan := func() []chunkedsnapshot.Task {
+	fullScan := func() []func(context.Context) error {
 		l.Infof("Launching snapshot of table '%s'", tableName)
-		return []chunkedsnapshot.Task{s.snapshotTableFullScanTask(table, maxBatchSize, s.newTableCompletion(table, 1))}
+		tracker := newTableCompletionTracker(s, table, 1)
+		return []func(context.Context) error{s.snapshotTableFullScanTask(table, maxBatchSize, tracker)}
 	}
 
 	// Skip PK lookup and keyspace sampling entirely for single worker
@@ -213,16 +243,19 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 
 	l.Infof("Launching snapshot of table '%s' split into %d parallel chunks by %s", tableName, len(ranges), method)
 
-	completion := s.newTableCompletion(table, len(ranges))
-	tasks := make([]chunkedsnapshot.Task, 0, len(ranges))
+	tracker := newTableCompletionTracker(s, table, len(ranges))
+	tasks := make([]func(context.Context) error, 0, len(ranges))
 	for _, r := range ranges {
-		tasks = append(tasks, s.scanTableRangeTask(table, pks, r.Min, r.Max, maxBatchSize, completion))
+		tasks = append(tasks, s.scanTableRangeTask(table, pks, r.min, r.max, maxBatchSize, tracker))
 	}
 	return tasks, nil
 }
 
 // chunkRange is a (min, max] primary key range of a table, where a nil bound is unbounded.
-type chunkRange = chunkedsnapshot.Range[map[string]any]
+type chunkRange struct {
+	min map[string]any
+	max map[string]any
+}
 
 // planChunkRanges splits table's keyspace into ranges, interpolating single numeric or date
 // keys between MIN and MAX and sampling the rest, and returns the method used for logs.
@@ -248,7 +281,7 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 				// outlier (e.g. a sentinel ID far beyond the rest) leaves most ranges empty
 				// and every real row in a few of them, so sample the keyspace instead.
 				if occupied*2 >= len(bounds)+1 {
-					ranges, method = chunkedsnapshot.RangesFromBounds(bounds), "interpolating its key range"
+					ranges, method = rangesFromBounds(bounds), "interpolating its key range"
 					return nil
 				}
 				s.log.With("src_table", table.FullName()).Infof("Only %d of %d interpolated key ranges of table '%s' hold rows, so its key range will be sampled instead", occupied, len(bounds)+1, table.FullName())
@@ -293,8 +326,25 @@ func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table Us
 
 // splitChunkRanges splits sorted key samples into at most maxWorkers ranges covering the whole keyspace.
 func splitChunkRanges(samples []map[string]any, maxWorkers int) []chunkRange {
-	step := (len(samples) + maxWorkers - 1) / maxWorkers // round up for at most maxWorkers ranges
-	return chunkedsnapshot.RangesFromBounds(chunkedsnapshot.BoundsFromSamples(samples, step))
+	// Round up so there are at most maxWorkers ranges. max(1, ...) avoids chunkSize=0
+	// when there are no samples, which would otherwise loop forever below.
+	chunkSize := max(1, (len(samples)+maxWorkers-1)/maxWorkers)
+	var bounds []map[string]any
+	for i := chunkSize; i < len(samples); i += chunkSize {
+		bounds = append(bounds, samples[i])
+	}
+	return rangesFromBounds(bounds)
+}
+
+// rangesFromBounds turns sorted, distinct bounds into contiguous ranges covering the whole keyspace.
+func rangesFromBounds(bounds []map[string]any) []chunkRange {
+	ranges := make([]chunkRange, 0, len(bounds)+1)
+	var prev map[string]any
+	for _, bound := range bounds {
+		ranges = append(ranges, chunkRange{min: prev, max: bound})
+		prev = bound
+	}
+	return append(ranges, chunkRange{min: prev, max: nil})
 }
 
 // keyType classifies a primary key column by how interpolateKeyBounds can split it.
@@ -375,7 +425,7 @@ func interpolatedBoundsQuery(table UserTable, column string, kt keyType, scn SCN
 
 // snapshotTableWithFilterTask returns a task that pages through table's custom filter query
 // by primary key in a read-only transaction, without chunking.
-func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int, customQuery string, completion *chunkedsnapshot.Completion) chunkedsnapshot.Task {
+func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int, customQuery string, tracker *tableCompletionTracker) func(context.Context) error {
 	tableName := table.FullName()
 	l := s.log.With("src_table", tableName)
 	return func(ctx context.Context) error {
@@ -410,13 +460,13 @@ func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int
 		if err != nil {
 			return err
 		}
-		completion.Done(numRowsProcessed)
+		tracker.done(numRowsProcessed)
 		return nil
 	}
 }
 
 // snapshotTableFullScanTask returns a task that reads an unchunked table in one full scan.
-func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, completion *chunkedsnapshot.Completion) chunkedsnapshot.Task {
+func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, tracker *tableCompletionTracker) func(context.Context) error {
 	tableName := table.FullName()
 	return func(ctx context.Context) error {
 		var numRowsProcessed int
@@ -427,14 +477,14 @@ func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, 
 		if err != nil {
 			return fmt.Errorf("processing snapshot table scan: %w", err)
 		}
-		completion.Done(numRowsProcessed)
+		tracker.done(numRowsProcessed)
 		return nil
 	}
 }
 
 // scanTableRangeTask returns a task that pages through one (minExclusive, maxInclusive]
 // key range of table AS OF the snapshot SCN, so every chunk reads the same point in time.
-func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclusive, maxInclusive map[string]any, maxBatchSize int, completion *chunkedsnapshot.Completion) chunkedsnapshot.Task {
+func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclusive, maxInclusive map[string]any, maxBatchSize int, tracker *tableCompletionTracker) func(context.Context) error {
 	tableName := table.FullName()
 	l := s.log.With("src_table", tableName)
 	return func(ctx context.Context) error {
@@ -464,7 +514,7 @@ func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclu
 			return err
 		}
 		l.Debugf("Finished scanning range chunk (%+v %+v], %d rows processed", minExclusive, maxInclusive, numRowsProcessed)
-		completion.Done(numRowsProcessed)
+		tracker.done(numRowsProcessed)
 		return nil
 	}
 }
