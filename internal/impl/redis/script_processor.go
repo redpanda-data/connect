@@ -71,7 +71,7 @@ pipeline:
           redis.call("ZADD", "XX", KEYS[1], ARGV[1], value)
 
           return value
-        keys_mapping: 'root = [ meta("key") ]'
+        keys_mapping: 'root = [ metadata("key") ]'
         args_mapping: 'root = [ timestamp_unix_nano() ]'
 `)
 }
