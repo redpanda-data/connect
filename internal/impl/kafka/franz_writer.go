@@ -594,6 +594,9 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 		// Optional: Headers
 		if w.MetaFilter != nil {
 			_ = w.MetaFilter.Walk(msg, func(key, value string) error {
+				if key == kafkaHeaders {
+					return nil // internal copy of the input headers, not a header itself
+				}
 				r.Headers = append(r.Headers, kgo.RecordHeader{
 					Key:   key,
 					Value: []byte(value),
