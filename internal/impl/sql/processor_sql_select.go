@@ -49,7 +49,7 @@ func SelectProcessorConfig() *service.ConfigSpec {
 			Example("user_id = ?")).
 		Field(selectArgsMappingField().
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`)).
+			Example(`root = [ metadata("user.id") ]`)).
 		Field(selectPrefixField()).
 		Field(selectSuffixField())
 

@@ -51,7 +51,7 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 			service.NewInterpolatedStringField(dloFieldPath).
 				Description("The path (file name) of each message to upload to the data lake storage file system.").
 				Example(`${!counter()}-${!timestamp_unix_nano()}.json`).
-				Example(`${!meta("kafka_key")}.json`).
+				Example(`${! @kafka_key }.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewOutputMaxInFlightField(),

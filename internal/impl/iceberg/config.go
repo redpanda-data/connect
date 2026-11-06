@@ -343,7 +343,7 @@ array:list
 			service.NewInterpolatedStringField(ioFieldTable).
 				Description("The destination Iceberg table name.").
 				Example("user_events").
-				Example(`events_${!meta("topic")}`),
+				Example(`events_${! @topic }`),
 
 			service.NewBoolField(ioFieldCaseSensitiveColumns).
 				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive; set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").Version("4.89.3").

@@ -39,7 +39,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Field(service.NewInterpolatedStringField("subject").
 			Description("A subject to write to.").
 			Example("foo.bar.baz").
-			Example(`${! meta("kafka_topic") }`).
+			Example(`${! @kafka_topic }`).
 			Example(`foo.${! json("meta.type") }`)).
 		Field(headersField().Version("4.1.0")).
 		Field(metadataField()).

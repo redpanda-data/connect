@@ -338,7 +338,7 @@ output:
 				"A custom header name that collides with `" + rmoFieldProvenanceHeader + "` or `" + rmoFieldOffsetHeader + "` is ignored, so those migration-critical headers are always protected.").Version("4.102.0").
 			Example(map[string]any{
 				"x-migration-processed-at": "${! timestamp_unix_milli() }",
-				"x-migration-latency-ms":   "${! timestamp_unix_milli() - meta(\"kafka_timestamp_ms\") }",
+				"x-migration-latency-ms":   "${! timestamp_unix_milli() - @kafka_timestamp_ms }",
 			}).
 			Optional()).
 		Field(service.NewStringField(rmoFieldProvenanceHeader).

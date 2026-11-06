@@ -49,7 +49,7 @@ func headersField() *service.ConfigField {
 		Default(map[string]any{}).
 		Example(map[string]any{
 			"Content-Type": "application/json",
-			"Timestamp":    `${!meta("Timestamp")}`,
+			"Timestamp":    `${! @Timestamp }`,
 		})
 }
 

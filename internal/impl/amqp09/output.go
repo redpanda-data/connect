@@ -113,7 +113,7 @@ The fields `+"`key`"+`, `+"`exchange`"+` and `+"`type`"+` can be dynamically set
 				Description("Set the priority of each message using a dynamic interpolated expression.").
 				Advanced().
 				Example("0").
-				Example(`${! meta("amqp_priority") }`).
+				Example(`${! @amqp_priority }`).
 				Example(`${! json("doc.priority") }`).
 				Default(""),
 			service.NewOutputMaxInFlightField(),

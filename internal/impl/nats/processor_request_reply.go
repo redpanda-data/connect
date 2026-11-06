@@ -53,7 +53,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Field(service.NewInterpolatedStringField("subject").
 			Description(`A subject to write to.`).
 			Example("foo.bar.baz").
-			Example(`${! meta("kafka_topic") }`).
+			Example(`${! @kafka_topic }`).
 			Example(`foo.${! json("meta.type") }`)).
 		Field(service.NewStringField("inbox_prefix").
 			Description("Set an explicit inbox prefix for the response subject").
