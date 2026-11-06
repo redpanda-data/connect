@@ -40,11 +40,24 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		fromSCN:      math.MaxUint64,
 		processedSCN: lm.currentSCN,
 	}
-	// A replay left over from a failed attempt already rolled back its
-	// transactions, so they may be absent from the cache until their rows are
-	// re-mined. They must stay in the set or their rows would be skipped.
+	// startSCNs is the start SCN of each transaction, which the reset keeps.
+	startSCNs := make(map[sqlredo.TransactionID]uint64)
+	// A replay left over from a failed attempt already reset its transactions,
+	// so they may have no LOB state until their rows are re-mined. They must
+	// stay in the set or their rows would be skipped.
 	if prev := lm.lobReplay; prev != nil {
 		for id := range prev.txns {
+			txn, err := lm.txnCache.GetTransaction(ctx, id)
+			if err != nil {
+				return nil, fmt.Errorf("getting carried-over transaction %s for LOB replay: %w", id, err)
+			}
+			// A reset that failed after the rollback leaves the transaction
+			// absent. prev.fromSCN is a safe start SCN, because it is at or below
+			// the start of each replayed transaction.
+			startSCNs[id] = prev.fromSCN
+			if txn != nil {
+				startSCNs[id] = txn.SCN
+			}
 			replay.txns[id] = struct{}{}
 			lm.log.Debugf("LOB transaction %s is carried over from an interrupted replay; re-mining it from SCN %d", id, prev.fromSCN)
 		}
@@ -72,6 +85,7 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 			continue
 		}
 		replay.txns[id] = struct{}{}
+		startSCNs[id] = txn.SCN
 		replay.fromSCN = min(replay.fromSCN, txn.SCN)
 		lm.log.Debugf("LOB transaction %s started at SCN %d is still open at the window boundary (SCN %d); re-mining it from its start", id, txn.SCN, replay.processedSCN)
 	}
@@ -79,53 +93,28 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		return nil, nil
 	}
 
-	// Record the set before resetting it, so a rollback that fails part way
-	// leaves the reset transactions carried over to the next attempt.
+	// Record the set before resetting it, so a reset that fails part way leaves
+	// the reset transactions carried over to the next attempt.
 	lm.lobReplay = replay
 	for id := range replay.txns {
 		if err := lm.txnCache.RollbackTransaction(ctx, id); err != nil {
 			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)
 		}
+		// Start the transaction again with no events, so that the cache holds
+		// the checkpoint below it until it commits or rolls back. Without this,
+		// the checkpoint can move past the transaction if ORA-01368 stops the
+		// cycle before its rows are mined again. With no DML events, it counts
+		// in the low watermark only if marked.
+		if err := lm.txnCache.StartTransaction(ctx, id, startSCNs[id]); err != nil {
+			return nil, fmt.Errorf("restarting transaction %s for LOB replay: %w", id, err)
+		}
+		if err := lm.txnCache.IncludeInLowWatermark(ctx, id); err != nil {
+			return nil, fmt.Errorf("holding checkpoint for transaction %s for LOB replay: %w", id, err)
+		}
 		delete(lm.lobStates, id)
 		delete(lm.pendingLOBWrites, id)
 	}
 	return replay, nil
-}
-
-// lowWatermarkSCN is the SCN that a checkpoint must stay at or below so that it
-// does not move past an open transaction. Both checkpoint paths use it.
-//
-// txnCache.LowWatermarkSCN alone is not enough. planLOBReplay takes the
-// replayed transactions out of txnCache until their rows are mined again. If
-// ORA-01368 stops the cycle in that gap, lm.lobReplay stays set and is the only
-// record that they are open. So the result is the minimum of:
-//
-//   - txnCache.LowWatermarkSCN, for the transactions in the cache.
-//   - lm.lobReplay.fromSCN, for the transactions of an open LOB replay.
-//
-// Both values ignore excludeTxnID, so that a committing transaction does not
-// hold back its own checkpoint.
-func (lm *LogMiner) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
-	low := lm.txnCache.LowWatermarkSCN(excludeTxnID)
-	// fromSCN can be too low: it does not go up when a replayed transaction
-	// ends. This only delays the checkpoint, which is safe.
-	if lm.lobReplay.hasOpenOtherThan(excludeTxnID) {
-		low = min(low, lm.lobReplay.fromSCN)
-	}
-	return low
-}
-
-// hasOpenOtherThan reports whether the replay has an open transaction other
-// than id.
-func (r *lobReplay) hasOpenOtherThan(id sqlredo.TransactionID) bool {
-	if r == nil {
-		return false
-	}
-	others := len(r.txns)
-	if _, exists := r.txns[id]; exists {
-		others--
-	}
-	return others > 0
 }
 
 // end removes a committed or rolled back transaction from the replay, so a
