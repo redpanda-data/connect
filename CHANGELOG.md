@@ -3,6 +3,21 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.117.0 - 2026-11-06
+
+### Added
+
+- oracledb: Oracle CDC now keeps the checkpoint current when monitored tables are idle by marking the mined position after each mining cycle, preventing archive log aging errors on restart. ([@Leward](https://github.com/Leward), [#4860](https://github.com/redpanda-data/connect/pull/4860))
+- postgres_cdc: PostgreSQL CDC now supports self-managed publications with the self_manage_publication option, allowing external management of logical replication publications. ([@squiidz](https://github.com/squiidz), [#5000](https://github.com/redpanda-data/connect/pull/5000))
+- postgres_cdc: PostgreSQL CDC now supports re-snapshotting tables that were previously snapshotted in the same process. ([@josephwoodward](https://github.com/josephwoodward), [#5094](https://github.com/redpanda-data/connect/pull/5094))
+- sap_hana: SAP HANA input is now available in the Redpanda Cloud distribution. ([@bfbarkhouse-redpanda](https://github.com/bfbarkhouse-redpanda), [#5090](https://github.com/redpanda-data/connect/pull/5090))
+- parquet_encode: Introduce fast path that enables skipping coercion ([@josephwoodward](https://github.com/josephwoodward), [#5145](https://github.com/redpanda-data/connect/pull/5145))
+
+### Fixed
+
+- azure: Azure append blob writer no longer loses data when concurrent writes occur to new blobs by using conditional creation with If-None-Match. ([@Leward](https://github.com/Leward), [#5108](https://github.com/redpanda-data/connect/pull/5108))
+- sap_hana: SAP HANA CDC now seeds the HWM lag gauge from the resume checkpoint at connect time, preventing incorrect healthy appearance during restarts into stalls. ([@Leward](https://github.com/Leward), [#5078](https://github.com/redpanda-data/connect/pull/5078))
+
 ## 4.116.0 - 2026-10-30
 
 ### Added

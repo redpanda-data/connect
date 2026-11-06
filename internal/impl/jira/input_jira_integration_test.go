@@ -38,13 +38,17 @@ import (
 func TestIntegration_JiraInput_FirstRunHasNoCursorPredicate(t *testing.T) {
 	integration.CheckSkip(t)
 
-	var lastJQL atomic.Value
+	// The input sends the next search as soon as the first page is acked, and
+	// that search has the cursor predicate. Keep the JQL of the first search
+	// only, so the result does not depend on how fast the stream stops.
+	var firstJQL atomic.Pointer[string]
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
 			_, _ = w.Write([]byte(`{}`))
 		case "/rest/api/3/search/jql":
-			lastJQL.Store(r.URL.Query().Get("jql"))
+			jql := r.URL.Query().Get("jql")
+			firstJQL.CompareAndSwap(nil, &jql)
 			_, _ = w.Write([]byte(`{"issues":[{"id":"1","key":"PROJ-1","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:00:00.000+0000"}}]}`))
 		default:
 			http.NotFound(w, r)
@@ -86,6 +90,7 @@ jira:
 	}
 	require.NoError(t, s.StopWithin(time.Second))
 
-	jql, _ := lastJQL.Load().(string)
-	assert.NotContains(t, jql, "updated >=", "first run should not include cursor predicate")
+	jql := firstJQL.Load()
+	require.NotNil(t, jql, "no search request")
+	assert.NotContains(t, *jql, "updated >=", "first run should not include cursor predicate")
 }

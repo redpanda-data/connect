@@ -624,8 +624,9 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 	}()
 
 	assert.Eventually(t, func() bool {
@@ -758,8 +759,9 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1103,8 +1105,9 @@ read_until:
 	license.InjectTestService(streamOut.Resources())
 	streamStopped := make(chan any, 1)
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 		streamStopped <- nil
 	}()
 	// Let the writer write a little more
@@ -1422,9 +1425,12 @@ postgres_cdc:
 
 	require.Eventually(t, func() bool {
 		var count int
-		err := db.QueryRow("SELECT count(*) FROM pg_replication_slots WHERE slot_name IN ($1, $2)", heartbeatSlot, noHeartbeatSlot).Scan(&count)
+		// A logical slot shows in pg_replication_slots while its creation waits for running transactions, and its
+		// confirmed_flush_lsn stays NULL until then. Postgres then sets it to the consistent point. If targetLSN is
+		// captured before that point, the slot without heartbeats seems to pass targetLSN.
+		err := db.QueryRow("SELECT count(*) FROM pg_replication_slots WHERE slot_name IN ($1, $2) AND confirmed_flush_lsn IS NOT NULL", heartbeatSlot, noHeartbeatSlot).Scan(&count)
 		return err == nil && count == 2
-	}, 10*time.Second, 50*time.Millisecond, "replication slots were not created in time")
+	}, 30*time.Second, 50*time.Millisecond, "replication slots were not ready to stream in time")
 
 	// Write only to a table that the inputs do not subscribe to.
 	for range 5 {
