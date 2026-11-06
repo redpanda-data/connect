@@ -210,6 +210,12 @@ input:
 	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, suite...)
 	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, integration.StreamTestCheckpointCapture())
 
+	// The kafka output sends with idempotent_write disabled, so a retried
+	// produce request can write a message twice. This is at-least-once
+	// delivery, not a fault. Under load it makes the exact-set checks of the
+	// suite fail on "hello world N" that was already received.
+	allowProducerDupes := integration.StreamTestOptAllowDupes()
+
 	t.Run("balanced", func(t *testing.T) {
 		t.Skip("Deprecated and flaky: balanced consumer group test fails under concurrent Redpanda containers")
 		t.Parallel()
@@ -282,6 +288,7 @@ input:
 				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
+			allowProducerDupes,
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
 			integration.StreamTestOptVarSet("VAR2", "1"),
 			integration.StreamTestOptVarSet("VAR3", "false"),
@@ -296,6 +303,7 @@ input:
 					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
+				allowProducerDupes,
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
 				integration.StreamTestOptVarSet("VAR1", ":0-3"),
 				integration.StreamTestOptVarSet("VAR2", "1"),
@@ -312,6 +320,7 @@ input:
 					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
+				allowProducerDupes,
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
 				integration.StreamTestOptVarSet("VAR1", ":0"),
 				integration.StreamTestOptVarSet("VAR2", "1000"),
@@ -328,6 +337,7 @@ input:
 				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
+			allowProducerDupes,
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
 			integration.StreamTestOptVarSet("VAR1", ":0-3"),
 			integration.StreamTestOptVarSet("VAR2", "1"),
@@ -369,6 +379,7 @@ input:
 				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
+			allowProducerDupes,
 			integration.StreamTestOptVarSet("VAR1", ""),
 			integration.StreamTestOptVarSet("VAR2", "1"),
 			integration.StreamTestOptVarSet("VAR3", "false"),

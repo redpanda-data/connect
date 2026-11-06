@@ -110,6 +110,12 @@ microsoft_sql_server_cdc:
 
 		t.Log("Verifying streaming changes...")
 		{
+			// Clear the snapshot messages before the inserts. The input reads the change tables all the time, so it can
+			// send some streaming changes before WaitForCDCChanges returns. A clear after the wait loses them.
+			outBatchesMu.Lock()
+			outBatches = nil
+			outBatchesMu.Unlock()
+
 			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
 			streamingRowsPerTable := 10
 			streamingWant := streamingRowsPerTable * 3
@@ -120,10 +126,6 @@ microsoft_sql_server_cdc:
 			}
 
 			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
-
-			outBatchesMu.Lock()
-			outBatches = nil
-			outBatchesMu.Unlock()
 			assert.Eventually(t, func() bool {
 				outBatchesMu.Lock()
 				defer outBatchesMu.Unlock()
@@ -215,6 +217,12 @@ microsoft_sql_server_cdc:
 
 		t.Log("Verifying streaming changes...")
 		{
+			// Clear the snapshot messages before the inserts. The input reads the change tables all the time, so it can
+			// send some streaming changes before WaitForCDCChanges returns. A clear after the wait loses them.
+			outBatchesMu.Lock()
+			outBatches = nil
+			outBatchesMu.Unlock()
+
 			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
 			streamingRowsPerTable := 10
 			streamingWant := streamingRowsPerTable * 3
@@ -225,10 +233,6 @@ microsoft_sql_server_cdc:
 			}
 
 			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
-
-			outBatchesMu.Lock()
-			outBatches = nil
-			outBatchesMu.Unlock()
 			assert.Eventually(t, func() bool {
 				outBatchesMu.Lock()
 				defer outBatchesMu.Unlock()
@@ -325,6 +329,12 @@ file:
 
 		t.Log("Verifying streaming changes...")
 		{
+			// Clear the snapshot messages before the inserts. The input reads the change tables all the time, so it can
+			// send some streaming changes before WaitForCDCChanges returns. A clear after the wait loses them.
+			outBatchesMu.Lock()
+			outBatches = nil
+			outBatchesMu.Unlock()
+
 			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
 			streamingRowsPerTable := 10
 			streamingWant := streamingRowsPerTable * 3
@@ -335,10 +345,6 @@ file:
 			}
 
 			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
-
-			outBatchesMu.Lock()
-			outBatches = nil
-			outBatchesMu.Unlock()
 			assert.Eventually(t, func() bool {
 				outBatchesMu.Lock()
 				defer outBatchesMu.Unlock()
