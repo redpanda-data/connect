@@ -252,6 +252,8 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 }
 
 // chunkRange is a (min, max] primary key range of a table, where a nil bound is unbounded.
+// The lower bound is exclusive so the first page of a chunk uses the same "> lastSeen" keyset
+// predicate as every later page.
 type chunkRange struct {
 	min map[string]any
 	max map[string]any
