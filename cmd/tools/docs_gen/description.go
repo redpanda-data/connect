@@ -519,14 +519,14 @@ type componentPlatform struct {
 // inCloud reports whether any Redpanda Cloud pipeline can use the component.
 func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
 
-// renderDescriptionPartial renders the description partial of a component.
-// The meta tag sets page attributes for the page header, such as page-beta,
-// which makes the docs UI show its beta badge. The body tag renders the status
-// notice of deprecated and experimental components, then the summary, version
-// note, and description. The footnotes tag renders the spec footnotes. Every tag is always present, so a
-// page that includes one keeps building when the spec drops that content.
-// excluded is as in cloudGuardXrefs, and is used only for components that
-// Redpanda Cloud includes.
+// renderDescriptionPartial renders the description partial of a component. The
+// meta tag sets page attributes for the page header, such as page-beta, which
+// makes the docs UI show its beta badge. The body tag renders the status notice
+// of deprecated and experimental components, then the summary, version note,
+// and description. The footnotes tag renders the spec footnotes. Every tag is
+// always present, so a page that includes one keeps building when the spec
+// drops that content. excluded is as in cloudGuardXrefs, and is used only for
+// components that Redpanda Cloud includes.
 func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool) string {
 	guard := func(body string) string {
 		if !plat.inCloud() || excluded == nil {
