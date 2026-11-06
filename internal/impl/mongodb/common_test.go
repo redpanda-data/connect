@@ -16,14 +16,17 @@ package mongodb
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -417,4 +420,250 @@ aws:
 	input, err := newMongoInput(parsed, service.MockResources().Logger())
 	require.NoError(t, err)
 	require.NoError(t, input.Close(t.Context()))
+}
+
+func TestExtJSONFromMapDontPreserveBinary(t *testing.T) {
+	rawBytes := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	base64String := base64.StdEncoding.EncodeToString(rawBytes)
+
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{
+		"binary_field": rawBytes,
+	})
+
+	executor, err := bloblang.Parse("root = this")
+	require.NoError(t, err)
+
+	batch := service.MessageBatch{msg}
+	mappingExec := batch.BloblangExecutor(executor)
+
+	result, err := extJSONFromMap(0, mappingExec, false)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	resultD, ok := result.(bson.D)
+	require.True(t, ok)
+
+	var fieldValue any
+	found := false
+	for _, elem := range resultD {
+		if elem.Key == "binary_field" {
+			fieldValue = elem.Value
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+
+	_, isBytes := fieldValue.([]byte)
+	assert.False(t, isBytes)
+
+	extractedString, isString := fieldValue.(string)
+	assert.True(t, isString)
+	assert.Equal(t, base64String, extractedString)
+}
+
+func TestExtJSONFromMapPreserveBinary(t *testing.T) {
+	rawBytes := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{
+		"binary_field": rawBytes,
+	})
+
+	executor, err := bloblang.Parse("root = this")
+	require.NoError(t, err)
+
+	batch := service.MessageBatch{msg}
+	mappingExec := batch.BloblangExecutor(executor)
+
+	result, err := extJSONFromMap(0, mappingExec, true)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	resultD, ok := result.(bson.D)
+	require.True(t, ok)
+
+	var fieldValue any
+	found := false
+	for _, elem := range resultD {
+		if elem.Key == "binary_field" {
+			fieldValue = elem.Value
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+
+	extractedBytes, isBytes := fieldValue.([]byte)
+	assert.True(t, isBytes)
+	assert.Equal(t, rawBytes, extractedBytes)
+}
+
+func TestProcessExtJSON(t *testing.T) {
+	rawBytes := []byte("hello redpanda")
+	expectedBase64 := "aGVsbG8gcmVkcGFuZGE="
+
+	tests := []struct {
+		name           string
+		preserveBinary bool
+		input          any
+		validate       func(t *testing.T, result any)
+	}{
+		{
+			name:           "Default mode (preserve_binary=false): bytes to base64, dates parsed",
+			preserveBinary: false,
+			input: map[string]any{
+				"name": "test_doc",
+				"data": rawBytes,
+				"created_at": map[string]any{
+					"$date": map[string]any{
+						"$numberLong": "1793011200000",
+					},
+				},
+			},
+			validate: func(t *testing.T, result any) {
+				doc, ok := result.(bson.D)
+				require.True(t, ok)
+
+				require.Len(t, doc, 3)
+				assert.Equal(t, "created_at", doc[0].Key)
+				assert.Equal(t, "data", doc[1].Key)
+				assert.Equal(t, "name", doc[2].Key)
+
+				assert.Equal(t, bson.DateTime(int64(1793011200000)), doc[0].Value)
+				assert.Equal(t, expectedBase64, doc[1].Value)
+			},
+		},
+		{
+			name:           "Preserve binary mode (preserve_binary=true): bytes kept raw, dates parsed",
+			preserveBinary: true,
+			input: map[string]any{
+				"name": "test_doc",
+				"data": rawBytes,
+				"created_at": map[string]any{
+					"$date": map[string]any{
+						"$numberLong": "1793011200001",
+					},
+				},
+			},
+			validate: func(t *testing.T, result any) {
+				doc, ok := result.(bson.D)
+				require.True(t, ok)
+
+				require.Len(t, doc, 3)
+				assert.Equal(t, "created_at", doc[0].Key)
+				assert.Equal(t, "data", doc[1].Key)
+				assert.Equal(t, "name", doc[2].Key)
+
+				assert.Equal(t, bson.DateTime(int64(1793011200001)), doc[0].Value)
+				assert.Equal(t, rawBytes, doc[1].Value)
+			},
+		},
+		{
+			name:           "Deep nested sorting and type evaluation",
+			preserveBinary: true,
+			input: map[string]any{
+				"root": map[string]any{
+					"z_field": "im_last",
+					"a_field": map[string]any{
+						"$oid": "60c72b2f9b1d8b2bad000001",
+					},
+					"nested_bytes": rawBytes,
+				},
+			},
+			validate: func(t *testing.T, result any) {
+				doc, ok := result.(bson.D)
+				require.True(t, ok)
+
+				rootVal := doc[0].Value
+				rootDoc, ok := rootVal.(bson.D)
+				require.True(t, ok)
+
+				require.Len(t, rootDoc, 3)
+				assert.Equal(t, "a_field", rootDoc[0].Key)
+				assert.Equal(t, "nested_bytes", rootDoc[1].Key)
+				assert.Equal(t, "z_field", rootDoc[2].Key)
+
+				expectedOID, err := bson.ObjectIDFromHex("60c72b2f9b1d8b2bad000001")
+				assert.NoError(t, err)
+				assert.Equal(t, expectedOID, rootDoc[0].Value)
+				assert.Equal(t, rawBytes, rootDoc[1].Value)
+			},
+		},
+		{
+			name:           "Arrays containing maps are recursively processed",
+			preserveBinary: true,
+			input: []any{
+				map[string]any{
+					"b": rawBytes,
+					"a": map[string]any{"$numberInt": "42"},
+				},
+			},
+			validate: func(t *testing.T, result any) {
+				slice, ok := result.([]any)
+				require.True(t, ok)
+				require.Len(t, slice, 1)
+
+				itemDoc, ok := slice[0].(bson.D)
+				require.True(t, ok)
+
+				assert.Equal(t, "a", itemDoc[0].Key)
+				assert.Equal(t, int32(42), itemDoc[0].Value)
+				assert.Equal(t, "b", itemDoc[1].Key)
+				assert.Equal(t, rawBytes, itemDoc[1].Value)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := processExtJSON(tt.input, tt.preserveBinary)
+			assert.NoError(t, err)
+			tt.validate(t, res)
+		})
+	}
+}
+
+func TestConvertExtJSONObject(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected any
+	}{
+		{
+			name: "Nested extJSON element",
+			input: map[string]any{
+				"name": "test_doc",
+				"data": []byte("hello"),
+				"created_at": map[string]any{
+					"$date": map[string]any{
+						"$numberLong": "1793011200000",
+					},
+				},
+			},
+			expected: bson.D{
+				bson.E{Key: "created_at", Value: bson.DateTime(int64(1793011200000))},
+				bson.E{Key: "data", Value: "aGVsbG8="},
+				bson.E{Key: "name", Value: "test_doc"},
+			},
+		},
+		{
+			name: "Top level extJSON element",
+			input: map[string]any{
+				"$date": map[string]any{
+					"$numberLong": "1793011200000",
+				},
+			},
+			expected: bson.DateTime(int64(1793011200000)),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := convertExtJSONObject(tt.input)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, res)
+		})
+	}
 }
