@@ -1,0 +1,8684 @@
+{
+ "classes": {
+  "api_activity": {
+   "attributes": {
+    "action": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "action_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "activity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "activity_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "actor": {
+     "object_type": "actor",
+     "profiles": null,
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "ai_model": {
+     "object_type": "ai_model",
+     "profiles": [
+      "ai_operation"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "api": {
+     "object_type": "api",
+     "profiles": null,
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "attacks": {
+     "is_array": true,
+     "object_type": "attack",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "authorizations": {
+     "is_array": true,
+     "object_type": "authorization",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "category_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "category_uid": {
+     "enum": [
+      "6"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "class_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "class_uid": {
+     "enum": [
+      "6003"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "cloud": {
+     "object_type": "cloud",
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "confidence": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidence_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "confidence_score": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "count": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "device": {
+     "object_type": "device",
+     "profiles": [
+      "host"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "disposition": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "disposition_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "dst_endpoint": {
+     "object_type": "network_endpoint",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "duration": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "end_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "end_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "enrichments": {
+     "is_array": true,
+     "object_type": "enrichment",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "firewall_rule": {
+     "object_type": "firewall_rule",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "http_request": {
+     "object_type": "http_request",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "http_response": {
+     "object_type": "http_response",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "is_alert": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "malware": {
+     "is_array": true,
+     "object_type": "malware",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "malware_scan_info": {
+     "object_type": "malware_scan_info",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "message": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "message_context": {
+     "object_type": "message_context",
+     "profiles": [
+      "ai_operation"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "metadata": {
+     "object_type": "metadata",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "observables": {
+     "is_array": true,
+     "object_type": "observable",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "osint": {
+     "is_array": true,
+     "object_type": "osint",
+     "profiles": [
+      "osint"
+     ],
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "policy": {
+     "object_type": "policy",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "raw_data": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "raw_data_hash": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "raw_data_size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "resources": {
+     "is_array": true,
+     "object_type": "resource_details",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "risk_details": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "risk_score": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "severity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "severity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "src_endpoint": {
+     "object_type": "network_endpoint",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "start_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "start_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "status": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_code": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_detail": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "time": {
+     "requirement": "required",
+     "type": "timestamp_t"
+    },
+    "time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "timezone_offset": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "trace": {
+     "object_type": "trace",
+     "profiles": [
+      "trace"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "type_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_uid": {
+     "enum": [
+      "600300",
+      "600301",
+      "600302",
+      "600303",
+      "600304",
+      "600399"
+     ],
+     "requirement": "required",
+     "type": "long_t"
+    },
+    "unmapped": {
+     "object_type": "object",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": null,
+   "name": "api_activity",
+   "profiles": [
+    "ai_operation",
+    "cloud",
+    "container",
+    "data_classification",
+    "datetime",
+    "host",
+    "linux/linux_users",
+    "macos/macos_users",
+    "osint",
+    "security_control",
+    "trace"
+   ],
+   "uid": 6003
+  },
+  "entity_management": {
+   "attributes": {
+    "access_list": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "access_mask": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "action": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "action_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "activity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "activity_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "actor": {
+     "object_type": "actor",
+     "profiles": null,
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "api": {
+     "object_type": "api",
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "attacks": {
+     "is_array": true,
+     "object_type": "attack",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "authorizations": {
+     "is_array": true,
+     "object_type": "authorization",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "category_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "category_uid": {
+     "enum": [
+      "3"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "class_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "class_uid": {
+     "enum": [
+      "3004"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "cloud": {
+     "object_type": "cloud",
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "comment": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "confidence": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidence_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "confidence_score": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "count": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "device": {
+     "object_type": "device",
+     "profiles": [
+      "host"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "disposition": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "disposition_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "end_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "end_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "enrichments": {
+     "is_array": true,
+     "object_type": "enrichment",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "entity": {
+     "object_type": "managed_entity",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "entity_result": {
+     "object_type": "managed_entity",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "firewall_rule": {
+     "object_type": "firewall_rule",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "http_request": {
+     "object_type": "http_request",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "http_response": {
+     "object_type": "http_response",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "is_alert": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "malware": {
+     "is_array": true,
+     "object_type": "malware",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "malware_scan_info": {
+     "object_type": "malware_scan_info",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "message": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "metadata": {
+     "object_type": "metadata",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "observables": {
+     "is_array": true,
+     "object_type": "observable",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "osint": {
+     "is_array": true,
+     "object_type": "osint",
+     "profiles": [
+      "osint"
+     ],
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "policy": {
+     "object_type": "policy",
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "raw_data": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "raw_data_hash": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "raw_data_size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "risk_details": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "risk_score": {
+     "profiles": [
+      "security_control"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "severity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "severity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "src_endpoint": {
+     "object_type": "network_endpoint",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "start_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "start_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "status": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_code": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_detail": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "time": {
+     "requirement": "required",
+     "type": "timestamp_t"
+    },
+    "time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "timezone_offset": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "type_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_uid": {
+     "enum": [
+      "300400",
+      "300401",
+      "300402",
+      "300403",
+      "300404",
+      "300405",
+      "300406",
+      "300407",
+      "300408",
+      "300409",
+      "300410",
+      "300411",
+      "300412",
+      "300413",
+      "300499"
+     ],
+     "requirement": "required",
+     "type": "long_t"
+    },
+    "unmapped": {
+     "object_type": "object",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": null,
+   "name": "entity_management",
+   "profiles": [
+    "cloud",
+    "container",
+    "data_classification",
+    "datetime",
+    "host",
+    "linux/linux_users",
+    "macos/macos_users",
+    "osint",
+    "security_control"
+   ],
+   "uid": 3004
+  }
+ },
+ "objects": {
+  "account": {
+   "attributes": {
+    "is_disabled": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_locked": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_on_premises_sync_enabled": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "account"
+  },
+  "actor": {
+   "attributes": {
+    "app_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "app_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "authorizations": {
+     "is_array": true,
+     "object_type": "authorization",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "idp": {
+     "object_type": "idp",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "invoked_by": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "process": {
+     "object_type": "process",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "session": {
+     "object_type": "session",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "user": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "process",
+     "user",
+     "invoked_by",
+     "session",
+     "app_name",
+     "app_uid"
+    ]
+   },
+   "name": "actor"
+  },
+  "advisory": {
+   "attributes": {
+    "avg_timespan": {
+     "object_type": "timespan",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "bulletin": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "classification": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "install_state": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "install_state_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "is_superseded": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "os": {
+     "object_type": "os",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "references": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "related_cves": {
+     "is_array": true,
+     "object_type": "cve",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "related_cwes": {
+     "is_array": true,
+     "object_type": "cwe",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "title": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "advisory"
+  },
+  "affected_code": {
+   "attributes": {
+    "end_column": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "end_line": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "file": {
+     "object_type": "file",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "remediation": {
+     "object_type": "remediation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "rule": {
+     "object_type": "rule",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "start_column": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "start_line": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "affected_code"
+  },
+  "affected_package": {
+   "attributes": {
+    "architecture": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "cpe_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "epoch": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "fixed_in_version": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "hash": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "license": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "license_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "package_manager": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "package_manager_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "path": {
+     "requirement": "optional",
+     "type": "file_path_t"
+    },
+    "purl": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "release": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "remediation": {
+     "object_type": "remediation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "affected_package"
+  },
+  "agent": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "policies": {
+     "is_array": true,
+     "object_type": "policy",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "uid",
+     "name"
+    ]
+   },
+   "name": "agent"
+  },
+  "ai_model": {
+   "attributes": {
+    "ai_provider": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "ai_model"
+  },
+  "analytic": {
+   "attributes": {
+    "algorithm": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "related_analytics": {
+     "is_array": true,
+     "object_type": "analytic",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "state": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "state_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "analytic"
+  },
+  "api": {
+   "attributes": {
+    "group": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "operation": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "request": {
+     "object_type": "request",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "response": {
+     "object_type": "response",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "service": {
+     "object_type": "service",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "token": {
+     "object_type": "token",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "api"
+  },
+  "application": {
+   "attributes": {
+    "criticality": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "group": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hostname": {
+     "requirement": "optional",
+     "type": "hostname_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "region": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "resource_relationship": {
+     "object_type": "graph",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "risk_level": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "risk_score": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "sbom": {
+     "object_type": "sbom",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "url": {
+     "object_type": "url",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "uid",
+     "name"
+    ]
+   },
+   "name": "application"
+  },
+  "attack": {
+   "attributes": {
+    "mitigation": {
+     "object_type": "mitigation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "sub_technique": {
+     "object_type": "sub_technique",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "tactic": {
+     "object_type": "tactic",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "tactics": {
+     "is_array": true,
+     "object_type": "tactic",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "technique": {
+     "object_type": "technique",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "tactic",
+     "technique",
+     "sub_technique"
+    ]
+   },
+   "name": "attack"
+  },
+  "auth_factor": {
+   "attributes": {
+    "device": {
+     "object_type": "device",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "email_addr": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "factor_type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "factor_type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "is_hotp": {
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "is_totp": {
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "phone_number": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "provider": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "security_questions": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "auth_factor"
+  },
+  "authorization": {
+   "attributes": {
+    "decision": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "policy": {
+     "object_type": "policy",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": null,
+   "name": "authorization"
+  },
+  "autonomous_system": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "number": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "number",
+     "name"
+    ]
+   },
+   "name": "autonomous_system"
+  },
+  "campaign": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "campaign"
+  },
+  "certificate": {
+   "attributes": {
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "expiration_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "expiration_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "fingerprints": {
+     "is_array": true,
+     "object_type": "fingerprint",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "is_self_signed": {
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "issuer": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "sans": {
+     "is_array": true,
+     "object_type": "san",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "serial_number": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "subject": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "certificate"
+  },
+  "cis_control": {
+   "attributes": {
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "cis_control"
+  },
+  "classifier_details": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "classifier_details"
+  },
+  "cloud": {
+   "attributes": {
+    "account": {
+     "object_type": "account",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "cloud_partition": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "org": {
+     "object_type": "organization",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "project_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "provider": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "region": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "zone": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "cloud"
+  },
+  "container": {
+   "attributes": {
+    "hash": {
+     "object_type": "fingerprint",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "image": {
+     "object_type": "image",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "network_driver": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "orchestrator": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "pod_uuid": {
+     "requirement": "optional",
+     "type": "uuid_t"
+    },
+    "runtime": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "size": {
+     "requirement": "recommended",
+     "type": "long_t"
+    },
+    "tag": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "uid",
+     "name"
+    ]
+   },
+   "name": "container"
+  },
+  "cve": {
+   "attributes": {
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "cvss": {
+     "is_array": true,
+     "object_type": "cvss",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "cwe": {
+     "object_type": "cwe",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "cwe_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cwe_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "epss": {
+     "object_type": "epss",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "references": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "related_cwes": {
+     "is_array": true,
+     "object_type": "cwe",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "title": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "cve"
+  },
+  "cvss": {
+   "attributes": {
+    "base_score": {
+     "requirement": "required",
+     "type": "float_t"
+    },
+    "depth": {
+     "enum": [
+      "Base",
+      "Temporal",
+      "Environmental"
+     ],
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "metrics": {
+     "is_array": true,
+     "object_type": "metric",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "overall_score": {
+     "requirement": "recommended",
+     "type": "float_t"
+    },
+    "severity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "vector_string": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "cvss"
+  },
+  "cwe": {
+   "attributes": {
+    "caption": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "cwe"
+  },
+  "d3f_tactic": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "d3f_tactic"
+  },
+  "d3f_technique": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "d3f_technique"
+  },
+  "d3fend": {
+   "attributes": {
+    "d3f_tactic": {
+     "object_type": "d3f_tactic",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "d3f_technique": {
+     "object_type": "d3f_technique",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "d3f_tactic",
+     "d3f_technique"
+    ]
+   },
+   "name": "d3fend"
+  },
+  "data_classification": {
+   "attributes": {
+    "category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "category_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "classifier_details": {
+     "object_type": "classifier_details",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "confidentiality": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidentiality_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "discovery_details": {
+     "is_array": true,
+     "object_type": "discovery_details",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "policy": {
+     "object_type": "policy",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "status": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status_details": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "status_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "total": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "category_id",
+     "confidentiality_id"
+    ]
+   },
+   "name": "data_classification"
+  },
+  "device": {
+   "attributes": {
+    "agent_list": {
+     "is_array": true,
+     "object_type": "agent",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "autoscale_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "boot_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "boot_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "boot_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "container": {
+     "object_type": "container",
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "eid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "first_seen_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "first_seen_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "groups": {
+     "is_array": true,
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "hw_info": {
+     "object_type": "device_hw_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hypervisor": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "iccid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "image": {
+     "object_type": "image",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "imei": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "imei_list": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "instance_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "interface_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "interface_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "ip": {
+     "requirement": "optional",
+     "type": "ip_t"
+    },
+    "is_backed_up": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_compliant": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_managed": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_mobile_account_active": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_personal": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_shared": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_supervised": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_trusted": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "last_seen_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "last_seen_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "mac": {
+     "requirement": "optional",
+     "type": "mac_t"
+    },
+    "mac_vendor": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "meid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "model": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "namespace_pid": {
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "network_interfaces": {
+     "is_array": true,
+     "object_type": "network_interface",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "org": {
+     "object_type": "organization",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "os": {
+     "object_type": "os",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "os_machine_uuid": {
+     "requirement": "optional",
+     "type": "uuid_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "pool": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "region": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "risk_level": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "risk_score": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "subnet": {
+     "requirement": "optional",
+     "type": "subnet_t"
+    },
+    "subnet_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "udid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vlan_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vpc_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "zone": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "ip",
+     "uid",
+     "name",
+     "hostname",
+     "instance_uid",
+     "interface_uid",
+     "interface_name"
+    ]
+   },
+   "name": "device"
+  },
+  "device_hw_info": {
+   "attributes": {
+    "bios_date": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "bios_manufacturer": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "bios_ver": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "chassis": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cpu_architecture": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cpu_architecture_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cpu_bits": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cpu_cores": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cpu_count": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cpu_speed": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cpu_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "desktop_display": {
+     "object_type": "display",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "gpu_count": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "gpu_info_list": {
+     "is_array": true,
+     "object_type": "gpu_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "keyboard_info": {
+     "object_type": "keyboard_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "ram_size": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "serial_number": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uuid": {
+     "requirement": "optional",
+     "type": "uuid_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "device_hw_info"
+  },
+  "digital_signature": {
+   "attributes": {
+    "algorithm": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "algorithm_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "certificate": {
+     "object_type": "certificate",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "developer_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "digest": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "state": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "state_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "digital_signature"
+  },
+  "discovery_details": {
+   "attributes": {
+    "count": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "occurrence_details": {
+     "object_type": "occurrence_details",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "occurrences": {
+     "is_array": true,
+     "object_type": "occurrence_details",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "value": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "discovery_details"
+  },
+  "display": {
+   "attributes": {
+    "color_depth": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "physical_height": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "physical_orientation": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "physical_width": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "scale_factor": {
+     "requirement": "optional",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "display"
+  },
+  "dns_answer": {
+   "attributes": {
+    "class": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "flag_ids": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "flags": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "packet_uid": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "rdata": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "ttl": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "dns_answer"
+  },
+  "domain_contact": {
+   "attributes": {
+    "email_addr": {
+     "requirement": "recommended",
+     "type": "email_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "phone_number": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "domain_contact"
+  },
+  "edge": {
+   "attributes": {
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "is_directed": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "relation": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "source": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "target": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "edge"
+  },
+  "email": {
+   "attributes": {
+    "cc": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "cc_mailboxes": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "data_classification": {
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "data_classifications": {
+     "is_array": true,
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "delivered_to": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "delivered_to_list": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "files": {
+     "is_array": true,
+     "object_type": "file",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "from": {
+     "requirement": "recommended",
+     "type": "email_t"
+    },
+    "from_list": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "from_mailbox": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "from_mailboxes": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "http_headers": {
+     "is_array": true,
+     "object_type": "http_header",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "is_read": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "message_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "raw_header": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "reply_to": {
+     "requirement": "recommended",
+     "type": "email_t"
+    },
+    "reply_to_list": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "reply_to_mailboxes": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "return_path": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "sender": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "sender_mailbox": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "size": {
+     "requirement": "recommended",
+     "type": "long_t"
+    },
+    "smtp_from": {
+     "requirement": "recommended",
+     "type": "email_t"
+    },
+    "smtp_to": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "email_t"
+    },
+    "subject": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "to": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "email_t"
+    },
+    "to_mailboxes": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "urls": {
+     "is_array": true,
+     "object_type": "url",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "x_originating_ip": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "ip_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "from",
+     "to"
+    ]
+   },
+   "name": "email"
+  },
+  "email_auth": {
+   "attributes": {
+    "dkim": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "dkim_domain": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "dkim_signature": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "dmarc": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "dmarc_override": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "dmarc_policy": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "spf": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "email_auth"
+  },
+  "encryption_details": {
+   "attributes": {
+    "algorithm": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "algorithm_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "key_length": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "key_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "encryption_details"
+  },
+  "enrichment": {
+   "attributes": {
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "data": {
+     "requirement": "required",
+     "type": "json_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "provider": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "reputation": {
+     "object_type": "reputation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "short_desc": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "recommended",
+     "type": "url_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "enrichment"
+  },
+  "environment_variable": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "environment_variable"
+  },
+  "epss": {
+   "attributes": {
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "percentile": {
+     "requirement": "optional",
+     "type": "float_t"
+    },
+    "score": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "epss"
+  },
+  "extension": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "extension"
+  },
+  "feature": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "feature"
+  },
+  "file": {
+   "attributes": {
+    "accessed_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "accessed_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "accessor": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "attributes": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "company_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidentiality": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidentiality_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "creator": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "data_classification": {
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "data_classifications": {
+     "is_array": true,
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "drive_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "drive_type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "encryption_details": {
+     "object_type": "encryption_details",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "ext": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "hashes": {
+     "is_array": true,
+     "object_type": "fingerprint",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "imported_symbols": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "internal_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "is_deleted": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_encrypted": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_public": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_readonly": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_system": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "mime_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "modifier": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "file_name_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "parent_folder": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "path": {
+     "requirement": "recommended",
+     "type": "file_path_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "security_descriptor": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "signature": {
+     "object_type": "digital_signature",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "signatures": {
+     "is_array": true,
+     "object_type": "digital_signature",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "storage_class": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uri": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "url": {
+     "object_type": "url",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "volume": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "xattributes": {
+     "object_type": "object",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": {},
+   "name": "file"
+  },
+  "fingerprint": {
+   "attributes": {
+    "algorithm": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "algorithm_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "file_hash_t"
+    }
+   },
+   "constraints": null,
+   "name": "fingerprint"
+  },
+  "firewall_rule": {
+   "attributes": {
+    "category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "condition": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "duration": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "match_details": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "match_location": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "rate_limit": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "sensitivity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "firewall_rule"
+  },
+  "gpu_info": {
+   "attributes": {
+    "bus_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "bus_type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cores": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "model": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vram_mode": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vram_mode_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "vram_size": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "gpu_info"
+  },
+  "graph": {
+   "attributes": {
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "edges": {
+     "is_array": true,
+     "object_type": "edge",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "is_directed": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "nodes": {
+     "is_array": true,
+     "object_type": "node",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "query_language": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "query_language_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "graph"
+  },
+  "group": {
+   "attributes": {
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "privileges": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "group"
+  },
+  "http_header": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "http_header"
+  },
+  "http_request": {
+   "attributes": {
+    "args": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "body_length": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "http_headers": {
+     "is_array": true,
+     "object_type": "http_header",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "http_method": {
+     "enum": [
+      "GET",
+      "PUT",
+      "HEAD",
+      "POST",
+      "PATCH",
+      "TRACE",
+      "DELETE",
+      "CONNECT",
+      "OPTIONS"
+     ],
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "length": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "referrer": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "url": {
+     "object_type": "url",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "user_agent": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "x_forwarded_for": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "ip_t"
+    }
+   },
+   "constraints": null,
+   "name": "http_request"
+  },
+  "http_response": {
+   "attributes": {
+    "body_length": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "code": {
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "content_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "http_headers": {
+     "is_array": true,
+     "object_type": "http_header",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "latency": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "length": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "message": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "status": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "http_response"
+  },
+  "idp": {
+   "attributes": {
+    "auth_factors": {
+     "is_array": true,
+     "object_type": "auth_factor",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "fingerprint": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "has_mfa": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "issuer": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "protocol_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "scim": {
+     "object_type": "scim",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "sso": {
+     "object_type": "sso",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "state": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "state_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "tenant_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "url_string": {
+     "requirement": "optional",
+     "type": "url_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "idp"
+  },
+  "image": {
+   "attributes": {
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "path": {
+     "requirement": "optional",
+     "type": "file_path_t"
+    },
+    "tag": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": {},
+   "name": "image"
+  },
+  "kb_article": {
+   "attributes": {
+    "avg_timespan": {
+     "object_type": "timespan",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "bulletin": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "classification": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "install_state": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "install_state_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "is_superseded": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "os": {
+     "object_type": "os",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "severity": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "title": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "uid",
+     "src_url"
+    ]
+   },
+   "name": "kb_article"
+  },
+  "key_value_object": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "value": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "values": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "value",
+     "values"
+    ]
+   },
+   "name": "key_value_object"
+  },
+  "keyboard_info": {
+   "attributes": {
+    "function_keys": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "ime": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "keyboard_layout": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "keyboard_subtype": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "keyboard_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "keyboard_info"
+  },
+  "kill_chain_phase": {
+   "attributes": {
+    "phase": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "phase_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "kill_chain_phase"
+  },
+  "ldap_person": {
+   "attributes": {
+    "cost_center": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "deleted_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "deleted_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "department": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "display_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "email_addrs": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "employee_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "given_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "hire_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "hire_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "job_title": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "last_login_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "last_login_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "ldap_cn": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "ldap_dn": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "leave_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "leave_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "manager": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "office_location": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "phone_number": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "surname": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": null,
+   "name": "ldap_person"
+  },
+  "location": {
+   "attributes": {
+    "aerial_height": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "city": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "continent": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "coordinates": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "float_t"
+    },
+    "country": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "geodetic_altitude": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "geodetic_vertical_accuracy": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "geohash": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "horizontal_accuracy": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "is_on_premises": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "isp": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "lat": {
+     "requirement": "optional",
+     "type": "float_t"
+    },
+    "long": {
+     "requirement": "optional",
+     "type": "float_t"
+    },
+    "postal_code": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "pressure_altitude": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "provider": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "region": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "city",
+     "country",
+     "postal_code",
+     "region"
+    ]
+   },
+   "name": "location"
+  },
+  "logger": {
+   "attributes": {
+    "device": {
+     "object_type": "device",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "event_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "is_truncated": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "log_format": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_level": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "log_provider": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "log_version": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "logged_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "logged_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "transmit_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "transmit_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "untruncated_size": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "logger"
+  },
+  "long_string": {
+   "attributes": {
+    "is_truncated": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "untruncated_size": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "long_string"
+  },
+  "malware": {
+   "attributes": {
+    "classification_ids": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "99"
+     ],
+     "is_array": true,
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "classifications": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cves": {
+     "is_array": true,
+     "object_type": "cve",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "files": {
+     "is_array": true,
+     "object_type": "file",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "num_infected": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "path": {
+     "requirement": "recommended",
+     "type": "file_path_t"
+    },
+    "provider": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "severity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "severity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "malware"
+  },
+  "malware_scan_info": {
+   "attributes": {
+    "end_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "end_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "num_files": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "num_infected": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "num_volumes": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "size": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "start_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "start_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "unique_malware_count": {
+     "requirement": "optional",
+     "type": "integer_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "malware_scan_info"
+  },
+  "managed_entity": {
+   "attributes": {
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "device": {
+     "object_type": "device",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "email": {
+     "object_type": "email",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "group": {
+     "object_type": "group",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "org": {
+     "object_type": "organization",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "policy": {
+     "object_type": "policy",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "user": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid",
+     "device",
+     "group",
+     "org",
+     "policy",
+     "user"
+    ]
+   },
+   "name": "managed_entity"
+  },
+  "message_context": {
+   "attributes": {
+    "ai_role": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "ai_role_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "application": {
+     "object_type": "application",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "completion_tokens": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "prompt_tokens": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "service": {
+     "object_type": "service",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "total_tokens": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "application",
+     "service"
+    ]
+   },
+   "name": "message_context"
+  },
+  "metadata": {
+   "attributes": {
+    "correlation_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "data_classification": {
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "data_classifications": {
+     "is_array": true,
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "debug": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "event_code": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "extension": {
+     "object_type": "extension",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "extensions": {
+     "is_array": true,
+     "object_type": "extension",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "is_truncated": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_format": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_level": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "log_provider": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_source": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "log_version": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "logged_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "logged_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "loggers": {
+     "is_array": true,
+     "object_type": "logger",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "original_event_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "original_time": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "processed_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "processed_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "profiles": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "reporter": {
+     "object_type": "reporter",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "sequence": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "source": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "tenant_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "total_queued_duration": {
+     "object_type": "timespan",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "transformation_info_list": {
+     "is_array": true,
+     "object_type": "transformation_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "transmit_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "transmit_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "untruncated_size": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "version": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "metadata"
+  },
+  "metric": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "metric"
+  },
+  "mitigation": {
+   "attributes": {
+    "countermeasures": {
+     "is_array": true,
+     "object_type": "d3fend",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "mitigation"
+  },
+  "network_endpoint": {
+   "attributes": {
+    "agent_list": {
+     "is_array": true,
+     "object_type": "agent",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "autonomous_system": {
+     "object_type": "autonomous_system",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "container": {
+     "object_type": "container",
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "fingerprints": {
+     "is_array": true,
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "hw_info": {
+     "object_type": "device_hw_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "instance_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "interface_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "interface_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "intermediate_ips": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "ip_t"
+    },
+    "ip": {
+     "requirement": "recommended",
+     "type": "ip_t"
+    },
+    "isp": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "isp_org": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "mac": {
+     "requirement": "optional",
+     "type": "mac_t"
+    },
+    "mac_vendor": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "namespace_pid": {
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "network_scope": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "network_scope_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "os": {
+     "object_type": "os",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "pool": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "port": {
+     "requirement": "recommended",
+     "type": "port_t"
+    },
+    "proxy_endpoint": {
+     "object_type": "network_proxy",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "subnet_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "svc_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vlan_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vpc_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "zone": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "ip",
+     "uid",
+     "name",
+     "hostname",
+     "svc_name",
+     "instance_uid",
+     "interface_uid",
+     "interface_name",
+     "domain"
+    ]
+   },
+   "name": "network_endpoint"
+  },
+  "network_interface": {
+   "attributes": {
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "ip": {
+     "requirement": "recommended",
+     "type": "ip_t"
+    },
+    "mac": {
+     "requirement": "recommended",
+     "type": "mac_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "namespace": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "open_ports": {
+     "is_array": true,
+     "object_type": "port_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "subnet_prefix": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "ip",
+     "mac",
+     "name",
+     "hostname",
+     "uid"
+    ]
+   },
+   "name": "network_interface"
+  },
+  "network_proxy": {
+   "attributes": {
+    "agent_list": {
+     "is_array": true,
+     "object_type": "agent",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "autonomous_system": {
+     "object_type": "autonomous_system",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "container": {
+     "object_type": "container",
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "fingerprints": {
+     "is_array": true,
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "hw_info": {
+     "object_type": "device_hw_info",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "instance_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "interface_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "interface_uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "intermediate_ips": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "ip_t"
+    },
+    "ip": {
+     "requirement": "recommended",
+     "type": "ip_t"
+    },
+    "isp": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "isp_org": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "mac": {
+     "requirement": "optional",
+     "type": "mac_t"
+    },
+    "mac_vendor": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "namespace_pid": {
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "network_scope": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "network_scope_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "os": {
+     "object_type": "os",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "pool": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "port": {
+     "requirement": "recommended",
+     "type": "port_t"
+    },
+    "proxy_endpoint": {
+     "object_type": "network_proxy",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "subnet_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "svc_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vlan_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vpc_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "zone": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "ip",
+     "uid",
+     "name",
+     "hostname",
+     "svc_name",
+     "instance_uid",
+     "interface_uid",
+     "interface_name",
+     "domain"
+    ]
+   },
+   "name": "network_proxy"
+  },
+  "node": {
+   "attributes": {
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "node"
+  },
+  "object": {
+   "attributes": {},
+   "constraints": null,
+   "name": "object"
+  },
+  "observable": {
+   "attributes": {
+    "event_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "reputation": {
+     "object_type": "reputation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "48",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "type_uid": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "value": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "observable"
+  },
+  "occurrence_details": {
+   "attributes": {
+    "cell_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "column_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "column_number": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "end_line": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "json_path": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "page_number": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "record_index_in_array": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "row_number": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "start_line": {
+     "requirement": "optional",
+     "type": "integer_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "cell_name",
+     "column_name",
+     "column_number",
+     "end_line",
+     "json_path",
+     "page_number",
+     "record_index_in_array",
+     "row_number",
+     "start_line"
+    ]
+   },
+   "name": "occurrence_details"
+  },
+  "organization": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "ou_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "ou_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "organization"
+  },
+  "os": {
+   "attributes": {
+    "build": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "country": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cpe_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cpu_bits": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "edition": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "kernel_release": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "lang": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "sp_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "sp_ver": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "99",
+      "100",
+      "101",
+      "200",
+      "201",
+      "300",
+      "301",
+      "302",
+      "400",
+      "401",
+      "402"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "os"
+  },
+  "osint": {
+   "attributes": {
+    "answers": {
+     "is_array": true,
+     "object_type": "dns_answer",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "attacks": {
+     "is_array": true,
+     "object_type": "attack",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "autonomous_system": {
+     "object_type": "autonomous_system",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "campaign": {
+     "object_type": "campaign",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "comment": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidence": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "confidence_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "creator": {
+     "object_type": "user",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "detection_pattern": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "detection_pattern_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "detection_pattern_type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "email": {
+     "object_type": "email",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "email_auth": {
+     "object_type": "email_auth",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "expiration_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "expiration_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "external_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "file": {
+     "object_type": "file",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "intrusion_sets": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "kill_chain": {
+     "is_array": true,
+     "object_type": "kill_chain_phase",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "location": {
+     "object_type": "location",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "malware": {
+     "is_array": true,
+     "object_type": "malware",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "references": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "related_analytics": {
+     "is_array": true,
+     "object_type": "analytic",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "reputation": {
+     "object_type": "reputation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "risk_score": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "script": {
+     "object_type": "script",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "severity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "severity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "signatures": {
+     "is_array": true,
+     "object_type": "digital_signature",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "subdomains": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "subnet": {
+     "requirement": "optional",
+     "type": "subnet_t"
+    },
+    "threat_actor": {
+     "object_type": "threat_actor",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "tlp": {
+     "enum": [
+      "RED",
+      "AMBER",
+      "CLEAR",
+      "GREEN",
+      "WHITE",
+      "AMBER STRICT"
+     ],
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uploaded_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "uploaded_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "value": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vulnerabilities": {
+     "is_array": true,
+     "object_type": "vulnerability",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "whois": {
+     "object_type": "whois",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": null,
+   "name": "osint"
+  },
+  "package": {
+   "attributes": {
+    "architecture": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "cpe_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "epoch": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "hash": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "license": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "license_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "package_manager": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "package_manager_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "purl": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "release": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "package"
+  },
+  "policy": {
+   "attributes": {
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "group": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "is_applied": {
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "type",
+     "uid"
+    ]
+   },
+   "name": "policy"
+  },
+  "port_info": {
+   "attributes": {
+    "port": {
+     "requirement": "required",
+     "type": "port_t"
+    },
+    "protocol_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "protocol_num": {
+     "requirement": "optional",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "port_info"
+  },
+  "process": {
+   "attributes": {
+    "ancestry": {
+     "is_array": true,
+     "object_type": "process_entity",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "auid": {
+     "profiles": [
+      "linux/linux_users"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "cmd_line": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "container": {
+     "object_type": "container",
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "cpid": {
+     "requirement": "recommended",
+     "type": "uuid_t"
+    },
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "egid": {
+     "profiles": [
+      "linux/linux_users",
+      "macos/macos_users"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "environment_variables": {
+     "is_array": true,
+     "object_type": "environment_variable",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "euid": {
+     "profiles": [
+      "linux/linux_users",
+      "macos/macos_users"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "file": {
+     "object_type": "file",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "group": {
+     "object_type": "group",
+     "profiles": [
+      "linux/linux_users"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "hosted_services": {
+     "is_array": true,
+     "object_type": "win/win_service",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "integrity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "integrity_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "lineage": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "file_path_t"
+    },
+    "loaded_modules": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "process_name_t"
+    },
+    "namespace_pid": {
+     "profiles": [
+      "container"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "parent_process": {
+     "object_type": "process",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "path": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "pid": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "ptid": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "sandbox": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "session": {
+     "object_type": "session",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "terminated_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "terminated_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "tid": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "user": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "working_directory": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "xattributes": {
+     "object_type": "object",
+     "requirement": "optional",
+     "type": "object_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "pid",
+     "uid",
+     "cpid"
+    ]
+   },
+   "name": "process"
+  },
+  "process_entity": {
+   "attributes": {
+    "cmd_line": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "cpid": {
+     "requirement": "recommended",
+     "type": "uuid_t"
+    },
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "process_name_t"
+    },
+    "path": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "pid": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "cmd_line",
+     "name",
+     "path",
+     "pid",
+     "uid",
+     "cpid"
+    ]
+   },
+   "name": "process_entity"
+  },
+  "product": {
+   "attributes": {
+    "cpe_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "data_classification": {
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "data_classifications": {
+     "is_array": true,
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "feature": {
+     "object_type": "feature",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "lang": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "path": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "url_string": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "vendor_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "product"
+  },
+  "programmatic_credential": {
+   "attributes": {
+    "last_used_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "last_used_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "programmatic_credential"
+  },
+  "remediation": {
+   "attributes": {
+    "cis_controls": {
+     "is_array": true,
+     "object_type": "cis_control",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "desc": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "kb_article_list": {
+     "is_array": true,
+     "object_type": "kb_article",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "kb_articles": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "references": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "remediation"
+  },
+  "reporter": {
+   "attributes": {
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "ip": {
+     "requirement": "recommended",
+     "type": "ip_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "org": {
+     "object_type": "organization",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "hostname",
+     "ip",
+     "name",
+     "uid"
+    ]
+   },
+   "name": "reporter"
+  },
+  "reputation": {
+   "attributes": {
+    "base_score": {
+     "requirement": "required",
+     "type": "float_t"
+    },
+    "provider": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "score": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "score_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "reputation"
+  },
+  "request": {
+   "attributes": {
+    "containers": {
+     "is_array": true,
+     "object_type": "container",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "flags": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "request"
+  },
+  "resource_details": {
+   "attributes": {
+    "agent_list": {
+     "is_array": true,
+     "object_type": "agent",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "cloud_partition": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "criticality": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "data_classification": {
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "data_classifications": {
+     "is_array": true,
+     "object_type": "data_classification",
+     "profiles": [
+      "data_classification"
+     ],
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "group": {
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "ip": {
+     "requirement": "recommended",
+     "type": "ip_t"
+    },
+    "is_backed_up": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "namespace": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "owner": {
+     "object_type": "user",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "provider": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "region": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "resource_relationship": {
+     "object_type": "graph",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "role": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "role_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "resource_uid_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "resource_uid_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "zone": {
+     "profiles": [
+      "cloud"
+     ],
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "resource_details"
+  },
+  "response": {
+   "attributes": {
+    "code": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "containers": {
+     "is_array": true,
+     "object_type": "container",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "data": {
+     "requirement": "optional",
+     "type": "json_t"
+    },
+    "error": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "error_message": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "flags": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "message": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "response"
+  },
+  "rule": {
+   "attributes": {
+    "category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "rule"
+  },
+  "san": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "san"
+  },
+  "sbom": {
+   "attributes": {
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "package": {
+     "object_type": "package",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "software_components": {
+     "is_array": true,
+     "object_type": "software_component",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "sbom"
+  },
+  "scim": {
+   "attributes": {
+    "auth_protocol": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "auth_protocol_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "error_message": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "is_group_provisioning_enabled": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_user_provisioning_enabled": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "last_run_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "last_run_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "protocol_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "rate_limit": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "scim_group_schema": {
+     "requirement": "recommended",
+     "type": "json_t"
+    },
+    "scim_user_schema": {
+     "requirement": "recommended",
+     "type": "json_t"
+    },
+    "state": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "state_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "url_string": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "scim"
+  },
+  "script": {
+   "attributes": {
+    "file": {
+     "object_type": "file",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "hashes": {
+     "is_array": true,
+     "object_type": "fingerprint",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "parent_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "script_content": {
+     "object_type": "long_string",
+     "requirement": "required",
+     "type": "object_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "required",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "script"
+  },
+  "service": {
+   "attributes": {
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "service"
+  },
+  "session": {
+   "attributes": {
+    "count": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "credential_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "expiration_reason": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "expiration_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "expiration_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "is_mfa": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_remote": {
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "is_vpn": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "issuer": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "terminal": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uuid": {
+     "requirement": "optional",
+     "type": "uuid_t"
+    }
+   },
+   "constraints": null,
+   "name": "session"
+  },
+  "software_component": {
+   "attributes": {
+    "author": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "hash": {
+     "object_type": "fingerprint",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "license": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "purl": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "related_component": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "relationship": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "relationship_id": {
+     "enum": [
+      "0",
+      "1",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "version": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "software_component"
+  },
+  "span": {
+   "attributes": {
+    "duration": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "end_time": {
+     "requirement": "required",
+     "type": "timestamp_t"
+    },
+    "end_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "message": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "operation": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "parent_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "service": {
+     "object_type": "service",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "start_time": {
+     "requirement": "required",
+     "type": "timestamp_t"
+    },
+    "start_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "status_code": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "span"
+  },
+  "sso": {
+   "attributes": {
+    "auth_protocol": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "auth_protocol_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "certificate": {
+     "object_type": "certificate",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "created_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "duration_mins": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "idle_timeout": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "login_endpoint": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "logout_endpoint": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "metadata_endpoint": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "protocol_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "scopes": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "sso"
+  },
+  "sub_technique": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "sub_technique"
+  },
+  "tactic": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "tactic"
+  },
+  "technique": {
+   "attributes": {
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "src_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "technique"
+  },
+  "threat_actor": {
+   "attributes": {
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    }
+   },
+   "constraints": null,
+   "name": "threat_actor"
+  },
+  "timespan": {
+   "attributes": {
+    "duration": {
+     "requirement": "recommended",
+     "type": "long_t"
+    },
+    "duration_days": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration_hours": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration_mins": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration_months": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration_secs": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration_weeks": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "duration_years": {
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "end_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "end_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "start_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "start_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "duration",
+     "duration_days",
+     "duration_hours",
+     "duration_mins",
+     "duration_months",
+     "duration_secs",
+     "duration_weeks",
+     "duration_years",
+     "end_time",
+     "start_time"
+    ]
+   },
+   "name": "timespan"
+  },
+  "token": {
+   "attributes": {
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "expiration_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "expiration_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "is_renewable": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "modified_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "modified_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "tenant_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "zone": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "token"
+  },
+  "trace": {
+   "attributes": {
+    "duration": {
+     "requirement": "optional",
+     "type": "long_t"
+    },
+    "end_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "end_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "flags": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "service": {
+     "object_type": "service",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "span": {
+     "object_type": "span",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "start_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "start_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "uid": {
+     "requirement": "required",
+     "type": "string_t"
+    }
+   },
+   "constraints": null,
+   "name": "trace"
+  },
+  "transformation_info": {
+   "attributes": {
+    "lang": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "product": {
+     "object_type": "product",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "url_string": {
+     "requirement": "recommended",
+     "type": "url_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "name",
+     "uid"
+    ]
+   },
+   "name": "transformation_info"
+  },
+  "url": {
+   "attributes": {
+    "categories": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "category_ids": {
+     "enum": [
+      "0",
+      "1",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "9",
+      "11",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "40",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "49",
+      "50",
+      "51",
+      "52",
+      "53",
+      "54",
+      "55",
+      "56",
+      "57",
+      "58",
+      "59",
+      "60",
+      "61",
+      "63",
+      "64",
+      "65",
+      "66",
+      "67",
+      "68",
+      "71",
+      "83",
+      "84",
+      "85",
+      "86",
+      "87",
+      "88",
+      "89",
+      "90",
+      "92",
+      "93",
+      "95",
+      "96",
+      "97",
+      "98",
+      "99",
+      "101",
+      "102",
+      "103",
+      "106",
+      "107",
+      "108",
+      "109",
+      "110",
+      "111",
+      "112",
+      "113",
+      "114",
+      "118",
+      "121"
+     ],
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "hostname": {
+     "requirement": "recommended",
+     "type": "hostname_t"
+    },
+    "path": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "port": {
+     "requirement": "recommended",
+     "type": "port_t"
+    },
+    "query_string": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "resource_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "scheme": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "subdomain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "url_string": {
+     "requirement": "recommended",
+     "type": "url_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "url_string",
+     "path"
+    ]
+   },
+   "name": "url"
+  },
+  "user": {
+   "attributes": {
+    "account": {
+     "object_type": "account",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "credential_uid": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "display_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "domain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "email_addr": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "forward_addr": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "full_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "groups": {
+     "is_array": true,
+     "object_type": "group",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "has_mfa": {
+     "requirement": "recommended",
+     "type": "boolean_t"
+    },
+    "ldap_person": {
+     "object_type": "ldap_person",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "name": {
+     "requirement": "recommended",
+     "type": "username_t"
+    },
+    "org": {
+     "object_type": "organization",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "phone_number": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "programmatic_credentials": {
+     "is_array": true,
+     "object_type": "programmatic_credential",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "risk_level": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "risk_level_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "risk_score": {
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "uid_alt": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "account",
+     "name",
+     "uid"
+    ]
+   },
+   "name": "user"
+  },
+  "vulnerability": {
+   "attributes": {
+    "advisory": {
+     "object_type": "advisory",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "affected_code": {
+     "is_array": true,
+     "object_type": "affected_code",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "affected_packages": {
+     "is_array": true,
+     "object_type": "affected_package",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "cve": {
+     "object_type": "cve",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "cwe": {
+     "object_type": "cwe",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "dependency_chain": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "desc": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "exploit_last_seen_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "exploit_last_seen_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "exploit_ref_url": {
+     "requirement": "optional",
+     "type": "url_t"
+    },
+    "exploit_requirement": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "exploit_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "first_seen_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "first_seen_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "fix_available": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "fix_coverage": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "fix_coverage_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "99"
+     ],
+     "requirement": "optional",
+     "type": "integer_t"
+    },
+    "is_exploit_available": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "is_fix_available": {
+     "requirement": "optional",
+     "type": "boolean_t"
+    },
+    "kb_article_list": {
+     "is_array": true,
+     "object_type": "kb_article",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "kb_articles": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "last_seen_time": {
+     "requirement": "optional",
+     "type": "timestamp_t"
+    },
+    "last_seen_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "packages": {
+     "is_array": true,
+     "object_type": "package",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "references": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "related_vulnerabilities": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "remediation": {
+     "object_type": "remediation",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "severity": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "title": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "vendor_name": {
+     "requirement": "optional",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "just_one": [
+     "advisory",
+     "cve",
+     "cwe"
+    ]
+   },
+   "name": "vulnerability"
+  },
+  "whois": {
+   "attributes": {
+    "autonomous_system": {
+     "object_type": "autonomous_system",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "created_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "created_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "dnssec_status": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "dnssec_status_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "domain": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "domain_contacts": {
+     "is_array": true,
+     "object_type": "domain_contact",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "email_addr": {
+     "requirement": "optional",
+     "type": "email_t"
+    },
+    "isp": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "isp_org": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "last_seen_time": {
+     "requirement": "recommended",
+     "type": "timestamp_t"
+    },
+    "last_seen_time_dt": {
+     "profiles": [
+      "datetime"
+     ],
+     "requirement": "optional",
+     "type": "datetime_t"
+    },
+    "name_servers": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "phone_number": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "registrar": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "status": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "subdomains": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "subnet": {
+     "requirement": "optional",
+     "type": "subnet_t"
+    }
+   },
+   "constraints": null,
+   "name": "whois"
+  },
+  "win/win_service": {
+   "attributes": {
+    "cmd_line": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "hosting_process": {
+     "object_type": "process_entity",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "labels": {
+     "is_array": true,
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "load_order_group": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "name": {
+     "requirement": "required",
+     "type": "string_t"
+    },
+    "service_category": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "service_category_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "service_dependencies": {
+     "is_array": true,
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "service_dll_file": {
+     "object_type": "file",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "service_error_control": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "service_error_control_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "service_file": {
+     "object_type": "file",
+     "requirement": "recommended",
+     "type": "object_t"
+    },
+    "service_start_name": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "service_start_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "service_start_type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "service_type": {
+     "requirement": "optional",
+     "type": "string_t"
+    },
+    "service_type_id": {
+     "enum": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "99"
+     ],
+     "requirement": "recommended",
+     "type": "integer_t"
+    },
+    "tags": {
+     "is_array": true,
+     "object_type": "key_value_object",
+     "requirement": "optional",
+     "type": "object_t"
+    },
+    "uid": {
+     "requirement": "recommended",
+     "type": "string_t"
+    },
+    "version": {
+     "requirement": "recommended",
+     "type": "string_t"
+    }
+   },
+   "constraints": {
+    "at_least_one": [
+     "cmd_line",
+     "service_category_id",
+     "service_dependencies",
+     "service_error_control_id",
+     "service_start_name",
+     "service_start_type_id",
+     "service_type_id"
+    ]
+   },
+   "name": "win/win_service"
+  }
+ },
+ "source": "https://schema.ocsf.io/1.8.0/export/v2/schema, trimmed to the classes below and the objects they reach; descriptions removed",
+ "types": {
+  "boolean_t": "boolean_t",
+  "bytestring_t": "string_t",
+  "datetime_t": "string_t",
+  "email_t": "string_t",
+  "file_hash_t": "string_t",
+  "file_name_t": "string_t",
+  "file_path_t": "string_t",
+  "float_t": "float_t",
+  "hostname_t": "string_t",
+  "integer_t": "integer_t",
+  "ip_t": "string_t",
+  "json_t": "json_t",
+  "long_t": "long_t",
+  "mac_t": "string_t",
+  "port_t": "integer_t",
+  "process_name_t": "string_t",
+  "reg_key_path_t": "string_t",
+  "resource_uid_t": "string_t",
+  "string_t": "string_t",
+  "subnet_t": "string_t",
+  "timestamp_t": "long_t",
+  "url_t": "string_t",
+  "username_t": "string_t",
+  "uuid_t": "string_t"
+ },
+ "version": "1.8.0"
+}
