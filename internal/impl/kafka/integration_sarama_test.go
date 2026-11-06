@@ -213,7 +213,12 @@ input:
 	// The kafka output sends with idempotent_write disabled, so a retried
 	// produce request can write a message twice. This is at-least-once
 	// delivery, not a fault. Under load it makes the exact-set checks of the
-	// suite fail on "hello world N" that was already received.
+	// suite fail on "hello world N" that was already received. Enabling
+	// idempotent_write is not a fix: the output then fails to connect,
+	// because Connect does not set Net.MaxOpenRequests to 1.
+	//
+	// The option does not apply to StreamTestCheckpointCapture, which
+	// checks each message in order. A copy can still fail that test.
 	allowProducerDupes := integration.StreamTestOptAllowDupes()
 
 	t.Run("balanced", func(t *testing.T) {
