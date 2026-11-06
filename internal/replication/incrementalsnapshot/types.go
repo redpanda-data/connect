@@ -17,6 +17,16 @@
 // A component for one database supplies a Deps and a Watermark, and usually
 // aliases Coordinator to its own position and watermark types to keep the
 // type arguments out of its call sites.
+//
+// Connectors whose stream has no single global log position (for example a
+// stream split into shards that each carry their own position, such as
+// DynamoDB Streams) cannot bound a chunk with watermarks. They use PageWindow
+// and ShardProgress instead. PageWindow holds each scanned page and drops
+// every key the stream touches before the page is sent, under one lock, so a
+// snapshot item is never emitted after its key's stream event. ShardProgress
+// tracks how far each shard has been read and decides when a held page may be
+// released; it only refines ordering, never safety. TableQueue runs such
+// backfills one table at a time.
 package incrementalsnapshot
 
 import "fmt"

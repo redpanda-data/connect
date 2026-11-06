@@ -1342,11 +1342,12 @@ func TestShardReaderNilIteratorCompletesClosedShard(t *testing.T) {
 	})
 }
 
-// countingMetricsExporter is a metrics exporter recording counter totals by
-// name, so tests can observe the input's counters.
+// countingMetricsExporter is a metrics exporter recording counter totals and
+// the last gauge value by name, so tests can observe the input's metrics.
 type countingMetricsExporter struct {
 	mu       sync.Mutex
 	counters map[string]int64
+	gauges   map[string]int64
 }
 
 type countingMetricsCounter struct {
@@ -1362,12 +1363,15 @@ type noopMetricsTimer struct{}
 
 func (noopMetricsTimer) Timing(int64) {}
 
-type noopMetricsGauge struct{}
+type countingMetricsGauge struct {
+	e    *countingMetricsExporter
+	name string
+}
 
-func (noopMetricsGauge) Set(int64)           {}
-func (noopMetricsGauge) SetFloat64(float64)  {}
-func (noopMetricsGauge) IncrFloat64(float64) {}
-func (noopMetricsGauge) DecrFloat64(float64) {}
+func (g countingMetricsGauge) Set(value int64)   { g.e.set(g.name, value) }
+func (countingMetricsGauge) SetFloat64(float64)  {}
+func (countingMetricsGauge) IncrFloat64(float64) {}
+func (countingMetricsGauge) DecrFloat64(float64) {}
 
 func (e *countingMetricsExporter) NewCounterCtor(name string, _ ...string) service.MetricsExporterCounterCtor {
 	return func(...string) service.MetricsExporterCounter { return countingMetricsCounter{e: e, name: name} }
@@ -1377,8 +1381,8 @@ func (*countingMetricsExporter) NewTimerCtor(string, ...string) service.MetricsE
 	return func(...string) service.MetricsExporterTimer { return noopMetricsTimer{} }
 }
 
-func (*countingMetricsExporter) NewGaugeCtor(string, ...string) service.MetricsExporterGaugeCtor {
-	return func(...string) service.MetricsExporterGauge { return noopMetricsGauge{} }
+func (e *countingMetricsExporter) NewGaugeCtor(name string, _ ...string) service.MetricsExporterGaugeCtor {
+	return func(...string) service.MetricsExporterGauge { return countingMetricsGauge{e: e, name: name} }
 }
 
 func (*countingMetricsExporter) Close(context.Context) error { return nil }
@@ -1395,10 +1399,22 @@ func (e *countingMetricsExporter) counter(name string) int64 {
 	return e.counters[name]
 }
 
+func (e *countingMetricsExporter) set(name string, value int64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.gauges[name] = value
+}
+
+func (e *countingMetricsExporter) gauge(name string) int64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.gauges[name]
+}
+
 // newCountingMetrics returns service metrics backed by a counting exporter.
 func newCountingMetrics(t *testing.T) (*service.Metrics, *countingMetricsExporter) {
 	t.Helper()
-	exporter := &countingMetricsExporter{counters: map[string]int64{}}
+	exporter := &countingMetricsExporter{counters: map[string]int64{}, gauges: map[string]int64{}}
 	env := service.NewEmptyEnvironment()
 	require.NoError(t, env.RegisterMetricsExporter("counting", service.NewConfigSpec(),
 		func(*service.ParsedConfig, *service.Logger) (service.MetricsExporter, error) { return exporter, nil }))
