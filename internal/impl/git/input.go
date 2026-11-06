@@ -583,7 +583,7 @@ func (in *input) detectMimeType(filePath string) (string, bool) {
 
 	// Detect content type and check if binary
 	contentTypeWithMetadata := http.DetectContentType(buffer[:n])
-	contentType := strings.Split(contentTypeWithMetadata, ";")[0]
+	contentType, _, _ := strings.Cut(contentTypeWithMetadata, ";")
 
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if mimeType, exists := extensionToMIME[ext]; exists {

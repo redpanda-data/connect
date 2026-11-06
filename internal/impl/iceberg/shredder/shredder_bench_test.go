@@ -67,3 +67,25 @@ func BenchmarkShred(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkShredCaseInsensitive measures the same per-record shred cost for a
+// case-insensitive shredder — the path that does NOT get the direct-lookup
+// treatment, and so is the one at risk of quietly paying for optimisations made
+// for the case-sensitive default.
+//
+// It earns its place: extracting the case-insensitive body into its own function
+// (briefly, to make the two paths separately callable) cost ~5% here for the
+// extra call, which only this benchmark revealed.
+func BenchmarkShredCaseInsensitive(b *testing.B) {
+	rs := NewRecordShredder(benchSchema(), false)
+	record := benchRecord()
+	sink := discardSink{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := rs.Shred(record, sink); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

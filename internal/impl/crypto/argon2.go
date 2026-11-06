@@ -118,7 +118,7 @@ func decodeArgon2Hash(hashedSecret string) (*argon2Value, error) {
 func registerArgon2CompareMethod() error {
 	spec := bloblang.NewPluginSpec().
 		Category("String Manipulation").
-		Description("Checks whether a string matches a hashed secret using Argon2.").
+		Description("Checks whether a string matches a hashed secret using Argon2.").Version("4.12.0").
 		Param(bloblang.NewStringParam("hashed_secret").Description("The hashed secret to compare with the input. This must be a fully-qualified string which encodes the Argon2 options used to generate the hash.")).
 		Example("", `root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")`, [2]string{
 			`{"secret":"there-are-many-blobs-in-the-sea"}`,

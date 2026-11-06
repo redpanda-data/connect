@@ -40,7 +40,9 @@ func envVarPrefix(es engineSpec, outs map[string]string) string {
 // shell-safe — bash still expands $, ` and \ inside "...". This is intentional
 // because (a) the RDS modules generate passwords with special=false (alphanumeric
 // only), and (b) reset SQL is hand-authored. If you ever feed user input into
-// these renderers, switch to a real shell-quoter.
+// these renderers, switch to a real shell-quoter. %q also turns a real
+// newline into a literal \n, so combineReset rejects multiline reset SQL
+// outright rather than let it reach the CLI altered.
 
 // renderSeedScript renders the shell script that runs on the load-gen host to
 // pre-seed the source database. The seeder is expected to be staged at
@@ -84,13 +86,47 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 	sb.WriteString("set -euo pipefail\n")
 	for _, st := range steps {
 		if st.SQL != "" {
-			// DSN form (postgres). The discrete host/port/user/pass/db-flags
-			// form (mysql's `mysql -h ... -P ... -e ...`) was dead once the
-			// registry was trimmed to postgres_cdc only — no remaining
-			// engineSpec entry sets ResetHostOutputKey — and returns with
-			// mysql_cdc's own stack PR.
-			fmt.Fprintf(&sb, `psql %q -v ON_ERROR_STOP=1 -c %q`+"\n",
-				outs[es.DSNOutputKey], st.SQL)
+			// %q renders a newline as the two characters \n, silently
+			// altering multiline SQL before the CLI ever sees it (a comment
+			// line would swallow the rest of the statement). Refuse loudly
+			// at render time rather than corrupt quietly on the paid host.
+			if strings.ContainsAny(st.SQL, "\n\r") {
+				return "", fmt.Errorf("combineReset: reset SQL must be single-line (%%q quoting turns a newline into a literal backslash-n): %q", st.SQL)
+			}
+			if es.ResetHostOutputKey != "" {
+				// Discrete-flags form (mysql): the CLI has no DSN-URL mode.
+				// The binary is `mariadb`, not `mysql` — mariadb1011 on the
+				// runner host guarantees the former, while the deprecated
+				// mysql compat symlink can vanish in a package/AMI refresh.
+				//
+				// Every connection part must be present, or the rendered
+				// command fails only at runtime on the provisioned host
+				// (bash collapses -p"" to a bare -p prompt) — an hour of
+				// paid session too late for a renamed terraform output.
+				for _, k := range []string{
+					es.ResetHostOutputKey, es.ResetPortOutputKey,
+					es.ResetUserOutputKey, es.ResetPassOutputKey,
+					es.ResetDBOutputKey,
+				} {
+					if outs[k] == "" {
+						return "", fmt.Errorf("combineReset: connector %q: terraform output %q is missing or empty", connector, k)
+					}
+				}
+				fmt.Fprintf(&sb, `mariadb -h %q -P %q -u %q -p%q %q -e %q`+"\n",
+					outs[es.ResetHostOutputKey],
+					outs[es.ResetPortOutputKey],
+					outs[es.ResetUserOutputKey],
+					outs[es.ResetPassOutputKey],
+					outs[es.ResetDBOutputKey],
+					st.SQL)
+			} else {
+				// DSN form (postgres). Same render-time presence check.
+				if outs[es.DSNOutputKey] == "" {
+					return "", fmt.Errorf("combineReset: connector %q: terraform output %q is missing or empty", connector, es.DSNOutputKey)
+				}
+				fmt.Fprintf(&sb, `psql %q -v ON_ERROR_STOP=1 -c %q`+"\n",
+					outs[es.DSNOutputKey], st.SQL)
+			}
 		}
 		if st.Bash != "" {
 			sb.WriteString(substitutePlaceholders(st.Bash, outs) + "\n")

@@ -93,29 +93,30 @@ func snsoOutputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Sends messages to an AWS SNS topic.`).
 		Description(`
+[[credentials-overview]]
 == Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, false)).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(snsoFieldTopicARN).
 				Description("The topic to publish to."),
 			service.NewInterpolatedStringField(snsoFieldMessageGroupID).
-				Description("An optional group ID to set for messages.").
+				Description("An optional message group ID. Required when publishing to an SNS FIFO topic, which delivers messages that share a group ID in order.").
 				Version("3.60.0").
 				Optional(),
 			service.NewInterpolatedStringField(snsoFieldMessageDedupeID).
-				Description("An optional deduplication ID to set for messages.").
+				Description("An optional deduplication ID for messages published to an SNS FIFO topic. SNS discards a message whose deduplication ID it has already accepted within the deduplication interval. Not required when the topic has content-based deduplication enabled.").
 				Version("3.60.0").
 				Optional(),
 			service.NewInterpolatedStringField(snsoFieldSubject).
-				Description("An optional subject to set for messages.").
+				Description("An optional subject to set for messages.").Version("4.81.0").
 				Optional(),
 			service.NewOutputMaxInFlightField(),
 			service.NewMetadataExcludeFilterField(snsoFieldMetadata).
-				Description("Specify criteria for which metadata values are sent as headers.").
+				Description("Specify which metadata values are sent as SNS message attributes of type `String`. Metadata keys that are not valid SNS attribute names are skipped.").
 				Version("3.60.0"),
 			service.NewDurationField(snsoFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("The maximum period to wait on a publish request before abandoning it and reattempting.").
 				Advanced().
 				Default("5s"),
 		).

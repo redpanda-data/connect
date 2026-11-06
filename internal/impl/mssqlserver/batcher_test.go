@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/ticket"
 )
 
 func TestSnapshotAckGate(t *testing.T) {
@@ -533,7 +534,7 @@ func TestFlushCurrentBarriersParkedFlusher(t *testing.T) {
 
 // TestShutdownUnwindsWedgedTicketChain encodes the shutdown wedge: the timed
 // flush loop parks in sendTracked holding its ticket (nothing drains msgChan
-// once ReadBatch stops), and another flusher waits in admit() with no escape
+// once ReadBatch stops), and another flusher waits in Ticket.Wait with no escape
 // of its own. Triggering the publisher's soft stop - which the input's Close
 // now does - must release the loop's ticket and let the chain drain via each
 // caller's cancelled context, instead of leaking both goroutines past the
@@ -553,10 +554,9 @@ func TestShutdownUnwindsWedgedTicketChain(t *testing.T) {
 	// One buffered event: the timed loop flushes it and parks in sendTracked
 	// (ticket 0) - nobody consumes msgs().
 	require.NoError(t, publisher.Publish(producerCtx, streamingEvent("00000001", "00000001")))
+	// Ticket 0 is admitted once its batch of 1 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 1
 	}, 5*time.Second, time.Millisecond, "the timed loop never flushed the first batch")
 
 	// A second flusher takes ticket 1 and wedges in admit behind the loop.
@@ -582,7 +582,7 @@ func TestShutdownUnwindsWedgedTicketChain(t *testing.T) {
 	cancelProducer()
 
 	select {
-	case <-blocked:
+	case <-blocked: //nolint:errcheck // only unwinding matters, the shutdown error is incidental
 	case <-time.After(5 * time.Second):
 		t.Fatal("the wedged flusher never unwound after shutdown")
 	}
@@ -620,10 +620,9 @@ func TestAdmitEscapesOnContextCancel(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent("00000002", "00000002"))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// A flusher with a cancellable context queues behind it (ticket 1).
@@ -699,10 +698,9 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent("00000002", "00000002"))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// A flusher with ROWS (ticket 1) queues behind it and is cancelled: its
@@ -724,7 +722,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 	// The abandon dropped rows: the queue must be sealed and the publisher
 	// poisoned so nothing can ever be tracked (and persisted) past them from
 	// this generation.
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"abandoning a flushed-but-untracked batch must poison the publisher")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent("00000005", "00000005")); err != nil {
@@ -732,7 +730,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent("00000006", "00000006"))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an LSN that skips them")
 }
 
@@ -776,7 +774,7 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	cancelTrack()
 	require.Error(t, <-parked)
 
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed Track stranded flushed-but-untracked rows; the publisher must be marked for rebuild")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent("00000005", "00000005")); err != nil {
@@ -784,8 +782,10 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent("00000006", "00000006"))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an LSN that skips them")
+	require.ErrorContains(t, laterErr, "tracking flushed batch",
+		"the refusal must show why the queue was sealed")
 }
 
 // mssqlTestFilterAllRegistered registers a processor that drops every batch,
@@ -862,7 +862,7 @@ func TestFailedSendPoisonsPublisher(t *testing.T) {
 
 	err := publisher.Publish(sendCtx, streamingEvent("00000001", "00000001"))
 	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
 }
 
@@ -935,4 +935,51 @@ func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublis
 		_ = publisher.Publish(ctx, event)
 	}()
 	return <-publisher.msgs()
+}
+
+func TestPublishSetsChangeMetadata(t *testing.T) {
+	t.Run("streaming rows carry lsn, seqval and command_id", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		event := streamingEvent("00000042", "00000041")
+		// A real __$seqval is 10 arbitrary bytes, usually not valid UTF-8.
+		event.SeqVal = replication.LSN{0x00, 0x00, 0x00, 0x2a, 0x00, 0x00, 0x0f, 0xa0, 0x00, 0x03}
+		event.CommandID = 7
+
+		am := publishAndReceive(t, ctx, publisher, event)
+		require.Len(t, am.msg, 1)
+		msg := am.msg[0]
+
+		want := map[string]string{
+			"database_schema": "dbo",
+			"table":           "t",
+			"operation":       replication.MessageOperationInsert.String(),
+			"lsn":             "00000042",
+			"seqval":          "0x0000002a00000fa00003",
+			"command_id":      "7",
+		}
+		for k, v := range want {
+			got, ok := msg.MetaGet(k)
+			require.True(t, ok, "metadata %q must be present", k)
+			require.Equal(t, v, got, "metadata %q", k)
+		}
+	})
+
+	t.Run("snapshot rows carry no ordering metadata", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, _ := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, snapshotEvent())
+		require.Len(t, am.msg, 1)
+		msg := am.msg[0]
+
+		op, ok := msg.MetaGet("operation")
+		require.True(t, ok)
+		require.Equal(t, replication.MessageOperationRead.String(), op)
+		for _, k := range []string{"lsn", "seqval", "command_id"} {
+			_, ok := msg.MetaGet(k)
+			require.False(t, ok, "metadata %q must be absent on snapshot rows", k)
+		}
+	})
 }

@@ -68,7 +68,7 @@ func init() {
 	if err := bloblang.RegisterMethodV2("format_xml",
 		bloblang.NewPluginSpec().
 			Category("Parsing").
-			Description(`Serializes an object into an XML document. Converts structured data to XML format with support for attributes (prefixed with hyphen), custom indentation, and configurable root element. Returns XML as a byte array.`).
+			Description(`Serializes an object into an XML document. Converts structured data to XML format with support for attributes (prefixed with hyphen), custom indentation, and configurable root element. Returns XML as a byte array.`).Version("4.11.0").
 			Example("Serialize object to pretty-printed XML with default indentation",
 				`root = this.format_xml()`,
 				[2]string{

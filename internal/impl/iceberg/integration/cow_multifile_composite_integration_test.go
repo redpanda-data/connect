@@ -40,8 +40,9 @@ import (
 // (zero delete manifests + overwrite operation).
 func TestCOWMultiFileAndCompositeIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	newRouter := func(t *testing.T, ns, tbl string, idFields ...string) *icebergimpl.Router {
 		operation, err := service.NewInterpolatedString(`${! meta("op") }`)

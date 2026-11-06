@@ -101,7 +101,7 @@ func (s *statusEmitter) sendStatusEvent(e *protoconnect.StatusEvent) {
 	}) // TODO: Log errors (occasionally)
 }
 
-// Convert a slice to a dot path following https://docs.redpanda.com/redpanda-connect/configuration/field_paths/
+// Convert a slice to a dot path following https://docs.redpanda.com/connect/configuration/field_paths/
 func sliceToDotPath(path []string) string {
 	var b bytes.Buffer
 	for i, s := range path {

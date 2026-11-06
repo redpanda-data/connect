@@ -161,19 +161,27 @@ func (k *awsKinesisCheckpointer) getCheckpoint(ctx context.Context, streamID, sh
 		},
 	})
 	if err != nil {
-		var aerr *types.ResourceNotFoundException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return nil, nil
 		}
 		return nil, err
 	}
 
+	// GetItem on a missing key succeeds with an empty Item (the
+	// ResourceNotFoundException above is a missing table), so a shard that
+	// was never claimed has no checkpoint.
+	if len(rawItem.Item) == 0 {
+		return nil, nil
+	}
+
 	c := awsKinesisCheckpoint{}
 
+	// A claim is written before the first commit, so an item can carry a
+	// client ID and lease but no sequence number yet: that is a checkpoint
+	// with no position, and a consumer resuming from it starts from the
+	// configured start_from_oldest position.
 	if s, ok := rawItem.Item["SequenceNumber"].(*types.AttributeValueMemberS); ok {
 		c.SequenceNumber = s.Value
-	} else {
-		return nil, errors.New("sequence ID was not found in checkpoint")
 	}
 
 	if s, ok := rawItem.Item["ClientID"].(*types.AttributeValueMemberS); ok {
@@ -296,8 +304,7 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 		},
 	})
 	if err != nil {
-		var aerr *types.ConditionalCheckFailedException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ConditionalCheckFailedException](err); ok {
 			return "", ErrLeaseNotAcquired
 		}
 		return "", err
@@ -338,7 +345,9 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 		if err != nil {
 			return "", err
 		}
-		startingSequence = cp.SequenceNumber
+		if cp != nil && cp.SequenceNumber != "" {
+			startingSequence = cp.SequenceNumber
+		}
 	}
 
 	return startingSequence, nil
@@ -387,8 +396,7 @@ func (k *awsKinesisCheckpointer) Checkpoint(ctx context.Context, streamID, shard
 		TableName: aws.String(k.conf.Table),
 		Item:      item,
 	}); err != nil {
-		var aerr *types.ConditionalCheckFailedException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ConditionalCheckFailedException](err); ok {
 			return false, nil
 		}
 		return false, err

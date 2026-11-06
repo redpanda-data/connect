@@ -12,7 +12,7 @@ header() {
 Redpanda Connect Installer
 
 Website: https://www.redpanda.com
-Docs: https://www.docs.redpanda.com/redpanda-connect
+Docs: https://docs.redpanda.com/connect
 Repo: https://github.com/redpanda-data/connect
 
 EOF

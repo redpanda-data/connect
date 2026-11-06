@@ -44,7 +44,7 @@ The `+"`topic`"+` field can be dynamically set using function interpolations des
 		Fields(clientFields()...).
 		Fields(
 			service.NewInterpolatedStringField(moFieldTopic).
-				Description("The topic to publish messages to."),
+				Description(`The topic to publish messages to.`),
 			service.NewIntField(moFieldQoS).
 				Description("The QoS value to set for each message. Has options 0, 1, 2.").
 				Default(1),
@@ -57,7 +57,7 @@ The `+"`topic`"+` field can be dynamically set using function interpolations des
 				Description("Set message as retained on the topic.").
 				Default(false),
 			service.NewInterpolatedStringField(moFieldRetainedInterpolated).
-				Description("Override the value of `retained` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `true` or `false`.").
+				Description(`Override the value of `+"`"+`retained`+"`"+` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `+"`"+`true`+"`"+` or `+"`"+`false`+"`"+`.`).
 				ShortDescription("Override retained with an interpolated value, resolving to true or false.").
 				Advanced().
 				Optional().

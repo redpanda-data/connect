@@ -24,6 +24,7 @@ import (
 
 func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t)
 
 	t.Run("cache initialises checkpoint table", func(t *testing.T) {
@@ -111,6 +112,7 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 
 func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache_ConvertOnRead(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t)
 
 	// highByteLSN has bytes >= 0x80, which a character column's collation decode corrupts on read.

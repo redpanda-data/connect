@@ -41,6 +41,7 @@ import (
 func TestIntegrationMongoCDCRefreshesCredentialsAfterSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	uri, mongoClient := startMongoContainerWithoutAuth(t)
+	dbName := testDatabaseName(t)
 
 	var builds atomic.Int64
 	prev := mongodb.AWSOptFn
@@ -52,7 +53,7 @@ func TestIntegrationMongoCDCRefreshesCredentialsAfterSnapshot(t *testing.T) {
 		}, nil
 	}
 
-	db := &databaseHelper{mongoClient.Database("test")}
+	db := &databaseHelper{mongoClient.Database(dbName)}
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "world"})
@@ -61,7 +62,7 @@ func TestIntegrationMongoCDCRefreshesCredentialsAfterSnapshot(t *testing.T) {
 	require.NoError(t, builder.AddInputYAML(`
 mongodb_cdc:
   url: '`+uri+`'
-  database: 'test'
+  database: '`+dbName+`'
   checkpoint_cache: 'filecache'
   stream_snapshot: true
   json_marshal_mode: relaxed

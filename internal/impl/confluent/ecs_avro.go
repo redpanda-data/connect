@@ -728,8 +728,8 @@ func ecsAvroAssignFullname(enclosing, typeName string, as map[string]any) (fulln
 	if name == "" {
 		return "", "", enclosing
 	}
-	if idx := strings.LastIndex(name, "."); idx >= 0 {
-		return name, name[idx+1:], name[:idx]
+	if before, after, ok := strings.CutLast(name, "."); ok {
+		return name, after, before
 	}
 	if ns, _ := as["namespace"].(string); ns != "" {
 		return ns + "." + name, name, ns

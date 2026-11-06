@@ -29,6 +29,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/llm"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -84,6 +86,8 @@ func chatProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor sends the contents of user prompts to the Cohere API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+ccpFieldUserPrompt+"`"+` configuration field to customize it.
 
+The model can also call external tools that you define in the `+"`"+ccpFieldTools+"`"+` field, and uses their results as supplementary context when it generates a response.
+
 To learn more about chat completion, see the https://docs.cohere.com/docs/chat-api[Cohere API documentation^].`).
 		Version("4.37.0").
 		Fields(
@@ -95,95 +99,77 @@ To learn more about chat completion, see the https://docs.cohere.com/docs/chat-a
 			)...,
 		).
 		Fields(
-			service.NewInterpolatedStringField(ccpFieldUserPrompt).
-				Description("The user prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+			llm.PromptField(ccpFieldUserPrompt).
 				Optional(),
-			service.NewInterpolatedStringField(ccpFieldSystemPrompt).
-				Description("The system prompt to submit along with the user prompt.").
+			llm.SystemPromptField(ccpFieldSystemPrompt).
 				Optional(),
 			service.NewIntField(ccpFieldMaxTokens).
 				Optional().
-				Description("The maximum number of tokens that can be generated in the chat completion."),
+				Description("The maximum number of tokens to allow in the chat completion."),
 			service.NewFloatField(ccpFieldTemp).
 				Optional().
-				Description(`What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
-
-We generally recommend altering this or top_p but not both.`).
+				Description("The sampling temperature, between `0` and `2`, that tunes the randomness of the generated text. Lower values make the output more focused and deterministic, and higher values make it more random. If you don't set this field, the Cohere API uses its default of `0.3`. To increase randomness further, also raise `top_p`.").
 				ShortDescription("Sampling temperature between 0 and 2. Higher values make output more random, lower more deterministic.").
 				LintRule(`root = if this > 2 || this < 0 { [ "field must be between 0 and 2" ] }`),
 			service.NewStringEnumField(ccpFieldResponseFormat, "text", "json", "json_schema").
 				Default("text").
-				Description("Specify the model's output format. If `json_schema` is specified, then additionally a `json_schema` or `schema_registry` must be configured.").
+				Description("Choose the model's output format. If `json_schema` is specified, then you must also configure a `json_schema` or `schema_registry`.").
 				ShortDescription("The model's output format. json_schema additionally requires json_schema or schema_registry."),
 			service.NewStringField(ccpFieldJSONSchema).
 				Optional().
-				Description("The JSON schema to use when responding in `json_schema` format. To learn more about what JSON schema is supported see the https://docs.cohere.com/docs/structured-outputs-json[Cohere documentation^].").
+				Description("The JSON schema to use when responding in `json_schema` format. To learn more about the JSON schema features supported, see the https://docs.cohere.com/docs/structured-outputs-json[Cohere documentation^].").
 				ShortDescription("The JSON schema to use when responding in json_schema format."),
 			service.NewObjectField(
 				ccpFieldSchemaRegistry,
 				slices.Concat(
 					[]*service.ConfigField{
-						service.NewURLField(ccpFieldSchemaRegistryURL).Description("The base URL of the schema registry service."),
+						service.NewURLField(ccpFieldSchemaRegistryURL).Description(schemaregistry.URLFieldDescription),
 						service.NewStringField(ccpFieldSchemaRegistrySubject).
 							Description("The subject name to fetch the schema for."),
 						service.NewDurationField(ccpFieldSchemaRegistryRefreshInterval).
 							Optional().
-							Description("The refresh rate for getting the latest schema. If not specified the schema does not refresh."),
+							Description("The refresh rate for fetching the latest schema. If not specified the schema does not refresh."),
 						service.NewTLSField(ccpFieldSchemaRegistryTLS),
 					},
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,
 			).
-				Description("The schema registry to dynamically load schemas from when responding in `json_schema` format. Schemas themselves must be in JSON format. To learn more about what JSON schema is supported see the https://docs.cohere.com/docs/structured-outputs-json[Cohere documentation^].").
+				Description("The schema registry to dynamically load schemas from when responding in `json_schema` format. Schemas themselves must be in JSON format. To learn more about the JSON schema features supported, see the https://docs.cohere.com/docs/structured-outputs-json[Cohere documentation^].").
 				ShortDescription("Schema registry to load schemas from when responding in json_schema format. Schemas must be JSON.").
 				Optional().
 				Advanced(),
 			service.NewFloatField(ccpFieldTopP).
 				Optional().
 				Advanced().
-				Description(`An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
-
-We generally recommend altering this or temperature but not both.`).
+				Description("Nucleus sampling, sent to the Cohere API as the `p` parameter. The model considers only the most likely tokens whose total probability mass is `top_p`. The Cohere API accepts values from `0.01` to `0.99`, and uses `0.75` if you don't set this field.").
 				ShortDescription("Nucleus sampling: the model considers only tokens making up the top_p probability mass.").
 				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
 			service.NewFloatField(ccpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
-				Description("Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.").
-				ShortDescription("Between -2.0 and 2.0. Positive values penalise frequent tokens, reducing verbatim repetition.").
-				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
+				Description("A number between `0.0` and `1.0`. Higher values penalize new tokens more strongly based on the frequency of their appearance in the prompt and the text so far. This decreases the model's likelihood to repeat the same line verbatim.").
+				ShortDescription("Between 0.0 and 1.0. Higher values penalize frequent tokens, reducing verbatim repetition.").
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
 			service.NewFloatField(ccpFieldPresencePenalty).
 				Optional().
 				Advanced().
-				Description("Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.").
-				ShortDescription("Between -2.0 and 2.0. Positive values encourage the model to raise new topics.").
-				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
+				Description("A number between `0.0` and `1.0`. Higher values penalize new tokens more strongly if they have already appeared in the prompt or the text so far, regardless of how often. This increases the model's likelihood to talk about new topics.").
+				ShortDescription("Between 0.0 and 1.0. Higher values encourage the model to raise new topics.").
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
 			service.NewIntField(ccpFieldSeed).
 				Advanced().
 				Optional().
-				Description("If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed.").
+				Description("If specified, the Cohere API makes a best effort to sample deterministically. Repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed.").
 				ShortDescription("Sample deterministically on a best-effort basis, so repeated requests with the same seed match."),
 			service.NewStringListField(ccpFieldStop).
 				Optional().
 				Advanced().
-				Description("Up to 4 sequences where the API will stop generating further tokens."),
-			service.NewIntField(ccpFieldMaxToolCalls).Description("Maximum number of tool calls the model can do.").Default(10),
+				Description("Specify up to five sequences to stop the API from generating further tokens."),
+			service.NewIntField(ccpFieldMaxToolCalls).Description("The maximum number of tool calls the model can perform.").Version("4.53.0").Default(10),
 			service.NewObjectListField(
 				ccpFieldTools,
-				service.NewStringField(ccpToolFieldName).Description("The name of this tool."),
-				service.NewStringField(ccpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
-				service.NewObjectField(
-					ccpToolFieldParams,
-					service.NewStringListField(ccpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
-					service.NewObjectMapField(
-						ccpToolParamFieldProps,
-						service.NewStringField(ccpToolParamPropFieldType).Description("The type of this parameter."),
-						service.NewStringField(ccpToolParamPropFieldDescription).Description("A description of this parameter."),
-						service.NewStringListField(ccpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
-					).Description("The properties for the processor's input data"),
-				).Description("The parameters the LLM needs to provide to invoke this tool."),
-				service.NewProcessorListField(ccpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
-			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+				llm.ToolFields(llm.ToolParametersField())...,
+			).Description("External tools that the model can invoke, such as functions, APIs, or web browsing. You can define subpipelines of processors that implement these tools, enabling the model to use agent-like behavior to decide when and how to invoke them to enhance response generation.").Version("4.53.0").
 				ShortDescription("The tools the LLM may invoke, allowing subpipelines to be called for agentic actions.").Default([]any{}),
 		).LintRule(`
       root = match {

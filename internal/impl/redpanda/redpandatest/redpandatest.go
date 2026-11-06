@@ -38,6 +38,17 @@ type Config struct {
 	ExtraOpts []testcontainers.ContainerCustomizer
 }
 
+// WithLowAIOUsage lowers the Linux AIO events that one Redpanda container
+// reserves at startup, from about 11000 to about 2000. The AIO events are
+// shared by all containers on the Docker host, and the default limit
+// (fs.aio-max-nr) is 65536. With the Redpanda default, a test package can
+// start only about 5 containers at the same time. More containers exit with
+// code 133. With this option, tests that start their own containers can run
+// in parallel.
+func WithLowAIOUsage() testcontainers.ContainerCustomizer {
+	return testcontainers.WithCmdArgs("--max-networking-io-control-blocks=1000")
+}
+
 // DefaultConfig returns the default configuration for starting a Redpanda broker.
 var DefaultConfig = Config{
 	AutoCreateTopics: true,
@@ -59,7 +70,7 @@ func StartSingleBrokerWithConfig(t *testing.T, cfg Config) (Endpoints, testconta
 		img = "docker.redpanda.com/redpandadata/redpanda-nightly:latest"
 	}
 
-	var opts []testcontainers.ContainerCustomizer
+	opts := []testcontainers.ContainerCustomizer{WithLowAIOUsage()}
 	if cfg.AutoCreateTopics {
 		opts = append(opts, tcredpanda.WithAutoCreateTopics())
 	}

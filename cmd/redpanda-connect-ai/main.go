@@ -65,7 +65,7 @@ func main() {
 	fmt.Println("exited without interrupt signal, marking as complete")
 	status.MarkDone()
 	select {
-	case <-errC:
+	case <-errC: //nolint:errcheck // health endpoint errors are irrelevant once the pipeline has exited
 	case <-sigC:
 	}
 }

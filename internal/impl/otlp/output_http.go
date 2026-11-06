@@ -73,34 +73,40 @@ func HTTPOutputSpec() *service.ConfigSpec {
 		Description(`
 Sends OpenTelemetry telemetry data to a remote collector via OTLP/HTTP protocol.
 
-Accepts batches of Redpanda OTEL v1 protobuf messages (spans, log records, or metrics) and converts them to OTLP format for transmission to OpenTelemetry collectors.
+Accepts batches of Redpanda OTEL v1 messages (spans, log records, or metrics) and converts them to OTLP format for transmission to OpenTelemetry collectors.
 
-## Input Format
+== Input format
 
-Expects messages in Redpanda OTEL v1 protobuf format with metadata:
-- `+"`signal_type`"+`: "trace", "log", or "metric"
+This output expects messages in Redpanda OTEL v1 format (protobuf or JSON, detected automatically) with the following metadata:
+
+- `+"`otel_signal_type`"+`: The signal type (`+"`trace`"+`, `+"`log`"+`, or `+"`metric`"+`)
+
+Messages produced by the `+"`otlp_grpc`"+` and `+"`otlp_http`"+` inputs already include this metadata.
 
 Each batch must contain messages of the same signal type. The entire batch is converted to a single OTLP export request and sent via HTTP POST.
 
-## Endpoints
+== Endpoints
 
 The output automatically appends the signal type path to the base endpoint:
+
 - Traces: `+"`{endpoint}/v1/traces`"+`
 - Logs: `+"`{endpoint}/v1/logs`"+`
 - Metrics: `+"`{endpoint}/v1/metrics`"+`
 
-## Content Types
+== Content types
 
-Supports two content types:
+The `+"`content_type`"+` field supports two content types:
+
 - `+"`protobuf`"+` (default): `+"`application/x-protobuf`"+`
 - `+"`json`"+`: `+"`application/json`"+`
 
-## Authentication
+== Authentication
 
-Supports multiple authentication methods:
+This output supports the following authentication methods:
+
 - Basic authentication
 - OAuth v1
-- OAuth v2
+- OAuth v2 (requires TLS to be enabled)
 - JWT
 `).
 		Fields(
@@ -127,9 +133,8 @@ Supports multiple authentication methods:
 				Advanced().
 				Default(""),
 			service.NewBoolField(hoFieldFollowRedirects).
-				Description("Transparently follow redirects, i.e. responses with 300-399 status codes. "+
-					"If disabled, the response message will contain the body, status, and headers from the redirect response and the processor will not make a request to the URL set in the Location header of the response.").
-				ShortDescription("Transparently follow redirects, meaning responses with 300-399 status codes.").
+				Description("Whether to follow redirects, which are responses with 300-399 status codes, from the OTLP endpoint. When disabled, the output does not request the URL in the `Location` header, and the write fails with an unexpected status error.").
+				ShortDescription("Whether to follow redirects from the OTLP endpoint.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(hoFieldDisableHTTP2).
@@ -144,7 +149,7 @@ Supports multiple authentication methods:
 			netutil.DialerConfigSpec(),
 		).
 		Fields(service.NewHTTPRequestAuthSignerFields()...).
-		Fields(oauth2.FieldSpec()).
+		Fields(service.NewOAuth2Field("oauth2")).
 		Fields(service.NewOutputMaxInFlightField())
 }
 

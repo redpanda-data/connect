@@ -82,8 +82,8 @@ func keyRoundTrip(t *testing.T, infra *testInfrastructure, ns, tbl string, keyTy
 
 func TestRowOperationKeyTypesIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	t.Parallel()
+	infra := setupTestInfra(t)
 	const ns = "row_op_keytypes"
 	infra.CreateNamespace(t, ns)
 
@@ -119,8 +119,9 @@ func TestRowOperationKeyTypesIntegration(t *testing.T) {
 // TestRowOperationCompositeKeyIntegration verifies a multi-column identifier.
 func TestRowOperationCompositeKeyIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns, tbl = "row_op_composite", "ck"
 	infra.CreateNamespace(t, ns)
 
@@ -170,8 +171,9 @@ func TestRowOperationCompositeKeyIntegration(t *testing.T) {
 // deletes route to the correct partition and match the intended rows.
 func TestRowOperationPartitionedIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns, tbl = "row_op_partitioned", "p"
 	infra.CreateNamespace(t, ns)
 
@@ -224,8 +226,9 @@ func TestRowOperationPartitionedIntegration(t *testing.T) {
 // upserts of the same key in one batch must leave a single (latest) row.
 func TestRowOperationBatchCollapseIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 	const ns, tbl = "row_op_collapse", "c"
 	infra.CreateNamespace(t, ns)
 

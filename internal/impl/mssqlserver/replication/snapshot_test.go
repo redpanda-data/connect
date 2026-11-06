@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIntegration_Snapshot_(t *testing.T) {
+func TestIntegration_Snapshot(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)

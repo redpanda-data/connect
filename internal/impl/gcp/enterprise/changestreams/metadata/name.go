@@ -9,6 +9,8 @@
 package metadata
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -21,7 +23,7 @@ const (
 	metadataCreatedAtIndexFormat = "CreatedAtIdx_%s_%s"
 )
 
-func genName(template, databaseID string, id uuid.UUID) string {
+func genName(template, databaseID, id string) string {
 	// maxNameLength is the maximum length for table and index names in PostgreSQL (63 bytes)
 	const maxNameLength = 63
 
@@ -31,6 +33,22 @@ func genName(template, databaseID string, id uuid.UUID) string {
 		return name[:maxNameLength]
 	}
 	return name
+}
+
+// deterministicSuffix derives a stable identifier from the database and
+// table name so that repeated calls for the same table produce identical
+// index names.
+//
+// This is required for the CREATE INDEX IF NOT EXISTS statements in
+// CreatePartitionMetadataTableWithDatabaseAdminClient to actually be
+// idempotent across connector restarts: that DDL runs on every startup, and
+// a random per-call suffix (e.g. uuid.New()) would generate a distinct,
+// never-matching index name each time, silently adding two new indexes to
+// the metadata table on every restart until Spanner's per-table index limit
+// (128) is hit.
+func deterministicSuffix(databaseID, table string) string {
+	sum := sha256.Sum256([]byte(databaseID + "/" + table))
+	return hex.EncodeToString(sum[:8])
 }
 
 // TableNames specifies table and index names to be used for metadata storage.
@@ -45,7 +63,7 @@ type TableNames struct {
 // The watermark index will be in the form of "WatermarkIdx_<databaseId>_<uuid>".
 // The createdAt / start timestamp index will be in the form of "CreatedAtIdx_<databaseId>_<uuid>".
 func RandomTableNames(databaseID string) TableNames {
-	id := uuid.New()
+	id := uuid.New().String()
 	return TableNames{
 		TableName:          genName(tableNameFormat, databaseID, id),
 		WatermarkIndexName: genName(watermarkIndexFormat, databaseID, id),
@@ -54,11 +72,14 @@ func RandomTableNames(databaseID string) TableNames {
 }
 
 // TableNamesFromExistingTable encapsulates a selected table name.
-// Index names are generated, but will only be used if the given table does not exist.
-// The watermark index will be in the form of "WatermarkIdx_<databaseId>_<uuid>".
-// The createdAt / start timestamp index will be in the form of "CreatedAtIdx_<databaseId>_<uuid>".
+// Index names are derived deterministically from the database and table
+// name (see deterministicSuffix), so repeated calls -- e.g. on every
+// connector restart -- produce the same names, and the CREATE INDEX IF NOT
+// EXISTS statements issued at setup are true no-ops once the indexes exist.
+// The watermark index will be in the form of "WatermarkIdx_<databaseId>_<suffix>".
+// The createdAt / start timestamp index will be in the form of "CreatedAtIdx_<databaseId>_<suffix>".
 func TableNamesFromExistingTable(databaseID, table string) TableNames {
-	id := uuid.New()
+	id := deterministicSuffix(databaseID, table)
 	return TableNames{
 		TableName:          table,
 		WatermarkIndexName: genName(watermarkIndexFormat, databaseID, id),

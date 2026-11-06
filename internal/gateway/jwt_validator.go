@@ -99,7 +99,7 @@ func (r *jwtValidator) validateToken(ctx context.Context, tokenString string) (*
 			return nil, err
 		}
 
-		c, ok := (token).(*validator.ValidatedClaims)
+		c, ok := token.(*validator.ValidatedClaims)
 		if !ok {
 			return nil, errors.New("invalid claims type")
 		}

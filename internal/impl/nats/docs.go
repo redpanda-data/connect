@@ -29,13 +29,36 @@ const (
 func connectionNameDescription() string {
 	return `== Connection name
 
-When monitoring and managing a production NATS system, it is often useful to
-know which connection a message was send/received from. This can be achieved by
+When monitoring and managing a production https://docs.nats.io/nats-concepts/overview[NATS system^], it is often useful to
+know which connection a message was sent or received from. This can be achieved by
 setting the connection name option when creating a NATS connection.
 
 Redpanda Connect will automatically set the connection name based off the label of the given
 NATS component, so that monitoring tools between NATS and Redpanda Connect can stay in sync.
 `
+}
+
+// consumeSubjectDescription describes the subject field of the NATS inputs.
+const consumeSubjectDescription = "A subject to consume from. Supports wildcards for consuming multiple subjects."
+
+// headersField returns the explicit message headers field shared by the
+// components that publish NATS messages.
+func headersField() *service.ConfigField {
+	return service.NewInterpolatedStringMapField("headers").
+		Description(`Explicit message headers to add to messages.`).
+		Default(map[string]any{}).
+		Example(map[string]any{
+			"Content-Type": "application/json",
+			"Timestamp":    `${!meta("Timestamp")}`,
+		})
+}
+
+// metadataField returns the metadata filter field shared by the components
+// that publish NATS messages.
+func metadataField() *service.ConfigField {
+	return service.NewMetadataFilterField("metadata").
+		Description("Specify which metadata values are added to messages as NATS headers, alongside any explicit `headers`.").Version("4.22.0").
+		Optional()
 }
 
 func inputTracingDocs() *service.ConfigField {

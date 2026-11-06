@@ -29,9 +29,10 @@ const (
 
 func inputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
+		Version("4.10.0").
 		Categories("Services").
 		Summary("Executes a find query and creates a message for each row received.").
-		Fields(clientFields()...).
+		Fields(clientFields("4.25.0")...).
 		Field(service.NewStringField(ciFieldQuery).
 			Description("A query to execute.")).
 		Field(service.NewAutoRetryNacksToggleField()).

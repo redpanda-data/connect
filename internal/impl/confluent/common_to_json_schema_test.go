@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
@@ -229,5 +230,101 @@ func TestCommonToJSONSchemaBigDecimal(t *testing.T) {
 	}
 	for _, s := range []string{"1.5e2", "+1.5", "01", "", "1.2.3"} {
 		assert.False(t, re.MatchString(s), "permissive pattern should NOT match %q", s)
+	}
+}
+
+func TestCommonToJSONSchemaOptionalAllowsNull(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  schema.Common
+		want   string
+		accept []string
+		reject []string
+	}{
+		{
+			name: "object property: optional accepts null, required does not",
+			input: schema.Common{Type: schema.Object, Children: []schema.Common{
+				{Name: "id", Type: schema.Int64},
+				{Name: "name", Type: schema.String, Optional: true},
+			}},
+			want:   `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":["string","null"]}},"required":["id"]}`,
+			accept: []string{`{"id":1}`, `{"id":1,"name":null}`, `{"id":1,"name":"x"}`},
+			reject: []string{`{}`, `{"id":null}`, `{"id":1,"name":5}`},
+		},
+		{
+			name:   "timestamp keeps format",
+			input:  schema.Common{Type: schema.Timestamp, Optional: true},
+			want:   `{"type":["string","null"],"format":"date-time"}`,
+			accept: []string{`null`, `"2026-10-09T00:00:00Z"`},
+			reject: []string{`5`},
+		},
+		{
+			name:   "decimal keeps pattern",
+			input:  schema.Common{Type: schema.Decimal, Optional: true, Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 10, Scale: 2}}},
+			want:   `{"type":["string","null"],"pattern":"^-?(0|[1-9][0-9]{0,7})\\.[0-9]{2}$"}`,
+			accept: []string{`null`, `"12.50"`},
+			reject: []string{`"12.5"`},
+		},
+		{
+			name:   "array with optional items",
+			input:  schema.Common{Type: schema.Array, Optional: true, Children: []schema.Common{{Type: schema.String, Optional: true}}},
+			want:   `{"type":["array","null"],"items":{"type":["string","null"]}}`,
+			accept: []string{`null`, `["a",null]`},
+			reject: []string{`[5]`},
+		},
+		{
+			name:   "object keeps required children",
+			input:  schema.Common{Type: schema.Object, Optional: true, Children: []schema.Common{{Name: "city", Type: schema.String}}},
+			want:   `{"type":["object","null"],"properties":{"city":{"type":"string"}},"required":["city"]}`,
+			accept: []string{`null`, `{"city":"c"}`},
+			reject: []string{`{"city":null}`},
+		},
+		{
+			name:   "union gets a null branch in its oneOf",
+			input:  schema.Common{Type: schema.Union, Optional: true, Children: []schema.Common{{Type: schema.String}, {Type: schema.Int32}}},
+			want:   `{"oneOf":[{"type":"string"},{"type":"integer"},{"type":"null"}]}`,
+			accept: []string{`null`, `"x"`, `3`},
+			reject: []string{`true`},
+		},
+		{
+			name:   "union with a branch that accepts null is unchanged",
+			input:  schema.Common{Type: schema.Union, Optional: true, Children: []schema.Common{{Type: schema.String, Optional: true}, {Type: schema.Int32}}},
+			want:   `{"oneOf":[{"type":["string","null"]},{"type":"integer"}]}`,
+			accept: []string{`null`, `"x"`, `3`},
+			reject: []string{`true`},
+		},
+		{
+			name:   "any is unchanged",
+			input:  schema.Common{Type: schema.Any, Optional: true},
+			want:   `{}`,
+			accept: []string{`null`, `true`},
+		},
+		{
+			name:   "null is unchanged",
+			input:  schema.Common{Type: schema.Null, Optional: true},
+			want:   `{"type":"null"}`,
+			accept: []string{`null`},
+			reject: []string{`"x"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := commonToJSONSchema(tt.input)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.want, got)
+
+			sch, err := gojsonschema.NewSchema(gojsonschema.NewStringLoader(got))
+			require.NoError(t, err)
+			for _, doc := range tt.accept {
+				res, err := sch.Validate(gojsonschema.NewStringLoader(doc))
+				require.NoError(t, err)
+				assert.True(t, res.Valid(), "%s should be accepted: %v", doc, res.Errors())
+			}
+			for _, doc := range tt.reject {
+				res, err := sch.Validate(gojsonschema.NewStringLoader(doc))
+				require.NoError(t, err)
+				assert.False(t, res.Valid(), "%s should be rejected", doc)
+			}
+		})
 	}
 }

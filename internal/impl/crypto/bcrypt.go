@@ -25,7 +25,7 @@ import (
 func registerCompareBCryptMethod() error {
 	spec := bloblang.NewPluginSpec().
 		Category("String Manipulation").
-		Description("Checks whether a string matches a hashed secret using bcrypt.").
+		Description("Checks whether a string matches a hashed secret using bcrypt.").Version("4.12.0").
 		Param(bloblang.NewStringParam("hashed_secret").Description("The hashed secret value to compare with the input.")).
 		Example("", `root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")`, [2]string{
 			`{"secret":"there-are-many-blobs-in-the-sea"}`,

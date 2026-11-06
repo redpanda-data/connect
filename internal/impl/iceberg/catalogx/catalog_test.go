@@ -47,6 +47,34 @@ func TestIsAuthErr(t *testing.T) {
 	}
 }
 
+// advertisedEndpoints is what /v1/config reports in the "endpoints" field.
+//
+// The REST spec makes the field optional, and a server that omits it is taken
+// to support only the default set — which does NOT include the two HEAD
+// "exists" endpoints. A client that honours that negotiation answers an
+// existence check with GET (load) instead of HEAD, so a mock that omits the
+// field cannot exercise the HEAD path at all. These tests are about the HEAD
+// path, so the mock advertises it, along with the default set the other tests
+// rely on (advertising replaces the default set rather than extending it).
+var advertisedEndpoints = []string{
+	"GET /v1/{prefix}/namespaces",
+	"POST /v1/{prefix}/namespaces",
+	"GET /v1/{prefix}/namespaces/{namespace}",
+	"HEAD /v1/{prefix}/namespaces/{namespace}",
+	"DELETE /v1/{prefix}/namespaces/{namespace}",
+	"POST /v1/{prefix}/namespaces/{namespace}/properties",
+	"GET /v1/{prefix}/namespaces/{namespace}/tables",
+	"GET /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+	"HEAD /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+	"POST /v1/{prefix}/namespaces/{namespace}/tables",
+	"POST /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+	"DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+	"POST /v1/{prefix}/tables/rename",
+	"POST /v1/{prefix}/namespaces/{namespace}/register",
+	"POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/metrics",
+	"POST /v1/{prefix}/transactions/commit",
+}
+
 // mockRESTServer wraps httptest.Server and always handles /v1/config (required
 // by rest.NewCatalog on construction). All other paths are dispatched to the
 // caller-provided handler.
@@ -56,12 +84,23 @@ type mockRESTServer struct {
 }
 
 func newMockRESTServer(handler http.HandlerFunc) *mockRESTServer {
+	return newMockRESTServerWithEndpoints(advertisedEndpoints, handler)
+}
+
+// newMockRESTServerWithEndpoints is newMockRESTServer with control over the
+// "endpoints" field. Pass nil to omit it, modelling a server that advertises
+// no capabilities.
+func newMockRESTServerWithEndpoints(endpoints []string, handler http.HandlerFunc) *mockRESTServer {
 	m := &mockRESTServer{}
 	m.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/config" {
 			m.configCalls.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"defaults": map[string]any{}, "overrides": map[string]any{}})
+			cfg := map[string]any{"defaults": map[string]any{}, "overrides": map[string]any{}}
+			if endpoints != nil {
+				cfg["endpoints"] = endpoints
+			}
+			_ = json.NewEncoder(w).Encode(cfg)
 			return
 		}
 		handler(w, r)
@@ -140,6 +179,34 @@ func TestCheckTableExistsRetryOnAuthErr(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, exists)
 	assert.Equal(t, int32(2), calls.Load())
+}
+
+// TestCheckTableExistsFallsBackToLoadWithoutAdvertisement covers the path taken
+// against a catalog that omits "endpoints" from /v1/config, which the REST spec
+// reads as "the default set only" — and that set has no HEAD exists endpoint.
+// The existence check must then be answered with GET (load) rather than by
+// issuing a HEAD the server never advertised.
+func TestCheckTableExistsFallsBackToLoadWithoutAdvertisement(t *testing.T) {
+	var heads, gets atomic.Int32
+	srv := newMockRESTServerWithEndpoints(nil, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/tables/") {
+			switch r.Method {
+			case http.MethodHead:
+				heads.Add(1)
+			case http.MethodGet:
+				gets.Add(1)
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL, []string{"ns"})
+	exists, err := client.CheckTableExists(context.Background(), "tbl")
+	require.NoError(t, err)
+	assert.False(t, exists)
+	assert.Zero(t, heads.Load(), "must not issue a HEAD the server never advertised")
+	assert.Equal(t, int32(1), gets.Load(), "existence check falls back to GET")
 }
 
 func TestCreateNamespaceRetryOnAuthErr(t *testing.T) {

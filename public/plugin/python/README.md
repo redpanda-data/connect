@@ -42,3 +42,9 @@ EOF
 
 rpk connect run --rpc-plugins=plugin.yaml connect.yaml
 ```
+
+To check the config in CI without running it, use `dry-run`:
+
+```shell
+rpk connect dry-run --rpc-plugins=plugin.yaml connect.yaml
+```

@@ -342,8 +342,7 @@ func processIAMRole(ctx context.Context, api cleanupAPI, roleName string, now ti
 		// error so the sweep's SNS alert fires; swallowing it lets orphaned
 		// bench roles accumulate invisibly until the instance-profile quota
 		// blocks every future terraform apply.
-		var notFound *iamtypes.NoSuchEntityException
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*iamtypes.NoSuchEntityException](err); ok {
 			return false, nil
 		}
 		return false, err

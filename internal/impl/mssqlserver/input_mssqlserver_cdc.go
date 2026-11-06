@@ -27,6 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 const (
@@ -54,7 +55,7 @@ func init() {
 var msSQLServerStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
-	Version("0.0.1").
+	Version("4.66.1").
 	Summary("Enables Change Data Capture by consuming from Microsoft SQL Server's change tables.").
 	Description(`Streams changes from a Microsoft SQL Server database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
@@ -62,85 +63,89 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 == Metadata
 
 This input adds the following metadata fields to each message:
-- database_schema (The database schema for the table where the message originates from)
-- schema (The table schema in benthos common schema format, compatible with processors like parquet_encode)
-- table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
-- lsn (the Log Sequence Number in Microsoft SQL Server)
+- ` + "`database_schema`" + ` (The database schema for the table where the message originates from)
+- ` + "`schema`" + ` (The table schema in benthos common schema format, compatible with processors like ` + "`parquet_encode`" + `)
+- ` + "`table`" + ` (Name of the table that the message originated from)
+- ` + "`operation`" + ` (Type of operation that generated the message: ` + "`read`" + `, ` + "`delete`" + `, ` + "`insert`" + `, or ` + "`update_before`" + ` and ` + "`update_after`" + `. ` + "`read`" + ` is from messages that are read in the initial snapshot phase.)
+- ` + "`lsn`" + ` (The commit Log Sequence Number of the change, from the change table column ` + "`__$start_lsn`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+- ` + "`seqval`" + ` (The position of the change in the transaction log, from the change table column ` + "`__$seqval`" + `, as a hexadecimal string with a ` + "`0x`" + ` prefix. Not present on snapshot (` + "`read`" + `) messages.)
+- ` + "`command_id`" + ` (The order of the statement within its transaction, from the change table column ` + "`__$command_id`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+
+== Ordering
+
+Change messages are emitted in the order SQL Server recorded them: by ` + "`lsn`" + ` first, then by ` + "`command_id`" + `.
+All rows of one transaction share one ` + "`lsn`" + `, so ` + "`lsn`" + ` alone does not order changes inside a transaction. Use ` + "`command_id`" + ` for that.
+
+The ` + "`update_before`" + ` and ` + "`update_after`" + ` rows of one ` + "`UPDATE`" + ` statement share ` + "`lsn`" + `, ` + "`seqval`" + ` and ` + "`command_id`" + `.
+Use ` + "`operation`" + ` to tell them apart: ` + "`update_before`" + ` is always emitted first.
 
 == Permissions
 
-When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures. The ` + "`rpcn`" + ` schema must also already exist. Refer to <<` + fieldCheckpointCacheTableName + `,` + "`" + fieldCheckpointCacheTableName + "`" + `>> for more information.
+
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + `, the database must allow snapshot isolation, because each table is snapshotted in a transaction at ` + "`SNAPSHOT`" + ` isolation so that its rows are read as one consistent view. Enable it with ` + "`ALTER DATABASE <database> SET ALLOW_SNAPSHOT_ISOLATION ON`" + `, which requires ` + "`ALTER`" + ` permission on the database. Otherwise the snapshot fails with an error such as ` + "`Snapshot isolation transaction failed accessing database ... because snapshot isolation is not allowed in this database`" + `. This setting is separate from ` + "`READ_COMMITTED_SNAPSHOT`" + ` and does not change the isolation level of other sessions, but SQL Server then keeps row versions in ` + "`tempdb`" + ` for updates and deletes. Streaming from the change tables does not need it.
 
 == Performance
 
-This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer, and delivery is inherently bursty — short idle periods followed by large batches are normal under heavy write load and reflect the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth (CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints) rather than CPU; the input itself needs very little CPU to keep pace with the capture job.
+This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer. Delivery is inherently bursty: short idle periods followed by large batches are normal under heavy write load. This reflects the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth rather than CPU. CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints. The input itself needs very little CPU to keep pace with the capture job.
 
 Operational notes:
 
 - ` + "`TRUNCATE TABLE`" + ` is rejected on a CDC-enabled table. To clear one, disable CDC on the table, truncate, then re-enable.
-- On AWS RDS, enable CDC with ` + "`msdb.dbo.rds_cdc_enable_db`" + ` — ` + "`sys.sp_cdc_enable_db`" + ` requires sysadmin, which RDS does not grant.
+- On AWS RDS, enable CDC with ` + "`msdb.dbo.rds_cdc_enable_db`" + `: ` + "`sys.sp_cdc_enable_db`" + ` requires sysadmin, which RDS does not grant.
 - Do not stop the CDC capture job (` + "`cdc.<database>_capture`" + `): while it is stopped nothing is published to the change tables, so this input reads nothing and reports no error.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
-		Description("The connection string of the Microsoft SQL Server database to connect to.").
+		Description("The connection string for the Microsoft SQL Server database. Use the format `sqlserver://username:password@host/instance?param1=value&param2=value`. For Windows Authentication, use `sqlserver://host/instance?trusted_connection=yes`. Include additional parameters like `TrustServerCertificate=true` for self-signed certificates or `encrypt=disable` to disable encryption.").
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("If set to true, the connector will query all the existing data as a part of snapshot process. " +
-			"If set to false, no snapshot is taken and on first run streaming begins from the start of each table's existing change table — " +
-			"every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not just changes from the current LSN onward. " +
-			"To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty.").
+		Description("Whether to stream a snapshot of all existing data before streaming CDC changes. When set to `true`, the connector first queries all existing table data, then switches to streaming incremental changes from the change tables. When set to `false`, no snapshot is taken and, on first run, streaming begins from the start of each table's existing change table: every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not only changes from the current LSN onward. To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty. The snapshot reads each table in a transaction at `SNAPSHOT` isolation, so the database must allow it: run `ALTER DATABASE <database> SET ALLOW_SNAPSHOT_ISOLATION ON` before enabling this field.").
 		ShortDescription("Snapshot existing data first. Otherwise streaming replays everything retained in the change tables.").
 		Example(true).
 		Default(false),
 	).
-	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
-		Default(1)).
+	Field(cdcreplication.MaxParallelSnapshotTablesField()).
 	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+		Description("The maximum number of rows to stream in a single batch during the initial snapshot phase. Larger batch sizes can improve throughput for initial data loads but may increase memory usage. This setting only applies when `stream_snapshot` is enabled.").
 		Default(1000),
 	).
 	Field(service.NewStringListField(fieldTablesInclude).
-		Description("Regular expressions for tables to include.").
+		Description("Regular expressions for tables to include in CDC streaming. Specify table names using the format `schema.table` (such as `dbo.orders`, `sales.customers`). Each pattern is treated as a regular expression, allowing wildcards and pattern matching. All specified tables must have CDC enabled in SQL Server.").
 		Example("dbo.products"),
 	).
 	Field(service.NewStringListField(fieldTablesExclude).
-		Description("Regular expressions for tables to exclude.").
+		Description("Regular expressions for tables to exclude from CDC streaming. Use this to filter out specific tables from the include patterns. Table names should follow the `schema.table` format. Exclude patterns are applied after include patterns, allowing you to include broad patterns while excluding specific tables.").
 		Example("dbo.privatetable").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table. If not set the default Microsoft SQL Server based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
+		Description("A xref:components:caches/about.adoc[cache resource] to store the current Log Sequence Number (LSN) position. The cache stores the highest LSN that has been successfully delivered downstream, which allows Redpanda Connect to resume from the last processed position after a restart, rather than consume the entire state of the change table. If not set, the default Microsoft SQL Server based cache is used. See `" + fieldCheckpointCacheTableName + "` for more information.").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
+		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").Version("4.67.0").
 		Default(defaultCheckpointCache).
 		Example("dbo.checkpoint_cache").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheConnectionString).
-		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, the checkpoint cache table is created on this remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").
+		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, this creates the checkpoint cache table on the remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").Version("4.87.0").
 		Example("sqlserver://username:password@remotehost/instance?param1=value&param2=value").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheKey).
-		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").Version("4.67.0").
 		Default("microsoft_sql_server_cdc").
 		Optional(),
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
-		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		Description("The maximum number of messages that can be processed concurrently before applying back pressure. Higher values enable more parallel processing and batching at the output level, but increase memory usage. To preserve at-least-once delivery guarantees, a given Log Sequence Number (LSN) is only acknowledged after all messages under that offset are delivered.").
 		ShortDescription("The maximum number of messages that can be processed at a given time.").
 		Default(1024),
 	).
 	Field(service.NewDurationField(fieldStreamBackoffInterval).
-		Description("The interval to wait before checking for new changes after a pass over the change tables completes. " +
-			"Each pass drains changes up to the maximum LSN observed as the pass began, then sleeps for this interval while SQL Server's capture job continues to publish. " +
-			"For low traffic tables increasing this value reduces query load on the server. " +
-			"On high traffic tables it directly reduces throughput, because the input sits idle for the full interval between passes; consider lowering it towards `500ms`, which matches the default poll interval of comparable CDC systems.").
+		Description("The interval to wait before checking for new changes after a pass over the change tables completes. Each pass drains changes up to the maximum LSN observed as the pass began, then waits for this interval while SQL Server's capture job continues to publish changes. For low-traffic tables, increasing this value reduces query load on the server. For high-traffic tables, a longer interval directly reduces throughput, because the input sits idle for the full interval between passes. Consider lowering it towards `500ms`, which matches the default poll interval of comparable CDC systems. Use Go duration format such as `500ms`, `5s`, or `1m`.").
 		ShortDescription("Interval between passes over the change tables. On busy tables lower values increase throughput.").
 		Default("5s").
 		Example("500ms").Example("5s").Example("1m"),
@@ -331,10 +336,14 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 // place, so the new session resumes from the last durable LSN.
 func (i *sqlServerCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error) {
 	publisher := i.publisher.Load()
-	if !publisher.poisoned.Load() {
+	if !publisher.poisoned() {
 		return publisher, nil
 	}
-	i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	if err := publisher.queue.Err(); err != nil {
+		i.log.Warnf("Rebuilding publisher: rows were dropped, so the flush queue is sealed: %v", err)
+	} else {
+		i.log.Warn("Rebuilding publisher: a batch could not be handed to the pipeline, so the previous checkpoint tracker is pinned")
+	}
 	publisher.close()
 	batcher, err := i.batching.NewBatcher(i.res)
 	if err != nil {
@@ -360,7 +369,8 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
-	// (see sendTracked), so a poisoned publisher can never checkpoint again.
+	// (see sendTracked), and a sealed flush queue refuses every later batch
+	// (see sealQueue), so a poisoned publisher can never checkpoint again.
 	// Rebuild it with a fresh tracker: the new session resumes from the last
 	// durable LSN, which is necessarily before the orphaned rows, and the old
 	// session's late acks resolve into the abandoned tracker (cacheLSN's
@@ -476,10 +486,8 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, ctx := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
-			}
-			return nil
+			// ReadChangeTables only returns once it hits an error.
+			return fmt.Errorf("streaming from change tables: %w", streaming.ReadChangeTables(ctx, i.db, maxLSN))
 		})
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
@@ -563,7 +571,7 @@ func (i *sqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch
 		case m := <-pub.msgs():
 			return m.msg, m.ackFn, nil
 		case <-pubStopped:
-			if pub.poisoned.Load() {
+			if pub.poisoned() {
 				// Fatal flush-loop exit: tear the session down BEFORE handing
 				// control to Connect - the session goroutine may still be
 				// alive (Connect's still-active guard would otherwise turn
@@ -626,7 +634,7 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	// runs under the publisher's OWN signaller, and a flush parked in
 	// sendTracked (nothing drains msgChan once ReadBatch stops) would
 	// otherwise hold its flush ticket forever - wedging every other flusher
-	// waiting in admit() and leaking the session goroutines past the
+	// waiting in Ticket.Wait and leaking the session goroutines past the
 	// timeout. Cancelling the loop's context releases its ticket, and the
 	// chain then drains: each later ticket holder's Track/send escapes via
 	// its stopSig-derived context.

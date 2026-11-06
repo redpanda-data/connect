@@ -66,8 +66,8 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Version("4.12.0").
-		Summary("Perform operations on a NATS key-value bucket.").
+		Version("4.13.0").
+		Summary("Performs operations on a NATS key-value bucket.").
 		Description(`
 == KV operations
 
@@ -105,7 +105,7 @@ This processor adds the following metadata fields to each message, depending on 
 			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
-				Description("The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards^] for the `history` and `keys` operations.").
+				Description(`The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards^] for the ` + "`" + `history` + "`" + ` and ` + "`" + `keys` + "`" + ` operations.`).
 				ShortDescription("The key for each message. Supports wildcards for the history and keys operations.").
 				Example("foo").
 				Example("foo.bar.baz").
@@ -113,14 +113,14 @@ This processor adds the following metadata fields to each message, depending on 
 				Example("foo.>").
 				Example(`foo.${! json("meta.type") }`).LintRule(`if this == "" {[ "'key' must be set to a non-empty string" ]}`),
 			service.NewInterpolatedStringField(kvpFieldRevision).
-				Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
+				Description(`The revision of the key to operate on. Used for ` + "`" + `get_revision` + "`" + ` and ` + "`" + `update` + "`" + ` operations.`).
 				ShortDescription("The revision of the key to operate on. Used by get_revision and update operations.").
 				Example("42").
 				Example(`${! @nats_kv_revision }`).
 				Optional().
 				Advanced(),
 			service.NewDurationField(kvpFieldTimeout).
-				Description("The maximum period to wait on an operation before aborting and returning an error.").
+				Description("The maximum period to wait on an operation before aborting and returning an error.").Version("4.27.0").
 				Advanced().Default("5s"),
 		}...)...).
 		LintRule(`root = match {

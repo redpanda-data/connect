@@ -38,28 +38,19 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").Optional()).
-		Field(service.NewBoolField("unsafe_dynamic_query").
-			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
-			ShortDescription("Enable interpolation functions in the query. Take care to defend against injection attacks.").
-			Advanced().
-			Default(false)).
-		Field(service.NewBloblangField("args_mapping").
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
-			ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
-			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
-			Optional()).
+		Field(unsafeDynamicQueryField().Version("4.8.0")).
+		Field(rawQueryArgsMappingField()).
 		Field(service.NewObjectListField(
 			"queries",
 			rawQueryField(),
 			rawQueryArgsMappingField(),
 			rawQueryWhenField(),
 		).
-			Description("A list of query statements. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries execute for each message within a transaction. When specifying multiple statements without conditions, they are all executed within a transaction.").
+			Description("A list of database statements to run in addition to the main `query`. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries are executed for each message within a single transaction.").Version("4.45.0").
 			ShortDescription("A list of query statements. The first whose when condition passes is executed for each message.").
 			Optional()).
 		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of batches to be sending in parallel at any given time.").
+			Description("The maximum number of batches to send in parallel at any given time. When multiple queries are configured and you consume from Redpanda or Kafka, messages are ordered by partition within each transaction, so you can keep this above `1` to parallelize writes across partitions while preserving consume order within each partition. Messages without a `kafka_partition` metadata field are treated as partition `0`.").
 			Default(64)).
 		Fields(connFields()...).
 		Field(service.NewBatchPolicyField("batching")).
@@ -129,6 +120,21 @@ output:
             name = EXCLUDED.name,
             updated_at = EXCLUDED.updated_at
         args_mapping: 'root = [this.id, this.name, this.updated_at]'
+`,
+		).
+		Example(
+			"Upsert into SAP HANA",
+			"SAP HANA uses `UPSERT ... WITH PRIMARY KEY` for insert-or-update semantics instead of the `ON CONFLICT` clause used by PostgreSQL. To read from SAP HANA, use the xref:components:inputs/sap_hana.adoc[`sap_hana` input].",
+			`
+output:
+  sql_raw:
+    driver: hana
+    dsn: hdb://user:password@hana-host:39017
+    query: |
+      UPSERT ORDERS (ORDER_ID, CUSTOMER_ID, STATUS, UPDATED_AT)
+      VALUES (?, ?, ?, ?)
+      WITH PRIMARY KEY
+    args_mapping: 'root = [this.order_id, this.customer_id, this.status, this.updated_at]'
 `,
 		).
 		LintRule(`root = match {

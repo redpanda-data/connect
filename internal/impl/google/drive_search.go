@@ -45,24 +45,27 @@ func driveSearchProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor searches for files in Google Drive using the provided query.
 
-Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[^Google Drive File]
+Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[Google Drive File^]
 
-`+authDescription("https://www.googleapis.com/auth/drive.readonly")).
+`+authDescription("https://www.googleapis.com/auth/drive.readonly")).Version("4.53.0").
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveSearchFieldQuery).
-				Description("The search query to use for finding files in Google Drive. Supports the same query format as the Google Drive UI."),
+				Description(`Specify a search query to locate matching files in Google Drive. This field supports:
+
+- The same query syntax as the Google Drive UI
+- xref:configuration:interpolation.adoc#bloblang-queries[Bloblang interpolation functions] for dynamic query generation`),
 			service.NewStringListField(driveSearchFieldProjection).
-				Description("The partial fields to include in the result.").
+				Description("Partial fields to include in the Google Drive search result.").
 				Default([]any{"id", "name", "mimeType", "size", "labelInfo"}),
 			service.NewInterpolatedStringField(driveSearchFieldLabels).
-				Description("A comma delimited list of label IDs to include in the result").
+				Description("A comma delimited list of label IDs to include in the Google Drive search result.").
 				Default(""),
 			service.NewIntField(driveSearchFieldMaxResults).
-				Description("The maximum number of results to return.").
+				Description("The maximum number of search results to return.").
 				Default(64),
 			service.NewBoolField(driveSearchFieldSupportSharedDrives).
-				Description("Whether or not to include shared drives in the result.").
+				Description("Whether or not to include shared drives in the result.").Version("4.80.1").
 				Default(false),
 		).
 		Example("Search & download files from Google Drive", "This examples downloads all the files from Google Drive that are returned in the query", `

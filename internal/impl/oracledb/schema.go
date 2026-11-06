@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -102,10 +103,27 @@ func columnToCommon(name, typeName string, precision, scale int64, hasDecimalInf
 	if isNumberType(typeName) {
 		return replication.NumberToCommon(name, precision, scale, hasDecimalInfo)
 	}
-	return schema.Common{
+	c := schema.Common{
 		Name:     name,
 		Type:     oracleTypeToCommonType(typeName),
 		Optional: true,
+	}
+	if c.Type == schema.Timestamp {
+		c.Logical = oracleTimestampLogical(typeName)
+	}
+	return c
+}
+
+// oracleTimestampLogical returns the timestamp parameters for a Timestamp
+// column. TIMESTAMP types use micros so TIMESTAMP(6) isn't truncated to
+// millis; precision above 6 is still truncated. DATE has no fractional
+// seconds, so it keeps the millis default.
+func oracleTimestampLogical(typeName string) *schema.LogicalParams {
+	if normalizeOracleTypeName(typeName) == "DATE" {
+		return nil
+	}
+	return &schema.LogicalParams{
+		Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true},
 	}
 }
 
@@ -134,7 +152,7 @@ func isNumberType(dataType string) bool {
 type schemaCache struct {
 	mu         sync.Mutex
 	schemas    map[string]*cachedSchema
-	seededMeta map[string][]replication.ColumnMeta // track the ColumnMeta slice for reuse
+	seededMeta map[string][]replication.ColumnMeta // last ColumnMeta each table was seeded with
 	db         *sql.DB
 	pdbName    string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
 	log        *service.Logger
@@ -293,15 +311,14 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 	return fresh.schema, &columnTypeInfo{fresh.colTypes}, nil
 }
 
-// seedFromColumnMeta populates the cache from column metadata collected during
-// a snapshot transaction, overriding any pre-fetched entry — unless meta is
-// the same slice (by identity) already used to seed this table, in which case
-// the rebuild is skipped and the cache is left untouched.
+// seedFromColumnMeta caches table's schema from snapshot column metadata,
+// overriding any existing entry. It's called for every snapshot row, so it
+// skips the rebuild when meta matches the last meta seeded for the table by
+// content, since each snapshot page builds its own slice.
 //
-// The identity check is against the last slice this function was called
-// with, not against whatever is currently cached. If schemaForEvent's
-// catalog-refresh path replaces the cached schema in between, a later call
-// here with the same meta slice will not restore the snapshot-derived one.
+// The match is against the last seeded meta, not the cached schema, so a
+// schema replaced by schemaForEvent's catalog refresh isn't restored by a
+// later seed with the same columns.
 func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []replication.ColumnMeta) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -332,15 +349,16 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}
 }
 
-// sameColumnMeta checks whether a and b are the same underlying slice to enable reuse.
+// sameColumnMeta reports whether a and b describe the same columns. Comparing the
+// first element's address first makes the common same-slice case O(1).
 func sameColumnMeta(a, b []replication.ColumnMeta) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	if len(a) == 0 {
+	if len(a) == 0 || &a[0] == &b[0] {
 		return true
 	}
-	return &a[0] == &b[0]
+	return slices.Equal(a, b)
 }
 
 // ---------------------------------------------------------------------------

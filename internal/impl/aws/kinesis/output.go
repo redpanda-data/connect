@@ -79,9 +79,10 @@ func koOutputSpec() *service.ConfigSpec {
 		Description(`
 Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages the interpolations are performed per message part.
 
+[[credentials-overview]]
 == Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(koFieldStream).
 				Description("The stream to publish messages to. Streams can either be specified by their name or full ARN.").
@@ -97,7 +98,11 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewBatchPolicyField(koFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+		Fields(service.NewRetryBackOffFields(0, &backoff.ExponentialBackOff{
+			InitialInterval: time.Second,
+			MaxInterval:     5 * time.Second,
+			MaxElapsedTime:  30 * time.Second,
+		})...)
 }
 
 func init() {

@@ -844,8 +844,7 @@ func putSoakArchiveObject(ctx context.Context, client *s3.Client, bucket, key st
 // message can be pinned in a test without a real S3 client (see
 // TestWrapSoakArchiveUploadErr_NoSuchBucket).
 func wrapSoakArchiveUploadErr(key, bucket string, err error) error {
-	var nsb *s3types.NoSuchBucket
-	if errors.As(err, &nsb) {
+	if _, ok := errors.AsType[*s3types.NoSuchBucket](err); ok {
 		return fmt.Errorf("upload %s to soak archive bucket %q: bucket does not exist — run `task aws:persistent` to create it: %w", key, bucket, err)
 	}
 	return fmt.Errorf("upload %s to soak archive bucket %q: %w", key, bucket, err)

@@ -53,12 +53,10 @@ func startEmulator(t *testing.T, projectID, datasetID string) *bqEmulator {
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts("9050/tcp", "9060/tcp"),
 		testcontainers.CustomizeRequest(testcontainers.GenericContainerRequest{
-			ContainerRequest: testcontainers.ContainerRequest{
-				Cmd: []string{
-					"--project=" + projectID,
-					"--dataset=" + datasetID,
-					"--log-level=debug",
-				},
+			Cmd: []string{
+				"--project=" + projectID,
+				"--dataset=" + datasetID,
+				"--log-level=debug",
 			},
 		}),
 		testcontainers.WithWaitStrategy(

@@ -31,6 +31,7 @@ input:
     # Confluent-style structured output (default: true)
     # When true: outputs JSON with all fields (message, log_group, log_stream, timestamp, etc.)
     # When false: outputs raw log message with metadata in message headers
+    # (the redpanda output only writes headers matching metadata.include_patterns)
     structured_log: true
 
     # AWS credentials and region
@@ -68,8 +69,8 @@ pipeline:
 
 output:
   # Example: Output to Kafka (similar to Confluent connector)
-  kafka:
-    addresses:
+  redpanda:
+    seed_brokers:
       - localhost:9092
     topic: cloudwatch-logs
     max_in_flight: 10

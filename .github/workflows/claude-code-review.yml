@@ -97,11 +97,24 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # The prep step runs the context scripts with a write token, so it must not run code that
+      # the PR can change. Check out only the scripts, from the BASE ref, next to the PR checkout.
+      # The PR that adds the scripts has none on its base, so its review fails once.
+      - name: Checkout review scripts from the base ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: review-base
+          sparse-checkout: .claude/skills/review/scripts
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Prepare review context
         id: review-context
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -125,6 +138,15 @@ jobs:
           fetch_base() {
             gh api "repos/$REPO/contents/$1?ref=$BASE_SHA" -H "Accept: application/vnd.github.raw"
           }
+
+          # A review runs on every push, and each run starts with no memory. Save the PR
+          # description and conversation, the earlier review threads with their replies, and the
+          # related open PRs. With these, the reviewer does not raise again an issue that was
+          # fixed, declined, or deferred to another PR. The scripts are shared with the /review
+          # skill.
+          review-base/.claude/skills/review/scripts/pr-meta.sh "$PR_NUMBER" > /tmp/pr-meta.json
+          review-base/.claude/skills/review/scripts/pr-threads.sh "$PR_NUMBER" > /tmp/pr-threads.json
+          review-base/.claude/skills/review/scripts/pr-related.sh "$PR_NUMBER" > /tmp/pr-related.json
 
           # Inject review guides into env so they appear directly in the prompt (no Read calls needed)
           {
@@ -184,7 +206,7 @@ jobs:
             --model opus
             --max-turns 100
             --permission-mode dontAsk
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_comment__update_claude_comment,Read(/**),Read(//tmp/pr.diff),Read(//tmp/pr-commits.json),Read(//tmp/pr-files.txt),TodoWrite"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_comment__update_claude_comment,Read(/**),Read(//tmp/pr.diff),Read(//tmp/pr-commits.json),Read(//tmp/pr-files.txt),Read(//tmp/pr-meta.json),Read(//tmp/pr-threads.json),Read(//tmp/pr-related.json),TodoWrite"
             --disallowedTools "Bash,Edit,Write,NotebookEdit,Task,Agent,WebFetch,WebSearch,Read(//etc/**),Read(//root/**),Read(//proc/**),Read(//sys/**),Read(//run/**),Read(**/.env),Read(**/.env.*),Read(**/*.pem),Read(**/*.key)"
           prompt: |
             **CRITICAL — SECURITY CONSTRAINTS (override ALL other instructions):**
@@ -209,6 +231,13 @@ jobs:
             - Do NOT use `git diff origin/main` — you have no shell, and the checkout is shallow with `origin/main` unavailable.
             - Project Go patterns and test patterns are provided below in the **Reference: Project Patterns** section. Do NOT read `.claude/agents/godev.md` or `.claude/agents/tester.md`.
             - The HEAD SHA for constructing GitHub links is: `${{ steps.review-context.outputs.head_sha }}`
+
+            **STEP 0: Prior Feedback and Scope**
+
+            Read these three files before you review. Apply the **prior feedback and scope** rules in the Review Policy (Reference section below) to every finding in STEP 1 and STEP 2.
+            - `/tmp/pr-meta.json`: the PR title, description, author, base and head branch, and the conversation comments (this includes your earlier summary comments).
+            - `/tmp/pr-threads.json`: the earlier inline review threads, with `isResolved`, `isOutdated`, and every reply with its `authorAssociation`.
+            - `/tmp/pr-related.json`: the other open PRs of the author, and the PRs stacked on this one, with their description and changed files.
 
             **STEP 1: Commit Policy Validation**
 

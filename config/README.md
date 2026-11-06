@@ -9,4 +9,4 @@ If you're looking for specific config examples for a use case you have then try 
 rpk connect create kafka/schema_registry_decode/nats_jetstream > example.yaml
 ```
 
-[unit-tests]: https://www.docs.redpanda.com/redpanda-connect/docs/configuration/unit_testing
+[unit-tests]: https://docs.redpanda.com/connect/configuration/unit_testing/

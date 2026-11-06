@@ -63,9 +63,9 @@ Only one authentication method is required, `+"`storage_connection_string`"+` or
 In order to set the `+"`queue_name`"+` you can use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are calculated per message of a batch.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewInterpolatedStringField(qsoFieldQueueName).
-				Description("The name of the target Queue Storage queue."),
+				Description(`The name of the target Queue Storage queue.`),
 			service.NewInterpolatedStringField(qsoFieldTTL).
-				Description("The TTL of each individual message as a duration string. Defaults to 0, meaning no retention period is set").
+				Description(`The TTL of each individual message as a duration string. Defaults to 0, meaning no retention period is set`).
 				Example("60s").Example("5m").Example("36h").
 				Advanced().
 				Default(""),

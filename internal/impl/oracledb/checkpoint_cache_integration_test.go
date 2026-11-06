@@ -9,10 +9,8 @@
 package oracledb_test
 
 import (
-	"context"
 	"database/sql"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -24,18 +22,18 @@ import (
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // TestIntegrationMigrateCheckpointCache can be deleted once we're happy customers have migrated.
 func TestIntegrationMigrateCheckpointCache(t *testing.T) {
 	integration.CheckSkip(t)
+	// Not parallel: TestIntegrationOracleDBCDCSnapshotAndStreaming also uses
+	// C##RPCN, and it is parallel (see SetupCDBTestWithPDB).
 
 	cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
-	require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.mtfoo", "CREATE TABLE testdb.mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), pdbDB.Schema+".mtfoo", "CREATE TABLE "+pdbDB.Schema+".mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	cdbDB, err := sql.Open("oracle", cdbConnStr)
 	require.NoError(t, err)
@@ -81,41 +79,22 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.MTFOO"]
+  include: ["` + pdbDB.Schema + `.MTFOO"]
   batching:
     count: 500`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, cdbConnStr, pdbName)))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		batch.Lock()
-		defer batch.Unlock()
-		for _, msg := range mb {
-			msgBytes, err := msg.AsBytes()
-			assert.NoError(t, err)
-			batch.Msgs = append(batch.Msgs, string(msgBytes))
-		}
-		return nil
-	}))
+	stream := oracledbtest.StartPipeline(t, fmt.Sprintf(cfg, cdbConnStr, pdbName), batch.Consumer(t))
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-
-	// Poll until the migration renames default 'max_scn' to config checkpoint_cache_key value, then immediately
-	// assert the SCN value is unchanged — the migration must only rename the key.
+	// Poll until the migration renames default 'max_scn' to config checkpoint_cache_key value.
+	// The rename must not roll the SCN back. The mined checkpoint can move it forward before
+	// the poll sees the new key, so the pre-migration SCN is a lower bound.
 	var actualSCN []byte
 	q := fmt.Sprintf(`SELECT cache_val FROM %s WHERE cache_key = :1`, cacheTableName)
 	assert.Eventually(t, func() bool {
 		return cdbDB.QueryRowContext(t.Context(), q, "oracledb_cdc").Scan(&actualSCN) == nil
 	}, time.Minute, time.Second, "expected migration to rename 'max_scn' to 'oracledb_cdc'")
-	assert.Equal(t, expectedSCN, actualSCN, "expected migration to leave SCN value unchanged")
+	assert.GreaterOrEqual(t, binary.LittleEndian.Uint64(actualSCN), binary.LittleEndian.Uint64(expectedSCN),
+		"expected migration to keep or advance the pre-migration SCN, never roll it back")
 
 	t.Log("Verifying streaming changes...")
 	{
@@ -123,18 +102,13 @@ oracledb_cdc:
 		_, err = pdbDB.Exec(`
 BEGIN
 	FOR i IN 1..1000 LOOP
-		INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT);
+		INSERT INTO ` + pdbDB.Schema + `.mtfoo (id) VALUES (DEFAULT);
 	END LOOP;
 	COMMIT;
 END;`)
 		require.NoError(t, err)
 
-		var got int
-		assert.Eventually(t, func() bool {
-			got = batch.Count()
-			return got >= want
-		}, time.Minute*1, time.Second*1)
-		assert.Equalf(t, want, got, "Wanted %d streaming messages but got %d", want, got)
+		oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*1)
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))

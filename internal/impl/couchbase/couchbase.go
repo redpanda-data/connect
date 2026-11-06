@@ -21,25 +21,35 @@ import (
 	"github.com/couchbase/gocb/v2"
 )
 
+// valueFromOp returns the document content for a GetOp or the operation error.
 func valueFromOp(op gocb.BulkOp) (out any, err error) {
-	switch o := op.(type) {
-	case *gocb.GetOp:
-		if o.Err != nil {
-			return nil, o.Err
-		}
+	if err := opErr(op); err != nil {
+		return nil, err
+	}
+	if o, ok := op.(*gocb.GetOp); ok {
 		err := o.Result.Content(&out)
 		return out, err
+	}
+	return nil, nil
+}
+
+// opErr returns the error of a bulk operation after collection.Do. Do does not return the errors of single
+// operations; it stores them in the Err field of each operation.
+func opErr(op gocb.BulkOp) error {
+	switch o := op.(type) {
+	case *gocb.GetOp:
+		return o.Err
 	case *gocb.InsertOp:
-		return nil, o.Err
+		return o.Err
 	case *gocb.RemoveOp:
-		return nil, o.Err
+		return o.Err
 	case *gocb.ReplaceOp:
-		return nil, o.Err
+		return o.Err
 	case *gocb.UpsertOp:
-		return nil, o.Err
+		return o.Err
 	}
 
-	return nil, errors.New("type not supported")
+	return errors.New("type not supported")
 }
 
 func get(key string, _ []byte, _ *time.Duration) gocb.BulkOp {

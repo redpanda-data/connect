@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -34,6 +36,8 @@ var (
 	SchemaStringEquals     = schemaStringEquals
 	EncodeOffsetHeader     = encodeOffsetHeader
 )
+
+type PartialSyncError = partialSyncError
 
 func ReadRecordTimestamp(
 	ctx context.Context,
@@ -82,8 +86,33 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 			Level: slog.LevelDebug,
 		}))),
 		knownSubjects: make(map[schemaSubjectVersion]struct{}),
-		knownSchemas:  make(map[int]schemaInfo),
+		schemas:       make(map[int]schemaState),
+
+		retryMinBackoff: 100 * time.Millisecond,
+		retryMaxBackoff: time.Second,
 	}
+}
+
+// SetMaxParallelHTTPRequests overrides the number of sync workers set by
+// NewSchemaRegistryMigratorForTesting.
+func (m *schemaRegistryMigrator) SetMaxParallelHTTPRequests(n int) {
+	m.conf.MaxParallelHTTPRequests = n
+}
+
+// SyncRoots syncs only the given root subjects, as the retry loop does.
+func (m *schemaRegistryMigrator) SyncRoots(ctx context.Context, subjects ...string) error {
+	roots := make(map[string]struct{}, len(subjects))
+	for _, s := range subjects {
+		roots[s] = struct{}{}
+	}
+	return m.sync(ctx, roots)
+}
+
+// FailedRoots returns the root subjects that the retry loop would retry.
+func (m *schemaRegistryMigrator) FailedRoots() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return slices.Sorted(maps.Keys(m.failedRoots))
 }
 
 func (m *schemaRegistryMigrator) DfsSubjectSchemasFunc(
@@ -120,4 +149,39 @@ func NewGroupsMigratorForTesting(
 		dstTopicIDs:     make(map[string]kadm.TopicID),
 		commitedOffsets: make(map[string]map[string]map[int32][2]int64),
 	}
+}
+
+func NewMigratorForSchemaIDTranslationTesting(t *testing.T, strict bool, idMap map[int]int, topics ...string) *Migrator {
+	t.Helper()
+
+	m := &Migrator{
+		topic: topicMigrator{knownTopics: make(map[string]TopicMapping)},
+		sr: schemaRegistryMigrator{
+			conf: SchemaRegistryMigratorConfig{
+				Enabled:      true,
+				TranslateIDs: true,
+				Strict:       strict,
+			},
+			src:     &sr.Client{},
+			dst:     &sr.Client{},
+			schemas: make(map[int]schemaState),
+		},
+		log: service.MockResources().Logger(),
+		src: &kgo.Client{},
+	}
+	m.topic.log, m.sr.log = m.log, m.log
+	for srcID, dstID := range idMap {
+		m.sr.setSchemaSynced(sr.SubjectSchema{Subject: "s", Version: 1, ID: srcID}, schemaInfo{Subject: "s", Version: 1, ID: dstID})
+	}
+	for _, topic := range topics {
+		m.topic.knownTopics[topic] = TopicMapping{
+			Src: TopicInfo{Topic: topic, Partitions: 1},
+			Dst: TopicInfo{Topic: topic, Partitions: 1},
+		}
+	}
+	return m
+}
+
+func (m *Migrator) MessageBatchToFranzRecords(batch service.MessageBatch) ([]kgo.Record, error) {
+	return m.messageBatchToFranzRecords(batch)
 }

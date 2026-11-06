@@ -1,0 +1,96 @@
+name: mysql-orders-soak
+description: |
+  Soak: hold Connect's mysql_cdc at a fixed, sustained-moderate load (10K
+  writes/sec ≈ 12 MB/s — roughly 10-15% of the ~100-115 MB/s read ceiling
+  measured for mysql_cdc, see docs history and the benchmarking branch's
+  mysql-orders-cdc sweep) for 90 minutes at a single vCPU point. Same
+  purpose as postgres-orders-soak: catch leaks, stalls, and rotation bugs
+  that a short max-load sweep never runs long enough to hit.
+
+  Password auth for now. The mysql soak is the designated future home of
+  the ~15-min IAM credential-rotation lever (RDS IAM tokens ride
+  normal-protocol MySQL connections, unlike postgres replication — see
+  postgres-orders-soak's description and #4258/#4668), but that arrives as
+  its own increment: IAM needs the AWSAuthenticationPlugin DB user created
+  in reset, the rds-db:connect policy in the stack, and a live validation
+  pass. Everything here works unchanged when that lands — only the DSN,
+  the input's aws block, and reset steps change.
+
+connector: mysql_cdc
+stack: mysql
+soak: true
+
+infra:
+  source:
+    instance_class: db.r6g.xlarge
+    # Same RDS gp3 tiering as postgres: below 400 GB you may not set
+    # iops/storage_throughput at all; at >=400 GB the free baseline is
+    # 12000 / 500 and those are the legal minimums (live-confirmed on the
+    # postgres stack 2026-08-12).
+    storage_gb: 400
+    iops: 12000
+    storage_throughput: 500
+    # Explicit for self-documentation; identical to the stack defaults.
+    # ROW + FULL are required by mysql_cdc, NONE keeps go-mysql compatible
+    # across server versions.
+    parameters:
+      binlog_format: "ROW"
+      binlog_row_image: "FULL"
+      binlog_checksum: "NONE"
+  runner:
+    instance_type: c8g.xlarge   # 4 vCPU: reservedCores(2) + cpu_points[2] == 4
+
+dataset:
+  initial_rows: 0          # reset TRUNCATEs; seed still CREATEs the table
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-mysql
+
+workload:
+  write_rate_per_sec: 10000
+  duration: 90m
+  warmup: 5m
+
+pipeline:
+  # mysql_cdc requires a cache resource for its binlog-position checkpoint.
+  # Memory is deliberate: the soak measures one uninterrupted process, and
+  # with stream_snapshot: false a (hypothetical) restart resumes from the
+  # current binlog position anyway.
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    mysql_cdc:
+      flavor: mysql
+      dsn: ${MYSQL_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image; mysql_cdc uses NewTLSField (no `enabled` toggle)
+      stream_snapshot: false
+      tables: [orders]
+      checkpoint_cache: bench_checkpoint
+      checkpoint_key: mysql_bench
+      # Must be >= batching.count: the default (1024) admits an oversized
+      # batch only when nothing is pending, which serializes the pipeline to
+      # exactly one 5000-row batch in flight per produce+ack round trip.
+      checkpoint_limit: 10000
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [2]
+
+reset:
+  # RDS purges binlog files as soon as they're backed up unless this is
+  # set — backup_retention_period=1 in the module only ENABLES binlog (see
+  # modules/rds-mysql). Without it, any mid-soak reconnect that outlives
+  # the purge finds its checkpointed position gone and dies with ERROR
+  # 1236 — an infra artifact indistinguishable from a connector bug. 24h
+  # comfortably outlives the longest run; the setting is per-instance and
+  # each session provisions a fresh one, so it must be set every run.
+  - sql: "CALL mysql.rds_set_configuration('binlog retention hours', 24)"
+  # TRUNCATE keeps the table bounded across runs on reused infra. Unlike
+  # postgres there is no slot/publication state to clear: with
+  # stream_snapshot: false and a fresh in-memory checkpoint cache, the
+  # connector always starts from the current binlog position.
+  - sql: "TRUNCATE TABLE orders"

@@ -145,6 +145,9 @@ func commonToAvroRecord(c schema.Common, recordName, namespace string, isRoot bo
 	if name == "" {
 		name = recordName
 	}
+	if !validAvroFullName(name) {
+		name = sanitizeAvroName(name)
+	}
 	fields := make([]any, 0, len(c.Children))
 	for _, child := range c.Children {
 		childNode, err := commonToAvroNode(child, child.Name, "", false)
@@ -231,6 +234,17 @@ func avroTimestampLogicalName(p schema.TimestampParams) (string, error) {
 		return "timestamp-" + unit, nil
 	}
 	return "local-timestamp-" + unit, nil
+}
+
+// validAvroFullName reports whether name is a valid Avro full name: one or
+// more dot-separated names, each matching [A-Za-z_][A-Za-z0-9_]*.
+func validAvroFullName(name string) bool {
+	for part := range strings.SplitSeq(name, ".") {
+		if part == "" || sanitizeAvroName(part) != part {
+			return false
+		}
+	}
+	return true
 }
 
 // sanitizeAvroName derives a valid Avro name from an arbitrary subject string.

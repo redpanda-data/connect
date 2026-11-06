@@ -25,6 +25,7 @@ output:
     - benchmark:
         interval: 1s
         count_bytes: true
+
   file:
     path: "./benchmark_results.json"
     codec: lines
@@ -38,7 +39,7 @@ cache_resources:
       directory: "./cache/"
 
 logger:
-  level: INFO
+  level: DEBUG
 
 metrics:
   prometheus:

@@ -60,7 +60,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewStringField(soFieldEventSource).Description("Set the source value to assign to the event data. Overrides existing source field if present.").Optional(),
 			service.NewStringField(soFieldEventSourceType).Description("Set the sourcetype value to assign to the event data. Overrides existing sourcetype field if present.").Optional(),
 			service.NewStringField(soFieldEventIndex).Description("Set the index value to assign to the event data. Overrides existing index field if present.").Optional(),
-			service.NewTLSToggledField(soFieldTLS),
+			service.NewTLSToggledField(soFieldTLS).Version("4.31.0"),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(soFieldBatching),
 

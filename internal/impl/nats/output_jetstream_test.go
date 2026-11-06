@@ -46,7 +46,7 @@ auth:
 		e, err := newJetStreamWriterFromConfig(conf, service.MockResources())
 		require.NoError(t, err)
 
-		msg := service.NewMessage((nil))
+		msg := service.NewMessage(nil)
 		msg.MetaSet("Timestamp", "1651485106")
 		assert.Equal(t, "url1,url2", e.connDetails.urls)
 

@@ -14,7 +14,7 @@ to lookup the weather in a given location.
 Running this example requires [`uv`](https://docs.astral.sh/uv/) to be installed on the
 host. Then you can run the agent using `rpk connect agent run`.
 
-[inputs]: https://docs.redpanda.com/redpanda-connect/components/inputs/about/
-[outputs]: https://docs.redpanda.com/redpanda-connect/components/outputs/about/
-[resources]: https://docs.redpanda.com/redpanda-connect/configuration/resources/
+[inputs]: https://docs.redpanda.com/connect/components/inputs/about/
+[outputs]: https://docs.redpanda.com/connect/components/outputs/about/
+[resources]: https://docs.redpanda.com/connect/configuration/resources/
 

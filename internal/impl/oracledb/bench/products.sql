@@ -4,13 +4,16 @@
 
 -- Enable output for debugging
 SET SERVEROUTPUT ON;
+-- Don't echo the old/new lines when &products_total is substituted
+SET VERIFY OFF;
 
 -- Switch to testdb schema
 ALTER SESSION SET CURRENT_SCHEMA = testdb;
 /
 
 DECLARE
-    products_total NUMBER := 50000;
+    -- products_total is defined by the sqlcl:pdb:data:products task (TOTAL=...)
+    products_total NUMBER := &products_total;
     products_batch_size NUMBER := 10000;
     products_current NUMBER := 0;
     products_batch_end NUMBER;
@@ -53,6 +56,13 @@ BEGIN
     END LOOP;
 
     DBMS_OUTPUT.PUT_LINE('Completed: ' || products_current || ' rows inserted into testdb.products');
+END;
+/
+
+-- Gather optimizer statistics so the snapshot can split testdb.products into parallel chunks
+BEGIN
+    DBMS_STATS.GATHER_TABLE_STATS(ownname => 'TESTDB', tabname => 'PRODUCTS');
+    DBMS_OUTPUT.PUT_LINE('Gathered optimizer statistics for testdb.products');
 END;
 /
 

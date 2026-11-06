@@ -89,11 +89,18 @@ type MessageEvent struct {
 	// position (resume is exclusive and all rows of a transaction share a
 	// start LSN). Empty for snapshot rows and until the first transaction
 	// boundary is observed.
-	CheckpointLSN LSN    `json:"-"`
-	Operation     string `json:"operation"`
-	Schema        string `json:"schema"`
-	Table         string `json:"table"`
-	Data          any    `json:"data"`
+	CheckpointLSN LSN `json:"-"`
+	// SeqVal is the change table __$seqval column: the position of the operation in
+	// the transaction log. It has the same varbinary(10) shape as LSN. Empty for
+	// snapshot rows.
+	SeqVal LSN `json:"seqval"`
+	// CommandID is the change table __$command_id column: the order of the operation
+	// in its transaction. Zero for snapshot rows.
+	CommandID int    `json:"command_id"`
+	Operation string `json:"operation"`
+	Schema    string `json:"schema"`
+	Table     string `json:"table"`
+	Data      any    `json:"data"`
 
 	// ColumnNames and ColumnTypes carry user-defined column metadata (excluding
 	// MSSQL system columns with __$ prefix). They are used to build schema

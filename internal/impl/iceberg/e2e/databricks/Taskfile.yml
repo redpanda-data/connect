@@ -49,6 +49,20 @@ tasks:
         -databricks.warehouse-id={{.DBX_WAREHOUSE_ID}}
         -databricks.bench
 
+  throughput:
+    desc: Run the append throughput sweep against a live Unity Catalog (costs ~15 minutes of warehouse time)
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 25m
+        -run TestDatabricksThroughput
+        ./internal/impl/iceberg/e2e/databricks/...
+        -databricks.host={{.DBX_HOST}}
+        -databricks.catalog={{.DBX_CATALOG}}
+        -databricks.schema={{.DBX_SCHEMA}}
+        -databricks.warehouse-id={{.DBX_WAREHOUSE_ID}}
+        -databricks.throughput
+
   full:
     desc: Provision, test, tear down. Destroy is deferred so it runs even when tests fail (needs task >= 3.15); if apply itself dies partway, run `task terraform:destroy` manually.
     cmds:

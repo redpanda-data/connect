@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,13 +31,19 @@ const (
 	kfoFieldRackID = "rack_id"
 )
 
+// FranzMaxInFlightDescription is the description of the max_in_flight field of
+// outputs that write to Kafka using the franz-go library.
+const FranzMaxInFlightDescription = "The maximum number of message batches to send in parallel at any given time."
+
 func franzKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Stable().
+		Deprecated().
 		Categories("Services").
 		Version("3.61.0").
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
+This output is deprecated as of version 4.113.0. Use the xref:components:outputs/redpanda.adoc[` + "`redpanda` output" + `] instead.
+
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
 This output often out-performs the traditional ` + "`kafka`" + ` output as well as providing more useful logs and error messages.
@@ -54,7 +60,7 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(kfoFieldMaxInFlight).
-				Description("The maximum number of batches to be sending in parallel at any given time.").
+				Description(FranzMaxInFlightDescription).
 				Default(10),
 			service.NewBatchPolicyField(kfoFieldBatching),
 

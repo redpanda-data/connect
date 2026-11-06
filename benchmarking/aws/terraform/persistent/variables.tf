@@ -21,5 +21,9 @@ variable "soak_scenarios" {
       connector = "postgres_cdc"
       scenario  = "postgres-orders-soak"
     }
+    mysql = {
+      connector = "mysql_cdc"
+      scenario  = "mysql-orders-soak"
+    }
   }
 }

@@ -116,7 +116,7 @@ func init() {
 type azureTableStorage struct {
 	conf  tsiConfig
 	pager *runtime.Pager[aztables.ListEntitiesResponse]
-	row   int64
+	row   atomic.Int64
 	log   *service.Logger
 }
 
@@ -172,7 +172,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 		for _, entity := range resp.Entities {
 			m := service.NewMessage(entity)
 			m.MetaSetMut("table_storage_name", a.conf.TableName)
-			m.MetaSetMut("row_num", atomic.AddInt64(&a.row, 1))
+			m.MetaSetMut("row_num", a.row.Add(1))
 			batch = append(batch, m)
 		}
 		return batch, func(context.Context, error) error {

@@ -172,6 +172,67 @@ func TestPrometheusMetrics(t *testing.T) {
 	assert.Contains(t, body, "\ngaugethree 10.452")
 }
 
+func TestPrometheusDeleteSeriesPartialMatch(t *testing.T) {
+	nm, handler := getTestProm(t)
+
+	ctr := nm.NewCounterCtor("input_received", "label", "stream")
+	ctr("in", "foo").Incr(3)
+	ctr("in", "bar").Incr(4)
+
+	gge := nm.NewGaugeCtor("input_connection_up", "stream")
+	gge("foo").Set(1)
+	gge("bar").Set(1)
+
+	tmr := nm.NewTimerCtor("input_latency_ns", "stream")
+	tmr("foo").Timing(100)
+	tmr("bar").Timing(200)
+
+	unlabelled := nm.NewCounterCtor("uptime")()
+	unlabelled.Incr(9)
+
+	// A vec with labels that do not include the matched key must be untouched:
+	// client_golang treats an unknown label key as a non-match, not a wildcard.
+	otherLabels := nm.NewCounterCtor("batch_created", "mechanism")
+	otherLabels("count").Incr(5)
+
+	body := getPage(t, handler)
+	require.Contains(t, body, "\ninput_received{label=\"in\",stream=\"foo\"} 3")
+	require.Contains(t, body, "\ninput_latency_ns_sum{stream=\"foo\"} 100")
+
+	// The exporter is bound to service.MetricsExporterSeriesDeleter by a
+	// compile-time assertion in metrics_prometheus.go, so the method can be
+	// exercised directly here.
+	nm.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, "stream=\"foo\"")
+	assert.Contains(t, body, "\ninput_received{label=\"in\",stream=\"bar\"} 4")
+	assert.Contains(t, body, "\ninput_connection_up{stream=\"bar\"} 1")
+	assert.Contains(t, body, "\ninput_latency_ns_sum{stream=\"bar\"} 200")
+	assert.Contains(t, body, "\nuptime 9")
+	assert.Contains(t, body, "\nbatch_created{mechanism=\"count\"} 5")
+}
+
+func TestPrometheusDeleteSeriesPartialMatchHistogram(t *testing.T) {
+	nm := promFromYAML(t, `
+use_histogram_timing: true
+`)
+
+	tmr := nm.NewTimerCtor("input_latency_ns", "stream")
+	tmr("foo").Timing(100)
+	tmr("bar").Timing(200)
+
+	handler := nm.HandlerFunc()
+	body := getPage(t, handler)
+	require.Contains(t, body, "stream=\"foo\"")
+
+	nm.DeleteSeriesPartialMatch(map[string]string{"stream": "foo"})
+
+	body = getPage(t, handler)
+	assert.NotContains(t, body, "stream=\"foo\"")
+	assert.Contains(t, body, "\ninput_latency_ns_count{stream=\"bar\"} 1")
+}
+
 func TestPrometheusHistMetrics(t *testing.T) {
 	nm := promFromYAML(t, `
 use_histogram_timing: true
@@ -190,6 +251,59 @@ use_histogram_timing: true
 	assertContainsTestMetrics(t, body)
 	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
 	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.4e-08")
+}
+
+// In histogram mode timings are recorded in seconds, so a `_ns`-suffixed metric
+// is renamed to `_seconds` to reflect the unit. This also ensures the histogram
+// variant uses a distinct series name from the summary variant emitted by nodes
+// with use_histogram_timing disabled, avoiding remote-write metric-kind
+// conflicts in a mixed fleet. See INC-1095.
+func TestPrometheusHistogramTimingSecondsSuffix(t *testing.T) {
+	tests := []struct {
+		name        string
+		conf        string
+		wantType    string
+		wantSum     string
+		wantMissing string
+	}{
+		{
+			name:        "histogram with suffix rewrite renames _ns to _seconds",
+			conf:        "use_histogram_timing: true\nhistogram_timing_seconds_suffix: true\n",
+			wantType:    "\n# TYPE processor_latency_seconds histogram",
+			wantSum:     "\nprocessor_latency_seconds_sum 2",
+			wantMissing: "processor_latency_ns",
+		},
+		{
+			// The default keeps existing histogram series names so upgrades
+			// don't silently break dashboards and alerts.
+			name:        "histogram without suffix rewrite keeps _ns",
+			conf:        "use_histogram_timing: true\n",
+			wantType:    "\n# TYPE processor_latency_ns histogram",
+			wantSum:     "\nprocessor_latency_ns_sum 2",
+			wantMissing: "processor_latency_seconds",
+		},
+		{
+			name:        "summary ignores suffix rewrite",
+			conf:        "histogram_timing_seconds_suffix: true\n",
+			wantType:    "\n# TYPE processor_latency_ns summary",
+			wantSum:     "\nprocessor_latency_ns_sum 2e+09",
+			wantMissing: "processor_latency_seconds",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := promFromYAML(t, "%s", tt.conf)
+
+			tmr := nm.NewTimerCtor("processor_latency_ns")()
+			tmr.Timing(2_000_000_000) // 2s expressed in nanoseconds
+
+			body := getPage(t, nm.HandlerFunc())
+
+			assert.Contains(t, body, tt.wantType)
+			assert.Contains(t, body, tt.wantSum)
+			assert.NotContains(t, body, tt.wantMissing)
+		})
+	}
 }
 
 func TestPrometheusWithFileOutputPath(t *testing.T) {

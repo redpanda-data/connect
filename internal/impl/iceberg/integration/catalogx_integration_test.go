@@ -31,9 +31,10 @@ import (
 
 func TestCatalogxIntegration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	namespaceName := "catalogx_test"
 	infra.CreateNamespace(t, namespaceName)
@@ -266,6 +267,7 @@ func TestCatalogxIntegration(t *testing.T) {
 
 		t.Run("CreateNamespace", func(t *testing.T) {
 			newNamespace := "test_create_namespace"
+			infra.EnsureNamespaceAbsent(t, newNamespace)
 
 			client, err := catalogx.NewCatalogClient(ctx, catalogx.Config{
 				URL:      infra.RestURL,

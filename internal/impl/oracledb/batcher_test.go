@@ -21,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
+	"github.com/redpanda-data/connect/v4/internal/replication/ticket"
 )
 
 func TestPublishBatch(t *testing.T) {
@@ -448,10 +449,9 @@ func TestAdmitEscapesOnContextCancel(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent(101))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// The handoff's flushCurrent queues behind it with a cancellable context
@@ -528,10 +528,9 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 			return publisher.Publish(ctx, streamingEvent(101))
 		}()
 	}()
+	// Ticket 0 is admitted once its batch of 2 is tracked.
 	require.Eventually(t, func() bool {
-		publisher.batcherMu.Lock()
-		defer publisher.batcherMu.Unlock()
-		return publisher.nextTicket == 1
+		return cp.Pending() == 2
 	}, 5*time.Second, time.Millisecond)
 
 	// A flusher with ROWS (ticket 1) queues behind it and is cancelled: its
@@ -553,7 +552,7 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 	// The abandon dropped SCN 200-201 rows: the queue must be sealed and the
 	// publisher poisoned so nothing can ever be tracked (and persisted) past
 	// them from this generation.
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"abandoning a flushed-but-untracked batch must poison the publisher")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
@@ -561,8 +560,10 @@ func TestAbandonedBatchSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent(301))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+	require.NotErrorIs(t, laterErr, context.Canceled,
+		"the refusal must not look like a shutdown: the input logs context.Canceled at Info as a clean stop")
 }
 
 // TestTrackFailureSealsQueue is TestAbandonedBatchSealsQueue's sibling: an
@@ -605,7 +606,7 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 	cancelTrack()
 	require.Error(t, <-parked)
 
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed Track stranded flushed-but-untracked rows; the publisher must be marked for rebuild")
 	laterErr := func() error {
 		if err := publisher.Publish(ctx, streamingEvent(300)); err != nil {
@@ -613,8 +614,12 @@ func TestTrackFailureSealsQueue(t *testing.T) {
 		}
 		return publisher.Publish(ctx, streamingEvent(301))
 	}()
-	require.ErrorIs(t, laterErr, errQueueSealed,
+	require.ErrorIs(t, laterErr, ticket.ErrSealed,
 		"a later flusher must be refused: tracking past the dropped rows would let its ack persist an SCN that skips them")
+	require.NotErrorIs(t, laterErr, context.Canceled,
+		"the refusal must not look like a shutdown: the input logs context.Canceled at Info as a clean stop")
+	require.ErrorContains(t, laterErr, "tracking flushed batch",
+		"the refusal must show why the queue was sealed")
 }
 
 // TestFailedSendPoisonsPublisher verifies that a tracked batch that cannot be
@@ -629,8 +634,90 @@ func TestFailedSendPoisonsPublisher(t *testing.T) {
 
 	err := publisher.Publish(sendCtx, streamingEvent(100))
 	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, publisher.poisoned.Load(),
+	require.True(t, publisher.poisoned(),
 		"a failed send orphans its tracker slot; the publisher must be marked for rebuild")
+}
+
+// TestCheckpointWindow regression-tests CON-583: a quiet table set must still
+// move the checkpoint forward.
+func TestCheckpointWindow(t *testing.T) {
+	t.Run("persists at once when all prior batches are acked", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent(42))
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+
+		require.Equal(t, []replication.SCN{42, 100}, cachedSCNs())
+	})
+
+	t.Run("a failed save does not stop the stream", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+		saveOK := publisher.cacheSCN
+		publisher.cacheSCN = func(context.Context, replication.SCN) error {
+			return errors.New("checkpoint cache unavailable")
+		}
+
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+		require.Empty(t, cachedSCNs())
+
+		publisher.cacheSCN = saveOK
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(101)))
+		require.Equal(t, []replication.SCN{101}, cachedSCNs())
+	})
+
+	t.Run("waits for outstanding acks", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisher(t)
+
+		am := publishAndReceive(t, ctx, publisher, streamingEvent(42))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+		require.Empty(t, cachedSCNs(), "the marker must not persist while an earlier batch is unacked")
+
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.Equal(t, []replication.SCN{100}, cachedSCNs())
+	})
+
+	t.Run("no-op while rows are buffered", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisherWithCount(t, 100)
+
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(42)))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+		require.Empty(t, cachedSCNs())
+
+		got := make(chan asyncMessage, 1)
+		go func() { got <- <-publisher.msgs() }()
+		require.NoError(t, publisher.flushCurrent(ctx))
+		var am asyncMessage
+		select {
+		case am = <-got:
+		case <-time.After(5 * time.Second):
+			t.Fatal("flushCurrent did not deliver the buffered event")
+		}
+		require.NoError(t, am.ackFn(ctx, nil))
+
+		require.Equal(t, []replication.SCN{42}, cachedSCNs(), "the buffered batch saves its own SCN, not the marker SCN")
+	})
+
+	t.Run("timed flush clears hasBuffered", func(t *testing.T) {
+		ctx := t.Context()
+		publisher, cachedSCNs := newTestBatchPublisherWithPolicy(t, service.BatchPolicy{Count: 100, Period: "20ms"})
+
+		require.NoError(t, publisher.Publish(ctx, streamingEvent(42)))
+		var am asyncMessage
+		select {
+		case am = <-publisher.msgs():
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed flush did not deliver the buffered event")
+		}
+		require.NoError(t, am.ackFn(ctx, nil))
+		require.NoError(t, publisher.CheckpointWindow(ctx, replication.SCN(100)))
+
+		require.Equal(t, []replication.SCN{42, 100}, cachedSCNs())
+	})
 }
 
 // newTestBatchPublisher builds a publisher whose batcher flushes on every
@@ -643,11 +730,16 @@ func newTestBatchPublisher(t *testing.T) (*batchPublisher, func() []replication.
 
 func newTestBatchPublisherWithCount(t *testing.T, count int) (*batchPublisher, func() []replication.SCN) {
 	t.Helper()
+	return newTestBatchPublisherWithPolicy(t, service.BatchPolicy{Count: count})
+}
+
+func newTestBatchPublisherWithPolicy(t *testing.T, policy service.BatchPolicy) (*batchPublisher, func() []replication.SCN) {
+	t.Helper()
 
 	logger := service.NewLoggerFromSlog(slog.Default())
 	cp := checkpoint.NewCapped[replication.SCN](100)
 
-	batcher, err := (service.BatchPolicy{Count: count}).NewBatcher(service.MockResources())
+	batcher, err := policy.NewBatcher(service.MockResources())
 	require.NoError(t, err)
 
 	publisher := newBatchPublisher(batcher, cp, logger)
@@ -702,4 +794,61 @@ func publishAndReceive(t *testing.T, ctx context.Context, publisher *batchPublis
 		_ = publisher.Publish(ctx, event)
 	}()
 	return <-publisher.msgs()
+}
+
+// rs_id, ssn and row_seq metadata are set only when the event carries an RS_ID.
+// Snapshot rows, synthetic LOB-only updates and events restored from a cache
+// written before this field existed all have an empty RSID and must get none of
+// the three keys.
+func TestPublishRecordIdentityMetadata(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("streaming event sets rs_id, ssn and row_seq", func(t *testing.T) {
+		publisher, _ := newTestBatchPublisher(t)
+		event := streamingEvent(200)
+		event.RSID = "0x000027.00001a33.0010"
+		event.SSN = 3
+		event.RowSeq = 7
+
+		got := publishAndReceive(t, ctx, publisher, event)
+		require.Len(t, got.msg, 1)
+
+		rsID, _ := got.msg[0].MetaGet("rs_id")
+		require.Equal(t, "0x000027.00001a33.0010", rsID)
+		ssn, _ := got.msg[0].MetaGet("ssn")
+		require.Equal(t, "3", ssn)
+		rowSeq, _ := got.msg[0].MetaGet("row_seq")
+		require.Equal(t, "7", rowSeq)
+	})
+
+	t.Run("snapshot event has neither", func(t *testing.T) {
+		publisher, _ := newTestBatchPublisher(t)
+
+		got := publishAndReceive(t, ctx, publisher, snapshotEvent(100))
+		require.Len(t, got.msg, 1)
+
+		_, ok := got.msg[0].MetaGet("rs_id")
+		require.False(t, ok, "snapshot rows have no rs_id")
+		_, ok = got.msg[0].MetaGet("ssn")
+		require.False(t, ok, "snapshot rows have no ssn")
+		_, ok = got.msg[0].MetaGet("row_seq")
+		require.False(t, ok, "snapshot rows have no row_seq")
+	})
+
+	t.Run("empty RSID suppresses ssn and row_seq too", func(t *testing.T) {
+		publisher, _ := newTestBatchPublisher(t)
+		event := streamingEvent(200)
+		event.SSN = 3
+		event.RowSeq = 1
+
+		got := publishAndReceive(t, ctx, publisher, event)
+		require.Len(t, got.msg, 1)
+
+		_, ok := got.msg[0].MetaGet("rs_id")
+		require.False(t, ok)
+		_, ok = got.msg[0].MetaGet("ssn")
+		require.False(t, ok, "ssn without rs_id is meaningless and must not be set")
+		_, ok = got.msg[0].MetaGet("row_seq")
+		require.False(t, ok, "row_seq without rs_id is meaningless and must not be set")
+	})
 }

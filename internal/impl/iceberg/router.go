@@ -147,6 +147,19 @@ type Router struct {
 
 	entries sync.Map // tableKey -> *tableEntry
 
+	// warnedCompression de-duplicates compression warnings, keyed by table and
+	// warning text together: rebuilding a writer does not re-log a warning for
+	// that table, but a second table hitting the same problem is still reported.
+	// See warnCompressionOnce.
+	warnedCompression sync.Map
+
+	// parquetCompression is the configured `parquet.compression` value, or ""
+	// when unset. Set after construction by the output, like metrics below, so
+	// NewRouter's signature stays put. Empty means each table falls back to its
+	// own write.parquet.compression-codec property — see
+	// resolveParquetCompression.
+	parquetCompression string
+
 	// metrics is optional (nil in some tests); set after construction by the
 	// output. Writers and committers inherit it.
 	metrics *opMetrics
@@ -273,16 +286,14 @@ func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service
 				continue
 			}
 
-			var schemaErr *BatchSchemaEvolutionError
-			if errors.As(err, &schemaErr) {
+			if schemaErr, ok := errors.AsType[*BatchSchemaEvolutionError](err); ok {
 				if evolveErr := r.evolveSchema(ctx, key, schemaErr, batch, entry); evolveErr != nil {
 					return fmt.Errorf("evolving schema for %s.%s: %w", key.namespace, key.table, evolveErr)
 				}
 				continue
 			}
 
-			var reqNullErr *shredder.RequiredFieldNullError
-			if errors.As(err, &reqNullErr) {
+			if reqNullErr, ok := errors.AsType[*shredder.RequiredFieldNullError](err); ok {
 				if optErr := r.makeColumnOptional(ctx, key, reqNullErr, entry); optErr != nil {
 					return fmt.Errorf("making column optional for %s.%s: %w", key.namespace, key.table, optErr)
 				}
@@ -675,43 +686,75 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 		return fmt.Errorf("loading table: %w", err)
 	}
 
-	// Group new fields by parent path for efficient updates
-	groups := schemaErr.GroupByParentPath()
+	// Resolve every new column's type before touching the table, so a column
+	// that must not be added fails the evolution without committing the rest.
+	columns, err := r.resolveNewColumns(schemaErr, batch[0], key)
+	if err != nil {
+		return err
+	}
 
 	// Update schema with new columns
-	added := 0
 	_, err = client.UpdateSchema(ctx, tbl, r.caseSensitive, func(us *table.UpdateSchema) {
-		for _, fields := range groups {
-			for _, field := range fields {
-				// Resolve type using the three-stage pipeline
-				fieldType, err := r.resolver.resolveTypeForAddColumn(field, batch[0], key.namespace, key.table)
-				if err != nil {
-					r.logger.Warnf("Failed to resolve type for field %q: %v, using string", field.FieldName(), err)
-					fieldType = iceberg.StringType{}
-				}
-
-				// Build column path
-				path := field.FullPath()
-				colPath := make([]string, len(path))
-				for i, seg := range path {
-					colPath[i] = seg.Name
-				}
-
-				// Add column (all new columns are optional)
-				us.AddColumn(colPath, fieldType, "", false, nil)
-				added++
-			}
+		for _, col := range columns {
+			// Add column (all new columns are optional)
+			us.AddColumn(col.path, col.fieldType, "", false, nil)
 		}
 	})
 	if err != nil {
 		return fmt.Errorf("updating schema: %w", err)
 	}
 
-	r.logger.Infof("Evolved schema for %s.%s: added %d columns", key.namespace, key.table, added)
+	r.logger.Infof("Evolved schema for %s.%s: added %d columns", key.namespace, key.table, len(columns))
 
 	// Invalidate cached writer so it gets recreated with the new schema
 	r.closeWriter(entry)
 	return nil
+}
+
+// newColumn is a column to add during schema evolution with its resolved type.
+type newColumn struct {
+	path      []string
+	fieldType iceberg.Type
+}
+
+// resolveNewColumns resolves the Iceberg type of each field in schemaErr with
+// resolveTypeForAddColumn. If the type cannot be resolved, the column falls
+// back to string. Nanosecond timestamps are the exception: they return an
+// error (see errNanosecondTimestamp).
+//
+// The asymmetry with create-table (where every resolve error fails) is
+// deliberate and narrow. For the other rejected types (time-of-day with
+// nanos or UTC adjustment, BigDecimal, Union) the string fallback is
+// long-standing behavior that running pipelines can depend on, so turning it
+// into a hard failure would stall them. Nanosecond timestamps previously
+// evolved into a column every write then failed against, so no working
+// pipeline relies on them and failing loudly breaks nothing.
+func (r *Router) resolveNewColumns(schemaErr *BatchSchemaEvolutionError, msg *service.Message, key tableKey) ([]newColumn, error) {
+	// Group new fields by parent path for efficient updates
+	groups := schemaErr.GroupByParentPath()
+
+	var columns []newColumn
+	for _, fields := range groups {
+		for _, field := range fields {
+			fieldType, err := r.resolver.resolveTypeForAddColumn(field, msg, key.namespace, key.table)
+			if errors.Is(err, errNanosecondTimestamp) {
+				return nil, fmt.Errorf("resolving type for field %v: %w", field.FullPath(), err)
+			}
+			if err != nil {
+				r.logger.Warnf("Failed to resolve type for field %q: %v, using string", field.FieldName(), err)
+				fieldType = iceberg.StringType{}
+			}
+
+			// Build column path
+			path := field.FullPath()
+			colPath := make([]string, len(path))
+			for i, seg := range path {
+				colPath[i] = seg.Name
+			}
+			columns = append(columns, newColumn{path: colPath, fieldType: fieldType})
+		}
+	}
+	return columns, nil
 }
 
 // makeColumnOptional changes a required column to optional in the table schema.
@@ -766,6 +809,44 @@ func (*Router) closeWriter(entry *tableEntry) {
 	if entry.writer != nil {
 		entry.writer.Close()
 		entry.writer = nil
+	}
+}
+
+// writerOptsFor returns the parquet writer options for one table: the options
+// configured on the output, plus that table's resolved compression codec.
+//
+// Compression is resolved per table because the fallback reads the table's own
+// write.parquet.compression-codec property, so two tables under one output can
+// legitimately land on different codecs.
+//
+// slices.Concat, not append: appending to r.writerOpts would hand successive
+// tables the same backing array whenever it has spare capacity, and each would
+// overwrite the previous table's codec option. Pinned by
+// TestWriterOptsForIsolatesTables.
+func (r *Router) writerOptsFor(key tableKey, props iceberg.Properties) []parquet.WriterOption {
+	codec, warning := resolveParquetCompression(r.parquetCompression, props)
+	if warning != "" {
+		r.warnCompressionOnce(key, warning)
+	}
+	return slices.Concat(r.writerOpts, []parquet.WriterOption{parquet.Compression(codec)})
+}
+
+// warnCompressionOnce logs a compression warning once per table and stays quiet
+// for that table afterwards. Writers are rebuilt whenever a write fails (see
+// closeWriter), so a retrying pipeline against a table whose property names an
+// unwritable codec would otherwise emit the same warning without bound.
+//
+// Keyed on the table as well as the message, because a router is inherently
+// multi-table — namespace and table are interpolated per message — so keying on
+// the message alone would report the first affected table and silently swallow
+// every other one. The message names the table for the same reason: otherwise
+// there is no way to tell whose data files went uncompressed.
+func (r *Router) warnCompressionOnce(key tableKey, warning string) {
+	if _, seen := r.warnedCompression.LoadOrStore(key.namespace+"\x00"+key.table+"\x00"+warning, struct{}{}); seen {
+		return
+	}
+	if r.logger != nil {
+		r.logger.Warnf("Table %s.%s: %s", key.namespace, key.table, warning)
 	}
 }
 
@@ -912,7 +993,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		}
 	}
 
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOptsFor(key, writerTbl.Properties()), r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, entry.tsEncoding, r.logger)
 	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 

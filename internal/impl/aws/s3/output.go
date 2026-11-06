@@ -59,6 +59,10 @@ const (
 	s3oFieldBatching                = "batching"
 )
 
+// forcePathStyleURLsDescription describes the force_path_style_urls field of
+// the aws_s3 output and cache.
+const forcePathStyleURLsDescription = "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."
+
 type s3TagPair struct {
 	key   string
 	value *service.InterpolatedString
@@ -177,10 +181,12 @@ func s3oOutputSpec() *service.ConfigSpec {
 		Description(`
 In order to have a different path for each object you should use function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries], which are calculated per message of a batch.
 
+[[metadata-overview]]
 == Metadata
 
 Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the xref:configuration:metadata.adoc[metadata docs].
 
+[[tags-overview]]
 == Tags
 
 The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]:
@@ -195,10 +201,12 @@ output:
       Timestamp: ${!meta("Timestamp")}
 `+"```"+`
 
-=== Credentials
+[[credentials-overview]]
+== Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].
 
+[[batching-overview]]
 == Batching
 
 It's common to want to upload messages to S3 as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"xref:components:processors/archive.adoc[`archive`]"+` and/or `+"xref:components:processors/compress.adoc[`compress`]"+` processor.
@@ -232,10 +240,29 @@ output:
       processors:
         - archive:
             format: json_array
-`+"```"+``+service.OutputPerformanceDocs(true, false)).
+`+"```"+`
+
+== S3-compatible storage
+
+The `+"`endpoint`"+` and `+"`force_path_style_urls`"+` fields let you connect to S3-compatible storage services, such as Cloudflare R2, MinIO, or DigitalOcean Spaces. For example, to upload to Cloudflare R2, set `+"`endpoint`"+` to your account's R2 endpoint URL, set `+"`region`"+` to `+"`auto`"+`, and enable `+"`force_path_style_urls`"+`:
+
+`+"```yaml"+`
+output:
+  aws_s3:
+    bucket: r2-bucket
+    path: ${!uuid_v4()}.json
+    endpoint: https://<account-id>.r2.cloudflarestorage.com
+    force_path_style_urls: true
+    region: auto
+    credentials:
+      id: <r2-access-key-id>
+      secret: <r2-secret-access-key>
+`+"```"+`
+
+To find your account ID and generate R2 API credentials, see https://developers.cloudflare.com/r2/api/tokens/[Cloudflare R2 authentication^].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(s3oFieldBucket).
-				Description("The bucket to upload messages to."),
+				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN."),
 			service.NewInterpolatedStringField(s3oFieldPath).
 				Description("The path of each message to upload.").
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`).
@@ -250,10 +277,10 @@ output:
 					"Timestamp": `${!meta("Timestamp")}`,
 				}),
 			service.NewInterpolatedStringField(s3oFieldContentType).
-				Description("The content type to set for each object.").
+				Description("The MIME type to store as the `Content-Type` of each uploaded S3 object.").
 				Default("application/octet-stream"),
 			service.NewInterpolatedStringField(s3oFieldContentEncoding).
-				Description("An optional content encoding to set for each object.").
+				Description("An optional `Content-Encoding` value, such as `gzip`, to store with each uploaded S3 object. When empty, S3 stores the object without a content encoding.").
 				Default("").
 				Advanced(),
 			service.NewInterpolatedStringField(s3oFieldCacheControl).
@@ -273,7 +300,7 @@ output:
 				Default("").
 				Advanced(),
 			service.NewMetadataExcludeFilterField(s3oFieldMetadata).
-				Description("Specify criteria for which metadata values are attached to objects as headers."),
+				Description("Specify which message metadata keys are stored as user-defined metadata on each S3 object, which S3 returns as `x-amz-meta-*` headers."),
 			service.NewInterpolatedStringEnumField(s3oFieldStorageClass,
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
 			).
@@ -281,27 +308,27 @@ output:
 				Default("STANDARD").
 				Advanced(),
 			service.NewStringField(s3oFieldKMSKeyID).
-				Description("An optional server side encryption key.").
+				Description("An optional server-side encryption key.").
 				Default("").
 				Advanced(),
 			service.NewStringEnumField(s3oFieldChecksumAlgorithm,
 				"CRC32", "CRC32C", "SHA1", "SHA256",
 			).
-				Description("The algorithm used to create the checksum for each object.").
+				Description("The algorithm used to create the checksum for each object, which Amazon S3 uses to validate the object during upload.").Version("4.38.0").
 				Default("").
 				Advanced(),
 			service.NewStringField(s3oFieldServerSideEncryption).
-				Description("An optional server side encryption algorithm.").
+				Description("An optional server-side encryption algorithm.").
 				Version("3.63.0").
 				Default("").
 				Advanced(),
 			service.NewBoolField(s3oFieldForcePathStyleURLs).
-				Description("Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").
+				Description(forcePathStyleURLsDescription).
 				Advanced().
 				Default(false),
 			service.NewOutputMaxInFlightField(),
 			service.NewDurationField(s3oFieldTimeout).
-				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
+				Description("The maximum period to wait for every object in a message batch to upload to S3. When the timeout is reached, the batch upload is abandoned and reattempted.").
 				Advanced().
 				Default("5s"),
 			service.NewStringEnumField(s3oFieldObjectCannedACL,
@@ -318,7 +345,7 @@ output:
 						}
 					}
 				})...).
-				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").
+				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").Version("4.56.0").
 				ShortDescription("The object canned ACL value. Leave empty for buckets that have ACLs disabled.").
 				Default("").
 				Advanced(),

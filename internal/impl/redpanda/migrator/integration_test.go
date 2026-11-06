@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -51,9 +52,23 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
-const httpAddr = "127.0.0.1:8080"
+// freeHTTPAddr returns a local address with a free TCP port for the HTTP
+// server of a stream. The tests run in parallel, so a fixed port makes the
+// servers of two tests collide.
+func freeHTTPAddr(t *testing.T) string {
+	t.Helper()
 
-func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.MessageHandlerFunc) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	require.NoError(t, l.Close())
+	return addr
+}
+
+// startMigrator runs a migrator stream from src to dst until the test ends,
+// and returns the address of the stream's HTTP server.
+func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.MessageHandlerFunc) (httpAddr string) {
+	httpAddr = freeHTTPAddr(t)
 	t.Helper()
 
 	const yamlTmpl = `
@@ -125,6 +140,8 @@ logger:
 	t.Cleanup(func() {
 		require.NoError(t, stream.StopWithin(stopStreamTimeout))
 	})
+
+	return httpAddr
 }
 
 func readMetrics(t *testing.T, baseURL string) map[string]any {
@@ -157,9 +174,12 @@ func readMetrics(t *testing.T, baseURL string) map[string]any {
 	return metrics
 }
 
-func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaCluster, numMessages int) {
+// startMigratorAndWaitForMessages runs startMigrator and waits until the
+// stream has written numMessages messages. It returns the address of the
+// stream's HTTP server.
+func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaCluster, numMessages int) (httpAddr string) {
 	done := make(chan struct{})
-	startMigrator(t, src, dst, func(_ context.Context, _ *service.Message) error {
+	httpAddr = startMigrator(t, src, dst, func(_ context.Context, _ *service.Message) error {
 		done <- struct{}{}
 		return nil
 	})
@@ -177,10 +197,13 @@ func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaClus
 			t.Fatalf("Timed out waiting for message %d/%d", i+1, numMessages)
 		}
 	}
+
+	return httpAddr
 }
 
 func TestIntegrationMigratorSinglePartition(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const numMessages = 100
 
@@ -209,6 +232,7 @@ func TestIntegrationMigratorSinglePartition(t *testing.T) {
 
 func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numMessages = 100
@@ -258,6 +282,7 @@ func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 
 func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numMessages = 10_000
@@ -328,14 +353,20 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	}
 
 	t.Log("And: Migrator is started")
-	startMigratorAndWaitForMessages(t, src, dst, numMessages)
+	httpAddr := startMigratorAndWaitForMessages(t, src, dst, numMessages)
 
 	t.Log("Then: Schema is visible at destination")
 	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
 	require.NoError(t, err)
 	txt, err := srDst.SchemaTextByVersion(t.Context(), subj, 1)
 	require.NoError(t, err)
-	assert.Equal(t, schema, txt)
+	// The schema registry canonicalizes a primitive Avro type object
+	// ({"type":"int"}) down to its bare string form ("int") on write, so
+	// compare against what the source registry stored rather than the
+	// literal schema submitted by the test.
+	srcTxt, err := srScr.SchemaTextByVersion(t.Context(), subj, 1)
+	require.NoError(t, err)
+	assert.Equal(t, srcTxt, txt)
 
 	t.Logf("And: %d schema-encoded messages are present in destination topic %s", numMessages, migratorTestTopic)
 	records := readTopicContent(dst, numMessages)
@@ -384,6 +415,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 
 func TestIntegrationMigratorInputKafkaFranzConsumerGroup(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const group = "foobar_cg"
 
@@ -915,6 +947,7 @@ output:
 
 func TestIntegrationMigratorTwoWayWithProvenanceHeaders(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const numMessages = 10
 
@@ -986,6 +1019,7 @@ func stopStreamAndWait(t *testing.T, stream *service.Stream, d time.Duration) {
 
 func TestIntegrationMigratorJiraCON229(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		numMessages   = 1000
@@ -1130,7 +1164,7 @@ logger:
 			TopicC:        topicC,
 			TopicD:        topicD,
 			ConsumerGroup: consumerGroup,
-			HTTPAddr:      httpAddr,
+			HTTPAddr:      freeHTTPAddr(t),
 		}
 		var yamlBuf bytes.Buffer
 		require.NoError(t, tmpl.Execute(&yamlBuf, data))
@@ -1209,6 +1243,7 @@ logger:
 
 func TestIntegrationMigratorEmptyTopicReplication(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	const (
 		topicPopulated = "topic_populated"
@@ -1287,28 +1322,31 @@ logger:
 	}, 2*time.Second, 200*time.Millisecond, "expected both topics to be synced within 2s")
 
 	t.Log("And: Empty topic has 0 messages on destination")
-	assert.Eventually(t, func() bool {
+	// ListEndOffsets fails until the partitions of the new topic have a leader. On a busy Docker host that can
+	// take some seconds, so wait longer than for the topic sync, and report the last error.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
-		if err != nil {
-			return false
+		if !assert.NoError(c, err) {
+			return
 		}
 		var emptyTotal int64
 		eo.Each(func(lo kadm.ListedOffset) {
-			if lo.Err == nil {
+			if assert.NoError(c, lo.Err) {
 				emptyTotal += lo.Offset
 			}
 		})
-		return emptyTotal == 0
-	}, 3*time.Second, 200*time.Millisecond, "Empty topic should have 0 messages on destination")
+		assert.Zero(c, emptyTotal, "Empty topic should have 0 messages on destination")
+	}, 10*time.Second, 200*time.Millisecond)
 }
 
 func TestIntegrationMigratorOutputCustomHeaders(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	getHeader := func(headers []kgo.RecordHeader, key string) ([]byte, bool) {
-		for i := len(headers) - 1; i >= 0; i-- {
-			if headers[i].Key == key {
-				return headers[i].Value, true
+		for _, header := range slices.Backward(headers) {
+			if header.Key == key {
+				return header.Value, true
 			}
 		}
 		return nil, false
@@ -1399,4 +1437,127 @@ logger:
 	require.True(t, ok, "expected provenance header %q to be present on migrated record", migrator.DefaultProvenanceHeader)
 	assert.NotEqual(t, []byte("bogus-cluster-id"), provenanceVal)
 	assert.Equal(t, []byte(srcMetadata.Cluster), provenanceVal, "provenance header should carry the real source cluster ID, not the colliding custom header value")
+}
+
+// Regression test for CON-530: a schema subject that cannot be registered at
+// the destination used to fail the output connect, restarting the pipeline
+// forever so that no topic was ever created and no data was copied.
+func TestIntegrationMigratorIncompatibleSubjectDoesNotBlockTopics(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	const (
+		topicPopulated = migratorTestTopic
+		topicEmpty     = "audit"
+		numMessages    = 3
+
+		badSubj = "bad-value"
+		badV1   = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"string"}]}`
+		badV2   = `{"type":"record","name":"Bad","fields":[{"name":"a","type":"int"}]}`
+		goodSub = "good-value"
+		good    = `{"type":"record","name":"Good","fields":[{"name":"g","type":"string"}]}`
+	)
+
+	t.Log("Given: Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+
+	srSrc, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
+	require.NoError(t, err)
+	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+	require.NoError(t, err)
+
+	t.Log("And: a subject evolved incompatibly at source, plus a healthy subject")
+	set := srSrc.SetCompatibility(t.Context(), sr.SetCompatibility{Level: sr.CompatNone})
+	require.NoError(t, set[0].Err)
+	for _, s := range []struct{ subj, schema string }{{badSubj, badV1}, {badSubj, badV2}, {goodSub, good}} {
+		_, err := srSrc.CreateSchema(t.Context(), s.subj, sr.Schema{Schema: s.schema})
+		require.NoError(t, err)
+	}
+
+	t.Log("And: destination holds only the old version of the subject under BACKWARD compatibility")
+	_, err = srDst.CreateSchema(t.Context(), badSubj, sr.Schema{Schema: badV1})
+	require.NoError(t, err)
+
+	t.Log("And: a populated topic and an empty topic at source")
+	src.CreateTopic(topicEmpty)
+	for i := range numMessages {
+		src.Produce(topicPopulated, []byte("msg-"+strconv.Itoa(i)))
+	}
+
+	t.Log("When: migrator is started with a one-shot schema sync")
+	const yamlTmpl = `
+input:
+  redpanda_migrator:
+    seed_brokers: [ {{.Src.BrokerAddr}} ]
+    topics: [ {{.TopicPopulated}}, {{.TopicEmpty}} ]
+    consumer_group: redpanda_migrator_cg
+    schema_registry:
+      url: {{.Src.SchemaRegistryURL}}
+output:
+  redpanda_migrator:
+    seed_brokers: [ {{.Dst.BrokerAddr}} ]
+    sync_topic_interval: 1s
+    schema_registry:
+      url: {{.Dst.SchemaRegistryURL}}
+      interval: 0s
+      versions: all
+      translate_ids: true
+logger:
+  level: DEBUG
+`
+	tmpl, err := template.New("migrator").Parse(yamlTmpl)
+	require.NoError(t, err)
+
+	data := struct {
+		Src            EmbeddedRedpandaCluster
+		Dst            EmbeddedRedpandaCluster
+		TopicPopulated string
+		TopicEmpty     string
+	}{
+		Src:            src,
+		Dst:            dst,
+		TopicPopulated: topicPopulated,
+		TopicEmpty:     topicEmpty,
+	}
+	var yamlBuf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlBuf.String()))
+	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
+	})
+
+	t.Log("Then: both topics are created at destination")
+	require.Eventually(t, func() bool {
+		topics := dst.ListTopics()
+		return slices.Contains(topics, topicPopulated) && slices.Contains(topics, topicEmpty)
+	}, redpandaTestWaitTimeout, 200*time.Millisecond)
+
+	t.Log("And: data is copied")
+	readCtx, readCancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer readCancel()
+	records := readTopicContentContext(readCtx, dst, numMessages)
+	require.Len(t, records, numMessages)
+	for i, r := range records {
+		assert.Equal(t, "msg-"+strconv.Itoa(i), string(r.Value))
+	}
+
+	t.Log("And: the healthy subject is registered while the incompatible version is not")
+	_, err = srDst.SchemaByVersion(t.Context(), goodSub, 1)
+	require.NoError(t, err)
+	_, err = srDst.SchemaByVersion(t.Context(), badSubj, 2)
+	require.Error(t, err)
 }

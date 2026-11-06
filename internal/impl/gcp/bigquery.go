@@ -168,3 +168,53 @@ func parseQueryPriority(config *service.ParsedConfig, fieldName string) (bigquer
 		return "", fmt.Errorf("unrecognised query priority: %s", rawPriority)
 	}
 }
+
+// Fields shared by the gcp_bigquery_select input and processor.
+
+func bqSelectProjectField() *service.ConfigField {
+	return service.NewStringField("project").
+		Description("The GCP project where the query job runs.")
+}
+
+func bqSelectTableField() *service.ConfigField {
+	return service.NewStringField("table").
+		Description("The fully-qualified name of the BigQuery table to query.").
+		Example("bigquery-public-data.samples.shakespeare")
+}
+
+func bqSelectWhereField() *service.ConfigField {
+	return service.NewStringField("where").
+		Description("An optional `WHERE` clause to add to the query. The `args_mapping` field populates the placeholder arguments. Placeholders must always be question marks (`?`).").
+		ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
+		Example("type = ? and created_at > ?").
+		Example("user_id = ?").
+		Optional()
+}
+
+func bqSelectArgsMappingField() *service.ConfigField {
+	return service.NewBloblangField("args_mapping").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values for the `?` placeholders in the `where` field, in order. Each value is sent to BigQuery as a positional query parameter.").
+		ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
+		Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
+		Optional()
+}
+
+func bqSelectPrefixField() *service.ConfigField {
+	return service.NewStringField("prefix").
+		Description("Optional GoogleSQL text to add before the `SELECT` keyword of the generated query, for example a `WITH` clause.").
+		Optional()
+}
+
+func bqSelectSuffixField() *service.ConfigField {
+	return service.NewStringField("suffix").
+		Description("Optional GoogleSQL text to append after the generated query, for example `GROUP BY`, `ORDER BY`, or `LIMIT` clauses.").
+		Optional()
+}
+
+// bqJobLabelsField returns the job_labels field for a component that runs
+// BigQuery jobs of the given kind, such as "query" or "load".
+func bqJobLabelsField(jobKind string) *service.ConfigField {
+	return service.NewStringMapField("job_labels").
+		Description("A map of labels to add to the " + jobKind + " job.").
+		Default(map[string]any{})
+}

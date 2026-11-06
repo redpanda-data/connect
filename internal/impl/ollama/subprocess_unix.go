@@ -98,7 +98,7 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 			return fmt.Errorf("unable to create file for ollama binary download: %w", err)
 		}
 		defer ollama.Close()
-		w, ok := (ollama).(io.Writer)
+		w, ok := ollama.(io.Writer)
 		if !ok {
 			return errors.New("unable to download ollama binary to filesystem")
 		}
@@ -130,7 +130,7 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 			return fmt.Errorf("unable to create file for ollama binary download: %w", err)
 		}
 		defer file.Close()
-		w, ok := (file).(io.Writer)
+		w, ok := file.(io.Writer)
 		if !ok {
 			return errors.New("unable to download ollama binary to filesystem")
 		}

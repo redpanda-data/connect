@@ -117,7 +117,8 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 	}
 
 	if m == nil {
-		c.log.Warnf("Transaction %s not found for event, creating...", txnID)
+		// Expected after a restart (see InMemoryCache.AddEvent).
+		c.log.Debugf("Starting transaction %s at SCN %d, its START is before the resume position", txnID, scn)
 		m = &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
@@ -271,6 +272,26 @@ func (c *ConnectCacheResource) LowWatermarkSCN(excludeTxnID sqlredo.TransactionI
 		}
 	}
 	return lowestOpenSCN
+}
+
+// IncludeInLowWatermark starts tracking the start SCN of an open transaction
+// so that LowWatermarkSCN counts it even without DML events.
+func (c *ConnectCacheResource) IncludeInLowWatermark(ctx context.Context, txnID sqlredo.TransactionID) error {
+	if _, discarded := c.discarded[txnID]; discarded {
+		return nil
+	}
+	if _, tracked := c.startSCNs[txnID]; tracked {
+		return nil
+	}
+	m, err := c.readMetadata(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
+	}
+	if m == nil {
+		return nil
+	}
+	c.startSCNs[txnID] = m.SCN
+	return nil
 }
 
 func (c *ConnectCacheResource) toMetaKey(txnID sqlredo.TransactionID) string {
@@ -438,6 +459,9 @@ type serializedDMLEvent struct {
 	OldValues     serializedMap         `json:"old"`
 	Timestamp     time.Time             `json:"ts"`
 	TransactionID sqlredo.TransactionID `json:"txn_id"`
+	Username      string                `json:"username"`
+	RSID          string                `json:"rs_id,omitempty"`
+	SSN           int64                 `json:"ssn,omitempty"`
 }
 
 type serializedTransactionMetadata struct {
@@ -464,6 +488,9 @@ func marshalEvent(ev *sqlredo.DMLEvent) ([]byte, error) {
 		OldValues:     encodeMap(ev.OldValues),
 		Timestamp:     ev.Timestamp,
 		TransactionID: ev.TransactionID,
+		Username:      ev.Username,
+		RSID:          ev.RSID,
+		SSN:           ev.SSN,
 	}
 	return json.Marshal(se)
 }
@@ -490,5 +517,8 @@ func unmarshalEvent(data []byte) (*sqlredo.DMLEvent, error) {
 		OldValues:     oldMap,
 		Timestamp:     se.Timestamp,
 		TransactionID: se.TransactionID,
+		Username:      se.Username,
+		RSID:          se.RSID,
+		SSN:           se.SSN,
 	}, nil
 }

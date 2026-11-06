@@ -81,6 +81,7 @@ We hold certified connectors to a consistent engineering bar so that they are re
 
 - **3.3.1** Changes are split into reviewable units. As a rule, neither a single PR nor an individual commit should reach ~10K lines of **code that a reviewer must read** — this keeps changes reviewable. AI-generated code counts in full: it needs *more* review, not less, and the limit is not a license to autogenerate past it. Only content that isn't reviewed line-by-line is excluded — mechanically generated/derived files (codegen output, mocks, bundle imports), vendored code, lockfiles, and non-code such as documentation, skills, Terraform, templates, and test fixtures/data. When a large PR is genuinely unavoidable, say why in the description and point reviewers at what matters.  
 - **3.3.2** Large features are broken into a series of smaller, self-contained PRs that can each be reviewed and reasoned about independently, rather than landed as one monolithic change.  
+- **3.3.3** *Changelog.* Do not edit `CHANGELOG.md` in a PR. The Release Notes workflow (`.github/workflows/release-notes.yml`) writes the entries for each minor release from the commit messages and the Claude review summary of the merged PRs. To change how a change shows in the changelog, edit the commit message. The release changelog PRs (`changelog/v*`) and patch releases are exempt.  
 
 ### 3.4 Commit Conventions
 

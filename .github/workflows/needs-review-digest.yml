@@ -1,0 +1,193 @@
+name: Needs Review Digest
+
+on:
+  # schedule:
+  #   - cron: "0 9 * * 1-5" # weekdays at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  needs-review-digest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      # PRs shown in Slack. Applied after sorting by label age, not to the
+      # fetch: gh returns newest first, so capping it would hide the oldest.
+      MAX_SHOWN: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: List PRs needing review
+        id: list
+        # Enables pipefail so a failing `gh` isn't masked by a trailing jq/tee.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr list --repo "$REPO" \
+            --state open \
+            --label "needs review" \
+            --json number,title,url,author,createdAt,body,additions,deletions,changedFiles,files,comments \
+            --limit 100 \
+            > "$RUNNER_TEMP/needs-review-prs-raw.json"
+
+          fetch_labeled_at() {
+            local num="$1"
+            local timeline
+            local status
+            local labeled_at
+            timeline=$(gh api --paginate "repos/$REPO/issues/$num/timeline")
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::warning::Failed to fetch timeline for PR #$num (gh api exited $status); labeledAt will incorrectly fall back to createdAt unless this fails the step" >&2
+              return 1
+            fi
+            labeled_at=$(printf '%s' "$timeline" \
+              | jq -r '[.[] | select(.event == "labeled" and .label.name == "needs review")] | last | .created_at // ""' \
+              | tail -n 1)
+            jq -n --argjson number "$num" --arg labeled_at "$labeled_at" \
+              '{number: $number, labeledAt: (if $labeled_at == "" then null else $labeled_at end)}'
+          }
+          export -f fetch_labeled_at
+          export REPO
+
+          jq -r '.[].number' "$RUNNER_TEMP/needs-review-prs-raw.json" \
+            | xargs -P8 -I{} bash -c 'fetch_labeled_at "$@"' _ {} \
+            > "$RUNNER_TEMP/labeled-at.jsonl"
+
+          jq --slurpfile labeled "$RUNNER_TEMP/labeled-at.jsonl" '
+            ($labeled | map({(.number|tostring): .labeledAt}) | add // {}) as $map
+            | map(. + {labeledAt: ($map[(.number|tostring)] // null)})
+            | sort_by(.labeledAt // .createdAt)
+          ' "$RUNNER_TEMP/needs-review-prs-raw.json" \
+            | tee "$RUNNER_TEMP/needs-review-prs.json" | jq .
+
+          COUNT=$(jq 'length' "$RUNNER_TEMP/needs-review-prs.json")
+          if ! [[ "$COUNT" =~ ^[0-9]+$ ]]; then
+            echo "::error::Failed to determine PR count (got '$COUNT')"
+            exit 1
+          fi
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "**PRs needing review:** $COUNT" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build summariser request
+        if: steps.list.outputs.count != '0'
+        shell: bash
+        run: |
+          # Only summarise the PRs shown in Slack.
+          jq --argjson max_shown "$MAX_SHOWN" '[.[0:$max_shown][] | {
+            pr: .number,
+            title,
+            author: .author.login,
+            body: ((.body // "")[0:4000]),
+            additions,
+            deletions,
+            changedFiles,
+            files: [.files[] | {path, additions, deletions}],
+            summary: ([.comments[] | select(.author.login == "claude")] | last | .body)
+          }]' "$RUNNER_TEMP/needs-review-prs.json" > "$RUNNER_TEMP/summariser-input.json"
+
+          jq --slurpfile prs "$RUNNER_TEMP/summariser-input.json" \
+            --rawfile prompt .github/ai/needs-review-digest.txt \
+            '.system = $prompt |
+             (.messages[] | select(.role == "user") | .content) = ($prs[0] | tojson)' \
+            .github/ai/needs-review-digest.json | tee "$RUNNER_TEMP/request.json" | jq .
+
+      - name: Summarise PRs
+        if: steps.list.outputs.count != '0'
+        # Post the digest without summaries rather than not at all.
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Only keep response.json on a 200 with valid JSON; a partial body
+          # would break `jq --slurpfile` later. `|| HTTP_CODE=000` stops a curl
+          # failure exiting under `bash -e` before cleanup.
+          HTTP_CODE=$(curl -sSL --max-time 120 -o "$RUNNER_TEMP/response.tmp" -w '%{http_code}' \
+            https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d @"$RUNNER_TEMP/request.json") || HTTP_CODE=000
+          if [ "$HTTP_CODE" != "200" ] || ! jq empty "$RUNNER_TEMP/response.tmp" 2>/dev/null; then
+            cat "$RUNNER_TEMP/response.tmp" 2>/dev/null || true
+            rm -f "$RUNNER_TEMP/response.tmp"
+            echo "::warning::Anthropic API request failed (HTTP $HTTP_CODE); posting digest without summaries"
+            exit 1
+          fi
+          mv "$RUNNER_TEMP/response.tmp" "$RUNNER_TEMP/response.json"
+
+      - name: Build Slack payload
+        if: steps.list.outputs.count != '0'
+        env:
+          SEARCH_URL: "${{ github.server_url }}/${{ github.repository }}/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+review%22"
+        run: |
+          AI_FILE="$RUNNER_TEMP/response.json"
+          if [ ! -f "$AI_FILE" ]; then
+            AI_FILE="$RUNNER_TEMP/empty-response.json"
+            echo '{}' > "$AI_FILE"
+          fi
+
+          # Slack mrkdwn needs &, < and > escaped (& first to avoid double-escaping).
+          jq --argjson count "${{ steps.list.outputs.count }}" \
+             --argjson max_shown "$MAX_SHOWN" \
+             --arg search_url "$SEARCH_URL" \
+             --slurpfile ai "$AI_FILE" '
+            def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+            def human_age($seconds):
+              ($seconds / 86400 | floor) as $days
+              | if $days >= 1 then ($days | tostring) + "d"
+                else ($seconds / 3600 | floor) as $hours
+                | if $hours >= 1 then ($hours | tostring) + "h"
+                  else (($seconds / 60 | floor) | tostring) + "m"
+                  end
+                end;
+            ((try ($ai[0].content[0].text | fromjson | .entries
+                   | map({(.pr | tostring): .}) | add) catch null) // {}) as $ai_map
+            | {
+            blocks: (
+              [{
+                type: "header",
+                text: {
+                  type: "plain_text",
+                  text: "PRs needing review",
+                  emoji: true
+                }
+              }]
+              + (
+                  [.[0:$max_shown][] |
+                    $ai_map[(.number|tostring)] as $s |
+                    ("• <" + .url + "|#" + (.number|tostring) + " " + (.title|esc) + ">  by " + (.author.login|esc)
+                      + " · labeled for review " + human_age(now - ((.labeledAt // .createdAt) | fromdateiso8601)) + " ago"
+                      + (if $s then "\n      " + ({S: "🟢", M: "🟡", L: "🔴"}[$s.effort] // $s.effort) + " _" + ($s.effort_reason|esc) + "_" else "" end))
+                  ] as $lines
+                  | if ($lines | length) > 0 then [{
+                      type: "section",
+                      text: { type: "mrkdwn", text: ($lines | join("\n")) }
+                    }] else [] end
+                )
+              + (if $count > $max_shown then [{
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("… and <" + $search_url + "|" + (($count - $max_shown) | tostring) + " more>")
+                  }
+                }] else [] end)
+            )
+          }' "$RUNNER_TEMP/needs-review-prs.json" > "$RUNNER_TEMP/slack_payload.json"
+          cat "$RUNNER_TEMP/slack_payload.json"
+
+      - name: Post to Slack
+        if: steps.list.outputs.count != '0'
+        uses: slackapi/slack-github-action@v3.0.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL_PR_REVIEW }}
+          webhook-type: incoming-webhook
+          payload-file-path: ${{ runner.temp }}/slack_payload.json
+          # Fail on webhook errors; the default silently ignores them.
+          errors: true

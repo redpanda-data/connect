@@ -103,34 +103,20 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
-		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
+		Field(bqSelectProjectField()).
 		Field(service.NewStringField("credentials_json").
-			Description("An optional field to set Google Service Account Credentials json.").
+			Description(credentialsJSONDescription).Version("4.33.0").
 			Secret().
 			Default("")).
-		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
+		Field(bqSelectTableField()).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
-		Field(service.NewStringField("where").
-			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks (`?`).").
-			ShortDescription("An optional where clause. Placeholders must be question marks, populated from args_mapping.").
-			Example("type = ? and created_at > ?").
-			Example("user_id = ?").
-			Optional(),
-		).
+		Field(bqSelectWhereField()).
 		Field(service.NewAutoRetryNacksToggleField()).
-		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]any{})).
-		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
-		Field(service.NewBloblangField("args_mapping").
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
-			ShortDescription("Bloblang mapping evaluating to an array of values matching the placeholder arguments in where.").
-			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
-			Optional()).
-		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the select query (before SELECT).").
-			Optional()).
-		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the select query.").
-			Optional()).
+		Field(bqJobLabelsField("query")).
+		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Version("4.7.0").Default("")).
+		Field(bqSelectArgsMappingField()).
+		Field(bqSelectPrefixField()).
+		Field(bqSelectSuffixField()).
 		Example("Word counts",
 			`
 Here we query the public corpus of Shakespeare's works to generate a stream of the top 10 words that are 3 or more characters long:`,

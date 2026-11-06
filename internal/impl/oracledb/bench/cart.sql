@@ -4,13 +4,16 @@
 
 -- Enable output for debugging
 SET SERVEROUTPUT ON;
+-- Don't echo the old/new lines when &cart_total is substituted
+SET VERIFY OFF;
 
 -- Switch to testdb schema
 ALTER SESSION SET CURRENT_SCHEMA = testdb;
 /
 
 DECLARE
-    cart_total NUMBER := 10000000;
+    -- cart_total is defined by the sqlcl:pdb:data:cart task (TOTAL=...)
+    cart_total NUMBER := &cart_total;
     cart_batch_size NUMBER := 10000;
     cart_current NUMBER := 0;
     batch_end NUMBER;
@@ -54,6 +57,13 @@ BEGIN
     END LOOP;
 
     DBMS_OUTPUT.PUT_LINE('Completed: ' || cart_current || ' rows inserted into testdb.cart');
+END;
+/
+
+-- Gather optimizer statistics so the snapshot can split testdb.cart into parallel chunks
+BEGIN
+    DBMS_STATS.GATHER_TABLE_STATS(ownname => 'TESTDB', tabname => 'CART');
+    DBMS_OUTPUT.PUT_LINE('Gathered optimizer statistics for testdb.cart');
 END;
 /
 

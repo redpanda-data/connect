@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/couchbase/gocb/v2"
 	"github.com/go-faker/faker/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,6 +125,9 @@ func TestIntegrationCouchbaseOutput(t *testing.T) {
 	t.Run("Insert", func(t *testing.T) {
 		testCouchbaseOutputInsert(payload, bucket, servicePort, t)
 	})
+	t.Run("Insert existing", func(t *testing.T) {
+		testCouchbaseOutputInsertExisting(payload, bucket, servicePort, t)
+	})
 	t.Run("Remove", func(t *testing.T) {
 		testCouchbaseOutputRemove(uid, bucket, servicePort, t)
 	})
@@ -175,6 +179,45 @@ operation: 'insert'
 	})
 
 	assert.NoError(t, err)
+}
+
+// testCouchbaseOutputInsertExisting writes a batch with a new document and a document that already exists. Only the
+// message of the existing document must fail.
+func testCouchbaseOutputInsertExisting(existingPayload, bucket, port string, t *testing.T) {
+	config := fmt.Sprintf(`
+url: 'couchbase://localhost:%s'
+bucket: %s
+username: %s
+password: %s
+id: '${! json("id") }'
+content: 'root = this'
+operation: 'insert'
+`, port, bucket, username, password)
+
+	newPayload := fmt.Sprintf(`{"id": %q, "data": %q}`, faker.UUIDHyphenated(), faker.Sentence())
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(newPayload)),
+		service.NewMessage([]byte(existingPayload)),
+	}
+
+	indexer := batch.Index()
+
+	err := getOutput(t, config).WriteBatch(t.Context(), batch)
+	require.Error(t, err)
+
+	var batchErr *service.BatchError
+	require.ErrorAs(t, err, &batchErr)
+	assert.Equal(t, 1, batchErr.IndexedErrors())
+
+	var failed []int
+	batchErr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, err error) bool {
+		if err != nil {
+			failed = append(failed, i)
+			assert.ErrorIs(t, err, gocb.ErrDocumentExists)
+		}
+		return true
+	})
+	assert.Equal(t, []int{1}, failed)
 }
 
 func testCouchbaseOutputUpsert(payload, bucket, port string, t *testing.T) {

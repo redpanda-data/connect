@@ -22,9 +22,10 @@ import (
 
 func TestIntegrationIcebergRESTWithMinIO(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	ctx := context.Background()
-	infra := setupTestInfra(t, ctx)
+	infra := setupTestInfra(t)
 
 	namespaceName := "test_ns"
 	infra.CreateNamespace(t, namespaceName)

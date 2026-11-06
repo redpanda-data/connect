@@ -35,20 +35,20 @@ func TestIntegrationSnapshot(t *testing.T) {
 	// Create all tables upfront before running subtests. Oracle requires SCNs to advance
 	// after DDL before SET TRANSACTION READ ONLY can provide a consistent read (ORA-01466).
 	// Creating tables here and sleeping gives the DDL time to settle before any snapshot runs.
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "TESTDB.single_key_test", `
-		CREATE TABLE TESTDB.single_key_test (
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".single_key_test", `
+		CREATE TABLE `+db.Schema+`.single_key_test (
 			id   NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 			data NVARCHAR2(100)
 		)`))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "TESTDB.composite_key_test", `
-		CREATE TABLE TESTDB.composite_key_test (
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".composite_key_test", `
+		CREATE TABLE `+db.Schema+`.composite_key_test (
 			col1 NUMBER NOT NULL,
 			col2 NUMBER NOT NULL,
 			data NVARCHAR2(100),
 			CONSTRAINT composite_key_test_pk PRIMARY KEY (col1, col2)
 		)`))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "TESTDB.three_col_key_test", `
-		CREATE TABLE TESTDB.three_col_key_test (
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".three_col_key_test", `
+		CREATE TABLE `+db.Schema+`.three_col_key_test (
 			col1 NUMBER NOT NULL,
 			col2 NUMBER NOT NULL,
 			col3 NUMBER NOT NULL,
@@ -63,12 +63,12 @@ func TestIntegrationSnapshot(t *testing.T) {
 		var totalRows int
 		for range 50 {
 			totalRows++
-			db.MustExec("INSERT INTO TESTDB.single_key_test (data) VALUES (:1)", "test-data")
+			db.MustExec("INSERT INTO "+db.Schema+".single_key_test (data) VALUES (:1)", "test-data")
 		}
 
 		publisher := &publisherStub{}
 		tables := []replication.UserTable{
-			{Schema: "TESTDB", Name: "SINGLE_KEY_TEST"},
+			{Schema: db.Schema, Name: "SINGLE_KEY_TEST"},
 		}
 
 		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
@@ -95,13 +95,13 @@ func TestIntegrationSnapshot(t *testing.T) {
 		for i := range 10 {
 			for j := range 5 {
 				totalRows++
-				db.MustExec("INSERT INTO TESTDB.composite_key_test (col1, col2, data) VALUES (:1, :2, :3)", i, j, "test-data")
+				db.MustExec("INSERT INTO "+db.Schema+".composite_key_test (col1, col2, data) VALUES (:1, :2, :3)", i, j, "test-data")
 			}
 		}
 
 		publisher := &publisherStub{}
 		tables := []replication.UserTable{
-			{Schema: "TESTDB", Name: "COMPOSITE_KEY_TEST"},
+			{Schema: db.Schema, Name: "COMPOSITE_KEY_TEST"},
 		}
 
 		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
@@ -133,16 +133,16 @@ func TestIntegrationSnapshot(t *testing.T) {
 		for i := range 10 {
 			for j := range 5 {
 				totalRows++
-				db.MustExec("INSERT INTO TESTDB.composite_key_test (col1, col2, data) VALUES (:1, :2, :3)", col1Offset+i, j, "test-data")
+				db.MustExec("INSERT INTO "+db.Schema+".composite_key_test (col1, col2, data) VALUES (:1, :2, :3)", col1Offset+i, j, "test-data")
 			}
 		}
 
 		publisher := &publisherStub{}
 		tables := []replication.UserTable{
-			{Schema: "TESTDB", Name: "COMPOSITE_KEY_TEST"},
+			{Schema: db.Schema, Name: "COMPOSITE_KEY_TEST"},
 		}
 		filters := map[string]string{
-			"TESTDB.COMPOSITE_KEY_TEST": fmt.Sprintf("SELECT col1, col2, data FROM TESTDB.COMPOSITE_KEY_TEST WHERE col1 >= %d", col1Offset),
+			db.Schema + ".COMPOSITE_KEY_TEST": fmt.Sprintf("SELECT col1, col2, data FROM "+db.Schema+".COMPOSITE_KEY_TEST WHERE col1 >= %d", col1Offset),
 		}
 
 		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, filters, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
@@ -170,14 +170,14 @@ func TestIntegrationSnapshot(t *testing.T) {
 			for j := range 3 {
 				for k := range 4 {
 					totalRows++
-					db.MustExec("INSERT INTO TESTDB.three_col_key_test (col1, col2, col3, data) VALUES (:1, :2, :3, :4)", i, j, k, "test-data")
+					db.MustExec("INSERT INTO "+db.Schema+".three_col_key_test (col1, col2, col3, data) VALUES (:1, :2, :3, :4)", i, j, k, "test-data")
 				}
 			}
 		}
 
 		publisher := &publisherStub{}
 		tables := []replication.UserTable{
-			{Schema: "TESTDB", Name: "THREE_COL_KEY_TEST"},
+			{Schema: db.Schema, Name: "THREE_COL_KEY_TEST"},
 		}
 
 		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
@@ -210,17 +210,17 @@ func TestIntegrationSnapshot(t *testing.T) {
 			for j := range 3 {
 				for k := range 4 {
 					totalRows++
-					db.MustExec("INSERT INTO TESTDB.three_col_key_test (col1, col2, col3, data) VALUES (:1, :2, :3, :4)", col1Offset+i, j, k, "test-data")
+					db.MustExec("INSERT INTO "+db.Schema+".three_col_key_test (col1, col2, col3, data) VALUES (:1, :2, :3, :4)", col1Offset+i, j, k, "test-data")
 				}
 			}
 		}
 
 		publisher := &publisherStub{}
 		tables := []replication.UserTable{
-			{Schema: "TESTDB", Name: "THREE_COL_KEY_TEST"},
+			{Schema: db.Schema, Name: "THREE_COL_KEY_TEST"},
 		}
 		filters := map[string]string{
-			"TESTDB.THREE_COL_KEY_TEST": fmt.Sprintf("SELECT col1, col2, col3, data FROM TESTDB.THREE_COL_KEY_TEST WHERE col1 >= %d", col1Offset),
+			db.Schema + ".THREE_COL_KEY_TEST": fmt.Sprintf("SELECT col1, col2, col3, data FROM "+db.Schema+".THREE_COL_KEY_TEST WHERE col1 >= %d", col1Offset),
 		}
 
 		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, filters, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())

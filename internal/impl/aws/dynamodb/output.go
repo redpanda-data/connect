@@ -48,6 +48,10 @@ const (
 	ddboFieldBatching       = "batching"
 )
 
+// ttlKeyDescription describes the ttl_key field of the aws_dynamodb output and
+// cache.
+const ttlKeyDescription = "The column key to place the TTL value within. The value is the expiry time as a Unix timestamp in seconds, stored as a number attribute, which is the format that DynamoDB TTL requires. A TTL value is only written when both this field and a TTL duration are set."
+
 type ddboConfig struct {
 	Table          string
 	StringColumns  map[string]*service.InterpolatedString
@@ -118,9 +122,10 @@ json_map_columns:
 
 In which case the top level document fields will be written at the root of the item, potentially overwriting previously defined column values. If a path is not found within a document the column will not be populated.
 
+[[credentials-overview]]
 == Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].
 
 == Performance
 
@@ -156,14 +161,18 @@ This output benefits from sending messages as a batch for improved performance. 
 				Default("").
 				Advanced(),
 			service.NewStringField(ddboFieldTTLKey).
-				Description("The column key to place the TTL value within.").
+				Description(ttlKeyDescription).
 				Default("").
 				Advanced(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(ddboFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(retries.CommonRetryBackOffFields(3, "1s", "5s", "30s")...)
+		Fields(service.NewRetryBackOffFields(3, &backoff.ExponentialBackOff{
+			InitialInterval: time.Second,
+			MaxInterval:     5 * time.Second,
+			MaxElapsedTime:  30 * time.Second,
+		})...)
 }
 
 func init() {

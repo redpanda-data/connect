@@ -81,9 +81,9 @@ func newDefaultClient() *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
-			Dial: (&net.Dialer{
+			DialContext: (&net.Dialer{
 				Timeout: 10 * time.Second,
-			}).Dial,
+			}).DialContext,
 			TLSHandshakeTimeout: 10 * time.Second,
 		},
 	}

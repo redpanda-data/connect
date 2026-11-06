@@ -427,6 +427,135 @@ func TestBuildSchemaWithResolverMetadataOnlyFieldOrdering(t *testing.T) {
 	assert.Equal(t, "extra", fields[2].Name) // record-only field last
 }
 
+// TestBuildSchemaWithResolverRejectsNanosecondTimestamps guards CON-521:
+// schema metadata declaring a nanosecond timestamp (Avro timestamp-nanos,
+// Debezium NanoTimestamp) used to resolve to timestamp_ns/timestamptz_ns,
+// which the output's write path does not support. The table was created and
+// every write to it then failed. Schema construction must now fail before
+// the table is created, naming the field and the remediation.
+func TestBuildSchemaWithResolverRejectsNanosecondTimestamps(t *testing.T) {
+	nanos := func(name string, utc bool) schema.Common {
+		return schema.Common{
+			Name:    name,
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: utc}},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		children  []schema.Common
+		record    map[string]any
+		wantField string
+	}{
+		{
+			name:      "top-level timestamptz nanos",
+			children:  []schema.Common{{Name: "id", Type: schema.Int64}, nanos("created_at", true)},
+			record:    map[string]any{"id": int64(1), "created_at": "2026-09-24T12:00:00.123456789Z"},
+			wantField: "created_at",
+		},
+		{
+			name:      "top-level local timestamp nanos",
+			children:  []schema.Common{nanos("local_ts", false)},
+			record:    map[string]any{"local_ts": "2026-09-24T12:00:00.123456789"},
+			wantField: "local_ts",
+		},
+		{
+			name:      "metadata-only field absent from record",
+			children:  []schema.Common{nanos("created_at", true)},
+			record:    map[string]any{},
+			wantField: "created_at",
+		},
+		{
+			name: "nested inside a struct",
+			children: []schema.Common{{
+				Name:     "audit",
+				Type:     schema.Object,
+				Children: []schema.Common{nanos("updated_at", true)},
+			}},
+			record:    map[string]any{"audit": map[string]any{"updated_at": "2026-09-24T12:00:00.123456789Z"}},
+			wantField: "updated_at",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := &Router{
+				caseSensitive: true,
+				resolver:      newTypeResolver("schema_key", nil, true, nil),
+			}
+
+			schemaMeta := schema.Common{Type: schema.Object, Children: tt.children}
+			msg := service.NewMessage(nil)
+			msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+			_, err := router.buildSchemaWithResolver(tt.record, msg, tableKey{namespace: "ns", table: "t"})
+			require.ErrorIs(t, err, errNanosecondTimestamp)
+			assert.Contains(t, err.Error(), tt.wantField)
+			assert.Contains(t, err.Error(), "nanosecond")
+			assert.Contains(t, err.Error(), "not supported by the iceberg output")
+			assert.Contains(t, err.Error(), "upstream")
+		})
+	}
+}
+
+// TestResolveNewColumnsRejectsNanosecondTimestamps guards the schema-evolution
+// half of CON-521: a nanosecond timestamp discovered on an existing table
+// must fail the evolution rather than fall back to a string column, and must
+// not let the other new columns in the batch through on their own.
+func TestResolveNewColumnsRejectsNanosecondTimestamps(t *testing.T) {
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "count", Type: schema.Int64},
+			{
+				Name:    "created_at",
+				Type:    schema.Timestamp,
+				Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: true}},
+			},
+		},
+	}
+	schemaErr := NewBatchSchemaEvolutionError([]*UnknownFieldError{
+		NewUnknownFieldError(nil, "count", int64(1)),
+		NewUnknownFieldError(nil, "created_at", "2026-09-24T12:00:00.123456789Z"),
+	})
+
+	newMsg := func() *service.Message {
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(map[string]any{"count": int64(1), "created_at": "2026-09-24T12:00:00.123456789Z"})
+		msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+		return msg
+	}
+
+	t.Run("rejected without a mapping", func(t *testing.T) {
+		router := &Router{
+			caseSensitive: true,
+			resolver:      newTypeResolver("schema_key", nil, true, nil),
+		}
+		columns, err := router.resolveNewColumns(schemaErr, newMsg(), tableKey{namespace: "ns", table: "t"})
+		require.ErrorIs(t, err, errNanosecondTimestamp)
+		assert.Contains(t, err.Error(), "created_at")
+		assert.Nil(t, columns)
+	})
+
+	t.Run("downcast by new_column_type_mapping", func(t *testing.T) {
+		exec, err := bloblang.Parse(`root = if this.name == "created_at" { "timestamptz" } else { this.inferred_type }`)
+		require.NoError(t, err)
+		router := &Router{
+			caseSensitive: true,
+			resolver:      newTypeResolver("schema_key", exec, true, nil),
+		}
+		columns, err := router.resolveNewColumns(schemaErr, newMsg(), tableKey{namespace: "ns", table: "t"})
+		require.NoError(t, err)
+
+		got := map[string]string{}
+		for _, c := range columns {
+			got[strings.Join(c.path, ".")] = c.fieldType.Type()
+		}
+		assert.Equal(t, map[string]string{"count": "long", "created_at": "timestamptz"}, got)
+	})
+}
+
 func TestTableLocationFor(t *testing.T) {
 	nsParts := []string{"shop", "cdc"}
 

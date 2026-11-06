@@ -4,13 +4,16 @@
 
 -- Enable output for debugging
 SET SERVEROUTPUT ON;
+-- Don't echo the old/new lines when &users_total is substituted
+SET VERIFY OFF;
 
 -- Switch to testdb schema
 ALTER SESSION SET CURRENT_SCHEMA = testdb;
 /
 
 DECLARE
-    users_total NUMBER := 1000000;
+    -- users_total is defined by the sqlcl:pdb:data:users task (TOTAL=...)
+    users_total NUMBER := &users_total;
     users_batch_size NUMBER := 10000;
     users_current NUMBER := 0;
     users_batch_end NUMBER;
@@ -52,6 +55,13 @@ BEGIN
     END LOOP;
 
     DBMS_OUTPUT.PUT_LINE('Completed: ' || users_current || ' rows inserted into testdb.users');
+END;
+/
+
+-- Gather optimizer statistics so the snapshot can split testdb.users into parallel chunks
+BEGIN
+    DBMS_STATS.GATHER_TABLE_STATS(ownname => 'TESTDB', tabname => 'USERS');
+    DBMS_OUTPUT.PUT_LINE('Gathered optimizer statistics for testdb.users');
 END;
 /
 

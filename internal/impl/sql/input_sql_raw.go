@@ -41,8 +41,7 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Fields(connFields()...).
 		Version("4.10.0").
 		Example("Consumes an SQL table using a query as an input.",
-			`
-Here we perform an aggregate over a list of names in a table that are less than 3600 seconds old.`,
+			`This example performs an aggregate query that counts the rows for each name in a table, including only rows that were last updated more than 3600 seconds ago.`,
 			`
 input:
   sql_raw:

@@ -64,9 +64,10 @@ func kfoOutputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Sends messages to a Kinesis Firehose delivery stream.`).
 		Description(`
+[[credentials-overview]]
 == Credentials
 
-By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].
 
 == Performance
 
@@ -81,7 +82,11 @@ This output benefits from sending messages as a batch for improved performance. 
 			service.NewBatchPolicyField(kfoFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+		Fields(service.NewRetryBackOffFields(0, &backoff.ExponentialBackOff{
+			InitialInterval: time.Second,
+			MaxInterval:     5 * time.Second,
+			MaxElapsedTime:  30 * time.Second,
+		})...)
 }
 
 func init() {

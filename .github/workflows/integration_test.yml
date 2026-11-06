@@ -1,5 +1,11 @@
 name: Integration Tests
 
+# Superseded pull request runs used a relatively large part of the 32-core runner time. Thus, a new push to a pull
+# request cancels the run of the previous push. Other events use the run ID as the key, so they are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   schedule:
     # Run every day at 1AM UTC
@@ -32,6 +38,10 @@ jobs:
 
       - name: Install Task
         uses: ./.github/actions/setup-task
+
+      # Fetch all modules up front so a Go proxy error fails here, not inside a random test package.
+      - name: Download Go modules
+        run: go mod download
 
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
@@ -139,9 +149,16 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          # A PR command (/integration) runs this job on the main branch, but with PR code.
+          # A cache save from that run can poison the main cache. Thus, do not cache for a PR command.
+          cache: ${{ github.event_name != 'issue_comment' }}
 
       - name: Install Task
         uses: ./.github/actions/setup-task
+
+      # Fetch all modules up front so a Go proxy error fails here, not inside a random test package.
+      - name: Download Go modules
+        run: go mod download
 
       - name: Verify Integration Tests Registry
         run: task test:integration:verify
@@ -149,7 +166,11 @@ jobs:
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
+      # A pull request that touches nothing under internal/impl/ has no packages to
+      # test; without this guard the empty filter runs every package and the step
+      # times out.
       - name: Run Integration Tests
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         env:
           FILTER: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}

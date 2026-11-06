@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -170,10 +171,10 @@ func (r *reader) Connect(ctx context.Context) error {
 				if len(msgs) == 0 {
 					return afterID
 				}
-				for i := len(msgs) - 1; i >= 0; i-- {
-					afterID = msgs[i].ID
+				for _, msg := range slices.Backward(msgs) {
+					afterID = msg.ID
 					select {
-					case msgChan <- msgs[i]:
+					case msgChan <- msg:
 					case <-r.shutSig.SoftStopChan():
 						return ""
 					}

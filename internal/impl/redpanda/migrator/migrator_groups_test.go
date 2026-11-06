@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/twmb/franz-go/pkg/kadm"
 )
 
 func TestExtractTopics(t *testing.T) {
@@ -37,12 +36,10 @@ func TestExtractTopics(t *testing.T) {
 			name: "single topic single group",
 			gcos: []GroupOffset{
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 0,
-						At:        100,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 0,
+					At:        100,
 				},
 			},
 			expected: []string{"topic1"},
@@ -51,20 +48,16 @@ func TestExtractTopics(t *testing.T) {
 			name: "single topic multiple groups",
 			gcos: []GroupOffset{
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 0,
-						At:        100,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 0,
+					At:        100,
 				},
 				{
-					Group: "group2",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 1,
-						At:        200,
-					},
+					Group:     "group2",
+					Topic:     "topic1",
+					Partition: 1,
+					At:        200,
 				},
 			},
 			expected: []string{"topic1"},
@@ -73,20 +66,16 @@ func TestExtractTopics(t *testing.T) {
 			name: "multiple topics single group",
 			gcos: []GroupOffset{
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 0,
-						At:        100,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 0,
+					At:        100,
 				},
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic2",
-						Partition: 0,
-						At:        200,
-					},
+					Group:     "group1",
+					Topic:     "topic2",
+					Partition: 0,
+					At:        200,
 				},
 			},
 			expected: []string{"topic1", "topic2"},
@@ -95,44 +84,34 @@ func TestExtractTopics(t *testing.T) {
 			name: "multiple topics multiple groups with duplicates",
 			gcos: []GroupOffset{
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 0,
-						At:        100,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 0,
+					At:        100,
 				},
 				{
-					Group: "group2",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 1,
-						At:        150,
-					},
+					Group:     "group2",
+					Topic:     "topic1",
+					Partition: 1,
+					At:        150,
 				},
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic2",
-						Partition: 0,
-						At:        200,
-					},
+					Group:     "group1",
+					Topic:     "topic2",
+					Partition: 0,
+					At:        200,
 				},
 				{
-					Group: "group3",
-					Offset: kadm.Offset{
-						Topic:     "topic3",
-						Partition: 0,
-						At:        300,
-					},
+					Group:     "group3",
+					Topic:     "topic3",
+					Partition: 0,
+					At:        300,
 				},
 				{
-					Group: "group2",
-					Offset: kadm.Offset{
-						Topic:     "topic2",
-						Partition: 1,
-						At:        250,
-					},
+					Group:     "group2",
+					Topic:     "topic2",
+					Partition: 1,
+					At:        250,
 				},
 			},
 			expected: []string{"topic1", "topic2", "topic3"},
@@ -141,28 +120,22 @@ func TestExtractTopics(t *testing.T) {
 			name: "same topic different partitions",
 			gcos: []GroupOffset{
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 0,
-						At:        100,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 0,
+					At:        100,
 				},
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 1,
-						At:        200,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 1,
+					At:        200,
 				},
 				{
-					Group: "group1",
-					Offset: kadm.Offset{
-						Topic:     "topic1",
-						Partition: 2,
-						At:        300,
-					},
+					Group:     "group1",
+					Topic:     "topic1",
+					Partition: 2,
+					At:        300,
 				},
 			},
 			expected: []string{"topic1"},
