@@ -9,6 +9,7 @@
 package pglogicalstream
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"time"
@@ -213,12 +214,8 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 				return nil, fmt.Errorf("normalising numeric value: %w", err)
 			}
 			return canonical, nil
-		case "date":
-			// ±infinity dates cannot be represented as time.Time; return nil.
-			if ts, ok := val.(time.Time); ok {
-				return ts, nil
-			}
-			return nil, nil
+		case "date", "timestamp", "timestamptz":
+			return decodedTimeValue(val)
 		case "time":
 			// Return the raw PostgreSQL text representation as a string,
 			// avoiding pgtype.Time struct.
@@ -230,15 +227,53 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 			// pgx decodes tsvector as pgtype.TSVector (a struct with Lexemes/Valid),
 			// but we want the raw PostgreSQL text representation as a string.
 			return string(data), nil
-		case "timestamp", "timestamptz":
-			// ±infinity timestamps cannot be represented as time.Time; return nil.
-			if ts, ok := val.(time.Time); ok {
-				return ts, nil
-			}
-			return nil, nil
 		default:
 			return val, err
 		}
 	}
 	return string(data), nil
+}
+
+// InfiniteTime is the decoded value of the PostgreSQL special values
+// "infinity" and "-infinity" in a date, timestamp or timestamptz column. They
+// have no time.Time form. The snapshot and the stream decoders both return it,
+// so the row keys of both paths agree.
+//
+// It keeps the exact value through the snapshot pagination and the incremental
+// snapshot window: the snapshot passes the last primary key back as a query
+// argument (through Value), and the window dedups on it. Do not replace it with
+// nil in the decoders: a nil key makes the "pk > $1" page predicate match no
+// rows, so the snapshot would stop at a -infinity key and skip the rest of the
+// table. The input maps it to its output form when it builds the message.
+type InfiniteTime string
+
+const (
+	// PositiveInfinity is PostgreSQL "infinity".
+	PositiveInfinity InfiniteTime = "infinity"
+	// NegativeInfinity is PostgreSQL "-infinity".
+	NegativeInfinity InfiniteTime = "-infinity"
+)
+
+// Value implements driver.Valuer, so the snapshot can send the value back to
+// PostgreSQL as a query argument. PostgreSQL parses the text form.
+func (t InfiniteTime) Value() (driver.Value, error) {
+	return string(t), nil
+}
+
+// decodedTimeValue maps what pgx decoded for a date, timestamp or timestamptz
+// column to the value the stream emits. pgx returns a time.Time for a finite
+// value and a pgtype.InfinityModifier for "infinity" and "-infinity".
+func decodedTimeValue(val any) (any, error) {
+	switch v := val.(type) {
+	case time.Time:
+		return v, nil
+	case pgtype.InfinityModifier:
+		switch v {
+		case pgtype.Infinity:
+			return PositiveInfinity, nil
+		case pgtype.NegativeInfinity:
+			return NegativeInfinity, nil
+		}
+	}
+	return nil, fmt.Errorf("unexpected decoded value %v of type %T for a date or timestamp column", val, val)
 }
