@@ -17,13 +17,11 @@ import (
 	"io"
 	"math/rand/v2"
 	"net"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	dockercontainer "github.com/moby/moby/api/types/container"
-	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -170,9 +168,7 @@ func TestIntegrationOTLPWithSchemaRegistry(t *testing.T) {
 			createTopic(t, seed, topic)
 
 			t.Log("And: OTel Collector")
-			collectorHTTPPort := freePortBelowEphemeral(t)
-			collectorGRPCPort := freePortBelowEphemeral(t)
-			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType, collectorHTTPPort, collectorGRPCPort)
+			collectorHTTP, collectorGRPC, collectorContainer := startOtelCollectorContainerWithDebugExporter(t, tc.signalType)
 			t.Logf("OTel Collector endpoints - HTTP: %s, gRPC: %s", collectorHTTP, collectorGRPC)
 
 			t.Log("When: generating telemetry data and sending to Redpanda via Benthos pipeline")
@@ -282,7 +278,9 @@ func runOtelgen(t *testing.T, cmd []string) {
 	require.Equal(t, 0, state.ExitCode, "otelgen should complete successfully")
 }
 
-func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType, httpPort, grpcPort int) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
+// startOtelCollectorContainerWithDebugExporter starts an OTel Collector that logs what it receives. Docker picks the host
+// ports, so they cannot collide with the ports that freePortBelowEphemeral gives to the producer pipelines.
+func startOtelCollectorContainerWithDebugExporter(t *testing.T, sig SignalType) (httpEndpoint, grpcEndpoint string, container testcontainers.Container) {
 	t.Helper()
 
 	conf := fmt.Sprintf(`
@@ -320,12 +318,6 @@ service:
 			},
 		},
 		Cmd: []string{"--config=/etc/otel-config.yaml"},
-		HostConfigModifier: func(hc *dockercontainer.HostConfig) {
-			hc.PortBindings = mobynet.PortMap{
-				mobynet.MustParsePort("4318/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(httpPort)}},
-				mobynet.MustParsePort("4317/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(grpcPort)}},
-			}
-		},
 	}
 
 	ctx := t.Context()
@@ -342,8 +334,12 @@ service:
 		}
 	})
 
-	httpEndpoint = fmt.Sprintf("localhost:%d", httpPort)
-	grpcEndpoint = fmt.Sprintf("localhost:%d", grpcPort)
+	httpPort, err := container.MappedPort(ctx, "4318/tcp")
+	require.NoError(t, err)
+	grpcPort, err := container.MappedPort(ctx, "4317/tcp")
+	require.NoError(t, err)
+	httpEndpoint = "localhost:" + httpPort.Port()
+	grpcEndpoint = "localhost:" + grpcPort.Port()
 	return
 }
 
@@ -400,6 +396,7 @@ func startStream(t *testing.T, confYAML string) *service.Stream {
 // the ports of other containers on random ports from the same range. When other test packages run at the same time,
 // a container can take the port before this test binds it: the otlp input then fails with "address already in use",
 // and waitForListening connects to the Docker proxy instead. Docker does not pick ports below the ephemeral range.
+// The bounds assume the default ip_local_port_range of the Linux CI runners.
 func freePortBelowEphemeral(t *testing.T) int {
 	t.Helper()
 	for range 100 {
