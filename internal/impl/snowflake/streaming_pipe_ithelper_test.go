@@ -120,7 +120,7 @@ import (
 //	                           <account>.snowflakecomputing.com pattern -- most commonly
 //	                           PrivateLink accounts (<account>.privatelink.snowflakecomputing.com).
 //	                           Mapped straight to the production output's own `account_host`
-//	                           field; see https://docs.snowflake.com/en/user-guide/admin-privatelink.
+//	                           field; see https://docs.snowflake.com/en/user-guide/admin-security-privatelink.
 //	                           Leave unset for an ordinary account.
 //	SNOWFLAKE_PRIVATE_KEY_PASS Passphrase for SNOWFLAKE_PRIVATE_KEY_FILE, only if it's
 //	                           encrypted (the `-v2 aes256` form in Snowflake's key-pair-auth
