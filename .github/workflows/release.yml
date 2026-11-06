@@ -454,11 +454,14 @@ jobs:
         id: operator
         env:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+          # Downstream repository receiving the bump PR; override via the
+          # OPERATOR_REPO repository variable.
+          OPERATOR_REPO: ${{ vars.OPERATOR_REPO || 'redpanda-data/redpanda-operator' }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BRANCH="auto/bump-connect"
 
-          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/redpanda-data/redpanda-operator.git" redpanda-operator
+          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/${OPERATOR_REPO}.git" redpanda-operator
           cd redpanda-operator
 
           CONST="operator/api/redpanda/v1alpha2/pipeline_types.go"
@@ -487,7 +490,7 @@ jobs:
           RELEASED=$(mktemp)
           for REF in $(git ls-remote --heads origin | sed -n 's|.*refs/heads/\(release/.*\)|\1|p'); do
             gh api -H 'Accept: application/vnd.github.raw' \
-              "repos/redpanda-data/redpanda-operator/contents/operator/CHANGELOG.md?ref=${REF}" >> "$RELEASED"
+              "repos/${OPERATOR_REPO}/contents/operator/CHANGELOG.md?ref=${REF}" >> "$RELEASED"
           done
           ENTRY=""
           for F in $(grep -lF 'Bumped the default Redpanda Connect image' .changes/unreleased/operator-*.yaml 2>/dev/null | sort -r || true); do
@@ -516,15 +519,15 @@ jobs:
           BODY=$(printf 'Automated bump of `PipelineDefaultImage` (the default Redpanda Connect image for `Pipeline` resources) from `connect:%s` to `connect:%s`.\n' \
             "$CURRENT" "$VERSION")
 
-          EXISTING_PR=$(gh pr list --repo redpanda-data/redpanda-operator --head "$BRANCH" --json number,url -q '.[0]')
+          EXISTING_PR=$(gh pr list --repo "$OPERATOR_REPO" --head "$BRANCH" --json number,url -q '.[0]')
           if [ -n "$EXISTING_PR" ]; then
             PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
             PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
-            gh pr edit "$PR_NUMBER" --repo redpanda-data/redpanda-operator \
+            gh pr edit "$PR_NUMBER" --repo "$OPERATOR_REPO" \
               --title "$TITLE" \
               --body "$BODY"
           else
-            PR_URL=$(gh pr create --repo redpanda-data/redpanda-operator \
+            PR_URL=$(gh pr create --repo "$OPERATOR_REPO" \
               --title "$TITLE" \
               --body "$BODY" \
               --base main \
