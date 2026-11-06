@@ -160,7 +160,13 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			// Kick off telemetry exporter
 			if !disableTelemetry {
-				telemetry.ActivateExporter(instanceID, version, telemetryDeploymentType, telemetryTenantID, telemetryPipelineID, fbLogger, schema, pConf)
+				telemetry.ActivateExporter(telemetry.Identity{
+					InstanceID:     instanceID,
+					Version:        version,
+					DeploymentType: telemetryDeploymentType,
+					TenantID:       telemetryTenantID,
+					PipelineID:     telemetryPipelineID,
+				}, fbLogger, schema, pConf)
 			}
 			return rpMgr.InitFromParsedConfig(pConf.Namespace("redpanda"))
 		}),

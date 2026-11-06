@@ -76,13 +76,13 @@ type payload struct {
 
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
-func extractPayload(identifier, deploymentType, tenantID, pipelineID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
+func extractPayload(id Identity, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
 	p := payload{
-		ID:             identifier,
+		ID:             id.InstanceID,
 		Uptime:         0,
-		DeploymentType: deploymentType,
-		TenantID:       tenantID,
-		PipelineID:     pipelineID,
+		DeploymentType: id.DeploymentType,
+		TenantID:       id.TenantID,
+		PipelineID:     id.PipelineID,
 		HostInfo: hostInfo{
 			NumCPU:     runtime.NumCPU(),
 			GoMaxProcs: runtime.GOMAXPROCS(0), // using 0 means to just read the value
