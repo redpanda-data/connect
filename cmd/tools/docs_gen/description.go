@@ -526,7 +526,7 @@ func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
 // page that includes one keeps building when the spec drops that content.
 // excluded is as in cloudGuardXrefs, and is used only for components that
 // Redpanda Cloud includes.
-func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool) string {
+func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool, source string) string {
 	guard := func(body string) string {
 		if !plat.inCloud() || excluded == nil {
 			return body
@@ -535,7 +535,7 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 	}
 	summary := escapePlaceholderBraces(c.Summary)
 	var b strings.Builder
-	b.WriteString(descBanner + "\n\n// tag::meta[]\n")
+	b.WriteString(descBannerFor(source) + "\n\n// tag::meta[]\n")
 	if summary != "" {
 		b.WriteString(":description: " + flattenToAttributeValue(escapePlaceholderBraces(metaSummary(c.Summary))) + "\n")
 	}
