@@ -27,6 +27,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/replication/chunkedsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
@@ -821,7 +822,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 		}
 	}()
 
-	snapshotTasks := []func(context.Context) error{}
+	tableTasks := make([][]chunkedsnapshot.Task, 0, len(s.tables))
 
 	for _, table := range s.tables {
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
@@ -849,19 +850,11 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			return fmt.Errorf("creating sample keyspace: %w", err)
 		}
 
-		var prev primaryKey
-		ranges := [][2]primaryKey{}
 		// We have a sorted key space, sample every N keys to get a uniform distribution.
 		// Use max(1, ...) to avoid chunkSize=0 when splits < maxSnapshotWorkers (e.g. small tables
-		// that fit on a single page produce only one sample), which would otherwise cause an
-		// infinite loop.
+		// that fit on a single page produce only one sample).
 		chunkSize := max(1, len(splits)/s.maxSnapshotWorkers)
-		for i := chunkSize; i < len(splits); i += chunkSize {
-			pk := splits[i]
-			ranges = append(ranges, [2]primaryKey{prev, pk})
-			prev = pk
-		}
-		ranges = append(ranges, [2]primaryKey{prev, nil})
+		ranges := chunkedsnapshot.RangesFromBounds(chunkedsnapshot.BoundsFromSamples(splits, chunkSize))
 
 		if len(ranges) > 1 {
 			s.logger.Infof(
@@ -879,10 +872,11 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			)
 		}
 
+		tasks := make([]chunkedsnapshot.Task, 0, len(ranges))
 		for _, r := range ranges {
-			start := r[0]
-			end := r[1]
-			snapshotTasks = append(snapshotTasks, func(ctx context.Context) error {
+			start := r.Min
+			end := r.Max
+			tasks = append(tasks, func(ctx context.Context) error {
 				s.logger.Debugf("Scanning %s in range (%+v %+v]", table, start, end)
 				err := s.scanTableRange(ctx, snapshotter, table, start, end, primaryKeyColumns)
 				if err != nil {
@@ -891,15 +885,10 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 				return err
 			})
 		}
+		tableTasks = append(tableTasks, tasks)
 	}
 	s.logger.Debugf("Starting snapshot processing")
-	// Run all the snapshot reads now
-	wg, ctx := errgroup.WithContext(ctx)
-	wg.SetLimit(s.maxSnapshotWorkers)
-	for _, task := range snapshotTasks {
-		wg.Go(func() error { return task(ctx) })
-	}
-	if err := wg.Wait(); err != nil {
+	if err := chunkedsnapshot.Run(ctx, s.maxSnapshotWorkers, tableTasks); err != nil {
 		return err
 	}
 	s.logger.Debugf("Finished snapshot processing")
