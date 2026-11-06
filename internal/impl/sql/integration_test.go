@@ -43,6 +43,25 @@ import (
 
 type testFn func(t *testing.T, driver, dsn, table string)
 
+// logContainerDiagnostics logs the state and the logs of ctr. A test calls it when its service does not become ready,
+// to show if the container stopped or if the service is still starting. name identifies the service in the messages.
+func logContainerDiagnostics(t *testing.T, name string, ctr testcontainers.Container) {
+	t.Helper()
+	if state, err := ctr.State(t.Context()); err != nil {
+		t.Logf("Cannot get the %s container state: %v", name, err)
+	} else {
+		t.Logf("%s container state: status=%s exit_code=%d oom_killed=%v error=%q",
+			name, state.Status, state.ExitCode, state.OOMKilled, state.Error)
+	}
+	if logs, err := ctr.Logs(t.Context()); err != nil {
+		t.Logf("Cannot get the %s container logs: %v", name, err)
+	} else {
+		b, _ := io.ReadAll(logs)
+		logs.Close()
+		t.Logf("%s container logs:\n%s", name, b)
+	}
+}
+
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
 		colList := `[ "foo", "bar", "baz" ]`
@@ -1160,19 +1179,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 	if !ready {
 		// The port can be open while SQL Server is not ready, or the container can stop after the port wait (for
 		// example exit code 139). Log the container state and logs to show which case it is.
-		if state, stateErr := ctr.State(t.Context()); stateErr != nil {
-			t.Logf("Cannot get the SQL Server container state: %v", stateErr)
-		} else {
-			t.Logf("SQL Server container state: status=%s exit_code=%d oom_killed=%v error=%q",
-				state.Status, state.ExitCode, state.OOMKilled, state.Error)
-		}
-		if logs, logsErr := ctr.Logs(t.Context()); logsErr != nil {
-			t.Logf("Cannot get the SQL Server container logs: %v", logsErr)
-		} else {
-			b, _ := io.ReadAll(logs)
-			logs.Close()
-			t.Logf("SQL Server container logs:\n%s", b)
-		}
+		logContainerDiagnostics(t, "SQL Server", ctr)
 		require.FailNow(t, "SQL Server is not ready", "last error: %v", lastErr)
 	}
 
@@ -1392,8 +1399,10 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		}
 	})
 
+	// The readiness loop below can run this more than once for the same name, so the statement must not fail when
+	// the collection exists.
 	createContainer := func(name string) (string, error) {
-		_, err := db.Exec(fmt.Sprintf(`create collection %s with pk=/foo`, name))
+		_, err := db.Exec(fmt.Sprintf(`create collection if not exists %s with pk=/foo`, name))
 		return name, err
 	}
 
@@ -1405,31 +1414,39 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		mp.Port(), emulatorAccountKey, dummyDatabase,
 	)
 
-	require.Eventually(t, func() bool {
+	// Each try must be idempotent. A try can create the database and then fail to create the collection, for example
+	// with a 408 or a client timeout while the emulator starts its partitions. With a plain "create database", all
+	// later tries then fail with 409 Conflict until the wait stops. lastErr keeps the error of the last try.
+	var lastErr error
+	ready := assert.Eventually(t, func() bool {
 		if db != nil {
 			db.Close()
 		}
-		db, err = sql.Open("gocosmos", dsn)
-		if err != nil {
+		db, lastErr = sql.Open("gocosmos", dsn)
+		if lastErr != nil {
 			return false
 		}
-		if err = db.Ping(); err != nil {
+		if lastErr = db.Ping(); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
-		if _, err := db.Exec(fmt.Sprintf(`create database %s`, dummyDatabase)); err != nil {
+		if _, lastErr = db.Exec(fmt.Sprintf(`create database if not exists %s`, dummyDatabase)); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
-		if _, err := createContainer(dummyContainer); err != nil {
+		if _, lastErr = createContainer(dummyContainer); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
 		return true
 	}, 3*time.Minute, time.Second)
+	if !ready {
+		logContainerDiagnostics(t, "Cosmos DB emulator", ctr)
+		require.FailNow(t, "Cosmos DB emulator is not ready", "last error: %v", lastErr)
+	}
 
 	// TODO: Enable the full test suite once https://github.com/microsoft/gocosmos/issues/15 is addressed and increase
 	// increase `AZURE_COSMOS_EMULATOR_PARTITION_COUNT` so the emulator can create all the required containers. Note
