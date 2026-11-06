@@ -332,12 +332,23 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 				return err
 			}
 			if keyType != keyTypeNotInterpolable {
-				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, min(maxWorkers, 256)*interpolatedRangesPerWorker)
+				numRanges := min(maxWorkers, 256) * interpolatedRangesPerWorker
+				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, numRanges)
 				if err != nil {
 					return err
 				}
-				ranges, method = rangesFromBounds(bounds), "interpolating its key range"
-				return nil
+				occupied, err := countOccupiedRanges(ctx, db, table, pkCols[0], keyType, s.scn, numRanges, len(bounds))
+				if err != nil {
+					return err
+				}
+				// Equal-width ranges only balance when keys are spread across MIN..MAX. An
+				// outlier (e.g. a sentinel ID far beyond the rest) leaves most ranges empty
+				// and every real row in a few of them, so sample the keyspace instead.
+				if occupied*2 >= len(bounds)+1 {
+					ranges, method = rangesFromBounds(bounds), "interpolating its key range"
+					return nil
+				}
+				s.log.With("src_table", table.FullName()).Infof("Only %d of %d interpolated key ranges of table '%s' hold rows, so its key range will be sampled instead", occupied, len(bounds)+1, table.FullName())
 			}
 		}
 		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, maxWorkers)
@@ -447,6 +458,36 @@ func getInterpolableKeyType(ctx context.Context, db DBQuerier, table UserTable, 
 // It returns no bounds for an empty table or one with a single key value. Integer keys are
 // rounded down to whole numbers, which keeps the bounds readable in logs.
 func interpolateKeyBounds(ctx context.Context, db DBQuerier, table UserTable, column string, kt keyType, scn SCN, numRanges int) ([]map[string]any, error) {
+	return queryKeyspace(ctx, db, table, interpolatedBoundsQuery(table, column, kt, scn, numRanges)+` ORDER BY 1`)
+}
+
+// countOccupiedRanges returns how many of the ranges formed by interpolateKeyBounds's
+// numBounds bounds hold at least one row as of scn. The first range always does, as it
+// holds MIN. Every other occupied range starts with the first key after its lower bound,
+// and empty ranges share that key with the next occupied one, so the distinct first keys
+// after each bound count the rest. Each is an index MIN/MAX probe, so this stays cheap.
+func countOccupiedRanges(ctx context.Context, db DBQuerier, table UserTable, column string, kt keyType, scn SCN, numRanges, numBounds int) (int, error) {
+	if numBounds == 0 {
+		return 1, nil
+	}
+	q := fmt.Sprintf(`SELECT COUNT(DISTINCT "N") FROM (
+		SELECT (SELECT MIN("%[1]s") FROM "%[2]s"."%[3]s" AS OF SCN %[4]d WHERE "%[1]s" > "BOUNDS"."%[1]s") "N"
+		FROM (%[5]s) "BOUNDS"
+	)`, column, table.Schema, table.Name, uint64(scn), interpolatedBoundsQuery(table, column, kt, scn, numRanges))
+
+	nextKeys, err := withFlashbackRetry(ctx, func() (n int, err error) {
+		err = db.QueryRowContext(ctx, q).Scan(&n)
+		return n, err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("counting occupied key ranges of table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
+	}
+	return 1 + nextKeys, nil
+}
+
+// interpolatedBoundsQuery returns an unordered query for the distinct bounds that split
+// column's values as of scn into numRanges equal-width intervals; see interpolateKeyBounds.
+func interpolatedBoundsQuery(table UserTable, column string, kt keyType, scn SCN, numRanges int) string {
 	bound := `"LO" + ("HI" - "LO") * (LEVEL / %[1]d)`
 	if kt == keyTypeInteger {
 		bound = `FLOOR(` + bound + `)`
@@ -455,8 +496,8 @@ func interpolateKeyBounds(ctx context.Context, db DBQuerier, table UserTable, co
 		SELECT ` + bound + ` "B", "LO", "HI"
 		FROM (SELECT MIN("%[2]s") "LO", MAX("%[2]s") "HI" FROM "%[3]s"."%[4]s" AS OF SCN %[5]d)
 		WHERE "LO" < "HI" CONNECT BY LEVEL < %[1]d
-	) WHERE "B" > "LO" AND "B" < "HI" ORDER BY 1`
-	return queryKeyspace(ctx, db, table, fmt.Sprintf(q, max(numRanges, 1), column, table.Schema, table.Name, uint64(scn)))
+	) WHERE "B" > "LO" AND "B" < "HI"`
+	return fmt.Sprintf(q, max(numRanges, 1), column, table.Schema, table.Name, uint64(scn))
 }
 
 // withSnapshotConn runs fn against a dedicated *sql.Conn suitable for snapshot queries,

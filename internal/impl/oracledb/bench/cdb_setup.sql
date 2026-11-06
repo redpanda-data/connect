@@ -23,6 +23,11 @@ ALTER USER c##testdb SET CONTAINER_DATA = ALL CONTAINER = CURRENT;
 /
 GRANT SET CONTAINER TO c##testdb CONTAINER=ALL;
 /
+-- Parallel snapshots read each chunk AS OF the snapshot SCN, which needs FLASHBACK on
+-- tables the user doesn't own. DBA already includes it; granted explicitly so the
+-- requirement is visible.
+GRANT FLASHBACK ANY TABLE TO c##testdb CONTAINER=ALL;
+/
 
 -- ============================================================================
 -- STAGE 2: Create C##RPCN in CDB$ROOT

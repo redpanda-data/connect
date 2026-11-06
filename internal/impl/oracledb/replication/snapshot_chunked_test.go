@@ -37,6 +37,10 @@ const (
 	// key, and rows repeating an existing key.
 	unenforcedNullKeyRows      = 10
 	unenforcedDuplicateKeyRows = 10
+
+	// outlierKey is the sentinel key added to chunk_outlier_key_test, far beyond its other
+	// keys 1 to chunkedTableRows.
+	outlierKey = 999999999999
 )
 
 func TestIntegrationSnapshotChunked(t *testing.T) {
@@ -83,6 +87,15 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		)`,
 			"INSERT INTO "+db.Schema+".chunk_date_key_test (dt, data) SELECT DATE '2024-01-01' + LEVEL * 2 / 86400, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
 		)
+		// One sentinel key far beyond the rest leaves almost every equal-width interpolated
+		// range empty, so the key range is sampled instead.
+		createChunkedTable(t, db, "chunk_outlier_key_test", `
+		CREATE TABLE `+db.Schema+`.chunk_outlier_key_test (
+			id   NUMBER(15) NOT NULL PRIMARY KEY,
+			data NVARCHAR2(100)
+		)`,
+			"INSERT INTO "+db.Schema+".chunk_outlier_key_test (id, data) SELECT LEVEL, RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
 		// String keys can't be interpolated between MIN and MAX, so they're sampled.
 		createChunkedTable(t, db, "chunk_string_key_test", `
 		CREATE TABLE `+db.Schema+`.chunk_string_key_test (
@@ -121,8 +134,9 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 	db.MustExec("INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT NULL, 'null-key' FROM dual CONNECT BY LEVEL <= :1", unenforcedNullKeyRows)
 	db.MustExec("INSERT INTO "+db.Schema+".chunk_unenforced_key_test (id, data) SELECT LEVEL * 1000, 'duplicate-key' FROM dual CONNECT BY LEVEL <= :1", unenforcedDuplicateKeyRows)
 	db.MustExec("ALTER TABLE " + db.Schema + ".chunk_unenforced_key_test ADD CONSTRAINT chunk_unenforced_key_test_pk PRIMARY KEY (id) RELY DISABLE NOVALIDATE")
+	db.MustExec("INSERT INTO "+db.Schema+".chunk_outlier_key_test (id, data) VALUES (:1, 'sentinel')", outlierKey)
 
-	for _, table := range []string{"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test", "chunk_string_key_test", "chunk_unenforced_key_test"} {
+	for _, table := range []string{"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test", "chunk_string_key_test", "chunk_unenforced_key_test", "chunk_outlier_key_test"} {
 		db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.GATHER_TABLE_STATS('%s', '%s'); END;", db.Schema, table))
 	}
 	// Delete explicitly rather than relying on statistics never having been gathered, so
@@ -135,7 +149,8 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 
 	waitForFlashbackReads(t, db,
 		"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test",
-		"chunk_string_key_test", "chunk_no_stats_test", "chunk_no_stats_numeric_test", "chunk_unenforced_key_test")
+		"chunk_string_key_test", "chunk_no_stats_test", "chunk_no_stats_numeric_test", "chunk_unenforced_key_test",
+		"chunk_outlier_key_test")
 
 	t.Run("SinglePrimaryKey", func(t *testing.T) {
 		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_SINGLE_KEY_TEST"}
@@ -225,6 +240,29 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 			return strconv.FormatInt(int64(dt.Sub(base).Seconds()), 10)
 		}, func(i int) string {
 			return strconv.Itoa(i * 2)
+		})
+	})
+
+	t.Run("OutlierKeyIsSampled", func(t *testing.T) {
+		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_OUTLIER_KEY_TEST"}
+		snapshot, publisher, logs := newChunkedSnapshot(t, connStr, "", table)
+
+		_, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+
+		t.Log("When a numeric key with one far outlier is read with multiple workers")
+		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
+
+		t.Log("Then the mostly empty interpolated ranges are rejected, the key range is sampled, and every key is returned exactly once")
+		assert.Contains(t, logs.String(), "interpolated key ranges of table '"+table.FullName()+"' hold rows")
+		assertSplitIntoChunks(t, logs, table, planSampled)
+		assertEveryKeyOnce(t, publisher, chunkedTableRows+1, func(row map[string]any) string {
+			return fmt.Sprint(row["ID"])
+		}, func(i int) string {
+			if i == chunkedTableRows+1 {
+				return strconv.Itoa(outlierKey)
+			}
+			return strconv.Itoa(i)
 		})
 	})
 

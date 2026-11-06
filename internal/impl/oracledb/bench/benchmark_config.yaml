@@ -7,6 +7,9 @@ input:
     connection_string: oracle://c%23%23testdb:testdb123@localhost:1521/FREE
     pdb_name: TESTPDB
     snapshot_mode: snapshot_only
+    # Read with 8 workers. Tables with an enabled primary key are split into key-range
+    # chunks shared across the workers; set to 1 to snapshot each table in a single scan.
+    max_parallel_snapshot_tables: 8
     snapshot_max_batch_size: 160000
     logminer:
       backoff_interval: 2s
