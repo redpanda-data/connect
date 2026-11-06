@@ -14,10 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,41 +40,24 @@ const (
 	errCodeInsufficientPrivileges = 1031
 )
 
-var (
-	// connectionCapacityErrCodes are the errors Oracle and its listener return when they have
-	// no room for another connection; see acquireSnapshotConn.
-	connectionCapacityErrCodes = []int{
-		18,    // ORA-00018: maximum number of sessions exceeded
-		20,    // ORA-00020: maximum number of processes exceeded
-		12516, // ORA-12516: listener could not find available handler with matching protocol stack
-		12518, // ORA-12518: listener could not hand off client connection
-		12519, // ORA-12519: no appropriate service handler found
-		12520, // ORA-12520: listener could not find available handler for requested type of server
-	}
-
-	// errNoPrimaryKey indicates a table has no discoverable primary key. Snapshot planning
-	// treats this as expected (not fatal) for unfiltered tables, falling back to a full
-	// unordered scan - see planTableTasks.
-	errNoPrimaryKey = errors.New("no primary key found")
-)
+// errNoPrimaryKey indicates a table has no discoverable primary key. Snapshot planning
+// treats this as expected (not fatal) for unfiltered tables, falling back to a full
+// unordered scan - see planTableTasks.
+var errNoPrimaryKey = errors.New("no primary key found")
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables
 // configuration value.
 type Snapshot struct {
-	dbPool                  *sql.DB
 	tables                  []UserTable
 	filters                 map[string]string
 	publisher               ChangePublisher
+	db                      *snapshotDB
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
-	pdbName                 string
-	scn                     SCN                        // published as part of snapshot read metadata
-	commitTimestamp         time.Time                  // Oracle server time at snapshot prepare
-	connBackoff             backoff.ExponentialBackOff // template for acquireSnapshotConn's retries
-	connCapacityWarnOnce    sync.Once                  // warns once when workers wait for a connection
-	connsInUse              atomic.Int32               // snapshot connections held by workers
+	scn                     SCN       // published as part of snapshot read metadata
+	commitTimestamp         time.Time // Oracle server time at snapshot prepare
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -94,43 +74,21 @@ func NewSnapshot(ctx context.Context,
 	logger *service.Logger,
 	metrics *service.Metrics,
 ) (*Snapshot, error) {
-	db, err := sql.Open("oracle", connectionString)
+	db, err := newSnapshotDB(ctx, connectionString, pdbName, connBackoff, logger)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
+		return nil, err
 	}
-
-	if err := ApplyNLSSettings(ctx, db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("configuring nls for snapshot session: %w", err)
-	}
-
-	s := &Snapshot{
-		dbPool:                  db,
+	return &Snapshot{
+		db:                      db,
 		tables:                  tables,
 		filters:                 filters,
 		publisher:               publisher,
 		lobEnabled:              lobEnabled,
-		pdbName:                 pdbName,
 		snapshotStatusMetric:    metrics.NewGauge("oracledb_cdc_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("oracledb_cdc_snapshot_rows_total", "table"),
 		log:                     logger,
 		scn:                     InvalidSCN,
-	}
-	if connBackoff == nil {
-		connBackoff = DefaultSnapshotConnBackoff()
-	}
-	s.connBackoff = *connBackoff
-	return s, nil
-}
-
-// DefaultSnapshotConnBackoff returns the default backoff for snapshot readers waiting for
-// a database connection; see acquireSnapshotConn.
-func DefaultSnapshotConnBackoff() *backoff.ExponentialBackOff {
-	b := backoff.NewExponentialBackOff()
-	b.InitialInterval = 100 * time.Millisecond
-	b.MaxInterval = 5 * time.Second
-	b.MaxElapsedTime = 3 * time.Minute
-	return b
+	}, nil
 }
 
 // Prepare prepares the snapshot by starting a transaction with appropriate isolation level.
@@ -141,7 +99,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	}
 
 	var currentSCN SCN
-	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
+	if err := s.db.pool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
@@ -187,9 +145,7 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 
 	s.log.Debugf("Snapshot planned as %d task(s) across %d table(s), running on %d of %d configured workers", len(snapshotTasks), len(s.tables), min(len(snapshotTasks), maxWorkers), maxWorkers)
 
-	// Keep a connection per worker idle between chunks, so a connection returned by one
-	// chunk is reused by the next rather than closed and logged in again.
-	s.dbPool.SetMaxIdleConns(maxWorkers)
+	s.db.setWorkers(maxWorkers)
 
 	wg, ctx := errgroup.WithContext(ctx)
 	wg.SetLimit(maxWorkers)
@@ -202,6 +158,15 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 	}
 
 	return nil
+}
+
+// Close safely closes all open connections opened for the snapshotting process.
+// It should be called after a non-recoverale error or once the snapshot process has completed.
+func (s *Snapshot) Close() error {
+	if s.db == nil {
+		return nil
+	}
+	return s.db.Close()
 }
 
 // tableCompletionTracker counts down a table's outstanding tasks, which run in the shared
@@ -269,7 +234,7 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 		pks      []string
 		enforced bool
 	)
-	if err := s.withSnapshotConn(ctx, func(db *sql.Conn) (err error) {
+	if err := s.db.withConn(ctx, func(db *sql.Conn) (err error) {
 		pks, enforced, err = getTablePrimaryKeys(ctx, db, table)
 		return err
 	}); err != nil {
@@ -356,7 +321,7 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 		return err
 	}
 
-	if err = s.withSnapshotConn(ctx, plan); err != nil {
+	if err = s.db.withConn(ctx, plan); err != nil {
 		return nil, "", fmt.Errorf("planning chunk ranges: %w", err)
 	}
 	return ranges, method, nil
@@ -500,144 +465,6 @@ func interpolatedBoundsQuery(table UserTable, column string, kt keyType, scn SCN
 	return fmt.Sprintf(q, max(numRanges, 1), column, table.Schema, table.Name, uint64(scn))
 }
 
-// withSnapshotConn runs fn against a dedicated *sql.Conn suitable for snapshot queries,
-// switched into the configured PDB (and back to CDB$ROOT afterward) in CDB mode. NLS and
-// TIME_ZONE settings are applied to every connection handed out here, in both modes: an
-// ALTER SESSION issued against the *sql.DB pool only reaches whichever pooled connection
-// happened to run it, and keyset pagination over DATE/TIMESTAMP or fractional NUMBER
-// primary keys depends on those settings to compare bound values correctly - running a
-// page on a connection without them can silently skip or re-read rows.
-func (s *Snapshot) withSnapshotConn(ctx context.Context, fn func(conn *sql.Conn) error) (err error) {
-	var conn *sql.Conn
-	if conn, err = s.acquireSnapshotConn(ctx); err != nil {
-		return fmt.Errorf("acquiring snapshot connection: %w", withConnectionCapacityHint(err))
-	}
-	s.connsInUse.Add(1)
-	defer func() {
-		s.connsInUse.Add(-1)
-		if closeErr := conn.Close(); closeErr != nil {
-			// snapshot has completed at this point so logging the error is sufficient.
-			s.log.Errorf("Closing snapshot connection: %v", closeErr)
-		}
-	}()
-
-	if s.pdbName != "" {
-		if _, err = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+s.pdbName); err != nil {
-			return fmt.Errorf("switching session to PDB '%s' for snapshot: %w", s.pdbName, err)
-		}
-		defer func() {
-			if _, cerr := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); cerr != nil {
-				// logging the error is sufficient here, connection will be closed in defer call above.
-				s.log.Errorf("Switching session back to root container: %v", cerr)
-			}
-		}()
-	}
-
-	if err = ApplyNLSSettings(ctx, conn); err != nil {
-		return fmt.Errorf("configuring nls for snapshot connection: %w", err)
-	}
-
-	return fn(conn)
-}
-
-// acquireSnapshotConn gets a connection from the pool. When the database has no room for
-// another connection, it waits and retries, using the configured backoff, rather than
-// failing the snapshot: once workers hold connections, each one they return to the pool is
-// reused by the next acquire, so the snapshot continues with as many workers as the
-// database allows. It gives up once the backoff's max elapsed time passes, but only while
-// no other worker holds a connection: until then the snapshot is still progressing, though
-// each connection returned may be reused by the next chunk to start rather than this one.
-func (s *Snapshot) acquireSnapshotConn(ctx context.Context) (*sql.Conn, error) {
-	retry := s.connBackoff // each acquire needs its own backoff state
-	retry.Reset()
-	for {
-		conn, err := s.dbPool.Conn(ctx)
-		if err == nil || !isConnectionCapacityError(err) {
-			return conn, err
-		}
-		delay := retry.NextBackOff()
-		if delay == backoff.Stop {
-			if s.connsInUse.Load() == 0 {
-				return nil, err
-			}
-			retry.Reset()
-			delay = retry.NextBackOff()
-		}
-		s.connCapacityWarnOnce.Do(func() {
-			s.log.Warnf("Database has no capacity for another snapshot connection, so snapshot workers will wait for one to be released; lower max_parallel_snapshot_tables to stay within the database's processes and sessions limits: %v", err)
-		})
-		select {
-		case <-time.After(delay):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-}
-
-// withConnectionCapacityHint annotates an error from opening a snapshot connection, when
-// the database has no room for another one, with the setting to change: the error alone
-// doesn't say that the snapshot's parallel readers are what used up the connections.
-func withConnectionCapacityHint(err error) error {
-	if !isConnectionCapacityError(err) {
-		return err
-	}
-	return fmt.Errorf("%w\n\nThe database has no capacity for another snapshot connection. Each parallel snapshot reader holds its own connection, so lower max_parallel_snapshot_tables to stay within the database's processes and sessions limits", err)
-}
-
-// isConnectionCapacityError reports whether err, returned while opening a connection, means
-// the database or its listener has no room for another connection right now. Besides the
-// listed ORA codes, that includes the connection closing mid-handshake (EOF), which is how
-// it surfaces when the listener hands off to a server process that can't be started.
-func isConnectionCapacityError(err error) bool {
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return true
-	}
-	var oraErr *goora.OracleError
-	return errors.As(err, &oraErr) && slices.Contains(connectionCapacityErrCodes, oraErr.ErrCode)
-}
-
-// withReadOnlyTxn runs fn against a *sql.Tx pinned to Oracle's automatic serializable
-// isolation for READ ONLY transactions, opened on a connection from withSnapshotConn. Used
-// only by the snapshot paths that still need transaction-scoped consistency -
-// custom-filtered tables and unchunked full-table scans - where AS OF SCN chunking (see
-// scanTableRangeTask) isn't used.
-func (s *Snapshot) withReadOnlyTxn(ctx context.Context, fn func(tx *sql.Tx) error) error {
-	return s.withSnapshotConn(ctx, func(conn *sql.Conn) (err error) {
-		// Use context.Background() to prevent database/sql from spawning an
-		// awaitDone goroutine that races with our explicit Rollback below.
-		// The go-ora v2 driver has an unsynchronized field in Session that
-		// causes a data race between BreakConnection (from awaitDone) and
-		// IsBreak (from our Rollback). Transaction lifetime is managed
-		// manually via the defer and explicit Rollback at the end.
-		tx, err := conn.BeginTx(context.Background(), nil)
-		if err != nil {
-			return fmt.Errorf("beginning snapshot transaction: %w", err)
-		}
-
-		// In Oracle, READ ONLY transactions automatically provide serializable isolation
-		if _, err = tx.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("setting transaction read-only: %w", err)
-		}
-		defer func() {
-			if err != nil {
-				if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-					s.log.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
-				}
-			}
-		}()
-
-		if err = fn(tx); err != nil {
-			return err
-		}
-
-		if rbErr := tx.Rollback(); rbErr != nil {
-			s.log.Errorf("Failed rollback snapshot transaction: %v", rbErr)
-		}
-		return nil
-	})
-}
-
 // snapshotTableWithFilterTask returns a task that pages through a custom snapshot filter
 // query using PK-keyset pagination against the filter's own result set. Custom filters may
 // join or aggregate, so a physical-order scan can't safely assume every row maps to a
@@ -648,7 +475,7 @@ func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int
 	l := s.log.With("src_table", tableName)
 	return func(ctx context.Context) error {
 		var numRowsProcessed int
-		err := s.withReadOnlyTxn(ctx, func(tx *sql.Tx) error {
+		err := s.db.withReadOnlyTxn(ctx, func(tx *sql.Tx) error {
 			tablePks, _, err := getTablePrimaryKeys(ctx, tx, table)
 			if err != nil {
 				return err
@@ -691,7 +518,7 @@ func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, 
 	tableName := table.FullName()
 	return func(ctx context.Context) error {
 		var numRowsProcessed int
-		err := s.withReadOnlyTxn(ctx, func(tx *sql.Tx) (err error) {
+		err := s.db.withReadOnlyTxn(ctx, func(tx *sql.Tx) (err error) {
 			numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName)
 			return err
 		})
@@ -713,7 +540,7 @@ func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclu
 	l := s.log.With("src_table", tableName)
 	return func(ctx context.Context) error {
 		var numRowsProcessed int
-		err := s.withSnapshotConn(ctx, func(db *sql.Conn) error {
+		err := s.db.withConn(ctx, func(db *sql.Conn) error {
 			lastSeenPksValues := map[string]any{}
 			for _, pk := range pkCols {
 				lastSeenPksValues[pk] = nil
@@ -1138,17 +965,6 @@ func querySnapshotTable(ctx context.Context, db DBQuerier, table UserTable, pk [
 		return nil, err
 	}
 	return rows, nil
-}
-
-// Close safely closes all open connections opened for the snapshotting process.
-// It should be called after a non-recoverale error or once the snapshot process has completed.
-func (s *Snapshot) Close() error {
-	if s.dbPool != nil {
-		if err := s.dbPool.Close(); err != nil {
-			return fmt.Errorf("closing database connection: %w", err)
-		}
-	}
-	return nil
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {

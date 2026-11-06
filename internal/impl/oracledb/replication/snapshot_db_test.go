@@ -62,8 +62,8 @@ func (noCapacityConnector) Connect(context.Context) (driver.Conn, error) {
 
 func (noCapacityConnector) Driver() driver.Driver { return nil }
 
-func TestAcquireSnapshotConnGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
-	newSnapshot := func(t *testing.T) *Snapshot {
+func TestSnapshotDBAcquireGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
+	newSnapshotDB := func(t *testing.T) *snapshotDB {
 		t.Helper()
 		db := sql.OpenDB(noCapacityConnector{})
 		t.Cleanup(func() { _ = db.Close() })
@@ -71,13 +71,13 @@ func TestAcquireSnapshotConnGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
 		connBackoff.InitialInterval = time.Millisecond
 		connBackoff.MaxInterval = 5 * time.Millisecond
 		connBackoff.MaxElapsedTime = 20 * time.Millisecond
-		return &Snapshot{dbPool: db, connBackoff: *connBackoff, log: service.MockResources().Logger()}
+		return &snapshotDB{pool: db, backoff: *connBackoff, log: service.MockResources().Logger()}
 	}
 
 	t.Run("no other connection held", func(t *testing.T) {
-		s := newSnapshot(t)
+		d := newSnapshotDB(t)
 
-		_, err := s.acquireSnapshotConn(t.Context())
+		_, err := d.acquire(t.Context())
 
 		var oraErr *goora.OracleError
 		require.ErrorAs(t, err, &oraErr, "Expected the capacity error once max elapsed time passes")
@@ -85,12 +85,12 @@ func TestAcquireSnapshotConnGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
 	})
 
 	t.Run("another connection held", func(t *testing.T) {
-		s := newSnapshot(t)
-		s.connsInUse.Add(1)
+		d := newSnapshotDB(t)
+		d.inUse.Add(1)
 		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 		defer cancel()
 
-		_, err := s.acquireSnapshotConn(ctx)
+		_, err := d.acquire(ctx)
 
 		assert.ErrorIs(t, err, context.DeadlineExceeded, "Expected to keep waiting past max elapsed time while another connection is held")
 	})
