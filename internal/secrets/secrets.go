@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -12,11 +12,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"strings"
 
 	"github.com/redpanda-data/common-go/secrets"
+
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const trimPrefixParam = "trimPrefix"
@@ -62,7 +63,7 @@ func ParseLookupURNs(ctx context.Context, logger *slog.Logger, secretsMgmtUrns .
 }
 
 func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string) (LookupFn, error) {
-	u, err := url.Parse(urn)
+	u, err := redact.ParseURL(urn)
 	if err != nil {
 		return nil, err
 	}

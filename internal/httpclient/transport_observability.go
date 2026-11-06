@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // --- Logging transport ---
@@ -128,7 +129,7 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	var entry accessLogEntry
 	entry.Request = &requestLogEntry{
-		URL:    req.URL.Redacted(),
+		URL:    redact.URL(req.URL),
 		Method: req.Method,
 		Header: flattenHeaders(req.Header),
 	}
@@ -281,7 +282,7 @@ func (t *tracingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("http.request.method", req.Method),
-			attribute.String("url.full", req.URL.Redacted()),
+			attribute.String("url.full", redact.URL(req.URL)),
 			attribute.String("server.address", req.URL.Hostname()),
 		),
 	)

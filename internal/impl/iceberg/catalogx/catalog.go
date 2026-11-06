@@ -23,6 +23,7 @@ import (
 	"github.com/apache/iceberg-go/table"
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/syncx"
 )
 
@@ -309,7 +310,7 @@ func (c *Client) refreshCatalog(ctx context.Context) error {
 		c.opts...,
 	)
 	if err != nil {
-		return fmt.Errorf("creating REST catalog: %w", err)
+		return fmt.Errorf("creating REST catalog: %w", redact.Error(err, redact.Conns(c.url)))
 	}
 	c.catalog.Store(restCatalog)
 	return nil

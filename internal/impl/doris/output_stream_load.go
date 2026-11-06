@@ -17,7 +17,6 @@ package doris
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,8 +34,10 @@ import (
 	"github.com/rs/xid"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -491,7 +492,7 @@ func dorisStreamLoadConfigFromParsed(conf *service.ParsedConfig) (c dorisStreamL
 	}
 	for i, feURL := range c.FEURLs {
 		var parsedURL *url.URL
-		if parsedURL, err = url.Parse(feURL); err != nil {
+		if parsedURL, err = redact.ParseURL(feURL); err != nil {
 			err = fmt.Errorf("parsing fe_urls[%d]: %w", i, err)
 			return
 		}
@@ -593,21 +594,21 @@ func (d *dorisStreamLoadOutput) ConnectionTest(ctx context.Context) service.Conn
 	for _, feURL := range d.conf.FEURLs {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, feURL, nil)
 		if err != nil {
-			lastErr = fmt.Errorf("creating FE reachability request: %w", err)
+			lastErr = fmt.Errorf("creating FE reachability request: %w", redact.Error(err, redact.Conns(feURL)))
 			continue
 		}
 		resp, err := d.client.Do(req)
 		if err != nil {
-			lastErr = fmt.Errorf("connecting to Doris FE %s: %w", feURL, err)
+			lastErr = fmt.Errorf("connecting to Doris FE %s: %w", redact.String(feURL), redact.Error(err, redact.Conns(feURL)))
 			continue
 		}
 		if resp.StatusCode >= http.StatusBadRequest {
 			body, readErr := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if readErr != nil {
-				lastErr = fmt.Errorf("doris FE %s returned HTTP %d and the body could not be read: %w", feURL, resp.StatusCode, readErr)
+				lastErr = fmt.Errorf("doris FE %s returned HTTP %d and the body could not be read: %w", redact.String(feURL), resp.StatusCode, readErr)
 			} else {
-				lastErr = fmt.Errorf("doris FE %s returned HTTP %d: %s", feURL, resp.StatusCode, strings.TrimSpace(string(body)))
+				lastErr = fmt.Errorf("doris FE %s returned HTTP %d: %s", redact.String(feURL), resp.StatusCode, strings.TrimSpace(string(body)))
 			}
 			continue
 		}
@@ -631,13 +632,13 @@ func (d *dorisStreamLoadOutput) connectionCheck(ctx context.Context, feURL strin
 		return d.connectionCheckFn(ctx, feURL, queryPort)
 	}
 
-	parsed, err := url.Parse(feURL)
+	parsed, err := redact.ParseURL(feURL)
 	if err != nil {
-		return fmt.Errorf("parsing Doris FE URL %q for query_port checks: %w", feURL, err)
+		return fmt.Errorf("parsing Doris FE URL for query_port checks: %w", err)
 	}
 	host := parsed.Hostname()
 	if host == "" {
-		return fmt.Errorf("unable to determine host from doris FE URL %q for query_port checks", feURL)
+		return fmt.Errorf("unable to determine host from doris FE URL %q for query_port checks", redact.URL(parsed))
 	}
 
 	cfg := mysqlDriver.NewConfig()
@@ -650,7 +651,7 @@ func (d *dorisStreamLoadOutput) connectionCheck(ctx context.Context, feURL strin
 	cfg.ReadTimeout = 5 * time.Second
 	cfg.WriteTimeout = 5 * time.Second
 
-	db, err := sql.Open("mysql", cfg.FormatDSN())
+	db, err := sqlredact.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return fmt.Errorf("opening Doris query_port connection to %s:%d: %w", host, queryPort, err)
 	}
@@ -820,7 +821,7 @@ func (d *dorisStreamLoadOutput) sendViaFE(ctx context.Context, label string, bod
 
 		feResp, err := d.client.Do(feReq)
 		if err != nil {
-			lastErr = fmt.Errorf("requesting Doris FE %s redirect: %w", feEndpoint.String(), err)
+			lastErr = fmt.Errorf("requesting Doris FE %s redirect: %w", redact.URL(feEndpoint), redact.Error(err, redact.Conns(feEndpoint.String())))
 			continue
 		}
 		if feResp.StatusCode != http.StatusTemporaryRedirect {
@@ -830,7 +831,7 @@ func (d *dorisStreamLoadOutput) sendViaFE(ctx context.Context, label string, bod
 		location := feResp.Header.Get(dsHeaderLocation)
 		feResp.Body.Close()
 		if location == "" {
-			lastErr = fmt.Errorf("doris FE %s redirect response missing Location header", feEndpoint.String())
+			lastErr = fmt.Errorf("doris FE %s redirect response missing Location header", redact.URL(feEndpoint))
 			continue
 		}
 
@@ -847,7 +848,7 @@ func (d *dorisStreamLoadOutput) sendViaFE(ctx context.Context, label string, bod
 		}
 		resp, err := d.client.Do(beReq)
 		if err != nil {
-			lastErr = fmt.Errorf("sending Doris Stream Load body via FE %s to BE: %w", feEndpoint.String(), err)
+			lastErr = fmt.Errorf("sending Doris Stream Load body via FE %s to BE: %w", redact.URL(feEndpoint), redact.Error(err, redact.Conns(targetURL)))
 			continue
 		}
 		return resp, nil
@@ -866,7 +867,7 @@ func (d *dorisStreamLoadOutput) newRequest(ctx context.Context, targetURL, label
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, targetURL, reader)
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", redact.Error(err, redact.Conns(targetURL)))
 	}
 
 	for k, v := range d.conf.Headers {
@@ -944,7 +945,7 @@ func (d *dorisStreamLoadOutput) newRequest(ctx context.Context, targetURL, label
 }
 
 func resolveRedirectURL(feEndpoint *url.URL, location string) (string, error) {
-	loc, err := url.Parse(location)
+	loc, err := redact.ParseURL(location)
 	if err != nil {
 		return "", fmt.Errorf("parsing Doris redirect URL: %w", err)
 	}
@@ -966,9 +967,9 @@ func dorisFEURLsRequireTLS(feURLs []string) bool {
 func streamLoadURLs(baseURLs []string, database, table string) ([]*url.URL, error) {
 	endpoints := make([]*url.URL, 0, len(baseURLs))
 	for _, baseURL := range baseURLs {
-		u, err := url.Parse(baseURL)
+		u, err := redact.ParseURL(baseURL)
 		if err != nil {
-			return nil, fmt.Errorf("parsing base url %q: %w", baseURL, err)
+			return nil, fmt.Errorf("parsing base url: %w", err)
 		}
 		endpoints = append(endpoints, u.JoinPath("api", database, table, "_stream_load"))
 	}

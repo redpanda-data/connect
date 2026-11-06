@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -20,6 +20,7 @@ import (
 	"net/http/httputil"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -246,14 +247,14 @@ func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err er
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.url, &payload)
 	if err != nil {
-		return fmt.Errorf("constructing HTTP request: %s", err)
+		return fmt.Errorf("constructing HTTP request: %w", redact.Error(err, redact.Conns(o.url)))
 	}
 	req.Header = header
 	req.ContentLength = int64(payload.Len())
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("executing http request: %s", err)
+		return fmt.Errorf("executing http request: %w", redact.Error(err, redact.Conns(o.url)))
 	}
 	defer resp.Body.Close()
 

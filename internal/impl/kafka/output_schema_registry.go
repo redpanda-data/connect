@@ -29,6 +29,7 @@ import (
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
@@ -155,8 +156,8 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 		return
 	}
 	var srURL *url.URL
-	if srURL, err = url.Parse(srURLStr); err != nil {
-		return nil, fmt.Errorf("parsing URL: %s", err)
+	if srURL, err = redact.ParseURL(srURLStr); err != nil {
+		return nil, fmt.Errorf("parsing URL: %w", err)
 	}
 
 	if o.subject, err = pConf.FieldInterpolatedString(sroFieldSubject); err != nil {
