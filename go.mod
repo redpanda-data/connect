@@ -83,6 +83,7 @@ require (
 	github.com/benhoyt/goawk v1.32.0
 	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
+	github.com/bufbuild/protocompile v0.14.1
 	github.com/bufbuild/prototransform v0.4.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/bwmarrin/snowflake v0.3.0
