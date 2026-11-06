@@ -100,20 +100,20 @@ Set this field value to `+"`"+`string`+"`"+` to transfer each message as an AMQP
 				Optional().
 				Advanced().
 				Example("amqp://localhost:5672/").
-				Example(`${! meta("target_address") }`),
+				Example(`${! @target_address }`),
 			service.NewInterpolatedStringField(messagePropsMsgID).
 				Description(`Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the message-id property on outgoing messages, auto-detected as UUID, uint64 or string.").
 				Optional().
 				Advanced().
 				Example(`${! uuid_v4() }`).
-				Example(`${! meta("amqp_message_id") }`),
+				Example(`${! @amqp_message_id }`),
 			service.NewInterpolatedStringField(messagePropsCorrelID).
 				Description(`Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.`).Version("4.87.0").
 				ShortDescription("Set the correlation-id property on outgoing messages, auto-detected as UUID, uint64 or string.").
 				Optional().
 				Advanced().
-				Example(`${! meta("amqp_correlation_id") }`),
+				Example(`${! @amqp_correlation_id }`),
 			service.NewInterpolatedStringField(messagePropsSubject).
 				Description(`Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.`).Version("4.87.0").
 				Optional().

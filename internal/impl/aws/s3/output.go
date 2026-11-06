@@ -198,7 +198,7 @@ output:
     path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     tags:
       Key1: Value1
-      Timestamp: ${!meta("Timestamp")}
+      Timestamp: ${! @Timestamp }
 `+"```"+`
 
 [[credentials-overview]]
@@ -267,14 +267,14 @@ To find your account ID and generate R2 API credentials, see https://developers.
 				Description("The path of each message to upload.").
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`).
 				Example(`${!counter()}-${!timestamp_unix_nano()}.txt`).
-				Example(`${!meta("kafka_key")}.json`).
+				Example(`${! @kafka_key }.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
 			service.NewInterpolatedStringMapField(s3oFieldTags).
 				Description("Key/value pairs to store with the object as tags.").
 				Default(map[string]any{}).
 				Example(map[string]any{
 					"Key1":      "Value1",
-					"Timestamp": `${!meta("Timestamp")}`,
+					"Timestamp": `${! @Timestamp }`,
 				}),
 			service.NewInterpolatedStringField(s3oFieldContentType).
 				Description("The MIME type to store as the `Content-Type` of each uploaded S3 object.").

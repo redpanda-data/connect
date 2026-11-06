@@ -199,7 +199,7 @@ This input adds the following metadata fields to each message:
 - `+"`s3_version_id`"+`
 - All user defined metadata
 
-You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation]. Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = meta().map_each_key(key -> key.lowercase())`"+`.`).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation]. Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as `+"`meta = metadata().map_each_key(key -> key.lowercase())`"+`.`).
 		Fields(
 			service.NewStringField(s3iFieldBucket).
 				Description("The name of the bucket to consume from, such as `my-bucket`. Use the bucket name, not its ARN. If the field `sqs.url` is specified this field is optional.").

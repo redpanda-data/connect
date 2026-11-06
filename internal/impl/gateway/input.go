@@ -170,7 +170,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 				service.NewInterpolatedStringField(hsiFieldResponseStatus).
 					Description("The HTTP status code that the gateway returns when the pipeline produces a synchronous response. The value is interpolated against the first response message, so the code can depend on its contents and metadata.").
 					ShortDescription("The HTTP status code the gateway returns with synchronous responses.").
-					Examples(`${! json("status") }`, `${! meta("status") }`).
+					Examples(`${! json("status") }`, `${! @status }`).
 					Default("200"),
 				service.NewInterpolatedStringMapField(hsiFieldResponseHeaders).
 					Description("The headers that the gateway adds to synchronous responses. Header values are interpolated against the first response message.").

@@ -212,7 +212,7 @@ func rawQueryArgsMappingField() *service.ConfigField {
 		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that includes the same number of values in an array as the placeholder arguments in the `query` field.").
 		ShortDescription("An optional Bloblang mapping evaluating to an array of values matching the placeholders in query.").
 		Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-		Example(`root = [ meta("user.id") ]`).
+		Example(`root = [ metadata("user.id") ]`).
 		Optional()
 }
 
@@ -283,7 +283,7 @@ func insertFields() []*service.ConfigField {
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
 			ShortDescription("A Bloblang mapping evaluating to an array of values matching the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`),
+			Example(`root = [ metadata("user.id") ]`),
 		service.NewStringField("prefix").
 			Description("An optional prefix to prepend to the insert query (before INSERT).").
 			Optional().
@@ -305,7 +305,7 @@ func rawQueryWhenField() *service.ConfigField {
 	return service.NewBloblangField("when").
 		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether to execute this query. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is executed. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").Version("4.87.0").
 		ShortDescription("An optional Bloblang mapping evaluated per message to decide whether this query runs. Must return a boolean.").
-		Example(`root = meta("kafka_tombstone_message") == "true"`).
+		Example(`root = metadata("kafka_tombstone_message").string() == "true"`).
 		Example(`root = this.operation == "delete"`).
 		Optional()
 }

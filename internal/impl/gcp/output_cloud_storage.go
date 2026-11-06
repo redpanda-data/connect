@@ -153,7 +153,7 @@ output:
 			service.NewInterpolatedStringField(csoFieldPath).
 				Description("The path of each message to upload.").
 				Example(`${!counter()}-${!timestamp_unix_nano()}.txt`).
-				Example(`${!meta("kafka_key")}.json`).
+				Example(`${! @kafka_key }.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringField(csoFieldContentType).

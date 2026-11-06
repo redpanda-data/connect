@@ -44,7 +44,7 @@ func redisProcConfig() *service.ConfigSpec {
 			Version("4.3.0").
 			Example("scard").
 			Example("incrby").
-			Example(`${! meta("command") }`).
+			Example(`${! @command }`).
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of arguments for `command`, such as the key followed by any values. The array must contain as many values as the Redis command requires.").
@@ -52,7 +52,7 @@ func redisProcConfig() *service.ConfigSpec {
 			Version("4.3.0").
 			Optional().
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), this.count ]`)).
+			Example(`root = [ metadata("kafka_key"), this.count ]`)).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"keys":   `Returns an array of strings containing all the keys that match the pattern specified by the ` + "`key` field" + `.`,
 			"scard":  `Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.`,

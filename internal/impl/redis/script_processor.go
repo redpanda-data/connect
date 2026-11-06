@@ -47,12 +47,12 @@ In order to merge the result into the original message compose this processor wi
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that evaluates to an array of values passed to the script, where they are available as `ARGV[1]`, `ARGV[2]`, and so on.").
 			ShortDescription("A Bloblang mapping evaluating to an array of values matching the arguments the Redis script requires.").
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), "hardcoded_value" ]`)).
+			Example(`root = [ metadata("kafka_key"), "hardcoded_value" ]`)).
 		Field(service.NewBloblangField("keys_mapping").
 			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of keys matching in size to the number of arguments required for the specified Redis script.").
 			ShortDescription("A Bloblang mapping evaluating to an array of keys matching the arguments the Redis script requires.").
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), this.count ]`)).
+			Example(`root = [ metadata("kafka_key"), this.count ]`)).
 		Fields(retryFields()...).
 		Example("Running a script",
 			`The following example will use a script execution to get next element from a sorted set and set its score with timestamp unix nano value.`,

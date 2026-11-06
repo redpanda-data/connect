@@ -398,7 +398,7 @@ func FranzWriterConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(kfwFieldPartition).
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").Version("4.13.0").
 			ShortDescription("An explicit partition for each message. Only relevant when partitioner is set to manual.").
-			Example(`${! meta("partition") }`).
+			Example(`${! @partition }`).
 			Optional(),
 		service.NewMetadataFilterField(kfwFieldMetadata).
 			Description("Determines which metadata values are added to messages as headers.").

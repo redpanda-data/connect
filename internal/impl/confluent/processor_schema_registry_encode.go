@@ -95,7 +95,7 @@ We will be considering alternative approaches in future so please https://redpan
 		Field(service.NewURLField("url").Description(schemaregistry.URLFieldDescription)).
 		Field(service.NewInterpolatedStringField("subject").Description(`The schema subject to derive schemas from.`).
 			Example("foo").
-			Example(`${! meta("kafka_topic") }`)).
+			Example(`${! @kafka_topic }`)).
 		Field(service.NewStringField("refresh_period").
 			Description("The period after which a schema is refreshed for each subject, this is done by polling the schema registry service.").
 			Default("10m").
