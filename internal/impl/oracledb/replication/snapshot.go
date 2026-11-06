@@ -197,6 +197,7 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 		return []func(context.Context) error{s.snapshotTableWithFilterTask(table, maxBatchSize, customQuery, tracker)}, nil
 	}
 
+	// fullScan is the single-task fallback for tables that can't be chunked (1 worker config, no pks etc)
 	fullScan := func() []func(context.Context) error {
 		l.Infof("Launching snapshot of table '%s'", tableName)
 		tracker := newTableCompletionTracker(s, table, 1)
