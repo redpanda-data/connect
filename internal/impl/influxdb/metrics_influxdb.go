@@ -135,6 +135,9 @@ type influxDBMetrics struct {
 
 	ctx    context.Context //nolint:containedctx // lifecycle context for background flush loop
 	cancel func()
+	// loopDone is closed when the background flush loop returns. Close waits
+	// for it, so that the loop cannot write again after the final flush.
+	loopDone chan struct{}
 
 	registry        metrics.Registry
 	runtimeRegistry metrics.Registry
@@ -199,6 +202,7 @@ func fromParsed(conf *service.ParsedConfig, logger *service.Logger) (i *influxDB
 	i.batchConfig.RetentionPolicy, _ = conf.FieldString(imFieldRetentionPolicy)
 	i.batchConfig.WriteConsistency, _ = conf.FieldString(imFieldWriteConsistency)
 
+	i.loopDone = make(chan struct{})
 	go i.loop()
 
 	return i, nil
@@ -249,6 +253,7 @@ func (conf clientConf) build() (c client.Client, err error) {
 }
 
 func (i *influxDBMetrics) loop() {
+	defer close(i.loopDone)
 	ticker := time.NewTicker(i.interval)
 	pingTicker := time.NewTicker(i.pingInterval)
 	defer ticker.Stop()
@@ -398,7 +403,15 @@ func (*influxDBMetrics) HandlerFunc() http.HandlerFunc {
 	return nil
 }
 
-func (i *influxDBMetrics) Close(context.Context) error {
+func (i *influxDBMetrics) Close(ctx context.Context) error {
+	// Stop the flush loop before the final flush. If the loop continues, it
+	// writes the same metrics again at each interval after Close.
+	i.cancel()
+	select {
+	case <-i.loopDone:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	if err := i.publishRegistry(); err != nil {
 		i.log.Errorf("failed to send metrics data: %s", err)
 	}
