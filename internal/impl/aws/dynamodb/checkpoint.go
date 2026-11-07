@@ -697,6 +697,12 @@ func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoin
 			state.Complete = complete.Value
 		}
 
+		if total, ok := item["TotalSegments"].(*types.AttributeValueMemberN); ok && checkpoint.TotalSegments == 0 {
+			if n, err := strconv.Atoi(total.Value); err == nil && n > 0 {
+				checkpoint.TotalSegments = n
+			}
+		}
+
 		checkpoint.SegmentProgress[segmentID] = state
 	}
 
@@ -704,11 +710,16 @@ func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoin
 }
 
 // UpdateSnapshotProgress updates the checkpoint for a snapshot segment.
-func (c *Checkpointer) UpdateSnapshotProgress(ctx context.Context, segment int, lastKey map[string]types.AttributeValue, recordsRead int64) error {
+// totalSegments is the scan's segment count, stored with the row so a resume
+// keeps the segmentation the positions were read under; zero stores none.
+func (c *Checkpointer) UpdateSnapshotProgress(ctx context.Context, segment, totalSegments int, lastKey map[string]types.AttributeValue, recordsRead int64) error {
 	shardID := fmt.Sprintf("snapshot#segment#%d", segment)
 
 	item := c.checkpointKey(shardID)
 	item["RecordsRead"] = &types.AttributeValueMemberN{Value: strconv.FormatInt(recordsRead, 10)}
+	if totalSegments > 0 {
+		item["TotalSegments"] = &types.AttributeValueMemberN{Value: strconv.Itoa(totalSegments)}
+	}
 
 	if lastKey == nil {
 		// Segment complete
