@@ -17,6 +17,7 @@ package s3
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -69,7 +70,7 @@ type s3TagPair struct {
 }
 
 type s3oConfig struct {
-	Bucket string
+	Bucket *service.InterpolatedString
 
 	Path                    *service.InterpolatedString
 	Tags                    []s3TagPair
@@ -92,7 +93,11 @@ type s3oConfig struct {
 }
 
 func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error) {
-	if conf.Bucket, err = pConf.FieldString(s3oFieldBucket); err != nil {
+	if conf.Bucket, err = pConf.FieldInterpolatedString(s3oFieldBucket); err != nil {
+		return
+	}
+	if static, isStatic := conf.Bucket.Static(); isStatic && static == "" {
+		err = errors.New("bucket must not be empty")
 		return
 	}
 
@@ -261,8 +266,10 @@ output:
 
 To find your account ID and generate R2 API credentials, see https://developers.cloudflare.com/r2/api/tokens/[Cloudflare R2 authentication^].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewStringField(s3oFieldBucket).
-				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN."),
+			service.NewInterpolatedStringField(s3oFieldBucket).
+				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN. This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], which are calculated per message of a batch, allowing messages to be routed to different buckets. When the bucket name is dynamic, connection tests are skipped for the bucket.").
+				Example("my-bucket").
+				Example(`${! metadata("client_id") }-logs`),
 			service.NewInterpolatedStringField(s3oFieldPath).
 				Description("The path of each message to upload.").
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`).
@@ -390,6 +397,13 @@ func newAmazonS3Writer(conf s3oConfig, mgr *service.Resources) (*amazonS3Writer,
 // without actually sending data. The connection, if successful, is then
 // closed.
 func (a *amazonS3Writer) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	bucket, isStatic := a.conf.Bucket.Static()
+	if !isStatic {
+		// A dynamic bucket can only be resolved against a message, so there
+		// is no single bucket to check without sending data.
+		return service.ConnectionTestSucceeded().AsList()
+	}
+
 	client := s3.NewFromConfig(a.conf.aconf, func(o *s3.Options) {
 		o.UsePathStyle = a.conf.UsePathStyle
 		if a.conf.aconf.BaseEndpoint != nil {
@@ -398,10 +412,10 @@ func (a *amazonS3Writer) ConnectionTest(ctx context.Context) service.ConnectionT
 	})
 
 	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
-		Bucket: aws.String(a.conf.Bucket),
+		Bucket: aws.String(bucket),
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("accessing bucket %s: %w", a.conf.Bucket, err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("accessing bucket %s: %w", bucket, err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }
@@ -475,6 +489,14 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			websiteRedirectLocation = aws.String(ce)
 		}
 
+		bucket, err := msg.TryInterpolatedString(i, a.conf.Bucket)
+		if err != nil {
+			return fmt.Errorf("bucket interpolation: %w", err)
+		}
+		if bucket == "" {
+			return errors.New("bucket interpolation resulted in an empty bucket name")
+		}
+
 		key, err := msg.TryInterpolatedString(i, a.conf.Path)
 		if err != nil {
 			return fmt.Errorf("key interpolation: %w", err)
@@ -496,7 +518,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		}
 
 		uploadInput := &transfermanager.UploadObjectInput{
-			Bucket:                  &a.conf.Bucket,
+			Bucket:                  aws.String(bucket),
 			Key:                     aws.String(key),
 			Body:                    bytes.NewReader(mBytes),
 			ContentType:             aws.String(contentType),
