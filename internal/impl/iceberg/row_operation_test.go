@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -58,6 +59,57 @@ func TestRowOpConfigMutating(t *testing.T) {
 			assert.Equal(t, tc.want, tc.cfg.mutating())
 		})
 	}
+}
+
+func TestRowOperationExampleBloblang(t *testing.T) {
+	// Verify the row_operation if/else interpolation example:
+	// ${! if this.op == "d" { "delete" } else { "upsert" } }
+	interp := mustInterp(t, `${! if this.op == "d" { "delete" } else { "upsert" } }`)
+
+	msgDelete := service.NewMessage([]byte(`{"op":"d"}`))
+	resDelete, err := interp.TryString(msgDelete)
+	require.NoError(t, err)
+	assert.Equal(t, "delete", resDelete)
+
+	msgUpsert := service.NewMessage([]byte(`{"op":"c"}`))
+	resUpsert, err := interp.TryString(msgUpsert)
+	require.NoError(t, err)
+	assert.Equal(t, "upsert", resUpsert)
+
+	// Verify that ternary operator is invalid in Bloblang:
+	_, errTernary := bloblang.Parse(`root = this.op == "d" ? "delete" : "upsert"`)
+	assert.Error(t, errTernary, "ternary operator should be rejected by Bloblang")
+
+	// Verify Debezium delete events retain the ID from the before record with coalesce:
+	// root = this.after | this.before
+	mapping, err := bloblang.Parse(`root = this.after | this.before`)
+	require.NoError(t, err)
+
+	debeziumDelete := map[string]any{
+		"op":     "d",
+		"after":  nil,
+		"before": map[string]any{"id": int64(1)},
+	}
+	resMsg, err := mapping.Query(debeziumDelete)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"id": int64(1)}, resMsg)
+
+	// Verify that match syntax also works on the debezium payload
+	matchMapping, err := bloblang.Parse(`root.op = match this.op {
+  "d" => "delete",
+  _   => "upsert",
+}`)
+	require.NoError(t, err)
+	resMatch, err := matchMapping.Query(debeziumDelete)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"op": "delete"}, resMatch)
+
+	// Verify that after.catch(before) produces null on Debezium delete events
+	catchMapping, err := bloblang.Parse(`root = this.after.catch(this.before)`)
+	require.NoError(t, err)
+	resCatch, err := catchMapping.Query(debeziumDelete)
+	require.NoError(t, err)
+	assert.Nil(t, resCatch, "after.catch(before) yields null when after is null")
 }
 
 func parseTestRowOpConfig(t *testing.T, snippet string) (RowOpConfig, error) {
