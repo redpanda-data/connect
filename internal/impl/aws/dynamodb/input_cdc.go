@@ -482,6 +482,11 @@ type tableStream struct {
 // Lock hierarchy: always acquire d.mu before ts.mu to prevent deadlocks.
 // Never hold ts.mu when acquiring d.mu.
 type dynamoDBCDCInput struct {
+	// shardInitRetryBackoff overrides the backoff between retries of a
+	// table coordinator's first shard refresh; tests only, nil in
+	// production.
+	shardInitRetryBackoff func() backoff.BackOff
+
 	conf          dynamoDBCDCConfig
 	awsConf       aws.Config
 	dynamoClient  *dynamodb.Client
@@ -2370,6 +2375,43 @@ func (d *dynamoDBCDCInput) periodicTableDiscovery(ctx context.Context) {
 	}
 }
 
+// initTableShards runs a table coordinator's first shard refresh, retrying
+// with backoff until it succeeds or ctx ends: giving up would leave the table
+// unread until restart. It reports false only when ctx ended.
+func (d *dynamoDBCDCInput) initTableShards(ctx context.Context, tableName string, ts *tableStream) bool {
+	var boff backoff.BackOff
+	if d.shardInitRetryBackoff != nil {
+		boff = d.shardInitRetryBackoff()
+	} else {
+		eb := backoff.NewExponentialBackOff()
+		eb.InitialInterval = time.Second
+		eb.MaxInterval = shardRefreshInterval
+		eb.MaxElapsedTime = 0 // Never give up
+		boff = eb
+	}
+	for {
+		err := d.refreshTableShards(ctx, tableName, ts)
+		if err == nil {
+			return true
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			wait = shardRefreshInterval
+		}
+		d.log.Errorf("Failed to initialize shards for table %s, retrying in %s: %v", tableName, wait, err)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
+}
+
 // startTableStreamCoordinator manages shard readers for a specific table stream
 func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tableName string, ts *tableStream) {
 	d.log.Infof("Starting coordinator for table stream: %s", tableName)
@@ -2380,11 +2422,8 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 	hasShards := len(ts.shardReaders) > 0
 	ts.mu.RUnlock()
 
-	if !hasShards {
-		if err := d.refreshTableShards(ctx, tableName, ts); err != nil {
-			d.log.Errorf("Failed to initialize shards for table %s: %v", tableName, err)
-			return
-		}
+	if !hasShards && !d.initTableShards(ctx, tableName, ts) {
+		return
 	}
 
 	// Track running shard readers for this table
