@@ -69,6 +69,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/text"
 	_ "github.com/redpanda-data/connect/v4/public/components/tigerbeetle"
 	_ "github.com/redpanda-data/connect/v4/public/components/timeplus"
+	_ "github.com/redpanda-data/connect/v4/public/components/turbopuffer"
 
 	// Import all (supported) sql drivers.
 	_ "github.com/ClickHouse/clickhouse-go/v2"

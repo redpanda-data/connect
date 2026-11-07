@@ -317,6 +317,7 @@ to_the_end                ,scanner   ,to_the_end                ,certified  ,n  
 try                       ,processor ,try                       ,certified  ,n          ,y     ,y              ,
 try_catch                 ,processor ,try_catch                 ,community  ,n          ,y     ,y              ,
 ttlru                     ,cache     ,ttlru                     ,community  ,n          ,y     ,y              ,
+turbopuffer               ,output    ,turbopuffer               ,community  ,n          ,y     ,y              ,
 twitter_search            ,input     ,twitter_search            ,community  ,n          ,n     ,n              ,not yet certified for cloud
 unarchive                 ,processor ,unarchive                 ,certified  ,n          ,y     ,y              ,
 wasm                      ,processor ,wasm                      ,community  ,n          ,n     ,n              ,WASM runtime not enabled in cloud
