@@ -16,6 +16,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/go-faker/faker/v4"
@@ -72,4 +73,42 @@ func TestChatInterpolationError(t *testing.T) {
 	input := service.NewMessage([]byte(faker.Paragraph()))
 	_, err = p.Process(t.Context(), input)
 	assert.Error(t, err)
+}
+
+type captureChatClient struct {
+	mockChatClient
+	body oai.ChatCompletionRequest
+}
+
+func (c *captureChatClient) CreateChatCompletion(ctx context.Context, body oai.ChatCompletionRequest) (oai.ChatCompletionResponse, error) {
+	c.body = body
+	return c.mockChatClient.CreateChatCompletion(ctx, body)
+}
+
+func TestChatZeroSamplingValuesAreSent(t *testing.T) {
+	zero := float32(0)
+	client := &captureChatClient{}
+	p := chatProcessor{
+		baseProcessor: &baseProcessor{
+			client: client,
+			model:  "gpt-4o",
+		},
+		temperature: &zero,
+		topP:        &zero,
+	}
+	_, err := p.Process(t.Context(), service.NewMessage([]byte("hi")))
+	require.NoError(t, err)
+
+	raw, err := json.Marshal(client.body)
+	require.NoError(t, err)
+	var sent map[string]any
+	require.NoError(t, json.Unmarshal(raw, &sent))
+
+	// An explicit 0 must reach the API instead of being dropped by omitempty,
+	// otherwise the API default (1) applies.
+	for _, field := range []string{"temperature", "top_p"} {
+		v, ok := sent[field].(float64)
+		require.Truef(t, ok, "%s missing from request body: %s", field, raw)
+		assert.Less(t, v, 1e-30, field)
+	}
 }

@@ -613,6 +613,17 @@ type chatProcessor struct {
 	tools            []pipelineTool
 }
 
+// keepIfZero works around go-openai tagging its float32 sampling fields with
+// omitempty: an explicit 0 would be dropped from the request and the API default
+// (1) would apply instead. The smallest non-zero value is serialised instead,
+// which is the workaround go-openai documents for this.
+func keepIfZero(v float32) float32 {
+	if v == 0 {
+		return math.SmallestNonzeroFloat32
+	}
+	return v
+}
+
 func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var body oai.ChatCompletionRequest
 	body.Model = p.model
@@ -620,10 +631,10 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		body.MaxTokens = *p.maxTokens
 	}
 	if p.temperature != nil {
-		body.Temperature = *p.temperature
+		body.Temperature = keepIfZero(*p.temperature)
 	}
 	if p.topP != nil {
-		body.TopP = *p.topP
+		body.TopP = keepIfZero(*p.topP)
 	}
 	body.Seed = p.seed
 	if p.frequencyPenalty != nil {
