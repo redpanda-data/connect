@@ -358,7 +358,7 @@ See the Row-level operations section above for the full semantics, the format-ve
 				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
-				Example(`${! this.op == "d" ? "delete" : "upsert" }`).
+				Example(`${! if this.op == "d" { "delete" } else { "upsert" } }`).
 				Default("insert").
 				Advanced(),
 
@@ -574,11 +574,11 @@ pipeline:
   processors:
     - mapping: |
         meta op = match this.op {
-          this == "d" => "delete"
-          _ => "upsert"
+          "d" => "delete",
+          _   => "upsert",
         }
         # Debezium puts the row image in 'after' (or 'before' for deletes).
-        root = this.after.catch(this.before)
+        root = this.after | this.before
 
 output:
   iceberg:
@@ -611,10 +611,10 @@ pipeline:
   processors:
     - mapping: |
         meta op = match this.op {
-          this == "d" => "delete"
-          _ => "upsert"
+          "d" => "delete",
+          _   => "upsert",
         }
-        root = this.after.catch(this.before)
+        root = this.after | this.before
 
 output:
   iceberg:
