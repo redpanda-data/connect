@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/microsoft/go-mssqldb"
+	mssql "github.com/microsoft/go-mssqldb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -231,12 +231,17 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	return nil
 }
 
-// dropDatabaseMu makes the DROP DATABASE calls in createDatabase run one at a time.
+// cdcDDLMu makes the DROP DATABASE calls in createDatabase and the sp_cdc_enable_db calls in openAndEnableCDC run one
+// at a time.
 //
 // DROP DATABASE on a CDC database also removes its capture and cleanup SQL Server Agent jobs from msdb. Parallel drops
 // on the shared container deadlock (error 1205) in msdb.dbo.sp_delete_job, sys.sp_MScdc_db_ddl_event, or
 // sys.sp_cdc_cleanup_job_entries.
-var dropDatabaseMu sync.Mutex
+//
+// Parallel sp_cdc_enable_db calls also deadlock, in sp_addrolemember 'db_owner', 'cdc'. sp_cdc_enable_db is not
+// atomic: the deadlock victim keeps the cdc user and schema, and that blocks each later sp_cdc_enable_db on the
+// database (refer to errCDCLeftover).
+var cdcDDLMu sync.Mutex
 
 // State of the container that all tests in one test package share. Only sharedContainer writes it.
 var (
@@ -367,15 +372,15 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 			return true
 		}
 		// The database exists only with go test -count=N, where all tests drop it at about the same time and need
-		// dropDatabaseMu. The lock costs little when there is nothing to drop.
-		dropDatabaseMu.Lock()
+		// cdcDDLMu. The lock costs little when there is nothing to drop.
+		cdcDDLMu.Lock()
 		_, openErr = masterDB.ExecContext(ctx, fmt.Sprintf(`
 			IF DB_ID(N'%s') IS NOT NULL
 			BEGIN
 				ALTER DATABASE [%s] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 				DROP DATABASE [%s];
 			END;`, dbName, dbName, dbName))
-		dropDatabaseMu.Unlock()
+		cdcDDLMu.Unlock()
 		if openErr != nil {
 			lastErr = openErr
 			return false
@@ -396,7 +401,30 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 // errCDCLeftover is the error of openAndEnableCDC when the database has the cdc schema or user, but CDC is not
 // enabled. A failed sp_cdc_enable_db can leave them, for example when it is the victim of a deadlock on a busy
 // server. sp_cdc_enable_db fails while they exist, so a retry on the same database cannot succeed.
+//
+// cdcDDLMu prevents the deadlock with the other tests of the package. The check stays for a deadlock with
+// something else on the server.
 var errCDCLeftover = errors.New("the cdc schema or user exists, but CDC is not enabled")
+
+// errNumCDCLeftover is the SQL Server error of sp_cdc_enable_db when the cdc user or schema already exists.
+const errNumCDCLeftover = 22906
+
+// isCDCLeftover reports whether err has SQL Server error errNumCDCLeftover.
+func isCDCLeftover(err error) bool {
+	var msErr mssql.Error
+	if !errors.As(err, &msErr) {
+		return false
+	}
+	if msErr.Number == errNumCDCLeftover {
+		return true
+	}
+	for _, e := range msErr.All {
+		if e.Number == errNumCDCLeftover {
+			return true
+		}
+	}
+	return false
+}
 
 // createDatabaseWithCDC creates dbName and enables CDC on it. When errCDCLeftover stops the enable, it creates the
 // database again and retries. afterCreate runs after each create; tests use it to make the leftover state.
@@ -464,18 +492,23 @@ func openAndEnableCDC(
 		// @start_job = 1, which waits about 3.4s for each job to start. Adding them with @start_job = 0 and then
 		// starting the capture job takes about 1s in total.
 		//
-		// This does not take dropDatabaseMu. Parallel adds do not deadlock with each other or with a drop, and they
-		// are about 3 times faster than adds one at a time.
+		// sp_cdc_enable_db takes cdcDDLMu. The job adds do not: parallel adds do not deadlock with each other or with
+		// a drop, and they are about 3 times faster than adds one at a time.
 		//
 		// The IF guards make a retry safe. They read msdb.dbo.sysjobs, because msdb.dbo.cdc_jobs does not exist
 		// before the first CDC job is added.
+		cdcDDLMu.Lock()
 		_, openErr = db.ExecContext(ctx, `
 			IF (SELECT is_cdc_enabled FROM sys.databases WHERE database_id = DB_ID()) = 0
-				EXEC sys.sp_cdc_enable_db;
+				EXEC sys.sp_cdc_enable_db;`)
+		cdcDDLMu.Unlock()
+		if openErr == nil {
+			_, openErr = db.ExecContext(ctx, `
 			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_capture')
 				EXEC sys.sp_cdc_add_job @job_type = N'capture', @start_job = 0;
 			IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'cdc.' + DB_NAME() + N'_cleanup')
 				EXEC sys.sp_cdc_add_job @job_type = N'cleanup', @start_job = 0;`)
+		}
 		// Start only the capture job. The cleanup job runs on a daily schedule, so it does not have to start.
 		if openErr == nil {
 			_, openErr = db.ExecContext(ctx, "EXEC sys.sp_cdc_start_job @job_type = N'capture';")
@@ -489,7 +522,7 @@ func openAndEnableCDC(
 			logf("enable CDC on %q failed, trying again: %v", dbName, openErr)
 			db.Close()
 			db = nil
-			if strings.Contains(openErr.Error(), "a database user named 'cdc' or a schema named 'cdc' already exists") {
+			if isCDCLeftover(openErr) {
 				lastErr = fmt.Errorf("%w: %w", errCDCLeftover, openErr)
 				return true
 			}
