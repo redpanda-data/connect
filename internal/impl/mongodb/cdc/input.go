@@ -986,10 +986,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 	}
 
-	// The token the change stream opens from. Nil starts it from the oplog
-	// timestamp. resumeToken is this connection's start position, fixed when
-	// the epoch opened, so no locking is needed to read it - unlike
-	// m.resumeToken, which acks advance while the stream runs.
+	// start is the resume token the change stream opens from: the checkpoint
+	// token, else the token captured above. Nil starts the stream at the
+	// operation after the majority committed oplog time (ts).
+	// Read the local resumeToken, not m.resumeToken: acks advance the field
+	// while the stream runs.
 	start := resumeToken
 	if start == nil {
 		start = initialResumeToken
