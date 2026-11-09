@@ -30,11 +30,10 @@ func TestMain(m *testing.M) {
 func TestIntegrationEnableCDCWithLeftoverSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
+	t.Log("Given: a database with a leftover cdc schema, as a failed sp_cdc_enable_db can leave")
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
-
-	// A failed sp_cdc_enable_db can leave the cdc schema in the database.
 	connStr, err := ctr.ConnectionString(t.Context(), "database="+dbName, "encrypt=disable")
 	require.NoError(t, err)
 	db, err := sql.Open("mssql", connStr)
@@ -43,13 +42,17 @@ func TestIntegrationEnableCDCWithLeftoverSchema(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
+	t.Log("When: CDC is enabled on the database")
 	_, _, err = openAndEnableCDC(t.Context(), ctr, dbName, t.Logf)
+
+	t.Log("Then: the error reports the leftover")
 	require.ErrorIs(t, err, errCDCLeftover)
 }
 
 func TestIntegrationLogDeadlocks(t *testing.T) {
 	integration.CheckSkip(t)
 
+	t.Log("Given: a database with two tables a and b")
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 	require.NoError(t, createDatabase(t.Context(), ctr, dbName))
@@ -63,6 +66,7 @@ func TestIntegrationLogDeadlocks(t *testing.T) {
 		CREATE TABLE b (id INT PRIMARY KEY); INSERT INTO b VALUES (1);`)
 	require.NoError(t, err)
 
+	t.Log("When: two transactions lock the tables in opposite order and deadlock")
 	// Each transaction locks one table, waits for the other to do the same, and then locks the other table.
 	var locked sync.WaitGroup
 	locked.Add(2)
@@ -91,6 +95,7 @@ func TestIntegrationLogDeadlocks(t *testing.T) {
 	require.NotEqual(t, hasSQLError(err1, errNumDeadlock), hasSQLError(err2, errNumDeadlock),
 		"want one deadlock victim, got %v and %v", err1, err2)
 
+	t.Log("Then: logDeadlocks logs the victim, the survivor, their statements, and the locked key")
 	var lines []string
 	logDeadlocks(t.Context(), db, func(format string, args ...any) {
 		lines = append(lines, fmt.Sprintf(format, args...))
