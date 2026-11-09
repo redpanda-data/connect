@@ -432,8 +432,9 @@ func (d *incSnapshotDeps) Prepare(ctx context.Context) error {
 	// The tick before the start: the start itself can be ahead of every write,
 	// and the server rejects an afterClusterTime ahead of its cluster time.
 	skipped := prevTimestamp(d.streamStart)
+	db := d.primary()
 	for _, coll := range d.collections {
-		err := d.primary().RunCommand(ctx, bson.D{
+		err := db.RunCommand(ctx, bson.D{
 			{Key: "find", Value: coll},
 			{Key: "limit", Value: 1},
 			{Key: "projection", Value: bson.D{{Key: "_id", Value: 1}}},
