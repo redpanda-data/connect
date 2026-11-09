@@ -108,6 +108,15 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		)`,
 			"INSERT INTO "+db.Schema+".chunk_string_key_test (id, data) SELECT LPAD(LEVEL, 10, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
 		)
+		// Lower-case and upper-case prefixes sort in a different order under binary and
+		// linguistic collations: binary puts 'B' before 'a', GERMAN puts 'a' first.
+		createChunkedTable(t, db, "chunk_mixed_case_key_test", `
+		CREATE TABLE `+db.Schema+`.chunk_mixed_case_key_test (
+			id   VARCHAR2(10) NOT NULL PRIMARY KEY,
+			data NVARCHAR2(100)
+		)`,
+			"INSERT INTO "+db.Schema+".chunk_mixed_case_key_test (id, data) SELECT CASE WHEN MOD(LEVEL, 2) = 0 THEN 'a' ELSE 'B' END || LPAD(LEVEL, 9, '0'), RPAD('x', 100, 'x') FROM dual CONNECT BY LEVEL <= :1",
+		)
 		// Without statistics a string key can't be sampled, but a numeric key can still be
 		// interpolated, since that only needs its MIN and MAX.
 		createChunkedTable(t, db, "chunk_no_stats_test", `
@@ -140,7 +149,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 	db.MustExec("ALTER TABLE " + db.Schema + ".chunk_unenforced_key_test ADD CONSTRAINT chunk_unenforced_key_test_pk PRIMARY KEY (id) RELY DISABLE NOVALIDATE")
 	db.MustExec("INSERT INTO "+db.Schema+".chunk_outlier_key_test (id, data) VALUES (:1, 'sentinel')", outlierKey)
 
-	for _, table := range []string{"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test", "chunk_string_key_test", "chunk_unenforced_key_test", "chunk_outlier_key_test"} {
+	for _, table := range []string{"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test", "chunk_string_key_test", "chunk_mixed_case_key_test", "chunk_unenforced_key_test", "chunk_outlier_key_test"} {
 		db.MustExec(fmt.Sprintf("BEGIN DBMS_STATS.GATHER_TABLE_STATS('%s', '%s'); END;", db.Schema, table))
 	}
 	// Delete explicitly rather than relying on statistics never having been gathered, so
@@ -153,8 +162,8 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 
 	waitForFlashbackReads(t, db,
 		"chunk_single_key_test", "chunk_composite_key_test", "chunk_timestamp_key_test", "chunk_date_key_test",
-		"chunk_string_key_test", "chunk_no_stats_test", "chunk_no_stats_numeric_test", "chunk_unenforced_key_test",
-		"chunk_outlier_key_test")
+		"chunk_string_key_test", "chunk_mixed_case_key_test", "chunk_no_stats_test", "chunk_no_stats_numeric_test",
+		"chunk_unenforced_key_test", "chunk_outlier_key_test")
 
 	t.Run("SinglePrimaryKey", func(t *testing.T) {
 		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_SINGLE_KEY_TEST"}
@@ -287,6 +296,28 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 		}, paddedKey)
 	})
 
+	t.Run("LinguisticSessionSortStillReturnsEveryKeyOnce", func(t *testing.T) {
+		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_MIXED_CASE_KEY_TEST"}
+		user := db.Schema + "_NLS"
+		userConnStr := createSelectOnlyUser(t, db, connStr, user, table,
+			"GRANT FLASHBACK ON "+table.FullName()+" TO "+user,
+			"CREATE OR REPLACE TRIGGER "+user+".nls_german_trg AFTER LOGON ON "+user+".SCHEMA BEGIN EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_SORT = GERMAN'; END;",
+		)
+		snapshot, publisher, logs := newChunkedSnapshot(t, userConnStr, "", table)
+
+		_, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+
+		t.Log("When a user whose logon trigger sets a linguistic NLS_SORT reads a mixed-case string key with multiple workers")
+		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
+
+		t.Log("Then pages and chunk bounds still compare in binary order, and every key is returned exactly once")
+		assertSplitIntoChunks(t, logs, table, planSampled)
+		assertEveryKeyOnce(t, publisher, chunkedTableRows, func(row map[string]any) string {
+			return fmt.Sprint(row["ID"])
+		}, mixedCaseKey)
+	})
+
 	t.Run("NumericKeyWithoutStatisticsIsInterpolated", func(t *testing.T) {
 		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_NO_STATS_NUMERIC_TEST"}
 		snapshot, publisher, logs := newChunkedSnapshot(t, connStr, "", table)
@@ -372,8 +403,10 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 }
 
 // createSelectOnlyUser creates a user that can log in, read the data dictionary and SELECT
-// from table, but has no FLASHBACK privilege, and returns connStr with its credentials.
-func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user string, table replication.UserTable) string {
+// from table, but has no FLASHBACK privilege unless extra grants it, and returns connStr with
+// its credentials. extra are further statements to run as the admin user, such as grants or a
+// logon trigger for the new user.
+func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user string, table replication.UserTable, extra ...string) string {
 	t.Helper()
 	const password = "testdb123"
 
@@ -403,11 +436,11 @@ func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user s
 	}
 
 	require.NoError(t, dropUser(t.Context()))
-	require.NoError(t, exec(t.Context(),
-		"CREATE USER "+user+" IDENTIFIED BY "+password,
-		"GRANT CREATE SESSION, SELECT ANY DICTIONARY TO "+user,
-		"GRANT SELECT ON "+table.FullName()+" TO "+user,
-	))
+	require.NoError(t, exec(t.Context(), append([]string{
+		"CREATE USER " + user + " IDENTIFIED BY " + password,
+		"GRANT CREATE SESSION, SELECT ANY DICTIONARY TO " + user,
+		"GRANT SELECT ON " + table.FullName() + " TO " + user,
+	}, extra...)...))
 	t.Cleanup(func() {
 		// t.Context() is cancelled before cleanup runs.
 		if err := dropUser(context.Background()); err != nil {
@@ -508,6 +541,14 @@ func assertSplitIntoChunks(t *testing.T, logs *oracledbtest.SyncBuffer, table re
 	assert.Greater(t, chunks, 1)
 	assert.Equal(t, method, m[2], "Expected table '%s' to be planned by %s", table.FullName(), method)
 	t.Logf("Table '%s' was split into %d chunks by %s", table.FullName(), chunks, m[2])
+}
+
+// mixedCaseKey is the VARCHAR2 key of row i in chunk_mixed_case_key_test.
+func mixedCaseKey(i int) string {
+	if i%2 == 0 {
+		return fmt.Sprintf("a%09d", i)
+	}
+	return fmt.Sprintf("B%09d", i)
 }
 
 // paddedKey is the VARCHAR2 key of row i in the string key tables.

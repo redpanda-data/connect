@@ -102,6 +102,9 @@ func (d *snapshotDB) withConn(ctx context.Context, fn func(conn *sql.Conn) error
 	if err = ApplyNLSSettings(ctx, conn); err != nil {
 		return fmt.Errorf("configuring nls for snapshot connection: %w", err)
 	}
+	if err = applyBinaryCollation(ctx, conn); err != nil {
+		return fmt.Errorf("configuring collation for snapshot connection: %w", err)
+	}
 
 	return fn(conn)
 }
@@ -210,4 +213,14 @@ func isConnectionCapacityError(err error) bool {
 // isHandshakeEOF reports whether err is the database closing the connection mid-handshake without an ORA code.
 func isHandshakeEOF(err error) bool {
 	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+// applyBinaryCollation sorts and compares keys in binary order, so a linguistic NLS_SORT or NLS_COMP can't make keyset pages and chunk bounds skip or repeat rows.
+func applyBinaryCollation(ctx context.Context, db dbExecer) error {
+	for _, stmt := range []string{"ALTER SESSION SET NLS_SORT = BINARY", "ALTER SESSION SET NLS_COMP = BINARY"} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("running %s: %w", stmt, err)
+		}
+	}
+	return nil
 }
