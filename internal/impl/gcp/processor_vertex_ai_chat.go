@@ -108,7 +108,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Advanced().
 				Optional(),
 			service.NewBloblangField(vaicpFieldHistory).
-				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where role is "user" or "model".`).Version("4.56.0").
+				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where `+"`role`"+` is `+"`user`"+` or `+"`model`"+`.`).Version("4.56.0").
 				ShortDescription("Historical messages to include in the chat request, as an array of role and content objects.").
 				Optional(),
 			service.NewBloblangField(vaicpFieldAttachment).

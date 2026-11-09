@@ -1322,19 +1322,21 @@ logger:
 	}, 2*time.Second, 200*time.Millisecond, "expected both topics to be synced within 2s")
 
 	t.Log("And: Empty topic has 0 messages on destination")
-	assert.Eventually(t, func() bool {
+	// ListEndOffsets fails until the partitions of the new topic have a leader. On a busy Docker host that can
+	// take some seconds, so wait longer than for the topic sync, and report the last error.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
-		if err != nil {
-			return false
+		if !assert.NoError(c, err) {
+			return
 		}
 		var emptyTotal int64
 		eo.Each(func(lo kadm.ListedOffset) {
-			if lo.Err == nil {
+			if assert.NoError(c, lo.Err) {
 				emptyTotal += lo.Offset
 			}
 		})
-		return emptyTotal == 0
-	}, 3*time.Second, 200*time.Millisecond, "Empty topic should have 0 messages on destination")
+		assert.Zero(c, emptyTotal, "Empty topic should have 0 messages on destination")
+	}, 10*time.Second, 200*time.Millisecond)
 }
 
 func TestIntegrationMigratorOutputCustomHeaders(t *testing.T) {

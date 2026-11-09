@@ -56,6 +56,7 @@ const (
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
 	fieldSignalTableName           = "signal_table_name"
+	fieldSelfManagePublication     = "self_manage_publication"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
@@ -107,7 +108,7 @@ The source database must have logical replication enabled, which means its ` + "
 
 This input reads changes through a logical replication slot, which it creates if the slot does not already exist. PostgreSQL retains the write-ahead log (WAL) that the slot still needs, so the input can resume from its last acknowledged position after a restart.
 
-When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `, and then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `. It then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
 
 When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
 
@@ -161,7 +162,7 @@ This input adds the following metadata fields to each message:
 
 == Unserializable rows
 
-A row whose decoded WAL data cannot be marshalled to JSON (in practice non-finite floating point values such as NaN or Infinity) is published with its error set and a plain-text rendering of the row as the payload, rather than stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue); if not handled they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+Some rows have decoded WAL data that cannot be marshalled to JSON, in practice non-finite floating point values such as NaN or Infinity. Such a row is published with its error set and a plain-text rendering of the row as the payload. This happens instead of stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue). If not handled, they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
 
 == Metrics
 
@@ -169,6 +170,7 @@ This input emits the following metrics:
 
 - ` + "`postgres_snapshot_progress`" + `: A gauge, labeled by ` + "`table`" + `, that reports the estimated fraction of each table's rows read so far in the initial snapshot. The value is 1 when the table's snapshot completes. The total row count comes from the PostgreSQL planner's row estimate, so the value is approximate until then.
 - ` + "`postgres_replication_lag_bytes`" + `: A gauge that reports how far, in bytes, the replication slot's restart position lags behind the current position of the source database's write-ahead log (WAL).
+- ` + "`postgres_publication_missing_tables`" + `: A gauge that reports how many required tables are missing from the publication. The required tables are the tables in ` + "`" + fieldTables + "`" + ` and the signal table, if ` + "`" + fieldSignalTableName + "`" + ` is set. It is only updated when ` + "`" + fieldSelfManagePublication + "`" + ` is ` + "`false`" + `, and stays 0 otherwise.
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The data source name (DSN) of the PostgreSQL database from which you want to stream updates. Use the format `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. PostgreSQL enforces SSL by default. To disable SSL, for example in a secure environment, add `sslmode=disable` to the connection string.").
@@ -202,7 +204,7 @@ This option is only available when ` + "`" + `stream_snapshot` + "`" + ` is set 
 		Field(service.NewStringListField(fieldTables).
 			Description(`A list of database table names to include in the snapshot and logical replication. Specify each table name as a separate item.
 
-If left empty, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. An existing publication of the same name that lists specific tables is dropped and recreated ` + "`FOR ALL TABLES`" + ` with the same options, which requires a superuser. This also disables ` + "`" + fieldStreamSnapshot + "`" + `, since the initial snapshot is only planned for tables listed here.`).
+If left empty, and ` + "`" + fieldSelfManagePublication + "`" + ` is ` + "`true`" + `, the underlying PostgreSQL publication is created ` + "`FOR ALL TABLES`" + `, which replicates every table in every schema of the database, ignoring ` + "`" + fieldSchema + "`" + `. An existing publication of the same name that lists specific tables is dropped and recreated ` + "`FOR ALL TABLES`" + ` with the same options, which requires a superuser. This also disables ` + "`" + fieldStreamSnapshot + "`" + `. The initial snapshot is only planned for tables listed here.`).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(replication.CheckpointLimitField("log sequence number (LSN)")).
 		Field(service.NewBoolField(fieldTemporarySlot).
@@ -216,17 +218,28 @@ If the pipeline is restarted and ` + "`" + `stream_snapshot` + "`" + ` is enable
 		Field(service.NewStringField(fieldSlotName).
 			Description(`The name of the PostgreSQL logical replication slot to use. If the slot does not exist, the input creates it. You can also create the slot manually before starting replication.
 
-To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention.
+To avoid granting the replication user permission to create publications, you can create the publications manually ahead of time. This input uses the naming pattern ` + "`" + `pglog_stream_<replication_slot_name>` + "`" + `, so create publications using this convention. Set ` + "`" + fieldSelfManagePublication + "`" + ` to ` + "`false`" + ` so the input also never alters them.
 
 Starting with version 4.48.0, this input no longer adds the prefix ` + "`rs_`" + ` to the names of the replication slots it creates. To keep using a replication slot that an earlier version created, add the ` + "`rs_`" + ` prefix to this field yourself.`).
 			ShortDescription("The name of the PostgreSQL logical replication slot to use. The input creates the slot if it does not exist.").
 			Example("my_test_slot")).
+		Field(service.NewBoolField(fieldSelfManagePublication).
+			Description(`Whether this input creates and maintains the publication ` + "`pglog_stream_<slot_name>`" + `. When ` + "`true`" + `, on every connect the input creates the publication if it is missing. Otherwise it adds and drops tables until the publication lists exactly ` + "`" + fieldTables + "`" + ` (plus ` + "`" + fieldSignalTableName + "`" + `, if set). A publication created ` + "`FOR ALL TABLES`" + ` is left as is when ` + "`" + fieldTables + "`" + ` is empty. When ` + "`" + fieldTables + "`" + ` is set and the publication is ` + "`FOR ALL TABLES`" + ` or ` + "`FOR TABLES IN SCHEMA`" + `, the input fails to start rather than stream tables that are not in the list. The error gives the SQL statement that fixes the publication.
+
+Set this to ` + "`false`" + ` when the publication is owned outside the connector, for example by a DBA. The replication user then needs no ownership of the replicated tables, and the input never runs ` + "`CREATE PUBLICATION`" + ` or ` + "`ALTER PUBLICATION`" + `. Instead, on every connect it checks the publication. The publication must exist, publish inserts, updates and deletes (the default ` + "`publish`" + ` option), and include every table in ` + "`" + fieldTables + "`" + ` and the signal table, if ` + "`" + fieldSignalTableName + "`" + ` is set. Otherwise the input fails with an error naming whatever is missing. A partitioned table counts as included only when every one of its partitions is published, directly or through the partitioned table. This check requires PostgreSQL 12 or later. While the input runs, it repeats the table check every ` + "`" + fieldWalMonitorInterval + "`" + `. When a table has been removed from the publication, the input logs an error and reports the count in the ` + "`postgres_publication_missing_tables`" + ` metric. PostgreSQL does not capture a table's changes while it is out of the publication, so adding it back does not recover them. Request an incremental snapshot of the table to backfill them.
+
+A table the publication streams with a row filter or a column list (PostgreSQL 15 or later) is logged as a warning at connect. Only the rows and columns it selects are streamed. An incremental snapshot is only accepted for a table the publication streams under the table's own name, with no row filter or column list. That excludes a partitioned table whose partitions are published without ` + "`publish_via_partition_root`" + `, and a partition published through its root with that option. Their changes stream under another name, so they cannot be deduplicated against the backfill. The check is repeated before each chunk, and a backfill whose table no longer qualifies fails.
+
+With ` + "`false`" + `, the publication decides what is streamed. Every table it includes is replicated, whether or not it is listed in ` + "`" + fieldTables + "`" + `. A table added with ` + "`ALTER PUBLICATION ... ADD TABLE`" + ` starts streaming without a restart. ` + "`" + fieldTables + "`" + ` then lists the tables that must be in the publication, the tables ` + "`" + fieldStreamSnapshot + "`" + ` reads, and the tables an incremental snapshot signal may name. Leave it empty to accept whatever the publication includes. To add a table, add it to the publication first, then to ` + "`" + fieldTables + "`" + `, and request an incremental snapshot to backfill it if needed. To remove one, remove it from ` + "`" + fieldTables + "`" + ` first, then from the publication. An incremental snapshot signal naming a table the publication does not include is rejected.`).
+			Advanced().
+			Version("4.117.0").
+			Default(true)).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout after which an idle connection is refreshed to keep the connection alive.").
 			Example("30s").
 			Default("10s")).
 		Field(service.NewDurationField(fieldWalMonitorInterval).
-			Description("How often to report changes to the replication lag and write them to Redpanda Connect metrics.").
+			Description("How often to report changes to the replication lag and write them to Redpanda Connect metrics. When <<" + fieldSelfManagePublication + ",`" + fieldSelfManagePublication + "`>> is `false`, this interval also sets how often the input checks that the publication still includes the required tables.").
 			Example("6s").
 			Default("3s")).
 		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
@@ -272,11 +285,11 @@ For more information about AWS credentials configuration, see the xref:guides:cl
 			Optional()).
 		Field(service.NewStringField(fieldSignalTableName).
 			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
-exist in the schema configured via the ` + "`schema`" + ` field, and must not also appear in ` + "`" + fieldTables + "`" + `,
-since the signal table is implicitly added to the publication and excluded from snapshot scans, so listing
-it in both places is rejected at startup. It must have at least these columns; startup validation checks
-column names only, not types, so a wrong column type (for example ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `)
-is only caught at runtime, on the first signal row read:
+exist in the schema configured via the ` + "`schema`" + ` field. It must not also appear in ` + "`" + fieldTables + "`" + `.
+The signal table is implicitly added to the publication and excluded from snapshot scans, so listing
+it in both places is rejected at startup. Startup validation checks column names only, not types.
+A wrong column type (for example ` + "`data JSONB`" + ` instead of ` + "`TEXT`" + `) is only caught at runtime,
+on the first signal row read. The table must have at least these columns:
 
 - **id**: any type representable as a string (for example ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
 - **type**: should be ` + "`VARCHAR`" + ` or another string type (the signal type, see supported signals below)
@@ -320,11 +333,11 @@ with a ` + "`tables`" + ` key listing table names in the configured ` + "`schema
 INSERT INTO <schema>.<signal_table_name> (type, data) VALUES ('` + replication.SnapshotSignalType + `', '{"tables": ["orders", "customers"]}');
 ` + "```" + `
 
-Each table must appear in ` + "`" + fieldTables + "`" + ` (or that list must be empty, replicating everything):
-an unreplicated table has no live changes to deduplicate its backfill against, so a write landing
+Each table must appear in ` + "`" + fieldTables + "`" + `, or that list must be empty, replicating everything.
+An unreplicated table has no live changes to deduplicate its backfill against, so a write landing
 after its chunk is read would be lost. Each must also have a primary key, which the backfill pages
 by. A table replicated under ` + "`REPLICA IDENTITY FULL`" + ` without one cannot be snapshotted. That key
-may not be ` + "`bytea`" + `: its value is read back and bound as the next chunk's bound, and raw bytes
+may not be ` + "`bytea`" + `. Its value is read back and bound as the next chunk's bound, and raw bytes
 survive neither that nor the checkpoint.
 
 **Partitioned tables**
@@ -337,20 +350,19 @@ already-read snapshot rows cannot be detected.
 A signal naming a table with partitions is rejected and logged, and it is left to replication alone. If a check cannot be run at all (for
 example, because the connection resets), the stream restarts and the signal is read again, so the request is not lost.
 
-Each table joins the back of the backfill queue. A table this run already covers is skipped and
-logged, so a repeated signal does not re-read it. To read one again, point
-` + "`" + fieldIncSnapshot + "." + fieldIncSnapshotCheckpointCacheKey + "`" + ` at a fresh key.
+Each table joins the back of the backfill queue. A table already queued or being backfilled is skipped and
+logged. A table whose backfill has finished is read again from the start.
 
 **Tables with large (TOASTed) column values**
 
 Set ` + "`REPLICA IDENTITY FULL`" + ` on a table with large (TOASTed) column values before backfilling using incremental snapshotting. PostgreSQL
-omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead, and
-under the default replica identity there is nothing in the message to recover it from, so
+omits an unchanged TOAST value from an ` + "`UPDATE`" + `, sending a marker instead.
+Under the default replica identity there is nothing in the message to recover it from, so
 ` + "`" + fieldUnchangedToastValue + "`" + ` is emitted for that column. For a row updated while its chunk is
-buffered, the backfilled copy that held the real value is dropped as a duplicate, leaving the
+buffered, the backfilled copy that held the real value is dropped as a duplicate. This leaves the
 placeholder as the only value the destination ever receives for it. ` + "`REPLICA IDENTITY FULL`" + `
 makes PostgreSQL send the previous row, which the connector reads the real value from. It can be
-set for the backfill and reverted afterwards; it takes a brief lock but rewrites nothing.`).Version("4.105.0").
+set for the backfill and reverted afterwards. It takes a brief lock but rewrites nothing.`).Version("4.105.0").
 			Example("rpcn_signal_table").
 			Default("").
 			Advanced()).
@@ -376,7 +388,7 @@ set for the backfill and reverted afterwards; it takes a brief lock but rewrites
 				ShortDescription("Cache resource storing incremental snapshot progress, so restarts resume instead of starting over. Required when enabled.").
 				Optional(),
 			service.NewStringField(fieldIncSnapshotCheckpointCacheKey).
-				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so a `"+replication.SnapshotSignalType+"` signal reads a table again.").
+				Description("The key used to store the incremental snapshot progress in `"+fieldIncSnapshotCheckpointCache+"`. Use a different key if multiple incremental snapshots share the same cache.\n\nChanging or clearing this key discards the record of which tables have been backfilled, so the next snapshot starts from scratch. To snapshot a finished table again, send a `"+replication.SnapshotSignalType+"` signal instead. It doesn't need the key changed.").
 				Default(incsnapshot.DefaultIncSnapshotCheckpointKey),
 		).
 			Description("Configures chunked snapshotting that runs alongside replication streaming.").
@@ -410,7 +422,23 @@ To change this:
 If the policy's ` + "`processors`" + ` fail on a batch, its rows are published as the batcher held them, with their error set, rather than dropped or retried, so error-handling components can route them. A processor earlier in the chain may already have altered them. If the processors drop every row of a batch, the position those rows reached is still acknowledged.`))
 }
 
-func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
+func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+	i, err := newPgStreamInputUnwrapped(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
+	if err != nil {
+		return nil, err
+	}
+
+	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+}
+
+// newPgStreamInputUnwrapped builds the input without the nack retry and
+// tracing wrappers newPgStreamInput adds.
+func newPgStreamInputUnwrapped(conf *service.ParsedConfig, mgr *service.Resources) (i *pgStreamInput, err error) {
 	var (
 		dsn                       string
 		dbSlotName                string
@@ -514,6 +542,11 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	selfManagePublication, err := conf.FieldBool(fieldSelfManagePublication)
+	if err != nil {
+		return nil, err
+	}
+
 	if signalTableName != "" {
 		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(signalTableName)
 		if err != nil {
@@ -560,8 +593,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
+	publicationMissingTables := mgr.Metrics().NewGauge("postgres_publication_missing_tables")
 
-	i := &pgStreamInput{
+	i = &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
 			DBConfig:         pgConnConfig,
 			TLSConfig:        pgConnConfig.TLSConfig,
@@ -590,14 +624,17 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		checkpointLimit:    checkpointLimit,
 		msgChan:            make(chan asyncMessage),
 
-		mgr:             mgr,
-		logger:          mgr.Logger(),
-		snapshotMetrics: snapshotMetrics,
-		replicationLag:  replicationLag,
-		stopSig:         shutdown.NewSignaller(),
+		mgr:                      mgr,
+		logger:                   mgr.Logger(),
+		snapshotMetrics:          snapshotMetrics,
+		publicationMissingTables: publicationMissingTables,
+		replicationLag:           replicationLag,
+		stopSig:                  shutdown.NewSignaller(),
 
 		iamAuthEnabled: iamAuthEnabled,
 	}
+
+	i.streamConfig.ExternallyManagedPublication = !selfManagePublication
 
 	if incSnapshot, err := parseIncrementalSnapshotCfg(conf, heartbeatInterval, signalTableName, streamSnapshot); err != nil {
 		return nil, err
@@ -614,12 +651,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
 
-	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
-	if err != nil {
-		return nil, err
-	}
-
-	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+	return i, nil
 }
 
 // validateSimpleString ensures we aren't vuln to SQL injection.
@@ -685,9 +717,12 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
-	controlSig      controlSignaller
-	stopSig         *shutdown.Signaller
-	iamAuthEnabled  bool
+	// publicationMissingTables counts the configured tables an externally
+	// managed publication has stopped covering since the input connected.
+	publicationMissingTables *service.MetricGauge
+	controlSig               controlSignaller
+	stopSig                  *shutdown.Signaller
+	iamAuthEnabled           bool
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
 	// snapshot batch (nil LSN) is enqueued and decremented when it is
@@ -756,6 +791,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			p.snapshotMetrics.SetFloat64(progress, name.String())
 		}
 		p.replicationLag.Set(report.WalLagInBytes)
+		if p.streamConfig.ExternallyManagedPublication {
+			p.publicationMissingTables.Set(report.TablesMissingFromPublication)
+		}
 	})
 	monitorLoop.Start()
 	defer monitorLoop.Stop()
@@ -790,9 +828,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !p.flushBatcher(ctx, pgStream, cp, batcher, st) {
-				break
-			}
+			// On failure flushBatcher has signalled a soft stop, which ends the loop.
+			p.flushBatcher(ctx, pgStream, cp, batcher, st)
 		case batch := <-pgStream.Messages():
 			if len(batch) == 1 && batch[0].Operation == pglogicalstream.SnapshotCompleteOpType {
 				// Snapshot fully emitted. Flush any buffered rows, then block

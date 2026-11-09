@@ -117,7 +117,8 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 	}
 
 	if m == nil {
-		c.log.Warnf("Transaction %s not found for event, creating...", txnID)
+		// Expected after a restart (see InMemoryCache.AddEvent).
+		c.log.Debugf("Starting transaction %s at SCN %d, its START is before the resume position", txnID, scn)
 		m = &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
