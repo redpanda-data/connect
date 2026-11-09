@@ -96,13 +96,11 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 		return InvalidSCN, errors.New("no tables provided")
 	}
 
-	var currentSCN SCN
-	if err := s.db.pool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
+	scn, ts, err := s.db.currentSCN(ctx)
+	if err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
-
-	// capture to include on snapshot metadata
-	s.scn = currentSCN
+	s.scn, s.commitTimestamp = scn, ts
 
 	s.log.Infof("Captured SCN before snapshot at SCN: %s", s.scn)
 	return s.scn, nil

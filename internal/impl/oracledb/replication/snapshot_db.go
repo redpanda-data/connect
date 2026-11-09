@@ -167,6 +167,12 @@ func (d *snapshotDB) acquire(ctx context.Context) (*sql.Conn, error) {
 	}
 }
 
+// currentSCN returns the database's current SCN and server time.
+func (d *snapshotDB) currentSCN(ctx context.Context) (scn SCN, ts time.Time, err error) {
+	err = d.pool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&scn, &ts)
+	return scn, ts, err
+}
+
 // Close closes the pool and its connections.
 func (d *snapshotDB) Close() error {
 	if err := d.pool.Close(); err != nil {
