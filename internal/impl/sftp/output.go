@@ -54,7 +54,10 @@ func sftpOutputSpec() *service.ConfigSpec {
 			service.NewBoolField(soFieldAtomicWrites).
 				Description("Write each message to a temporary file in the same directory, then rename it to the target path. "+
 					"A reader of the target path then never sees an empty or partial file. "+
-					"The temporary file name is `.<name>.<random>.tmp`, so make sure that readers of the directory do not match it. "+
+					"For the target path `/upload/a.txt`, the temporary file is `/upload/.a.txt.<random>.tmp`. "+
+					"Glob patterns match file names that start with a dot, so `/upload/*` and `/upload/*.tmp` match the temporary file, but `/upload/*.txt` does not. "+
+					"A reader that matches the temporary file, such as an `sftp` input, can read an empty or partial message, or read the same message two times. "+
+					"Use a reader pattern that ends with the extension of the target files. "+
 					"If the server supports the `posix-rename@openssh.com` extension, the rename replaces an existing file in one step. "+
 					"If not, the output removes the existing file first, so a reader can see no file for a short time. "+
 					"The SFTP user must have permission to rename files. "+
