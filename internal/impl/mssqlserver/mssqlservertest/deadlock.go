@@ -32,21 +32,8 @@ const errNumDeadlock = 1205
 // (MAX_DISPATCH_LATENCY), which is after the test fails.
 const deadlockSessionName = "rpcn_deadlocks"
 
-// startDeadlockSession creates and starts deadlockSessionName on the server of db.
-func startDeadlockSession(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `
-		IF NOT EXISTS (SELECT 1 FROM sys.server_event_sessions WHERE name = N'`+deadlockSessionName+`')
-			CREATE EVENT SESSION [`+deadlockSessionName+`] ON SERVER
-			ADD EVENT sqlserver.xml_deadlock_report
-			ADD TARGET package0.ring_buffer
-			WITH (MAX_DISPATCH_LATENCY = 1 SECONDS);
-		IF NOT EXISTS (SELECT 1 FROM sys.dm_xe_sessions WHERE name = N'`+deadlockSessionName+`')
-			ALTER EVENT SESSION [`+deadlockSessionName+`] ON SERVER STATE = START;`)
-	return err
-}
-
-// withMasterDB runs fn with a connection to the master database of ctr.
-func withMasterDB(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, fn func(context.Context, *sql.DB) error) error {
+// startDeadlockSession creates and starts deadlockSessionName on the server of ctr.
+func startDeadlockSession(ctx context.Context, ctr *tcmssql.MSSQLServerContainer) error {
 	connStr, err := ctr.ConnectionString(ctx, "encrypt=disable")
 	if err != nil {
 		return err
@@ -56,7 +43,15 @@ func withMasterDB(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, fn fun
 		return err
 	}
 	defer db.Close()
-	return fn(ctx, db)
+	_, err = db.ExecContext(ctx, `
+		IF NOT EXISTS (SELECT 1 FROM sys.server_event_sessions WHERE name = N'`+deadlockSessionName+`')
+			CREATE EVENT SESSION [`+deadlockSessionName+`] ON SERVER
+			ADD EVENT sqlserver.xml_deadlock_report
+			ADD TARGET package0.ring_buffer
+			WITH (MAX_DISPATCH_LATENCY = 1 SECONDS);
+		IF NOT EXISTS (SELECT 1 FROM sys.dm_xe_sessions WHERE name = N'`+deadlockSessionName+`')
+			ALTER EVENT SESSION [`+deadlockSessionName+`] ON SERVER STATE = START;`)
+	return err
 }
 
 // hasSQLError reports whether err has SQL Server error number num, also as an earlier error of the same batch.

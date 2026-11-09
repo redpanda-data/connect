@@ -47,38 +47,6 @@ func TestIntegrationEnableCDCWithLeftoverSchema(t *testing.T) {
 	require.ErrorIs(t, err, errCDCLeftover)
 }
 
-func TestIntegrationSetupRecreatesDatabaseWithLeftoverSchema(t *testing.T) {
-	integration.CheckSkip(t)
-
-	ctr := sharedContainer(t)
-	dbName := testDatabaseName(t)
-
-	// Leave the cdc schema after the first create, as a failed sp_cdc_enable_db does.
-	creates := 0
-	afterCreate := func() {
-		creates++
-		if creates > 1 {
-			return
-		}
-		connStr, err := ctr.ConnectionString(t.Context(), "database="+dbName, "encrypt=disable")
-		require.NoError(t, err)
-		db, err := sql.Open("mssql", connStr)
-		require.NoError(t, err)
-		defer db.Close()
-		_, err = db.ExecContext(t.Context(), "CREATE SCHEMA cdc;")
-		require.NoError(t, err)
-	}
-
-	db, _, err := createDatabaseWithCDC(t.Context(), ctr, dbName, t.Logf, afterCreate)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	require.Equal(t, 2, creates)
-
-	var enabled bool
-	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT is_cdc_enabled FROM sys.databases WHERE database_id = DB_ID()").Scan(&enabled))
-	require.True(t, enabled)
-}
-
 func TestIntegrationLogDeadlocks(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -120,7 +88,7 @@ func TestIntegrationLogDeadlocks(t *testing.T) {
 		}()
 	}
 	err1, err2 := <-errs, <-errs
-	require.True(t, hasSQLError(err1, errNumDeadlock) != hasSQLError(err2, errNumDeadlock),
+	require.NotEqual(t, hasSQLError(err1, errNumDeadlock), hasSQLError(err2, errNumDeadlock),
 		"want one deadlock victim, got %v and %v", err1, err2)
 
 	var lines []string

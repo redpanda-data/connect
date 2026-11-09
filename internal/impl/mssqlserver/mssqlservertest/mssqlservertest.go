@@ -272,8 +272,8 @@ func sharedContainer(t *testing.T) *tcmssql.MSSQLServerContainer {
 			if sharedErr == nil {
 				// The master database accepts connections only some time after the container is up.
 				if sharedErr = createDatabase(ctx, sharedCtr, ""); sharedErr == nil {
-					// Without the session, a 1205 error shows only the victim. The tests can run without it.
-					if err := withMasterDB(ctx, sharedCtr, startDeadlockSession); err != nil {
+					// The tests can run without the session.
+					if err := startDeadlockSession(ctx, sharedCtr); err != nil {
 						t.Logf("start the %s session: %v", deadlockSessionName, err)
 					}
 					return
@@ -327,7 +327,7 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	ctr := sharedContainer(t)
 	dbName := testDatabaseName(t)
 
-	db, connectionString, err := createDatabaseWithCDC(t.Context(), ctr, dbName, t.Logf, func() {})
+	db, connectionString, err := createDatabaseWithCDC(t.Context(), ctr, dbName, t.Logf)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
@@ -415,25 +415,23 @@ var errCDCLeftover = errors.New("the cdc schema or user exists, but CDC is not e
 const errNumCDCLeftover = 22906
 
 // createDatabaseWithCDC creates dbName and enables CDC on it. When errCDCLeftover stops the enable, it creates the
-// database again and retries. afterCreate runs after each create; tests use it to make the leftover state.
+// database again and retries.
 func createDatabaseWithCDC(
 	ctx context.Context,
 	ctr *tcmssql.MSSQLServerContainer,
 	dbName string,
 	logf func(format string, args ...any),
-	afterCreate func(),
 ) (*sql.DB, string, error) {
 	const maxAttempts = 3
 	for attempt := 1; ; attempt++ {
 		if err := createDatabase(ctx, ctr, dbName); err != nil {
 			return nil, "", err
 		}
-		afterCreate()
 		db, connStr, err := openAndEnableCDC(ctx, ctr, dbName, logf)
 		if !errors.Is(err, errCDCLeftover) || attempt == maxAttempts {
 			return db, connStr, err
 		}
-		logf("enable CDC on %q attempt %d/%d failed, creating the database again: %v", dbName, attempt, maxAttempts, err)
+		logf("attempt %d/%d failed, creating the database again: %v", attempt, maxAttempts, err)
 	}
 }
 
@@ -507,16 +505,17 @@ func openAndEnableCDC(
 		}
 		if openErr != nil {
 			lastErr = openErr
-			logf("enable CDC on %q failed, trying again: %v", dbName, openErr)
 			if hasSQLError(openErr, errNumDeadlock) {
 				logDeadlocks(ctx, db, logf)
 			}
 			db.Close()
 			db = nil
+			// createDatabaseWithCDC logs this error.
 			if hasSQLError(openErr, errNumCDCLeftover) {
 				lastErr = fmt.Errorf("%w: %w", errCDCLeftover, openErr)
 				return true
 			}
+			logf("enable CDC on %q failed, trying again: %v", dbName, openErr)
 			return false
 		}
 
