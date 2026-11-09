@@ -462,25 +462,8 @@ func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int
 			}
 			l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
 
-			lastSeenPksValues := map[string]any{}
-			for _, pk := range tablePks {
-				lastSeenPksValues[pk] = nil
-			}
-
-			var pksForQuery map[string]any
-			for {
-				batchCount, err := s.processBatch(ctx, tx, table, tablePks, pksForQuery, nil, lastSeenPksValues, maxBatchSize, tableName, customQuery, InvalidSCN)
-				if err != nil {
-					return fmt.Errorf("processing snapshot batch: %w", err)
-				}
-
-				numRowsProcessed += batchCount
-				pksForQuery = lastSeenPksValues
-				if batchCount < maxBatchSize {
-					break
-				}
-			}
-			return nil
+			numRowsProcessed, err = s.pageKeyset(ctx, tx, table, tablePks, keysetScan{customQuery: customQuery, scn: InvalidSCN}, maxBatchSize)
+			return err
 		})
 		if err != nil {
 			return err
@@ -492,11 +475,10 @@ func (s *Snapshot) snapshotTableWithFilterTask(table UserTable, maxBatchSize int
 
 // snapshotTableFullScanTask returns a task that reads an unchunked table in one full scan.
 func (s *Snapshot) snapshotTableFullScanTask(table UserTable, maxBatchSize int, tracker *tableCompletionTracker) func(context.Context) error {
-	tableName := table.FullName()
 	return func(ctx context.Context) error {
 		var numRowsProcessed int
 		err := s.db.withReadOnlyTxn(ctx, func(tx *sql.Tx) (err error) {
-			numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize, tableName)
+			numRowsProcessed, err = s.snapshotTableFullScan(ctx, tx, table, maxBatchSize)
 			return err
 		})
 		if err != nil {
@@ -514,26 +496,10 @@ func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclu
 	l := s.log.With("src_table", tableName)
 	return func(ctx context.Context) error {
 		var numRowsProcessed int
-		err := s.db.withConn(ctx, func(db *sql.Conn) error {
-			lastSeenPksValues := map[string]any{}
-			for _, pk := range pkCols {
-				lastSeenPksValues[pk] = nil
-			}
-
-			pksForQuery := minExclusive
-			for {
-				batchCount, err := s.processBatch(ctx, db, table, pkCols, pksForQuery, maxInclusive, lastSeenPksValues, maxBatchSize, tableName, "", s.scn)
-				if err != nil {
-					return fmt.Errorf("processing snapshot range batch: %w", err)
-				}
-
-				numRowsProcessed += batchCount
-				pksForQuery = lastSeenPksValues
-				if batchCount < maxBatchSize {
-					break
-				}
-			}
-			return nil
+		err := s.db.withConn(ctx, func(db *sql.Conn) (err error) {
+			scan := keysetScan{minExclusive: minExclusive, maxInclusive: maxInclusive, scn: s.scn}
+			numRowsProcessed, err = s.pageKeyset(ctx, db, table, pkCols, scan, maxBatchSize)
+			return err
 		})
 		if err != nil {
 			return err
@@ -544,10 +510,40 @@ func (s *Snapshot) scanTableRangeTask(table UserTable, pkCols []string, minExclu
 	}
 }
 
-// processBatch publishes one page of rows after pksForQuery, up to maxInclusivePkVal, and
-// stores the last row's keys in lastSeenPksValues for the next page.
-func (s *Snapshot) processBatch(ctx context.Context, db DBQuerier, table UserTable, tablePks []string, pksForQuery, maxInclusivePkVal map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName, customQuery string, scn SCN) (batchCount int, err error) {
-	batchRows, err := querySnapshotTable(ctx, db, table, tablePks, pksForQuery, maxInclusivePkVal, maxBatchSize, customQuery, scn)
+// keysetScan is the part of a keyset scan that differs between tasks.
+type keysetScan struct {
+	minExclusive map[string]any // nil starts at the first key
+	maxInclusive map[string]any // nil reads to the last key
+	customQuery  string         // empty reads the base table
+	scn          SCN            // InvalidSCN reads without AS OF SCN
+}
+
+// pageKeyset publishes every row of scan in pages of up to maxBatchSize rows ordered by pks,
+// returning the number of rows published.
+func (s *Snapshot) pageKeyset(ctx context.Context, db DBQuerier, table UserTable, pks []string, scan keysetScan, maxBatchSize int) (numRowsProcessed int, err error) {
+	lastSeen := make(map[string]any, len(pks))
+	for _, pk := range pks {
+		lastSeen[pk] = nil
+	}
+
+	after := scan.minExclusive
+	for {
+		batchCount, err := s.processBatch(ctx, db, table, pks, scan, after, lastSeen, maxBatchSize)
+		if err != nil {
+			return numRowsProcessed, fmt.Errorf("processing snapshot batch: %w", err)
+		}
+		numRowsProcessed += batchCount
+		if batchCount < maxBatchSize {
+			return numRowsProcessed, nil
+		}
+		after = lastSeen
+	}
+}
+
+// processBatch publishes one page of scan's rows after the keys in after, and stores the last
+// row's keys in lastSeen for the next page.
+func (s *Snapshot) processBatch(ctx context.Context, db DBQuerier, table UserTable, pks []string, scan keysetScan, after, lastSeen map[string]any, maxBatchSize int) (batchCount int, err error) {
+	batchRows, err := querySnapshotTable(ctx, db, table, pks, scan, after, maxBatchSize)
 	if err != nil {
 		return 0, fmt.Errorf("execute snapshot table query: %w", err)
 	}
@@ -578,7 +574,7 @@ func (s *Snapshot) processBatch(ctx context.Context, db DBQuerier, table UserTab
 			return 0, err
 		}
 
-		if err := s.publishRow(ctx, table, columns, types, values, mappers, colMeta, lastSeenPksValues); err != nil {
+		if err := s.publishRow(ctx, table, columns, types, values, mappers, colMeta, lastSeen); err != nil {
 			return 0, err
 		}
 	}
@@ -586,7 +582,7 @@ func (s *Snapshot) processBatch(ctx context.Context, db DBQuerier, table UserTab
 	if err = batchRows.Err(); err != nil {
 		return 0, fmt.Errorf("iterating snapshot table row: %w", err)
 	}
-	s.snapshotRowsTotalMetric.Incr(int64(batchCount), tableName)
+	s.snapshotRowsTotalMetric.Incr(int64(batchCount), table.FullName())
 	return batchCount, nil
 }
 
@@ -628,7 +624,8 @@ func (s *Snapshot) publishRow(ctx context.Context, table UserTable, columns []st
 
 // snapshotTableFullScan publishes every row of table from one unordered scan, which Oracle
 // reads with fast sequential multiblock I/O.
-func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int, tableName string) (numRowsProcessed int, err error) {
+func (s *Snapshot) snapshotTableFullScan(ctx context.Context, tx *sql.Tx, table UserTable, maxBatchSize int) (numRowsProcessed int, err error) {
+	tableName := table.FullName()
 	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
 	rows, err := tx.QueryContext(ctx, q)
 	if err != nil {
@@ -856,83 +853,71 @@ func buildLexicographicBoundExpr(pk []string, boundVals map[string]any, op strin
 	return sb.String(), args
 }
 
-// querySnapshotTable fetches the next keyset page of table, or of customQuery, after
-// lastSeenPkVal and up to maxInclusivePkVal, reading the base table AS OF scn when valid.
-func querySnapshotTable(ctx context.Context, db DBQuerier, table UserTable, pk []string, lastSeenPkVal, maxInclusivePkVal map[string]any, limit int, customQuery string, scn SCN) (*sql.Rows, error) {
+// querySnapshotTable fetches the next keyset page of scan after the keys in after, reading the
+// base table AS OF scan.scn when it's valid and there is no custom query.
+func querySnapshotTable(ctx context.Context, db DBQuerier, table UserTable, pk []string, scan keysetScan, after map[string]any, limit int) (*sql.Rows, error) {
 	baseTableRef := fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
-	flashback := customQuery == "" && scn != InvalidSCN
+	flashback := scan.customQuery == "" && scan.scn != InvalidSCN
 	if flashback {
-		baseTableRef = fmt.Sprintf("%s AS OF SCN %d", baseTableRef, scn)
+		baseTableRef = fmt.Sprintf("%s AS OF SCN %d", baseTableRef, scan.scn)
 	}
 
-	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
-	if lastSeenPkVal == nil && maxInclusivePkVal == nil {
-		// No cursor: use custom query directly to avoid a redundant wrapping subquery.
-		var base string
-		if customQuery != "" {
-			base = customQuery
-		} else {
-			base = "SELECT * FROM " + baseTableRef
-		}
-		q := strings.Join([]string{base, buildOrderByClause(pk), fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit)}, " ")
-		rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
-			return db.QueryContext(ctx, q)
-		})
-		if err != nil && flashback {
-			err = withFlashbackPrivilegeHint(err, table)
-		}
-		return rows, err
+	q, args := buildKeysetPageQuery(baseTableRef, scan.customQuery, pk, after, scan.maxInclusive, limit)
+	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
+		return db.QueryContext(ctx, q, args...)
+	})
+	if err == nil {
+		return rows, nil
 	}
-
-	// Bounded pagination requires a WHERE clause; wrap the custom query in a subquery so
-	// the added WHERE does not conflict with any WHERE already present in customQuery.
-	var tableSource string
-	if customQuery != "" {
-		tableSource = fmt.Sprintf("(%s) t", customQuery)
-	} else {
-		tableSource = baseTableRef
+	var oraErr *goora.OracleError
+	if scan.customQuery != "" && errors.As(err, &oraErr) && oraErr.ErrCode == errCodeInvalidIdentifier {
+		return nil, fmt.Errorf("%w\n\nThis usually means the snapshot filter for table '%s' doesn't project all of its primary key columns (%s). "+
+			"Cursor-based pagination filters and sorts on the full primary key against the filter's own result set, "+
+			"so every primary key column must be included in the filter's SELECT list even if it otherwise selects only a subset of columns",
+			err, table.FullName(), strings.Join(pk, ", "))
 	}
+	if flashback {
+		err = withFlashbackPrivilegeHint(err, table)
+	}
+	return nil, err
+}
 
+// buildKeysetPageQuery returns the query and bind args for one keyset page of baseTableRef, or
+// of customQuery when set, after lastSeen and up to maxInclusive, where a nil bound is unbounded.
+func buildKeysetPageQuery(baseTableRef, customQuery string, pk []string, lastSeen, maxInclusive map[string]any, limit int) (string, []any) {
 	var (
 		args     []any
 		paramIdx int
 		clauses  []string
 	)
-	if lastSeenPkVal != nil {
-		expr, exprArgs := buildLexicographicBoundExpr(pk, lastSeenPkVal, ">", &paramIdx)
+	if lastSeen != nil {
+		expr, exprArgs := buildLexicographicBoundExpr(pk, lastSeen, ">", &paramIdx)
 		clauses = append(clauses, "("+expr+")")
 		args = append(args, exprArgs...)
 	}
-	if maxInclusivePkVal != nil {
-		expr, exprArgs := buildLexicographicBoundExpr(pk, maxInclusivePkVal, "<=", &paramIdx)
+	if maxInclusive != nil {
+		expr, exprArgs := buildLexicographicBoundExpr(pk, maxInclusive, "<=", &paramIdx)
 		clauses = append(clauses, "("+expr+")")
 		args = append(args, exprArgs...)
 	}
 
-	snapshotQueryParts := []string{
-		"SELECT * FROM " + tableSource,
-		"WHERE " + strings.Join(clauses, " AND "),
-		buildOrderByClause(pk),
-		fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit),
+	var parts []string
+	switch {
+	case customQuery == "":
+		parts = append(parts, "SELECT * FROM "+baseTableRef)
+	case len(clauses) == 0:
+		// No bounds, so use the custom query as is rather than wrapping it in a subquery.
+		parts = append(parts, customQuery)
+	default:
+		// Wrap the custom query so the added WHERE doesn't conflict with one it already has.
+		parts = append(parts, fmt.Sprintf("SELECT * FROM (%s) t", customQuery))
 	}
-	q := strings.Join(snapshotQueryParts, " ")
-	rows, err := withFlashbackRetry(ctx, func() (*sql.Rows, error) {
-		return db.QueryContext(ctx, q, args...)
-	})
-	if err != nil {
-		var oraErr *goora.OracleError
-		if customQuery != "" && errors.As(err, &oraErr) && oraErr.ErrCode == errCodeInvalidIdentifier {
-			return nil, fmt.Errorf("%w\n\nThis usually means the snapshot filter for table '%s' doesn't project all of its primary key columns (%s). "+
-				"Cursor-based pagination filters and sorts on the full primary key against the filter's own result set, "+
-				"so every primary key column must be included in the filter's SELECT list even if it otherwise selects only a subset of columns",
-				err, table.FullName(), strings.Join(pk, ", "))
-		}
-		if flashback {
-			err = withFlashbackPrivilegeHint(err, table)
-		}
-		return nil, err
+	if len(clauses) > 0 {
+		parts = append(parts, "WHERE "+strings.Join(clauses, " AND "))
 	}
-	return rows, nil
+	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end.
+	parts = append(parts, buildOrderByClause(pk), fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
+	return strings.Join(parts, " "), args
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
