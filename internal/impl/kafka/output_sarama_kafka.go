@@ -484,9 +484,9 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		config.Producer.RequiredAcks = sarama.WaitForLocal
 	}
 	if config.Producer.Idempotent {
-		// sarama rejects an idempotent producer with more than one request in
-		// flight per broker connection, because a retry can then reorder the
-		// sequence numbers.
+		// sarama requires 1 for an idempotent producer. Unlike the franz
+		// writer, the connector's output has no max in-flight requests field,
+		// so we set the value instead of validating it.
 		config.Net.MaxOpenRequests = 1
 	}
 
