@@ -1064,7 +1064,9 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			}
 			if start != nil {
 				if at, err := resumeTokenTimestamp(start); err != nil {
-					m.logger.Debugf("Unable to read the stream start from its resume token, the incremental snapshot does not wait for it: %v", err)
+					// A Warn, not an error: a token format this code cannot read would then stop the input on each
+					// connect. Without the wait, a chunk can miss a write that the stream also skips.
+					m.logger.Warnf("Unable to read the stream start from its resume token, so the incremental snapshot does not wait for the majority snapshot to reach it. A chunk can miss a write that is not majority committed yet: %v", err)
 				} else {
 					incRun.deps.streamStart = at
 				}
