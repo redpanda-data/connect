@@ -430,14 +430,19 @@ func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
 	_, err := w1.UpdateOne(t.Context(), bson.M{"_id": 1}, bson.M{"$inc": bson.M{"v": 1}})
 	require.NoError(t, err)
 
-	// This replica set has no auth and no signal collection. Snapshot foo only.
-	input := strings.NewReplacer(
-		"  username: mongoadmin\n", "",
-		"  password: secret\n", "",
-		"  signal_collection_name: signals\n", "",
-		"    - 'foo'\n    - 'bar'\n", "    - 'foo'\n",
-	).Replace(incrementalInput)
-	stream := h.stream(input)
+	// This replica set has no auth and no signal collection.
+	stream := h.stream(`
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  incremental_snapshot:
+    enabled: true
+    chunk_size: 20
+  collections:
+    - 'foo'
+`)
 	wait := stream.RunAsync(t)
 
 	// Keep replication stopped until one of these happens:
