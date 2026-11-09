@@ -3,6 +3,47 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.117.0 - 2026-11-06
+
+### Added
+
+- oracledb: Oracle CDC now keeps the checkpoint current when monitored tables are idle by marking the mined position after each mining cycle, preventing archive log aging errors on restart. ([@Leward](https://github.com/Leward), [#4860](https://github.com/redpanda-data/connect/pull/4860))
+- postgres_cdc: PostgreSQL CDC now supports self-managed publications with the self_manage_publication option, allowing external management of logical replication publications. ([@squiidz](https://github.com/squiidz), [#5000](https://github.com/redpanda-data/connect/pull/5000))
+- postgres_cdc: PostgreSQL CDC now supports re-snapshotting tables that were previously snapshotted in the same process. ([@josephwoodward](https://github.com/josephwoodward), [#5094](https://github.com/redpanda-data/connect/pull/5094))
+- sap_hana: SAP HANA input is now available in the Redpanda Cloud distribution. ([@bfbarkhouse-redpanda](https://github.com/bfbarkhouse-redpanda), [#5090](https://github.com/redpanda-data/connect/pull/5090))
+- parquet_encode: Introduce fast path that enables skipping coercion ([@josephwoodward](https://github.com/josephwoodward), [#5145](https://github.com/redpanda-data/connect/pull/5145))
+
+### Fixed
+
+- azure: Azure append blob writer no longer loses data when concurrent writes occur to new blobs by using conditional creation with If-None-Match. ([@Leward](https://github.com/Leward), [#5108](https://github.com/redpanda-data/connect/pull/5108))
+- sap_hana: SAP HANA CDC now seeds the HWM lag gauge from the resume checkpoint at connect time, preventing incorrect healthy appearance during restarts into stalls. ([@Leward](https://github.com/Leward), [#5078](https://github.com/redpanda-data/connect/pull/5078))
+
+## 4.116.0 - 2026-10-30
+
+### Added
+
+- mongodb_cdc: Added incremental snapshot mode with configurable signal collection for on-demand snapshot re-execution alongside streaming changes. ([@squiidz](https://github.com/squiidz), [#4996](https://github.com/redpanda-data/connect/pull/4996))
+- sftp: Added cache_mode configuration to enable re-consumption of files when their modification time changes in addition to initial consumption. ([@rockdatasrl001](https://github.com/rockdatasrl001), [#5064](https://github.com/redpanda-data/connect/pull/5064))
+
+### Fixed
+
+- aws_dynamodb_cdc: Fixed shutdown hang by settling undelivered CDC batches on close instead of waiting indefinitely for their acknowledgments. ([@Leward](https://github.com/Leward), [#4989](https://github.com/redpanda-data/connect/pull/4989))
+- aws_dynamodb_cdc: Fixed shard completion tracking to prevent re-reading exhausted shards after cleanup and improved child shard ordering based on parent completion. ([@squiidz](https://github.com/squiidz), [#5001](https://github.com/redpanda-data/connect/pull/5001))
+- aws_dynamodb_cdc: Fixed shard completion marker handling to prevent late plain checkpoint writes from overwriting completion state. ([@squiidz](https://github.com/squiidz), [#5014](https://github.com/redpanda-data/connect/pull/5014))
+- aws_kinesis: Fixed shard handover by allowing takeover of shards with no committed sequence number in the claim. ([@squiidz](https://github.com/squiidz), [#5028](https://github.com/redpanda-data/connect/pull/5028))
+- kafka: Fixed concurrent map access in franz writer and restored dispatch signal for produced records to fix ordered partition input blocking. ([@Jeffail](https://github.com/Jeffail), [#5033](https://github.com/redpanda-data/connect/pull/5033))
+- mongodb_cdc: Fixed snapshot signal behavior to work correctly in all snapshot modes and handle collections unknown to stored progress. ([@squiidz](https://github.com/squiidz), [#5066](https://github.com/redpanda-data/connect/pull/5066))
+- oracledb_cdc: Fixed timestamp precision handling in Oracle CDC to correctly preserve timestamp values. ([@josephwoodward](https://github.com/josephwoodward), [#5022](https://github.com/redpanda-data/connect/pull/5022))
+- postgres_cdc: Fixed publication recreation to handle switching between FOR TABLE and FOR ALL TABLES modes correctly. ([@squiidz](https://github.com/squiidz), [#5029](https://github.com/redpanda-data/connect/pull/5029))
+- postgres_cdc: Fixed PostgreSQL CDC to skip emitting empty records for Type, Truncate, and Origin WAL messages. ([@nvanthao](https://github.com/nvanthao), [#5084](https://github.com/redpanda-data/connect/pull/5084))
+- redpanda_migrator: With `schema_registry.translate_ids` enabled, the output no longer rewrites the schema ID in the input message. A batch retried after a failed write was translated a second time, so records either failed forever with `schema ID N not found in registry` or were silently written with the wrong destination schema ID. ([@josephwoodward](https://github.com/josephwoodward), [#5074](https://github.com/redpanda-data/connect/pull/5074))
+- sap_hana: Fixed fractional timestamp precision, session loss handling, and credential refresh behavior in SAP HANA CDC with real hardware testing. ([@squiidz](https://github.com/squiidz), [#5063](https://github.com/redpanda-data/connect/pull/5063))
+
+### Changed
+
+- mssqlserver: Adopted the new ticket.Lock package for flush ticket management, replacing duplicate code with shared infrastructure for better maintainability. ([@Leward](https://github.com/Leward), [#4857](https://github.com/redpanda-data/connect/pull/4857))
+- replication: Refactored flush ticket logic into a reusable ticket.Lock package with improved concurrency handling, cancellation support, and typed Ticket returns for safer API usage. ([@Leward](https://github.com/Leward), [#4856](https://github.com/redpanda-data/connect/pull/4856))
+
 ## 4.115.1 - 2026-10-23
 
 ### Fixed

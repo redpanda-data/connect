@@ -11,12 +11,16 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -31,6 +35,7 @@ type fakeCheckpointAPI struct {
 	updateTable   func(context.Context, *dynamodb.UpdateTableInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateTableOutput, error)
 	getItem       func(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
 	putItem       func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	updateItem    func(context.Context, *dynamodb.UpdateItemInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error)
 	query         func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
 }
 
@@ -52,6 +57,10 @@ func (f *fakeCheckpointAPI) GetItem(ctx context.Context, in *dynamodb.GetItemInp
 
 func (f *fakeCheckpointAPI) PutItem(ctx context.Context, in *dynamodb.PutItemInput, o ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
 	return f.putItem(ctx, in, o...)
+}
+
+func (f *fakeCheckpointAPI) UpdateItem(ctx context.Context, in *dynamodb.UpdateItemInput, o ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+	return f.updateItem(ctx, in, o...)
 }
 
 func (f *fakeCheckpointAPI) Query(ctx context.Context, in *dynamodb.QueryInput, o ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
@@ -255,6 +264,15 @@ func globalCheckpointerWithPartition(t *testing.T, currentStreamArn string, item
 		query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
 			return &dynamodb.QueryOutput{Items: items}, nil
 		},
+		getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			shardID := in.Key[checkpointRangeKey].(*types.AttributeValueMemberS).Value
+			for _, item := range items {
+				if item["ShardID"].(*types.AttributeValueMemberS).Value == shardID {
+					return &dynamodb.GetItemOutput{Item: item}, nil
+				}
+			}
+			return &dynamodb.GetItemOutput{}, nil
+		},
 	}
 	c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
 		TableName: "cps", SourceTable: "t", StreamArn: currentStreamArn, CheckpointLimit: 1,
@@ -405,13 +423,67 @@ func sharedStoreAPI(store map[string]map[string]types.AttributeValue) *fakeCheck
 			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
 		},
 		putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+			if err := checkAttributeNotExistsCondition(in, store[keyOf(in.Item)]); err != nil {
+				return nil, err
+			}
 			store[keyOf(in.Item)] = in.Item
 			return &dynamodb.PutItemOutput{}, nil
+		},
+		updateItem: func(_ context.Context, in *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+			k := keyOf(in.Key)
+			row := map[string]types.AttributeValue{}
+			maps.Copy(row, in.Key)
+			maps.Copy(row, store[k])
+			maps.Copy(row, applySetExpression(in))
+			store[k] = row
+			return &dynamodb.UpdateItemOutput{}, nil
 		},
 		getItem: func(_ context.Context, in *dynamodb.GetItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
 			return &dynamodb.GetItemOutput{Item: store[keyOf(in.Key)]}, nil
 		},
 	}
+}
+
+// applySetExpression resolves a "SET #a = :x, #b = :y" UpdateExpression into
+// the attributes it assigns.
+func applySetExpression(in *dynamodb.UpdateItemInput) map[string]types.AttributeValue {
+	out := map[string]types.AttributeValue{}
+	expr := strings.TrimPrefix(aws.ToString(in.UpdateExpression), "SET ")
+	for clause := range strings.SplitSeq(expr, ", ") {
+		name, value, _ := strings.Cut(clause, " = ")
+		if resolved, ok := in.ExpressionAttributeNames[name]; ok {
+			name = resolved
+		}
+		out[name] = in.ExpressionAttributeValues[value]
+	}
+	return out
+}
+
+// checkAttributeNotExistsCondition evaluates the only ConditionExpression the
+// Checkpointer writes, "attribute_not_exists(<#alias>)", against the row a
+// PutItem would replace, the way DynamoDB does: the write is rejected with
+// ConditionalCheckFailedException when the existing row has the attribute.
+func checkAttributeNotExistsCondition(in *dynamodb.PutItemInput, existing map[string]types.AttributeValue) error {
+	cond := aws.ToString(in.ConditionExpression)
+	if cond == "" {
+		return nil
+	}
+	const prefix, suffix = "attribute_not_exists(", ")"
+	if !strings.HasPrefix(cond, prefix) || !strings.HasSuffix(cond, suffix) {
+		return fmt.Errorf("fake PutItem: unsupported ConditionExpression %q", cond)
+	}
+	attr := strings.TrimSuffix(strings.TrimPrefix(cond, prefix), suffix)
+	if strings.HasPrefix(attr, "#") {
+		resolved, ok := in.ExpressionAttributeNames[attr]
+		if !ok {
+			return fmt.Errorf("fake PutItem: ConditionExpression alias %q has no ExpressionAttributeNames entry", attr)
+		}
+		attr = resolved
+	}
+	if _, has := existing[attr]; has {
+		return &types.ConditionalCheckFailedException{Message: aws.String("The conditional request failed")}
+	}
+	return nil
 }
 
 func TestCheckpointer_NamespacePrefixesHashKeyValue(t *testing.T) {
@@ -555,6 +627,9 @@ func TestPrepareResume_UsesNamespacedHashValue(t *testing.T) {
 			queryIn = in
 			return &dynamodb.QueryOutput{}, nil
 		},
+		getItem: func(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+			return &dynamodb.GetItemOutput{}, nil
+		},
 	}
 	c, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
 		TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
@@ -566,4 +641,346 @@ func TestPrepareResume_UsesNamespacedHashValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "dev-alice#t", queryIn.ExpressionAttributeValues[":hash"].(*types.AttributeValueMemberS).Value,
 		"global-mode resume partition query must use the namespaced hash value")
+}
+
+// TestCheckpointerShardCompletionMarkerRoundTrip (CON-599): a shard marked
+// completed resolves to resumeCompleted after a restart, with or without a
+// final sequence number, while ordinary rows keep resolving to an exact
+// resume.
+func TestCheckpointerShardCompletionMarkerRoundTrip(t *testing.T) {
+	store := map[string]map[string]types.AttributeValue{}
+	c, err := NewCheckpointer(t.Context(), sharedStoreAPI(store), CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+	}, checkpointTestLogger())
+	require.NoError(t, err)
+
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", ""))
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-empty", "", ""))
+	require.NoError(t, c.Set(t.Context(), "shard-open", "seq-5", ""))
+
+	for _, shardID := range []string{"shard-done", "shard-empty"} {
+		d, err := c.ResolveResume(t.Context(), shardID)
+		require.NoError(t, err)
+		assert.Equal(t, resumeCompleted, d.Mode, shardID)
+	}
+	seq, err := c.Get(t.Context(), "shard-done")
+	require.NoError(t, err)
+	assert.Equal(t, "seq-9", seq, "the completion row still carries the final checkpoint")
+
+	d, err := c.ResolveResume(t.Context(), "shard-open")
+	require.NoError(t, err)
+	assert.Equal(t, resumeExact, d.Mode)
+	assert.Equal(t, "seq-5", d.SequenceNumber)
+
+	// A later plain checkpoint write must not clear the marker (CON-600).
+	require.NoError(t, c.Set(t.Context(), "shard-done", "seq-10", ""))
+	d, err = c.ResolveResume(t.Context(), "shard-done")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
+}
+
+// TestCheckpointerSetKeepsCompletionMarker (CON-600): a plain checkpoint
+// write landing after the completion marker (a maybePersist Set that timed
+// out client-side but still reaches the server, or the shutdown flush) must
+// leave the completed row intact, so a restart still skips the shard. The
+// write is conditional on the marker being absent and a rejected write is not
+// an error: the row already records the shard's final position.
+func TestCheckpointerSetKeepsCompletionMarker(t *testing.T) {
+	t.Run("default mode", func(t *testing.T) {
+		store := map[string]map[string]types.AttributeValue{}
+		c, err := NewCheckpointer(t.Context(), sharedStoreAPI(store), CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", ""))
+		require.NoError(t, c.Set(t.Context(), "shard-done", "seq-7", ""), "a late plain write is not an error")
+		require.NoError(t, c.FlushCheckpoints(t.Context(), map[string]CheckpointValue{
+			"shard-done": {SequenceNumber: "seq-8"},
+		}), "the shutdown flush goes through the same guarded write")
+
+		d, err := c.ResolveResume(t.Context(), "shard-done")
+		require.NoError(t, err)
+		assert.Equal(t, resumeCompleted, d.Mode)
+		seq, err := c.Get(t.Context(), "shard-done")
+		require.NoError(t, err)
+		assert.Equal(t, "seq-9", seq, "the final checkpoint must not step backwards either")
+
+		// Rows without the marker keep accepting plain writes.
+		require.NoError(t, c.Set(t.Context(), "shard-open", "seq-1", ""))
+		require.NoError(t, c.Set(t.Context(), "shard-open", "seq-2", ""))
+		seq, err = c.Get(t.Context(), "shard-open")
+		require.NoError(t, err)
+		assert.Equal(t, "seq-2", seq)
+	})
+
+	t.Run("global mode", func(t *testing.T) {
+		store := map[string]map[string]types.AttributeValue{}
+		api := sharedStoreAPI(store)
+		api.describeTable = func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
+				TableStatus: types.TableStatusActive,
+				KeySchema:   globalTableKeySchema(),
+				Replicas:    []types.ReplicaDescription{{RegionName: aws.String("us-east-1")}, {RegionName: aws.String("us-west-2")}},
+			}}, nil
+		}
+		c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+			GlobalTable: true, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-done", "seq-9", "2026-06-16T10:09:00Z"))
+		require.NoError(t, c.Set(t.Context(), "shard-done", "seq-7", "2026-06-16T10:07:00Z"))
+
+		row := store["t|shard-done"]
+		require.NotNil(t, row)
+		assert.True(t, isShardCompletedRow(row))
+		assert.Equal(t, "seq-9", row["SequenceNumber"].(*types.AttributeValueMemberS).Value)
+		assert.Equal(t, "2026-06-16T10:09:00Z", row["ApproximateCreationTime"].(*types.AttributeValueMemberS).Value,
+			"the failover watermark must not step backwards")
+	})
+
+	t.Run("only plain writes are conditional", func(t *testing.T) {
+		var puts []*dynamodb.PutItemInput
+		var updates []*dynamodb.UpdateItemInput
+		api := &fakeCheckpointAPI{
+			describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+				return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+			},
+			putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+				puts = append(puts, in)
+				return &dynamodb.PutItemOutput{}, nil
+			},
+			updateItem: func(_ context.Context, in *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+				updates = append(updates, in)
+				return &dynamodb.UpdateItemOutput{}, nil
+			},
+		}
+		c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		require.NoError(t, c.Set(t.Context(), "shard-1", "seq-1", ""))
+		require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-1", "seq-2", ""))
+		require.Len(t, puts, 1)
+		require.Len(t, updates, 1)
+
+		assert.Equal(t, "attribute_not_exists(#completed)", aws.ToString(puts[0].ConditionExpression))
+		assert.Equal(t, checkpointShardCompletedAttr, puts[0].ExpressionAttributeNames["#completed"])
+		assert.Nil(t, updates[0].ConditionExpression, "the completion write itself is unconditional")
+	})
+
+	t.Run("other write errors still surface", func(t *testing.T) {
+		api := &fakeCheckpointAPI{
+			describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+				return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive}}, nil
+			},
+			putItem: func(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+				return nil, &types.ProvisionedThroughputExceededException{}
+			},
+		}
+		c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+			TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		}, checkpointTestLogger())
+		require.NoError(t, err)
+
+		err = c.Set(t.Context(), "shard-1", "seq-1", "")
+		require.Error(t, err)
+		_, isThrottle := errors.AsType[*types.ProvisionedThroughputExceededException](err)
+		assert.True(t, isThrottle, "the original error must stay unwrapped")
+	})
+}
+
+// TestResolveResume_GlobalCompletedRows: in global mode completed rows of the
+// current stream resolve to resumeCompleted and count as own state, so an
+// unknown shard still starts by default instead of a failover replay.
+func TestResolveResume_GlobalCompletedRows(t *testing.T) {
+	completedRow := shardRow("arn:A", "shard-done", "seq-9", "2026-06-16T10:00:00Z")
+	completedRow[checkpointShardCompletedAttr] = &types.AttributeValueMemberBOOL{Value: true}
+	emptyCompletedRow := map[string]types.AttributeValue{
+		"TableId":                    &types.AttributeValueMemberS{Value: "t"},
+		"ShardID":                    &types.AttributeValueMemberS{Value: "shard-empty"},
+		"StreamArn":                  &types.AttributeValueMemberS{Value: "arn:A"},
+		checkpointShardCompletedAttr: &types.AttributeValueMemberBOOL{Value: true},
+	}
+	c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{completedRow, emptyCompletedRow})
+
+	for _, shardID := range []string{"shard-done", "shard-empty"} {
+		d, err := c.ResolveResume(t.Context(), shardID)
+		require.NoError(t, err)
+		assert.Equal(t, resumeCompleted, d.Mode, shardID)
+	}
+	d, err := c.ResolveResume(t.Context(), "shard-new")
+	require.NoError(t, err)
+	assert.Equal(t, resumeDefault, d.Mode)
+	assert.False(t, cdcCheckpointProbeNeeded(resumeCompleted), "a completed shard has nothing to probe")
+}
+
+// TestResolveResume_GlobalForeignCompletedRowWithoutTimeIgnored (CON-599): a
+// completed row from another region's stream that carries no
+// ApproximateCreationTime (a closed shard that delivered nothing) gives no
+// failover position, so it must not turn a fresh region into a failover
+// resume with a zero cutoff, which would replay every shard from TRIM_HORIZON.
+func TestResolveResume_GlobalForeignCompletedRowWithoutTimeIgnored(t *testing.T) {
+	emptyCompleted := func(shardID string) map[string]types.AttributeValue {
+		return map[string]types.AttributeValue{
+			"TableId":                    &types.AttributeValueMemberS{Value: "t"},
+			"ShardID":                    &types.AttributeValueMemberS{Value: shardID},
+			"StreamArn":                  &types.AttributeValueMemberS{Value: "arn:A"},
+			checkpointShardCompletedAttr: &types.AttributeValueMemberBOOL{Value: true},
+		}
+	}
+
+	t.Run("only timeless completed rows", func(t *testing.T) {
+		c := globalCheckpointerWithPartition(t, "arn:B", []map[string]types.AttributeValue{
+			emptyCompleted("shard-x"), emptyCompleted("shard-y"),
+		})
+		d, err := c.ResolveResume(t.Context(), "shard-new")
+		require.NoError(t, err)
+		assert.Equal(t, resumeDefault, d.Mode)
+	})
+
+	t.Run("beside a timed row", func(t *testing.T) {
+		timedCompleted := shardRow("arn:A", "shard-z", "seq-3", "2026-06-16T10:02:00Z")
+		timedCompleted[checkpointShardCompletedAttr] = &types.AttributeValueMemberBOOL{Value: true}
+		c := globalCheckpointerWithPartition(t, "arn:B", []map[string]types.AttributeValue{
+			emptyCompleted("shard-x"),
+			timedCompleted,
+		})
+		d, err := c.ResolveResume(t.Context(), "shard-new")
+		require.NoError(t, err)
+		assert.Equal(t, resumeFailover, d.Mode)
+		assert.Equal(t, "2026-06-16T10:02:00Z", d.Cutoff.UTC().Format(time.RFC3339))
+	})
+}
+
+// TestResolveResume_GlobalReadsCurrentRow (CON-599): in global mode a shard
+// resolved during the run (its reader was released, or it left the listing
+// and came back, and discovery prepares it again) must resume from the
+// checkpoint written during this run, not from the partition cache read at
+// startup, or the records acked since startup are delivered again.
+func TestResolveResume_GlobalReadsCurrentRow(t *testing.T) {
+	store := map[string]map[string]types.AttributeValue{}
+	api := sharedStoreAPI(store)
+	api.describeTable = func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+		return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+			TableStatus: types.TableStatusActive,
+			KeySchema:   globalTableKeySchema(),
+			Replicas:    []types.ReplicaDescription{{RegionName: aws.String("us-east-1")}, {RegionName: aws.String("us-west-2")}},
+		}}, nil
+	}
+	api.query = func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+		out := &dynamodb.QueryOutput{}
+		for _, r := range store {
+			out.Items = append(out.Items, r)
+		}
+		return out, nil
+	}
+	// Another region's row makes a shard with no own checkpoint a failover.
+	foreign := shardRow("arn:A", "shard-foreign", "seq-1", "2026-06-16T10:00:00Z")
+	store["t|shard-foreign"] = foreign
+	c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:B", CheckpointLimit: 1,
+		GlobalTable: true, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+	}, checkpointTestLogger())
+	require.NoError(t, err)
+
+	d, err := c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	require.Equal(t, resumeFailover, d.Mode)
+
+	// Acks during the run checkpoint the shard; a re-resolve resumes there.
+	require.NoError(t, c.Set(t.Context(), "shard-1", "seq-1000", "2026-06-16T11:00:00Z"))
+	d, err = c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.Equal(t, resumeExact, d.Mode)
+	assert.Equal(t, "seq-1000", d.SequenceNumber)
+
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-1", "seq-2000", "2026-06-16T12:00:00Z"))
+	d, err = c.ResolveResume(t.Context(), "shard-1")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
+
+	// A shard completed during the run resolves as completed even on its first
+	// resolve since startup.
+	require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-3", "seq-3000", "2026-06-16T12:00:00Z"))
+	d, err = c.ResolveResume(t.Context(), "shard-3")
+	require.NoError(t, err)
+	assert.Equal(t, resumeCompleted, d.Mode)
+
+	// A shard with no row of its own still falls back to the cached decision.
+	_, err = c.ResolveResume(t.Context(), "shard-2")
+	require.NoError(t, err)
+	d, err = c.ResolveResume(t.Context(), "shard-2")
+	require.NoError(t, err)
+	assert.Equal(t, resumeFailover, d.Mode)
+}
+
+// TestCheckpointerMarkShardCompletedKeepsStoredPosition (CON-599): marking a
+// shard completed without a final position (nothing was delivered from it
+// during this run) must keep the row's stored SequenceNumber and, in global
+// mode, its ApproximateCreationTime. The other region derives its failover
+// cutoff from those times, so losing one would skip the records between the
+// shard's last checkpoint and the next cutoff.
+func TestCheckpointerMarkShardCompletedKeepsStoredPosition(t *testing.T) {
+	for _, global := range []bool{false, true} {
+		t.Run(map[bool]string{false: "default", true: "global"}[global], func(t *testing.T) {
+			store := map[string]map[string]types.AttributeValue{}
+			api := sharedStoreAPI(store)
+			if global {
+				api.describeTable = func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+					return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+						TableStatus: types.TableStatusActive,
+						KeySchema:   globalTableKeySchema(),
+						Replicas:    []types.ReplicaDescription{{RegionName: aws.String("us-east-1")}, {RegionName: aws.String("us-west-2")}},
+					}}, nil
+				}
+				api.query = func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
+					out := &dynamodb.QueryOutput{}
+					for _, r := range store {
+						out.Items = append(out.Items, r)
+					}
+					return out, nil
+				}
+			}
+			c, err := NewCheckpointer(t.Context(), api, CheckpointerConfig{
+				TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+				GlobalTable: global, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+			}, checkpointTestLogger())
+			require.NoError(t, err)
+
+			require.NoError(t, c.Set(t.Context(), "shard-1", "seq-7", "2026-06-16T10:00:00Z"))
+			require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-1", "", ""))
+			require.Len(t, store, 1)
+			var row map[string]types.AttributeValue
+			for _, r := range store {
+				row = r
+			}
+			assert.True(t, isShardCompletedRow(row))
+			assert.Equal(t, "seq-7", row["SequenceNumber"].(*types.AttributeValueMemberS).Value)
+			if global {
+				assert.Equal(t, "2026-06-16T10:00:00Z", row["ApproximateCreationTime"].(*types.AttributeValueMemberS).Value)
+				assert.Equal(t, "arn:A", row["StreamArn"].(*types.AttributeValueMemberS).Value)
+			} else {
+				assert.NotContains(t, row, "ApproximateCreationTime")
+			}
+
+			d, err := c.ResolveResume(t.Context(), "shard-1")
+			require.NoError(t, err)
+			assert.Equal(t, resumeCompleted, d.Mode)
+
+			// A final position, when known, still replaces the stored one.
+			require.NoError(t, c.MarkShardCompleted(t.Context(), "shard-1", "seq-9", "2026-06-16T11:00:00Z"))
+			for _, r := range store {
+				row = r
+			}
+			assert.Equal(t, "seq-9", row["SequenceNumber"].(*types.AttributeValueMemberS).Value)
+			if global {
+				assert.Equal(t, "2026-06-16T11:00:00Z", row["ApproximateCreationTime"].(*types.AttributeValueMemberS).Value)
+			}
+		})
+	}
 }

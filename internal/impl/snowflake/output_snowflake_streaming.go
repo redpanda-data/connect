@@ -188,16 +188,16 @@ NOTE: Redpanda does not recommend changing the default setting (`+"`"+`true`+"`"
 				service.NewBloblangField(ssoFieldSchemaEvolutionNewColumnTypeMapping).Description(`
 The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `+"`root`"+` variable being assigned a string with the data type for the new column in Snowflake.
 
-        The input to this mapping is either the output of `+"`processors`"+` if specified, otherwise it is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`).
+If `+"`processors`"+` is specified, the input to this mapping is the output of those processors. Otherwise, the input is an object with the value and the name of the new column, the original message, and the table being written to. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": "MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`").
 					ShortDescription("The mapping from Redpanda Connect type to Snowflake column type.").Optional().Deprecated(),
 				service.NewProcessorListField(ssoFieldSchemaEvolutionProcessors).Description(`A series of processors to execute when new columns are added to the Snowflake table. You can use these processors to:
 
 - Run side effects when the schema evolves.
 - Enrich the message with additional information to guide the schema changes.
 
-For example, a processor could read the schema from the schema registry that a message was produced with and use that schema to determine the data type of the new column in Snowflake.
+For example, a processor could read the schema from the schema registry that a message was produced with. It could then use that schema to determine the data type of the new column in Snowflake.
 
-The input to these processors is an object with the value and name of the new column, the original message, and details of the Snowflake table the output writes to. The metadata remains the same as in the original message that triggered the schema update. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`"+`
+The input to these processors is an object with the value and name of the new column, the original message, and details of the Snowflake table the output writes to. The metadata remains the same as in the original message that triggered the schema update. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": "MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`"+`
 
 The output from the processors must be a single message that contains a string specifying the column data type to use, such as `+"`"+`FLOAT`+"`"+`, `+"`"+`VARIANT`+"`"+`, or `+"`"+`NUMBER(38, 0)`+"`"+`. The output then runs an `+"`"+`ALTER TABLE`+"`"+` statement on the Snowflake table to add the column with the corresponding data type.`).Version("4.46.0").
 					ShortDescription("Processors to execute when new columns are added to the table, for side effects or enrichment.").Optional().Advanced().Example([]map[string]any{

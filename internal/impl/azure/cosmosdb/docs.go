@@ -115,6 +115,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 // BatchingDocs batching docs
 var BatchingDocs = `
 
+[[batching-overview]]
 == Batching
 
 CosmosDB limits the maximum batch size to 100 messages and the payload must not exceed 2MB (https://learn.microsoft.com/en-us/azure/cosmos-db/concepts-limits#per-request-limits[details here^]).

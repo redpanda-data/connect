@@ -168,6 +168,7 @@ Kinesis enforces a shared limit of 5 GetRecords calls per second per shard acros
 
 It's possible to configure Redpanda Connect to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key `+"`StreamID`"+` and a string RANGE key `+"`ShardID`"+`.
 
+[[batching-overview]]
 == Batching
 
 Use the `+"`batching`"+` fields to configure an optional xref:configuration:batching.adoc#batch-policy[batching policy]. Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.

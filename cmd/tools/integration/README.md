@@ -43,7 +43,7 @@ go run ./cmd/tools/integration run kafka redis
 
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
 
-- **Docker Cleanup** -- Testcontainers are removed between packages to prevent resource leaks. Skipped in CI environments.
+- **Docker Cleanup** -- Ryuk, the testcontainers reaper, is on by default. It removes the containers, networks, and volumes of each package about 10 seconds after its test binary exits, also when the run is interrupted or crashes. If you disable it (`TESTCONTAINERS_RYUK_DISABLED=true`), containers will not be cleaned up and will accumulate.
 
 - **Race Detection** -- The `--race` flag enables Go's race detector with `CGO_ENABLED=1` set automatically.
 
@@ -65,3 +65,13 @@ On resume, the runner picks the latest timestamped directory and appends new res
 ## Package List
 
 The list of packages and their timeouts is defined in [`packages.json`](packages.json).
+
+## Affected Packages
+
+The `affected` subcommand reads changed file paths on stdin and prints the packages in `packages.json` whose tests depend on them, as `GITHUB_OUTPUT` lines. The pull request job in `integration_test.yml` uses it to build its filter.
+
+```bash
+git diff --name-only origin/main...HEAD | go run ./cmd/tools/integration affected
+```
+
+A change to a Go package selects every package whose test binary (`go list -test -deps`) includes it. A `_test.go` file or a file under `testdata/` selects only its own package. When the run would select more than `--max-packages` packages (default 20), `filters` is empty and `budget_exceeded=true`.

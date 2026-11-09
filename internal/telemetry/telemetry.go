@@ -52,9 +52,31 @@ const (
 	defaultExportPeriod = time.Hour * 24
 )
 
+// Identity describes the running Connect instance in telemetry exports.
+type Identity struct {
+	// InstanceID is a unique identifier for the Redpanda Connect instance.
+	InstanceID string
+
+	// Version is the Redpanda Connect version, used in the client user agent.
+	Version string
+
+	// DeploymentType identifies how this Connect instance is deployed. Expected
+	// values: "self-hosted", "byoc", "serverless". Empty when not set.
+	DeploymentType string
+
+	// TenantID identifies the owning tenant for cloud-managed deployments
+	// (typically the Redpanda Cloud organization ID). Empty for self-hosted.
+	TenantID string
+
+	// PipelineID identifies the control-plane pipeline resource this
+	// Connect instance is running, for cloud-managed deployments. Empty
+	// for self-hosted.
+	PipelineID string
+}
+
 // ActivateExporter runs the telemetry exporter asynchronously, provided all
 // conditions for telemetry are satisfied.
-func ActivateExporter(identifier, version, deploymentType, tenantID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) {
+func ActivateExporter(id Identity, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) {
 	// If TLS information isn't present in the build then we do not send
 	// telemetry data.
 	if privateKey == "" {
@@ -82,7 +104,7 @@ func ActivateExporter(identifier, version, deploymentType, tenantID string, logg
 		exportHost = ExportHost
 	}
 
-	p, err := extractPayload(identifier, deploymentType, tenantID, logger, schema, conf)
+	p, err := extractPayload(id, logger, schema, conf)
 	if err != nil {
 		logger.With("error", err).Debug("Failed to create telemetry payload")
 		return
@@ -91,7 +113,7 @@ func ActivateExporter(identifier, version, deploymentType, tenantID string, logg
 	client, err := commontelemetry.New(commontelemetry.Config{
 		Endpoint:      exportHost,
 		Path:          "/connect/telemetry",
-		UserAgent:     "RedpandaConnect/" + version,
+		UserAgent:     "RedpandaConnect/" + id.Version,
 		SigningKeyPEM: []byte(privateKey),
 		JWTHeaders:    map[string]any{"key_generation": 1},
 	})

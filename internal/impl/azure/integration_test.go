@@ -25,11 +25,16 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -228,6 +233,227 @@ input:
 			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
 			integration.StreamTestOptVarSet("VAR3", connString),
 		)
+	})
+
+	t.Run("blob_storage_append_create_race", func(t *testing.T) {
+		// Two writers append to a new blob. Both get BlobNotFound. Writer A creates the blob and appends. Then
+		// writer B calls Create. This test seeds the blob as writer A, and makes writer B see a fake BlobNotFound.
+		containerName := dummyContainer + "-create-race"
+		blobName := dummyPrefix + "/data.txt"
+
+		seedClient, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = seedClient.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+		seedBlob := seedClient.ServiceClient().NewContainerClient(containerName).NewAppendBlobClient(blobName)
+		_, err = seedBlob.Create(t.Context(), nil)
+		require.NoError(t, err)
+		_, err = seedBlob.AppendBlock(t.Context(), streaming.NopCloser(strings.NewReader("first")), nil)
+		require.NoError(t, err)
+
+		raceClient, err := azblob.NewClientFromConnectionString(connString, &azblob.ClientOptions{
+			PerCallPolicies: []policy.Policy{&blobNotFoundOnFirstAppendPolicy{}},
+		})
+		require.NoError(t, err)
+		w := &azureBlobStorageWriter{conf: bsoConfig{client: raceClient}}
+		require.NoError(t, w.uploadBlob(t.Context(), containerName, blobName, "APPEND", []byte("second"), nil))
+
+		resp, err := seedClient.DownloadStream(t.Context(), containerName, blobName, nil)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		content, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, "firstsecond", string(content))
+	})
+
+	t.Run("blob_storage_tags", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: tagged-blob.txt
+blob_type: BLOCK
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: test-suite
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		msg := service.NewMessage([]byte("hello world"))
+		require.NoError(t, writer.Write(t.Context(), msg))
+
+		blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-blob.txt")
+
+		// Assert the payload too, so a regression that tags correctly but corrupts
+		// the body cannot pass.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "hello world", string(body))
+
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "test-suite",
+		}, tags)
+	})
+
+	t.Run("blob_storage_tags_append", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: tagged-append-blob.txt
+blob_type: APPEND
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: ${! content() }
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("first"))))
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("second"))))
+
+		blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-append-blob.txt")
+
+		// Each message must be appended exactly once.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "firstsecond", string(body))
+
+		// Tags are applied when the blob is created and not re-sent with later
+		// appends, so Source reflects the message that created the blob rather
+		// than the most recent one. An implementation that re-tagged on every
+		// append would leave "second" here.
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "first",
+		}, tags)
+	})
+
+	// A blob this output did not create never passes through the creation path,
+	// and so is never tagged. Documented behaviour, pinned here.
+	t.Run("blob_storage_tags_append_preexisting_blob", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		containerClient := client.ServiceClient().NewContainerClient(containerName)
+
+		// Simulate a blob left behind by an earlier run that had no tags configured.
+		_, err = containerClient.NewAppendBlobClient("existing-blob.txt").Create(t.Context(), nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: existing-blob.txt
+blob_type: APPEND
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: test-suite
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
+
+		blobClient := containerClient.NewBlobClient("existing-blob.txt")
+
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		// Tags are only applied when this output creates the blob, so a blob left
+		// behind by an earlier run stays untagged. This pins the documented
+		// limitation: writing tags here instead would cost a request per message
+		// and only ever reflect the last one.
+		assert.Empty(t, tags)
+
+		// The pre-existing blob must be appended to, not recreated.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "payload", string(body))
 	})
 
 	t.Run("queue_storage", func(t *testing.T) {
@@ -555,4 +781,23 @@ enable_content_response_on_write: true
 			assert.Contains(t, data, "blobfish")
 		}
 	})
+}
+
+// blobNotFoundOnFirstAppendPolicy is an Azure pipeline policy that tests use to open the race window in uploadBlob.
+// It returns a fake BlobNotFound response for the first Append Block request and does not send that request.
+// It sends all other requests.
+type blobNotFoundOnFirstAppendPolicy struct {
+	done atomic.Bool
+}
+
+func (p *blobNotFoundOnFirstAppendPolicy) Do(req *policy.Request) (*http.Response, error) {
+	if req.Raw().URL.Query().Get("comp") == "appendblock" && p.done.CompareAndSwap(false, true) {
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Header:     http.Header{"X-Ms-Error-Code": []string{string(bloberror.BlobNotFound)}},
+			Body:       http.NoBody,
+			Request:    req.Raw(),
+		}, nil
+	}
+	return req.Next()
 }

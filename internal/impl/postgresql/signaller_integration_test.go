@@ -26,8 +26,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
+// signalTestStandbyTimeout is the pg_standby_timeout of the signal tests that
+// wait 5 s for a row. Postgres 16+ can hold back a streamed commit until the
+// next standby status update, and the 10s default is longer than the wait.
+// postgres/postgres@782d9cf8bf fixed this for physical replication only. The
+// logical case is discussed in
+// https://postgr.es/m/mvx5bs7q.33b99c32-67d8-4373-8611-7a8250fb2fd3@we.are.superhuman.com
+const signalTestStandbyTimeout = "1s"
+
 func TestIntegrationSignallingConfiguration(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -82,10 +91,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_uuid_id
     stream_snapshot: true
     signal_table_name: uuid_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - uuid_test_events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 		// Wait for the initial snapshot to complete before inserting a signal.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -128,10 +138,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_jsonb_data
     stream_snapshot: true
     signal_table_name: jsonb_data_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - jsonb_test_events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 		// Wait for the initial snapshot to complete before inserting a signal.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -222,6 +233,7 @@ postgres_cdc:
 
 func TestIntegrationSignallingDisabledWhenTableNameEmpty(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -275,6 +287,7 @@ postgres_cdc:
 // of the detected signal in input_pg_stream.go).
 func TestIntegrationSignallingDetectedWithoutInterruptingStream(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -290,10 +303,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_detect_only
     stream_snapshot: true
     signal_table_name: rpcn_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -335,6 +349,7 @@ postgres_cdc:
 
 func TestIntegrationSignallingMalformedRowStillPublished(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
@@ -350,10 +365,11 @@ postgres_cdc:
     slot_name: test_slot_signalling_malformed
     stream_snapshot: true
     signal_table_name: rpcn_signal_table
+    pg_standby_timeout: %s
     schema: dbo
     tables:
       - events
-`, databaseURL))
+`, databaseURL, signalTestStandbyTimeout))
 
 	// Wait for the initial snapshot row from dbo.events.
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -384,6 +400,7 @@ postgres_cdc:
 // does not collapse the publication down to just the signal table.
 func TestIntegrationSignalTableNameWithEmptyTablesReplicatesAllTables(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 

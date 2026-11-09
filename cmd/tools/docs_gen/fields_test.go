@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,6 +91,17 @@ func TestBuildConfigYAMLShapes(t *testing.T) {
 			}},
 			want: "processor:\n  label: \"\"\n  x:\n    headers: {} # No default (optional)\n    enabled: false # No default (required)\n" +
 				"    count: 0 # No default (required)\n    ratio: 0 # No default (required)\n    inner: {} # No default (required)\n    topics: [] # No default (required)\n",
+		},
+		{
+			name: "a required enum shows its first option and an optional one stays empty",
+			conf: fieldSpec{Type: "object", Children: []fieldSpec{
+				{Name: "algorithm", Type: "string", Kind: "scalar", Options: []string{"flate", "gzip"}},
+				{Name: "mode", Type: "string", Kind: "scalar", AnnotatedOptions: [][2]string{{"true", "On."}, {"off", "Off."}}},
+				{Name: "suffix", Type: "string", Kind: "scalar", IsOptional: true, Options: []string{"nanoid"}},
+				{Name: "codecs", Type: "string", Kind: "array", Options: []string{"none"}},
+			}},
+			want: "processor:\n  label: \"\"\n  x:\n    algorithm: flate # No default (required)\n    mode: \"true\" # No default (required)\n" +
+				"    suffix: \"\" # No default (optional)\n    codecs: [] # No default (required)\n",
 		},
 		{
 			name: "an object whose fields are all advanced is never a bare key",
@@ -194,4 +206,24 @@ func TestEmptyEnumOptionRendersAsQuotedEmptyString(t *testing.T) {
 	out := renderFields([]fieldSpec{{Name: "level", Type: "string", Options: []string{"INFO", ""}}}, "")
 	assert.Contains(t, out, "*Options*: `INFO`, `\"\"`")
 	assert.NotContains(t, out, ", ``")
+}
+
+func TestRenderConfigPartial(t *testing.T) {
+	common := "processor:\n  label: \"\"\n  x:\n    a: 1\n"
+	advanced := "processor:\n  label: \"\"\n  x:\n    a: 1\n    b: 2\n"
+
+	t.Run("identical snippets render one code block", func(t *testing.T) {
+		assert.Equal(t, generatedBanner+"\n\n```yml\n"+strings.TrimSuffix(common, "\n")+"\n```\n", renderConfigPartial(common, common))
+	})
+	t.Run("different snippets render Common and Advanced tabs", func(t *testing.T) {
+		want := generatedBanner + "\n\n[tabs]\n======\nCommon::\n+\n--\n\n```yml\n" + strings.TrimSuffix(common, "\n") + "\n```\n" +
+			"\n--\nAdvanced::\n+\n--\n\n```yml\n" + strings.TrimSuffix(advanced, "\n") + "\n```\n\n--\n======\n"
+		assert.Equal(t, want, renderConfigPartial(common, advanced))
+	})
+	t.Run("a line AsciiDoc would act on is rejected", func(t *testing.T) {
+		for _, line := range []string{"include::x.adoc[]", "ifdef::env-cloud[]", "endif::[]", "```"} {
+			assert.Panics(t, func() { renderConfigPartial(common+line+"\n", advanced) }, line)
+		}
+		assert.NotPanics(t, func() { renderConfigPartial(common+"    v: \"include::x\"\n", advanced) })
+	})
 }
