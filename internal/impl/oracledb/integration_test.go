@@ -201,14 +201,22 @@ func TestIntegrationOracleDBCDCSnapshot(t *testing.T) {
 		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".small", "CREATE TABLE "+db.Schema+".small (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
-		// bulk insert snapshot rows
-		const rowsPerTable = 5000
+		// bulk insert snapshot rows. FOO2's statistics are set to a stale 1000 rows and the other
+		// tables have none, so planning counts their rows: each large table has enough for 3
+		// chunks of 10,000 rows, the small one too few to chunk.
+		const (
+			rowsPerTable = 30000
+			smallRows    = 1000
+		)
 		tableNames := []string{db.Schema + ".foo", db.Schema + ".foo2", db.Schema2 + ".bar"}
 		for _, table := range tableNames {
 			db.MustExec("BEGIN FOR i IN 1..:1 LOOP INSERT INTO "+table+" (id) VALUES (DEFAULT); END LOOP; COMMIT; END;", rowsPerTable)
 		}
-		want := rowsPerTable * len(tableNames)
+		db.MustExec("BEGIN FOR i IN 1..:1 LOOP INSERT INTO "+db.Schema+".small (id) VALUES (DEFAULT); END LOOP; COMMIT; END;", smallRows)
+		db.MustExec("BEGIN DBMS_STATS.SET_TABLE_STATS(ownname => :1, tabname => 'FOO2', numrows => 1000); END;", strings.ToUpper(db.Schema))
+		want := rowsPerTable*len(tableNames) + smallRows
 
 		var (
 			batch  oracledbtest.MsgBatch
@@ -227,7 +235,7 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR"]
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR", "` + db.Schema + `.SMALL"]
   exclude: ["` + db.Schema + `.DOESNOTEXIST"]`
 
 			var logBuf oracledbtest.SyncBuffer
@@ -237,9 +245,10 @@ oracledb_cdc:
 			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 
 			t.Log("Verifying every table was split into parallel chunks...")
-			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB2_F90071E9.BAR' split into 48 parallel chunks by interpolating its key range")
-			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.FOO' split into 48 parallel chunks by interpolating its key range")
-			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.FOO2' split into 48 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB2_F90071E9.BAR' split into 3 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.FOO' split into 3 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.FOO2' split into 3 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.SMALL'\"", "Expected the small table to be snapshotted with a full scan")
 
 			msgs := batch.Clone()
 			expectedSCN, _ := msgs[0].MetaGetMut("scn")

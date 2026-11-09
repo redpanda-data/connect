@@ -52,3 +52,22 @@ func TestSplitChunkRanges(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxChunkRanges(t *testing.T) {
+	tests := []struct {
+		name    string
+		numRows int64
+		want    int
+	}{
+		{name: "no rows", numRows: 0, want: 0},
+		{name: "smaller than one chunk", numRows: minRowsPerChunk - 1, want: 0},
+		{name: "one chunk", numRows: 2*minRowsPerChunk - 1, want: 1},
+		{name: "two chunks", numRows: 2 * minRowsPerChunk, want: 2},
+		{name: "large table", numRows: 7_000_000, want: 700},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, maxChunkRanges(tt.numRows))
+		})
+	}
+}

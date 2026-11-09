@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -42,6 +43,9 @@ const (
 	// maxPlanningWorkers caps the worker count chunk planning sizes its queries for, bounding them
 	// to 4,096 interpolated ranges or 8,192 sampled keys (few DBs support more sessions than this).
 	maxPlanningWorkers = 256
+	// minRowsPerChunk is the fewest rows a chunk is planned to hold, so a chunk's connection
+	// setup and planning share stay small next to the rows it reads.
+	minRowsPerChunk = 10_000
 )
 
 // errNoPrimaryKey means a table has no primary key, so planTableTasks falls back to a full scan.
@@ -266,13 +270,34 @@ type chunkRange struct {
 func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols []string, maxWorkers int) (ranges []chunkRange, method string, err error) {
 	const interpolatedRangesPerWorker = 16
 	plan := func(db *sql.Conn) error {
+		numRows, err := getTableRowCount(ctx, db, table)
+		if err != nil {
+			return err
+		}
+		// When statistics are missing or say the table is too small to chunk, which they can if
+		// they're stale, count rows up to the most that every planned range could need.
+		wantRanges := min(maxWorkers, maxPlanningWorkers) * interpolatedRangesPerWorker
+		maxRanges := maxChunkRanges(numRows)
+		if maxRanges < 2 {
+			probed, err := countRowsUpTo(ctx, db, table, s.scn, wantRanges*minRowsPerChunk)
+			if err != nil {
+				return err
+			}
+			maxRanges = maxChunkRanges(probed)
+		}
+		if maxRanges < 2 {
+			s.log.With("src_table", table.FullName()).Debugf("Table '%s' has fewer than %d rows, so it will be snapshotted without parallel chunking", table.FullName(), 2*minRowsPerChunk)
+			ranges = []chunkRange{{}}
+			return nil
+		}
+
 		if len(pkCols) == 1 {
 			keyType, err := getInterpolableKeyType(ctx, db, table, pkCols[0])
 			if err != nil {
 				return err
 			}
 			if keyType != keyTypeNotInterpolable {
-				numRanges := min(maxWorkers, maxPlanningWorkers) * interpolatedRangesPerWorker
+				numRanges := min(wantRanges, maxRanges)
 				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, numRanges)
 				if err != nil {
 					return err
@@ -291,7 +316,7 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 				s.log.With("src_table", table.FullName()).Infof("Only %d of %d interpolated key ranges of table '%s' hold rows, so its key range will be sampled instead", occupied, len(bounds)+1, table.FullName())
 			}
 		}
-		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, maxWorkers)
+		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, numRows, min(maxWorkers, maxRanges))
 		method = "sampling its key range"
 		return err
 	}
@@ -303,8 +328,8 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 }
 
 // sampleChunkRanges splits table's keyspace into up to maxWorkers even ranges by sampling
-// rows, returning one unbounded range when the table has no optimizer statistics.
-func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, maxWorkers int) ([]chunkRange, error) {
+// rows, returning one unbounded range when the table has no optimizer statistics (numRows 0).
+func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table UserTable, pkCols []string, numRows int64, maxWorkers int) ([]chunkRange, error) {
 	const (
 		// overSampleFactor is the number of primary key samples drawn per worker when planning
 		// chunks: enough to split the keyspace evenly while keeping the sample query cheap.
@@ -312,10 +337,6 @@ func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table Us
 	)
 	numSamples := min(maxWorkers, maxPlanningWorkers) * overSampleFactor
 
-	numRows, err := getTableRowCount(ctx, db, table)
-	if err != nil {
-		return nil, err
-	}
 	if numRows <= 0 {
 		s.log.With("src_table", table.FullName()).Infof("Table '%s' has no optimizer statistics, so it will be snapshotted without parallel chunking; gather statistics with DBMS_STATS.GATHER_TABLE_STATS to enable it", table.FullName())
 		return []chunkRange{{}}, nil
@@ -714,6 +735,24 @@ func getTableRowCount(ctx context.Context, db DBQuerier, table UserTable) (int64
 		return 0, fmt.Errorf("getting statistics for table '%s': %w", table.FullName(), err)
 	}
 	return max(numRows.Int64, 0), nil
+}
+
+// maxChunkRanges returns the most chunks numRows rows can be split into while each holds at least minRowsPerChunk.
+func maxChunkRanges(numRows int64) int {
+	return int(min(numRows/minRowsPerChunk, math.MaxInt32))
+}
+
+// countRowsUpTo returns table's row count as of scn, reading at most limit rows.
+func countRowsUpTo(ctx context.Context, db DBQuerier, table UserTable, scn SCN, limit int) (int64, error) {
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM (SELECT 1 FROM "%s"."%s" AS OF SCN %d WHERE ROWNUM <= %d)`, table.Schema, table.Name, uint64(scn), limit)
+	n, err := withFlashbackRetry(ctx, func() (n int64, err error) {
+		err = db.QueryRowContext(ctx, q).Scan(&n)
+		return n, err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("counting rows of table '%s': %w", table.FullName(), withFlashbackPrivilegeHint(err, table))
+	}
+	return n, nil
 }
 
 // samplePercent returns the SAMPLE percentage expected to draw numSamples of total rows,
