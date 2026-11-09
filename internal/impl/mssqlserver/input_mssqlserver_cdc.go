@@ -105,7 +105,7 @@ Operational notes:
 		Example(true).
 		Default(false),
 	).
-	Field(cdcreplication.MaxParallelSnapshotTablesField()).
+	Field(cdcreplication.MaxParallelSnapshotTablesField("Each table is read by its own reader")).
 	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
 		Description("The maximum number of rows to stream in a single batch during the initial snapshot phase. Larger batch sizes can improve throughput for initial data loads but may increase memory usage. This setting only applies when `stream_snapshot` is enabled.").
 		Default(1000),

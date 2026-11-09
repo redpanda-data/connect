@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 const (
@@ -158,10 +159,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Optional().
 		Version("4.99.0"),
 	).
-	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
-		Description("Specifies a number of tables (or, for large tables split into range chunks, table chunks) that are processed in parallel during the snapshot processing stage. Tables are only split into chunks when this is greater than 1.\n\nA table is not split, and is read by a single reader alongside the other tables, when it has a `" + ociFieldSnapshotFilters + "` entry. The same is true when it has no primary key, or one that isn't enabled and validated, or when it has too few distinct keys to split. It is also true when it has a key that must be sampled (anything other than a single NUMBER, FLOAT, DATE or TIMESTAMP column) but no optimizer statistics.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff. The snapshot fails only if no reader can get a connection in time. See `" + ociFieldSnapshotConnBackoff + "`.").
-		Version("4.69.0").
-		Default(1).
+	Field(cdcreplication.MaxParallelSnapshotTablesField("Each reader reads one table, or one range chunk of a large table. Tables are only split into chunks when this is greater than 1.\n\nA table is not split, and is read by a single reader alongside the other tables, when it has a `" + ociFieldSnapshotFilters + "` entry. The same is true when it has no primary key, or one that isn't enabled and validated, or when it has too few distinct keys to split. It is also true when it has a key that must be sampled (anything other than a single NUMBER, FLOAT, DATE or TIMESTAMP column) but no optimizer statistics.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff. The snapshot fails only if no reader can get a connection in time. See `" + ociFieldSnapshotConnBackoff + "`.").
 		LintRule(`root = if this <= 0 { [ "` + ociFieldMaxParallelSnapshotTables + ` must be greater than 0" ] }`),
 	).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
