@@ -136,7 +136,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option, so that retries do not write duplicate messages. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available. When enabled, the output waits for acknowledgement from all in-sync replicas, as if `ack_replicas` is `true`, and sends one request at a time on each broker connection.").Version("4.26.0").
+				Description("Enable the idempotent write producer option, so that retries do not write duplicate messages. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available. When enabled, the output waits for acknowledgement from all in-sync replicas, as if `ack_replicas` is `true`. It also sends only one request at a time on each broker connection.").Version("4.26.0").
 				ShortDescription("Enable the idempotent write producer option. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(false).
 				Advanced(),
