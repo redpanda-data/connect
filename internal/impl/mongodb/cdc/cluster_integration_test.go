@@ -395,12 +395,22 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 // TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite starts the input
 // after a write that the primary has applied but a majority has not committed.
 //
-// In that state, both sources of the snapshot miss the write:
-//   - The change stream starts after the write, so it does not return it.
-//   - A majority chunk read does not see the write until it commits.
+// MongoDB applies a write on the primary first. The write becomes majority
+// committed only when most members of the replica set have a copy of it. Until
+// then, a read with majority read concern returns the version of the document
+// before the write.
 //
-// The snapshot must wait for the majority snapshot to reach the stream start
-// before it reads a chunk. Without that wait, no output has the write.
+// In that window, the two sources of the incremental snapshot disagree about
+// the write:
+//   - The change stream starts one tick after the last write that the primary
+//     applied. The write is before the start, so the stream does not return
+//     it.
+//   - The chunk reads use majority read concern, so they return the version
+//     before the write.
+//
+// The snapshot then releases the chunk with the older document, and no output
+// has the write. To prevent this, the snapshot must wait for the majority
+// snapshot to reach the stream start before it reads a chunk.
 func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
 	integration.CheckSkip(t)
 	// Starts its own containers on its own network.
