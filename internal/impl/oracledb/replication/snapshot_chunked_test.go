@@ -27,9 +27,10 @@ import (
 
 // chunkedTableRows is large enough that, with statistics gathered, the table spans
 // hundreds of blocks and keyspace sampling returns thousands of keys, so a snapshot with
-// chunkedWorkers workers reliably splits it into more than one range.
+// chunkedWorkers workers reliably splits it into more than one range. It also allows 10
+// ranges of minRowsPerChunk rows, enough for the outlier key to leave most of them empty.
 const (
-	chunkedTableRows = 20000
+	chunkedTableRows = 100000
 	chunkedWorkers   = 4
 
 	// unenforcedNullKeyRows and unenforcedDuplicateKeyRows are the extra rows added to
