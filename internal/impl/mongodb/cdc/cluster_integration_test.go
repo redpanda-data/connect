@@ -111,6 +111,23 @@ func (n *mongoNode) awaitEval(js, want string) {
 	require.NoError(n.t, awaitEvalOn(n.t.Context(), n.container, js, want))
 }
 
+// stopReplication stops the node from fetching the oplog of its sync source,
+// until resumeReplication or the end of the test.
+func (n *mongoNode) stopReplication() {
+	n.t.Helper()
+	n.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
+	n.t.Cleanup(func() {
+		// t.Context() is already cancelled during cleanup.
+		_, _ = evalOn(context.Background(), n.container, `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+	})
+}
+
+// resumeReplication undoes stopReplication.
+func (n *mongoNode) resumeReplication() {
+	n.t.Helper()
+	n.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+}
+
 // uri returns a host-reachable connection string for the node.
 func (n *mongoNode) uri(direct bool) string {
 	n.t.Helper()
@@ -346,7 +363,7 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
+	secondary.stopReplication()
 
 	// Applied on the primary only: a majority of two needs the secondary.
 	w1 := db.Collection("c", options.Collection().SetWriteConcern(writeconcern.W1()))
@@ -384,7 +401,7 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	assert.Equal(t, []int32{1, 2, 3}, ids, "the chunk saw an unreplicated insert")
 
 	// Once replication resumes the write becomes majority and visible.
-	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+	secondary.resumeReplication()
 	want := key(t, 4)
 	require.Eventually(t, func() bool {
 		maxKey, err := deps.ResolveMaxKey(ctx, table, nil)
@@ -421,11 +438,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
 
 	// Stop replication, then update foo/1. The write is applied on the primary
 	// only: a majority of two needs the secondary.
-	const stopRepl = `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "%s"})`
-	secondary.eval(fmt.Sprintf(stopRepl, "alwaysOn"))
-	t.Cleanup(func() {
-		_, _ = evalOn(context.Background(), secondary.container, fmt.Sprintf(stopRepl, "off"))
-	})
+	secondary.stopReplication()
 	w1 := h.db.Collection("foo", options.Collection().SetWriteConcern(writeconcern.W1()))
 	_, err := w1.UpdateOne(t.Context(), bson.M{"_id": 1}, bson.M{"$inc": bson.M{"v": 1}})
 	require.NoError(t, err)
@@ -445,22 +458,21 @@ mongodb_cdc:
 `)
 	wait := stream.RunAsync(t)
 
-	// Keep replication stopped until one of these happens:
-	//   - without the fix, the input reads foo before the write commits;
-	//   - with the fix, the input waits in a majority read with afterClusterTime.
+	// Keep replication stopped until the input either reads foo or waits for the
+	// majority snapshot. The "reading" log fires only when the first chunk is
+	// released, which is after Prepare, so a wait never logs it.
 	readingFoo := func() bool {
 		return len(h.logs.matching("Incremental snapshot reading collection foo")) > 0
 	}
-	waitQuery := fmt.Sprintf(`db.getSiblingDB("admin").aggregate([{$currentOp: {}}, {$match: {`+
-		`ns: "%s.$cmd", "command.find": "foo", "command.readConcern.afterClusterTime": {$exists: true}}}]).toArray().length > 0`, h.db.Name())
 	waitingForMajority := func() bool {
-		out, err := evalOn(t.Context(), primary.container, waitQuery)
+		out, err := evalOn(t.Context(), primary.container,
+			`db.currentOp({"command.readConcern.afterClusterTime": {$exists: true}}).inprog.length > 0`)
 		return err == nil && out == "true"
 	}
 	require.Eventually(t, func() bool {
 		return readingFoo() || waitingForMajority()
 	}, time.Minute, 100*time.Millisecond, "the input neither read foo nor waited for the majority snapshot")
-	secondary.eval(fmt.Sprintf(stopRepl, "off"))
+	secondary.resumeReplication()
 
 	h.waitReads("foo", 3)
 	stream.Stop(t)
@@ -499,10 +511,7 @@ func TestIntegrationIncSnapshotDepsReadFromPrimary(t *testing.T) {
 	})
 	require.NoError(t, err)
 	secondary.awaitEval(`db.getMongo().setReadPref("secondary"); db.getSiblingDB("readpref").c.countDocuments({v: 0})`, "3")
-	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
-	t.Cleanup(func() {
-		_, _ = evalOn(context.Background(), secondary.container, `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
-	})
+	secondary.stopReplication()
 	_, err = majority.UpdateMany(ctx, bson.D{}, bson.M{"$set": bson.M{"v": 1}})
 	require.NoError(t, err)
 
