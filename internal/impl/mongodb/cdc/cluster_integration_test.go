@@ -392,13 +392,16 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	}, time.Minute, 250*time.Millisecond)
 }
 
-// TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority starts
-// the input while the primary has applied a write that a majority has not. A
-// new change stream starts one tick after the last applied write, so it never
-// returns that write, and a majority chunk read before the write commits does
-// not see it. The snapshot must wait for the majority snapshot to reach the
-// stream start, or the write is lost.
-func TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority(t *testing.T) {
+// TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite starts the input
+// after a write that the primary has applied but a majority has not committed.
+//
+// In that state, both sources of the snapshot miss the write:
+//   - The change stream starts after the write, so it does not return it.
+//   - A majority chunk read does not see the write until it commits.
+//
+// The snapshot must wait for the majority snapshot to reach the stream start
+// before it reads a chunk. Without that wait, no output has the write.
+func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
 	integration.CheckSkip(t)
 	// Starts its own containers on its own network.
 	t.Parallel()
@@ -407,16 +410,18 @@ func TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority(t *tes
 	h := newIncrementalHarnessOn(t, uri, connectTo(t, uri))
 	h.seed("foo", 3)
 
+	// Stop replication, then update foo/1. The write is applied on the primary
+	// only: a majority of two needs the secondary.
 	const stopRepl = `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "%s"})`
 	secondary.eval(fmt.Sprintf(stopRepl, "alwaysOn"))
 	t.Cleanup(func() {
 		_, _ = evalOn(context.Background(), secondary.container, fmt.Sprintf(stopRepl, "off"))
 	})
-	// Applied on the primary only: a majority of two needs the secondary.
 	w1 := h.db.Collection("foo", options.Collection().SetWriteConcern(writeconcern.W1()))
 	_, err := w1.UpdateOne(t.Context(), bson.M{"_id": 1}, bson.M{"$inc": bson.M{"v": 1}})
 	require.NoError(t, err)
 
+	// This replica set has no auth and no signal collection. Snapshot foo only.
 	input := strings.NewReplacer(
 		"  username: mongoadmin\n", "",
 		"  password: secret\n", "",
@@ -426,15 +431,20 @@ func TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority(t *tes
 	stream := h.stream(input)
 	wait := stream.RunAsync(t)
 
-	// Keep replication stopped until the input has released a chunk of foo,
-	// which misses the write, or waits for the majority snapshot to catch up.
-	waiting := fmt.Sprintf(`db.getSiblingDB("admin").aggregate([{$currentOp: {}}, {$match: {ns: "%s.$cmd", "command.find": "foo", "command.readConcern.afterClusterTime": {$exists: true}}}]).toArray().length > 0`, h.db.Name())
-	require.Eventually(t, func() bool {
-		if len(h.logs.matching("Incremental snapshot reading collection foo")) > 0 {
-			return true
-		}
-		out, err := evalOn(t.Context(), primary.container, waiting)
+	// Keep replication stopped until one of these happens:
+	//   - without the fix, the input reads foo before the write commits;
+	//   - with the fix, the input waits in a majority read with afterClusterTime.
+	readingFoo := func() bool {
+		return len(h.logs.matching("Incremental snapshot reading collection foo")) > 0
+	}
+	waitQuery := fmt.Sprintf(`db.getSiblingDB("admin").aggregate([{$currentOp: {}}, {$match: {`+
+		`ns: "%s.$cmd", "command.find": "foo", "command.readConcern.afterClusterTime": {$exists: true}}}]).toArray().length > 0`, h.db.Name())
+	waitingForMajority := func() bool {
+		out, err := evalOn(t.Context(), primary.container, waitQuery)
 		return err == nil && out == "true"
+	}
+	require.Eventually(t, func() bool {
+		return readingFoo() || waitingForMajority()
 	}, time.Minute, 100*time.Millisecond, "the input neither read foo nor waited for the majority snapshot")
 	secondary.eval(fmt.Sprintf(stopRepl, "off"))
 
@@ -443,7 +453,7 @@ func TestIntegrationMongoCDCIncrementalSnapshotStreamStartAheadOfMajority(t *tes
 	wait()
 
 	got := replayChecked(t, h.output)
-	assert.Equal(t, map[string]float64{"foo/0": 0, "foo/1": 1, "foo/2": 0}, got.of("foo"), "the write before the stream start was lost")
+	assert.Equal(t, map[string]float64{"foo/0": 0, "foo/1": 1, "foo/2": 0}, got.of("foo"), "the unreplicated update of foo/1 is missing from the output")
 }
 
 // TestIntegrationIncSnapshotDepsReadFromPrimary connects with
