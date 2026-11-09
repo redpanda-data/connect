@@ -38,6 +38,10 @@ const (
 	// errCodeInsufficientPrivileges (ORA-01031) on an AS OF SCN read usually means a missing
 	// FLASHBACK grant; see withFlashbackPrivilegeHint.
 	errCodeInsufficientPrivileges = 1031
+
+	// maxPlanningWorkers caps the worker count chunk planning sizes its queries for, bounding them
+	// to 4,096 interpolated ranges or 8,192 sampled keys (few DBs support more sessions than this).
+	maxPlanningWorkers = 256
 )
 
 // errNoPrimaryKey means a table has no primary key, so planTableTasks falls back to a full scan.
@@ -270,7 +274,7 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 				return err
 			}
 			if keyType != keyTypeNotInterpolable {
-				numRanges := min(maxWorkers, 256) * interpolatedRangesPerWorker
+				numRanges := min(maxWorkers, maxPlanningWorkers) * interpolatedRangesPerWorker
 				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, numRanges)
 				if err != nil {
 					return err
@@ -308,7 +312,7 @@ func (s *Snapshot) sampleChunkRanges(ctx context.Context, db DBQuerier, table Us
 		// chunks: enough to split the keyspace evenly while keeping the sample query cheap.
 		overSampleFactor = 32
 	)
-	numSamples := min(maxWorkers, 256) * overSampleFactor
+	numSamples := min(maxWorkers, maxPlanningWorkers) * overSampleFactor
 
 	numRows, err := getTableRowCount(ctx, db, table)
 	if err != nil {
