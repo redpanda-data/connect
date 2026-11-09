@@ -185,19 +185,29 @@ func (d *snapshotDB) Close() error {
 	return nil
 }
 
-// withConnectionCapacityHint adds advice to lower max_parallel_snapshot_tables to a connection capacity error.
+// withConnectionCapacityHint adds advice to lower max_parallel_snapshot_tables to a connection
+// capacity error, which acquire only returns once no other reader holds a connection.
 func withConnectionCapacityHint(err error) error {
-	if !isConnectionCapacityError(err) {
+	switch {
+	case isHandshakeEOF(err):
+		// With no other connection held, an EOF may mean the database is down rather than full.
+		return fmt.Errorf("%w\n\nThe database closed the snapshot connection while it was logging in, and no other snapshot reader held a connection. "+
+			"Either the database has no capacity for another connection, so lower max_parallel_snapshot_tables to stay within its processes and sessions limits, "+
+			"or the database is down or restarting", err)
+	case isConnectionCapacityError(err):
+		return fmt.Errorf("%w\n\nThe database has no capacity for another snapshot connection. Each parallel snapshot reader holds its own connection, so lower max_parallel_snapshot_tables to stay within the database's processes and sessions limits", err)
+	default:
 		return err
 	}
-	return fmt.Errorf("%w\n\nThe database has no capacity for another snapshot connection. Each parallel snapshot reader holds its own connection, so lower max_parallel_snapshot_tables to stay within the database's processes and sessions limits", err)
 }
 
 // isConnectionCapacityError reports whether err means the database has no room for another connection, including an EOF mid-handshake.
 func isConnectionCapacityError(err error) bool {
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return true
-	}
 	var oraErr *goora.OracleError
-	return errors.As(err, &oraErr) && slices.Contains(connectionCapacityErrCodes, oraErr.ErrCode)
+	return isHandshakeEOF(err) || (errors.As(err, &oraErr) && slices.Contains(connectionCapacityErrCodes, oraErr.ErrCode))
+}
+
+// isHandshakeEOF reports whether err is the database closing the connection mid-handshake without an ORA code.
+func isHandshakeEOF(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }

@@ -53,6 +53,31 @@ func TestIsConnectionCapacityError(t *testing.T) {
 	}
 }
 
+func TestWithConnectionCapacityHint(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantHint string
+	}{
+		{name: "capacity ORA code", err: goora.NewOracleError(12516), wantHint: "The database has no capacity for another snapshot connection"},
+		{name: "connection closed during handshake", err: io.EOF, wantHint: "or the database is down or restarting"},
+		{name: "connection cut short during handshake", err: fmt.Errorf("reading packet: %w", io.ErrUnexpectedEOF), wantHint: "or the database is down or restarting"},
+		{name: "not a capacity error", err: goora.NewOracleError(1017)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := withConnectionCapacityHint(tt.err)
+
+			require.ErrorIs(t, got, tt.err)
+			if tt.wantHint == "" {
+				assert.Equal(t, tt.err.Error(), got.Error(), "Expected no hint on a non-capacity error")
+				return
+			}
+			assert.Contains(t, got.Error(), tt.wantHint)
+		})
+	}
+}
+
 func TestSnapshotDBAcquireCountsConnectionBeforeReturning(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
