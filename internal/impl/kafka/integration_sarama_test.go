@@ -173,6 +173,8 @@ output:
     addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    # Without idempotence, a retried produce request can write a copy and fail the exact-set checks.
+    idempotent_write: true
     retry_as_batch: $VAR3
     metadata:
       exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
@@ -209,17 +211,6 @@ input:
 	var suiteSingleCheckpointedStream integration.StreamTestList
 	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, suite...)
 	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, integration.StreamTestCheckpointCapture())
-
-	// The kafka output sends with idempotent_write disabled, so a retried
-	// produce request can write a message twice. This is at-least-once
-	// delivery, not a fault. Under load it makes the exact-set checks of the
-	// suite fail on "hello world N" that was already received. Enabling
-	// idempotent_write is not a fix: the output then fails to connect,
-	// because Connect does not set Net.MaxOpenRequests to 1.
-	//
-	// The option does not apply to StreamTestCheckpointCapture, which
-	// checks each message in order. A copy can still fail that test.
-	allowProducerDupes := integration.StreamTestOptAllowDupes()
 
 	t.Run("balanced", func(t *testing.T) {
 		t.Skip("Deprecated and flaky: balanced consumer group test fails under concurrent Redpanda containers")
@@ -293,7 +284,6 @@ input:
 				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
-			allowProducerDupes,
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
 			integration.StreamTestOptVarSet("VAR2", "1"),
 			integration.StreamTestOptVarSet("VAR3", "false"),
@@ -308,7 +298,6 @@ input:
 					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
-				allowProducerDupes,
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
 				integration.StreamTestOptVarSet("VAR1", ":0-3"),
 				integration.StreamTestOptVarSet("VAR2", "1"),
@@ -325,7 +314,6 @@ input:
 					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
-				allowProducerDupes,
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
 				integration.StreamTestOptVarSet("VAR1", ":0"),
 				integration.StreamTestOptVarSet("VAR2", "1000"),
@@ -342,7 +330,6 @@ input:
 				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
-			allowProducerDupes,
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
 			integration.StreamTestOptVarSet("VAR1", ":0-3"),
 			integration.StreamTestOptVarSet("VAR2", "1"),
@@ -356,6 +343,8 @@ output:
     addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    # Without idempotence, a retried produce request can write a copy and fail the exact-set checks.
+    idempotent_write: true
     retry_as_batch: $VAR3
     metadata:
       exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
@@ -384,7 +373,6 @@ input:
 				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
-			allowProducerDupes,
 			integration.StreamTestOptVarSet("VAR1", ""),
 			integration.StreamTestOptVarSet("VAR2", "1"),
 			integration.StreamTestOptVarSet("VAR3", "false"),
