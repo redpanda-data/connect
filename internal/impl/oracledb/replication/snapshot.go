@@ -292,6 +292,11 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 				return err
 			}
 			maxRanges = maxChunkRanges(probed)
+			// Size any sample from the count, which is exact below its limit and a far closer lower
+			// bound than stale statistics above it. Tables without statistics still aren't sampled.
+			if numRows > 0 {
+				numRows = probed
+			}
 		}
 		if maxRanges < 2 {
 			s.log.With("src_table", table.FullName()).Debugf("Table '%s' has fewer than %d rows, so it will be snapshotted without parallel chunking", table.FullName(), 2*minRowsPerChunk)
