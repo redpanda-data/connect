@@ -997,7 +997,8 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	// counts now. resumeToken is used locally from here on, since the field can be
 	// advanced concurrently by acks once the stream is running.
 	tokenEpoch := m.beginTokenEpoch(resumeToken)
-	// Set the stream start when starting fresh to be the current oplog end time.
+	// The hello reply gives the majority committed oplog time, which
+	// resolveStreamStart uses to start the stream when there is no token.
 	r = m.db.RunCommand(ctx, bson.M{"hello": 1})
 	if r.Err() != nil {
 		return fmt.Errorf("unable to determine replication info (is your mongodb instance running as a replication set?): %w", r.Err())
