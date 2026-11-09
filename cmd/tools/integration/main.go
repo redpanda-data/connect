@@ -17,6 +17,7 @@
 // Usage:
 //
 //	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [filter...]
+//	git diff --name-only <base>...HEAD | go run ./cmd/tools/integration affected [--max-packages 20]
 package main
 
 import (
@@ -37,6 +38,10 @@ func main() {
 		if err := cmdRun(os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "affected":
+		if err := cmdAffected(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	case "show":
 		if err := cmdShow(os.Args[2:]); err != nil {
 			log.Fatal(err)
@@ -52,6 +57,7 @@ func printUsage() {
 	log.Println("Commands:")
 	log.Println("  run      Run integration tests package by package")
 	log.Println("  show     Show test output for a failure reference (file:line)")
+	log.Println("  affected Read changed files on stdin, print the packages whose tests depend on them")
 	log.Println("")
 	log.Println("Flags for run:")
 	log.Println("  --output-dir   Directory for test output (default: .integration/<timestamp>)")
