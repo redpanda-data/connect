@@ -408,9 +408,8 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 //   - The chunk reads use majority read concern, so they return the version
 //     before the write.
 //
-// The snapshot then releases the chunk with the older document, and no output
-// has the write. To prevent this, the snapshot must wait for the majority
-// snapshot to reach the stream start before it reads a chunk.
+// The snapshot can then emit the chunk with the older document, and the output
+// never has the write. The test expects foo/1 with v=1 in the output.
 func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
 	integration.CheckSkip(t)
 	// Starts its own containers on its own network.
