@@ -9,8 +9,11 @@
 package replication
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
+	goora "github.com/sijms/go-ora/v2/network"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -83,6 +86,26 @@ func TestBuildKeysetPageQuery(t *testing.T) {
 
 			assert.Equal(t, tt.wantQuery, query)
 			assert.Equal(t, tt.wantArgs, args)
+		})
+	}
+}
+
+func TestIsMissingFlashbackPrivilege(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "insufficient privileges", err: goora.NewOracleError(1031), want: true},
+		{name: "missing flashback privilege on 23ai", err: goora.NewOracleError(41900), want: true},
+		{name: "wrapped", err: fmt.Errorf("planning chunk ranges: %w", goora.NewOracleError(41900)), want: true},
+		{name: "other Oracle error", err: goora.NewOracleError(942), want: false},
+		{name: "not an Oracle error", err: errors.New("connection reset by peer"), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, got := isMissingFlashbackPrivilege(tt.err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

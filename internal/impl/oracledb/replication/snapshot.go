@@ -37,8 +37,10 @@ const (
 	// after the SCN is captured; see withFlashbackRetry.
 	errCodeFlashbackTableChanged = 1466
 	// errCodeInsufficientPrivileges (ORA-01031) on an AS OF SCN read usually means a missing
-	// FLASHBACK grant; see withFlashbackPrivilegeHint.
+	// FLASHBACK grant; see isMissingFlashbackPrivilege.
 	errCodeInsufficientPrivileges = 1031
+	// errCodeMissingFlashbackPrivilege (ORA-41900) is how Oracle 23ai reports a missing FLASHBACK grant.
+	errCodeMissingFlashbackPrivilege = 41900
 
 	// maxPlanningWorkers caps the worker count chunk planning sizes its queries for, bounding them
 	// to 4,096 interpolated ranges or 8,192 sampled keys (few DBs support more sessions than this).
@@ -241,6 +243,12 @@ func (s *Snapshot) planTableTasks(ctx context.Context, table UserTable, maxWorke
 
 	ranges, method, err := s.planChunkRanges(ctx, table, pks, maxWorkers)
 	if err != nil {
+		// Without FLASHBACK the table can still be read without AS OF SCN, as when chunking is off.
+		if oraErr, ok := isMissingFlashbackPrivilege(err); ok {
+			l.Warnf("Table '%s' can't be split into parallel chunks without the FLASHBACK privilege, so it will be snapshotted with a full scan. "+
+				"Grant it with GRANT FLASHBACK ON %s TO <user> or GRANT FLASHBACK ANY TABLE TO <user> to split it: %v", tableName, tableName, oraErr)
+			return fullScan(), nil
+		}
 		return nil, err
 	}
 	if len(ranges) <= 1 {
@@ -1053,10 +1061,19 @@ func snapshotValueMapper[T any](v any) (any, error) {
 	return s.V, nil
 }
 
-// withFlashbackPrivilegeHint adds the missing FLASHBACK grant to an ORA-01031 from an AS OF SCN read.
-func withFlashbackPrivilegeHint(err error, table UserTable) error {
+// isMissingFlashbackPrivilege reports whether err from an AS OF SCN read means the user lacks
+// FLASHBACK on the table, returning the Oracle error.
+func isMissingFlashbackPrivilege(err error) (*goora.OracleError, bool) {
 	var oraErr *goora.OracleError
-	if !errors.As(err, &oraErr) || oraErr.ErrCode != errCodeInsufficientPrivileges {
+	if !errors.As(err, &oraErr) {
+		return nil, false
+	}
+	return oraErr, oraErr.ErrCode == errCodeInsufficientPrivileges || oraErr.ErrCode == errCodeMissingFlashbackPrivilege
+}
+
+// withFlashbackPrivilegeHint adds the missing FLASHBACK grant to an ORA-01031 or ORA-41900 from an AS OF SCN read.
+func withFlashbackPrivilegeHint(err error, table UserTable) error {
+	if _, ok := isMissingFlashbackPrivilege(err); !ok {
 		return err
 	}
 	return fmt.Errorf("%w\n\nParallel snapshot chunks read table '%s' with flashback queries (AS OF SCN), which require the FLASHBACK privilege in addition to SELECT: "+

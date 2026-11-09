@@ -9,10 +9,13 @@
 package replication_test
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -349,6 +352,73 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 			return fmt.Sprint(row["ID"])
 		}, paddedKey)
 	})
+
+	t.Run("MissingFlashbackPrivilegeFallsBackToFullScan", func(t *testing.T) {
+		table := replication.UserTable{Schema: db.Schema, Name: "CHUNK_TIMESTAMP_KEY_TEST"}
+		userConnStr := createSelectOnlyUser(t, db, connStr, db.Schema+"_NOFB", table)
+		snapshot, publisher, logs := newChunkedSnapshot(t, userConnStr, "", table)
+
+		_, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+
+		t.Log("When a user with SELECT but not FLASHBACK on the table reads it with multiple workers")
+		require.NoError(t, snapshot.Read(t.Context(), chunkedWorkers, 500))
+
+		t.Log("Then it is not chunked, a warning names the missing grant, and every row is still returned")
+		assert.Contains(t, logs.String(), "can't be split into parallel chunks without the FLASHBACK privilege")
+		assert.NotRegexp(t, chunkedLogPattern(table), logs.String())
+		assert.Len(t, publisher.messagesCopy(), chunkedTableRows)
+	})
+}
+
+// createSelectOnlyUser creates a user that can log in, read the data dictionary and SELECT
+// from table, but has no FLASHBACK privilege, and returns connStr with its credentials.
+func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user string, table replication.UserTable) string {
+	t.Helper()
+	const password = "testdb123"
+
+	// Local users in CDB$ROOT need _ORACLE_SCRIPT, a session setting, so use one connection.
+	exec := func(ctx context.Context, queries ...string) error {
+		conn, err := db.DB.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`); err != nil {
+			return err
+		}
+		for _, q := range queries {
+			if _, err := conn.ExecContext(ctx, q); err != nil {
+				return fmt.Errorf("%s: %w", q, err)
+			}
+		}
+		return nil
+	}
+	dropUser := func(ctx context.Context) error {
+		err := exec(ctx, "DROP USER "+user+" CASCADE")
+		if err != nil && strings.Contains(err.Error(), "ORA-01918") {
+			return nil
+		}
+		return err
+	}
+
+	require.NoError(t, dropUser(t.Context()))
+	require.NoError(t, exec(t.Context(),
+		"CREATE USER "+user+" IDENTIFIED BY "+password,
+		"GRANT CREATE SESSION, SELECT ANY DICTIONARY TO "+user,
+		"GRANT SELECT ON "+table.FullName()+" TO "+user,
+	))
+	t.Cleanup(func() {
+		// t.Context() is cancelled before cleanup runs.
+		if err := dropUser(context.Background()); err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+		}
+	})
+
+	u, err := url.Parse(connStr)
+	require.NoError(t, err)
+	u.User = url.UserPassword(user, password)
+	return u.String()
 }
 
 func TestIntegrationSnapshotChunkedCDB(t *testing.T) {
