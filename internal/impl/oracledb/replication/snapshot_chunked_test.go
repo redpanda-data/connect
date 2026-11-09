@@ -379,7 +379,7 @@ func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user s
 
 	// Local users in CDB$ROOT need _ORACLE_SCRIPT, a session setting, so use one connection.
 	exec := func(ctx context.Context, queries ...string) error {
-		conn, err := db.DB.Conn(ctx)
+		conn, err := db.Conn(ctx)
 		if err != nil {
 			return err
 		}
