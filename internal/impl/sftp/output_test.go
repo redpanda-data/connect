@@ -136,6 +136,62 @@ func readMemFile(h sftp.Handlers, path string) (content string, exists bool, err
 	return string(buf[:n]), true, nil
 }
 
+// newTestSFTPWriter returns a connected sftp output that writes to path on the
+// server at addr. extraConf holds more config fields, one per line.
+func newTestSFTPWriter(t *testing.T, addr, hostKey, path, extraConf string) *sftpWriter {
+	t.Helper()
+	parsed, err := sftpOutputSpec().ParseYAML(fmt.Sprintf(`
+address: %s
+path: %s
+credentials:
+  username: user
+  password: pass
+  host_public_key: %q
+%s
+`, addr, path, hostKey, extraConf), nil)
+	require.NoError(t, err)
+	w, err := newWriterFromParsed(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, w.Connect(t.Context()))
+	t.Cleanup(func() { require.NoError(t, w.Close(context.Background())) })
+	return w
+}
+
+func TestSFTPOutputSamePathWrites(t *testing.T) {
+	tests := []struct {
+		name  string
+		codec string
+		want  string
+	}{
+		{
+			name:  "all-bytes replaces the file",
+			codec: "all-bytes",
+			want:  "world",
+		},
+		{
+			name:  "lines appends to the file",
+			codec: "lines",
+			want:  "hello\nworld\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const path = "/upload/a.txt"
+			mem := sftp.InMemHandler()
+			addr, hostKey := newTestSFTPServer(t, mem)
+			w := newTestSFTPWriter(t, addr, hostKey, path, "codec: "+tt.codec)
+
+			require.NoError(t, w.Write(t.Context(), service.NewMessage([]byte("hello"))))
+			require.NoError(t, w.Write(t.Context(), service.NewMessage([]byte("world"))))
+
+			content, ok, err := readMemFile(mem, path)
+			require.NoError(t, err)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, content)
+		})
+	}
+}
+
 func TestSFTPOutputAtomicWrites(t *testing.T) {
 	const path = "/upload/a.txt"
 	mem := sftp.InMemHandler()
@@ -154,21 +210,7 @@ func TestSFTPOutputAtomicWrites(t *testing.T) {
 	}}
 	addr, hostKey := newTestSFTPServer(t, handlers)
 
-	parsed, err := sftpOutputSpec().ParseYAML(fmt.Sprintf(`
-address: %s
-path: %s
-credentials:
-  username: user
-  password: pass
-  host_public_key: %q
-codec: all-bytes
-atomic_writes: true
-`, addr, path, hostKey), nil)
-	require.NoError(t, err)
-	w, err := newWriterFromParsed(parsed, service.MockResources())
-	require.NoError(t, err)
-	require.NoError(t, w.Connect(t.Context()))
-	t.Cleanup(func() { require.NoError(t, w.Close(context.Background())) })
+	w := newTestSFTPWriter(t, addr, hostKey, path, "codec: all-bytes\natomic_writes: true")
 
 	// The second write replaces the file that the first write made.
 	require.NoError(t, w.Write(t.Context(), service.NewMessage([]byte("hello"))))
