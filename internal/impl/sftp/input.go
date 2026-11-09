@@ -720,7 +720,10 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 				// value. Use the end of that second to compute the age.
 				// Without this, a file that a writer created but did not
 				// write yet can pass minimum_age and be read empty.
-				if w.minAge > 0 && time.Since(info.ModTime().Add(time.Second)) < w.minAge {
+				// A negative age (the server clock is ahead) always waits,
+				// also with minimum_age 0, as before.
+				age := time.Since(info.ModTime())
+				if age < 0 || (w.minAge > 0 && age < w.minAge+time.Second) {
 					continue
 				}
 

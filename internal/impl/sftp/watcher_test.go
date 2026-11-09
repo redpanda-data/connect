@@ -151,11 +151,9 @@ func TestDecideWatcherActionPathAndModTime(t *testing.T) {
 // queue a file that was changed less than minimum_age ago. SFTP sends
 // modification times in whole seconds, so the reported value can be up to one
 // second older than the real change.
-func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.txt")
-	require.NoError(t, os.WriteFile(path, nil, 0o600))
-
+// newTestWatcher returns a watcher for dir/*.txt that reads from an in-process SFTP server.
+func newTestWatcher(t *testing.T, dir string, minAge time.Duration) *watcherPathProvider {
+	t.Helper()
 	serverConn, clientConn := net.Pipe()
 	server, err := sftp.NewServer(serverConn)
 	require.NoError(t, err)
@@ -165,6 +163,24 @@ func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
 	client, err := sftp.NewClientPipe(clientConn, clientConn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
+
+	return &watcherPathProvider{
+		clientPool: pool.NewCapped(1, func(context.Context, int) (*sftp.Client, error) {
+			return client, nil
+		}),
+		mgr:          service.MockResources(service.MockResourcesOptAddCache("files_memory")),
+		cacheName:    "files_memory",
+		pollInterval: 100 * time.Millisecond,
+		minAge:       minAge,
+		targetPaths:  []string{filepath.Join(dir, "*.txt")},
+		cacheMode:    watcherCacheModePath,
+	}
+}
+
+func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
 
 	// The real change is 1ms before the start of this second. The server
 	// reports the start of the previous second, so the reported age is always
@@ -176,19 +192,24 @@ func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
 	// age. The file is too young and must not be queued.
 	minAge := time.Since(changed) + 500*time.Millisecond
 
-	w := &watcherPathProvider{
-		clientPool: pool.NewCapped(1, func(context.Context, int) (*sftp.Client, error) {
-			return client, nil
-		}),
-		mgr:          service.MockResources(service.MockResourcesOptAddCache("files_memory")),
-		cacheName:    "files_memory",
-		pollInterval: 100 * time.Millisecond,
-		minAge:       minAge,
-		targetPaths:  []string{filepath.Join(dir, "*.txt")},
-		cacheMode:    watcherCacheModePath,
-	}
+	w := newTestWatcher(t, dir, minAge)
 	require.NoError(t, w.findNewPaths(t.Context()))
 	require.Less(t, time.Since(changed), minAge, "the poll was too slow for the test to be valid")
+
+	assert.Empty(t, w.expandedPaths)
+}
+
+func TestWatcherZeroMinimumAgeFutureModTime(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+
+	// The server clock is ahead, so the file changed in the future.
+	changed := time.Now().Add(time.Hour)
+	require.NoError(t, os.Chtimes(path, changed, changed))
+
+	w := newTestWatcher(t, dir, 0)
+	require.NoError(t, w.findNewPaths(t.Context()))
 
 	assert.Empty(t, w.expandedPaths)
 }
