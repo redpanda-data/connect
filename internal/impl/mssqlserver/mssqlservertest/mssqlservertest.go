@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	mssql "github.com/microsoft/go-mssqldb"
+	_ "github.com/microsoft/go-mssqldb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -272,6 +272,10 @@ func sharedContainer(t *testing.T) *tcmssql.MSSQLServerContainer {
 			if sharedErr == nil {
 				// The master database accepts connections only some time after the container is up.
 				if sharedErr = createDatabase(ctx, sharedCtr, ""); sharedErr == nil {
+					// Without the session, a 1205 error shows only the victim. The tests can run without it.
+					if err := withMasterDB(ctx, sharedCtr, startDeadlockSession); err != nil {
+						t.Logf("start the %s session: %v", deadlockSessionName, err)
+					}
 					return
 				}
 			}
@@ -406,25 +410,9 @@ func createDatabase(ctx context.Context, ctr *tcmssql.MSSQLServerContainer, dbNa
 // something else on the server.
 var errCDCLeftover = errors.New("the cdc schema or user exists, but CDC is not enabled")
 
-// errNumCDCLeftover is the SQL Server error of sp_cdc_enable_db when the cdc user or schema already exists.
+// errNumCDCLeftover is the SQL Server error of sp_cdc_enable_db when the cdc user or schema already exists. Refer to
+// https://learn.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-events-and-errors-22000-to-22999
 const errNumCDCLeftover = 22906
-
-// isCDCLeftover reports whether err has SQL Server error errNumCDCLeftover.
-func isCDCLeftover(err error) bool {
-	var msErr mssql.Error
-	if !errors.As(err, &msErr) {
-		return false
-	}
-	if msErr.Number == errNumCDCLeftover {
-		return true
-	}
-	for _, e := range msErr.All {
-		if e.Number == errNumCDCLeftover {
-			return true
-		}
-	}
-	return false
-}
 
 // createDatabaseWithCDC creates dbName and enables CDC on it. When errCDCLeftover stops the enable, it creates the
 // database again and retries. afterCreate runs after each create; tests use it to make the leftover state.
@@ -520,9 +508,12 @@ func openAndEnableCDC(
 		if openErr != nil {
 			lastErr = openErr
 			logf("enable CDC on %q failed, trying again: %v", dbName, openErr)
+			if hasSQLError(openErr, errNumDeadlock) {
+				logDeadlocks(ctx, db, logf)
+			}
 			db.Close()
 			db = nil
-			if isCDCLeftover(openErr) {
+			if hasSQLError(openErr, errNumCDCLeftover) {
 				lastErr = fmt.Errorf("%w: %w", errCDCLeftover, openErr)
 				return true
 			}
