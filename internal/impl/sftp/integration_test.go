@@ -62,6 +62,8 @@ output:
       password: $VAR3
       host_public_key: $VAR4
     codec: all-bytes
+    # The watcher must not see a file before its data is written.
+    atomic_writes: true
     max_in_flight: 1
 
 input:
