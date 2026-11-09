@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/cenkalti/backoff/v4"
 	goora "github.com/sijms/go-ora/v2/network"
 	"github.com/stretchr/testify/assert"
@@ -52,15 +53,18 @@ func TestIsConnectionCapacityError(t *testing.T) {
 	}
 }
 
-// noCapacityConnector is a driver.Connector whose every connection attempt fails as if
-// the database had no room for another connection.
-type noCapacityConnector struct{}
+func TestSnapshotDBAcquireCountsConnectionBeforeReturning(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	d := &snapshotDB{pool: db, backoff: *backoff.NewExponentialBackOff(), log: service.MockResources().Logger()}
 
-func (noCapacityConnector) Connect(context.Context) (driver.Conn, error) {
-	return nil, goora.NewOracleError(12516)
+	conn, err := d.acquire(t.Context())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	assert.Equal(t, int32(1), d.inUse.Load(), "Expected acquire to count the connection as held before returning it")
 }
-
-func (noCapacityConnector) Driver() driver.Driver { return nil }
 
 func TestSnapshotDBAcquireGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
 	newSnapshotDB := func(t *testing.T) *snapshotDB {
@@ -95,3 +99,12 @@ func TestSnapshotDBAcquireGivesUpOnlyWithNoConnectionsHeld(t *testing.T) {
 		assert.ErrorIs(t, err, context.DeadlineExceeded, "Expected to keep waiting past max elapsed time while another connection is held")
 	})
 }
+
+// noCapacityConnector is a driver.Connector whose every connection attempt fails as if
+// the database had no room for another connection.
+type noCapacityConnector struct{}
+
+func (noCapacityConnector) Connect(context.Context) (driver.Conn, error) {
+	return nil, goora.NewOracleError(12516)
+}
+func (noCapacityConnector) Driver() driver.Driver { return nil }

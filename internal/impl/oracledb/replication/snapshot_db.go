@@ -81,7 +81,6 @@ func (d *snapshotDB) withConn(ctx context.Context, fn func(conn *sql.Conn) error
 	if conn, err = d.acquire(ctx); err != nil {
 		return fmt.Errorf("acquiring snapshot connection: %w", withConnectionCapacityHint(err))
 	}
-	d.inUse.Add(1)
 	defer func() {
 		d.inUse.Add(-1)
 		if closeErr := conn.Close(); closeErr != nil {
@@ -139,14 +138,19 @@ func (d *snapshotDB) withReadOnlyTxn(ctx context.Context, fn func(tx *sql.Tx) er
 	})
 }
 
-// acquire gets a pooled connection, retrying with backoff while the database is at capacity and giving up only once the backoff expires with no connections held.
+// acquire gets a pooled connection and counts it as held, retrying with backoff while the database is at capacity and giving up only once the backoff expires with no connections held.
 func (d *snapshotDB) acquire(ctx context.Context) (*sql.Conn, error) {
 	retry := d.backoff
 	retry.Reset()
 	for {
 		conn, err := d.pool.Conn(ctx)
-		if err == nil || !isConnectionCapacityError(err) {
-			return conn, err
+		if err == nil {
+			// Count the connection before returning it, so another reader's give-up check can't miss it.
+			d.inUse.Add(1)
+			return conn, nil
+		}
+		if !isConnectionCapacityError(err) {
+			return nil, err
 		}
 		delay := retry.NextBackOff()
 		if delay == backoff.Stop {
