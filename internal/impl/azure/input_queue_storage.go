@@ -216,7 +216,7 @@ func (a *azureQueueStorage) releaseMessages(ctx context.Context, queueClient *az
 		if _, err := queueClient.UpdateMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, *queueMsg.MessageText, &azq.UpdateMessageOptions{
 			VisibilityTimeout: &visibilityTimeout,
 		}); err != nil {
-			a.log.Debugf("Failed to reset visibility of rejected message %s, it is redelivered once the visibility timeout expires: %v", *queueMsg.MessageID, err)
+			a.log.Warnf("Failed to reset visibility of rejected message %s, it is redelivered once the visibility timeout expires: %v", *queueMsg.MessageID, err)
 		}
 	}
 }
