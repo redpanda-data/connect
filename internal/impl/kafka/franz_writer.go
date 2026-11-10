@@ -383,7 +383,7 @@ const (
 // outputs.
 const (
 	kafkaOutputKeyDescription         = "An optional key to populate for each message."
-	franzOutputKeyDescription         = "An optional key to populate for each message. A key that resolves to an empty string or to `null` is sent as a null key. Records with a null key are distributed across partitions instead of all hashing to the same partition."
+	franzOutputKeyDescription         = "An optional key to populate for each message. A key that resolves to an empty string or to `null` is sent as a null key. With the default `murmur2_hash` partitioner, records with a null key are distributed across partitions instead of all hashing to the same partition. The `round_robin`, `least_backup`, and `manual` partitioners ignore the key when choosing a partition."
 	kafkaOutputTimeoutDescription     = "The maximum period of time to wait for message sends before abandoning the request and retrying."
 	kafkaOutputTimestampDescription   = "An optional timestamp to set for each message, in seconds since the Unix epoch. When left empty, the current timestamp is used."
 	kafkaOutputTimestampMsDescription = "An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`."
