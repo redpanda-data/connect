@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -61,13 +60,11 @@ func TestTableCoordinatorRetriesInitialRefresh(t *testing.T) {
 			pollInterval:    20 * time.Millisecond,
 			throttleBackoff: 20 * time.Millisecond,
 		},
-		log:           service.MockResources().Logger(),
-		metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
-		streamsClient: newStubStreamsClient(transport),
-		msgChan:       make(chan asyncMessage, 10),
-		shardInitRetryBackoff: func() backoff.BackOff {
-			return backoff.NewConstantBackOff(10 * time.Millisecond)
-		},
+		log:             service.MockResources().Logger(),
+		metrics:         newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		streamsClient:   newStubStreamsClient(transport),
+		msgChan:         make(chan asyncMessage, 10),
+		refreshInterval: 10 * time.Millisecond,
 	}
 	ts := &tableStream{
 		tableName:      "test",
@@ -112,12 +109,10 @@ func TestTableCoordinatorRetriesInitialRefresh(t *testing.T) {
 func TestTableCoordinatorInitialRefreshStopsOnCancel(t *testing.T) {
 	transport := &flakyDescribeTransport{failures: 1 << 30}
 	d := &dynamoDBCDCInput{
-		log:           service.MockResources().Logger(),
-		metrics:       newDynamoDBCDCMetrics(service.MockResources().Metrics()),
-		streamsClient: newStubStreamsClient(transport),
-		shardInitRetryBackoff: func() backoff.BackOff {
-			return backoff.NewConstantBackOff(10 * time.Millisecond)
-		},
+		log:             service.MockResources().Logger(),
+		metrics:         newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		streamsClient:   newStubStreamsClient(transport),
+		refreshInterval: 10 * time.Millisecond,
 	}
 	ts := &tableStream{tableName: "test", streamArn: testStreamArn, shardReaders: map[string]*dynamoDBShardReader{}}
 
