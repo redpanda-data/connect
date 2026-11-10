@@ -83,9 +83,14 @@ func (m *mongoCDC) resolveStreamStart(
 		return start, nil
 	}
 
-	// A snapshot runs, or hello has no oplog time (mongos). Only a token can be
-	// stored in the checkpoint cache, and on mongos it is the only start
-	// position, so capture one.
+	// Capture a token. Three cases get here:
+	//   - A blocking snapshot runs. The checkpoint cache stores only tokens, so
+	//     the end of the snapshot needs a token to checkpoint.
+	//   - An incremental snapshot runs. Its token is not stored: it only sets
+	//     where the stream opens. A captured token can be ahead of the majority
+	//     committed oplog time, so Prepare waits until a majority read sees
+	//     every write before it.
+	//   - hello has no oplog time (mongos). A token is the only start position.
 	token, err := captureToken(ctx)
 	switch {
 	case err == nil:
