@@ -48,6 +48,10 @@ When a consumer group is specified this input consumes one or more topics, and p
 
 When using consumer groups, the offsets of "delivered" records are committed automatically and continuously, and in the event of restarts these committed offsets are used to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considered to be delivered when all configured outputs that the record is routed to have confirmed delivery.
 
+=== Rejected records
+
+Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens the input logs a warning at most every 10 seconds and increments the ` + "`redpanda_nacks`" + ` metric. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output as shown in the Ordering section, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.
+
 == Ordering
 
 To preserve ordering of topic partitions, records consumed from each partition are processed and delivered in the order that they are received, and only one batch of records of a given partition is ever processed at a time. This means that parallel processing can only occur when multiple topic partitions are being consumed, but ensures that data is processed in a sequential order as determined from the source partition.
@@ -56,7 +60,7 @@ To preserve ordering of topic partitions, records consumed from each partition a
 
 For example, a batch of records may have been sent to an output broker and only a subset of records were delivered. In this case Redpanda Connect by default reattempts to deliver the records that failed, even though these failed records may have come before records that were previously delivered successfully.
 
-To avoid this scenario you must specify in your configuration an alternative way to handle delivery errors in the form of a ` + "xref:components:outputs/fallback.adoc[`fallback`] output" + `. It is good practice to also disable the field ` + "`auto_retry_nacks` by setting it to `false`" + ` when you've added an explicit fallback output as this improves the throughput of your pipeline. For example, the following config avoids ordering issues by specifying a fallback output into a DLQ topic, which is also retried indefinitely as a way to apply back pressure during connectivity issues:
+To avoid this scenario you must specify in your configuration an alternative way to handle delivery errors in the form of a ` + "xref:components:outputs/fallback.adoc[`fallback`] output" + `. It is good practice to also disable the field ` + "`auto_replay_nacks` by setting it to `false`" + ` when you've added an explicit fallback output as this improves the throughput of your pipeline. For example, the following config avoids ordering issues by specifying a fallback output into a DLQ topic, which is also retried indefinitely as a way to apply back pressure during connectivity issues:
 
 ` + example + `
 
@@ -67,6 +71,8 @@ Records are processed and delivered from each partition in batches as received f
 == Metrics
 
 When a consumer group is set, this input emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic. The metric records the number of produced messages that the consumer group has not yet read from each topic partition.
+
+This input also emits a ` + "`redpanda_nacks`" + ` counter with ` + "`topic`" + ` and ` + "`partition`" + ` labels. It counts the records rejected by the output, whether they are then replayed or dropped.
 
 == Metadata
 
@@ -217,6 +223,10 @@ func init() {
 			}
 
 			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			if rdr, err = WrapBatchInputNackWarnings(conf, mgr, NackMetricNameRedpanda, rdr); err != nil {
 				return nil, err
 			}
 

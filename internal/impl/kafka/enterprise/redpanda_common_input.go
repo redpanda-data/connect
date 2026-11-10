@@ -85,6 +85,10 @@ func init() {
 				return nil, err
 			}
 
+			if rdr, err = kafka.WrapBatchInputNackWarnings(conf, mgr, kafka.NackMetricNameRedpanda, rdr); err != nil {
+				return nil, err
+			}
+
 			if rdr, err = service.ForceTimelyNacksBatched(conf, rdr); err != nil {
 				return nil, err
 			}
