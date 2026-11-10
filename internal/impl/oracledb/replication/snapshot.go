@@ -1082,7 +1082,7 @@ func withFlashbackPrivilegeHint(err error, table UserTable) error {
 		return err
 	}
 	return fmt.Errorf("%w\n\nParallel snapshot chunks read table '%s' with flashback queries (AS OF SCN), which require the FLASHBACK privilege in addition to SELECT: "+
-		"GRANT FLASHBACK ON %s TO <user>, or GRANT FLASHBACK ANY TABLE TO <user>. Alternatively, set max_parallel_snapshot_tables to 1 to snapshot without flashback queries",
+		"GRANT FLASHBACK ON %s TO <user>, or GRANT FLASHBACK ANY TABLE TO <user>",
 		err, table.FullName(), table.FullName())
 }
 
