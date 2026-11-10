@@ -282,6 +282,24 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 		if err != nil {
 			return err
 		}
+		keyType, keyTypeKnown := keyTypeNotInterpolable, false
+		lookupKeyType := func() (err error) {
+			if !keyTypeKnown && len(pkCols) == 1 {
+				keyType, err = getInterpolableKeyType(ctx, db, table, pkCols[0])
+			}
+			keyTypeKnown = true
+			return err
+		}
+		// Without statistics a key that must be sampled can't be split, so don't count its rows.
+		if numRows == 0 {
+			if err := lookupKeyType(); err != nil {
+				return err
+			}
+			if keyType == keyTypeNotInterpolable {
+				ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, numRows, maxWorkers)
+				return err
+			}
+		}
 		// When statistics are missing or say the table is too small to chunk, which they can if
 		// they're stale, count rows up to the most that every planned range could need.
 		wantRanges := min(maxWorkers, maxPlanningWorkers) * interpolatedRangesPerWorker
@@ -304,30 +322,27 @@ func (s *Snapshot) planChunkRanges(ctx context.Context, table UserTable, pkCols 
 			return nil
 		}
 
-		if len(pkCols) == 1 {
-			keyType, err := getInterpolableKeyType(ctx, db, table, pkCols[0])
+		if err := lookupKeyType(); err != nil {
+			return err
+		}
+		if keyType != keyTypeNotInterpolable {
+			numRanges := min(wantRanges, maxRanges)
+			bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, numRanges)
 			if err != nil {
 				return err
 			}
-			if keyType != keyTypeNotInterpolable {
-				numRanges := min(wantRanges, maxRanges)
-				bounds, err := interpolateKeyBounds(ctx, db, table, pkCols[0], keyType, s.scn, numRanges)
-				if err != nil {
-					return err
-				}
-				occupied, err := countOccupiedRanges(ctx, db, table, pkCols[0], keyType, s.scn, numRanges, len(bounds))
-				if err != nil {
-					return err
-				}
-				// Equal-width ranges only balance when keys are spread across MIN..MAX. An
-				// outlier (e.g. a sentinel ID far beyond the rest) leaves most ranges empty
-				// and every real row in a few of them, so sample the keyspace instead.
-				if occupied*2 >= len(bounds)+1 {
-					ranges, method = rangesFromBounds(bounds), "interpolating its key range"
-					return nil
-				}
-				s.log.With("src_table", table.FullName()).Infof("Only %d of %d interpolated key ranges of table '%s' hold rows, so its key range will be sampled instead", occupied, len(bounds)+1, table.FullName())
+			occupied, err := countOccupiedRanges(ctx, db, table, pkCols[0], keyType, s.scn, numRanges, len(bounds))
+			if err != nil {
+				return err
 			}
+			// Equal-width ranges only balance when keys are spread across MIN..MAX. An
+			// outlier (e.g. a sentinel ID far beyond the rest) leaves most ranges empty
+			// and every real row in a few of them, so sample the keyspace instead.
+			if occupied*2 >= len(bounds)+1 {
+				ranges, method = rangesFromBounds(bounds), "interpolating its key range"
+				return nil
+			}
+			s.log.With("src_table", table.FullName()).Infof("Only %d of %d interpolated key ranges of table '%s' hold rows, so its key range will be sampled instead", occupied, len(bounds)+1, table.FullName())
 		}
 		ranges, err = s.sampleChunkRanges(ctx, db, table, pkCols, numRows, min(maxWorkers, maxRanges))
 		method = "sampling its key range"
