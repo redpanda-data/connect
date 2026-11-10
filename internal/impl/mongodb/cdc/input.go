@@ -842,13 +842,17 @@ func mongoClientBSONOptions(o *options.ClientOptions) {
 // once per connection with resolveStreamStart, and the stream goroutine reads
 // it.
 type streamStart struct {
-	// token is the resume token the stream opens after (SetResumeAfter): the
-	// checkpoint token, else snapshotToken. Nil opens the stream at the
-	// operation after opTime.
+	// token is the change stream resume token the stream opens after
+	// (SetResumeAfter): the checkpoint token, else snapshotToken. Nil opens the
+	// stream at the operation after opTime.
 	token bson.Raw
-	// opTime is the majority committed oplog time from the hello reply. The
-	// blocking snapshot reads at it. It is zero on a sharded cluster, which
-	// reports no oplog time, but there token is never nil.
+	// opTime is lastWrite.majorityOpTime.ts from the hello reply: the timestamp
+	// of the newest oplog entry that a majority of the replica set members has
+	// written. With a nil token, the stream opens at the operation after it.
+	// The blocking snapshot puts it in the operation_time metadata of each
+	// document it reads, but does not read at it. It is zero on a sharded
+	// cluster, because mongos reports no lastWrite, but there token is never
+	// nil.
 	opTime bson.Timestamp
 	// snapshotToken is the token captured on a first start, which
 	// storeSnapshotCheckpoint stores when the blocking snapshot completes. Nil
@@ -858,9 +862,15 @@ type streamStart struct {
 	snapshotToken bson.Raw
 }
 
-// resolveStreamStart decides where the change stream opens. checkpointToken is
-// the loaded checkpoint, nil on a first start. hello is the reply to the hello
-// command. captureToken reads the current change stream position.
+// resolveStreamStart decides where the change stream opens. Arguments:
+//   - checkpointToken is the loaded checkpoint, nil on a first start.
+//   - hello is the reply to the hello command. Only
+//     lastWrite.majorityOpTime.ts is read. On a sharded cluster, mongos
+//     replies without lastWrite: it is a router with no oplog, and each shard
+//     keeps its own.
+//   - captureToken reads the current change stream position. It is a function
+//     so that it runs only when a snapshot is about to run or hello has no
+//     timestamp.
 func (m *mongoCDC) resolveStreamStart(
 	ctx context.Context,
 	checkpointToken bson.Raw,
