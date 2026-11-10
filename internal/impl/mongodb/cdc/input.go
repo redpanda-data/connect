@@ -279,7 +279,7 @@ Each message emitted by this plugin has the following metadata:
 
 - `+"`operation`"+`: Either `+"`insert`"+`, `+"`replace`"+`, `+"`delete`"+`, or `+"`update`"+` for changes streamed. Documents from a snapshot have the operation set to `+"`read`"+`.
 - `+"`collection`"+`: The collection the document was written to.
-- `+"`operation_time`"+`: The oplog time for when this operation occurred.
+- `+"`operation_time`"+`: The oplog time for when this operation occurred. A document read by a snapshot has no oplog entry, so it gets a cluster time instead. The blocking snapshot uses the majority committed oplog time from before the snapshot starts (on a sharded cluster, the cluster time of mongos). In a large snapshot, a document can be read long after that time. The incremental snapshot uses the cluster time of a majority read made right after the chunk read.
 - `+"`schema`"+`: The collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `+"`$jsonSchema`"+` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (for example, deletes without pre-images when no prior schema is cached).
 
 == Schema Detection
