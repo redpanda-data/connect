@@ -136,12 +136,12 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").Version("4.26.0").
+				Description("Enable the idempotent write producer option, so that retries do not write duplicate messages. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available. When enabled, the output waits for acknowledgement from all in-sync replicas, as if `ack_replicas` is `true`. It also sends only one request at a time on each broker connection.").Version("4.26.0").
 				ShortDescription("Enable the idempotent write producer option. Requires the IDEMPOTENT_WRITE permission on CLUSTER.").
 				Default(false).
 				Advanced(),
 			service.NewBoolField(oskFieldAckReplicas).
-				Description("Ensure that messages have been copied across all replicas before acknowledging receipt.").
+				Description("Ensure that messages have been copied across all replicas before acknowledging receipt. When `idempotent_write` is `true`, the output acts as if this field is `true`.").
 				Advanced().Default(false),
 			service.NewIntField(oskFieldMaxMsgBytes).
 				Description("The maximum size in bytes of messages sent to the target topic.").
@@ -478,10 +478,17 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return nil, err
 	}
 
+	config.Producer.RequiredAcks = sarama.WaitForLocal
 	if ackReplicas {
 		config.Producer.RequiredAcks = sarama.WaitForAll
-	} else {
-		config.Producer.RequiredAcks = sarama.WaitForLocal
+	}
+	if config.Producer.Idempotent {
+		// sarama requires WaitForAll and MaxOpenRequests == 1 for an
+		// idempotent producer. Unlike the franz writer, the connector's output
+		// has no max in-flight requests field, so we set the value instead of
+		// validating it.
+		config.Producer.RequiredAcks = sarama.WaitForAll
+		config.Net.MaxOpenRequests = 1
 	}
 
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {

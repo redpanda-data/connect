@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -71,7 +72,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			{Schema: db.Schema, Name: "SINGLE_KEY_TEST"},
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", nil, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -85,7 +86,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -104,7 +105,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			{Schema: db.Schema, Name: "COMPOSITE_KEY_TEST"},
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", nil, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -118,7 +119,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -145,7 +146,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			db.Schema + ".COMPOSITE_KEY_TEST": fmt.Sprintf("SELECT col1, col2, data FROM "+db.Schema+".COMPOSITE_KEY_TEST WHERE col1 >= %d", col1Offset),
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, filters, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, filters, publisher, false, "", nil, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -159,7 +160,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -180,7 +181,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			{Schema: db.Schema, Name: "THREE_COL_KEY_TEST"},
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, nil, publisher, false, "", nil, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -194,7 +195,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -223,7 +224,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			db.Schema + ".THREE_COL_KEY_TEST": fmt.Sprintf("SELECT col1, col2, col3, data FROM "+db.Schema+".THREE_COL_KEY_TEST WHERE col1 >= %d", col1Offset),
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, filters, publisher, false, "", service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, filters, publisher, false, "", nil, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -237,7 +238,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
-		for i, msg := range publisher.messages {
+		for i, msg := range publisher.messagesCopy() {
 			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
 		}
 	})
@@ -262,4 +263,12 @@ func (p *publisherStub) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.messages)
+}
+
+// messagesCopy returns a copy of the messages published so far, safe to range over while
+// the snapshot is still publishing.
+func (p *publisherStub) messagesCopy() []*replication.MessageEvent {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.messages)
 }

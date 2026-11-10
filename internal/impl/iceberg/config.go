@@ -250,6 +250,7 @@ To use with AWS Glue Data Catalog:
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
 
+[[storage-overview]]
 == Storage
 
 === Azure Blob Storage (ADLS Gen2)
@@ -358,7 +359,7 @@ See the Row-level operations section above for the full semantics, the format-ve
 				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
-				Example(`${! this.op == "d" ? "delete" : "upsert" }`).
+				Example(`${! if this.op == "d" { "delete" } else { "upsert" } }`).
 				Default("insert").
 				Advanced(),
 

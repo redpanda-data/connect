@@ -23,9 +23,15 @@ func CheckpointLimitField(position string) *service.ConfigField {
 }
 
 // MaxParallelSnapshotTablesField returns the max_parallel_snapshot_tables
-// field of a CDC input that reads each snapshot table with its own reader.
-func MaxParallelSnapshotTablesField() *service.ConfigField {
+// field of a CDC input. extra is connector-specific text appended to the
+// shared description.
+func MaxParallelSnapshotTablesField(extra string) *service.ConfigField {
+	desc := "The maximum number of snapshot readers that run in parallel during the initial snapshot."
+	if extra != "" {
+		desc += " " + extra
+	}
 	return service.NewIntField("max_parallel_snapshot_tables").
-		Description("The maximum number of tables to read in parallel during the initial snapshot. Each table is read by its own reader.").Version("4.69.0").
+		Description(desc).
+		Version("4.69.0").
 		Default(1)
 }

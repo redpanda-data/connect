@@ -41,7 +41,7 @@ It's possible for this output type to create the target exchange by setting `+"`
 
 TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the <<tls,`+"`tls`"+`>> section.
 
-The fields 'key', 'exchange' and 'type' can be dynamically set using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).
+The fields `+"`key`"+`, `+"`exchange`"+` and `+"`type`"+` can be dynamically set using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).
 		Fields(
 			urlsFieldSpec(),
 			service.NewInterpolatedStringField(exchangeField).

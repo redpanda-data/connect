@@ -63,13 +63,13 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 == Metadata
 
 This input adds the following metadata fields to each message:
-- database_schema (The database schema for the table where the message originates from)
-- schema (The table schema in benthos common schema format, compatible with processors like parquet_encode)
-- table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
-- lsn (The commit Log Sequence Number of the change, from the change table column ` + "`__$start_lsn`" + `. Not present on snapshot (` + "`read`" + `) messages.)
-- seqval (The position of the change in the transaction log, from the change table column ` + "`__$seqval`" + `, as a hexadecimal string with a ` + "`0x`" + ` prefix. Not present on snapshot (` + "`read`" + `) messages.)
-- command_id (The order of the statement within its transaction, from the change table column ` + "`__$command_id`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+- ` + "`database_schema`" + ` (The database schema for the table where the message originates from)
+- ` + "`schema`" + ` (The table schema in benthos common schema format, compatible with processors like ` + "`parquet_encode`" + `)
+- ` + "`table`" + ` (Name of the table that the message originated from)
+- ` + "`operation`" + ` (Type of operation that generated the message: ` + "`read`" + `, ` + "`delete`" + `, ` + "`insert`" + `, or ` + "`update_before`" + ` and ` + "`update_after`" + `. ` + "`read`" + ` is from messages that are read in the initial snapshot phase.)
+- ` + "`lsn`" + ` (The commit Log Sequence Number of the change, from the change table column ` + "`__$start_lsn`" + `. Not present on snapshot (` + "`read`" + `) messages.)
+- ` + "`seqval`" + ` (The position of the change in the transaction log, from the change table column ` + "`__$seqval`" + `, as a hexadecimal string with a ` + "`0x`" + ` prefix. Not present on snapshot (` + "`read`" + `) messages.)
+- ` + "`command_id`" + ` (The order of the statement within its transaction, from the change table column ` + "`__$command_id`" + `. Not present on snapshot (` + "`read`" + `) messages.)
 
 == Ordering
 
@@ -81,11 +81,13 @@ Use ` + "`operation`" + ` to tell them apart: ` + "`update_before`" + ` is alway
 
 == Permissions
 
-When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to <<` + fieldCheckpointCacheTableName + `,` + "`" + fieldCheckpointCacheTableName + "`" + `>> for more information.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures. The ` + "`rpcn`" + ` schema must also already exist. Refer to <<` + fieldCheckpointCacheTableName + `,` + "`" + fieldCheckpointCacheTableName + "`" + `>> for more information.
+
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + `, the database must allow snapshot isolation, because each table is snapshotted in a transaction at ` + "`SNAPSHOT`" + ` isolation so that its rows are read as one consistent view. Enable it with ` + "`ALTER DATABASE <database> SET ALLOW_SNAPSHOT_ISOLATION ON`" + `, which requires ` + "`ALTER`" + ` permission on the database. Otherwise the snapshot fails with an error such as ` + "`Snapshot isolation transaction failed accessing database ... because snapshot isolation is not allowed in this database`" + `. This setting is separate from ` + "`READ_COMMITTED_SNAPSHOT`" + ` and does not change the isolation level of other sessions, but SQL Server then keeps row versions in ` + "`tempdb`" + ` for updates and deletes. Streaming from the change tables does not need it.
 
 == Performance
 
-This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer, and delivery is inherently bursty: short idle periods followed by large batches are normal under heavy write load and reflect the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth (CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints) rather than CPU; the input itself needs very little CPU to keep pace with the capture job.
+This input does not read the transaction log directly: SQL Server's CDC capture job scans the log asynchronously and publishes rows into per-table change tables, which this input polls. The capture job is an upstream throughput ceiling shared by every CDC consumer. Delivery is inherently bursty: short idle periods followed by large batches are normal under heavy write load. This reflects the capture job's publication cadence, not this input. Under sustained load the practical ceiling is usually the database server's storage bandwidth rather than CPU. CDC multiplies physical write volume several times over across the base table, transaction log, change tables and checkpoints. The input itself needs very little CPU to keep pace with the capture job.
 
 Operational notes:
 
@@ -98,12 +100,12 @@ Operational notes:
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("Whether to stream a snapshot of all existing data before streaming CDC changes. When set to `true`, the connector first queries all existing table data, then switches to streaming incremental changes from the change tables. When set to `false`, no snapshot is taken and, on first run, streaming begins from the start of each table's existing change table: every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not only changes from the current LSN onward. To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty.").
+		Description("Whether to stream a snapshot of all existing data before streaming CDC changes. When set to `true`, the connector first queries all existing table data, then switches to streaming incremental changes from the change tables. When set to `false`, no snapshot is taken and, on first run, streaming begins from the start of each table's existing change table: every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not only changes from the current LSN onward. To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty. The snapshot reads each table in a transaction at `SNAPSHOT` isolation, so the database must allow it: run `ALTER DATABASE <database> SET ALLOW_SNAPSHOT_ISOLATION ON` before enabling this field.").
 		ShortDescription("Snapshot existing data first. Otherwise streaming replays everything retained in the change tables.").
 		Example(true).
 		Default(false),
 	).
-	Field(cdcreplication.MaxParallelSnapshotTablesField()).
+	Field(cdcreplication.MaxParallelSnapshotTablesField("Each table is read by its own reader.")).
 	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
 		Description("The maximum number of rows to stream in a single batch during the initial snapshot phase. Larger batch sizes can improve throughput for initial data loads but may increase memory usage. This setting only applies when `stream_snapshot` is enabled.").
 		Default(1000),

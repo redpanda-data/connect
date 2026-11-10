@@ -29,19 +29,115 @@ import (
 	"strconv"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/redpanda-data/connect/v4/internal/plugins"
 	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
-// allComponentsPkg imports every component docs_gen documents. Comparing the
-// Go files a standard build of it compiles with the files the docs_gen build
-// compiles shows which components only cgo and x_benthos_extra builds have.
+// allComponentsPkg imports every component docs_gen documents.
 const allComponentsPkg = "github.com/redpanda-data/connect/v4/cmd/tools/docs_gen/allcomponents"
 
+// The goreleaser files, in .goreleaser, of the release builds whose component
+// lists decide where a component is available.
+const (
+	standardRelease = "connect.yaml"
+	cgoRelease      = "connect-cgo.yaml"
+	cloudRelease    = "connect-cloud.yaml"
+	cloudAIRelease  = "connect-ai.yaml"
+)
+
+// releaseBuild is the first build of a goreleaser file: its main package, and
+// the cgo setting and tags that select its Go files.
+type releaseBuild struct {
+	file string
+	main string
+	cgo  string
+	tags []string
+}
+
+// readReleaseBuild reads the release build that .goreleaser/<name> defines,
+// so a change to how a release is built changes the docs with it.
+func readReleaseBuild(name string) (releaseBuild, error) {
+	root, err := moduleDir(connectModule)
+	if err != nil {
+		return releaseBuild{}, err
+	}
+	path := filepath.Join(root, ".goreleaser", name)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return releaseBuild{}, err
+	}
+	var conf struct {
+		Builds []struct {
+			Main string   `yaml:"main"`
+			Env  []string `yaml:"env"`
+			Tags []string `yaml:"tags"`
+		} `yaml:"builds"`
+	}
+	if err := yaml.Unmarshal(raw, &conf); err != nil {
+		return releaseBuild{}, fmt.Errorf("%v: %w", path, err)
+	}
+	if len(conf.Builds) == 0 || conf.Builds[0].Main == "" {
+		return releaseBuild{}, fmt.Errorf("%v: no build with a main package", path)
+	}
+	b := releaseBuild{file: name, main: connectModule + "/" + filepath.ToSlash(filepath.Dir(conf.Builds[0].Main)), tags: conf.Builds[0].Tags}
+	for _, kv := range conf.Builds[0].Env {
+		if v, ok := strings.CutPrefix(kv, "CGO_ENABLED="); ok {
+			b.cgo = v
+		}
+	}
+	if b.cgo == "" {
+		return releaseBuild{}, fmt.Errorf("%v: the first build doesn't set CGO_ENABLED", path)
+	}
+	return b, nil
+}
+
+// files returns the Go files that this build's settings compile for pkg,
+// which is the build's own main package or allComponentsPkg.
+func (b releaseBuild) files(pkg string) (map[string]bool, error) {
+	var flags []string
+	if len(b.tags) > 0 {
+		flags = append(flags, "-tags="+strings.Join(b.tags, ","))
+	}
+	return buildFiles(pkg, buildEnv(os.Environ(), b.cgo), flags...)
+}
+
+// registrationsNotIn returns the components that build b registers and
+// build other doesn't.
+func (b releaseBuild) registrationsNotIn(other releaseBuild) (map[string]bool, error) {
+	files, err := b.files(b.main)
+	if err != nil {
+		return nil, err
+	}
+	otherFiles, err := other.files(other.main)
+	if err != nil {
+		return nil, err
+	}
+	return registrationsOnlyIn(files, otherFiles)
+}
+
+// releaseComponentsDiff returns the components that the release build in
+// .goreleaser/<name> registers and the standard release build doesn't.
+func releaseComponentsDiff(name string) (map[string]bool, error) {
+	b, err := readReleaseBuild(name)
+	if err != nil {
+		return nil, err
+	}
+	standard, err := readReleaseBuild(standardRelease)
+	if err != nil {
+		return nil, err
+	}
+	return b.registrationsNotIn(standard)
+}
+
 // standardBuildEnv returns env with cgo disabled and any -tags flag removed
-// from GOFLAGS, which is how .goreleaser/connect.yaml builds the standard
-// release binaries (timetzdata, its one tag, doesn't change the components).
-func standardBuildEnv(env []string) []string {
+// from GOFLAGS.
+func standardBuildEnv(env []string) []string { return buildEnv(env, "0") }
+
+// buildEnv returns env with CGO_ENABLED set to cgo and any -tags flag removed
+// from GOFLAGS, so only the flags buildFiles passes select the files.
+func buildEnv(env []string, cgo string) []string {
 	out := make([]string, 0, len(env)+1)
 	for _, kv := range env {
 		k, v, _ := strings.Cut(kv, "=")
@@ -62,15 +158,15 @@ func standardBuildEnv(env []string) []string {
 		}
 		out = append(out, kv)
 	}
-	return append(out, "CGO_ENABLED=0")
+	return append(out, "CGO_ENABLED="+cgo)
 }
 
-// buildFiles returns the Go files, by path, that a build of allcomponents
-// compiles with env and the given go flags. go list reads build constraints
+// buildFiles returns the Go files, by path, that a build of pkg compiles with
+// env and the given go flags. go list reads build constraints
 // without compiling, so this takes about a second.
-func buildFiles(env []string, flags ...string) (map[string]bool, error) {
+func buildFiles(pkg string, env []string, flags ...string) (map[string]bool, error) {
 	args := append([]string{"list", "-deps", "-f", "{{.Dir}}{{range .GoFiles}}|{{.}}{{end}}{{range .CgoFiles}}|{{.}}{{end}}"}, flags...)
-	cmd := exec.Command("go", append(args, allComponentsPkg)...)
+	cmd := exec.Command("go", append(args, pkg)...)
 	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -90,23 +186,6 @@ func buildFiles(env []string, flags ...string) (map[string]bool, error) {
 	return files, nil
 }
 
-// docsGenBuildEnv returns the environment and flags of the build docs_gen
-// itself runs as. The x_benthos_extra tag can't be read from the environment,
-// so builtWithAllComponents supplies it, and it implies cgo.
-func docsGenBuildEnv() ([]string, []string) {
-	env := os.Environ()
-	if !builtWithAllComponents {
-		return env, nil
-	}
-	out := make([]string, 0, len(env)+1)
-	for _, kv := range env {
-		if !strings.HasPrefix(kv, "CGO_ENABLED=") {
-			out = append(out, kv)
-		}
-	}
-	return append(out, "CGO_ENABLED=1"), []string{"-tags=x_benthos_extra"}
-}
-
 // registerGroups maps a benthos service.MustRegister... or Register...
 // function, without its prefix, to the schema group of what it registers.
 var registerGroups = map[string]string{
@@ -120,24 +199,117 @@ var registerGroups = map[string]string{
 }
 
 // cgoOnlyComponents returns the components, as componentKey values, that the
-// docs_gen build registers in Go files a standard build (no cgo, no tags)
-// doesn't compile. It reads each name from the service.MustRegister... call
-// in those files, resolving a constant name within its package.
+// cgo release build registers and the standard release build doesn't. It
+// reads each name from the service.MustRegister... call in the files only the
+// cgo build compiles, resolving a constant name within its package.
 //
 // Anything it can't read is an error rather than a silent gap: a register
 // call of a kind it doesn't know (such as a template, whose name is in its
 // YAML), or an init function in such a file that registers nothing it can
 // see (such as one that calls a register helper in a shared file).
 func cgoOnlyComponents() (map[string]bool, error) {
-	env, flags := docsGenBuildEnv()
-	full, err := buildFiles(env, flags...)
+	return releaseComponentsDiff(cgoRelease)
+}
+
+// cloudOnlyComponents returns the components that the Redpanda Cloud release
+// build registers and the standard release build doesn't.
+func cloudOnlyComponents() (map[string]bool, error) {
+	return releaseComponentsDiff(cloudRelease)
+}
+
+// undocumentedComponents returns the components that the release build in
+// .goreleaser/<name> registers and allComponentsPkg, built the same way,
+// doesn't. docs_gen documents only allComponentsPkg, so these have no docs.
+// The standard main package, built the same way, adds the CLI files that
+// every release build has and allComponentsPkg doesn't import.
+func undocumentedComponents(name string) (map[string]bool, error) {
+	b, err := readReleaseBuild(name)
 	if err != nil {
 		return nil, err
 	}
-	standard, err := buildFiles(standardBuildEnv(os.Environ()))
+	standard, err := readReleaseBuild(standardRelease)
 	if err != nil {
 		return nil, err
 	}
+	files, err := b.files(b.main)
+	if err != nil {
+		return nil, err
+	}
+	documented, err := b.files(allComponentsPkg)
+	if err != nil {
+		return nil, err
+	}
+	cli, err := b.files(standard.main)
+	if err != nil {
+		return nil, err
+	}
+	for f := range cli {
+		documented[f] = true
+	}
+	return registrationsOnlyIn(files, documented)
+}
+
+// undocumentedComponent is a component that one or more release builds
+// register and docs_gen doesn't document. Type is its schema group, such as
+// processors, and Builds names the release builds that have it.
+type undocumentedComponent struct {
+	Type   string   `json:"type"`
+	Name   string   `json:"name"`
+	Builds []string `json:"builds"`
+}
+
+// releaseBuildNames maps each release build that undocumentedReport checks to
+// the name the report uses for it.
+var releaseBuildNames = []struct{ file, name string }{
+	{standardRelease, "standard"},
+	{cgoRelease, "cgo"},
+	{cloudRelease, "cloud"},
+	{cloudAIRelease, "ai"},
+}
+
+// undocumentedReport returns the components that any release build registers
+// and docs_gen doesn't document, sorted by type and then name, and never nil.
+// docs_gen records it for the docs side and doesn't fail on it;
+// TestPlatformsFromBuilds fails when it has any entries.
+func undocumentedReport() ([]undocumentedComponent, error) {
+	builds := map[string][]string{}
+	for _, r := range releaseBuildNames {
+		keys, err := undocumentedComponents(r.file)
+		if err != nil {
+			return nil, fmt.Errorf("%v: %w", r.file, err)
+		}
+		for k := range keys {
+			builds[k] = append(builds[k], r.name)
+		}
+	}
+	out := []undocumentedComponent{}
+	for k, b := range builds {
+		group, name, _ := strings.Cut(k, "/")
+		out = append(out, undocumentedComponent{Type: group, Name: name, Builds: b})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
+const connectModule = "github.com/redpanda-data/connect/v4"
+
+// moduleDir returns the directory of the module mod.
+func moduleDir(mod string) (string, error) {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", mod).Output()
+	if err != nil {
+		return "", fmt.Errorf("finding the directory of %v: %w", mod, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// registrationsOnlyIn returns the components registered in the files of
+// files that other doesn't compile.
+func registrationsOnlyIn(files, other map[string]bool) (map[string]bool, error) {
 	// Only this module and benthos register components. Other dependencies
 	// can also have files that only cgo builds compile, such as a macOS
 	// keychain backend.
@@ -159,11 +331,11 @@ func cgoOnlyComponents() (map[string]bool, error) {
 	}
 	keys := map[string]bool{}
 	fset := token.NewFileSet()
-	for path := range full {
-		if standard[path] || !inModule(path) {
+	for path := range files {
+		if other[path] || !inModule(path) {
 			continue
 		}
-		found, err := fileRegistrations(path, full, fset)
+		found, err := fileRegistrations(path, files, fset)
 		if err != nil {
 			return nil, err
 		}
@@ -356,17 +528,8 @@ func loadPlatforms(full *fullSchema) (platformSet, error) {
 	if err != nil {
 		return platformSet{}, fmt.Errorf("finding cgo-only components: %w", err)
 	}
-	fullNames := componentNames(full)
-	var unknown []string
-	for k := range cgoOnly {
-		if !fullNames[k] {
-			unknown = append(unknown, k)
-		}
-	}
-	if len(unknown) > 0 {
-		sort.Strings(unknown)
-		return platformSet{}, fmt.Errorf("found registrations for components the docs_gen build doesn't have: %v", strings.Join(unknown, ", "))
-	}
+	// A cgo-only component that docs_gen doesn't have is left out here and
+	// recorded by undocumentedReport instead.
 	standard := withoutComponents(full, cgoOnly)
 	cloud, err := marshalSchema(schema.Cloud("", "").MarshalJSONV0())
 	if err != nil {

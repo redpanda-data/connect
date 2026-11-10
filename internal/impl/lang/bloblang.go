@@ -326,7 +326,7 @@ func registerULID() error {
 		Param(
 			bloblang.NewStringParam("random_source").
 				Default("secure_random").
-				Description("Randomness source: \"secure_random\" uses cryptographically secure random (recommended for production), \"fast_random\" uses faster but non-secure random (only for non-sensitive testing)."),
+				Description("Randomness source: `secure_random` uses cryptographically secure random (recommended for production), `fast_random` uses faster but non-secure random (only for non-sensitive testing)."),
 		).
 		Example(
 			"Generate time-sortable IDs for distributed message ordering",

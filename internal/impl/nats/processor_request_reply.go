@@ -31,6 +31,7 @@ func natsRequestReplyConfig() *service.ConfigSpec {
 		Version("4.27.0").
 		Summary("Sends a message to a NATS subject and expects a reply back from a NATS subscriber acting as a responder.").
 		Description(`
+[[metadata-overview]]
 == Metadata
 
 This input adds the following metadata fields to each message:

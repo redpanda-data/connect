@@ -12,12 +12,15 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/sijms/go-ora/v2/configurations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 func TestBuildConnectionURL(t *testing.T) {
@@ -565,4 +568,38 @@ logminer:
 			assert.ErrorContains(t, err, tt.wantErr)
 		})
 	}
+}
+
+func TestParseSnapshotConnBackoffConfig(t *testing.T) {
+	const minimalOracleCDCYAML = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+logminer: {}
+`
+	t.Run("unset uses the replication defaults", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML, nil)
+		require.NoError(t, err)
+
+		got, err := conf.FieldBackOff(ociFieldSnapshotConnBackoff)
+		require.NoError(t, err)
+		want := replication.DefaultSnapshotConnBackoff()
+		assert.Equal(t, want.InitialInterval, got.InitialInterval)
+		assert.Equal(t, want.MaxInterval, got.MaxInterval)
+		assert.Equal(t, want.MaxElapsedTime, got.MaxElapsedTime)
+	})
+
+	t.Run("set values override the defaults", func(t *testing.T) {
+		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML+`snapshot_connection_backoff:
+  initial_interval: 250ms
+  max_interval: 2s
+  max_elapsed_time: 30s
+`, nil)
+		require.NoError(t, err)
+
+		got, err := conf.FieldBackOff(ociFieldSnapshotConnBackoff)
+		require.NoError(t, err)
+		assert.Equal(t, 250*time.Millisecond, got.InitialInterval)
+		assert.Equal(t, 2*time.Second, got.MaxInterval)
+		assert.Equal(t, 30*time.Second, got.MaxElapsedTime)
+	})
 }
