@@ -35,6 +35,10 @@ var connectionCapacityErrCodes = []int{
 	12520, // ORA-12520: listener could not find available handler for requested type of server
 }
 
+// containerResetTimeout bounds switching a snapshot connection back to the root container. The
+// switch takes milliseconds, and this only stops a hung database blocking shutdown, so needn't be configurable.
+const containerResetTimeout = 10 * time.Second
+
 // DefaultSnapshotConnBackoff returns the default backoff used while waiting for a snapshot connection.
 func DefaultSnapshotConnBackoff() *backoff.ExponentialBackOff {
 	b := backoff.NewExponentialBackOff()
@@ -60,14 +64,16 @@ func newSnapshotDB(ctx context.Context, connStr, pdbName string, connBackoff *ba
 	if err != nil {
 		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
 	}
-	if err := ApplyNLSSettings(ctx, pool); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("configuring nls for snapshot session: %w", err)
-	}
 	if connBackoff == nil {
 		connBackoff = DefaultSnapshotConnBackoff()
 	}
-	return &snapshotDB{pool: pool, pdbName: pdbName, backoff: *connBackoff, log: log}, nil
+	d := &snapshotDB{pool: pool, pdbName: pdbName, backoff: *connBackoff, log: log}
+	// Check a connection can be opened and configured now, waiting with backoff like any other reader.
+	if err := d.withConn(ctx, func(*sql.Conn) error { return nil }); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return d, nil
 }
 
 // setWorkers keeps n connections idle so chunks reuse them instead of logging in again.
@@ -93,7 +99,11 @@ func (d *snapshotDB) withConn(ctx context.Context, fn func(conn *sql.Conn) error
 			return fmt.Errorf("switching session to PDB '%s' for snapshot: %w", d.pdbName, err)
 		}
 		defer func() {
-			if _, cerr := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); cerr != nil {
+			// Reset even when ctx is done, so the pooled connection is left in the root, but don't
+			// let a hung database block shutdown.
+			resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), containerResetTimeout)
+			defer cancel()
+			if _, cerr := conn.ExecContext(resetCtx, "ALTER SESSION SET CONTAINER = CDB$ROOT"); cerr != nil {
 				d.log.Errorf("Switching session back to root container: %v", cerr)
 			}
 		}()
@@ -109,7 +119,7 @@ func (d *snapshotDB) withConn(ctx context.Context, fn func(conn *sql.Conn) error
 	return fn(conn)
 }
 
-// withReadOnlyTxn runs fn in a READ ONLY (serializable) transaction on a connection from withConn.
+// withReadOnlyTxn runs fn in a READ ONLY transaction, whose queries all read as of its start, on a connection from withConn.
 func (d *snapshotDB) withReadOnlyTxn(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	return d.withConn(ctx, func(conn *sql.Conn) (err error) {
 		// context.Background() avoids database/sql's awaitDone goroutine, which races with Rollback in go-ora.
@@ -158,6 +168,11 @@ func (d *snapshotDB) acquire(ctx context.Context) (*sql.Conn, error) {
 		delay := retry.NextBackOff()
 		if delay == backoff.Stop {
 			if d.inUse.Load() == 0 {
+				// Try once more, in case the last reader released its connection after the failed attempt.
+				if conn, err = d.pool.Conn(ctx); err == nil {
+					d.inUse.Add(1)
+					return conn, nil
+				}
 				return nil, err
 			}
 			retry.Reset()
@@ -176,7 +191,9 @@ func (d *snapshotDB) acquire(ctx context.Context) (*sql.Conn, error) {
 
 // currentSCN returns the database's current SCN and server time.
 func (d *snapshotDB) currentSCN(ctx context.Context) (scn SCN, ts time.Time, err error) {
-	err = d.pool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&scn, &ts)
+	err = d.withConn(ctx, func(conn *sql.Conn) error {
+		return conn.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&scn, &ts)
+	})
 	return scn, ts, err
 }
 
