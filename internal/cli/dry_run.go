@@ -40,7 +40,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		&cli.BoolFlag{
 			Name:  "verbose",
 			Value: false,
-			Usage: "Print a pass or fail result for each target and list components that do not support connection tests",
+			Usage: "Print a pass or fail result for each target and list components that do not support connection tests.",
 		},
 
 		secretsFlag,
@@ -56,7 +56,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		Description: `
 Parses each config and tests the connections of its components. It does not lint, so a misspelled field passes. To check fields, use the lint command.
 
-A directory argument is read as a resource repository. Templates in templates/ are registered, and the inputs, caches, processors and outputs in resources/ are tested. Pipeline config files in the directory are not tested. To test pipeline configs, pass the files or a glob:
+A directory argument is read as a resource repository. Templates in templates/ are registered. Resources in resources/inputs, resources/caches, resources/processors and resources/outputs are tested. Pipeline config files in the directory are not tested. To test pipeline configs, pass the files or a glob:
 
   {{.BinaryName}} dry-run ./foo.yaml
   {{.BinaryName}} dry-run './pipelines/*.yaml'
