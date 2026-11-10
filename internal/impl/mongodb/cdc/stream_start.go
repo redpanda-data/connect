@@ -109,7 +109,7 @@ func (m *mongoCDC) resolveStreamStart(
 	case err == nil:
 		start.token = token
 	case !hasTS:
-		return streamStart{}, fmt.Errorf("unable to compute stream start position: %w (%s)", err, bson.M(hello).String())
+		return streamStart{}, fmt.Errorf("unable to compute the stream start position: the hello reply has no lastWrite.majorityOpTime.ts, and capturing a resume token failed: %w (hello reply: %s)", err, bson.M(hello).String())
 	default:
 		// The capture failed, but the oplog time can still open the stream.
 		// The capture fails on replica sets before 4.0.7, which report no
