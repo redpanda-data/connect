@@ -271,9 +271,11 @@ type incSnapshotDeps struct {
 	// collections are the configured collections. Prepare reads each one, so
 	// on a sharded cluster every shard that owns one of them waits.
 	collections []string
-	// streamStart is the cluster time of the token the change stream opened
-	// from: the stream returns no change before it. Prepare waits until a
-	// majority read sees every write before it. Zero means no wait.
+	// streamStart is the cluster time of the resume token the change stream
+	// opened from: the stream returns no change before it. Prepare waits until
+	// a majority read sees every write before it. Zero means no wait: the
+	// stream opened at the majority committed oplog time, or the token time
+	// could not be read.
 	streamStart bson.Timestamp
 	logger      *service.Logger
 }
@@ -416,12 +418,18 @@ func (d *incSnapshotDeps) ResolveWatermark(ctx context.Context) (clusterTimeWate
 // Prepare waits until a majority read sees every write the change stream
 // skips, before the first chunk read.
 //
-// A new change stream starts one tick after the last write the server has
-// applied, not after the last majority-committed write. A write between the two
-// never streams, and a majority chunk read does not see it until it commits.
-// Without the wait, the chunk is released with the older document and the write
-// is lost. A loaded server can take hundreds of milliseconds to commit one write,
-// which is enough to read and release every chunk of a small collection.
+// A stream that opens from a resume token can start ahead of the last
+// majority-committed write. A token captured on a first start (on mongos, or
+// for a blocking snapshot with a signal collection) is one tick after the last
+// write that the server has applied, and a checkpoint can store such a token.
+// A write between the two never streams, and a majority chunk read does not see
+// it until it commits. Without the wait, the chunk is released with the older
+// document and the write is lost. A loaded server can take hundreds of
+// milliseconds to commit one write, which is enough to read and release every
+// chunk of a small collection.
+//
+// A stream that opens at the majority committed oplog time skips no such write,
+// so streamStart is zero and there is no wait.
 //
 // The read sets afterClusterTime, so the server holds it until its majority
 // snapshot reaches that time. Majority snapshots only move forward, so one wait
