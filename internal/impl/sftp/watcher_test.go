@@ -147,11 +147,8 @@ func TestDecideWatcherActionPathAndModTime(t *testing.T) {
 	}
 }
 
-// TestWatcherMinimumAgeWholeSecondModTime checks that the watcher does not
-// queue a file that was changed less than minimum_age ago. SFTP sends
-// modification times in whole seconds, so the reported value can be up to one
-// second older than the real change.
-// newTestWatcher returns a watcher for dir/*.txt that reads from an in-process SFTP server.
+// newTestWatcher returns a watcher for dir/*.txt that reads from an
+// in-process SFTP server.
 func newTestWatcher(t *testing.T, dir string, minAge time.Duration) *watcherPathProvider {
 	t.Helper()
 	serverConn, clientConn := net.Pipe()
@@ -177,6 +174,10 @@ func newTestWatcher(t *testing.T, dir string, minAge time.Duration) *watcherPath
 	}
 }
 
+// TestWatcherMinimumAgeWholeSecondModTime checks that the watcher does not
+// queue a file that was changed less than minimum_age ago. SFTP sends
+// modification times in whole seconds, so the reported value can be up to one
+// second older than the real change.
 func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
@@ -199,6 +200,8 @@ func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
 	assert.Empty(t, w.expandedPaths)
 }
 
+// TestWatcherZeroMinimumAgeFutureModTime checks that the watcher does not queue
+// a file with a modification time in the future, also with a zero minimum_age.
 func TestWatcherZeroMinimumAgeFutureModTime(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.txt")
