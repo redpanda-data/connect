@@ -111,10 +111,11 @@ func (m *mongoCDC) resolveStreamStart(
 	case !hasTS:
 		return streamStart{}, fmt.Errorf("unable to compute stream start position: %w (%s)", err, bson.M(hello).String())
 	default:
-		// Replica sets before 4.0.7 may not report a post-batch resume
-		// token. The oplog timestamp still positions this run, but there is
-		// nothing storable, so the post-snapshot checkpoint is skipped and
-		// a failure re-runs the snapshot as before.
+		// The capture failed, but the oplog time can still open the stream.
+		// The capture fails on replica sets before 4.0.7, which report no
+		// post-batch resume token, and on a transient error. There is no token
+		// to store when the blocking snapshot completes, so a restart before
+		// the first stream checkpoint runs the snapshot again.
 		m.logger.Debugf("unable to capture a pre-snapshot resume token, a completed snapshot will not be checkpointed: %v", err)
 	}
 	return start, nil
