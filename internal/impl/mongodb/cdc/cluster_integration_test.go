@@ -409,6 +409,53 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	}, time.Minute, 250*time.Millisecond)
 }
 
+// TestIntegrationIncSnapshotDepsPrepareWaitsForMajority starts the incremental
+// snapshot with a change stream that opens one tick after a write that the
+// primary has applied but a majority has not committed. The stream does not
+// return that write, and a majority chunk read does not see it until it
+// commits. Prepare must not return until a majority read sees the write, and
+// must return when it does.
+func TestIntegrationIncSnapshotDepsPrepareWaitsForMajority(t *testing.T) {
+	integration.CheckSkip(t)
+	// Starts its own containers on its own network.
+	t.Parallel()
+	primary, secondary := startTwoNodeReplicaSet(t)
+	client := connectTo(t, primary.uri(true))
+	db := client.Database("prepare")
+	ctx := t.Context()
+
+	_, err := db.Collection("c").InsertOne(ctx, bson.M{"_id": 1, "v": 0})
+	require.NoError(t, err)
+
+	secondary.stopReplication()
+
+	// Applied on the primary only: a majority of two needs the secondary.
+	sess, err := client.StartSession()
+	require.NoError(t, err)
+	defer sess.EndSession(ctx)
+	w1 := db.Collection("c", options.Collection().SetWriteConcern(writeconcern.W1()))
+	_, err = w1.UpdateOne(mongo.NewSessionContext(ctx, sess), bson.M{"_id": 1}, bson.M{"$set": bson.M{"v": 1}})
+	require.NoError(t, err)
+	writeTS := sess.OperationTime()
+	require.NotNil(t, writeTS)
+
+	deps := &incSnapshotDeps{
+		db:          db,
+		collections: []string{"c"},
+		streamStart: nextTimestamp(*writeTS),
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	err = deps.Prepare(waitCtx)
+	require.True(t, mongo.IsTimeout(err), "Prepare returned before the write was majority committed: %v", err)
+
+	secondary.resumeReplication()
+	waitCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	require.NoError(t, deps.Prepare(waitCtx))
+}
+
 // TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite starts the input
 // after a write that the primary has applied but a majority has not committed.
 //
