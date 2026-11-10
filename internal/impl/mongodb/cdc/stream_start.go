@@ -15,25 +15,29 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// streamStart is the position one connection's change stream opens from, and
-// the inputs of the blocking snapshot that runs before it. Connect resolves it
-// once per connection with resolveStreamStart, and the stream goroutine reads
-// it.
+// streamStart is where one connection's MongoDB change stream opens, and the
+// time that the blocking snapshot puts on the documents it reads.
+//
+// Connect computes it once per connection with resolveStreamStart. The stream
+// goroutine reads it.
 type streamStart struct {
-	// token is the change stream resume token the stream opens after
-	// (SetResumeAfter): the checkpoint token, else the position captured
-	// before the snapshot. Nil opens the stream at the operation after opTime.
-	// When a blocking snapshot runs, no checkpoint was loaded, so token is the
-	// captured position that storeSnapshotCheckpoint stores when the snapshot
-	// completes.
+	// token is the MongoDB change stream resume token that the stream opens
+	// after (SetResumeAfter).
+	//
+	// It is one of:
+	//   - The loaded checkpoint, on a restart.
+	//   - The current position of the change stream, captured on a first start.
+	//     resolveStreamStart says when it captures one.
+	//   - Nil, when there is no checkpoint and no captured token. The stream
+	//     then starts from opTime: it returns only the changes after that time.
 	token bson.Raw
-	// opTime is lastWrite.majorityOpTime.ts from the hello reply: the timestamp
-	// of the newest oplog entry that a majority of the replica set members has
-	// written. With a nil token, the stream opens at the operation after it.
-	// The blocking snapshot puts it in the operation_time metadata of each
-	// document it reads, but does not read at it. It is zero on a sharded
-	// cluster, because mongos reports no lastWrite, but there token is never
-	// nil.
+
+	// opTime is the time of the stream start, from the hello reply:
+	//   - On a replica set, lastWrite.majorityOpTime.ts: the timestamp of the
+	//     newest oplog entry that a majority of the members has written.
+	//   - On a sharded cluster, zero. mongos has no oplog, so its reply has no
+	//     lastWrite. The stream never starts from opTime there, because a token
+	//     is always captured.
 	opTime bson.Timestamp
 }
 
@@ -62,9 +66,10 @@ func (h helloReply) majorityOpTime() (bson.Timestamp, bool) {
 // resolveStreamStart decides where the change stream opens. Arguments:
 //   - checkpointToken is the loaded checkpoint, nil on a first start.
 //   - hello is the reply to the hello command.
-//   - captureToken reads the current change stream position. It is a function
-//     so that it runs only when a snapshot is about to run or hello has no
-//     timestamp.
+//   - captureToken reads the current change stream position. Connect passes
+//     getCurrentResumeToken, which opens a short-lived change stream and
+//     returns its resume token. It is a function so that the short-lived
+//     change stream opens only when a token is needed.
 func (m *mongoCDC) resolveStreamStart(
 	ctx context.Context,
 	checkpointToken bson.Raw,
