@@ -1074,9 +1074,8 @@ func TestResolveStreamStart(t *testing.T) {
 			hello:               replicaSetHello,
 			wantCaptured:        true,
 			want: streamStart{
-				token:         capturedToken,
-				opTime:        bson.Timestamp{T: 100, I: 2},
-				snapshotToken: capturedToken,
+				token:  capturedToken,
+				opTime: bson.Timestamp{T: 100, I: 2},
 			},
 		},
 		{
@@ -1094,8 +1093,7 @@ func TestResolveStreamStart(t *testing.T) {
 			hello:        shardedHello,
 			wantCaptured: true,
 			want: streamStart{
-				token:         capturedToken,
-				snapshotToken: capturedToken,
+				token: capturedToken,
 			},
 		},
 		{

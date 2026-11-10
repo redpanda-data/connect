@@ -843,8 +843,11 @@ func mongoClientBSONOptions(o *options.ClientOptions) {
 // it.
 type streamStart struct {
 	// token is the change stream resume token the stream opens after
-	// (SetResumeAfter): the checkpoint token, else snapshotToken. Nil opens the
-	// stream at the operation after opTime.
+	// (SetResumeAfter): the checkpoint token, else the position captured
+	// before the snapshot. Nil opens the stream at the operation after opTime.
+	// When a blocking snapshot runs, no checkpoint was loaded, so token is the
+	// captured position that storeSnapshotCheckpoint stores when the snapshot
+	// completes.
 	token bson.Raw
 	// opTime is lastWrite.majorityOpTime.ts from the hello reply: the timestamp
 	// of the newest oplog entry that a majority of the replica set members has
@@ -854,12 +857,6 @@ type streamStart struct {
 	// cluster, because mongos reports no lastWrite, but there token is never
 	// nil.
 	opTime bson.Timestamp
-	// snapshotToken is the token captured on a first start, which
-	// storeSnapshotCheckpoint stores when the blocking snapshot completes. Nil
-	// skips that checkpoint, so a failure re-runs the snapshot. It is not
-	// derivable from token: with a checkpoint token, no snapshot runs and
-	// nothing is captured.
-	snapshotToken bson.Raw
 }
 
 // resolveStreamStart decides where the change stream opens. Arguments:
@@ -894,7 +891,6 @@ func (m *mongoCDC) resolveStreamStart(
 	switch {
 	case err == nil:
 		start.token = token
-		start.snapshotToken = token
 	case !hasTS:
 		return streamStart{}, fmt.Errorf("unable to compute stream start position: %w (%s)", err, hello.String())
 	default:
@@ -1129,7 +1125,9 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			// CONTRIBUTING §5.4.1: checkpoint as soon as the snapshot completes
 			// rather than waiting for the first streamed message, so that a
 			// restart resumes the stream instead of re-running the snapshot.
-			if !m.storeSnapshotCheckpoint(ctx, tokenEpoch, cp, start.snapshotToken, m.checkpoint.Store) {
+			// No checkpoint was loaded, so start.token is the position captured
+			// before the snapshot, or nil if none was captured.
+			if !m.storeSnapshotCheckpoint(ctx, tokenEpoch, cp, start.token, m.checkpoint.Store) {
 				return
 			}
 			if m.snapshotParallelism > 0 && m.cc.AssumesRole() {
