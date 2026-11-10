@@ -177,6 +177,10 @@ func (s *State) watermark(high time.Time) time.Time {
 	// The one second is a protocol constant, not a tuning knob: DynamoDB
 	// Streams rounds ApproximateCreationDateTime down to the second, so a
 	// shard seen up to second S may still deliver records from later in S.
-	// User-tunable slack is snapshot_watermark_margin.
+	// User-tunable slack is snapshot_watermark_margin. The margin is used
+	// twice for a shard read as idle: ShardProgress.ObserveIdle credits it
+	// only up to its poll start minus the margin (the poll start is host
+	// time, so this covers clock skew to AWS), and the margin added here
+	// covers stream publication delay on every shard.
 	return high.Add(time.Second + s.margin)
 }

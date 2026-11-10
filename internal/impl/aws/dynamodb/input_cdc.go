@@ -122,25 +122,25 @@ const (
 const signalTableDescription = `A DynamoDB table used to send control signals to the input. Leave empty (the default)
 to disable control signals. When set, the table must exist and have a
 stream enabled with view type ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `, otherwise the input fails to
-connect. It must not also appear in ` + "`" + dciFieldTables + "`" + `, which is rejected at startup, and tag discovery
+connect. It must not also appear in ` + "`" + dciFieldTables + "`" + `, which is rejected at startup. Tag discovery
 never treats it as a source table, even when its tags match. The signal table is always streamed
-alongside the source tables, so the input runs in multi-table mode whenever it is set, and
+alongside the source tables. So the input runs in multi-table mode whenever it is set, and
 ` + "`" + dciFieldSnapshotMode + "`" + ` must then be ` + "`none`" + ` or ` + "`incremental`" + `.
 
 Each signal is an item with these attributes:
 
-- **id**: the table's partition key, of any scalar type; it identifies the signal in logs, and
-  each signal must use a new id, for example a UUID or a timestamp
+- **id**: the table's partition key, of any scalar type. It identifies the signal in logs. Each
+  signal must use a new id, for example a UUID or a timestamp
 - **type**: a string (` + "`S`" + `), the signal type (see supported signals below)
 - **data**: a string (` + "`S`" + `) holding a JSON object with the signal parameters
 
-Only inserted items are signals. Modified and removed items are streamed but not acted on, so
-writing a signal with an id already in the table overwrites that item and has no effect (the input
-logs a warning). Write each signal with a new id.
+Only inserted items are signals. Modified and removed items are streamed but not acted on.
+Writing a signal with an id already in the table overwrites that item and has no effect (the
+input logs a warning). Write each signal with a new id.
 
 Signals are read from the signal table's stream like any other change. With
 ` + "`" + dciFieldStartFrom + ": trim_horizon`" + ` (the default) and no checkpoint state yet, the first start reads
-the stream's retained records, which cover the last 24 hours, so ` + "`snapshot-execute`" + ` items written
+the stream's retained records, which cover the last 24 hours. So ` + "`snapshot-execute`" + ` items written
 in that time are executed on that first start.
 
 Signal records are emitted downstream as regular messages, with the ` + "`dynamodb_table`" + ` metadata
@@ -163,14 +163,19 @@ object with a ` + "`message`" + ` key, whose value is written to the input's log
 ` + "`" + dciFieldSnapshotMode + ": incremental`" + `; without it the signal is logged with a warning and
 ignored. The ` + "`data`" + ` attribute must contain a JSON object with a ` + "`tables`" + ` key listing table names,
 for example ` + "`{\"tables\": [\"orders\", \"customers\"]}`" + `. Every named table must be one this input
-streams, with a stream view of ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `; if any table fails these
-checks the whole request is rejected and logged, and nothing is queued.
+streams, with a stream view of ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `. If any table fails these
+checks, the whole request is rejected and logged, and nothing is queued.
 
 With ` + "`" + dciFieldSnapshotMode + ": incremental`" + ` and ` + "`signal_table_name`" + ` set, tables are backfilled only on
-request. At startup, and for tables found by discovery, a table is queued only when it has a
-backfill in progress, has a request recorded that has not completed, or has a completed backfill
-whose stream checkpoint is stale (the stream has trimmed changes the backfill no longer covers),
-which is reset and run again. Every other table waits for a signal.
+request. At startup, and for tables found by discovery, a table is queued only when one of these
+is true:
+
+- It has a backfill in progress.
+- It has a request recorded that has not completed.
+- It has a completed backfill whose stream checkpoint is stale (the stream has trimmed changes
+  the backfill no longer covers). That backfill is reset and run again.
+
+Every other table waits for a signal.
 
 Each table joins the back of the backfill queue and is backfilled once. A table already backfilled
 is skipped with a warning, so a repeated signal does not read it again. To read it again, delete
@@ -178,9 +183,9 @@ its ` + "`snapshot#complete`" + ` and ` + "`snapshot#segment#N`" + ` rows from t
 signal.
 
 A table's snapshot rows (` + "`snapshot#complete`" + `, ` + "`snapshot#segment#N`" + ` and ` + "`snapshot#requested`" + `)
-are in that table's partition of the checkpoint table, whose hash key is the table's stream ARN, or
-the source table name when ` + "`" + dciFieldGlobalTable + "`" + ` is set, prefixed with ` + "`<namespace>#`" + ` when
-` + "`" + dciFieldCheckpointNamespace + "`" + ` is set.
+are in that table's partition of the checkpoint table. The partition's hash key is the table's
+stream ARN, or the source table name when ` + "`" + dciFieldGlobalTable + "`" + ` is set. It is prefixed with
+` + "`<namespace>#`" + ` when ` + "`" + dciFieldCheckpointNamespace + "`" + ` is set.
 
 Send a signal with the AWS CLI, generating a new id for each one:
 
@@ -242,13 +247,19 @@ WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units 
 
 NOTE: In `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes, snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `+"`snapshot_deduplicate`"+` to minimize duplicates.
 
-When `+"`snapshot_mode`"+` is `+"`incremental`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode; in multi-table mode this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held, so no snapshot item leaves the input after a newer change to the same key, and the last value per key the input emits matches the table. This ordering holds at the input; output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress (in multi-table mode, so is one that fails to start; in single-table mode that fails the connection, which is retried with its own backoff), waiting 30 seconds at first and doubling up to 10 minutes between attempts, while the table keeps streaming; in multi-table mode the other queued tables are backfilled meanwhile.
+When `+"`snapshot_mode`"+` is `+"`incremental`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode. In multi-table mode, this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held. So no snapshot item leaves the input after a newer change to the same key. The last value per key the input emits matches the table. This ordering holds at the input. Output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress, while the table keeps streaming. In multi-table mode, a backfill that fails to start is retried the same way, and the other queued tables are backfilled meanwhile. In single-table mode, a backfill that fails the connection is retried with its own backoff. Retries wait 30 seconds at first and double up to 10 minutes between attempts.
 
 == Checkpointing
 
 Checkpoints are stored in a separate DynamoDB table (configured with `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses. With `+"`snapshot_mode: incremental`"+`, or when `+"`signal_table_name`"+` is set, it also needs `+"`dynamodb:DeleteItem`"+` on the checkpoint table, because resetting stale snapshot progress and clearing a handled snapshot request both delete rows.
 
-A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one: the first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position; a parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged); and a parent shard the stream reports as not found. A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged.
+A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one:
+
+- The first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position.
+- A parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged).
+- A parent shard the stream reports as not found.
+
+A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged.
 
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
@@ -296,7 +307,7 @@ This input emits the following metrics:
 
 == Global table checkpoints (multi-region failover)
 
-In active/active or active/passive multi-region deployments, set `+"`global_table: true`"+` and list the other regions in `+"`global_table_replicas`"+` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. If the checkpoint table already exists, enabling `+"`global_table`"+` reconciles it towards the desired configuration: any missing replica regions are added by calling `+"`UpdateTable`"+`. The existing table must have been created in global mode (it must use a `+"`TableId`"+` hash key); pointing `+"`global_table`"+` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
+In active/active or active/passive multi-region deployments, set `+"`global_table: true`"+` and list the other regions in `+"`global_table_replicas`"+` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time). Same-region restarts still resume exactly. If the checkpoint table already exists, enabling `+"`global_table`"+` reconciles it towards the desired configuration: any missing replica regions are added by calling `+"`UpdateTable`"+`. The existing table must have been created in global mode (it must use a `+"`TableId`"+` hash key). Pointing `+"`global_table`"+` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
 
 When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamodb:CreateTable`"+`, `+"`dynamodb:UpdateTable`"+`, `+"`dynamodb:DescribeTable`"+`, `+"`dynamodb:DescribeLimits`"+`, `+"`iam:CreateServiceLinkedRole`"+`, and create/describe permissions in each replica region.
 `).
@@ -367,7 +378,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc", "incremental").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too), and never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. `incremental` requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, reads with strongly consistent Scans (twice the RCU of the other modes), and backfills a table once, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset deletes snapshot progress rows.").Version("4.82.0").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too). It never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. `incremental` requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, and reads with strongly consistent Scans (twice the RCU of the other modes). It backfills a table once, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset deletes snapshot progress rows.").Version("4.82.0").
 				ShortDescription("Snapshot behaviour: none, snapshot_only, snapshot_and_cdc, or incremental (backfill while streaming, multi-table capable).").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
@@ -398,13 +409,13 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(100000).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotWatermarkMargin).
-				Description("Incremental snapshot only. Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.").Version("4.118.0").
+				Description("Incremental snapshot only. Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. A shard that is read as idle counts as read up to its poll start minus this margin, so a page can wait up to twice the margin for an idle shard. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").Version("4.118.0").
 				ShortDescription("Incremental snapshot only: extra hold time for clock skew and stream delay.").
 				Default("2s").
 				LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["snapshot_watermark_margin must not be negative"] }`).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotIdleShardGrace).
-				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events; correctness of the final value per key does not depend on it.").Version("4.118.0").
+				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").Version("4.118.0").
 				ShortDescription("Incremental snapshot only: how long a shard with no records holds back snapshot pages.").
 				Default("1m").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_idle_shard_grace must be greater than 0"] }`).

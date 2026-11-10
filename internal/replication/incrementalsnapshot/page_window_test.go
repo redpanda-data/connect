@@ -9,6 +9,7 @@
 package incrementalsnapshot
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -236,4 +237,30 @@ func TestPageWindowOldestHeld(t *testing.T) {
 	oldest, ok := w.OldestHeld()
 	require.True(t, ok)
 	assert.Equal(t, t0, oldest)
+}
+
+func TestPageWindowSendErrorKeepsPageHeld(t *testing.T) {
+	w := newTestWindow()
+	w.Begin(0)
+	released, _ := w.Hold(0, []string{"a", "b"}, []string{"a", "b"}, t0, nil)
+	require.Equal(t, 2, w.HeldItems())
+
+	err := w.ReleaseReady(always, func(ReleasedPage[string, any]) error {
+		return errors.New("emit failed")
+	})
+	require.ErrorContains(t, err, "emit failed")
+	assert.Equal(t, 2, w.HeldItems())
+	select {
+	case <-released:
+		t.Fatal("released channel closed after a failed send")
+	default:
+	}
+
+	assert.Equal(t, []string{"a", "b"}, collectPage(t, w))
+	assert.Equal(t, 0, w.HeldItems())
+	select {
+	case <-released:
+	default:
+		t.Fatal("released channel still open after a successful send")
+	}
 }

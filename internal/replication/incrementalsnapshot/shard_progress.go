@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+// productiveIdleStreak is how many consecutive empty reads make a shard that
+// has returned records count as idle. One is not enough: a stream can return
+// an empty page mid-shard, before the records that follow it.
+const productiveIdleStreak = 2
+
 type shardMark struct {
 	seen        time.Time
 	exhausted   bool
@@ -28,6 +33,10 @@ type shardMark struct {
 // PageWindow's ordering refinement: a wrong answer releases a page early,
 // which can briefly reorder an older stream value after the snapshot item
 // but never loses or stales a key (see PageWindow).
+//
+// The idle rules (productive, the empty-read streak and idleGrace) are for
+// streams that can return empty reads before they reach a shard's data. A
+// stream that sends heartbeats would replace them.
 //
 // The tracker starts unsettled and reports nothing caught up until the first
 // RefreshDone that lists only known shards, or until it has stayed unsettled
@@ -119,7 +128,7 @@ func (p *ShardProgress) ObserveIdle(id string, pollStart time.Time) {
 	if m.firstEmpty.IsZero() {
 		m.firstEmpty = pollStart
 	}
-	idle := (m.productive && m.emptyStreak >= 2) ||
+	idle := (m.productive && m.emptyStreak >= productiveIdleStreak) ||
 		(!m.productive && pollStart.Sub(m.firstEmpty) >= p.idleGrace)
 	if !idle {
 		return

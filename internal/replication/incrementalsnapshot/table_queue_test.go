@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTableQueueFIFOAndDedup(t *testing.T) {
@@ -33,14 +34,72 @@ func TestTableQueueFIFOAndDedup(t *testing.T) {
 	assert.Equal(t, 0, q.Len())
 }
 
-func TestTableQueuePopBlocksUntilPushOrCancel(t *testing.T) {
+func TestTableQueuePushAgainAfterPop(t *testing.T) {
+	q := NewTableQueue()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	q.Push("a")
+	tbl, ok := q.Pop(ctx)
+	require.True(t, ok)
+	require.Equal(t, "a", tbl)
+
+	q.Push("a")
+	assert.Equal(t, 1, q.Len())
+	tbl, ok = q.Pop(ctx)
+	require.True(t, ok)
+	assert.Equal(t, "a", tbl)
+}
+
+type popResult struct {
+	table string
+	ok    bool
+}
+
+func popAsync(ctx context.Context, q *TableQueue) <-chan popResult {
+	out := make(chan popResult, 1)
+	go func() {
+		tbl, ok := q.Pop(ctx)
+		out <- popResult{tbl, ok}
+	}()
+	return out
+}
+
+func TestTableQueuePopBlocksUntilPush(t *testing.T) {
+	q := NewTableQueue()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	res := popAsync(ctx, q)
+	select {
+	case r := <-res:
+		t.Fatalf("Pop returned %+v before any Push", r)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	q.Push("late")
+	select {
+	case r := <-res:
+		assert.True(t, r.ok)
+		assert.Equal(t, "late", r.table)
+	case <-ctx.Done():
+		t.Fatal("Pop did not return after Push")
+	}
+}
+
+func TestTableQueuePopReturnsOnCancelWhileBlocked(t *testing.T) {
 	q := NewTableQueue()
 	ctx, cancel := context.WithCancel(t.Context())
-	go func() { time.Sleep(20 * time.Millisecond); q.Push("late") }()
-	tbl, ok := q.Pop(ctx)
-	assert.True(t, ok)
-	assert.Equal(t, "late", tbl)
+	res := popAsync(ctx, q)
+	select {
+	case r := <-res:
+		t.Fatalf("Pop returned %+v before cancel", r)
+	case <-time.After(50 * time.Millisecond):
+	}
+
 	cancel()
-	_, ok = q.Pop(ctx)
-	assert.False(t, ok)
+	select {
+	case r := <-res:
+		assert.False(t, r.ok)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Pop did not return after cancel")
+	}
 }

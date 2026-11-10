@@ -38,31 +38,41 @@ type windowPage[T, C any] struct {
 	released chan struct{}
 }
 
-// PageWindow holds one table's open snapshot pages for a connector whose
-// stream has no single global log position to compare a snapshot read
-// against, such as a per-shard change stream. T is the item type and C the
-// caller's opaque resume cursor; keys are caller-encoded strings, one per
-// item, and must identify an item's primary key unambiguously.
+// PageWindow stops a snapshot item from being emitted after a newer stream
+// event for the same key. It is for connectors whose change stream has no
+// single global log position to compare a snapshot read against, such as a
+// per-shard stream. One PageWindow covers one table.
 //
-// A segment is a disjoint slice of the table's key space (for example a
-// parallel scan segment) and holds at most one page at a time. A page opens
-// (Begin) before its read request, so a stream record processed while the
-// request is in flight still drops the key once the items arrive (Hold).
-// Held pages are sent (ReleaseReady) only once the caller's predicate
-// accepts the page's read time.
+// A page is the items of one snapshot read request. A segment is a disjoint
+// slice of the table's key space (for example a parallel scan segment), and
+// it has at most one page at a time. T is the item type. C is the caller's
+// opaque resume cursor, returned unchanged on release. Each item has a
+// caller-encoded string key that identifies its primary key unambiguously.
 //
-// The window is clock-free in its safety: it never decides ordering from
-// timestamps. Release sends while holding the window's lock, and Touch
-// takes the same lock before the caller enqueues the stream record, so for
-// any key either the stream record drops the snapshot item or the item is
-// enqueued first. A snapshot item can therefore never be emitted after the
-// stream event for its key. The release predicate only refines ordering: a
-// wrong answer releases a page early, which can briefly reorder an older
-// stream value after the snapshot item but never loses or stales a key.
+// A page goes through these steps:
 //
-// Lock order: send runs under the window's lock, and Touch, Begin and the
-// other methods take it. A caller must never call into the window while
-// holding a lock that send (or any code send waits on) also acquires.
+//   - Begin opens the page before the read request is sent.
+//   - Touch records each stream key while the request is in flight.
+//   - Hold attaches the read's items and skips the keys already touched.
+//     After Hold, Touch drops the matching item from the page.
+//   - ReleaseReady sends the page when the caller's predicate accepts its
+//     read time.
+//
+// Abort discards a page that was never held, and Reset discards all pages.
+//
+// Ordering does not depend on clocks. The caller must call Touch before it
+// enqueues the stream record, and ReleaseReady calls send while it holds the
+// window's lock. Touch takes the same lock. So for each key, either the
+// stream record drops the snapshot item, or the snapshot item is enqueued
+// first. The release predicate only makes the order better. If it accepts a
+// page too early, an older stream record can arrive after the snapshot item.
+// This is a brief reorder and no key is lost. When each stream record
+// carries the key's full new image, the last value for each key is also
+// still the newest.
+//
+// Lock rule: send runs while the window's lock is held, and all methods
+// take that lock. Do not call a method while you hold a lock that send, or
+// code that send waits on, also takes. This causes a deadlock.
 type PageWindow[T, C any] struct {
 	mu    sync.Mutex
 	pages map[int]*windowPage[T, C] // at most one per segment
