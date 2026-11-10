@@ -715,7 +715,15 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 					w.mgr.Logger().With("error", err, "path", path).Warn("Failed to stat path")
 					continue
 				}
-				if time.Since(info.ModTime()) < w.minAge {
+				// SFTP sends modification times in whole seconds, so the
+				// real change can be up to one second after the reported
+				// value. Use the end of that second to compute the age.
+				// Without this, a file that a writer created but did not
+				// write yet can pass minimum_age and be read empty.
+				// A negative age (the server clock is ahead) always waits,
+				// also with minimum_age 0, as before.
+				age := time.Since(info.ModTime())
+				if age < 0 || (w.minAge > 0 && age < w.minAge+time.Second) {
 					continue
 				}
 
