@@ -40,7 +40,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		&cli.BoolFlag{
 			Name:  "verbose",
 			Value: false,
-			Usage: "Print the lint result for each target file.",
+			Usage: "Print a pass or fail result for each target and list components that do not support connection tests",
 		},
 
 		secretsFlag,
@@ -54,9 +54,14 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		Usage: "Parse {{.ProductName}} configs and test the connections of each plugin",
 		Flags: flags,
 		Description: `
-Exits with a status code 1 if any connection errors are detected in a directory:
+Parses each config and tests the connections of its components. It does not lint, so a misspelled field passes. To check fields, use the lint command.
 
-  {{.BinaryName}} dry-run ./foo.yaml`[1:],
+A directory argument is read as a resource repository. Templates in templates/ are registered, and the inputs, caches, processors and outputs in resources/ are tested. Pipeline config files in the directory are not tested. To test pipeline configs, pass the files or a glob:
+
+  {{.BinaryName}} dry-run ./foo.yaml
+  {{.BinaryName}} dry-run './pipelines/*.yaml'
+
+Exits with status code 1 if any connection test fails.`[1:],
 		Action: func(c *cli.Context) error {
 			if err := applyEnvFileFlag(c); err != nil {
 				return err
