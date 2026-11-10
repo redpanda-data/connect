@@ -141,7 +141,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Default(false).
 				Advanced(),
 			service.NewBoolField(oskFieldAckReplicas).
-				Description("Ensure that messages have been copied across all replicas before acknowledging receipt. This is always `true` when `idempotent_write` is `true`.").
+				Description("Ensure that messages have been copied across all replicas before acknowledging receipt. When `idempotent_write` is `true`, the output acts as if this field is `true`.").
 				Advanced().Default(false),
 			service.NewIntField(oskFieldMaxMsgBytes).
 				Description("The maximum size in bytes of messages sent to the target topic.").
