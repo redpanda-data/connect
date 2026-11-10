@@ -409,7 +409,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(100000).
 				Advanced(),
 			service.NewDurationField(dciFieldSnapshotWatermarkMargin).
-				Description("Incremental snapshot only. Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. A shard that is read as idle counts as read up to its poll start minus this margin, so a page can wait up to twice the margin for an idle shard. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").Version("4.118.0").
+				Description("Incremental snapshot only. Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. A shard read as idle counts as read up to its poll start minus this margin. So a page can wait up to twice the margin for an idle shard. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").Version("4.118.0").
 				ShortDescription("Incremental snapshot only: extra hold time for clock skew and stream delay.").
 				Default("2s").
 				LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["snapshot_watermark_margin must not be negative"] }`).
