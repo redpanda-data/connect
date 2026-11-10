@@ -275,6 +275,7 @@ type incSnapshotDeps struct {
 	// from: the stream returns no change before it. Prepare waits until a
 	// majority read sees every write before it. Zero means no wait.
 	streamStart bson.Timestamp
+	logger      *service.Logger
 }
 
 var _ incrementalsnapshot.Deps[clusterTimeWatermark] = (*incSnapshotDeps)(nil)
@@ -432,6 +433,8 @@ func (d *incSnapshotDeps) Prepare(ctx context.Context) error {
 	// The tick before the start: the start itself can be ahead of every write,
 	// and the server rejects an afterClusterTime ahead of its cluster time.
 	skipped := prevTimestamp(d.streamStart)
+	// The wait has no timeout: without a majority it lasts until shutdown.
+	d.logger.Debugf("Incremental snapshot waiting for the majority snapshot to reach %v", d.streamStart)
 	db := d.primary()
 	for _, coll := range d.collections {
 		err := db.RunCommand(ctx, bson.D{
@@ -594,6 +597,7 @@ func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, 
 		},
 		streamedThrough: func() bson.Timestamp { return run.through },
 		collections:     collections,
+		logger:          logger,
 	}
 	deps := &watermarkRecorder{incSnapshotDeps: run.deps, run: run}
 	if err := run.setUp(deps, collections, chunkSize, retryCooldown, resume); err != nil {
