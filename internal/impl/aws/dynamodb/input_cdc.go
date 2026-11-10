@@ -279,7 +279,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
-				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with. A snapshot that resumes from stored progress keeps the segment count it started with; a changed value applies to the next snapshot.").Version("4.82.0").
+				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with. A snapshot that resumes from stored progress keeps the segment count it started with. A changed value applies to the next snapshot.").Version("4.82.0").
 				ShortDescription("Number of parallel scan segments, from 1 to 10. Higher parallelism scans faster but uses more RCUs.").
 				Default(1).
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
