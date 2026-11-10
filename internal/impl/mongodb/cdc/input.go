@@ -964,7 +964,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if version.Major() < 4 {
 		return fmt.Errorf("`mongodc_cdc` requires MongoDB version 4 or higher - current version: %v", version.String())
 	}
-	resumeToken, err := m.checkpoint.Load(ctx)
+	checkpointToken, err := m.checkpoint.Load(ctx)
 	if err != nil {
 		if !errors.Is(err, errCorruptCheckpoint) {
 			return fmt.Errorf("unable to load checkpoints from cache: %w", err)
@@ -987,11 +987,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		if derr := m.checkpoint.Delete(ctx); derr != nil {
 			return fmt.Errorf("unable to clear the corrupt checkpoint: %w", derr)
 		}
-		resumeToken = nil
+		checkpointToken = nil
 	}
 	var incResume *incrementalsnapshot.State
 	if m.readsIncrementally() {
-		if incResume, resumeToken, err = m.loadIncSnapshotState(ctx, resumeToken); err != nil {
+		if incResume, checkpointToken, err = m.loadIncSnapshotState(ctx, checkpointToken); err != nil {
 			return err
 		}
 	} else if err := m.discardIncSnapshotProgress(ctx); err != nil {
@@ -1000,9 +1000,9 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	// Open this connection's checkpoint generation, abandoning any token still in
 	// flight from a previous one: those belong to a position this connection is
 	// not resuming from, and the loaded checkpoint is the only start position that
-	// counts now. resumeToken is used locally from here on, since the field can be
-	// advanced concurrently by acks once the stream is running.
-	tokenEpoch := m.beginTokenEpoch(resumeToken)
+	// counts now. Code below reads checkpointToken, not m.resumeToken, because acks
+	// advance m.resumeToken concurrently once the stream is running.
+	tokenEpoch := m.beginTokenEpoch(checkpointToken)
 	// The hello reply gives the majority committed oplog time, which
 	// resolveStreamStart uses to start the stream when there is no token.
 	r = m.db.RunCommand(ctx, bson.M{"hello": 1})
@@ -1013,7 +1013,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if err := r.Decode(&helloReply); err != nil {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
-	start, err := m.resolveStreamStart(ctx, resumeToken, helloReply, m.getCurrentResumeToken)
+	start, err := m.resolveStreamStart(ctx, checkpointToken, helloReply, m.getCurrentResumeToken)
 	if err != nil {
 		return err
 	}
@@ -1109,7 +1109,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			opts = opts.SetStartAtOperationTime(&nextTS)
 		}
 		cp := checkpoint.NewCapped[streamPosition](int64(m.checkpointLimit))
-		if resumeToken == nil && !m.incremental {
+		if checkpointToken == nil && !m.incremental {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
