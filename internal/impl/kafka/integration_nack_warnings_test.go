@@ -73,6 +73,7 @@ func TestIntegrationRedpandaInputNackWarning(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
+	t.Log("Given: a running Redpanda instance with one record in the topic")
 	rpe, err := redpandatest.StartRedpanda(t, true)
 	require.NoError(t, err)
 
@@ -101,6 +102,7 @@ output:
 	stream, err := sb.Build()
 	require.NoError(t, err)
 
+	t.Log("When: the stream fails every record and reject_errored rejects it")
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
@@ -115,6 +117,7 @@ output:
 		<-done
 	})
 
+	t.Log("Then: the input logs a warning naming the rejected record")
 	var warning string
 	require.Eventually(t, func() bool {
 		var ok bool
