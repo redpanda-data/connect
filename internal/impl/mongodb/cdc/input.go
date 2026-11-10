@@ -1109,7 +1109,13 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			opts = opts.SetStartAtOperationTime(&nextTS)
 		}
 		cp := checkpoint.NewCapped[streamPosition](int64(m.checkpointLimit))
-		if checkpointToken == nil && !m.incremental {
+		// firstStart is a start without a loaded checkpoint. The blocking
+		// snapshot block runs on each first start, also when stream_snapshot is
+		// off: readSnapshot then reads nothing, and storeSnapshotCheckpoint
+		// stores the start position at once if one was captured (sharded).
+		// The incremental snapshot replaces the blocking one.
+		firstStart := checkpointToken == nil
+		if firstStart && !m.incremental {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
