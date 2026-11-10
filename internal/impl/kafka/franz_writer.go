@@ -15,6 +15,7 @@
 package kafka
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -382,6 +383,7 @@ const (
 // outputs.
 const (
 	kafkaOutputKeyDescription         = "An optional key to populate for each message."
+	franzOutputKeyDescription         = "An optional key to populate for each message. A key that resolves to an empty string or to `null` is sent as a null key. Records with a null key are distributed across partitions instead of all hashing to the same partition."
 	kafkaOutputTimeoutDescription     = "The maximum period of time to wait for message sends before abandoning the request and retrying."
 	kafkaOutputTimestampDescription   = "An optional timestamp to set for each message, in seconds since the Unix epoch. When left empty, the current timestamp is used."
 	kafkaOutputTimestampMsDescription = "An optional timestamp to set for each message, in milliseconds since the Unix epoch. When left empty, the current timestamp is used. You cannot set both `timestamp` and `timestamp_ms`."
@@ -394,7 +396,7 @@ func FranzWriterConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(kfwFieldTopic).
 			Description("A topic to write messages to."),
 		service.NewInterpolatedStringField(kfwFieldKey).
-			Description(kafkaOutputKeyDescription).Optional(),
+			Description(franzOutputKeyDescription).Optional(),
 		service.NewInterpolatedStringField(kfwFieldPartition).
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").Version("4.13.0").
 			ShortDescription("An explicit partition for each message. Only relevant when partitioner is set to manual.").
@@ -585,10 +587,11 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 
 		// Optional: Key
 		if w.Key != nil {
-			r.Key, err = w.Key.TryBytes(msg)
+			key, err := w.Key.TryBytes(msg)
 			if err != nil {
 				return nil, fmt.Errorf("key interpolation: %w", err)
 			}
+			r.Key = franzRecordKey(key)
 		}
 
 		// Optional: Headers
@@ -638,6 +641,19 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 	}
 
 	return records, nil
+}
+
+// franzRecordKey converts an interpolated key into the record key to produce.
+// The partitioner only spreads records across partitions when the key is nil;
+// a non-nil key, even an empty one, hashes every such record to the same
+// partition. An interpolation renders a missing or null key as an empty string
+// or as the bytes `null` (for example `${! @kafka_key }` when the source
+// record had no key), so both are sent as a null key.
+func franzRecordKey(key []byte) []byte {
+	if len(key) == 0 || bytes.Equal(key, []byte("null")) {
+		return nil
+	}
+	return key
 }
 
 // ConnectionTest attempts to test the connection configuration of this output
