@@ -32,6 +32,7 @@ func redpandaCommonInputConfig() *service.ConfigSpec {
 				kafka.FranzReaderOrderedConfigFields(),
 				[]*service.ConfigField{
 					service.NewAutoRetryNacksToggleField(),
+					kafka.NewNackWarningIntervalField(),
 					service.NewForceTimelyNacksField(),
 				},
 			)...,

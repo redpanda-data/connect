@@ -180,6 +180,8 @@ func newNackTestResources(t *testing.T) (*service.Resources, *logCapture, *count
 	return res, logs, exporter
 }
 
+const testNackWarnInterval = 10 * time.Second
+
 func TestNackWarningInputReplay(t *testing.T) {
 	res, logs, metrics := newNackTestResources(t)
 
@@ -193,7 +195,7 @@ func TestNackWarningInputReplay(t *testing.T) {
 	}}
 
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	in := newNackWarningInput(res, NackMetricNameRedpanda, true, child)
+	in := newNackWarningInput(res, NackMetricNameRedpanda, true, testNackWarnInterval, child)
 	in.now = func() time.Time { return now }
 
 	rejected := errors.New("boom")
@@ -216,14 +218,14 @@ func TestNackWarningInputReplay(t *testing.T) {
 	assert.Contains(t, warnings[0], "Error: boom")
 
 	// Further rejections inside the interval are counted but not logged.
-	now = now.Add(nackWarnInterval / 2)
+	now = now.Add(testNackWarnInterval / 2)
 	nack()
 	nack()
 	assert.Len(t, logs.warnings(), 1)
 
 	// Once the interval has passed the next rejection warns again, summing
 	// up what happened since.
-	now = now.Add(nackWarnInterval)
+	now = now.Add(testNackWarnInterval)
 	nack()
 	warnings = logs.warnings()
 	require.Len(t, warnings, 2)
@@ -235,7 +237,7 @@ func TestNackWarningInputReplay(t *testing.T) {
 	batch, aFn, err := in.ReadBatch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, batch, 1)
-	now = now.Add(nackWarnInterval)
+	now = now.Add(testNackWarnInterval)
 	require.NoError(t, aFn(t.Context(), rejected))
 	warnings = logs.warnings()
 	require.Len(t, warnings, 3)
@@ -262,7 +264,7 @@ func TestNackWarningInputDrop(t *testing.T) {
 	res, logs, metrics := newNackTestResources(t)
 
 	child := &nackTestInput{batches: []service.MessageBatch{kafkaBatch("bar", 3, 7, 3)}}
-	in := newNackWarningInput(res, NackMetricNameKafka, false, child)
+	in := newNackWarningInput(res, NackMetricNameKafka, false, testNackWarnInterval, child)
 
 	batch, aFn, err := in.ReadBatch(t.Context())
 	require.NoError(t, err)
@@ -280,8 +282,82 @@ func TestNackWarningInputDrop(t *testing.T) {
 func TestNackWarningInputPassesErrors(t *testing.T) {
 	res, logs, _ := newNackTestResources(t)
 
-	in := newNackWarningInput(res, NackMetricNameKafka, true, &nackTestInput{})
+	in := newNackWarningInput(res, NackMetricNameKafka, true, testNackWarnInterval, &nackTestInput{})
 	_, _, err := in.ReadBatch(t.Context())
 	require.ErrorIs(t, err, service.ErrEndOfInput)
 	assert.Empty(t, logs.warnings())
+}
+
+func TestNackWarningInputPartialBatchError(t *testing.T) {
+	res, logs, metrics := newNackTestResources(t)
+
+	child := &nackTestInput{batches: []service.MessageBatch{
+		kafkaBatch("foo", 2, 100, 5),
+		kafkaBatch("foo", 2, 100, 5),
+	}}
+	in := newNackWarningInput(res, NackMetricNameRedpanda, true, 0, child)
+
+	// The output fails two messages of a reordered copy of the batch, as a
+	// broker or processor might hand it over, so the batch error indexes do
+	// not match the source batch.
+	batch, aFn, err := in.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, batch, 5)
+	sent := service.MessageBatch{batch[4], batch[3], batch[2], batch[1], batch[0]}
+	bErr := service.NewBatchError(sent, errors.New("partial")).
+		Failed(1, errors.New("bad 103")).
+		Failed(2, errors.New("bad 102"))
+	require.NoError(t, aFn(t.Context(), bErr))
+
+	warnings := logs.warnings()
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "Output rejected 2 message(s) of topic foo partition 2 starting at offset 102")
+	assert.Contains(t, warnings[0], "2 message(s) rejected since the last warning")
+	assert.Equal(t, int64(2), metrics.counter("redpanda_nacks{foo,2}"))
+
+	// A batch error without per message errors rejects the whole batch.
+	batch, aFn, err = in.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, aFn(t.Context(), service.NewBatchError(batch, errors.New("all"))))
+
+	warnings = logs.warnings()
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[1], "Output rejected 5 message(s) of topic foo partition 2 starting at offset 100")
+	assert.Equal(t, int64(7), metrics.counter("redpanda_nacks{foo,2}"))
+
+	// The child receives the batch error unchanged.
+	child.mu.Lock()
+	defer child.mu.Unlock()
+	require.Len(t, child.acks, 2)
+	assert.Same(t, bErr, child.acks[0])
+}
+
+func TestWrapBatchInputNackWarningsInterval(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(
+		service.NewAutoRetryNacksToggleField(),
+		NewNackWarningIntervalField(),
+	)
+
+	tests := []struct {
+		name string
+		yaml string
+		want time.Duration
+	}{
+		{name: "default", yaml: "", want: 10 * time.Second},
+		{name: "custom", yaml: "nack_warning_interval: 1m", want: time.Minute},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+
+			res, _, _ := newNackTestResources(t)
+			rdr, err := WrapBatchInputNackWarnings(conf, res, NackMetricNameRedpanda, &nackTestInput{})
+			require.NoError(t, err)
+			in, ok := rdr.(*nackWarningInput)
+			require.True(t, ok)
+			assert.Equal(t, tc.want, in.warnInterval)
+			assert.True(t, in.replay)
+		})
+	}
 }

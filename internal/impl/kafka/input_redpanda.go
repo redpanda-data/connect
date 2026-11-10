@@ -50,7 +50,7 @@ When using consumer groups, the offsets of "delivered" records are committed aut
 
 === Rejected records
 
-Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens the input logs a warning at most every 10 seconds and increments the ` + "`redpanda_nacks`" + ` metric. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output as shown in the Ordering section, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.
+Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens, the input logs a warning at most once per ` + "<<nack_warning_interval,`nack_warning_interval`>>" + ` and increments the ` + "`redpanda_nacks`" + ` metric. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output as shown in the Ordering section, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.
 
 == Ordering
 
@@ -164,6 +164,7 @@ To change strategies on a running group, first roll out a list with the old stra
 				Advanced().
 				Version("4.114.0"),
 			service.NewAutoRetryNacksToggleField(),
+			NewNackWarningIntervalField(),
 			service.NewForceTimelyNacksField(),
 			service.NewExtractTracingSpanMappingField().Version("4.85.0"),
 		},

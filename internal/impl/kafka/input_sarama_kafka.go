@@ -162,6 +162,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				ShortDescription("Maximum number of messages of the same topic and partition that can be processed at a given time.").
 				Version("3.33.0").Default(1024),
 			service.NewAutoRetryNacksToggleField(),
+			NewNackWarningIntervalField(),
 			service.NewForceTimelyNacksField(),
 			commitPeriodField(iskFieldCommitPeriod).
 				Advanced().Default("1s"),
