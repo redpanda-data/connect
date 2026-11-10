@@ -876,17 +876,17 @@ func (m *mongoCDC) resolveStreamStart(
 ) (streamStart, error) {
 	ts, hasTS := bsonGetPath(hello, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
 	start := streamStart{token: checkpointToken, opTime: ts}
-	// Capture the current change stream position as a resume token when a
-	// snapshot is about to run, because only a token can be persisted to the
-	// checkpoint cache once that snapshot completes - the oplog timestamp
-	// cannot. Sharded clusters (mongos) report no oplog timestamp at all, so
-	// there the token is fetched regardless as the only usable start position.
-	// Otherwise the oplog timestamp positions the stream as before, and nothing
-	// needs a token: without a snapshot there is nothing to checkpoint early,
-	// and when a checkpoint already exists the stream resumes from it.
-	if checkpointToken != nil || (!m.readsSnapshot() && hasTS) {
+	if checkpointToken != nil {
+		// Resume from the checkpoint. No snapshot runs.
 		return start, nil
 	}
+	if !m.readsSnapshot() && hasTS {
+		// Nothing to checkpoint before the first event: open at the oplog time.
+		return start, nil
+	}
+	// A snapshot runs, or hello has no oplog time (mongos). Only a token can be
+	// stored in the checkpoint cache, and on mongos it is the only start
+	// position, so capture one.
 	token, err := captureToken(ctx)
 	switch {
 	case err == nil:
