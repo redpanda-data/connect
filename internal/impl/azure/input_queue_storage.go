@@ -78,7 +78,7 @@ This input adds the following metadata fields to each message:
 
 Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.
 
-Messages are deleted from the queue once they are acknowledged. A rejected message is not deleted. Instead its visibility timeout is reset to zero so that the queue redelivers it right away.`).
+Messages are deleted from the queue after they are acknowledged. A rejected message is not deleted. Instead its visibility timeout is reset to zero so that the queue redelivers it right away.`).
 		Fields(
 			service.NewInterpolatedStringField(qsiFieldQueueName).
 				Description(`The name of the source storage queue.`).
@@ -209,14 +209,14 @@ func deleteMessages(ctx context.Context, queueClient *azq.QueueClient, dqm []*az
 // releaseMessages makes rejected messages visible again right away so they
 // are redelivered without waiting for the dequeue visibility timeout. A
 // failure here is not fatal: the message stays in the queue and becomes
-// visible again once the timeout expires.
+// visible again after the timeout expires.
 func (a *azureQueueStorage) releaseMessages(ctx context.Context, queueClient *azq.QueueClient, dqm []*azq.DequeuedMessage) {
 	visibilityTimeout := int32(0)
 	for _, queueMsg := range dqm {
 		if _, err := queueClient.UpdateMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, *queueMsg.MessageText, &azq.UpdateMessageOptions{
 			VisibilityTimeout: &visibilityTimeout,
 		}); err != nil {
-			a.log.Warnf("Failed to reset visibility of rejected message %s, it is redelivered once the visibility timeout expires: %v", *queueMsg.MessageID, err)
+			a.log.Warnf("Failed to reset visibility of rejected message %s, it is redelivered after the visibility timeout expires: %v", *queueMsg.MessageID, err)
 		}
 	}
 }
