@@ -7,6 +7,7 @@ AI-powered assistant for building Redpanda Connect streaming pipelines with natu
 - Pipeline generation from descriptions
 - Bloblang transformation authoring
 - Configuration validation and fixing
+- Safe operation of CDC inputs (snapshots, backfills, checkpoints)
 
 ## Use in Claude Code
 
