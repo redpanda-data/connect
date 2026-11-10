@@ -25,6 +25,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -168,4 +169,76 @@ input:
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 		integration.StreamTestOptPort(mp.Port()),
 	)
+}
+
+func TestIntegrationNatsPullConsumerSubscriptionClosed(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
+		testcontainers.WithCmd("--js"),
+		testcontainers.WithExposedPorts("4222/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4222/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mp, err := ctr.MappedPort(t.Context(), "4222/tcp")
+	require.NoError(t, err)
+
+	var natsConn *nats.Conn
+	require.Eventually(t, func() bool {
+		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", mp.Port()))
+		return err == nil
+	}, 30*time.Second, time.Second)
+	t.Cleanup(func() {
+		natsConn.Close()
+	})
+
+	js, err := natsConn.JetStream()
+	require.NoError(t, err)
+	_, err = js.AddStream(&nats.StreamConfig{Name: "stream-closed", Subjects: []string{"subject-closed"}})
+	require.NoError(t, err)
+	_, err = js.AddConsumer("stream-closed", &nats.ConsumerConfig{
+		Durable:       "durable-closed",
+		DeliverPolicy: nats.DeliverAllPolicy,
+		AckPolicy:     nats.AckExplicitPolicy,
+	})
+	require.NoError(t, err)
+
+	conf, err := natsJetStreamInputConfig().ParseYAML(fmt.Sprintf(`
+urls: [ nats://localhost:%v ]
+stream: stream-closed
+durable: durable-closed
+bind: true
+`, mp.Port()), nil)
+	require.NoError(t, err)
+
+	reader, err := newJetStreamReaderFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, reader.Connect(t.Context()))
+	t.Cleanup(func() {
+		_ = reader.Close(context.Background())
+	})
+
+	// Close the subscription from under the reader, as a server restart can during a fetch
+	require.NoError(t, reader.natsSub.Unsubscribe())
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	_, _, err = reader.Read(ctx)
+	require.ErrorIs(t, err, service.ErrNotConnected)
+
+	require.NoError(t, reader.Connect(ctx))
+	_, err = js.Publish("subject-closed", []byte("after reconnect"))
+	require.NoError(t, err)
+
+	msg, ackFn, err := reader.Read(ctx)
+	require.NoError(t, err)
+	body, err := msg.AsBytes()
+	require.NoError(t, err)
+	require.Equal(t, "after reconnect", string(body))
+	require.NoError(t, ackFn(ctx, nil))
 }
