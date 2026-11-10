@@ -29,7 +29,7 @@ func TestResolveStreamStart(t *testing.T) {
 	capturedToken, err := bson.Marshal(bson.M{"_data": "captured"})
 	require.NoError(t, err)
 	replicaSetHello := helloReply{"lastWrite": bson.M{"majorityOpTime": bson.M{"ts": bson.Timestamp{T: 100, I: 2}}}}
-	shardedHello := helloReply{"msg": "isdbgrid"}
+	shardedHello := helloReply{"msg": "isdbgrid", "operationTime": bson.Timestamp{T: 200, I: 3}}
 
 	tests := []struct {
 		name                string
@@ -56,7 +56,8 @@ func TestResolveStreamStart(t *testing.T) {
 			checkpointToken: checkpointToken,
 			hello:           shardedHello,
 			want: streamStart{
-				token: checkpointToken,
+				token:  checkpointToken,
+				opTime: bson.Timestamp{T: 200, I: 3},
 			},
 		},
 		{
@@ -91,7 +92,21 @@ func TestResolveStreamStart(t *testing.T) {
 			hello:        shardedHello,
 			wantCaptured: true,
 			want: streamStart{
-				token: capturedToken,
+				token:  capturedToken,
+				opTime: bson.Timestamp{T: 200, I: 3},
+			},
+		},
+		{
+			name:                "first start with a snapshot on a sharded cluster has the cluster time",
+			snapshotParallelism: 1,
+			hello: helloReply{
+				"msg":           "isdbgrid",
+				"operationTime": bson.Timestamp{T: 300, I: 4},
+			},
+			wantCaptured: true,
+			want: streamStart{
+				token:  capturedToken,
+				opTime: bson.Timestamp{T: 300, I: 4},
 			},
 		},
 		{
