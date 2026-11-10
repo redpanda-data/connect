@@ -478,15 +478,16 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return nil, err
 	}
 
-	if ackReplicas || config.Producer.Idempotent {
+	config.Producer.RequiredAcks = sarama.WaitForLocal
+	if ackReplicas {
 		config.Producer.RequiredAcks = sarama.WaitForAll
-	} else {
-		config.Producer.RequiredAcks = sarama.WaitForLocal
 	}
 	if config.Producer.Idempotent {
-		// sarama requires 1 for an idempotent producer. Unlike the franz
-		// writer, the connector's output has no max in-flight requests field,
-		// so we set the value instead of validating it.
+		// sarama requires WaitForAll and MaxOpenRequests == 1 for an
+		// idempotent producer. Unlike the franz writer, the connector's output
+		// has no max in-flight requests field, so we set the value instead of
+		// validating it.
+		config.Producer.RequiredAcks = sarama.WaitForAll
 		config.Net.MaxOpenRequests = 1
 	}
 
