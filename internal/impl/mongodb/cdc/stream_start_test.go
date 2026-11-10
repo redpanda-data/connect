@@ -28,14 +28,14 @@ func TestResolveStreamStart(t *testing.T) {
 	require.NoError(t, err)
 	capturedToken, err := bson.Marshal(bson.M{"_data": "captured"})
 	require.NoError(t, err)
-	replicaSetHello := bson.M{"lastWrite": bson.M{"majorityOpTime": bson.M{"ts": bson.Timestamp{T: 100, I: 2}}}}
-	shardedHello := bson.M{"msg": "isdbgrid"}
+	replicaSetHello := helloReply{"lastWrite": bson.M{"majorityOpTime": bson.M{"ts": bson.Timestamp{T: 100, I: 2}}}}
+	shardedHello := helloReply{"msg": "isdbgrid"}
 
 	tests := []struct {
 		name                string
 		snapshotParallelism int
 		checkpointToken     bson.Raw
-		hello               bson.M
+		hello               helloReply
 		captureErr          error
 		wantCaptured        bool
 		want                streamStart

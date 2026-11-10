@@ -943,11 +943,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if r.Err() != nil {
 		return fmt.Errorf("unable to determine replication info (is your mongodb instance running as a replication set?): %w", r.Err())
 	}
-	var helloReply bson.M
-	if err := r.Decode(&helloReply); err != nil {
+	var hello helloReply
+	if err := r.Decode(&hello); err != nil {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
-	start, err := m.resolveStreamStart(ctx, checkpointToken, helloReply, m.getCurrentResumeToken)
+	start, err := m.resolveStreamStart(ctx, checkpointToken, hello, m.getCurrentResumeToken)
 	if err != nil {
 		return err
 	}

@@ -37,31 +37,52 @@ type streamStart struct {
 	opTime bson.Timestamp
 }
 
+// helloReply is the reply to the hello command. A client runs hello to learn
+// the role of the server it is connected to and the topology around it: for
+// example, whether it is a primary, a secondary, or a mongos router. On a
+// replica set member, the reply also has lastWrite, the optimes of the latest
+// oplog writes.
+//
+// See https://www.mongodb.com/docs/manual/reference/command/hello/.
+type helloReply bson.M
+
+// majorityOpTime returns lastWrite.majorityOpTime.ts.
+//
+// It is the timestamp of the newest oplog entry that a majority of the replica
+// set members has written.
+//
+// The bool is false when the reply has no such timestamp. This is the case on a
+// sharded cluster: mongos replies without lastWrite, because it is a router
+// with no oplog, and each shard keeps its own.
+func (h helloReply) majorityOpTime() (bson.Timestamp, bool) {
+	ts, ok := bsonGetPath(bson.M(h), "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
+	return ts, ok
+}
+
 // resolveStreamStart decides where the change stream opens. Arguments:
 //   - checkpointToken is the loaded checkpoint, nil on a first start.
-//   - hello is the reply to the hello command. Only
-//     lastWrite.majorityOpTime.ts is read. On a sharded cluster, mongos
-//     replies without lastWrite: it is a router with no oplog, and each shard
-//     keeps its own.
+//   - hello is the reply to the hello command.
 //   - captureToken reads the current change stream position. It is a function
 //     so that it runs only when a snapshot is about to run or hello has no
 //     timestamp.
 func (m *mongoCDC) resolveStreamStart(
 	ctx context.Context,
 	checkpointToken bson.Raw,
-	hello bson.M,
+	hello helloReply,
 	captureToken func(context.Context) (bson.Raw, error),
 ) (streamStart, error) {
-	ts, hasTS := bsonGetPath(hello, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
+	ts, hasTS := hello.majorityOpTime()
 	start := streamStart{token: checkpointToken, opTime: ts}
 	if checkpointToken != nil {
 		// Resume from the checkpoint. No snapshot runs.
 		return start, nil
 	}
+
 	if !m.readsSnapshot() && hasTS {
 		// Nothing to checkpoint before the first event: open at the oplog time.
 		return start, nil
 	}
+
 	// A snapshot runs, or hello has no oplog time (mongos). Only a token can be
 	// stored in the checkpoint cache, and on mongos it is the only start
 	// position, so capture one.
@@ -70,7 +91,7 @@ func (m *mongoCDC) resolveStreamStart(
 	case err == nil:
 		start.token = token
 	case !hasTS:
-		return streamStart{}, fmt.Errorf("unable to compute stream start position: %w (%s)", err, hello.String())
+		return streamStart{}, fmt.Errorf("unable to compute stream start position: %w (%s)", err, bson.M(hello).String())
 	default:
 		// Replica sets before 4.0.7 may not report a post-batch resume
 		// token. The oplog timestamp still positions this run, but there is
