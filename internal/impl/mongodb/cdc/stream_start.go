@@ -35,9 +35,8 @@ type streamStart struct {
 	// opTime is the time of the stream start, from the hello reply:
 	//   - On a replica set, lastWrite.majorityOpTime.ts: the timestamp of the
 	//     newest oplog entry that a majority of the members has written.
-	//   - On a sharded cluster, zero. mongos has no oplog, so its reply has no
-	//     lastWrite. The stream never starts from opTime there, because a token
-	//     is always captured.
+	//   - On a sharded cluster, operationTime: the cluster time of the hello
+	//     command. mongos has no oplog, so its reply has no lastWrite.
 	opTime bson.Timestamp
 }
 
@@ -65,7 +64,8 @@ func (h helloReply) majorityOpTime() (bson.Timestamp, bool) {
 
 // resolveStreamStart decides where the change stream opens. Arguments:
 //   - checkpointToken is the loaded checkpoint, nil on a first start.
-//   - hello is the reply to the hello command.
+//   - hello is the reply to the hello command. lastWrite.majorityOpTime.ts
+//     is read, else operationTime.
 //   - captureToken reads the current change stream position. Connect passes
 //     getCurrentResumeToken, which opens a short-lived change stream and
 //     returns its resume token. It is a function so that the short-lived
@@ -78,6 +78,13 @@ func (m *mongoCDC) resolveStreamStart(
 ) (streamStart, error) {
 	ts, hasTS := hello.majorityOpTime()
 	start := streamStart{token: checkpointToken, opTime: ts}
+	if !hasTS {
+		// mongos has no oplog, but its reply has the cluster time of the
+		// command. A change stream through mongos orders the events of all
+		// shards on this clock, so it is a valid time for the snapshot. hasTS
+		// stays false: the stream still opens at a token, not at this time.
+		start.opTime, _ = hello["operationTime"].(bson.Timestamp)
+	}
 	if checkpointToken != nil {
 		// Resume from the checkpoint. No snapshot runs.
 		return start, nil
