@@ -40,7 +40,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		&cli.BoolFlag{
 			Name:  "verbose",
 			Value: false,
-			Usage: "Print a pass or fail result for each target and list components that do not support connection tests.",
+			Usage: "Print a pass or fail result for each target and list components that do not support connection tests",
 		},
 
 		secretsFlag,
