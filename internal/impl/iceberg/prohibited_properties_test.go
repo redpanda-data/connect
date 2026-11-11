@@ -202,9 +202,8 @@ func TestCOWOverwriteStripsProhibitedKeys(t *testing.T) {
 		assert.NotContains(t, props, table.WriteDeleteModeKey)
 	})
 
-	// The learn-and-strip retry is not one of the configured attempts. With
-	// max_retries: 1, the stripped commit must still run, or every write to
-	// the table fails.
+	// With max_retries: 1, the stripped commit must still run, or every write
+	// to the table fails.
 	t.Run("stripped retry does not spend max_retries", func(t *testing.T) {
 		ctx := t.Context()
 		cat, w, _ := setup(t, 1, "schema.name-mapping.default")

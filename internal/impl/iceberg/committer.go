@@ -165,11 +165,10 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if reloadTable == nil {
 		return nil, errors.New("creating committer: reloadTable must not be nil")
 	}
-	// Defensively clamp MaxRetries to at least 1: commitLocked's retry loop is
-	// `for attempt < budget` with budget starting at cfg.MaxRetries (a
-	// learn-and-strip retry extends it), so a zero or negative value would
-	// never run a single attempt and return a "committing transaction after 0
-	// attempts" error wrapping a nil cause. Config lint rejects it at startup (config.go),
+	// Defensively clamp MaxRetries to at least 1: commitLocked makes at most
+	// cfg.MaxRetries attempts, so a zero or negative value would never run a
+	// single attempt and return a "committing transaction after 0 attempts"
+	// error wrapping a nil cause. Config lint rejects it at startup (config.go),
 	// but callers constructing a committer directly get the same safety here.
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
@@ -680,9 +679,8 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// errors.Is(err, rest.ErrCommitStateUnknown) checks stay true even when a
 	// later attempt's differently-classed error terminates the loop.
 	var unresolvedUnknown error
-	// budget is the number of attempts this call may make. It starts at the
-	// configured MaxRetries and grows by one for each learn-and-strip retry,
-	// because that retry is not one of the user's attempts (see below).
+	// budget is the number of attempts this call may make: cfg.MaxRetries plus
+	// one per learn-and-strip retry.
 	budget := c.cfg.MaxRetries
 	attempt := 0
 	reloaded := false
@@ -752,10 +750,9 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.incrCommitFailure()
 				return attempt > 1, joinUnresolvedUnknown(fatalErr, unresolvedUnknown)
 			} else if retry {
-				// A learn-and-strip retry is not one of the configured
-				// attempts: with max_retries: 1 it would otherwise never run,
-				// and a catalog that names a key as prohibited would wedge the
-				// table. It cannot loop: noteProhibitedKeys asks for a retry
+				// With max_retries: 1 the stripped commit would otherwise never
+				// run, and a catalog that names a key as prohibited would wedge
+				// the table. It cannot loop: noteProhibitedKeys asks for a retry
 				// only when it learns a key the commit sent, and the commit
 				// sends a finite set of keys.
 				commitErr = err
@@ -913,10 +910,9 @@ func isDefinitiveCommitRejection(err error) bool {
 // noteProhibitedKeys inspects a failed commit's error for a catalog
 // prohibited-table-property rejection and updates the stripper accordingly.
 // It returns retry=true when at least one new (non-reserved) key was learned —
-// the caller should re-stage, letting the stripper filter the keys on the
-// next commit. That retry does not spend one of the configured attempts.
-// Only keys the failed commit actually sent (in its set-properties updates,
-// tracked by the stripper) can be learned: a named key we never sent
+// the caller should re-stage, letting the stripper filter the keys on the next
+// commit. Only keys the failed commit actually sent (in its set-properties
+// updates, tracked by the stripper) can be learned: a named key we never sent
 // cannot be the cause of THIS rejection,
 // so learning it would let arbitrary error text poison the strip set — it is
 // logged at debug and skipped instead. It returns a non-nil fatalErr when the
