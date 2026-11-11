@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow/array"
@@ -77,6 +78,14 @@ type CommitConfig struct {
 	ManifestMergeEnabled bool
 	MaxSnapshotAge       time.Duration
 	MaxRetries           int
+	// UnsupportedUpdateRetryInterval is how long a catalog's refusal of an
+	// optional update (snapshot expiry) stands before the update is tried
+	// again, and how often the failed-expiry warning may repeat. A verdict
+	// rests on one 400 and one landed retry, strong evidence but not proof (a
+	// non-conforming catalog could map a transient failure to 400), so it is
+	// re-probed rather than permanent: a refusing catalog costs one wasted
+	// round trip per interval, a mis-verdict heals within it. Zero or negative means the default of one hour.
+	UnsupportedUpdateRetryInterval time.Duration
 	// SkipFormatUpgrade leaves the table at its existing format version instead
 	// of upgrading to v2. Set for copy-on-write, which only ever writes plain
 	// data files (no v2 delete files) and so works on a v1 table — avoiding an
@@ -101,7 +110,58 @@ type CommitConfig struct {
 	// writer on every failure) instead of costing a rejected commit per
 	// generation. Nil gets a fresh, private set.
 	ProhibitedKeys *prohibitedKeySet
+	// UnsupportedUpdates, when non-nil, is the shared record of optional
+	// table updates (snapshot expiry) a catalog has proven it refuses, see
+	// commitLocked's elimination trials. Owned by the router per tableEntry
+	// for the same reason as ProhibitedKeys: a verdict must outlive writer
+	// recreation or every generation pays the rejected trial round trips and
+	// warnings again. Nil gets a fresh, private record.
+	UnsupportedUpdates *unsupportedUpdates
 }
+
+// defaultUnsupportedUpdateRetryInterval backs
+// CommitConfig.UnsupportedUpdateRetryInterval when it is unset.
+const defaultUnsupportedUpdateRetryInterval = time.Hour
+
+// unsupportedUpdates records, per table, which optional updates the catalog
+// has refused and until when that verdict stands. It also carries the rate
+// limit of the warnings that accompany those updates, so writer recreation
+// (a new committer generation) does not repeat them.
+type unsupportedUpdates struct {
+	expiryUntil atomic.Int64 // unix nanos; zero means not refused
+
+	// expiryStageWarnAfter rate-limits the "could not stage expiry" warning
+	// to once per UnsupportedUpdateRetryInterval per table. Not once-ever: the
+	// cause (a ref left pointing at a removed snapshot, say) can be fixed
+	// and recur, and retention silently stopping a second time must not be
+	// silent.
+	expiryStageWarnAfter atomic.Int64
+}
+
+// warnExpiryStage reports whether the expiry-staging warning may be logged
+// now, and if so arms the next window.
+func (u *unsupportedUpdates) warnExpiryStage(every time.Duration) bool {
+	now := time.Now().UnixNano()
+	next := u.expiryStageWarnAfter.Load()
+	if now < next {
+		return false
+	}
+	return u.expiryStageWarnAfter.CompareAndSwap(next, now+int64(every))
+}
+
+func newUnsupportedUpdates() *unsupportedUpdates { return &unsupportedUpdates{} }
+
+func refusedNow(until *atomic.Int64) bool {
+	u := until.Load()
+	return u != 0 && time.Now().UnixNano() < u
+}
+
+func refuse(until *atomic.Int64, for_ time.Duration) {
+	until.Store(time.Now().Add(for_).UnixNano())
+}
+
+func (u *unsupportedUpdates) refusesExpiry() bool          { return refusedNow(&u.expiryUntil) }
+func (u *unsupportedUpdates) refuseExpiry(d time.Duration) { refuse(&u.expiryUntil, d) }
 
 // StaleSchemaError is returned when data was written with a schema
 // that no longer matches the table's current schema.
@@ -143,8 +203,14 @@ type committer struct {
 	// doCommit and the direct commitRowDelta path both take it.
 	commitMu        sync.Mutex
 	upgradeWarnOnce sync.Once
-	metrics         *opMetrics
-	logger          *service.Logger
+	// unsupported records which optional updates the catalog has refused:
+	// snapshot expiry (remove-snapshots). Each is set once a catalog has
+	// rejected a commit carrying the update and then accepted the identical
+	// commit without it (see commitLocked's elimination trials). Shared
+	// across committer generations via CommitConfig.UnsupportedUpdates.
+	unsupported *unsupportedUpdates
+	metrics     *opMetrics
+	logger      *service.Logger
 }
 
 // NewCommitter creates a new committer for a specific table. cat must be the
@@ -173,14 +239,25 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
 	}
+	// Same shape for the retry interval: config lint rejects a non-positive
+	// value at startup, so this only covers callers constructing a committer
+	// directly (tests), where the zero value should mean "the default".
+	if cfg.UnsupportedUpdateRetryInterval <= 0 {
+		cfg.UnsupportedUpdateRetryInterval = defaultUnsupportedUpdateRetryInterval
+	}
 	stripper := newPropertyStrippingCatalog(cat, cfg.ProhibitedKeys)
 	writes := newWriteRecorder()
+	unsupported := cfg.UnsupportedUpdates
+	if unsupported == nil {
+		unsupported = newUnsupportedUpdates()
+	}
 	c := &committer{
-		table:    rebindTableRecording(tbl, stripper, writes),
-		cfg:      cfg,
-		stripper: stripper,
-		writes:   writes,
-		logger:   logger,
+		table:       rebindTableRecording(tbl, stripper, writes),
+		cfg:         cfg,
+		stripper:    stripper,
+		writes:      writes,
+		unsupported: unsupported,
+		logger:      logger,
 	}
 	// Single choke point for reloaded tables: every table handle the
 	// committer adopts after a reload is rebound onto the stripper and the
@@ -643,11 +720,14 @@ func (c *committer) referencedCandidatePaths(ctx context.Context, candidates map
 //
 // Callers must hold c.commitMu.
 func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
+	// props are the SNAPSHOT summary properties every stage callback passes
+	// to iceberg-go. The snapshot-retention keys do not belong here:
+	// iceberg-go reads them from TABLE metadata properties and never from a
+	// snapshot summary, so placing them here is inert. Retention is instead
+	// applied directly via Transaction.ExpireSnapshots inside the retry loop
+	// below.
 	props := iceberg.Properties{
 		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
-	}
-	if c.cfg.MaxSnapshotAge > 0 {
-		props[table.MaxSnapshotAgeMsKey] = strconv.FormatInt(c.cfg.MaxSnapshotAge.Milliseconds(), 10)
 	}
 	// Stamp the idempotency token into the snapshot props so the committed
 	// snapshot carries it. props is reused across attempts, so this holds for
@@ -679,8 +759,46 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// errors.Is(err, rest.ErrCommitStateUnknown) checks stay true even when a
 	// later attempt's differently-classed error terminates the loop.
 	var unresolvedUnknown error
+	// Optional-extras elimination. An optional update rides along with the
+	// data that a catalog may refuse wholesale with a 400: the
+	// remove-snapshots update that snapshot expiry stages. That refusal would
+	// otherwise wedge every write to the table. So a 400 with an extra staged
+	// is answered by re-staging the same commit with that extra dropped
+	// (trial 1 drops expiry). The trial attempt landing proves the
+	// catalog refuses the extra just dropped, and the matching refusal is
+	// recorded (for UnsupportedUpdateRetryInterval) with a warning. A trial
+	// attempt that does NOT land outright (a 409, an ambiguous response, a
+	// repeat 400) proves nothing: the extras stay dropped for the rest of
+	// this call so the data can still get through, no flag is set, and the
+	// next call starts over.
+	//
+	// This leans on 400 being deterministic for a given request body, which
+	// is what the status means: if the extra staged nothing new (expiry with
+	// nothing eligible), the trial's body is identical to the rejected one
+	// and fails identically, so no flag is set. Trials do not consume the
+	// configured retry budget: each one extends it by one attempt, so
+	// max_retries: 1 still gets its data committed on a refusing catalog.
+	var (
+		dropExpiry   bool
+		trial        int // 0 none, 1 expiry dropped
+		trialAttempt int // the attempt index that runs the current trial
+		trialErr     error
+	)
+	// noteTrialLanded records the verdict when the attempt that landed
+	// cleanly is the trial attempt itself. It is deliberately NOT called on
+	// the ambiguous-landed path (commit-id token found after a reload): the
+	// token could belong to an EARLIER ambiguous attempt that still carried
+	// the extra, which would prove nothing about the trial. An ambiguous
+	// trial is inconclusive and the next call simply tries again.
+	noteTrialLanded := func(attempt int) {
+		if trial != 1 || attempt != trialAttempt {
+			return
+		}
+		c.unsupported.refuseExpiry(c.cfg.UnsupportedUpdateRetryInterval)
+		c.logger.Warnf("Catalog rejected a commit carrying snapshot expiry but accepted it without; pausing %s for this table for %s and leaving snapshot retention to external maintenance meanwhile. If this catalog does support snapshot expiry the rejection was transient and expiry resumes at the next probe. Rejection was: %v", ioFieldMaxSnapshotAge, c.cfg.UnsupportedUpdateRetryInterval, trialErr)
+	}
 	// budget is the number of attempts this call may make: cfg.MaxRetries plus
-	// one per learn-and-strip retry.
+	// one per learn-and-strip retry and one per elimination trial.
 	budget := c.cfg.MaxRetries
 	attempt := 0
 	reloaded := false
@@ -702,6 +820,15 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			// dashboard watching the commit-failure metric must see it.
 			c.incrCommitFailure()
 			return attempt > 1, joinUnresolvedUnknown(err, unresolvedUnknown)
+		}
+		// Snapshot retention, after the data so the new snapshot is the head;
+		// rationale in stageSnapshotExpiry. expiryStaged is true only when a
+		// snapshot is actually being removed: a table with nothing eligible,
+		// or whose old snapshots are all pinned by refs, carries no expiry
+		// update, so a 400 on it is never blamed on expiry and costs no trial.
+		expiryStaged := false
+		if c.cfg.MaxSnapshotAge > 0 && !dropExpiry && !c.unsupported.refusesExpiry() && c.expiryHasWork(c.cfg.MaxSnapshotAge) {
+			expiryStaged = c.stageSnapshotExpiry(txn) && c.expiryRemovedSnapshots(txn)
 		}
 		tbl, err := txn.Commit(ctx)
 		// ambiguous is THE classification for this attempt's outcome; the
@@ -759,6 +886,19 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				budget++
 				continue
 			}
+			// Optional-extras elimination (see trial above). Only a 400
+			// qualifies: a 409 is an ordinary conflict for the reload branch
+			// below, and auth/not-found verdicts are never about an extra.
+			// Nothing landed (the rejection is definitive), so re-staging
+			// from the same base without a reload is safe, exactly as for
+			// the prohibited-keys retry.
+			if errors.Is(err, rest.ErrBadRequest) && trial == 0 && expiryStaged {
+				dropExpiry = true
+				trial, trialAttempt, trialErr, commitErr = 1, attempt+1, err, err
+				budget++
+				c.logger.Warnf("Commit attempt %d rejected with optional updates staged; retrying without snapshot expiry to rule it out: %v", attempt, err)
+				continue
+			}
 		}
 		// A clean conflict (our commit did not land) is retried: a
 		// reload-and-retry re-adds our files exactly once. Matched via
@@ -812,10 +952,100 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			return attempt > 1, fmt.Errorf("committing transaction: %w", joinUnresolvedUnknown(err, unresolvedUnknown))
 		}
 		c.table = tbl
+		noteTrialLanded(attempt)
 		return attempt > 1, nil
 	}
 	c.incrCommitFailure()
 	return attempt > 1, fmt.Errorf("committing transaction after %d attempts: %w", attempt, joinUnresolvedUnknown(commitErr, unresolvedUnknown))
+}
+
+// expiryHasWork is the cheap pre-check for stageSnapshotExpiry: it reports
+// whether the table's current metadata holds anything ExpireSnapshots could
+// act on, namely a snapshot older than age, or a non-main ref whose own
+// max-ref-age-ms has elapsed. Both are necessary conditions for iceberg-go
+// to stage an update, so when this is false the walk is skipped and the
+// commit is known to carry no expiry update. (A ref pinning an old snapshot
+// can still make the walk stage nothing; expiryRemovedSnapshots catches
+// that.) The table-level max-ref-age property is not consulted: its
+// default is effectively infinite and setting it is rare.
+func (c *committer) expiryHasWork(age time.Duration) bool {
+	meta := c.table.Metadata()
+	nowMs := time.Now().UnixMilli()
+	cutoff := nowMs - age.Milliseconds()
+	for _, s := range meta.Snapshots() {
+		if s.TimestampMs < cutoff {
+			return true
+		}
+	}
+	for name, ref := range meta.Refs() {
+		if name == table.MainBranch || ref.MaxRefAgeMs == nil {
+			continue
+		}
+		if snap := meta.SnapshotByID(ref.SnapshotID); snap != nil && nowMs-snap.TimestampMs > *ref.MaxRefAgeMs {
+			return true
+		}
+	}
+	return false
+}
+
+// expiryRemovedSnapshots reports whether txn, with expiry staged, removes at
+// least one of the base table's snapshots. It decides whether a later 400
+// can be blamed on expiry at all. It builds the staged metadata, which is
+// linear in snapshots but small next to the full metadata JSON every REST
+// commit serialises anyway; it must run BEFORE Commit, since a failed Commit
+// marks the transaction committed. An error building the staged metadata is
+// answered conservatively with true: the trial then runs and, if expiry was
+// innocent, fails identically and records nothing.
+func (c *committer) expiryRemovedSnapshots(txn *table.Transaction) bool {
+	staged, err := txn.StagedTable()
+	if err != nil {
+		return true
+	}
+	remaining := map[int64]struct{}{}
+	for _, s := range staged.Metadata().Snapshots() {
+		remaining[s.SnapshotID] = struct{}{}
+	}
+	for _, s := range c.table.Metadata().Snapshots() {
+		if _, ok := remaining[s.SnapshotID]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// stageSnapshotExpiry makes commit.max_snapshot_age take effect by staging
+// Transaction.ExpireSnapshots on the data commit's own transaction: one
+// catalog round trip, and the table is never observable with the new
+// snapshot but without the expiry (or vice versa). WithOlderThan overrides
+// the table's retention property for this call, so no table property is
+// written. WithPostCommit(false) leaves the expired snapshots' files on
+// storage for orphan-file maintenance: deleting them inline would race
+// readers mid-scan on a streaming table, and this output must never delete
+// a file a reader may hold. Like Iceberg's expire_snapshots procedure the
+// expiry is table-wide; refs with their own retention properties keep them.
+// iceberg-go also asserts EVERY ref's position for the commit, not just the
+// branch being written, so on a table where another writer moves branches
+// or tags concurrently an expiry-carrying commit can 409 and go through the
+// ordinary reload-retry.
+//
+// It must run AFTER the data is staged so the new snapshot is the branch
+// head the retention walk counts from. iceberg-go only stages a
+// remove-snapshots update when something is actually eligible.
+//
+// A local staging error (metadata iceberg-go cannot walk, e.g. a ref left
+// pointing at a snapshot another engine already removed) must not take the
+// data commit down with it: retention is a maintenance concern, delivery is
+// not. It is logged at most once per UnsupportedUpdateRetryInterval per
+// table and the commit proceeds without expiry. The bool reports whether
+// expiry was requested on txn.
+func (c *committer) stageSnapshotExpiry(txn *table.Transaction) bool {
+	if err := txn.ExpireSnapshots(table.WithOlderThan(c.cfg.MaxSnapshotAge), table.WithPostCommit(false)); err != nil {
+		if c.unsupported.warnExpiryStage(c.cfg.UnsupportedUpdateRetryInterval) {
+			c.logger.Warnf("Could not stage snapshot expiry for this table; committing without it and leaving snapshot retention to external maintenance until the cause is fixed: %v", err)
+		}
+		return false
+	}
+	return true
 }
 
 // joinUnresolvedUnknown attaches an unresolved ambiguous commit outcome — an
