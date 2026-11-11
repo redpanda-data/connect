@@ -99,6 +99,9 @@ type tableEntry struct {
 	// commit per generation. Created lazily in createWriter under mu; the set
 	// carries its own lock, so committers share it race-safely.
 	prohibitedProps *prohibitedKeySet
+	// unsupportedUpdates persists, for the same reason, which optional
+	// updates the catalog has refused (see CommitConfig.UnsupportedUpdates).
+	unsupportedUpdates *unsupportedUpdates
 }
 
 // cachedProbeErr returns the negative-cached probe-bound error when it was
@@ -945,6 +948,10 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 		entry.prohibitedProps = newProhibitedKeySet()
 	}
 	commitCfg.ProhibitedKeys = entry.prohibitedProps
+	if entry.unsupportedUpdates == nil {
+		entry.unsupportedUpdates = newUnsupportedUpdates()
+	}
+	commitCfg.UnsupportedUpdates = entry.unsupportedUpdates
 	comm, err := NewCommitter(committerTbl, client.TableIO(), commitCfg, reloadTable, r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)

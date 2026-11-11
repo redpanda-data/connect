@@ -91,6 +91,7 @@ const (
 	ioFieldMaxSnapshotAge       = "max_snapshot_age"
 	ioFieldMaxCommitRetries     = "max_retries"
 	ioFieldCleanupOnFailure     = "cleanup_on_failure"
+	ioFieldUnsupportedRetry     = "unsupported_update_retry_interval"
 
 	// Performance fields
 	ioFieldBatching    = "batching"
@@ -515,8 +516,9 @@ See the Row-level operations section above for the full constraints, including t
 					Description("Merge small manifest files during commits to reduce metadata overhead.").
 					Default(true),
 				service.NewDurationField(ioFieldMaxSnapshotAge).
-					Description("Maximum age of snapshots to retain for time-travel queries. Set to zero to disable removing old snapshots.").
-					Default("24h"),
+					Description("Snapshots older than this are expired from the table metadata as part of each commit. This keeps the metadata file bounded on a continuously appending table. Some catalogs, such as AWS Glue, reject every commit once that file exceeds a size limit. The current snapshot is always retained. Like Iceberg's `expire_snapshots` procedure, the expiry is table-wide. Other branches are expired by their own retention properties where set, and by this age otherwise. A tag or branch whose own `max-ref-age-ms` has elapsed is removed. A ref that pins a snapshot keeps it. An expiry-carrying commit asserts the position of every ref on the table. Where another writer moves branches or tags concurrently, such commits can conflict and are retried. Expiry removes the snapshots from metadata only. The data, manifest and manifest-list files that only they referenced stay on storage. Iceberg orphan-file maintenance (for example `remove_orphan_files`) reclaims them. A catalog that rejects commits carrying a snapshot-expiry update makes the output log a warning and keep committing without expiry. Expiry is paused for that table and retried after `unsupported_update_retry_interval`. Zero, the default, keeps every snapshot.").
+					ShortDescription("Expire snapshots older than this on each commit. Zero, the default, keeps every snapshot.").
+					Default("0s"),
 				service.NewIntField(ioFieldMaxCommitRetries).
 					Description("Maximum number of times to retry a failed transaction commit.").
 					Default(3).
@@ -524,6 +526,16 @@ See the Row-level operations section above for the full constraints, including t
 					// `max_retries` times, so 0 or a negative value would never
 					// attempt the commit at all. Require >= 1.
 					LintRule(`root = if this < 1 { [ "max_retries must be at least 1" ] }`),
+				service.NewDurationField(ioFieldUnsupportedRetry).
+					Description("How long to wait before retrying an optional table update that the catalog has rejected. The only such update is snapshot expiry (from `max_snapshot_age`). When a catalog rejects a commit that carries it, the output retries the commit without it so the data still lands. It then stops sending that update to the table for this long before trying again. This also bounds how often the warning about a failed expiry attempt is logged. Must be a positive duration.").Version("4.118.0").
+					ShortDescription("How long to pause an optional table update after the catalog rejects it.").
+					Default("1h").
+					// Zero would mean "retry the rejected update on every commit",
+					// which is a 400 plus a retry per commit against a catalog that
+					// refuses it. The committer clamps a non-positive value to the
+					// default, so reject it here rather than let it change silently.
+					LintRule(`root = if this.parse_duration().catch(0) <= 0 { [ "`+ioFieldUnsupportedRetry+` must be a positive duration" ] }`).
+					Advanced(),
 				service.NewBoolField(ioFieldCleanupOnFailure).
 					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. The same sweep reclaims the superseded files of earlier attempts when a `copy-on-write` commit succeeds on retry (each attempt re-stages fresh rewrites). This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous, since such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table. Those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").Version("4.105.0").
 					ShortDescription("Remove the files a failed commit had already written, and a retried commit's superseded earlier attempts. Disabling it leaves them orphaned for table maintenance to reclaim.").
