@@ -334,6 +334,33 @@ func TestProhibitedKeysPersistAcrossCommitters(t *testing.T) {
 	assert.Equal(t, map[int64]string{1: "one", 2: "TWO", 3: "THREE"}, scanRows(t, ctx, cat.snapshot()))
 }
 
+// TestProhibitedKeyRetryDoesNotSpendRetryBudget pins that the learn-and-strip
+// retry is not one of the configured commit attempts. With max_retries: 1, a
+// catalog that names a prohibited key must still get the stripped commit, or
+// the table stays wedged on every write.
+func TestProhibitedKeyRetryDoesNotSpendRetryBudget(t *testing.T) {
+	ctx := t.Context()
+	sc := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "payload", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+	seedTbl, mem := newCOWTable(t, sc)
+	_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two"})
+	cat := &prohibitingCatalog{memCatalog: mem, prohibited: []string{"schema.name-mapping.default"}}
+
+	comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 1},
+		func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, service.MockResources().Logger())
+	require.NoError(t, err)
+	t.Cleanup(comm.Close)
+	w := cowWriter(t, cat.snapshot(), "id")
+	w.committer = comm
+
+	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 2, "payload": "TWO"})}))
+	assert.Equal(t, 1, cat.rejections)
+	assert.Equal(t, 2, cat.commits, "one rejection, then the stripped retry lands")
+	assert.Equal(t, map[int64]string{1: "one", 2: "TWO"}, scanRows(t, ctx, cat.snapshot()))
+}
+
 // unknownStateProhibitedTextCatalog applies the FIRST commit server-side but
 // reports an ambiguous error (firstErr) whose text also names a prohibited key
 // that the commit really sent. It models a 5xx from a catalog whose error body
