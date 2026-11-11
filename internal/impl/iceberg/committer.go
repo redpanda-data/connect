@@ -165,8 +165,8 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if reloadTable == nil {
 		return nil, errors.New("creating committer: reloadTable must not be nil")
 	}
-	// Defensively clamp MaxRetries to at least 1: commitLocked's retry loop is
-	// `for range cfg.MaxRetries`, so a zero or negative value would never run a
+	// Defensively clamp MaxRetries to at least 1: commitLocked makes at most
+	// cfg.MaxRetries attempts, so a zero or negative value would never run a
 	// single attempt and return a "committing transaction after 0 attempts"
 	// error wrapping a nil cause. Config lint rejects it at startup (config.go),
 	// but callers constructing a committer directly get the same safety here.
@@ -679,9 +679,12 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// errors.Is(err, rest.ErrCommitStateUnknown) checks stay true even when a
 	// later attempt's differently-classed error terminates the loop.
 	var unresolvedUnknown error
+	// budget is the number of attempts this call may make: cfg.MaxRetries plus
+	// one per learn-and-strip retry.
+	budget := c.cfg.MaxRetries
 	attempt := 0
 	reloaded := false
-	for range c.cfg.MaxRetries {
+	for attempt < budget {
 		attempt++
 		txn := c.table.NewTransaction()
 		if !c.cfg.SkipFormatUpgrade && c.table.Metadata().Version() < CurrentIcebergVersion {
@@ -747,7 +750,13 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.incrCommitFailure()
 				return attempt > 1, joinUnresolvedUnknown(fatalErr, unresolvedUnknown)
 			} else if retry {
+				// With max_retries: 1 the stripped commit would otherwise never
+				// run, and a catalog that names a key as prohibited would wedge
+				// the table. It cannot loop: noteProhibitedKeys asks for a retry
+				// only when it learns a key the commit sent, and the commit
+				// sends a finite set of keys.
 				commitErr = err
+				budget++
 				continue
 			}
 		}
@@ -765,7 +774,7 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		if errors.Is(err, table.ErrCommitFailed) ||
 			(retryOnUnknownState && ambiguous) {
 			commitErr = err
-			c.logger.Warnf("Commit attempt %d/%d failed: %v", attempt, c.cfg.MaxRetries, err)
+			c.logger.Warnf("Commit attempt %d/%d failed: %v", attempt, budget, err)
 			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloadedTbl
 				reloaded = true
@@ -901,10 +910,10 @@ func isDefinitiveCommitRejection(err error) bool {
 // noteProhibitedKeys inspects a failed commit's error for a catalog
 // prohibited-table-property rejection and updates the stripper accordingly.
 // It returns retry=true when at least one new (non-reserved) key was learned —
-// the caller should count the attempt and re-stage, letting the stripper
-// filter the keys on the next commit. Only keys the failed commit actually
-// sent (in its set-properties updates, tracked by the stripper) can be
-// learned: a named key we never sent cannot be the cause of THIS rejection,
+// the caller should re-stage, letting the stripper filter the keys on the next
+// commit. Only keys the failed commit actually sent (in its set-properties
+// updates, tracked by the stripper) can be learned: a named key we never sent
+// cannot be the cause of THIS rejection,
 // so learning it would let arbitrary error text poison the strip set — it is
 // logged at debug and skipped instead. It returns a non-nil fatalErr when the
 // catalog named a key under reservedTablePropertyPrefix (matched
@@ -943,7 +952,7 @@ func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fata
 	for _, k := range learned {
 		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
 	}
-	c.logger.Warnf("Commit attempt %d/%d rejected for prohibited table properties %v; retrying with them stripped", attempt, c.cfg.MaxRetries, learned)
+	c.logger.Warnf("Commit attempt %d rejected for prohibited table properties %v; retrying with them stripped", attempt, learned)
 	return true, nil
 }
 
