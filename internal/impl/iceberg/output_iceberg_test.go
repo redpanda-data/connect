@@ -165,7 +165,8 @@ storage:
 }
 
 // TestParseCommitConfigMaxSnapshotAge pins the `commit.max_snapshot_age`
-// default: snapshot expiry is off unless the config sets an age.
+// default: snapshots older than 24h are expired unless the config sets
+// another age.
 func TestParseCommitConfigMaxSnapshotAge(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -175,17 +176,17 @@ func TestParseCommitConfigMaxSnapshotAge(t *testing.T) {
 		{
 			name:       "commit object absent",
 			commitYAML: "",
-			want:       0,
+			want:       24 * time.Hour,
 		},
 		{
 			name:       "field absent",
 			commitYAML: "commit:\n  max_retries: 2\n",
-			want:       0,
+			want:       24 * time.Hour,
 		},
 		{
-			name:       "explicit value",
-			commitYAML: "commit:\n  max_snapshot_age: 24h\n",
-			want:       24 * time.Hour,
+			name:       "explicit zero",
+			commitYAML: "commit:\n  max_snapshot_age: 0s\n",
+			want:       0,
 		},
 	}
 
