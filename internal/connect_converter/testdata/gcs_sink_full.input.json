@@ -1,0 +1,15 @@
+{
+  "name": "gcs-sink-full",
+  "config": {
+    "connector.class": "io.confluent.connect.gcs.GcsSinkConnector",
+    "gcs.bucket.name": "my-gcs-bucket",
+    "topics": "orders,shipments",
+    "flush.size": "3",
+    "format.class": "io.confluent.connect.gcs.format.avro.AvroFormat",
+    "gcs.part.size": "5242880",
+    "storage.class": "io.confluent.connect.gcs.storage.GCSStorage",
+    "schema.compatibility": "NONE",
+    "schema.generator.class": "io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator",
+    "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner"
+  }
+}

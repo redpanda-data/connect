@@ -1,0 +1,23 @@
+# Converted from Kafka Connect connector "repl-full" (class=io.confluent.connect.replicator.ReplicatorSourceConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - src1:9092
+      - src2:9092
+    topics:
+      - prod\..*
+    regexp_topics: true
+    consumer_group: repl-full-rpcn # TODO: confirm consumer group name
+    tls:
+      enabled: true # TODO: configure source cluster TLS (cert/key paths or skip_cert_verify)
+    sasl:
+      - mechanism: PLAIN # TODO: set SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, etc.)
+        username: "" # TODO: set source cluster SASL username
+        password: "" # TODO: set source cluster SASL password
+output:
+  redpanda:
+    seed_brokers:
+      - dst:9093
+    topic: ${! @kafka_topic }
+    tls:
+      enabled: true # TODO: configure destination cluster TLS (cert/key paths or skip_cert_verify)
