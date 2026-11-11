@@ -741,7 +741,7 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		// the reload + commit-id idempotency check below, so it could apply
 		// the mutation twice. Unknown-state takes precedence.
 		if err != nil && !ambiguous {
-			if retry, fatalErr := c.noteProhibitedKeys(attempt, budget, err); fatalErr != nil {
+			if retry, fatalErr := c.noteProhibitedKeys(attempt, err); fatalErr != nil {
 				// Reload so the next call uses fresh metadata, mirroring the
 				// non-retryable branch below.
 				if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
@@ -923,7 +923,7 @@ func isDefinitiveCommitRejection(err error) bool {
 // mean the error is not a prohibited-keys rejection — or it names only keys
 // that are already being stripped or were never sent, in which case retrying
 // would loop futilely — and the caller's standard error handling applies.
-func (c *committer) noteProhibitedKeys(attempt, budget int, err error) (retry bool, fatalErr error) {
+func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fatalErr error) {
 	keys := parseProhibitedPropertyKeys(err)
 	if len(keys) == 0 {
 		return false, nil
@@ -952,7 +952,7 @@ func (c *committer) noteProhibitedKeys(attempt, budget int, err error) (retry bo
 	for _, k := range learned {
 		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
 	}
-	c.logger.Warnf("Commit attempt %d/%d rejected for prohibited table properties %v; retrying with them stripped", attempt, budget, learned)
+	c.logger.Warnf("Commit attempt %d rejected for prohibited table properties %v; retrying with them stripped", attempt, learned)
 	return true, nil
 }
 
