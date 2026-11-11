@@ -15,11 +15,20 @@
 package sftp
 
 import (
+	"context"
+	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/pool"
 )
 
 // TestDecideWatcherActionPathModeMatchesLegacy checks that the default `path`
@@ -136,4 +145,74 @@ func TestDecideWatcherActionPathAndModTime(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// newTestWatcher returns a watcher for dir/*.txt that reads from an
+// in-process SFTP server.
+func newTestWatcher(t *testing.T, dir string, minAge time.Duration) *watcherPathProvider {
+	t.Helper()
+	serverConn, clientConn := net.Pipe()
+	server, err := sftp.NewServer(serverConn)
+	require.NoError(t, err)
+	go func() { _ = server.Serve() }()
+	t.Cleanup(func() { _ = server.Close() })
+
+	client, err := sftp.NewClientPipe(clientConn, clientConn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
+
+	return &watcherPathProvider{
+		clientPool: pool.NewCapped(1, func(context.Context, int) (*sftp.Client, error) {
+			return client, nil
+		}),
+		mgr:          service.MockResources(service.MockResourcesOptAddCache("files_memory")),
+		cacheName:    "files_memory",
+		pollInterval: 100 * time.Millisecond,
+		minAge:       minAge,
+		targetPaths:  []string{filepath.Join(dir, "*.txt")},
+		cacheMode:    watcherCacheModePath,
+	}
+}
+
+// TestWatcherMinimumAgeWholeSecondModTime checks that the watcher does not
+// queue a file that was changed less than minimum_age ago. SFTP sends
+// modification times in whole seconds, so the reported value can be up to one
+// second older than the real change.
+func TestWatcherMinimumAgeWholeSecondModTime(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+
+	// The real change is 1ms before the start of this second. The server
+	// reports the start of the previous second, so the reported age is always
+	// about 1s more than the real age.
+	changed := time.Now().Truncate(time.Second).Add(-time.Millisecond)
+	require.NoError(t, os.Chtimes(path, changed, changed))
+
+	// minimum_age is 500ms more than the real age, and less than the reported
+	// age. The file is too young and must not be queued.
+	minAge := time.Since(changed) + 500*time.Millisecond
+
+	w := newTestWatcher(t, dir, minAge)
+	require.NoError(t, w.findNewPaths(t.Context()))
+	require.Less(t, time.Since(changed), minAge, "the poll was too slow for the test to be valid")
+
+	assert.Empty(t, w.expandedPaths)
+}
+
+// TestWatcherZeroMinimumAgeFutureModTime checks that the watcher does not queue
+// a file with a modification time in the future, also with a zero minimum_age.
+func TestWatcherZeroMinimumAgeFutureModTime(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	require.NoError(t, os.WriteFile(path, nil, 0o600))
+
+	// The server clock is ahead, so the file changed in the future.
+	changed := time.Now().Add(time.Hour)
+	require.NoError(t, os.Chtimes(path, changed, changed))
+
+	w := newTestWatcher(t, dir, 0)
+	require.NoError(t, w.findNewPaths(t.Context()))
+
+	assert.Empty(t, w.expandedPaths)
 }

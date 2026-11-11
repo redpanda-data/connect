@@ -279,7 +279,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
-				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with.").Version("4.82.0").
+				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with. A snapshot that resumes from stored progress keeps the segment count it started with. A changed value applies to the next snapshot.").Version("4.82.0").
 				ShortDescription("Number of parallel scan segments, from 1 to 10. Higher parallelism scans faster but uses more RCUs.").
 				Default(1).
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
@@ -1474,12 +1474,13 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// break TrackBatch's scan-order contract and could persist positions or
 	// Complete=true past un-acked items) nor leave this attempt's gate
 	// permanently un-drainable via batches orphaned in a replaced msgChan.
-	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, d.log)
+	segments := resolveSnapshotSegments(snapshotCheckpoint, d.conf.snapshot.segments, tableName, d.log)
+	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, segments, d.log)
 	ackGate := new(sync.WaitGroup)
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
 		Client:    d.dynamoClient,
 		Table:     tableName,
-		Segments:  d.conf.snapshot.segments,
+		Segments:  segments,
 		BatchSize: d.conf.snapshot.batchSize,
 		Throttle:  d.conf.snapshot.throttle,
 		Logger:    d.log,
