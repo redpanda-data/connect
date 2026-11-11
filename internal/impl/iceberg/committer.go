@@ -79,12 +79,14 @@ type CommitConfig struct {
 	MaxSnapshotAge       time.Duration
 	MaxRetries           int
 	// UnsupportedUpdateRetryInterval is how long a catalog's refusal of an
-	// optional update (snapshot expiry) stands before the update is tried
-	// again, and how often the failed-expiry warning may repeat. A verdict
-	// rests on one 400 and one landed retry, strong evidence but not proof (a
-	// non-conforming catalog could map a transient failure to 400), so it is
-	// re-probed rather than permanent: a refusing catalog costs one wasted
-	// round trip per interval, a mis-verdict heals within it. Zero or negative means the default of one hour.
+	// optional update (snapshot expiry, the manifest-merge property) stands
+	// before the update is tried again, and how often the failed-expiry
+	// warning may repeat. A verdict rests on one 400 and one landed retry,
+	// strong evidence but not proof (a non-conforming catalog could map a
+	// transient failure to 400), so it is re-probed rather than permanent: a
+	// refusing catalog costs one wasted round trip per interval, a
+	// mis-verdict heals within it. Zero or negative means the default of one
+	// hour.
 	UnsupportedUpdateRetryInterval time.Duration
 	// SkipFormatUpgrade leaves the table at its existing format version instead
 	// of upgrading to v2. Set for copy-on-write, which only ever writes plain
@@ -111,11 +113,12 @@ type CommitConfig struct {
 	// generation. Nil gets a fresh, private set.
 	ProhibitedKeys *prohibitedKeySet
 	// UnsupportedUpdates, when non-nil, is the shared record of optional
-	// table updates (snapshot expiry) a catalog has proven it refuses, see
-	// commitLocked's elimination trials. Owned by the router per tableEntry
-	// for the same reason as ProhibitedKeys: a verdict must outlive writer
-	// recreation or every generation pays the rejected trial round trips and
-	// warnings again. Nil gets a fresh, private record.
+	// table updates (snapshot expiry, the manifest-merge property) a catalog
+	// has proven it refuses, see commitLocked's elimination trials. Owned by
+	// the router per tableEntry for the same reason as ProhibitedKeys: a
+	// verdict must outlive writer recreation or every generation pays the
+	// rejected trial round trips and warnings again. Nil gets a fresh,
+	// private record.
 	UnsupportedUpdates *unsupportedUpdates
 }
 
@@ -128,8 +131,12 @@ const defaultUnsupportedUpdateRetryInterval = time.Hour
 // limit of the warnings that accompany those updates, so writer recreation
 // (a new committer generation) does not repeat them.
 type unsupportedUpdates struct {
-	expiryUntil atomic.Int64 // unix nanos; zero means not refused
+	expiryUntil    atomic.Int64 // unix nanos; zero means not refused
+	mergePropUntil atomic.Int64
 
+	// manifestMergeWarnOnce: the table-property-vs-config mismatch is static
+	// for the life of the table, so once per table is enough.
+	manifestMergeWarnOnce sync.Once
 	// expiryStageWarnAfter rate-limits the "could not stage expiry" warning
 	// to once per UnsupportedUpdateRetryInterval per table. Not once-ever: the
 	// cause (a ref left pointing at a removed snapshot, say) can be fixed
@@ -160,8 +167,10 @@ func refuse(until *atomic.Int64, for_ time.Duration) {
 	until.Store(time.Now().Add(for_).UnixNano())
 }
 
-func (u *unsupportedUpdates) refusesExpiry() bool          { return refusedNow(&u.expiryUntil) }
-func (u *unsupportedUpdates) refuseExpiry(d time.Duration) { refuse(&u.expiryUntil, d) }
+func (u *unsupportedUpdates) refusesExpiry() bool             { return refusedNow(&u.expiryUntil) }
+func (u *unsupportedUpdates) refuseExpiry(d time.Duration)    { refuse(&u.expiryUntil, d) }
+func (u *unsupportedUpdates) refusesMergeProp() bool          { return refusedNow(&u.mergePropUntil) }
+func (u *unsupportedUpdates) refuseMergeProp(d time.Duration) { refuse(&u.mergePropUntil, d) }
 
 // StaleSchemaError is returned when data was written with a schema
 // that no longer matches the table's current schema.
@@ -204,10 +213,13 @@ type committer struct {
 	commitMu        sync.Mutex
 	upgradeWarnOnce sync.Once
 	// unsupported records which optional updates the catalog has refused:
-	// snapshot expiry (remove-snapshots). Each is set once a catalog has
-	// rejected a commit carrying the update and then accepted the identical
-	// commit without it (see commitLocked's elimination trials). Shared
-	// across committer generations via CommitConfig.UnsupportedUpdates.
+	// snapshot expiry (remove-snapshots) and the commit.manifest-merge.enabled
+	// set-properties. Each is set once a catalog has rejected a commit
+	// carrying the update and then accepted the identical commit without it
+	// (see commitLocked's elimination trials). Shared across committer
+	// generations via CommitConfig.UnsupportedUpdates. For the merge
+	// property this covers catalogs whose rejection does not NAME the key;
+	// those that do are handled by the prohibited-keys stripper.
 	unsupported *unsupportedUpdates
 	metrics     *opMetrics
 	logger      *service.Logger
@@ -721,14 +733,13 @@ func (c *committer) referencedCandidatePaths(ctx context.Context, candidates map
 // Callers must hold c.commitMu.
 func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
 	// props are the SNAPSHOT summary properties every stage callback passes
-	// to iceberg-go. The snapshot-retention keys do not belong here:
-	// iceberg-go reads them from TABLE metadata properties and never from a
-	// snapshot summary, so placing them here is inert. Retention is instead
-	// applied directly via Transaction.ExpireSnapshots inside the retry loop
-	// below.
-	props := iceberg.Properties{
-		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
-	}
+	// to iceberg-go. commit.manifest-merge.enabled and the snapshot-retention
+	// keys do not belong here: iceberg-go resolves both from TABLE metadata
+	// properties and never reads a snapshot summary for them, so placing them
+	// here is inert. Manifest merge is instead stamped onto the table by
+	// stageManifestMergeProperty, and retention is applied directly via
+	// Transaction.ExpireSnapshots; both happen inside the retry loop below.
+	props := iceberg.Properties{}
 	// Stamp the idempotency token into the snapshot props so the committed
 	// snapshot carries it. props is reused across attempts, so this holds for
 	// every stage attempt. iceberg-go copies it verbatim into Summary.Properties.
@@ -759,12 +770,14 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// errors.Is(err, rest.ErrCommitStateUnknown) checks stay true even when a
 	// later attempt's differently-classed error terminates the loop.
 	var unresolvedUnknown error
-	// Optional-extras elimination. An optional update rides along with the
-	// data that a catalog may refuse wholesale with a 400: the
-	// remove-snapshots update that snapshot expiry stages. That refusal would
-	// otherwise wedge every write to the table. So a 400 with an extra staged
-	// is answered by re-staging the same commit with that extra dropped
-	// (trial 1 drops expiry). The trial attempt landing proves the
+	// Optional-extras elimination. Two updates ride along with the data that
+	// a catalog may refuse wholesale with a 400: the remove-snapshots update
+	// that snapshot expiry stages, and the set-properties update that stamps
+	// commit.manifest-merge.enabled. Either refusal would otherwise wedge
+	// every write to the table from the first commit after upgrade. So a 400
+	// with an extra staged is answered by re-staging the same commit with
+	// that extra dropped, in a fixed order: first expiry (trial 1), then the
+	// merge property as well (trial 2). The trial attempt landing proves the
 	// catalog refuses the extra just dropped, and the matching refusal is
 	// recorded (for UnsupportedUpdateRetryInterval) with a warning. A trial
 	// attempt that does NOT land outright (a 409, an ambiguous response, a
@@ -779,10 +792,11 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// configured retry budget: each one extends it by one attempt, so
 	// max_retries: 1 still gets its data committed on a refusing catalog.
 	var (
-		dropExpiry   bool
-		trial        int // 0 none, 1 expiry dropped
-		trialAttempt int // the attempt index that runs the current trial
-		trialErr     error
+		dropExpiry    bool
+		dropMergeProp bool
+		trial         int // 0 none, 1 expiry dropped, 2 merge property dropped too
+		trialAttempt  int // the attempt index that runs the current trial
+		trialErr      error
 	)
 	// noteTrialLanded records the verdict when the attempt that landed
 	// cleanly is the trial attempt itself. It is deliberately NOT called on
@@ -791,11 +805,17 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// the extra, which would prove nothing about the trial. An ambiguous
 	// trial is inconclusive and the next call simply tries again.
 	noteTrialLanded := func(attempt int) {
-		if trial != 1 || attempt != trialAttempt {
+		if trial == 0 || attempt != trialAttempt {
 			return
 		}
-		c.unsupported.refuseExpiry(c.cfg.UnsupportedUpdateRetryInterval)
-		c.logger.Warnf("Catalog rejected a commit carrying snapshot expiry but accepted it without; pausing %s for this table for %s and leaving snapshot retention to external maintenance meanwhile. If this catalog does support snapshot expiry the rejection was transient and expiry resumes at the next probe. Rejection was: %v", ioFieldMaxSnapshotAge, c.cfg.UnsupportedUpdateRetryInterval, trialErr)
+		switch trial {
+		case 1:
+			c.unsupported.refuseExpiry(c.cfg.UnsupportedUpdateRetryInterval)
+			c.logger.Warnf("Catalog rejected a commit carrying snapshot expiry but accepted it without; pausing %s for this table for %s and leaving snapshot retention to external maintenance meanwhile. If this catalog does support snapshot expiry the rejection was transient and expiry resumes at the next probe. Rejection was: %v", ioFieldMaxSnapshotAge, c.cfg.UnsupportedUpdateRetryInterval, trialErr)
+		case 2:
+			c.unsupported.refuseMergeProp(c.cfg.UnsupportedUpdateRetryInterval)
+			c.logger.Warnf("Catalog rejected a commit setting table property %s but accepted it without; %s is paused for this table for %s and it keeps one manifest per commit meanwhile. Rejection was: %v", table.ManifestMergeEnabledKey, ioFieldManifestMergeEnabled, c.cfg.UnsupportedUpdateRetryInterval, trialErr)
+		}
 	}
 	// budget is the number of attempts this call may make: cfg.MaxRetries plus
 	// one per learn-and-strip retry and one per elimination trial.
@@ -812,6 +832,18 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			if err := txn.UpgradeFormatVersion(CurrentIcebergVersion); err != nil {
 				return attempt > 1, fmt.Errorf("upgrading version: %w", joinUnresolvedUnknown(err, unresolvedUnknown))
 			}
+		}
+		// Must precede stage: iceberg-go picks fast- vs merge-append from the
+		// transaction's table properties at the moment the data files are
+		// staged, so a property staged after the fact is read one commit late.
+		mergeStaged := false
+		if !dropMergeProp && !c.unsupported.refusesMergeProp() {
+			staged, err := c.stageManifestMergeProperty(txn)
+			if err != nil {
+				c.incrCommitFailure()
+				return attempt > 1, fmt.Errorf("staging %s: %w", table.ManifestMergeEnabledKey, joinUnresolvedUnknown(err, unresolvedUnknown))
+			}
+			mergeStaged = staged
 		}
 		if err := stage(txn, props, reloaded); err != nil {
 			// Stage failures ARE commit failures for observability: a
@@ -892,12 +924,22 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 			// Nothing landed (the rejection is definitive), so re-staging
 			// from the same base without a reload is safe, exactly as for
 			// the prohibited-keys retry.
-			if errors.Is(err, rest.ErrBadRequest) && trial == 0 && expiryStaged {
-				dropExpiry = true
-				trial, trialAttempt, trialErr, commitErr = 1, attempt+1, err, err
-				budget++
-				c.logger.Warnf("Commit attempt %d rejected with optional updates staged; retrying without snapshot expiry to rule it out: %v", attempt, err)
-				continue
+			if errors.Is(err, rest.ErrBadRequest) {
+				next, dropped := 0, ""
+				switch {
+				case trial == 0 && expiryStaged:
+					next, dropped = 1, "snapshot expiry"
+					dropExpiry = true
+				case trial < 2 && mergeStaged:
+					next, dropped = 2, "the manifest-merge property"
+					dropMergeProp = true
+				}
+				if next != 0 {
+					trial, trialAttempt, trialErr, commitErr = next, attempt+1, err, err
+					budget++
+					c.logger.Warnf("Commit attempt %d rejected with optional updates staged; retrying without %s to rule it out: %v", attempt, dropped, err)
+					continue
+				}
 			}
 		}
 		// A clean conflict (our commit did not land) is retried: a
@@ -957,6 +999,53 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	}
 	c.incrCommitFailure()
 	return attempt > 1, fmt.Errorf("committing transaction after %d attempts: %w", attempt, joinUnresolvedUnknown(commitErr, unresolvedUnknown))
+}
+
+// stageManifestMergeProperty makes commit.manifest_merge_enabled take effect.
+// iceberg-go chooses between fast-append (one new manifest per commit) and
+// merge-append (small manifests folded together once there are more than
+// commit.manifest.min-count-to-merge of them) from the TABLE property
+// commit.manifest-merge.enabled, defaulting to false. A table that lacks the
+// property is stamped with the configured value, in the same transaction as
+// the data so the very first commit already honours it. A table that already
+// carries the property keeps it: the property is standard Iceberg metadata
+// that other engines read and write, and silently overriding an operator's
+// explicit choice would flip their write profile behind their back. A
+// mismatch with the configured value is logged once per table.
+//
+// Once the prohibited-property stripper has learned that the catalog forbids
+// the key (it named it in a rejection), the property is not staged at all:
+// staging it would make iceberg-go merge manifests in THIS transaction (it
+// reads the transaction's own metadata) while the stripper removes the
+// update before the catalog sees it, so the table would merge without ever
+// recording why. Not staging keeps the table at one manifest per commit,
+// which is what the documentation promises for such catalogs. The stripper
+// is also why the property is not set at CreateTable: a forbidden property
+// there fails table creation outright with no stripper in the path.
+//
+// The bool reports whether a set-properties update was staged on txn.
+func (c *committer) stageManifestMergeProperty(txn *table.Transaction) (bool, error) {
+	if c.stripper.strip.has(table.ManifestMergeEnabledKey) {
+		return false, nil
+	}
+	want := strconv.FormatBool(c.cfg.ManifestMergeEnabled)
+	if have, ok := c.table.Properties()[table.ManifestMergeEnabledKey]; ok {
+		if have != want {
+			c.unsupported.manifestMergeWarnOnce.Do(func() {
+				c.logger.Warnf("Table property %s is %q but %s is %v; honouring the table property, which other engines read too. Change the property on the table to change manifest merging.", table.ManifestMergeEnabledKey, have, ioFieldManifestMergeEnabled, c.cfg.ManifestMergeEnabled)
+			})
+		}
+		return false, nil
+	}
+	if want == strconv.FormatBool(table.ManifestMergeEnabledDefault) {
+		// Absent already means this value to iceberg-go; a set-properties
+		// update would change nothing and could only cost a rejection.
+		return false, nil
+	}
+	if err := txn.SetProperties(iceberg.Properties{table.ManifestMergeEnabledKey: want}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // expiryHasWork is the cheap pre-check for stageSnapshotExpiry: it reports

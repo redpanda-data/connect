@@ -210,6 +210,52 @@ storage:
 	}
 }
 
+// TestParseCommitConfigManifestMergeEnabled pins the
+// `commit.manifest_merge_enabled` default: the output does not stamp the
+// manifest-merge property unless the config turns it on.
+func TestParseCommitConfigManifestMergeEnabled(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       bool
+	}{
+		{
+			name:       "commit object absent",
+			commitYAML: "",
+			want:       false,
+		},
+		{
+			name:       "field absent",
+			commitYAML: "commit:\n  max_retries: 2\n",
+			want:       false,
+		},
+		{
+			name:       "explicit value",
+			commitYAML: "commit:\n  manifest_merge_enabled: true\n",
+			want:       true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.ManifestMergeEnabled)
+		})
+	}
+}
+
 // TestRuntimeNoticeWiring pins the startup log notices wired in
 // newIcebergOutputFromConfig (currently 0% covered): the max_in_flight ordering
 // WARNING, the copy-on-write write-amplification INFO, and the
