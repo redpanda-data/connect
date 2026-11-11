@@ -201,32 +201,30 @@ func (c *redpandaOutputClient) hooks() franzWriterHooks {
 	return NewFranzWriterHooks(c.use).WithYieldClientFn(c.close)
 }
 
+// use calls fn with the client, creating the client first if there is none.
 func (c *redpandaOutputClient) use(ctx context.Context, fn FranzSharedClientUseFn) error {
-	client, err := c.rlockClient(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.mu.RUnlock()
-
-	return fn(&FranzSharedClientInfo{
-		Client:      client,
-		ConnDetails: c.connDetails,
-	})
-}
-
-// rlockClient returns the client with the read lock held, creating the client
-// first if there is none. A read lock cannot be upgraded, so the client is
-// created under the write lock and checked again once the read lock is back.
-func (c *redpandaOutputClient) rlockClient(ctx context.Context) (*kgo.Client, error) {
 	c.mu.RLock()
-	for c.client == nil {
+	if c.client == nil {
+		// A read lock cannot be upgraded, so the client is created under the
+		// write lock and the read lock is taken again afterwards.
 		c.mu.RUnlock()
 		if err := c.connect(ctx); err != nil {
-			return nil, err
+			return err
 		}
 		c.mu.RLock()
 	}
-	return c.client, nil
+	defer c.mu.RUnlock()
+
+	// Benthos closes the output only after every write has returned, so the
+	// client is nil here only if close ran between connect and RLock above.
+	// ErrNotConnected sends benthos into its reconnect path.
+	if c.client == nil {
+		return service.ErrNotConnected
+	}
+	return fn(&FranzSharedClientInfo{
+		Client:      c.client,
+		ConnDetails: c.connDetails,
+	})
 }
 
 func (c *redpandaOutputClient) connect(ctx context.Context) error {
