@@ -648,6 +648,7 @@ func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
 // parseCommitConfig parses the commit configuration.
 func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	cfg := CommitConfig{
+		ManifestMergeEnabled:           true,
 		MaxSnapshotAge:                 24 * time.Hour,
 		MaxRetries:                     3,
 		UnsupportedUpdateRetryInterval: time.Hour,

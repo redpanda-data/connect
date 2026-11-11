@@ -211,8 +211,8 @@ storage:
 }
 
 // TestParseCommitConfigManifestMergeEnabled pins the
-// `commit.manifest_merge_enabled` default: the output does not stamp the
-// manifest-merge property unless the config turns it on.
+// `commit.manifest_merge_enabled` default: the output stamps the
+// manifest-merge property unless the config turns it off.
 func TestParseCommitConfigManifestMergeEnabled(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -222,17 +222,17 @@ func TestParseCommitConfigManifestMergeEnabled(t *testing.T) {
 		{
 			name:       "commit object absent",
 			commitYAML: "",
-			want:       false,
+			want:       true,
 		},
 		{
 			name:       "field absent",
 			commitYAML: "commit:\n  max_retries: 2\n",
-			want:       false,
+			want:       true,
 		},
 		{
-			name:       "explicit value",
-			commitYAML: "commit:\n  manifest_merge_enabled: true\n",
-			want:       true,
+			name:       "explicit false",
+			commitYAML: "commit:\n  manifest_merge_enabled: false\n",
+			want:       false,
 		},
 	}
 
