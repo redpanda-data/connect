@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,39 @@ func TestConvertTableRecordsToBatch_FailoverKeepsBoundarySecond(t *testing.T) {
 	seq1, _ := batch[1].MetaGet("dynamodb_sequence_number")
 	require.Equal(t, "2", seq0)
 	require.Equal(t, "3", seq1)
+}
+
+// The snapshot records an item under the key that buildItemKeyString gives
+// for a scan item, with a start time in the host zone. The stream side looks
+// the item up by its stream keys and the UTC stream time. On a host east of
+// UTC, a record stamped after the snapshot start must stay in the batch. A
+// record stamped before the start is a version the scan already read, so it
+// is skipped.
+func TestConvertTableRecordsToBatch_SnapshotDedupe(t *testing.T) {
+	keySchema := []dynamodbtypes.KeySchemaElement{
+		{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash},
+	}
+	item := map[string]dynamodbtypes.AttributeValue{
+		"pk": &dynamodbtypes.AttributeValueMemberS{Value: "item-1"},
+	}
+	buffer := newSnapshotSequenceBuffer(100)
+	// 10:00:00.300 UTC, as time.Now() gives it on a UTC+1 host.
+	start := time.Date(2026, 1, 1, 11, 0, 0, 300_000_000, time.FixedZone("UTC+1", 3600))
+	buffer.RecordSnapshotItem(buildItemKeyString(item, keySchema), start)
+
+	keys := map[string]streamstypes.AttributeValue{
+		"pk": &streamstypes.AttributeValueMemberS{Value: "item-1"},
+	}
+	before := time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC)
+	after := time.Date(2026, 1, 1, 10, 0, 30, 0, time.UTC)
+	records := []streamstypes.Record{
+		{Dynamodb: &streamstypes.StreamRecord{Keys: keys, ApproximateCreationDateTime: &before, SequenceNumber: aws.String("1")}},
+		{Dynamodb: &streamstypes.StreamRecord{Keys: keys, ApproximateCreationDateTime: &after, SequenceNumber: aws.String("2")}},
+	}
+	batch := convertTableRecordsToBatch(records, "t", "shard-1", buffer, time.Time{}, nil)
+	require.Len(t, batch, 1)
+	seq, _ := batch[0].MetaGet("dynamodb_sequence_number")
+	require.Equal(t, "2", seq)
 }
 
 func TestShouldSkipFailoverRecord(t *testing.T) {
