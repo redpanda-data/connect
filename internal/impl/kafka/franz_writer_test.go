@@ -244,6 +244,33 @@ key: '${! json("key") }'
 			wantKey: []byte("0"),
 		},
 		{
+			name: "literal null text in json field is a null key",
+			conf: `
+topic: foo
+key: '${! json("key") }'
+`,
+			msg:     newMsg([]byte(`{"key":"null"}`), nil),
+			wantKey: nil,
+		},
+		{
+			name: "static null key is kept",
+			conf: `
+topic: foo
+key: "null"
+`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: []byte("null"),
+		},
+		{
+			name: "static empty key is a null key",
+			conf: `
+topic: foo
+key: ""
+`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: nil,
+		},
+		{
 			name: "static key is kept",
 			conf: `
 topic: foo
