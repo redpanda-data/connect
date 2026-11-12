@@ -10,12 +10,16 @@ package streaming
 
 import (
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
 const testSecret = "S3cretToken"
@@ -39,6 +43,35 @@ func TestRedactedBodyEncryptionKey(t *testing.T) {
 	assert.NotContains(t, got, testSecret)
 	assert.Contains(t, got, `"encryption_key":"xxxxx"`)
 	assert.Contains(t, got, `"encryption_key_id":42`)
+}
+
+func TestDoPostErrorsRedactBody(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		kept   string
+	}{
+		{name: "non 200", status: http.StatusInternalServerError, body: "creds: " + testSecret, kept: "status code (500)"},
+		{name: "invalid response", status: http.StatusOK, body: `{"prefix":42,"stage_location":{"creds":{"AWS_SECRET_KEY":"` + testSecret + `"}}}`, kept: `"prefix":42`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+
+			c := &SnowflakeRestClient{client: srv.Client(), cachedJWT: typed.NewAtomicValue("")}
+			var resp struct {
+				Prefix string `json:"prefix"`
+			}
+			err := c.doPost(t.Context(), srv.URL, struct{}{}, &resp)
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), testSecret)
+			assert.Contains(t, err.Error(), tc.kept)
+		})
+	}
 }
 
 func TestAzureUploaderRedactsSASToken(t *testing.T) {
