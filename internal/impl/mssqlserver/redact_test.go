@@ -21,10 +21,10 @@ import (
 
 func TestOpenDBBadDSNRedacted(t *testing.T) {
 	const secret = "S3cretPass"
-	dsn := "sqlserver://sa:" + secret + "@bad host:1433?database=db"
+	dsn := "sqlserver://sa:" + secret + "@localhost:1433?database=db&dial+timeout=" + secret
 
-	// Guard that the driver still echoes the DSN, otherwise this test proves
-	// nothing.
+	// Guard that the driver still echoes the invalid parameter value, otherwise
+	// this test proves nothing.
 	raw, err := sql.Open("mssql", dsn)
 	if err == nil {
 		err = raw.PingContext(t.Context())
