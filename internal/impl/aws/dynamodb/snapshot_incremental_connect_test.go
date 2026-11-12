@@ -28,7 +28,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
-	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // incStreamsStub fakes DynamoDB Streams for input-level incremental tests.
@@ -241,7 +240,7 @@ func TestStartDiscoveredTableBackfillsNewTable(t *testing.T) {
 	streams := &incStreamsStub{describe: func(string) []string { return []string{"s3"} }}
 	scan := &scanStubTransport{items: `[{"pk":{"S":"a"}}]`}
 	d := newIncConnectInput(t, scan, streams)
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.startBackgroundWorker("incremental snapshot queue", d.runBackfillQueue)
 	defer stopInput(t, d)
 

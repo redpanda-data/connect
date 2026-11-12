@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
-	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 // TestPrepareTableBackfillSkipsKeysOnlyTable: the stream-view check runs
@@ -87,7 +86,7 @@ func TestRunBackfillQueueMovesPastStoppedCoordinator(t *testing.T) {
 		})
 	}
 
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.backfills.Push("t1")
 	d.backfills.Push("t2")
 	// t3 proves the queue also moves on after a table that completes

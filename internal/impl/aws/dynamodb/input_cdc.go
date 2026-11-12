@@ -34,7 +34,6 @@ import (
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
-	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 type asyncMessage struct {
@@ -160,7 +159,7 @@ pipeline:
 object with a ` + "`message`" + ` key, whose value is written to the input's log output.
 
 **` + "`snapshot-execute`" + `**: backfills the named tables incrementally, alongside streaming. Requires
-` + "`" + dciFieldSnapshotMode + ": incremental`" + `; without it the signal is logged with a warning and
+` + "`" + dciFieldSnapshotMode + ": incremental`" + `. Without it, the signal is logged with a warning and
 ignored. The ` + "`data`" + ` attribute must contain a JSON object with a ` + "`tables`" + ` key listing table names,
 for example ` + "`{\"tables\": [\"orders\", \"customers\"]}`" + `. Every named table must be one this input
 streams, with a stream view of ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `. If any table fails these
@@ -241,7 +240,7 @@ When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+`, `+"`snapshot_and_cdc
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
-The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table; `+"`incremental`"+` also works in multi-table mode, including with `+"`signal_table_name`"+` set.
+The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table. `+"`incremental`"+` also works in multi-table mode, including with `+"`signal_table_name`"+` set.
 
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `+"`snapshot_segments`"+` and `+"`snapshot_throttle`"+` to control RCU consumption.
 
@@ -696,7 +695,7 @@ type dynamoDBCDCInput struct {
 	backfillCancel context.CancelFunc
 	// backfills orders multi-table incremental backfills; nil unless
 	// snapshot_mode is incremental in multi-table mode.
-	backfills *incrementalsnapshot.TableQueue
+	backfills *incsnapshot.TableQueue
 
 	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
 	// multi-table) is true only until the first successful shard discovery of
@@ -1460,7 +1459,7 @@ func (d *dynamoDBCDCInput) connectMultipleTables(ctx context.Context, tables []s
 	// The queue exists before any coordinator starts: the signal table's
 	// reader may push to it as soon as it runs, and so may a retried prepare.
 	if d.conf.snapshot.mode == snapshotModeIncremental {
-		d.backfills = incrementalsnapshot.NewTableQueue()
+		d.backfills = incsnapshot.NewTableQueue()
 	}
 
 	// Incremental backfills are prepared before any shard is discovered or

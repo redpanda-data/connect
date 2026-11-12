@@ -9,10 +9,13 @@
 // Package incrementalsnapshot drives the aws_dynamodb_cdc input's incremental
 // snapshot: it backfills a table page by page while the table streams, and
 // releases each page only once no stream record can still supersede it out
-// of order. The connector-neutral machinery (the page window, shard progress
-// and table queue) lives in internal/replication/incrementalsnapshot; this
-// package binds it to DynamoDB items and stream records, and reaches the
-// input's checkpoint store, scanner and message channel through Deps.
+// of order. The connector-neutral page window lives in
+// internal/replication/incrementalsnapshot. This package binds it to DynamoDB
+// items and stream records, holds the parts specific to DynamoDB Streams
+// (ShardProgress, which derives each shard's read position from records,
+// empty reads and shard listings, and TableQueue, which runs multi-table
+// backfills one table at a time), and reaches the input's checkpoint store,
+// scanner and message channel through Deps.
 package incrementalsnapshot
 
 import (
@@ -40,7 +43,7 @@ type ReleasedPage = incrementalsnapshot.ReleasedPage[Item, Item]
 // snapshot_mode: incremental pay nothing.
 type State struct {
 	window   *Window
-	progress *incrementalsnapshot.ShardProgress
+	progress *ShardProgress
 	margin   time.Duration
 	// nudge wakes the release loop early after progress moves.
 	nudge chan struct{}
@@ -51,7 +54,7 @@ type State struct {
 func NewState(margin, idleGrace time.Duration) *State {
 	return &State{
 		window:   incrementalsnapshot.NewPageWindow[Item, Item](),
-		progress: incrementalsnapshot.NewShardProgress(margin, idleGrace, time.Now),
+		progress: NewShardProgress(margin, idleGrace, time.Now),
 		margin:   margin,
 		nudge:    make(chan struct{}, 1),
 	}
@@ -63,7 +66,7 @@ func (s *State) Window() *Window {
 }
 
 // Progress returns the table's shard progress tracker.
-func (s *State) Progress() *incrementalsnapshot.ShardProgress {
+func (s *State) Progress() *ShardProgress {
 	return s.progress
 }
 

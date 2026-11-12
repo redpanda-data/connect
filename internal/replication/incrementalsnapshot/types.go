@@ -21,12 +21,12 @@
 // Connectors whose stream has no single global log position (for example a
 // stream split into shards that each carry their own position, such as
 // DynamoDB Streams) cannot bound a chunk with watermarks. They use PageWindow
-// and ShardProgress instead. PageWindow holds each scanned page and drops
-// every key the stream touches before the page is sent, under one lock, so a
-// snapshot item is never emitted after its key's stream event. ShardProgress
-// tracks how far each shard has been read and decides when a held page may be
-// released; it only refines ordering, never safety. TableQueue runs such
-// backfills one table at a time.
+// instead. PageWindow holds each scanned page and drops every key the stream
+// touches before the page is sent, under one lock, so a snapshot item is never
+// emitted after its key's stream event. This is safe as long as each stream
+// event carries the key's full new image and the events for one key arrive in
+// order. The connector decides when a held page may be released, from how far
+// its stream has been read. That decision only refines ordering, never safety.
 package incrementalsnapshot
 
 import "fmt"

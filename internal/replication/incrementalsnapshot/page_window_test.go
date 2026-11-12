@@ -23,6 +23,9 @@ type testWindow = PageWindow[string, any]
 
 func newTestWindow() *testWindow { return NewPageWindow[string, any]() }
 
+// t0 is the read time of the first test page.
+var t0 = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+
 func always(time.Time) bool { return true }
 
 func collectPage(t *testing.T, w *testWindow) []string {

@@ -28,7 +28,6 @@ import (
 
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
 	"github.com/redpanda-data/connect/v4/internal/replication"
-	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
 )
 
 const (
@@ -82,7 +81,7 @@ func newSignalTestInput(api checkpointDynamoAPI, mem *memCheckpointAPI) *dynamoD
 		},
 		log:       service.MockResources().Logger(),
 		metrics:   newDynamoDBCDCMetrics(service.MockResources().Metrics()),
-		backfills: incrementalsnapshot.NewTableQueue(),
+		backfills: incsnapshot.NewTableQueue(),
 		tableStreams: map[string]*tableStream{
 			"t1": {
 				tableName: "t1", streamArn: signalArnT1, incremental: inc(),

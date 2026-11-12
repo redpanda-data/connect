@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/internal/replication/incrementalsnapshot"
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
 )
 
 // failFirstScans returns a scanItems func whose first n Scans return a
@@ -113,7 +113,7 @@ func TestRunBackfillQueueRequeuesFailedTable(t *testing.T) {
 		"t1": newQueueTableStream(t, d, "t1"),
 		"t2": newQueueTableStream(t, d, "t2"),
 	}
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.backfills.Push("t1")
 	d.backfills.Push("t2")
 
@@ -166,7 +166,7 @@ func TestRunBackfillQueueDrivesSnapshotState(t *testing.T) {
 		"t1": newQueueTableStream(t, d, "t1"),
 		"t2": newQueueTableStream(t, d, "t2"),
 	}
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.backfills.Push("t1")
 	d.backfills.Push("t2")
 	state := func() int64 { return exporter.gauge(metricSnapshotState) }
@@ -226,7 +226,7 @@ func TestRunBackfillQueueNoRequeueAfterShutdown(t *testing.T) {
 		return signalingBackOff{ConstantBackOff: backoff.NewConstantBackOff(retryWait), scheduled: scheduled}
 	}
 	d.tableStreams = map[string]*tableStream{"t1": newQueueTableStream(t, d, "t1")}
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.backfills.Push("t1")
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -367,7 +367,7 @@ func TestStartDiscoveredTableRetriesFailedPrepare(t *testing.T) {
 	scan := &scanStubTransport{items: `[{"pk":{"S":"a"}}]`}
 	d := newIncConnectInput(t, scan, streams)
 	d.backfillRetryBackoff = constantRetryBackoff(20 * time.Millisecond)
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.startBackgroundWorker("incremental snapshot queue", d.runBackfillQueue)
 	defer stopInput(t, d)
 
@@ -393,7 +393,7 @@ func TestPrepareRetryStopsWithInput(t *testing.T) {
 	d.backfillRetryBackoff = func() backoff.BackOff {
 		return signalingBackOff{ConstantBackOff: backoff.NewConstantBackOff(retryWait), scheduled: scheduled}
 	}
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	ts, api := newFlakyTableStream(t, d, "t1", 1)
 
 	assert.False(t, d.prepareOrRetryTableBackfill(t.Context(), t.Context(), "t1", ts), "a failed prepare does not queue the table")
@@ -418,7 +418,7 @@ func TestPrepareRetryOutlivesCancelledConnect(t *testing.T) {
 	streams := &incStreamsStub{describe: func(string) []string { return []string{"s1"} }}
 	d := newIncConnectInput(t, &scanStubTransport{}, streams)
 	d.backfillRetryBackoff = constantRetryBackoff(10 * time.Millisecond)
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	ts, _ := newFlakyTableStream(t, d, "t1", 1)
 
 	connectCtx, cancel := context.WithCancel(t.Context())
@@ -439,7 +439,7 @@ func TestPrepareNoRetryWhenNoBackfillNeeded(t *testing.T) {
 	d.backfillRetryBackoff = func() backoff.BackOff {
 		return signalingBackOff{ConstantBackOff: backoff.NewConstantBackOff(time.Millisecond), scheduled: scheduled}
 	}
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	ts, api := newFlakyTableStream(t, d, "t1", 0)
 	arn := testArn("t1")
 	api.put(arn, snapshotRow(arn, "snapshot#complete", true, nil))
@@ -464,7 +464,7 @@ func TestSignalDuringPrepareRetryWaitsForPrepare(t *testing.T) {
 	d.conf.signalTable = "sig"
 	const retryWait = time.Second
 	d.backfillRetryBackoff = constantRetryBackoff(retryWait)
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.startBackgroundWorker("incremental snapshot queue", d.runBackfillQueue)
 	defer stopInput(t, d)
 
@@ -563,7 +563,7 @@ func TestSignalBeforeDiscoveredTablePrepareWaitsForPrepare(t *testing.T) {
 	d := newIncConnectInput(t, scan, streams)
 	d.conf.checkpointTable = "ckpt"
 	d.dynamoClient = newStubDynamoClient(describingTransport{scan})
-	d.backfills = incrementalsnapshot.NewTableQueue()
+	d.backfills = incsnapshot.NewTableQueue()
 	d.startBackgroundWorker("incremental snapshot queue", d.runBackfillQueue)
 	defer stopInput(t, d)
 
