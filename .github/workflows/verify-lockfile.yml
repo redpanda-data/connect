@@ -1,6 +1,6 @@
-# Fails when .github/workflows/actions.lock does not agree with the workflows, or when a locked pin
-# no longer resolves upstream. Without this check the lockfile only records what the author of a
-# pull request resolved on their machine.
+# Fails when a workflow uses an action that .github/workflows/actions.lock does not record. That
+# happens when somebody adds a step or changes a version and does not run `gh actions-lock`. Without
+# this check the lockfile only records what the author of a pull request resolved on their machine.
 #
 # The path filter keeps the job off pull requests that do not touch Actions. A required check with a
 # path filter stays pending on the pull requests it skips, so remove the filter before you make this
