@@ -913,6 +913,10 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 	}
 	defer snapshotter.ReleaseReaderTxn(txn)
 
+	// minExclusive is also the previous range's maxInclusive, which another worker may still be
+	// paging up to. Page with a copy, so recording this range's last key doesn't move that bound.
+	minExclusive = slices.Clone(minExclusive)
+
 	unquotedTable, err := sanitize.UnquotePostgresIdentifier(table.Table)
 	if err != nil {
 		return fmt.Errorf("unexpected failure to unquote table name: %w", err)
