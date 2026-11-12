@@ -38,5 +38,9 @@ jobs:
       - name: Install gh-actions-lock
         run: gh extension install github/gh-actions-lock --pin v0.4.1
 
-      - name: Verify lockfile
-        run: gh actions-lock --verify
+      # `--verify-local` is the offline coverage check: it confirms that every action reference has a
+      # lockfile entry. The full `--verify` also reads each action upstream, which fails on a hosted
+      # runner because the `aquasecurity` organization (trivy-action) has an IP allow list that rejects
+      # runner addresses. Run `gh actions-lock --verify` on a workstation to check the entries upstream.
+      - name: Verify lockfile coverage
+        run: gh actions-lock --verify-local
