@@ -68,7 +68,7 @@ func TestConvertTableRecordsToBatch_FailoverKeepsBoundarySecond(t *testing.T) {
 // UTC, a record stamped after the snapshot start must stay in the batch. A
 // record stamped before the start is a version the scan already read, so it
 // is skipped.
-func TestConvertTableRecordsToBatch_SnapshotDedupe(t *testing.T) {
+func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	keySchema := []dynamodbtypes.KeySchemaElement{
 		{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash},
 	}
