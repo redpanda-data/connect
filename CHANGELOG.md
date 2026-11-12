@@ -3,6 +3,40 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.118.0 - 2026-11-12
+
+### Added
+
+- azure: Azure Blob Storage output now supports blob index tags for organizing and filtering blobs, with configuration-time validation and best-effort tag application for pre-existing append blobs. ([@cadiidii](https://github.com/cadiidii), [#4204](https://github.com/redpanda-data/connect/pull/4204))
+- telemetry: Pipeline ID from the control plane is now included in the anonymous telemetry payload for correlation with usage and billing data. ([@prakhargarg105](https://github.com/prakhargarg105), [#4758](https://github.com/redpanda-data/connect/pull/4758))
+
+### Fixed
+
+- dynamodb: DynamoDB CDC input now correctly deduplicates snapshots and CDC events across different time zones and within the same second. ([@Leward](https://github.com/Leward), [#5057](https://github.com/redpanda-data/connect/pull/5057))
+- dynamodb: AWS DynamoDB CDC input now properly resumes snapshots with the correct segment count. ([@squiidz](https://github.com/squiidz), [#5181](https://github.com/redpanda-data/connect/pull/5181))
+- dynamodb: AWS DynamoDB CDC input now retries table coordinator shard refresh on failure instead of giving up. ([@squiidz](https://github.com/squiidz), [#5182](https://github.com/redpanda-data/connect/pull/5182))
+- influxdb: InfluxDB metrics exporter now properly stops its flush loop on close, preventing goroutine leaks and duplicate metric writes. ([@Leward](https://github.com/Leward), [#5130](https://github.com/redpanda-data/connect/pull/5130))
+- kafka: Sarama Kafka output tests now correctly handle at-least-once delivery semantics by allowing duplicate messages. ([@Leward](https://github.com/Leward), [#5131](https://github.com/redpanda-data/connect/pull/5131))
+- kafka: Sarama Kafka output now supports idempotent writes by properly configuring RequiredAcks and MaxOpenRequests when idempotent_write is enabled. ([@Leward](https://github.com/Leward), [#5167](https://github.com/redpanda-data/connect/pull/5167))
+- mongodb: MongoDB CDC input now ensures the incremental snapshot waits for the majority snapshot to reach the stream start, preventing data loss from concurrent writes. ([@Leward](https://github.com/Leward), [#5132](https://github.com/redpanda-data/connect/pull/5132))
+- mssqlserver: SQL Server CDC input now properly handles failed CDC enable operations and parallel CDC setup calls, preventing test flakiness in concurrent environments. ([@Leward](https://github.com/Leward), [#5119](https://github.com/redpanda-data/connect/pull/5119))
+- mssqlserver: SQL Server CDC input now correctly captures streaming changes by clearing snapshot messages before streaming inserts. ([@Leward](https://github.com/Leward), [#5122](https://github.com/redpanda-data/connect/pull/5122))
+- otlp: OTLP integration tests now use ports outside the ephemeral range to avoid conflicts when running concurrent test packages. ([@Leward](https://github.com/Leward), [#5134](https://github.com/redpanda-data/connect/pull/5134))
+- postgres: PostgreSQL CDC input now prevents parallel snapshot chunks from moving each other's bounds during processing. ([@josephwoodward](https://github.com/josephwoodward), [#5204](https://github.com/redpanda-data/connect/pull/5204))
+- questdb: QuestDB output integration tests now properly wait for WAL tables to apply changes before reading results. ([@Leward](https://github.com/Leward), [#5129](https://github.com/redpanda-data/connect/pull/5129))
+- sftp: SFTP input now correctly counts minimum_age from whole-second modification times, preventing premature reads of files with incomplete data. ([@Leward](https://github.com/Leward), [#5125](https://github.com/redpanda-data/connect/pull/5125))
+- snowflake: Fixed incorrect PrivateLink documentation link in Snowflake output. ([@JakeSCahill](https://github.com/JakeSCahill), [#5050](https://github.com/redpanda-data/connect/pull/5050))
+- snowflake: Fixed incorrect field naming in Snowflake Redpanda input's unordered_processing configuration. ([@JakeSCahill](https://github.com/JakeSCahill), [#5062](https://github.com/redpanda-data/connect/pull/5062))
+
+### Changed
+
+- azure: Azure Blob Storage output tags field version updated to 4.118.0 as it was not included in the 4.117.0 release. ([@Leward](https://github.com/Leward), [#5166](https://github.com/redpanda-data/connect/pull/5166))
+- general: Documentation generation now creates config partials that show a single code block when Common and Advanced snippets match, with improved handling of required enum fields. ([@JakeSCahill](https://github.com/JakeSCahill), [#5139](https://github.com/redpanda-data/connect/pull/5139))
+- general: Improved documentation formatting with proper inline code markup for field names and better sentence structure. ([@JakeSCahill](https://github.com/JakeSCahill), [#5140](https://github.com/redpanda-data/connect/pull/5140))
+- general: Release workflow now uses a configurable OPERATOR_REPO variable instead of hardcoded repository references for operator updates. ([@gousteris](https://github.com/gousteris), [#5169](https://github.com/redpanda-data/connect/pull/5169))
+- oracledb: Oracle CDC input now uses partitioned table snapshots for improved performance and reliability when capturing changes from large tables. ([@josephwoodward](https://github.com/josephwoodward), [#5006](https://github.com/redpanda-data/connect/pull/5006))
+- snowflake: Improved Snowflake Streaming Pipe documentation with clearer placeholder names and better explanation of configuration requirements. ([@JakeSCahill](https://github.com/JakeSCahill), [#5092](https://github.com/redpanda-data/connect/pull/5092))
+
 ## 4.117.0 - 2026-11-06
 
 ### Added
