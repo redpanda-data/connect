@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"time"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
@@ -648,9 +647,10 @@ func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
 // parseCommitConfig parses the commit configuration.
 func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	cfg := CommitConfig{
-		ManifestMergeEnabled: true,
-		MaxSnapshotAge:       24 * time.Hour,
-		MaxRetries:           3,
+		ManifestMergeEnabled:           true,
+		MaxSnapshotAge:                 defaultMaxSnapshotAge,
+		MaxRetries:                     3,
+		UnsupportedUpdateRetryInterval: defaultUnsupportedUpdateRetryInterval,
 	}
 	if !conf.Contains(ioFieldCommit) {
 		return cfg, nil
@@ -665,6 +665,10 @@ func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 		return cfg, err
 	}
 	cfg.MaxRetries, err = conf.FieldInt(ioFieldCommit, ioFieldMaxCommitRetries)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.UnsupportedUpdateRetryInterval, err = conf.FieldDuration(ioFieldCommit, ioFieldUnsupportedRetry)
 	if err != nil {
 		return cfg, err
 	}

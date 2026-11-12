@@ -369,7 +369,7 @@ output:
     # ...catalog / storage / table...
     max_in_flight: 16
     commit:
-      max_snapshot_age: 24h  # keep snapshot expiry on (see "Avoid over-committing")
+      max_snapshot_age: 24h  # shorter than the 5-day default: frequent commits need it (see "Avoid over-committing")
 ```
 
 Preserves ordering across partitions; throughput plateaus at the single merged stream's ceiling.
@@ -417,4 +417,4 @@ This increases resident memory; validate it against your memory budget before ad
 Beyond the per-commit round trip, very high commit rates also grow table metadata: each commit
 re-reads the full table metadata document, and that cost rises with the number of snapshots. Tiny,
 frequent commits therefore pay a compounding penalty. Prefer larger batches, and keep snapshot expiry
-enabled (`commit.max_snapshot_age`, default `24h`) so metadata stays bounded over long runs.
+enabled (`commit.max_snapshot_age`, default `120h`, 5 days) so metadata stays bounded over long runs.
