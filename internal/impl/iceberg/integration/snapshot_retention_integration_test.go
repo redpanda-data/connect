@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/iceberg-go/table"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,10 +23,11 @@ import (
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
 )
 
-// TestSnapshotRetentionIntegration proves commit.max_snapshot_age against a
-// real REST catalog, not the in-memory one: the catalog must accept a commit
-// that carries a remove-snapshots update alongside the new snapshot, and a
-// reader must still see every row once older snapshots are gone.
+// TestSnapshotRetentionIntegration proves the commit.* table-lifecycle knobs
+// against a real REST catalog, not the in-memory one: the catalog must accept
+// a commit that carries a remove-snapshots update alongside the new snapshot,
+// the manifest-merge property must land on the table through set-properties,
+// and a reader must still see every row once older snapshots are gone.
 func TestSnapshotRetentionIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -42,8 +44,9 @@ func TestSnapshotRetentionIntegration(t *testing.T) {
 	router := infra.NewRouter(t, namespace, tableName,
 		WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}),
 		WithCommitConfig(icebergimpl.CommitConfig{
-			MaxSnapshotAge: age,
-			MaxRetries:     3,
+			ManifestMergeEnabled: true,
+			MaxSnapshotAge:       age,
+			MaxRetries:           3,
 		}),
 	)
 
@@ -65,6 +68,8 @@ func TestSnapshotRetentionIntegration(t *testing.T) {
 	assert.LessOrEqual(t, len(snaps), 2,
 		"snapshots older than max_snapshot_age must have been expired through the catalog; got %d", len(snaps))
 	require.NotNil(t, tbl.CurrentSnapshot())
+	assert.Equal(t, "true", tbl.Properties()[table.ManifestMergeEnabledKey],
+		"commit.manifest-merge.enabled must be stamped onto the table as a table property")
 
 	// Every row is still readable: expiry drops snapshots from metadata, never
 	// data the current snapshot depends on.
