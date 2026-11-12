@@ -62,37 +62,45 @@ func TestConvertTableRecordsToBatch_FailoverKeepsBoundarySecond(t *testing.T) {
 	require.Equal(t, "3", seq1)
 }
 
-// The snapshot records an item under the key that buildItemKeyString gives
-// for a scan item, with a start time in the host zone. The stream side looks
-// the item up by its stream keys and the UTC stream time. On a host east of
-// UTC, a record stamped after the snapshot start must stay in the batch. A
-// record stamped before the start is a version the scan already read, so it
-// is skipped.
+// The snapshot start is in the host zone and stream stamps are in UTC. The
+// dedupe must still compare them as points in time.
 func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
+	t.Log("Given: the snapshot emitted item-1 and started at 10:00:00.300 UTC on a UTC+1 host")
+	snapshotStart := time.Date(2026, 1, 1, 10, 0, 0, 300_000_000, time.UTC).
+		In(time.FixedZone("UTC+1", 3600))
 	keySchema := []dynamodbtypes.KeySchemaElement{
 		{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash},
 	}
-	item := map[string]dynamodbtypes.AttributeValue{
+	scanItem := map[string]dynamodbtypes.AttributeValue{
 		"pk": &dynamodbtypes.AttributeValueMemberS{Value: "item-1"},
 	}
 	buffer := newSnapshotSequenceBuffer(100)
-	// 10:00:00.300 UTC, as time.Now() gives it on a UTC+1 host.
-	start := time.Date(2026, 1, 1, 11, 0, 0, 300_000_000, time.FixedZone("UTC+1", 3600))
-	buffer.RecordSnapshotItem(buildItemKeyString(item, keySchema), start)
+	buffer.RecordSnapshotItem(buildItemKeyString(scanItem, keySchema), snapshotStart)
 
-	keys := map[string]streamstypes.AttributeValue{
+	t.Log("When: the stream returns item-1 records stamped 09:59:59 and 10:00:30 UTC")
+	streamKeys := map[string]streamstypes.AttributeValue{
 		"pk": &streamstypes.AttributeValueMemberS{Value: "item-1"},
 	}
-	before := time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC)
-	after := time.Date(2026, 1, 1, 10, 0, 30, 0, time.UTC)
+	record := func(seq string, stamp time.Time) streamstypes.Record {
+		return streamstypes.Record{Dynamodb: &streamstypes.StreamRecord{
+			Keys:                        streamKeys,
+			ApproximateCreationDateTime: &stamp,
+			SequenceNumber:              aws.String(seq),
+		}}
+	}
 	records := []streamstypes.Record{
-		{Dynamodb: &streamstypes.StreamRecord{Keys: keys, ApproximateCreationDateTime: &before, SequenceNumber: aws.String("1")}},
-		{Dynamodb: &streamstypes.StreamRecord{Keys: keys, ApproximateCreationDateTime: &after, SequenceNumber: aws.String("2")}},
+		record("before-start", time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC)),
+		record("after-start", time.Date(2026, 1, 1, 10, 0, 30, 0, time.UTC)),
 	}
 	batch := convertTableRecordsToBatch(records, "t", "shard-1", buffer, time.Time{}, nil)
-	require.Len(t, batch, 1)
-	seq, _ := batch[0].MetaGet("dynamodb_sequence_number")
-	require.Equal(t, "2", seq)
+
+	t.Log("Then: only the record stamped after the snapshot start stays in the batch")
+	var kept []string
+	for _, msg := range batch {
+		seq, _ := msg.MetaGet("dynamodb_sequence_number")
+		kept = append(kept, seq)
+	}
+	require.Equal(t, []string{"after-start"}, kept)
 }
 
 func TestShouldSkipFailoverRecord(t *testing.T) {
