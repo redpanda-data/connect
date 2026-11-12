@@ -42,8 +42,8 @@ func TestPageWindowTouchBeforeHoldDrops(t *testing.T) {
 	w := newTestWindow()
 	w.Begin(0)
 	assert.Equal(t, 0, w.Touch("a"), "nothing held yet, recorded as touched")
-	_, dropped := w.Hold(0, []string{"a", "b"}, []string{"a", "b"}, t0, nil)
-	assert.Equal(t, 1, dropped)
+	_, skipped := w.Hold(0, []string{"a", "b"}, []string{"a", "b"}, t0, nil)
+	assert.Equal(t, 1, skipped)
 	assert.Equal(t, []string{"b"}, collectPage(t, w))
 }
 
@@ -71,8 +71,8 @@ func TestPageWindowTouchHitsEveryOpenPage(t *testing.T) {
 	w.Begin(1)
 	w.Hold(0, []string{"a"}, []string{"a"}, t0, nil)
 	assert.Equal(t, 1, w.Touch("a"))
-	_, dropped := w.Hold(1, []string{"a"}, []string{"a"}, t0, nil)
-	assert.Equal(t, 1, dropped, "segment 1 was open when a was touched")
+	_, skipped := w.Hold(1, []string{"a"}, []string{"a"}, t0, nil)
+	assert.Equal(t, 1, skipped, "segment 1 was open when a was touched")
 }
 
 func TestPageWindowReleaseRespectsPredicate(t *testing.T) {
@@ -95,27 +95,61 @@ func TestPageWindowAbortAndBeginReplaceUnheldPage(t *testing.T) {
 	w.Begin(0)
 	w.Touch("a")
 	w.Begin(0) // retry after a failed request: the old open page is discarded
-	_, dropped := w.Hold(0, []string{"a"}, []string{"a"}, t0, nil)
-	assert.Equal(t, 0, dropped, "the touch belonged to the discarded page")
+	_, skipped := w.Hold(0, []string{"a"}, []string{"a"}, t0, nil)
+	assert.Equal(t, 0, skipped, "the touch belonged to the discarded page")
 	w.Begin(1)
 	w.Abort(1)
 	assert.Equal(t, []string{"a"}, collectPage(t, w))
 }
 
-func TestPageWindowHeldPageStopsRecordingTouches(t *testing.T) {
+func TestPageWindowHoldMovesSegmentFromOpenToHeld(t *testing.T) {
 	w := newTestWindow()
 	w.Begin(0)
 	w.Hold(0, []string{"a", "b"}, []string{"a", "b"}, t0, nil)
-	w.Touch("c") // touch a non-held key
-	// Verify that touched is nil on held page (read w.pages[0] directly)
+	w.Touch("c") // a key the page does not hold
 	w.mu.Lock()
-	p := w.pages[0]
+	_, open := w.open[0]
+	_, held := w.held[0]
 	w.mu.Unlock()
-	assert.Nil(t, p.touched, "held page should not record touches")
+	assert.False(t, open, "a held page no longer records touches")
+	assert.True(t, held)
 	assert.Equal(t, 2, w.HeldItems())
-	// Verify Touch still drops held items
 	assert.Equal(t, 1, w.Touch("a"))
 	assert.Equal(t, 1, w.HeldItems())
+}
+
+func TestHoldPageSkipsTouchedKeys(t *testing.T) {
+	touched := map[string]struct{}{"b": {}}
+	p, skipped := holdPage[string, any](touched, []string{"a", "b", "c"}, []string{"a", "b", "c"}, t0, "cur")
+	assert.Equal(t, 1, skipped)
+	assert.Equal(t, []string{"a", "c"}, p.liveItems())
+	assert.Equal(t, t0, p.high)
+	assert.Equal(t, "cur", p.cursor)
+}
+
+func TestHeldPageTouch(t *testing.T) {
+	p, _ := holdPage[string, any](nil, []string{"a", "b", "c"}, []string{"a", "b", "c"}, t0, nil)
+	assert.True(t, p.touch("b"))
+	assert.False(t, p.touch("b"), "already dropped")
+	assert.False(t, p.touch("z"), "not on the page")
+	assert.Equal(t, []string{"a", "c"}, p.liveItems())
+}
+
+func TestKeyedBuffer(t *testing.T) {
+	b := newKeyedBuffer[int](3)
+	b.Add("a", 1)
+	b.Add("b", 2)
+	b.Add("c", 3)
+	assert.Equal(t, 3, b.Len())
+	assert.True(t, b.Remove("b"))
+	assert.False(t, b.Remove("b"))
+	assert.False(t, b.Remove("missing"))
+	assert.Equal(t, 2, b.Len())
+	assert.Equal(t, []int{1, 3}, b.Items())
+	assert.True(t, b.Remove("a"))
+	assert.True(t, b.Remove("c"))
+	assert.Equal(t, 0, b.Len())
+	assert.Empty(t, b.Items())
 }
 
 // TestPageWindowNoStaleAfterNewer races a stream reader against the release
@@ -202,8 +236,8 @@ func TestPageWindowFullyTouchedPageIsNotHeld(t *testing.T) {
 	w := newTestWindow()
 	w.Begin(0)
 	w.Touch("a")
-	released, dropped := w.Hold(0, []string{"a"}, []string{"a"}, t0, nil)
-	assert.Equal(t, 1, dropped)
+	released, skipped := w.Hold(0, []string{"a"}, []string{"a"}, t0, nil)
+	assert.Equal(t, 1, skipped)
 	select {
 	case <-released:
 	default:

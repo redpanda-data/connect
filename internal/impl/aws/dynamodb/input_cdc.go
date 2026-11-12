@@ -300,7 +300,7 @@ This input emits the following metrics:
 - `+"`dynamodb_cdc_checkpoint_failures`"+` - Number of failed checkpoint writes to the checkpoint table (counter)
 - `+"`dynamodb_cdc_failover_skipped`"+` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
 - `+"`dynamodb_cdc_snapshot_window_held_items`"+` - Snapshot items held in the incremental snapshot window, waiting for the streams to catch up (gauge)
-- `+"`dynamodb_cdc_snapshot_window_dropped_items`"+` - Snapshot items dropped by the incremental snapshot window because a stream record for the same key arrived while the page was held (counter)
+- `+"`dynamodb_cdc_snapshot_window_dropped_items`"+` - Snapshot items dropped by the incremental snapshot window because a stream record for the same key arrived while the page was read or held (counter)
 - `+"`dynamodb_cdc_snapshot_window_wait`"+` - Time from reading an incremental snapshot page to releasing it (timer)
 - `+"`dynamodb_cdc_snapshot_backfill_tables_pending`"+` - Tables queued for an incremental backfill that has not started yet (gauge)
 
@@ -712,7 +712,7 @@ type dynamoDBCDCMetrics struct {
 	snapshotSegmentDuration *service.MetricTimer   // Tracks segment scan duration
 	checkpointFailures      *service.MetricCounter // Counts checkpoint write failures
 	failoverSkipped         *service.MetricCounter // Counts records skipped during global-table failover replay
-	snapshotWindowDropped   *service.MetricCounter // Counts held snapshot items dropped by a stream touch
+	snapshotWindowDropped   *service.MetricCounter // Counts snapshot items a stream touch removed (skipped at Hold or dropped while held)
 	snapshotWindowHeld      *service.MetricGauge   // Live items held in incremental snapshot windows
 	snapshotWindowWait      *service.MetricTimer   // Time from a page's read to its release
 	backfillTablesPending   *service.MetricGauge   // Tables queued whose incremental backfill has not started yet

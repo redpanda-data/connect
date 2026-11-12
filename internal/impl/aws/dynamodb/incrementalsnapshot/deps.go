@@ -97,7 +97,8 @@ type ScanHooks struct {
 type Metrics struct {
 	// WindowHeld is the number of live items held in the window.
 	WindowHeld *service.MetricGauge
-	// WindowDropped counts held items dropped by a stream touch.
+	// WindowDropped counts scanned items a stream touch removed, whether
+	// skipped at Hold or dropped while held.
 	WindowDropped *service.MetricCounter
 	// WindowWait times a page from its read to its release.
 	WindowWait *service.MetricTimer

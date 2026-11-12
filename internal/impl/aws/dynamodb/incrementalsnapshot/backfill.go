@@ -78,9 +78,9 @@ func (b *Backfill[P]) Run(ctx context.Context) (retErr error) {
 				}
 				keys[i] = k
 			}
-			released, dropped := win.Hold(segment, items, keys, high, lastKey)
-			if dropped > 0 {
-				b.Metrics.WindowDropped.Incr(int64(dropped))
+			released, skipped := win.Hold(segment, items, keys, high, lastKey)
+			if skipped > 0 {
+				b.Metrics.WindowDropped.Incr(int64(skipped))
 			}
 			b.Metrics.WindowHeld.Set(int64(win.HeldItems()))
 			b.State.Poke()
