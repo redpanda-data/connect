@@ -445,9 +445,9 @@ func debugf(l *service.Logger, msg string, args ...any) {
 	l.Tracef(msg, args...)
 }
 
-// redactedBody formats a JSON response body for debug logging with the stage
-// credentials and encryption keys removed. Bodies that are not valid JSON are
-// omitted.
+// redactedBody formats a response body for logs and errors with the stage
+// credentials and encryption keys removed. Bodies without any of the secret keys
+// are kept as they are, and ones that do but are not valid JSON are omitted.
 type redactedBody []byte
 
 // secretBodyKeys are the lowercase JSON keys whose values redactedBody removes.
@@ -535,7 +535,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req, resp 
 			if unmarshalErr := json.Unmarshal(respBody, &restErr); unmarshalErr == nil && restErr.StatusCode != responseSuccess {
 				return nil, &restErr
 			}
-			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
+			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, redactedBody(respBody))
 		}
 		debugf(c.logger, "got response to %s with body %s", url, redactedBody(respBody))
 		return respBody, nil
@@ -556,7 +556,8 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req, resp 
 	}
 	err = json.Unmarshal(respBody, resp)
 	if err != nil {
-		return fmt.Errorf("invalid response: %w, full response: %s", err, respBody[:min(128, len(respBody))])
+		body := redactedBody(respBody).String()
+		return fmt.Errorf("invalid response: %w, full response: %s", err, body[:min(128, len(body))])
 	}
 	return err
 }
