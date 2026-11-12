@@ -484,9 +484,10 @@ input:
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cosmosStartupTimeout := 30 * time.Second
+	// The wait stops before the package timeout, so that the test can log why the emulator is not ready.
+	cosmosStartupTimeout := 2 * time.Minute
 	if deadline, ok := t.Deadline(); ok {
-		cosmosStartupTimeout = time.Until(deadline) - 100*time.Millisecond
+		cosmosStartupTimeout = min(cosmosStartupTimeout, time.Until(deadline)-100*time.Millisecond)
 	}
 
 	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
@@ -500,8 +501,12 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			// the container's internal Docker bridge IP (e.g. 172.17.0.x).
 			"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
 		}),
-		testcontainers.WithWaitStrategy(
+		// The emulator accepts connections and serves its certificate before all partitions are up. Requests sent
+		// before that can fail with 408 Request Timeout. A bare "Started" line follows "Started N/N partitions".
+		// WithWaitStrategy would limit the wait to 60s.
+		testcontainers.WithWaitStrategyAndDeadline(cosmosStartupTimeout,
 			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
+			wait.ForLog(`(?m)^Started\r?$`).AsRegexp().WithStartupTimeout(cosmosStartupTimeout),
 		),
 	)
 	testcontainers.CleanupContainer(t, cosmosCtr)
