@@ -235,12 +235,17 @@ func (in *input) Close(ctx context.Context) error {
 	return nil
 }
 
+// minUsernameTokenLen is the shortest URL username that redactErr treats as a
+// token, which matches the shortest password that redact.Error removes.
+const minUsernameTokenLen = 4
+
 // redactErr removes the credentials of the repository URL from err. A username
-// without a password, as in https://<token>@github.com/org/repo, is a token.
+// without a password, as in https://<token>@github.com/org/repo, is a token,
+// unless it is too short to remove without changing unrelated words.
 func (in *input) redactErr(err error) error {
 	opts := []redact.Option{redact.Conns(in.cfg.repoURL)}
 	if u, perr := url.Parse(in.cfg.repoURL); perr == nil && u.User != nil && strings.HasPrefix(u.Scheme, "http") {
-		if _, hasPass := u.User.Password(); !hasPass && u.User.Username() != "" {
+		if _, hasPass := u.User.Password(); !hasPass && len(u.User.Username()) >= minUsernameTokenLen {
 			opts = append(opts, redact.Values(u.User.Username()))
 		}
 	}

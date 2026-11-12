@@ -48,3 +48,17 @@ func TestCloneErrorRedactsUsernameToken(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "S3cretToken")
 }
+
+func TestCloneErrorKeepsShortUsername(t *testing.T) {
+	in := &input{
+		cfg: inputCfg{
+			repoURL: "https://git@127.0.0.1:1/org/repo.git",
+			branch:  "main",
+		},
+		tempDir: t.TempDir(),
+	}
+
+	err := in.cloneRepo(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "/org/repo.git/")
+}
