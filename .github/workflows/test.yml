@@ -13,20 +13,20 @@ jobs:
       CGO_ENABLED: 1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # TestNewSpecsHaveVersions reads the previous release tag.
           fetch-depth: 0
       - name: Free disk space if low
-        uses: ./.github/actions/free-disk-space-if-low
+        uses: $/.github/actions/free-disk-space-if-low
       - name: Install Go
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
 
       - name: Install Task
-        uses: ./.github/actions/setup-task
+        uses: $/.github/actions/setup-task
 
       - name: Deps
         run: task deps && git diff HEAD -- go.mod go.sum && git diff-index HEAD --exit-code
@@ -42,20 +42,20 @@ jobs:
       CGO_ENABLED: 1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           # TestNewSpecsHaveVersions reads the release tags.
           fetch-depth: 0
       - name: Free disk space if low
-        uses: ./.github/actions/free-disk-space-if-low
+        uses: $/.github/actions/free-disk-space-if-low
       - name: Install Go
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
 
       - name: Install Task
-        uses: ./.github/actions/setup-task
+        uses: $/.github/actions/setup-task
 
       - name: Docs
         run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs
@@ -66,7 +66,7 @@ jobs:
       # The docs check below builds the docs site with this tree.
       - name: Upload the generated docs
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: connect-docs-head
           path: docs/modules
@@ -85,7 +85,7 @@ jobs:
       CGO_ENABLED: 1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 0
       # The docs job builds the merge commit GitHub made for this PR, so build
@@ -101,7 +101,7 @@ jobs:
           fi
           git checkout --quiet HEAD^1
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: 'go.mod'
       - name: Install system dependencies
@@ -109,7 +109,7 @@ jobs:
       - name: Generate the reference docs
         run: go run -tags x_benthos_extra ./cmd/tools/docs_gen
       - name: Upload the generated docs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: connect-docs-base
           path: docs/modules
@@ -123,11 +123,11 @@ jobs:
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: connect-docs-head
           path: head
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: connect-docs-base
           path: base
@@ -170,15 +170,15 @@ jobs:
       CGO_ENABLED: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Install Go
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Set version env variables
         run: cat .versions >> $GITHUB_ENV
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: "v${{env.GOLANGCI_LINT_VERSION}}"
           args: "--timeout=30m cmd/... internal/... public/..."
@@ -196,11 +196,11 @@ jobs:
       CGO_ENABLED: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       # Use a separate cache key. With the default key (root go.sum), this job saves first, and test and
       # golangci-lint then restore a cache without the root module's build output.
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: 'benchmarking/aws/go.mod'
           cache-dependency-path: 'benchmarking/aws/**/go.sum'
@@ -232,7 +232,7 @@ jobs:
         run: cat .versions >> $GITHUB_ENV
 
       - name: Lint benchmarking/aws
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: "v${{env.GOLANGCI_LINT_VERSION}}"
           args: "--timeout=15m"
@@ -241,7 +241,7 @@ jobs:
           skip-save-cache: true
 
       - name: Lint cleanup-lambda
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: "v${{env.GOLANGCI_LINT_VERSION}}"
           args: "--timeout=15m"
@@ -254,7 +254,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Set up test packages
         run: |

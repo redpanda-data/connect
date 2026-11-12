@@ -1,0 +1,42 @@
+# Fails when .github/workflows/actions.lock does not agree with the workflows, or when a locked pin
+# no longer resolves upstream. Without this check the lockfile only records what the author of a
+# pull request resolved on their machine.
+#
+# The path filter keeps the job off pull requests that do not touch Actions. A required check with a
+# path filter stays pending on the pull requests it skips, so remove the filter before you make this
+# check required.
+
+name: verify-lockfile
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.1.0
+        with:
+          persist-credentials: false
+
+      # The extension is pinned. An unpinned extension would run code that the lockfile does not cover.
+      - name: Install gh-actions-lock
+        run: gh extension install github/gh-actions-lock --pin v0.4.1
+
+      - name: Verify lockfile
+        run: gh actions-lock --verify

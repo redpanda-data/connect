@@ -29,15 +29,15 @@ jobs:
       CGO_ENABLED: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: 'go.mod'
 
       - name: Install Task
-        uses: ./.github/actions/setup-task
+        uses: $/.github/actions/setup-task
 
       # Fetch all modules up front so a Go proxy error fails here, not inside a random test package.
       - name: Download Go modules
@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload Test Output
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: integration-test-output
           path: ${{ runner.temp }}/integration/
@@ -118,22 +118,22 @@ jobs:
 
       - name: Checkout PR branch
         if: ${{ github.event_name == 'issue_comment' }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/pull/${{ github.event.issue.number }}/merge
 
       - name: Checkout code
         if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
         with:
           fetch-depth: 0
 
       - name: Checkout code
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
 
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: 'go.mod'
           # A PR command (/integration) runs this job on the main branch, but with PR code.
@@ -141,7 +141,7 @@ jobs:
           cache: ${{ github.event_name != 'issue_comment' }}
 
       - name: Install Task
-        uses: ./.github/actions/setup-task
+        uses: $/.github/actions/setup-task
 
       # Fetch all modules up front so a Go proxy error fails here, not inside a random test package.
       - name: Download Go modules
@@ -225,7 +225,7 @@ jobs:
 
       - name: Upload Test Output
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: integration-test-output
           path: ${{ runner.temp }}/integration/

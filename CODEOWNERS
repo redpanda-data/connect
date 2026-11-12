@@ -1,0 +1,4 @@
+# The lockfile records the commit that each action runs from. A change to a `commit`, `owner_id` or
+# `repo_id` value is the signal that an action moved, so every change needs a review.
+# This has no effect until a ruleset requires a review from a code owner.
+.github/workflows/actions.lock @redpanda-data/connect
