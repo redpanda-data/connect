@@ -552,6 +552,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
 
+	// The emulator serves its certificate when it logs "Started", so this check does not need the startup timeout.
 	require.Eventually(t, func() bool {
 		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
 		if err != nil {
@@ -567,7 +568,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			return false
 		}
 		return len(body) > 0
-	}, cosmosStartupTimeout, time.Second, "Failed to start CosmosDB emulator")
+	}, 30*time.Second, time.Second, "Failed to start CosmosDB emulator")
 
 	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dummyDatabase := "Asgard"
