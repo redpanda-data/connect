@@ -169,6 +169,18 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 		return nil, nil
 	}
 	if dt, ok := mi.TypeForOID(dataType); ok {
+		switch dt.Name {
+		case "interval", "_interval",
+			"daterange", "tstzrange", "_daterange", "_tstzrange", "_tsrange",
+			"datemultirange", "tstzmultirange", "tsmultirange":
+			// Return the raw PostgreSQL text, which the snapshot also returns.
+			// pgx decodes these types to pgtype.Interval and pgtype.Range
+			// structs, which marshal with internal fields and an infinite bound
+			// as the number 1. pgx also rejects the interval "infinity" of
+			// PostgreSQL 17, and a decode error stops the stream. So this check
+			// comes before the decode.
+			return string(data), nil
+		}
 		val, err := dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
 		if err != nil {
 			return val, err
