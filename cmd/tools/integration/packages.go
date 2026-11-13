@@ -28,6 +28,9 @@ type TestPackage struct {
 	Timeout    string `json:"timeout"`
 	Skip       bool   `json:"skip,omitempty"`
 	SkipReason string `json:"skip_reason,omitempty"`
+	// CGO makes the runner set CGO_ENABLED=1 for this package only. CI runs with CGO_ENABLED=0, and a package
+	// that builds only with cgo (such as tigerbeetle) compiles out and runs no tests without it.
+	CGO bool `json:"cgo,omitempty"`
 }
 
 // TimeoutStr returns the timeout for go test -timeout, defaulting to 5m.
