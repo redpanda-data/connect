@@ -152,7 +152,8 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Description("The maximum number of seconds to wait for each network read from or write to the database, on every connection the input opens, during both snapshot and streaming. It restarts with each read or write, so it does not limit how long a whole query takes. When it's exceeded, the query fails and the input reconnects, resuming from its last checkpoint. This prevents the input from hanging indefinitely if the database stops responding without closing the connection. It must exceed the longest time Oracle takes to return the first rows of any query, such as a snapshot query against a large table. Set to `0` to disable. A `TIMEOUT`, `READ TIMEOUT` or `SOCKET TIMEOUT` query parameter in `connection_string`, matched case-insensitively, takes precedence.").
 		ShortDescription("Maximum seconds to wait for each network read or write to Oracle before failing and reconnecting. Set to 0 to disable it.").
 		Default(defaultSocketTimeout).
-		LintRule(`root = if this < 0 { [ "` + ociFieldSocketTimeout + ` must be greater than or equal to 0" ] }`),
+		LintRule(`root = if this < 0 { [ "` + ociFieldSocketTimeout + ` must be greater than or equal to 0" ] }`).
+		Version("4.119.0"),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
