@@ -354,6 +354,10 @@ type oracleDBCDCInput struct {
 	// resume position.
 	persistMu        sync.Mutex
 	lastPersistedSCN replication.SCN
+
+	// poolCloses tracks connection pools Connect is closing in the background,
+	// so Close can wait for them.
+	poolCloses sync.WaitGroup
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -589,7 +593,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	}
 
 	if o.db != nil {
-		_ = o.db.Close()
+		o.closeDBInBackground(o.db)
 		o.db = nil
 	}
 
@@ -598,7 +602,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	}
 	defer func() {
 		if resErr != nil {
-			_ = o.db.Close()
+			o.closeDBInBackground(o.db)
 		}
 	}()
 
@@ -1006,7 +1010,30 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 			}
 		}
 	}
+
+	// wait for connection pools to close
+	// to ensure we don't leave hanging connections
+	sig := make(chan struct{})
+	go func() {
+		o.poolCloses.Wait()
+		close(sig)
+	}()
+	select {
+	case <-sig:
+	case <-ctx.Done():
+		closeErr = errors.Join(closeErr, fmt.Errorf("waiting for previous connection pools to close: %w", ctx.Err()))
+	}
 	return closeErr
+}
+
+// closeDBInBackground closes a discarded pool without blocking the reconnect,
+// since each idle connection's logoff can prolong a socket_timeout.
+func (o *oracleDBCDCInput) closeDBInBackground(db *sql.DB) {
+	o.poolCloses.Go(func() {
+		if err := db.Close(); err != nil {
+			o.log.Debugf("Closing previous Oracle connection pool: %v", err)
+		}
+	})
 }
 
 func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
