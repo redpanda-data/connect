@@ -105,7 +105,7 @@ This input adds the following metadata fields to each message:
 
 == Permissions
 
-When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Oracle based cache, the Connect user requires permission to create tables, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 
 When ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is greater than 1, tables with an enabled and validated primary key and no ` + "`" + ociFieldSnapshotFilters + "`" + ` entry are considered for splitting into parallel chunks. Planning and reading those chunks uses flashback queries (` + "`AS OF SCN`" + `) pinned to the SCN captured at the start of the snapshot. For tables it does not own, the Connect user then requires the ` + "`FLASHBACK`" + ` object privilege on each table (` + "`GRANT FLASHBACK ON <schema>.<table> TO <user>`" + `) or ` + "`GRANT FLASHBACK ANY TABLE TO <user>`" + `, in addition to ` + "`SELECT`" + `. A table the user can't read with flashback queries isn't split: a warning is logged and a single reader reads it with a full scan, as when ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is 1. Because every chunk reads as of that one SCN, the database's undo retention must also cover the full duration of the snapshot, otherwise reads fail with ORA-01555 (snapshot too old).
 
@@ -272,7 +272,7 @@ A table with a query here is never split into parallel chunks, whatever ` + "`" 
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (for example, `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
+		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered. This allows Redpanda Connect to resume from that point upon restart, rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (for example, `RPCN.CDC_CHECKPOINT_MYPDB`). This avoids SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
