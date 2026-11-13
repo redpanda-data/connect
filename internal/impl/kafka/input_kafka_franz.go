@@ -32,7 +32,7 @@ This input is deprecated as of version 4.68.0. Use the xref:components:inputs/re
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
 This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
-
+` + nackWarningsDescription(NackMetricNameKafka) + `
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -62,6 +62,7 @@ func FranzKafkaInputConfigFields() []*service.ConfigField {
 		FranzReaderUnorderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
+			NewNackWarningIntervalField(),
 			service.NewForceTimelyNacksField(),
 		},
 	)
@@ -87,6 +88,10 @@ func init() {
 			}
 
 			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			if rdr, err = WrapBatchInputNackWarnings(conf, mgr, NackMetricNameKafka, rdr); err != nil {
 				return nil, err
 			}
 

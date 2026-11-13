@@ -112,7 +112,8 @@ This input adds the following metadata fields to each message:
 		// Schema registry fields
 		Field(schemaRegistryField().Optional()).
 		// Other fields
-		Field(service.NewAutoRetryNacksToggleField())
+		Field(service.NewAutoRetryNacksToggleField()).
+		Field(kafka.NewNackWarningIntervalField())
 }
 
 func migratorOutputConfig() *service.ConfigSpec {
@@ -456,7 +457,11 @@ func init() {
 			}
 			m.srcAdm = kadm.NewClient(fr.Client)
 
-			return service.AutoRetryNacksBatchedToggled(pConf, migratorBatchInput{fr, m})
+			rdr, err := service.AutoRetryNacksBatchedToggled(pConf, migratorBatchInput{fr, m})
+			if err != nil {
+				return nil, err
+			}
+			return kafka.WrapBatchInputNackWarnings(pConf, mgr, kafka.NackMetricNameRedpanda, rdr)
 		})
 
 	service.MustRegisterBatchOutput("redpanda_migrator", migratorOutputConfig(),

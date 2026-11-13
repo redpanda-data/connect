@@ -92,22 +92,22 @@ Offsets are managed within Kafka under the specified consumer group, and partiti
 
 The Kafka input allows parallel processing of messages from different topic partitions, and messages of the same topic partition are processed with a maximum parallelism determined by the field `+"<<checkpoint_limit,`checkpoint_limit`>>"+`.
 
-In order to enforce ordered processing of partition messages set the `+"<<checkpoint_limit,`checkpoint_limit`>> to `1`"+` and this will force partitions to be processed in lock-step, where a message will only be processed once the prior message is delivered.
+To enforce ordered processing of partition messages, set `+"<<checkpoint_limit,`checkpoint_limit`>> to `1`"+`. Partitions are then processed in lock-step, where a message is only processed once the prior message is delivered.
 
 Batching messages before processing can be enabled using the `+"<<batching,`batching`>>"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"<<checkpoint_limit,`checkpoint_limit`>>"+`, in which case the next batch will only be created upon delivery of the current one.
-
+`+nackWarningsDescription(NackMetricNameKafka)+`
 == Metadata
 
 This input adds the following metadata fields to each message:
 
-- kafka_key
-- kafka_topic
-- kafka_partition
-- kafka_offset
-- kafka_lag
-- kafka_timestamp_ms
-- kafka_timestamp_unix
-- kafka_tombstone_message
+- `+"`kafka_key`"+`
+- `+"`kafka_topic`"+`
+- `+"`kafka_partition`"+`
+- `+"`kafka_offset`"+`
+- `+"`kafka_lag`"+`
+- `+"`kafka_timestamp_ms`"+`
+- `+"`kafka_timestamp_unix`"+`
+- `+"`kafka_tombstone_message`"+`
 - All existing message headers (version 0.11+)
 
 The field `+"`kafka_lag`"+` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
@@ -162,6 +162,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				ShortDescription("Maximum number of messages of the same topic and partition that can be processed at a given time.").
 				Version("3.33.0").Default(1024),
 			service.NewAutoRetryNacksToggleField(),
+			NewNackWarningIntervalField(),
 			service.NewForceTimelyNacksField(),
 			commitPeriodField(iskFieldCommitPeriod).
 				Advanced().Default("1s"),
@@ -199,6 +200,10 @@ func init() {
 		}
 
 		if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+			return
+		}
+
+		if rdr, err = WrapBatchInputNackWarnings(conf, mgr, NackMetricNameKafka, rdr); err != nil {
 			return
 		}
 
