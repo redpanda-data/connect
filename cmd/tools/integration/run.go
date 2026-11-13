@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
+	"golang.org/x/sync/errgroup"
 )
 
 var runArgs struct {
@@ -36,6 +37,7 @@ var runArgs struct {
 	race         bool
 	unit         bool
 	coverProfile bool
+	parallel     int
 }
 
 func debugf(format string, args ...any) {
@@ -52,6 +54,7 @@ func cmdRun(args []string) error {
 	fset.BoolVar(&runArgs.race, "race", false, "enable race detector (sets CGO_ENABLED=1)")
 	fset.BoolVar(&runArgs.unit, "unit", false, "run all tests, not just integration tests")
 	fset.BoolVar(&runArgs.coverProfile, "cover-profile", false, "generate coverage profile per package")
+	fset.IntVar(&runArgs.parallel, "parallel", 1, "number of packages to test at the same time")
 
 	if err := fset.Parse(args); err != nil {
 		return err
@@ -59,6 +62,9 @@ func cmdRun(args []string) error {
 
 	if runArgs.outputDir != "" && runArgs.clean {
 		return errors.New("--output-dir and --clean are mutually exclusive")
+	}
+	if runArgs.parallel < 1 {
+		return errors.New("--parallel must be 1 or more")
 	}
 
 	if runArgs.debug {
@@ -99,7 +105,10 @@ func cmdRun(args []string) error {
 
 	debugf("resolved run dir: %s", outputDir)
 
-	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"), false)
+	// Packages that run at the same time would mix their lines on the terminal,
+	// so each one writes its lines as one block when it is done. A single
+	// package streams its lines as they happen.
+	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"), runArgs.parallel > 1)
 	total := len(packages)
 
 	headerLabel := "Integration Tests"
@@ -116,50 +125,23 @@ func cmdRun(args []string) error {
 	}
 	out.Blank()
 
-	var (
-		passed  int
-		failed  int
-		skipped int
-	)
-
+	// Go blocks while runArgs.parallel packages run, so the packages start in
+	// the registry order of packages.json. Each package writes only its own
+	// slot of results, so the count below needs no lock.
+	results := make([]TestResult, total)
+	var g errgroup.Group
+	g.SetLimit(runArgs.parallel)
 	for i, pkg := range packages {
-		short := pkgShort(pkg.Path)
-		fname := pkgFilename(pkg.Path)
-		pkgOutFile := filepath.Join(outputDir, fname)
+		g.Go(func() error {
+			results[i] = runPackage(pkg, i+1, total, outputDir, out)
+			return nil
+		})
+	}
+	_ = g.Wait()
 
-		tag := strings.TrimSuffix(fname, ".txt")
-		pout := out.Package(tag, i+1, total, short)
-
-		// Check cache from current run directory.
-		var cached PackageCache
-		if !runArgs.clean {
-			debugf("checking cache for %s at %s", short, pkgOutFile)
-			cached = checkCache(pkgOutFile)
-		}
-
-		// Print cached items (subtests compacted into parent summaries).
-		for _, t := range compactCacheEntries(cached.Tests) {
-			switch t.Result {
-			case ResultPass:
-				pout.TestPass(t.TestName, "", true)
-			case ResultSkip:
-				pout.TestSkip(t.TestName, "", t.SkipReason, true)
-			case ResultFail:
-				pout.TestFail(t.TestName, "", pkgOutFile, t.FailLine, true)
-			}
-		}
-
-		// If complete and all passed, close and move on.
-		if cached.Complete && cached.Overall() == ResultPass {
-			debugf("found cached result for %s: complete", short)
-			pout.Cached()
-			passed++
-			continue
-		}
-
-		res := runPackageTest(pkg, short, pkgOutFile, cached, pout)
-
-		switch res.status {
+	var passed, failed, skipped int
+	for _, r := range results {
+		switch r {
 		case ResultPass:
 			passed++
 		case ResultFail:
@@ -167,7 +149,6 @@ func cmdRun(args []string) error {
 		case ResultSkip:
 			skipped++
 		}
-		pout.Result(res.status, res.duration)
 	}
 
 	// Final report.
@@ -180,6 +161,47 @@ func cmdRun(args []string) error {
 		return errors.New("integration tests failed")
 	}
 	return nil
+}
+
+// runPackage tests one package, or prints its cached result, and returns its
+// result. num is the 1-based position of the package in the run.
+func runPackage(pkg TestPackage, num, total int, outputDir string, out *Output) TestResult {
+	short := pkgShort(pkg.Path)
+	fname := pkgFilename(pkg.Path)
+	pkgOutFile := filepath.Join(outputDir, fname)
+
+	tag := strings.TrimSuffix(fname, ".txt")
+	pout := out.Package(tag, num, total, short)
+
+	// Check cache from current run directory.
+	var cached PackageCache
+	if !runArgs.clean {
+		debugf("checking cache for %s at %s", short, pkgOutFile)
+		cached = checkCache(pkgOutFile)
+	}
+
+	// Print cached items (subtests compacted into parent summaries).
+	for _, t := range compactCacheEntries(cached.Tests) {
+		switch t.Result {
+		case ResultPass:
+			pout.TestPass(t.TestName, "", true)
+		case ResultSkip:
+			pout.TestSkip(t.TestName, "", t.SkipReason, true)
+		case ResultFail:
+			pout.TestFail(t.TestName, "", pkgOutFile, t.FailLine, true)
+		}
+	}
+
+	// If complete and all passed, close and move on.
+	if cached.Complete && cached.Overall() == ResultPass {
+		debugf("found cached result for %s: complete", short)
+		pout.Cached()
+		return ResultPass
+	}
+
+	res := runPackageTest(pkg, short, pkgOutFile, cached, pout)
+	pout.Result(res.status, res.duration)
+	return res.status
 }
 
 type packageResult struct {
