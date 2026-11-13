@@ -15,6 +15,7 @@
 package influxdb
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -173,4 +174,34 @@ interval: 10ms
 
 	require.Never(t, func() bool { return writes.Load() > afterClose }, 100*time.Millisecond, 10*time.Millisecond,
 		"the flush loop wrote metrics after Close")
+}
+
+// TestInfluxWriteTimeout checks that a write to a server that does not respond
+// fails with a timeout error after the timeout field.
+func TestInfluxWriteTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // Never respond.
+	}))
+	t.Cleanup(srv.Close)
+	// Runs before srv.Close, so a write that hangs does not block it.
+	t.Cleanup(srv.CloseClientConnections)
+
+	// The 1h intervals keep the loop quiet, so only the write below reaches srv.
+	i := fromYAML(t, `
+url: %s
+db: db0
+interval: 1h
+ping_interval: 1h
+timeout: 50ms
+`, srv.URL)
+	t.Cleanup(i.cancel)
+
+	errc := make(chan error, 1)
+	go func() { errc <- i.publishRegistry() }()
+	select {
+	case err := <-errc:
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the write did not stop after the timeout")
+	}
 }

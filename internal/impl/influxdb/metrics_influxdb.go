@@ -131,7 +131,6 @@ type influxDBMetrics struct {
 	tags         map[string]string
 	interval     time.Duration
 	pingInterval time.Duration
-	timeout      time.Duration
 
 	ctx    context.Context //nolint:containedctx // lifecycle context for background flush loop
 	cancel func()
@@ -177,10 +176,6 @@ func fromParsed(conf *service.ParsedConfig, logger *service.Logger) (i *influxDB
 	if i.pingInterval, err = conf.FieldDuration(imFieldPingInterval); err != nil {
 		return
 	}
-	if i.timeout, err = conf.FieldDuration(imFieldTimeout); err != nil {
-		return
-	}
-
 	if i.clientConf, err = clientConfFromParsed(conf); err != nil {
 		return nil, err
 	}
@@ -213,6 +208,8 @@ type clientConf struct {
 	tlsConf  *tls.Config
 	username string
 	password string
+	// timeout limits each HTTP request, ping and write. UDP ignores it.
+	timeout time.Duration
 }
 
 func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) {
@@ -222,6 +219,9 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 	c.username, _ = conf.FieldString(imFieldUsername)
 	c.password, _ = conf.FieldString(imFieldPassword)
 	if c.tlsConf, err = conf.FieldTLS(imFieldTLS); err != nil {
+		return
+	}
+	if c.timeout, err = conf.FieldDuration(imFieldTimeout); err != nil {
 		return
 	}
 	return
@@ -235,12 +235,14 @@ func (conf clientConf) build() (c client.Client, err error) {
 			TLSConfig: conf.tlsConf,
 			Username:  conf.username,
 			Password:  conf.password,
+			Timeout:   conf.timeout,
 		})
 	case "http":
 		c, err = client.NewHTTPClient(client.HTTPConfig{
 			Addr:     conf.u.String(),
 			Username: conf.username,
 			Password: conf.password,
+			Timeout:  conf.timeout,
 		})
 	case "udp":
 		c, err = client.NewUDPClient(client.UDPConfig{
@@ -267,7 +269,7 @@ func (i *influxDBMetrics) loop() {
 				i.log.Errorf("failed to send metrics data: %s", err)
 			}
 		case <-pingTicker.C:
-			_, _, err := i.client.Ping(i.timeout)
+			_, _, err := i.client.Ping(i.clientConf.timeout)
 			if err != nil {
 				i.log.Warnf("unable to ping influx endpoint: %s", err)
 				if tmpClient, err := i.clientConf.build(); err != nil {
