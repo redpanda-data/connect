@@ -270,8 +270,11 @@ func (p *dataTransformEnginePool) newModule() (engine *dataTransformEngine, err 
 		engine.mod.Close(ctx)
 		return
 	}
+	var callCtx context.Context
+	callCtx, engine.cancel = context.WithCancel(context.Background())
+	startedAt := time.Now()
 	go func() {
-		_, err := start.Call(context.Background())
+		_, err := start.Call(callCtx)
 		if !engine.mod.IsClosed() {
 			_ = engine.mod.Close(context.Background())
 		}
@@ -282,10 +285,16 @@ func (p *dataTransformEnginePool) newModule() (engine *dataTransformEngine, err 
 		close(engine.hostChan)
 	}()
 
-	// Wait for the engine to start
+	// Wait for the engine to start. A guest that is ready after the timeout can still win the select, so the elapsed
+	// time decides if the start-up timed out.
 	select {
 	case <-engine.hostChan:
 	case <-time.After(p.cfg.timeout):
+	}
+	if time.Since(startedAt) > p.cfg.timeout {
+		// A guest that becomes ready waits in a host function for the next batch, where closing the module does not
+		// stop it. The cancel stops that wait, so the goroutine can exit.
+		engine.cancel()
 		_ = engine.mod.Close(ctx)
 		drainChannel(engine.hostChan) // Wait for goroutine to exit
 	}
@@ -340,6 +349,8 @@ type dataTransformEngine struct {
 	procErr   error
 	hostChan  chan any
 	guestChan chan any
+	// cancel cancels the context of the guest _start call. Host functions that wait for the next batch stop on it.
+	cancel context.CancelFunc
 }
 
 func (r *dataTransformEngine) newTransformMessage(message *service.Message) (tmsg transformMessage, err error) {
@@ -426,6 +437,7 @@ func (r *dataTransformEngine) Close(ctx context.Context) error {
 	close(r.guestChan)
 	_ = r.mod.Close(ctx)
 	drainChannel(r.hostChan) // Wait for goroutine to exit
+	r.cancel()
 	err := r.runtime.Close(ctx)
 	return err
 }
