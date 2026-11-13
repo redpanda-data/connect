@@ -203,10 +203,13 @@ func TestPlanLOBReplay(t *testing.T) {
 		assert.Equal(t, uint64(20), replay.fromSCN)
 		assert.Equal(t, uint64(100), replay.processedSCN)
 
-		for _, id := range []sqlredo.TransactionID{"withState", "pendingOnly"} {
+		// A reset keeps the transaction open with its start SCN and no events.
+		for id, wantSCN := range map[sqlredo.TransactionID]uint64{"withState": 30, "pendingOnly": 20} {
 			txn, err := cache.GetTransaction(ctx, id)
 			require.NoError(t, err)
-			assert.Nil(t, txn, id)
+			require.NotNil(t, txn, id)
+			assert.Equal(t, wantSCN, txn.SCN, id)
+			assert.Empty(t, txn.Events, id)
 		}
 		assert.Empty(t, lm.lobStates)
 		assert.Empty(t, lm.pendingLOBWrites)
@@ -248,7 +251,7 @@ func TestPlanLOBReplay(t *testing.T) {
 		lm.currentSCN = 120
 		again, err := lm.planLOBReplay(ctx)
 		require.NoError(t, err)
-		require.NotNil(t, again, "carried txns stay even when absent from the cache")
+		require.NotNil(t, again, "carried txns stay without LOB state")
 		assert.Equal(t, uint64(150), again.processedSCN)
 	})
 
@@ -275,7 +278,7 @@ func TestPlanLOBReplay(t *testing.T) {
 		replay, err = lm.planLOBReplay(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, replay)
-		assert.Equal(t, want, replay.txns, "txns already rolled back must be carried over")
+		assert.Equal(t, want, replay.txns, "txns already reset must be carried over")
 		assert.Equal(t, uint64(20), replay.fromSCN)
 		assert.Empty(t, lm.lobStates)
 		assert.Empty(t, lm.pendingLOBWrites)
@@ -283,11 +286,11 @@ func TestPlanLOBReplay(t *testing.T) {
 }
 
 // TestCheckpointMinedPositionInterruptedLOBReplay regression-tests a checkpoint
-// past an open LOB transaction. planLOBReplay takes the replayed transactions out
-// of txnCache, lobStates and pendingLOBWrites. When ORA-01368 stops the cycle
-// before their rows are mined again, miningCycle returns (false, nil) and keeps
-// lm.lobReplay set. The checkpoint after that cycle must stay below the start of
-// the replay, or a restart skips the early rows of the open transaction.
+// past an open LOB transaction. planLOBReplay clears the events of the replayed
+// transactions and removes them from lobStates and pendingLOBWrites. When
+// ORA-01368 stops the cycle before their rows are mined again, miningCycle
+// returns (false, nil). The checkpoint after that cycle must stay below the
+// start of the replay, or a restart skips the early rows of the open transaction.
 func TestCheckpointMinedPositionInterruptedLOBReplay(t *testing.T) {
 	ctx := t.Context()
 	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`
@@ -308,50 +311,108 @@ func TestCheckpointMinedPositionInterruptedLOBReplay(t *testing.T) {
 	assert.Equal(t, []replication.SCN{29}, pub.windows, "checkpoint must stay below the start of the interrupted LOB replay")
 }
 
-// TestCommitCheckpointDuringLOBReplay verifies that the commit path counts the
-// transactions of an open LOB replay, which planLOBReplay took out of txnCache.
+// TestCommitCheckpointDuringLOBReplay verifies that the commit path stays below
+// the transactions of an open LOB replay. planLOBReplay keeps them in txnCache,
+// so the low watermark counts them before their rows are mined again.
 func TestCommitCheckpointDuringLOBReplay(t *testing.T) {
 	ctx := t.Context()
+	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`
 	insert := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
 		return lobEv(scn, txn, sqlredo.OpInsert, `insert into "TESTDB"."T" ("ID") values ('7')`)
 	}
 	commit := func(scn uint64, txn sqlredo.TransactionID) *sqlredo.RedoEvent {
 		return &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: sqlredo.OpCommit}
 	}
+	// replayLOBTxns opens a LOB transaction at each start SCN and plans a replay
+	// of them at the window boundary SCN 100.
+	replayLOBTxns := func(t *testing.T, lm *LogMiner, starts map[sqlredo.TransactionID]uint64) {
+		t.Helper()
+		for id, scn := range starts {
+			require.NoError(t, lm.txnCache.StartTransaction(ctx, id, scn))
+			require.NoError(t, lm.processRedoEvent(ctx, lobEv(scn+1, id, sqlredo.OpSelectLobLocator, locator)))
+		}
+		lm.currentSCN = 100
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		lm.lobReplay = replay
+	}
 
-	tests := []struct {
-		name              string
-		replayTxn         sqlredo.TransactionID
-		fromSCN           uint64
-		wantCheckpointSCN replication.SCN
-	}{
-		{
-			name:              "other transaction commits before the replayed one is mined again",
-			replayTxn:         "replayed",
-			fromSCN:           30,
-			wantCheckpointSCN: 29,
+	t.Run("other transaction commits before the replayed one is mined again", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		replayLOBTxns(t, lm, map[sqlredo.TransactionID]uint64{"replayed": 30})
+
+		require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{SCN: 110, TransactionID: "txB", Operation: sqlredo.OpStart}))
+		require.NoError(t, lm.processRedoEvent(ctx, insert(111, "txB")))
+		require.NoError(t, lm.processRedoEvent(ctx, commit(120, "txB")))
+
+		require.Len(t, pub.messages, 1)
+		assert.Equal(t, replication.SCN(29), pub.messages[0].CheckpointSCN, "checkpoint must stay below the start of the replayed transaction")
+	})
+
+	t.Run("replayed transaction does not hold back its own commit checkpoint", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		replayLOBTxns(t, lm, map[sqlredo.TransactionID]uint64{"txB": 30})
+
+		require.NoError(t, lm.processRedoEvent(ctx, insert(32, "txB")))
+		require.NoError(t, lm.processRedoEvent(ctx, commit(120, "txB")))
+
+		require.Len(t, pub.messages, 1)
+		assert.Equal(t, replication.SCN(120), pub.messages[0].CheckpointSCN)
+	})
+
+	t.Run("checkpoint moves up when the oldest replayed transaction ends", func(t *testing.T) {
+		lm, pub, _ := newLOBReplayMiner(t)
+		replayLOBTxns(t, lm, map[sqlredo.TransactionID]uint64{"txA": 30, "txB": 50})
+
+		require.NoError(t, lm.processRedoEvent(ctx, commit(110, "txA")))
+		require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{SCN: 111, TransactionID: "txC", Operation: sqlredo.OpStart}))
+		require.NoError(t, lm.processRedoEvent(ctx, insert(112, "txC")))
+		require.NoError(t, lm.processRedoEvent(ctx, commit(120, "txC")))
+
+		require.NotEmpty(t, pub.messages)
+		assert.Equal(t, replication.SCN(49), pub.messages[len(pub.messages)-1].CheckpointSCN, "checkpoint must stay below txB only")
+	})
+}
+
+// TestPlanLOBReplayKeepsTransactionsInCache verifies that planLOBReplay clears
+// the events of a replayed transaction but keeps it in txnCache with its start
+// SCN. So the low watermark counts the transaction until it commits or rolls
+// back, also when no row of it is mined again.
+func TestPlanLOBReplayKeepsTransactionsInCache(t *testing.T) {
+	ctx := t.Context()
+	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`
+	caches := map[string]func() TransactionCache{
+		"in-memory cache": func() TransactionCache {
+			return NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		},
-		{
-			name:              "replayed transaction does not hold back its own commit checkpoint",
-			replayTxn:         "txB",
-			fromSCN:           110,
-			wantCheckpointSCN: 120,
+		"connect cache resource": func() TransactionCache {
+			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: 0}
+			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lm, pub, cache := newLOBReplayMiner(t)
-			lm.lobReplay = &lobReplay{
-				txns:         map[sqlredo.TransactionID]struct{}{tt.replayTxn: {}},
-				fromSCN:      tt.fromSCN,
-				processedSCN: 100,
-			}
-			require.NoError(t, cache.StartTransaction(ctx, "txB", 110))
-			require.NoError(t, lm.processRedoEvent(ctx, insert(111, "txB")))
-			require.NoError(t, lm.processRedoEvent(ctx, commit(120, "txB")))
+	for name, newCache := range caches {
+		t.Run(name, func(t *testing.T) {
+			lm, _, _ := newLOBReplayMiner(t)
+			lm.txnCache = newCache()
+			lm.currentSCN = 100
+			// The transaction has only LOB events, so only IncludeInLowWatermark
+			// makes the low watermark count it.
+			require.NoError(t, lm.txnCache.StartTransaction(ctx, "open", 30))
+			require.NoError(t, lm.processRedoEvent(ctx, lobEv(31, "open", sqlredo.OpSelectLobLocator, locator)))
+			require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(32, "open", "abc", 1)))
 
-			require.Len(t, pub.messages, 1)
-			assert.Equal(t, tt.wantCheckpointSCN, pub.messages[0].CheckpointSCN)
+			replay, err := lm.planLOBReplay(ctx)
+			require.NoError(t, err)
+			require.NotNil(t, replay)
+
+			txn, err := lm.txnCache.GetTransaction(ctx, "open")
+			require.NoError(t, err)
+			require.NotNil(t, txn, "replayed transaction must stay in the cache")
+			assert.Equal(t, uint64(30), txn.SCN)
+			assert.Empty(t, txn.Events)
+			assert.Equal(t, uint64(30), lm.txnCache.LowWatermarkSCN(""))
 		})
 	}
 }
