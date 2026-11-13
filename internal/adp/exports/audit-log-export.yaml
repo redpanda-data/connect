@@ -7,7 +7,9 @@ input:
     start_from_oldest: true
     unordered_processing:
       enabled: true
-      checkpoint_limit: 20000
+      checkpoint_limit: 5000
+    fetch_max_bytes: 8MiB
+    fetch_max_partition_bytes: 512KiB
     client_id: "audit-log-export"
     tls:
       enabled: ${REDPANDA_TLS_ENABLED}
@@ -100,8 +102,8 @@ output:
       max_in_flight: 4
       timeout: 60s
       batching:
-        count: ${secrets.AUDIT_LOG_EXPORT_BATCH_COUNT:10000}
-        byte_size: 67108864
+        count: ${secrets.AUDIT_LOG_EXPORT_BATCH_COUNT:2000}
+        byte_size: 16777216
         period: "${secrets.AUDIT_LOG_EXPORT_BATCH_PERIOD:60s}"
         processors:
           - mapping: 'meta batch_count = batch_size()'

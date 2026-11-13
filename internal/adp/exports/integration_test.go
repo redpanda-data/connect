@@ -228,6 +228,10 @@ func startEnv(t testing.TB) *testEnv {
 		tcredpanda.WithNewServiceAccount(kafkaUser, kafkaPass),
 		tcredpanda.WithSuperusers(kafkaUser),
 		tcredpanda.WithEnableSchemaRegistryHTTPBasicAuth(),
+		// The broker refuses produces once free disk drops below
+		// storage_min_free_bytes (5 GiB by default), which a developer VM
+		// can easily be under; the tests need far less.
+		tcredpanda.WithBootstrapConfig("storage_min_free_bytes", 512<<20),
 		redpandatest.WithLowAIOUsage(),
 	)
 	testcontainers.CleanupContainer(t, ctr)

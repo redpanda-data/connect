@@ -8,7 +8,7 @@ tests here run it against the real wire format.
 
 Flow: `redpanda` input (SASL/SCRAM, TLS) → `schema_registry_decode`
 (protobuf, proto names, integer enums) → Bloblang (`time` to a number, OCSF
-class fix-ups) → batches of up to 10k events / 64 MiB / 60 s → NDJSON →
+class fix-ups) → batches of up to 2,000 events / 16 MiB / 60 s → NDJSON →
 gzip → `aws_s3`.
 
 ## Inputs
@@ -49,7 +49,7 @@ so the names are fixed):
 | `AUDIT_LOG_EXPORT_S3_SSE` | no | empty | e.g. `aws:kms` |
 | `AUDIT_LOG_EXPORT_S3_KMS_KEY_ID` | no | empty | with `aws:kms` |
 | `AUDIT_LOG_EXPORT_S3_OBJECT_ACL` | no | `bucket-owner-full-control` | empty sends no ACL |
-| `AUDIT_LOG_EXPORT_BATCH_COUNT` | no | `10000` | events per object, upper bound |
+| `AUDIT_LOG_EXPORT_BATCH_COUNT` | no | `2000` | events per object, upper bound; memory grows with it |
 | `AUDIT_LOG_EXPORT_BATCH_PERIOD` | no | `60s` | flush interval |
 | `AUDIT_LOG_EXPORT_S3_ENDPOINT` | no | empty | S3-compatible emulators only |
 | `AUDIT_LOG_EXPORT_S3_FORCE_PATH_STYLE` | no | `false` | with a custom endpoint |
@@ -101,30 +101,63 @@ pre-loads a real Redpanda with the requested number of events and times the
 pipeline until the last one is in localstack S3, once per batch count. Use
 a multiple of the batch counts so no partial batch waits out the period.
 
-Apple M3 Pro, Docker in colima with 4 cores, 2026-11-05, ~780-byte events:
+Apple M3 Pro, Docker in colima with 4 cores, 2026-11-13, ~780-byte events:
 
 | Benchmark | events/s | peak live heap |
 |---|---|---|
-| processors, serial | ~27k | ~200 MB |
-| processors, parallel | ~80–100k | ~1.8 GB |
-| end to end, 300k events, batch count 10000 | ~30k | ~360 MB |
-| end to end, 300k events, batch count 2000 | ~37k | ~190 MB |
+| processors, serial | ~28k | ~50 MB |
+| processors, parallel | ~115k | ~440 MB |
+| end to end, 300k events, batch count 2000 | ~37k | ~125 MB |
+| end to end, 300k events, batch count 10000 | ~21k | ~310 MB |
 
 End-to-end times include start-up and the final flush. Localstack is not
 S3, so read these as "the pipeline is not the bottleneck". Heap figures are
 for the whole test binary; `peak_heap_MB` in the output also counts garbage
 not yet collected and is nearer what the process needs.
 
-Memory is set by the batch size, not the event rate. A decoded event is
-about 20 KB of nested Go maps and the output batcher holds a whole batch
-until it flushes, so the default 10k batch is ~200 MB live while it forms,
-plus in-flight raw records (up to `checkpoint_limit` per partition). A
-Redpanda Cloud compute unit is 0.1 CPU and 400 MB and a pipeline that hits
-its memory limit restarts, so either size the pipeline for the batch or
-lower `AUDIT_LOG_EXPORT_BATCH_COUNT`; throughput does not suffer (2000 was
-faster than 10000 above). The 64 MiB `byte_size` cap measures serialised
-JSON, not heap, and would allow ~40k events if the count were raised, so
-keep the count as the limiter.
+### Sizing for a 400 MB pod
+
+A Redpanda Cloud compute unit is 0.1 CPU and 400 MB, and a pipeline that
+hits its memory limit is killed and restarts. Memory is set by three
+things, not by the event rate:
+
+- **The batch.** The output batcher holds a whole batch decoded until it
+  flushes, about 20 KB of heap per event. At 0.1 CPU a 2,000-event batch
+  fills in a few seconds when there is a backlog.
+- **Fetch buffers.** Fetched records sit decompressed until processed.
+  `fetch_max_bytes` and `fetch_max_partition_bytes` are lowered from the
+  50 MiB / 1 MiB defaults for this.
+- **Garbage.** Go collects when the heap doubles unless `GOMEMLIMIT` is set,
+  so the process needs about twice what it holds. Setting `GOMEMLIMIT` on
+  the pipeline pod, around 75% of the memory limit, makes the collector work
+  harder near the limit instead of the pod being killed. It is an
+  environment variable on the pod, so it is set by whatever creates the
+  pipeline, not in this file.
+
+`TestSaturateAuditLogExport` measures this: it runs the cloud binary in a
+container with the pod's limits against a large backlog (`start_from_oldest`
+reads it as fast as the CPU allows) and records memory, heap, events in
+flight, export progress and OOM kills. Every knob is an environment
+variable; the doc comment in `saturate_test.go` lists them.
+
+```sh
+SATURATE=1 go test ./internal/adp/exports -run '^TestSaturateAuditLogExport$' -v -timeout 2h
+```
+
+400k events of ~1.6 KB (634 MB of protobuf), 400 MB, 0.1 CPU, same machine
+as above:
+
+| batch count | fetch sizes | `GOMEMLIMIT` | result | peak memory |
+|---|---|---|---|---|
+| 10000 | 50 MiB / 1 MiB | unset | OOM killed after ~1 min, every restart, nothing exported | 381 MiB |
+| 10000 | 8 MiB / 512 KiB | 300MiB | OOM killed after ~2 min, every restart | 379 MiB |
+| 2000 | 8 MiB / 512 KiB | 300MiB | no kills, ~470 events/s | 290 MiB |
+| 2000 | 8 MiB / 512 KiB | unset | no kills, ~500 events/s | 311 MiB |
+
+At 0.1 CPU the pipeline is CPU-bound at about 500 events/s, above the 30M
+events/day average (~350 events/s) but below the peak; a backlog drains at
+that rate. Raising the batch count needs more memory than one compute unit
+has.
 
 ### Why `unordered_processing` is on
 
@@ -137,7 +170,7 @@ at about 40 events per partition per batch period: ~115 events/s measured
 on three partitions with a 1 s period, ~2 events/s with the 60 s default.
 `unordered_processing` removes the gate and allows `checkpoint_limit`
 records per partition in flight; the limit is above the batch count so one
-busy partition can still fill a batch. Offsets still commit in order.
+busy partition can still fill a batch. Raise it with the batch count. Offsets still commit in order.
 
 The cost is ordering: with pipeline threads and `max_in_flight` above one,
 a partition's records can land out of offset order within and across
@@ -151,7 +184,7 @@ when a message is merged into a batch; once it lands, drop
   topic/partition/offset and rejected by `reject_errored`. The input retries
   it indefinitely and never commits past it. Records around it still export
   (and are written again after a restart, since the batch is never acked).
-  Later records on that partition flow until `checkpoint_limit` (20k) are in
+  Later records on that partition flow until `checkpoint_limit` (5k) are in
   flight behind it; then the partition pauses. The same ERROR repeats about
   once a second while the record is there; clearing it means moving the
   group past the record. `catch` is not used because it clears the error
@@ -197,7 +230,8 @@ wire format, and the config run in-process with the inputs above.
   logged with its offset, the group never commits past it on that partition
   and commits to the end on the others.
 
-Benchmarks: see above. `testdata/README.md` covers the fixtures' origin.
+Benchmarks and the saturation harness: see above. `testdata/README.md`
+covers the fixtures' origin.
 
 ## Not covered
 

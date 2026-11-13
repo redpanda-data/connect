@@ -65,9 +65,9 @@ import (
 // benchBatchSize is the config's default batching.count; the end-to-end
 // benchmark's event count should be a multiple of every batch count so no
 // partial batch waits out the batch period at the end.
-const benchBatchSize = 10000
+const benchBatchSize = 2000
 
-var benchBatchCounts = []int{benchBatchSize, 2000}
+var benchBatchCounts = []int{benchBatchSize, 10000}
 
 func BenchmarkPipelineProcessors(b *testing.B) {
 	md, schemaText := compileAuditEvent(b)
