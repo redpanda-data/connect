@@ -152,6 +152,10 @@ func TestIntegrationOpensearch(t *testing.T) {
 	t.Run("TestOpenSearchBatchIDCollision", func(te *testing.T) {
 		testOpenSearchBatchIDCollision(urls, client, te)
 	})
+
+	t.Run("TestOpenSearchBatchPerMessageErrors", func(te *testing.T) {
+		testOpenSearchBatchPerMessageErrors(urls, client, te)
+	})
 }
 
 func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
@@ -565,4 +569,93 @@ action: update
 
 	assert.Equal(t, "updated", tmp.Source["user"])
 	assert.Equal(t, "goodbye", tmp.Source["message"])
+}
+
+func testOpenSearchBatchPerMessageErrors(urls []string, client *os.Client, t *testing.T) {
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
+	defer done()
+
+	t.Log("Given: an output with per_message_errors enabled")
+	m := outputFromConf(t, `
+index: test_conn_index
+id: ${! @id }
+urls: %v
+action: ${! @action }
+per_message_errors: true
+`, urls)
+
+	require.NoError(t, m.Connect(ctx))
+	defer func() {
+		require.NoError(t, m.Close(ctx))
+	}()
+
+	N := 10
+
+	newBatch := func(action string, content func(i int) string) service.MessageBatch {
+		var batch service.MessageBatch
+		for i := range N {
+			msg := service.NewMessage([]byte(content(i)))
+			msg.MetaSetMut("id", fmt.Sprintf("per-message-%v", i))
+			msg.MetaSetMut("action", action)
+			batch = append(batch, msg)
+		}
+		return batch
+	}
+	doc := func(i int) string {
+		return fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)
+	}
+	update := func(int) string {
+		return `{"doc":{"user":"updated"}}`
+	}
+
+	t.Log("When: the documents are created, updated, left unchanged and deleted")
+	t.Log("Then: every created, updated, noop and deleted result acknowledges its message")
+	require.NoError(t, m.WriteBatch(ctx, newBatch("index", doc)))
+	require.NoError(t, m.WriteBatch(ctx, newBatch("index", doc)))
+	require.NoError(t, m.WriteBatch(ctx, newBatch("update", update)))
+	require.NoError(t, m.WriteBatch(ctx, newBatch("update", update)))
+	require.NoError(t, m.WriteBatch(ctx, newBatch("delete", func(int) string { return "" })))
+
+	for i := range N {
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
+			Index:      "test_conn_index",
+			DocumentID: fmt.Sprintf("per-message-%v", i),
+		}, nil)
+		require.NoError(t, err)
+		assert.True(t, get.IsError())
+	}
+
+	t.Log("When: the index mapping rejects one document of a batch")
+	const rejected = 3
+	batch := newBatch("index", func(i int) string {
+		if i == rejected {
+			return `{"message":{"not":"text"},"user":"3"}`
+		}
+		return doc(i)
+	})
+	idx := batch.Index()
+
+	err := m.WriteBatch(ctx, batch)
+
+	t.Log("Then: only its message fails, and the other documents are written")
+	var bErr *service.BatchError
+	require.ErrorAs(t, err, &bErr)
+	assert.Equal(t, 1, bErr.IndexedErrors())
+	bErr.WalkMessagesIndexedBy(idx, func(i int, _ *service.Message, err error) bool {
+		if i == rejected {
+			assert.ErrorContains(t, err, "mapper_parsing_exception")
+		} else {
+			assert.NoError(t, err, i)
+		}
+		return true
+	})
+
+	for i := range N {
+		get, err := client.Do(ctx, osapi.DocumentGetReq{
+			Index:      "test_conn_index",
+			DocumentID: fmt.Sprintf("per-message-%v", i),
+		}, nil)
+		require.NoError(t, err)
+		assert.Equal(t, i == rejected, get.IsError(), i)
+	}
 }
