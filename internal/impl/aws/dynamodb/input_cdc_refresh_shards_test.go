@@ -266,6 +266,26 @@ func TestRefreshShards_SkipsFailedShardAndCommitsRest(t *testing.T) {
 		"every AWS call in a discovery cycle must carry its own deadline, or one hung call consumes the whole cycle budget")
 }
 
+// TestRefreshShardsAppliesStartCutoff: on a start_from: latest restart, a
+// shard without a checkpoint is read from TRIM_HORIZON and its reader gets
+// the start cutoff, so it skips only the records from before the pipeline
+// first started (CON-597).
+func TestRefreshShardsAppliesStartCutoff(t *testing.T) {
+	cutoff := time.Date(2026, 10, 29, 9, 55, 0, 0, time.UTC)
+	transport := &refreshStubTransport{shardIDs: []string{"shard-001"}}
+	d := newRefreshTestInput(t, transport)
+	d.conf.startFrom = "latest"
+	d.checkpointer.startCutoff = cutoff
+
+	require.NoError(t, d.refreshShards(t.Context()))
+
+	assert.Equal(t, "TRIM_HORIZON", transport.iteratorTypeFor("shard-001"))
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	require.Contains(t, d.shardReaders, "shard-001")
+	assert.Equal(t, cutoff, d.shardReaders["shard-001"].failoverCutoff)
+}
+
 // TestRefreshShards_ZeroCommitKeepsStartFrom: a discovery cycle that commits
 // no shards has not positioned anything, so it must not consume the
 // once-only start_from window - otherwise a transient full-cycle failure on
