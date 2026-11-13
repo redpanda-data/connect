@@ -27,7 +27,7 @@ workflows:
         - 'actions/setup-go@v6.5.0'
         - 'actions/setup-python@v5.6.0'
         - 'actions/upload-artifact@v4.6.2'
-        - 'aquasecurity/trivy-action@master'
+        - 'aquasecurity/trivy-action@v0.36.0'
         - 'aws-actions/amazon-ecr-login@v2.1.7'
         - 'aws-actions/aws-secretsmanager-get-secrets@v3.0.2'
         - 'aws-actions/configure-aws-credentials@v6.2.4'
@@ -40,7 +40,7 @@ workflows:
     '.github/workflows/release_python_sdk.yaml':
         - 'actions/checkout@v6.1.0'
         - 'astral-sh/setup-uv@v7.6.0'
-        - 'pypa/gh-action-pypi-publish@release/v1'
+        - 'pypa/gh-action-pypi-publish@v1.14.3'
     '.github/workflows/rpcn-release-bot.yml':
         - 'slackapi/slack-github-action@v3.0.1'
     '.github/workflows/soak_nightly.yml':
@@ -71,9 +71,9 @@ workflows:
     '.github/workflows/verify-lockfile.yml':
         - 'actions/checkout@v6.1.0'
 dependencies:
-    'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
-        ref: 'v6.1.0'
-        commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
+    'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae':
+        ref: 'v5.0.5'
+        commit: 'sha1-27d5ce7f107fe9357f9df03efb73ab90386fccae'
         owner_id: 44036562
         repo_id: 215566462
     'actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb':
@@ -143,22 +143,22 @@ dependencies:
         repo_id: 986421638
         uses:
             - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
-    'aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567':
-        ref: 'v0.3.1'
-        commit: 'sha1-81e514348e19b6112ce2a7e3ecbafe19c1e1f567'
+    'aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514':
+        ref: 'v0.2.6'
+        commit: 'sha1-3fb12ec12f41e471780db15c232d5dd185dcb514'
         owner_id: 12783832
         repo_id: 869952525
         uses:
             - 'actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb'
             - 'actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8'
-    'aquasecurity/trivy-action@master':
-        ref: 'master'
-        commit: 'sha1-38b337fff0a2f984d5be173c99e3f633438167ec'
+    'aquasecurity/trivy-action@v0.36.0':
+        ref: 'v0.36.0'
+        commit: 'sha1-ed142fd0673e97e23eac54620cfb913e5ce36c25'
         owner_id: 12783832
         repo_id: 268833180
         uses:
-            - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-            - 'aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567'
+            - 'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae'
+            - 'aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514'
     'astral-sh/setup-uv@v7.6.0':
         ref: 'v7.6.0'
         commit: 'sha1-37802adc94f370d6bfd71619e3f0bf239e1f3b78'
@@ -224,8 +224,8 @@ dependencies:
         commit: 'sha1-0c5077e51419868618aeaa5fe8019c62421857d6'
         owner_id: 108928776
         repo_id: 512644635
-    'pypa/gh-action-pypi-publish@release/v1':
-        ref: 'release/v1'
+    'pypa/gh-action-pypi-publish@v1.14.3':
+        ref: 'v1.14.3'
         commit: 'sha1-7245906fb61fa33a13554f9d5fb856fe61758086'
         owner_id: 647025
         repo_id: 178055147

@@ -179,7 +179,7 @@ jobs:
 
       - name: Scan docker images for vulnerabilities
         if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (matrix.variant == 'connect' || matrix.variant == 'connect-cloud') }}
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ fromJSON('{"connect":"redpandadata/connect:edge","connect-ai":"redpandadata/connect:edge-ai","connect-cloud":"redpandadata/connect:edge-cloud"}')[matrix.variant] }}
           format: table
