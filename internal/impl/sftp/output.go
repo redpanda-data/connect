@@ -16,6 +16,7 @@ package sftp
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -32,8 +33,9 @@ import (
 )
 
 const (
-	soFieldPath  = "path"
-	soFieldCodec = "codec"
+	soFieldPath         = "path"
+	soFieldCodec        = "codec"
+	soFieldAtomicWrites = "atomic_writes"
 )
 
 func sftpOutputSpec() *service.ConfigSpec {
@@ -49,6 +51,21 @@ func sftpOutputSpec() *service.ConfigSpec {
 				Description("The file to save the messages to on the SFTP server."),
 			writecodec.Field(soFieldCodec).
 				Default("all-bytes"),
+			service.NewBoolField(soFieldAtomicWrites).
+				Description("Write each message to a temporary file in the same directory, then rename it to the target path. "+
+					"A reader of the target path then never sees an empty or partial file. "+
+					"For the target path `/upload/a.txt`, the temporary file is `/upload/.a.txt.<random>.tmp`. "+
+					"Glob patterns match file names that start with a dot, so `/upload/*` and `/upload/*.tmp` match the temporary file, but `/upload/*.txt` does not. "+
+					"A reader that matches the temporary file, such as an `sftp` input, can read an empty or partial message, or read the same message two times. "+
+					"Use a reader pattern that ends with the extension of the target files. "+
+					"If the server supports the `posix-rename@openssh.com` extension, the rename replaces an existing file in one step. "+
+					"If not, the output removes the existing file first, so a reader can see no file for a short time. "+
+					"The SFTP user must have permission to rename files. "+
+					"Only the `all-bytes` codec supports this field, because the other codecs append to the file.").
+				ShortDescription("Write each message to a temporary file, then rename it to the target path, so readers never see a partial file.").
+				Advanced().
+				Default(false).
+				Version("4.118.0"),
 			service.NewOutputMaxInFlightField(),
 		)
 }
@@ -75,6 +92,9 @@ type sftpWriter struct {
 	path       *service.InterpolatedString
 	suffixFn   codecSuffixFn
 	appendMode bool
+	// atomicWrites makes Write call writeAtomic for each message instead of
+	// keeping a file handle open. It is never set with appendMode.
+	atomicWrites bool
 
 	handleMut  sync.Mutex
 	sshClient  *ssh.Client
@@ -94,6 +114,12 @@ func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s 
 	}
 	if s.suffixFn, s.appendMode, err = codecGetWriter(codecStr); err != nil {
 		return nil, err
+	}
+	if s.atomicWrites, err = conf.FieldBool(soFieldAtomicWrites); err != nil {
+		return
+	}
+	if s.atomicWrites && s.appendMode {
+		return nil, fmt.Errorf("%s requires the all-bytes codec, got %s", soFieldAtomicWrites, codecStr)
 	}
 
 	if s.address, err = conf.FieldString(sFieldAddress); err != nil {
@@ -173,6 +199,10 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 		return fmt.Errorf("path interpolation error: %w", err)
 	}
 
+	if s.atomicWrites {
+		return s.writeAtomic(path, msg)
+	}
+
 	if s.handle != nil && path == s.handlePath {
 		if err := s.writeTo(s.handle, msg); err != nil {
 			s.closeHandle(s.handle)
@@ -237,6 +267,54 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 	s.handle = handle
 	s.handlePath = path
 
+	return nil
+}
+
+// writeAtomic writes msg to a temporary file in the directory of path, then
+// renames the temporary file to path. The temporary file is in the same
+// directory, because a rename to another file system is not atomic or fails.
+// It keeps the SFTP client open for the next message, and closes it on failure.
+func (s *sftpWriter) writeAtomic(path string, msg *service.Message) (err error) {
+	if s.sftpClient == nil {
+		if s.sftpClient, err = sftp.NewClient(s.sshClient); err != nil {
+			return fmt.Errorf("creating SFTP client: %w", err)
+		}
+	}
+	defer func() {
+		if err != nil {
+			s.closeClient()
+		}
+	}()
+
+	dir := filepath.Dir(path)
+	if err := s.sftpClient.MkdirAll(dir); err != nil {
+		return fmt.Errorf("creating remote directory: %w", err)
+	}
+
+	tmpPath := filepath.Join(dir, "."+filepath.Base(path)+"."+rand.Text()+".tmp")
+	handle, err := s.sftpClient.OpenFile(tmpPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY)
+	if err != nil {
+		return fmt.Errorf("opening temporary remote file: %w", err)
+	}
+	// The data is on the server only after Close succeeds.
+	if err := errors.Join(s.writeTo(handle, msg), handle.Close()); err != nil {
+		_ = s.sftpClient.Remove(tmpPath)
+		return fmt.Errorf("writing message to SFTP server: %w", err)
+	}
+
+	if _, ok := s.sftpClient.HasExtension("posix-rename@openssh.com"); ok {
+		err = s.sftpClient.PosixRename(tmpPath, path)
+	} else {
+		// A plain SFTP rename fails on most servers if the target exists.
+		err = s.sftpClient.Remove(path)
+		if err == nil || errors.Is(err, os.ErrNotExist) {
+			err = s.sftpClient.Rename(tmpPath, path)
+		}
+	}
+	if err != nil {
+		_ = s.sftpClient.Remove(tmpPath)
+		return fmt.Errorf("renaming temporary remote file: %w", err)
+	}
 	return nil
 }
 
