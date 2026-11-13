@@ -423,6 +423,18 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				}
 				return sanitizeTsrange(val.String), nil
 			}
+		case "_DATE", "_TIMESTAMP", "_TIMESTAMPTZ":
+			// Decode the array text with the stream decoder, so both paths
+			// emit the same []any with time.Time and InfiniteTime elements.
+			dt, _ := pgTypeMap.TypeForName(strings.ToLower(resolveTypeName(v.DatabaseTypeName())))
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullString)
+				if !val.Valid {
+					return nil, nil
+				}
+				return decodeTextColumnData(pgTypeMap, []byte(val.String), dt.OID, -1)
+			}
 		case "_INT4":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
