@@ -898,7 +898,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if version.Major() < 4 {
 		return fmt.Errorf("`mongodc_cdc` requires MongoDB version 4 or higher - current version: %v", version.String())
 	}
-	resumeToken, err := m.checkpoint.Load(ctx)
+	checkpointToken, err := m.checkpoint.Load(ctx)
 	if err != nil {
 		if !errors.Is(err, errCorruptCheckpoint) {
 			return fmt.Errorf("unable to load checkpoints from cache: %w", err)
@@ -921,11 +921,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		if derr := m.checkpoint.Delete(ctx); derr != nil {
 			return fmt.Errorf("unable to clear the corrupt checkpoint: %w", derr)
 		}
-		resumeToken = nil
+		checkpointToken = nil
 	}
 	var incResume *incrementalsnapshot.State
 	if m.readsIncrementally() {
-		if incResume, resumeToken, err = m.loadIncSnapshotState(ctx, resumeToken); err != nil {
+		if incResume, checkpointToken, err = m.loadIncSnapshotState(ctx, checkpointToken); err != nil {
 			return err
 		}
 	} else if err := m.discardIncSnapshotProgress(ctx); err != nil {
@@ -934,42 +934,22 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	// Open this connection's checkpoint generation, abandoning any token still in
 	// flight from a previous one: those belong to a position this connection is
 	// not resuming from, and the loaded checkpoint is the only start position that
-	// counts now. resumeToken is used locally from here on, since the field can be
-	// advanced concurrently by acks once the stream is running.
-	tokenEpoch := m.beginTokenEpoch(resumeToken)
-	// Set the stream start when starting fresh to be the current oplog end time.
+	// counts now. Code below reads checkpointToken, not m.resumeToken, because acks
+	// advance m.resumeToken concurrently once the stream is running.
+	tokenEpoch := m.beginTokenEpoch(checkpointToken)
+	// The hello reply gives the majority committed oplog time, which
+	// resolveStreamStart uses to start the stream when there is no token.
 	r = m.db.RunCommand(ctx, bson.M{"hello": 1})
 	if r.Err() != nil {
 		return fmt.Errorf("unable to determine replication info (is your mongodb instance running as a replication set?): %w", r.Err())
 	}
-	var helloReply bson.M
-	if err := r.Decode(&helloReply); err != nil {
+	var hello helloReply
+	if err := r.Decode(&hello); err != nil {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
-	ts, hasTS := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
-	// Capture the current change stream position as a resume token when a
-	// snapshot is about to run, because only a token can be persisted to the
-	// checkpoint cache once that snapshot completes - the oplog timestamp
-	// cannot. Sharded clusters (mongos) report no oplog timestamp at all, so
-	// there the token is fetched regardless as the only usable start position.
-	// Otherwise the oplog timestamp positions the stream as before, and nothing
-	// needs a token: without a snapshot there is nothing to checkpoint early,
-	// and when a checkpoint already exists the stream resumes from it.
-	var initialResumeToken bson.Raw = nil
-	if resumeToken == nil && (m.readsSnapshot() || !hasTS) {
-		token, err := m.getCurrentResumeToken(ctx)
-		switch {
-		case err == nil:
-			initialResumeToken = token
-		case !hasTS:
-			return fmt.Errorf("unable to compute stream start position: %w (%s)", err, helloReply.String())
-		default:
-			// Replica sets before 4.0.7 may not report a post-batch resume
-			// token. The oplog timestamp still positions this run, but there is
-			// nothing storable, so the post-snapshot checkpoint is skipped and
-			// a failure re-runs the snapshot as before.
-			m.logger.Debugf("unable to capture a pre-snapshot resume token, a completed snapshot will not be checkpointed: %v", err)
-		}
+	start, err := m.resolveStreamStart(ctx, checkpointToken, hello, m.getCurrentResumeToken)
+	if err != nil {
+		return err
 	}
 	// Tier 1: pre-fetch $jsonSchema validators for all watched collections
 	// during Connect() so the stream goroutine is not delayed.
@@ -986,16 +966,6 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 	}
 
-	// start is the resume token the change stream opens from: the checkpoint
-	// token, else the token captured above. Nil starts the stream at the
-	// operation after the majority committed oplog time (ts).
-	// Read the local resumeToken, not m.resumeToken: acks advance the field
-	// while the stream runs.
-	start := resumeToken
-	if start == nil {
-		start = initialResumeToken
-	}
-
 	var incRun *incSnapshotRun
 	if m.readsIncrementally() {
 		// Without incremental_snapshot.enabled, incResume marks every
@@ -1007,8 +977,8 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		// The chunk reads must see every write the stream skips: refer to
 		// incSnapshotDeps.Prepare. Without a token the stream starts after
 		// the majority optime, so it skips no write a majority read misses.
-		if start != nil {
-			at, err := resumeTokenTimestamp(start)
+		if start.token != nil {
+			at, err := resumeTokenTimestamp(start.token)
 			if err != nil {
 				// A Warn, not an error: a token format this code cannot read would then stop the input on each
 				// connect. Without the wait, a chunk can miss a write that the stream also skips.
@@ -1052,7 +1022,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				opts = opts.SetShowExpandedEvents(true)
 			}
 		}
-		if start != nil {
+		if start.token != nil {
 			// This used to carry a TODO about the resume token being invalidated by a
 			// collection drop or rename. Measured against a mongo:7 replica set, that
 			// does not happen to the stream this input opens: the watch is
@@ -1065,19 +1035,25 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			// event is filtered out by the ns.coll $match, so the cursor just closes
 			// and the next connection resumes from the last position, again
 			// successfully. See TestIntegrationMongoCDCCollectionDropAndRename.
-			opts = opts.SetResumeAfter(start)
+			opts = opts.SetResumeAfter(start.token)
 		} else {
 			// If there are no writes between snapshot and streaming, we want to skip the last
 			// document that will be read in the snapshot.
-			nextTS := nextTimestamp(ts)
+			nextTS := nextTimestamp(start.opTime)
 			opts = opts.SetStartAtOperationTime(&nextTS)
 		}
 		cp := checkpoint.NewCapped[streamPosition](int64(m.checkpointLimit))
-		if resumeToken == nil && !m.incremental {
+		// firstStart is a start without a loaded checkpoint. The blocking
+		// snapshot block runs on each first start, also when stream_snapshot is
+		// off: readSnapshot then reads nothing, and storeSnapshotCheckpoint
+		// stores the start position at once if one was captured (sharded).
+		// The incremental snapshot replaces the blocking one.
+		firstStart := checkpointToken == nil
+		if firstStart && !m.incremental {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
-				g.Go(func() error { return m.readSnapshot(gctx, coll, ts, cp) })
+				g.Go(func() error { return m.readSnapshot(gctx, coll, start.opTime, cp) })
 			}
 			if err := g.Wait(); err != nil {
 				select {
@@ -1089,7 +1065,9 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			// CONTRIBUTING §5.4.1: checkpoint as soon as the snapshot completes
 			// rather than waiting for the first streamed message, so that a
 			// restart resumes the stream instead of re-running the snapshot.
-			if !m.storeSnapshotCheckpoint(ctx, tokenEpoch, cp, initialResumeToken, m.checkpoint.Store) {
+			// No checkpoint was loaded, so start.token is the position captured
+			// before the snapshot, or nil if none was captured.
+			if !m.storeSnapshotCheckpoint(ctx, tokenEpoch, cp, start.token, m.checkpoint.Store) {
 				return
 			}
 			if m.snapshotParallelism > 0 && m.cc.AssumesRole() {
