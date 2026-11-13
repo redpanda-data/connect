@@ -969,7 +969,7 @@ func (o *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replic
 
 func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 	if o.stopSig == nil {
-		return nil // Never connected
+		return o.waitForPoolCloses(ctx) // Never connected
 	}
 	// Mark the publisher as stopping BEFORE any cancellation propagates: the
 	// session's contexts unwind off stopSig, and sendTracked needs the flag
@@ -1013,19 +1013,23 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 		}
 	}
 
-	// wait for connection pools to close
-	// to ensure we don't leave hanging connections
-	sig := make(chan struct{})
+	return errors.Join(closeErr, o.waitForPoolCloses(ctx))
+}
+
+// waitForPoolCloses waits, bounded by ctx, for the pools closeDBInBackground
+// is still closing.
+func (o *oracleDBCDCInput) waitForPoolCloses(ctx context.Context) error {
+	done := make(chan struct{})
 	go func() {
 		o.poolCloses.Wait()
-		close(sig)
+		close(done)
 	}()
 	select {
-	case <-sig:
+	case <-done:
+		return nil
 	case <-ctx.Done():
-		closeErr = errors.Join(closeErr, fmt.Errorf("waiting for previous connection pools to close: %w", ctx.Err()))
+		return fmt.Errorf("waiting for previous connection pools to close: %w", ctx.Err())
 	}
-	return closeErr
 }
 
 // closeDBInBackground closes a discarded pool without blocking the reconnect,
