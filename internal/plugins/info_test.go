@@ -64,6 +64,26 @@ func TestPluginInfoFromMapRejectsUnknownUseCase(t *testing.T) {
 	assert.Contains(t, err.Error(), `"not-a-use-case"`)
 }
 
+func TestPluginInfoFromMapRejectsUseCasesOnDeprecated(t *testing.T) {
+	_, err := pluginInfoFromMap(map[string]string{"name": "foo", "type": "input", "deprecated": "y", "use_cases": "change-data-capture"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "foo-input")
+	assert.Contains(t, err.Error(), "deprecated")
+
+	info, err := pluginInfoFromMap(map[string]string{"name": "foo", "type": "input", "deprecated": "y"})
+	require.NoError(t, err)
+	assert.True(t, info.Deprecated)
+	assert.Empty(t, info.UseCases)
+}
+
+func TestInfoCSVDeprecatedHaveNoUseCases(t *testing.T) {
+	for k, v := range BaseInfo {
+		if v.Deprecated {
+			assert.Empty(t, v.UseCases, "plugin %v is deprecated", k)
+		}
+	}
+}
+
 func TestFormatCSVRoundTripsUseCases(t *testing.T) {
 	in := InfoCollection{
 		"foo-input":  {Name: "foo", Type: TypeInput, CommercialName: "foo", Support: "community", UseCases: []string{"change-data-capture", "data-lakehouse"}},

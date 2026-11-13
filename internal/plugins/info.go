@@ -91,6 +91,11 @@ var UseCaseIDs = []string{
 	"real-time-analytics",
 	"schema-management",
 	"stream-processing",
+	"ai-pipelines",
+	"log-and-observability-pipelines",
+	"iot-ingestion",
+	"object-storage-archiving",
+	"search-indexing",
 }
 
 // parseUseCases parses a use_cases value: zero or more IDs from UseCaseIDs,
@@ -131,6 +136,9 @@ func pluginInfoFromMap(m map[string]string) (PluginInfo, error) {
 	useCases, err := parseUseCases(m["use_cases"])
 	if err != nil {
 		return PluginInfo{}, fmt.Errorf("plugin %v-%v: %w", m["name"], m["type"], err)
+	}
+	if m["deprecated"] == "y" && len(useCases) > 0 {
+		return PluginInfo{}, fmt.Errorf("plugin %v-%v: a deprecated plugin must not list use cases", m["name"], m["type"])
 	}
 	supportStr := m["support"]
 	if supportStr == "" {

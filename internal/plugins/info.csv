@@ -200,7 +200,7 @@ parquet                   ,processor ,parquet                   ,community  ,y  
 parquet_decode            ,processor ,parquet_decode            ,certified  ,n          ,y     ,y              ,,
 parquet_encode            ,processor ,parquet_encode            ,certified  ,n          ,y     ,y              ,,
 parse_log                 ,processor ,parse_log                 ,community  ,n          ,y     ,y              ,,
-pg_stream                 ,input     ,pg_stream                 ,enterprise ,y          ,y     ,y              ,,change-data-capture
+pg_stream                 ,input     ,pg_stream                 ,enterprise ,y          ,y     ,y              ,,
 pinecone                  ,output    ,pinecone                  ,certified  ,n          ,y     ,y              ,,
 postgres_cdc              ,input     ,postgres_cdc              ,enterprise ,n          ,y     ,y              ,,change-data-capture
 processors                ,processor ,processors                ,certified  ,n          ,y     ,y              ,,
