@@ -19,10 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -46,7 +43,6 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/benthos/v4/public/service/securetls"
 )
 
 func TestIntegrationAzure(t *testing.T) {
@@ -484,91 +480,23 @@ input:
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
-	// The wait stops before the package timeout, so that the test can log why the emulator is not ready.
-	cosmosStartupTimeout := 2 * time.Minute
-	if deadline, ok := t.Deadline(); ok {
-		cosmosStartupTimeout = min(cosmosStartupTimeout, time.Until(deadline)-100*time.Millisecond)
-	}
-
-	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("8081/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			// The bigger the value, the longer it takes for the container to start up.
-			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "4",
-			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
-			// Override the emulator's advertised IP so the SDK doesn't try to connect to
-			// the container's internal Docker bridge IP (e.g. 172.17.0.x).
-			"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
-		}),
-		// The emulator accepts connections and serves its certificate before all partitions are up. Requests sent
-		// before that can fail with 408 Request Timeout. A bare "Started" line follows "Started N/N partitions".
-		// WithWaitStrategy would limit the wait to 60s.
-		testcontainers.WithWaitStrategyAndDeadline(cosmosStartupTimeout,
-			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
-			wait.ForLog(`(?m)^Started\r?$`).AsRegexp().WithStartupTimeout(cosmosStartupTimeout),
+	// The vNext emulator is a native Linux image (amd64 and arm64) that serves plain HTTP. It reports readiness on
+	// port 8080.
+	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest",
+		testcontainers.WithExposedPorts("8081/tcp", "8080/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/ready").WithPort("8080/tcp").WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}),
 		),
 	)
 	testcontainers.CleanupContainer(t, cosmosCtr)
 	require.NoError(t, err)
 
-	cosmosHost, err := cosmosCtr.Host(t.Context())
+	// The emulator advertises the address that the client connects to, so the SDK can use the mapped port.
+	cosmosPort, err := cosmosCtr.MappedPort(t.Context(), "8081/tcp")
 	require.NoError(t, err)
-	cosmosPortM, err := cosmosCtr.MappedPort(t.Context(), "8081/tcp")
-	require.NoError(t, err)
-	cosmosPort := cosmosPortM.Port()
-
-	// Start a HTTP -> HTTPS proxy server on a background goroutine to work around the self-signed certificate that the
-	// CosmosDB container provides, because unfortunately, it doesn't expose a plain HTTP endpoint.
-	// The proxy must listen on port 8081 because the CosmosDB SDK discovers the emulator's endpoint from
-	// service responses. With AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE=127.0.0.1, the emulator advertises
-	// 127.0.0.1:8081, so the proxy must be on that port for subsequent SDK requests to be routed through it.
-	// This listener will be owned and closed automatically by the HTTP server
-	listener, err := net.Listen("tcp", ":8081")
-	require.NoError(t, err)
-	srv := &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		url, err := url.Parse("https://" + cosmosHost + ":" + cosmosPort)
-		require.NoError(t, err)
-
-		customTransport := http.DefaultTransport.(*http.Transport).Clone()
-		customTransport.TLSClientConfig = securetls.WithInsecureSkipVerify(securetls.SecurityLevelNormal)
-
-		p := httputil.NewSingleHostReverseProxy(url)
-		p.Transport = customTransport
-		// Don't log proxy errors, but return an error downstream
-		p.ErrorHandler = func(rw http.ResponseWriter, _ *http.Request, _ error) {
-			rw.WriteHeader(http.StatusBadGateway)
-		}
-
-		p.ServeHTTP(res, req)
-	})}
-	go func() {
-		require.ErrorIs(t, srv.Serve(listener), http.ErrServerClosed)
-	}()
-	t.Cleanup(func() {
-		assert.NoError(t, srv.Close())
-	})
-
-	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
-	require.NoError(t, err)
-
-	// The emulator serves its certificate when it logs "Started", so this check does not need the startup timeout.
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return false
-		}
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return false
-		}
-		return len(body) > 0
-	}, 30*time.Second, time.Second, "Failed to start CosmosDB emulator")
+	servicePort := cosmosPort.Port()
 
 	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dummyDatabase := "Asgard"
@@ -765,9 +693,9 @@ enable_content_response_on_write: true
 			activityID, ok := m.MetaGetMut("activity_id")
 			assert.True(t, ok)
 			assert.NotEmpty(t, activityID)
-			requestCharge, ok := m.MetaGetMut("request_charge")
+			// The vNext emulator does not count request units, so it reports a request charge of 0.
+			_, ok = m.MetaGetMut("request_charge")
 			assert.True(t, ok)
-			assert.EqualValues(t, 1.0, requestCharge)
 		}
 
 		var patchBatch service.MessageBatch

@@ -576,6 +576,60 @@ func TestLOBReplayCarriedOverEndedTxns(t *testing.T) {
 	})
 }
 
+func TestPlanLOBReplayLOBDisabled(t *testing.T) {
+	ctx := t.Context()
+	insertEv := func(scn uint64, txn sqlredo.TransactionID, table, redo string) *sqlredo.RedoEvent {
+		return &sqlredo.RedoEvent{
+			SCN:           scn,
+			TransactionID: txn,
+			Operation:     sqlredo.OpInsert,
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: table, Valid: true},
+			SQLRedo:       sql.NullString{String: redo, Valid: true},
+		}
+	}
+
+	t.Run("selects open transactions that insert into a LOB table", func(t *testing.T) {
+		lm, _, cache := newLOBReplayMiner(t)
+		lm.cfg.LOBEnabled = false
+		lm.currentSCN = 100
+		for id, scn := range map[sqlredo.TransactionID]uint64{"lobInsert": 30, "plainInsert": 20} {
+			require.NoError(t, cache.StartTransaction(ctx, id, scn))
+		}
+		require.NoError(t, lm.processRedoEvent(ctx, insertEv(31, "lobInsert", "T", `insert into "TESTDB"."T"("ID","DOC") values ('42',EMPTY_CLOB());`)))
+		require.NoError(t, lm.processRedoEvent(ctx, insertEv(21, "plainInsert", "P", `insert into "TESTDB"."P"("ID") values ('1');`)))
+
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, replay)
+		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"lobInsert": {}}, replay.txns)
+		assert.Equal(t, uint64(30), replay.fromSCN)
+		assert.Empty(t, lm.lobInsertTxns)
+
+		txn, err := cache.GetTransaction(ctx, "lobInsert")
+		require.NoError(t, err)
+		assert.Nil(t, txn, "the replayed transaction is reset")
+		txn, err = cache.GetTransaction(ctx, "plainInsert")
+		require.NoError(t, err)
+		assert.NotNil(t, txn, "a transaction without LOB columns must be untouched")
+	})
+
+	t.Run("commit ends the tracking", func(t *testing.T) {
+		lm, _, cache := newLOBReplayMiner(t)
+		lm.cfg.LOBEnabled = false
+		lm.currentSCN = 100
+		require.NoError(t, cache.StartTransaction(ctx, "lobInsert", 30))
+		require.NoError(t, lm.processRedoEvent(ctx, insertEv(31, "lobInsert", "T", `insert into "TESTDB"."T"("ID","DOC") values ('42',EMPTY_CLOB());`)))
+		require.Contains(t, lm.lobInsertTxns, sqlredo.TransactionID("lobInsert"))
+		require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{SCN: 32, TransactionID: "lobInsert", Operation: sqlredo.OpCommit}))
+		assert.Empty(t, lm.lobInsertTxns)
+
+		replay, err := lm.planLOBReplay(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, replay)
+	})
+}
+
 func TestLOBReplayEndNil(t *testing.T) {
 	var r *lobReplay
 	assert.NotPanics(t, func() { r.end("txA") })

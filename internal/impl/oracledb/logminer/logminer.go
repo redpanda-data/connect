@@ -79,6 +79,12 @@ type LogMiner struct {
 	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
 	// replayed after the INSERT is buffered so inferLOBLocator can find it.
 	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
+	// lobInsertTxns holds the open transactions that INSERT into a table with LOB columns while LOBEnabled is false.
+	// Oracle writes the LOB value of such an INSERT as a separate change after it. When a mining window ends between
+	// the two, the next LogMiner session renders that change as a second full-row INSERT, and the row is published
+	// twice. planLOBReplay re-mines these transactions from their start, so that LogMiner sees both changes in one
+	// session. It stays empty while LOBEnabled is true, because then lobStates selects the replay.
+	lobInsertTxns map[sqlredo.TransactionID]struct{}
 	// lobReplay is the in-flight window that re-mines open LOB transactions.
 	// It stays set until the window succeeds, so a retry resets them again.
 	lobReplay *lobReplay
@@ -143,6 +149,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher Publishe
 		dmlParser:        sqlredo.NewParser(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		lobInsertTxns:    make(map[sqlredo.TransactionID]struct{}),
 		windowSize:       cfg.SCNWindowSize,
 		redoVolume:       newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 	}
@@ -341,7 +348,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		sessionStart = lm.currentSCN
 		processEvent = lm.processRedoEvent
 	)
-	if lm.cfg.LOBEnabled {
+	{
 		replay, err := lm.planLOBReplay(ctx)
 		if err != nil {
 			return false, err
@@ -540,6 +547,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
 			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
+		}
+		if !lm.cfg.LOBEnabled && event.Operation == sqlredo.OpInsert && lm.hasLOBColumn(&event) {
+			lm.lobInsertTxns[redoEvent.TransactionID] = struct{}{}
 		}
 
 	case sqlredo.OpSelectLobLocator:
@@ -823,16 +833,18 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 			}
-			lm.lobReplay.end(redoEvent.TransactionID)
 		}
+		delete(lm.lobInsertTxns, redoEvent.TransactionID)
+		lm.lobReplay.end(redoEvent.TransactionID)
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
-			lm.lobReplay.end(redoEvent.TransactionID)
 		}
+		delete(lm.lobInsertTxns, redoEvent.TransactionID)
+		lm.lobReplay.end(redoEvent.TransactionID)
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
 		}
@@ -953,6 +965,16 @@ func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.Tx
 // This identifies Oracle's internal LOB-initialisation UPDATE events, which carry
 // only LOB column values and should be suppressed when a matching INSERT already
 // exists in the same transaction.
+// hasLOBColumn reports whether ev sets one or more LOB columns.
+func (lm *LogMiner) hasLOBColumn(ev *sqlredo.DMLEvent) bool {
+	for col := range ev.Data {
+		if _, exists := lm.lobColTypes[strings.ToUpper(ev.Schema+"."+ev.Table+"."+col)]; exists {
+			return true
+		}
+	}
+	return false
+}
+
 func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 	if len(ev.Data) == 0 {
 		return false

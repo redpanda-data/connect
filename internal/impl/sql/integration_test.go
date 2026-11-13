@@ -18,6 +18,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -41,6 +43,25 @@ import (
 )
 
 type testFn func(t *testing.T, driver, dsn, table string)
+
+// logContainerDiagnostics logs the state and the logs of ctr. A test calls it when its service does not become ready,
+// to show if the container stopped or if the service is still starting. name identifies the service in the messages.
+func logContainerDiagnostics(t *testing.T, name string, ctr testcontainers.Container) {
+	t.Helper()
+	if state, err := ctr.State(t.Context()); err != nil {
+		t.Logf("Cannot get the %s container state: %v", name, err)
+	} else {
+		t.Logf("%s container state: status=%s exit_code=%d oom_killed=%v error=%q",
+			name, state.Status, state.ExitCode, state.OOMKilled, state.Error)
+	}
+	if logs, err := ctr.Logs(t.Context()); err != nil {
+		t.Logf("Cannot get the %s container logs: %v", name, err)
+	} else {
+		b, _ := io.ReadAll(logs)
+		logs.Close()
+		t.Logf("%s container logs:\n%s", name, b)
+	}
+}
 
 func testProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
@@ -1081,20 +1102,36 @@ func TestIntegrationMSSQL(t *testing.T) {
 	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
-	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("1433/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"ACCEPT_EULA": "Y",
-			"SA_PASSWORD": testPassword,
-		}),
-		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
-		// when it runs in parallel with the other tests, so set the deadline explicitly.
-		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
-			wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
-		),
+	// When other test packages load the Docker host, SQL Server 2025 can crash in sqlpal.dll a few seconds after
+	// the start ("This program has encountered a fatal error"). The port can be open before that, so also wait for
+	// the log line that the mssql module waits for. The log wait fails as soon as the container exits, and then the
+	// test starts a new container.
+	const maxAttempts = 3
+	var (
+		ctr testcontainers.Container
+		err error
 	)
-	testcontainers.CleanupContainer(t, ctr)
+	for attempt := 1; ; attempt++ {
+		ctr, err = testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
+			testcontainers.WithImagePlatform("linux/amd64"),
+			testcontainers.WithExposedPorts("1433/tcp"),
+			testcontainers.WithEnv(map[string]string{
+				"ACCEPT_EULA": "Y",
+				"SA_PASSWORD": testPassword,
+			}),
+			// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
+			// when it runs in parallel with the other tests, so set the deadline explicitly.
+			testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
+				wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
+				wait.ForLog("Recovery is complete.").WithStartupTimeout(3*time.Minute),
+			),
+		)
+		testcontainers.CleanupContainer(t, ctr)
+		if err == nil || attempt == maxAttempts {
+			break
+		}
+		t.Logf("SQL Server start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+	}
 	require.NoError(t, err)
 
 	mp, err := ctr.MappedPort(t.Context(), "1433/tcp")
@@ -1118,26 +1155,34 @@ func TestIntegrationMSSQL(t *testing.T) {
 	}
 
 	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", mp.Port())
-	require.Eventually(t, func() bool {
+	// lastErr keeps the error of the last try. Without it, a failed wait only says "Condition never satisfied".
+	var lastErr error
+	ready := assert.Eventually(t, func() bool {
 		if db != nil {
 			db.Close()
 		}
-		db, err = sql.Open("mssql", dsn)
-		if err != nil {
+		db, lastErr = sql.Open("mssql", dsn)
+		if lastErr != nil {
 			return false
 		}
-		if err = db.Ping(); err != nil {
+		if lastErr = db.Ping(); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
-		if _, err := createTable("footable"); err != nil {
+		if _, lastErr = createTable("footable"); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
 		return true
 	}, 3*time.Minute, time.Second)
+	if !ready {
+		// The port can be open while SQL Server is not ready, or the container can stop after the port wait (for
+		// example exit code 139). Log the container state and logs to show which case it is.
+		logContainerDiagnostics(t, "SQL Server", ctr)
+		require.FailNow(t, "SQL Server is not ready", "last error: %v", lastErr)
+	}
 
 	testSuite(t, "mssql", dsn, createTable)
 }
@@ -1328,18 +1373,14 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	}
 	t.Parallel()
 
-	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("8081/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			// The bigger the value, the longer it takes for the container to start up.
-			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "2",
-			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
-		}),
-		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, the emulator can need more time to start
-		// when it runs in parallel with the other tests, so set the deadline explicitly.
-		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
-			wait.ForListeningPort("8081/tcp").WithStartupTimeout(3*time.Minute),
+	// The vNext emulator is a native Linux image (amd64 and arm64) that serves plain HTTP. It reports readiness on
+	// port 8080.
+	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest",
+		testcontainers.WithExposedPorts("8081/tcp", "8080/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/ready").WithPort("8080/tcp").WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}),
 		),
 	)
 	testcontainers.CleanupContainer(t, ctr)
@@ -1355,8 +1396,10 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		}
 	})
 
+	// The readiness loop below can run this more than once for the same name, so the statement must not fail when
+	// the collection exists.
 	createContainer := func(name string) (string, error) {
-		_, err := db.Exec(fmt.Sprintf(`create collection %s with pk=/foo`, name))
+		_, err := db.Exec(fmt.Sprintf(`create collection if not exists %s with pk=/foo`, name))
 		return name, err
 	}
 
@@ -1364,35 +1407,43 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	dummyContainer := "ChallengerDeep"
 	emulatorAccountKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dsn := fmt.Sprintf(
-		"AccountEndpoint=https://localhost:%s;AccountKey=%s;DefaultDb=%s;AutoId=true;InsecureSkipVerify=true",
+		"AccountEndpoint=http://localhost:%s;AccountKey=%s;DefaultDb=%s;AutoId=true",
 		mp.Port(), emulatorAccountKey, dummyDatabase,
 	)
 
-	require.Eventually(t, func() bool {
+	// Each try must be idempotent. A try can create the database and then fail to create the collection, for example
+	// with a 408 or a client timeout while the emulator starts its partitions. With a plain "create database", all
+	// later tries then fail with 409 Conflict until the wait stops. lastErr keeps the error of the last try.
+	var lastErr error
+	ready := assert.Eventually(t, func() bool {
 		if db != nil {
 			db.Close()
 		}
-		db, err = sql.Open("gocosmos", dsn)
-		if err != nil {
+		db, lastErr = sql.Open("gocosmos", dsn)
+		if lastErr != nil {
 			return false
 		}
-		if err = db.Ping(); err != nil {
+		if lastErr = db.Ping(); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
-		if _, err := db.Exec(fmt.Sprintf(`create database %s`, dummyDatabase)); err != nil {
+		if _, lastErr = db.Exec(fmt.Sprintf(`create database if not exists %s`, dummyDatabase)); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
-		if _, err := createContainer(dummyContainer); err != nil {
+		if _, lastErr = createContainer(dummyContainer); lastErr != nil {
 			db.Close()
 			db = nil
 			return false
 		}
 		return true
 	}, 3*time.Minute, time.Second)
+	if !ready {
+		logContainerDiagnostics(t, "Cosmos DB emulator", ctr)
+		require.FailNow(t, "Cosmos DB emulator is not ready", "last error: %v", lastErr)
+	}
 
 	// TODO: Enable the full test suite once https://github.com/microsoft/gocosmos/issues/15 is addressed and increase
 	// increase `AZURE_COSMOS_EMULATOR_PARTITION_COUNT` so the emulator can create all the required containers. Note
