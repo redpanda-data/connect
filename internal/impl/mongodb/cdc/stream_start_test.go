@@ -20,9 +20,14 @@ import (
 )
 
 // TestResolveStreamStart covers where a connection's change stream opens. A
-// checkpoint token wins. On a first start, a snapshot or a sharded cluster
-// (no oplog time in the hello reply) needs a captured token, and every other
-// first start opens at the majority committed oplog time.
+// checkpoint token wins. On a first start, a blocking snapshot or a sharded
+// cluster (no oplog time in the hello reply) needs a captured token, and every
+// other first start opens at the majority committed oplog time.
+//
+// The incremental snapshot stores no token before the first event, so on a
+// replica set it opens at the majority committed oplog time too. A captured
+// token can be ahead of that time: the stream would then skip a write that the
+// majority chunk reads do not see yet.
 func TestResolveStreamStart(t *testing.T) {
 	checkpointToken, err := bson.Marshal(bson.M{"_data": "checkpoint"})
 	require.NoError(t, err)
@@ -34,6 +39,7 @@ func TestResolveStreamStart(t *testing.T) {
 	tests := []struct {
 		name                string
 		snapshotParallelism int
+		incremental         bool
 		checkpointToken     bson.Raw
 		hello               helloReply
 		captureErr          error
@@ -42,7 +48,7 @@ func TestResolveStreamStart(t *testing.T) {
 		wantErr             string
 	}{
 		{
-			name:                "checkpoint token wins over a snapshot",
+			name:                "checkpoint token wins over a blocking snapshot",
 			snapshotParallelism: 1,
 			checkpointToken:     checkpointToken,
 			hello:               replicaSetHello,
@@ -68,7 +74,7 @@ func TestResolveStreamStart(t *testing.T) {
 			},
 		},
 		{
-			name:                "first start with a snapshot opens at a captured token",
+			name:                "first start with a blocking snapshot opens at a captured token",
 			snapshotParallelism: 1,
 			hello:               replicaSetHello,
 			wantCaptured:        true,
@@ -78,13 +84,31 @@ func TestResolveStreamStart(t *testing.T) {
 			},
 		},
 		{
-			name:                "first start with a snapshot falls back to the oplog time without a token",
+			name:                "first start with a blocking snapshot falls back to the oplog time without a token",
 			snapshotParallelism: 1,
 			hello:               replicaSetHello,
 			captureErr:          errors.New("no post-batch resume token"),
 			wantCaptured:        true,
 			want: streamStart{
 				opTime: bson.Timestamp{T: 100, I: 2},
+			},
+		},
+		{
+			name:        "first start with an incremental snapshot opens at the oplog time",
+			incremental: true,
+			hello:       replicaSetHello,
+			want: streamStart{
+				opTime: bson.Timestamp{T: 100, I: 2},
+			},
+		},
+		{
+			name:         "first start with an incremental snapshot on a sharded cluster opens at a captured token",
+			incremental:  true,
+			hello:        shardedHello,
+			wantCaptured: true,
+			want: streamStart{
+				token:  capturedToken,
+				opTime: bson.Timestamp{T: 200, I: 3},
 			},
 		},
 		{
@@ -97,7 +121,7 @@ func TestResolveStreamStart(t *testing.T) {
 			},
 		},
 		{
-			name:                "first start with a snapshot on a sharded cluster has the cluster time",
+			name:                "first start with a blocking snapshot on a sharded cluster has the cluster time",
 			snapshotParallelism: 1,
 			hello: helloReply{
 				"msg":           "isdbgrid",
@@ -122,6 +146,7 @@ func TestResolveStreamStart(t *testing.T) {
 			m := &mongoCDC{
 				logger:              service.MockResources().Logger(),
 				snapshotParallelism: tt.snapshotParallelism,
+				incremental:         tt.incremental,
 			}
 			captured := false
 			captureToken := func(context.Context) (bson.Raw, error) {
