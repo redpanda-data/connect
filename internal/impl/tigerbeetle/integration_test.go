@@ -27,7 +27,6 @@ import (
 	"time"
 
 	tb "github.com/tigerbeetle/tigerbeetle-go"
-	tb_types "github.com/tigerbeetle/tigerbeetle-go/pkg/types"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
@@ -84,7 +83,7 @@ func setupTestWithTigerBeetle(t *testing.T, version string) (tb.Client, []string
 	addresses := []string{port}
 	t.Logf("TigerBeetle running at %s", addresses[0])
 
-	client, err := tb.NewClient(tb_types.ToUint128(0), addresses)
+	client, err := tb.NewClient(tb.ToUint128(0), addresses)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		client.Close()
@@ -98,7 +97,7 @@ func TestIntegrationTigerBeetle(t *testing.T) {
 	// so the oldest supported TigerBeetle cluster must be pinned to the client version
 	// used in the connector. Keep it equal to the cluster version in the input docs.
 	versions := []string{
-		"0.16.78",
+		"0.17.9",
 		"latest",
 	}
 
@@ -135,50 +134,54 @@ func TestIntegrationTigerBeetle(t *testing.T) {
 			}()
 
 			// Creating accounts:
-			accounts := make(map[tb_types.Uint128]tb_types.Account)
-			accountA := tb_types.ToUint128(1)
-			accountB := tb_types.ToUint128(2)
-			accounts[accountA] = tb_types.Account{
+			accounts := make(map[tb.Uint128]tb.Account)
+			accountA := tb.ToUint128(1)
+			accountB := tb.ToUint128(2)
+			accounts[accountA] = tb.Account{
 				ID:          accountA,
-				UserData128: tb_types.ToUint128(1000),
+				UserData128: tb.ToUint128(1000),
 				UserData64:  100,
 				UserData32:  10,
 				Ledger:      1,
 				Code:        10,
 			}
-			accounts[accountB] = tb_types.Account{
+			accounts[accountB] = tb.Account{
 				ID:          accountB,
-				UserData128: tb_types.ToUint128(2000),
+				UserData128: tb.ToUint128(2000),
 				UserData64:  200,
 				UserData32:  20,
 				Ledger:      1,
 				Code:        20,
 			}
-			createAccountResults, err := client.CreateAccounts([]tb_types.Account{
+			createAccountResults, err := client.CreateAccounts([]tb.Account{
 				accounts[accountA],
 				accounts[accountB],
 			})
 			require.NoError(t, err)
-			require.Empty(t, createAccountResults)
+			require.Len(t, createAccountResults, 2)
+			for _, result := range createAccountResults {
+				require.Equal(t, tb.AccountCreated, result.Status)
+			}
 
 			// Creating transfers:
-			transfers := make([]tb_types.Transfer, 0, messageCount)
+			transfers := make([]tb.Transfer, 0, messageCount)
 			require.Empty(t, transfers)
 			for i := range messageCount {
-				transfer := tb_types.Transfer{
-					ID:              tb_types.ToUint128(uint64(i + 1)),
+				transfer := tb.Transfer{
+					ID:              tb.ToUint128(uint64(i + 1)),
 					DebitAccountID:  accountA,
 					CreditAccountID: accountB,
-					Amount:          tb_types.ToUint128(1),
-					UserData128:     tb_types.ToUint128(1000),
+					Amount:          tb.ToUint128(1),
+					UserData128:     tb.ToUint128(1000),
 					UserData64:      100,
 					UserData32:      10,
 					Ledger:          1,
 					Code:            100,
 				}
-				createTransfersResult, err := client.CreateTransfers([]tb_types.Transfer{transfer})
+				createTransfersResult, err := client.CreateTransfers([]tb.Transfer{transfer})
 				require.NoError(t, err)
-				require.Empty(t, createTransfersResult)
+				require.Len(t, createTransfersResult, 1)
+				require.Equal(t, tb.TransferCreated, createTransfersResult[0].Status)
 
 				transfers = append(transfers, transfer)
 			}
