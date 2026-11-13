@@ -139,6 +139,169 @@ tombstone: '${! @kafka_tombstone_message }'
 	}
 }
 
+func TestFranzWriterKey(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(FranzWriterConfigFields()...)
+
+	newMsg := func(body []byte, meta map[string]any) *service.Message {
+		msg := service.NewMessage(body)
+		for k, v := range meta {
+			msg.MetaSetMut(k, v)
+		}
+		return msg
+	}
+
+	testCases := []struct {
+		name    string
+		conf    string
+		msg     *service.Message
+		wantKey []byte
+	}{
+		{
+			name:    "field unset is a null key",
+			conf:    `topic: foo`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: nil,
+		},
+		{
+			name: "missing metadata is a null key",
+			conf: `
+topic: foo
+key: '${! @kafka_key }'
+`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: nil,
+		},
+		{
+			name: "empty string metadata is a null key",
+			conf: `
+topic: foo
+key: '${! @kafka_key }'
+`,
+			msg:     newMsg([]byte("hello"), map[string]any{"kafka_key": ""}),
+			wantKey: nil,
+		},
+		{
+			name: "nil bytes metadata is a null key",
+			conf: `
+topic: foo
+key: '${! @kafka_key }'
+`,
+			msg:     newMsg([]byte("hello"), map[string]any{"kafka_key": []byte(nil)}),
+			wantKey: nil,
+		},
+		{
+			name: "null json field is a null key",
+			conf: `
+topic: foo
+key: '${! json("key") }'
+`,
+			msg:     newMsg([]byte(`{"key":null}`), nil),
+			wantKey: nil,
+		},
+		{
+			name: "missing json field is a null key",
+			conf: `
+topic: foo
+key: '${! json("key") }'
+`,
+			msg:     newMsg([]byte(`{"id":1}`), nil),
+			wantKey: nil,
+		},
+		{
+			name: "populated metadata is kept",
+			conf: `
+topic: foo
+key: '${! @kafka_key }'
+`,
+			msg:     newMsg([]byte("hello"), map[string]any{"kafka_key": "user-1"}),
+			wantKey: []byte("user-1"),
+		},
+		{
+			name: "bytes metadata is kept",
+			conf: `
+topic: foo
+key: '${! @kafka_key }'
+`,
+			msg:     newMsg([]byte("hello"), map[string]any{"kafka_key": []byte("user-1")}),
+			wantKey: []byte("user-1"),
+		},
+		{
+			name: "numeric json field is kept",
+			conf: `
+topic: foo
+key: '${! json("key") }'
+`,
+			msg:     newMsg([]byte(`{"key":1234}`), nil),
+			wantKey: []byte("1234"),
+		},
+		{
+			name: "single character key is kept",
+			conf: `
+topic: foo
+key: '${! json("key") }'
+`,
+			msg:     newMsg([]byte(`{"key":"0"}`), nil),
+			wantKey: []byte("0"),
+		},
+		{
+			name: "literal null text in json field is a null key",
+			conf: `
+topic: foo
+key: '${! json("key") }'
+`,
+			msg:     newMsg([]byte(`{"key":"null"}`), nil),
+			wantKey: nil,
+		},
+		{
+			name: "static null key is kept",
+			conf: `
+topic: foo
+key: "null"
+`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: []byte("null"),
+		},
+		{
+			name: "static empty key is a null key",
+			conf: `
+topic: foo
+key: ""
+`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: nil,
+		},
+		{
+			name: "static key is kept",
+			conf: `
+topic: foo
+key: fixed
+`,
+			msg:     newMsg([]byte("hello"), nil),
+			wantKey: []byte("fixed"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.conf, nil)
+			require.NoError(t, err)
+
+			w, err := NewFranzWriterFromConfig(pConf, franzWriterHooks{})
+			require.NoError(t, err)
+
+			records, err := w.messageBatchToFranzRecords(service.MessageBatch{tc.msg})
+			require.NoError(t, err)
+			require.Len(t, records, 1)
+
+			if tc.wantKey == nil {
+				assert.Nil(t, records[0].Key, "a null key must be nil, not empty, so the partitioner spreads records")
+				return
+			}
+			assert.Equal(t, tc.wantKey, records[0].Key)
+		})
+	}
+}
+
 // TestBatchWriterTriggersDispatchSignalForRealRecords guards against a
 // regression where batchWriter.writeBatch had ended up calling
 // dispatch.TriggerSignal only for skipped records, and not for records that
