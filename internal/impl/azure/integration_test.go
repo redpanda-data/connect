@@ -17,6 +17,7 @@ package azure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -35,6 +36,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -478,6 +480,61 @@ input:
 			integration.StreamTestOptVarSet("VAR1", dummyQueue),
 			integration.StreamTestOptVarSet("VAR2", connString),
 		)
+	})
+
+	t.Run("queue_storage_nack_redelivers", func(t *testing.T) {
+		queueName := "nack-" + strings.ToLower(uuid.Must(uuid.NewV4()).String())
+
+		serviceClient, err := azqueue.NewServiceClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		queueClient := serviceClient.NewQueueClient(queueName)
+		_, err = queueClient.Create(t.Context(), nil)
+		require.NoError(t, err)
+		_, err = queueClient.EnqueueMessage(t.Context(), "retry-me", nil)
+		require.NoError(t, err)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.AddInputYAML(fmt.Sprintf(`
+azure_queue_storage:
+  queue_name: %s
+  storage_connection_string: %s
+`, queueName, connString)))
+		require.NoError(t, sb.SetLoggerYAML(`level: OFF`))
+
+		var deliveries atomic.Int32
+		redelivered := make(chan struct{})
+		require.NoError(t, sb.AddConsumerFunc(func(context.Context, *service.Message) error {
+			switch deliveries.Add(1) {
+			case 1:
+				// Reject the first delivery: the message must come back.
+				return errors.New("simulated processing failure")
+			case 2:
+				close(redelivered)
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		streamDone := make(chan error, 1)
+		go func() { streamDone <- stream.Run(t.Context()) }()
+
+		select {
+		case <-redelivered:
+		case <-time.After(30 * time.Second):
+			t.Fatal("rejected message was not redelivered")
+		}
+
+		// The acknowledged redelivery must have removed the message from the queue.
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			peek, err := queueClient.PeekMessage(t.Context(), nil)
+			require.NoError(c, err)
+			assert.Empty(c, peek.Messages)
+		}, 10*time.Second, 100*time.Millisecond)
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		require.NoError(t, <-streamDone)
+		assert.Equal(t, int32(2), deliveries.Load())
 	})
 }
 

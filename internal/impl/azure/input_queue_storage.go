@@ -16,6 +16,7 @@ package azure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -75,7 +76,9 @@ This input adds the following metadata fields to each message:
 - All user defined queue metadata
 `+"```"+`
 
-Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.`).
+Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.
+
+Messages are deleted from the queue after they are acknowledged. A rejected message is not deleted. Instead its visibility timeout is reset to zero so that the queue redelivers it right away.`).
 		Fields(
 			service.NewInterpolatedStringField(qsiFieldQueueName).
 				Description(`The name of the source storage queue.`).
@@ -181,15 +184,41 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 		batch = append(batch, part)
 		dqm[i] = queueMsg
 	}
-	return batch, func(ctx context.Context, _ error) error {
-		for _, queueMsg := range dqm {
-			_, err = queueClient.DeleteMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, nil)
-			if err != nil {
-				return fmt.Errorf("error deleting message: %v", err)
-			}
+	return batch, func(ctx context.Context, res error) error {
+		if res != nil {
+			a.releaseMessages(ctx, queueClient, dqm)
+			return nil
 		}
-		return nil
+		return deleteMessages(ctx, queueClient, dqm)
 	}, nil
+}
+
+// deleteMessages removes acknowledged messages from the queue. Every message
+// is attempted even when an earlier one fails, so a single failed delete does
+// not leave the rest of the batch to be redelivered.
+func deleteMessages(ctx context.Context, queueClient *azq.QueueClient, dqm []*azq.DequeuedMessage) error {
+	var errs []error
+	for _, queueMsg := range dqm {
+		if _, err := queueClient.DeleteMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, nil); err != nil {
+			errs = append(errs, fmt.Errorf("error deleting message %s: %w", *queueMsg.MessageID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// releaseMessages makes rejected messages visible again right away so they
+// are redelivered without waiting for the dequeue visibility timeout. A
+// failure here is not fatal: the message stays in the queue and becomes
+// visible again after the timeout expires.
+func (a *azureQueueStorage) releaseMessages(ctx context.Context, queueClient *azq.QueueClient, dqm []*azq.DequeuedMessage) {
+	visibilityTimeout := int32(0)
+	for _, queueMsg := range dqm {
+		if _, err := queueClient.UpdateMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, *queueMsg.MessageText, &azq.UpdateMessageOptions{
+			VisibilityTimeout: &visibilityTimeout,
+		}); err != nil {
+			a.log.Warnf("Failed to reset visibility of rejected message %s, it is redelivered after the visibility timeout expires: %v", *queueMsg.MessageID, err)
+		}
+	}
 }
 
 func (*azureQueueStorage) Close(context.Context) error {
