@@ -54,8 +54,6 @@ const (
 	ociFieldPDBName                   = "pdb_name"
 	ociFieldSnapshotMode              = "snapshot_mode"
 
-	shutdownTimeout = 5 * time.Second
-
 	//-- logminer specific
 	ociFieldLogMiner             = "logminer"
 	ociFieldSCNWindowSize        = "scn_window_size"
@@ -75,6 +73,10 @@ const (
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
+
+	//-- default values
+	shutdownTimeout      = 5 * time.Second
+	defaultSocketTimeout = 180
 )
 
 func init() {
@@ -116,7 +118,7 @@ Streaming throughput is bounded by the LogMiner session, not by CPU. Each pipeli
 
 Large transactions and driver fetch size: left to itself, the Oracle driver sizes each fetch to roughly 128 KiB based on the declared maximum width of the selected columns. As a result, wide columns such as LogMiner's redo SQL yield only a handful of rows per network round trip. This can make large committed transactions appear minutes late while the database, network and connector all look idle. Each round trip costs a full network exchange, and a large transaction requires thousands of them. The connector therefore fetches ` + "`" + ociFieldPrefetchRows + "`" + ` rows per round trip (500 by default). Raise it for large transactions over high-latency links. A ` + "`PREFETCH_ROWS`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + ` takes precedence over the field.
 
-Unresponsive databases: if the database stops responding without closing the connection, a query can wait indefinitely while the input still reports as connected. The connector therefore limits each network read from and write to the database to ` + "`" + ociFieldSocketTimeout + "`" + ` seconds. When it's exceeded, the query fails, and the input reconnects and resumes from its last checkpoint. Recovery can take a few multiples of ` + "`" + ociFieldSocketTimeout + "`" + `, because cleaning up the unresponsive connection and each failed reconnect attempt also wait for it. The limit applies to every individual read and write on every connection the input opens, including snapshot queries. It is not a limit on a whole query, because it restarts with each read or write. It must exceed the longest time Oracle takes to return the first rows of any query. A ` + "`TIMEOUT`" + `, ` + "`READ TIMEOUT`" + ` or ` + "`SOCKET TIMEOUT`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + `, matched case-insensitively, takes precedence over the field.
+Unresponsive databases: if the database stops responding without closing the connection, a query can wait indefinitely while the input still reports as connected. The connector therefore limits each network read from and write to the database to ` + "`" + ociFieldSocketTimeout + "`" + ` seconds. When it's exceeded, the query fails, and the input reconnects and resumes from its last checkpoint. Recovery can take a few multiples of ` + "`" + ociFieldSocketTimeout + "`" + `, because closing the failed session's prepared statements and each failed reconnect attempt also wait for it. The limit applies to every individual read and write on every connection the input opens, including snapshot queries. It is not a limit on a whole query, because it restarts with each read or write. It must exceed the longest time Oracle takes to return the first rows of any query. A ` + "`TIMEOUT`" + `, ` + "`READ TIMEOUT`" + ` or ` + "`SOCKET TIMEOUT`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + `, matched case-insensitively, takes precedence over the field.
 
 The checkpoint advances about every 10 seconds after every delivered batch is acknowledged, also while the monitored tables are idle. On an idle database it can stay up to ` + "`" + ociFieldLogMiner + "." + ociFieldMinSCNWindowSize + "`" + ` SCNs behind the current SCN, because the input does not mine smaller ranges. It never moves past the start of a transaction that is still open. With ` + "`" + ociFieldBatching + ".count`" + ` and no ` + "`" + ociFieldBatching + ".period`" + `, rows can wait in the batcher until more rows arrive, and the checkpoint does not advance until they flush. Set a ` + "`period`" + ` to prevent this. Keep redo logs for longer than the longest open transaction and the longest pipeline outage. If the checkpointed SCN is no longer available, the input cannot resume and fails with ORA-01291. Alert on a stagnant checkpoint SCN or repeated ORA errors.
 
@@ -149,7 +151,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 	Field(service.NewIntField(ociFieldSocketTimeout).
 		Description("The maximum number of seconds to wait for each network read from or write to the database, on every connection the input opens, during both snapshot and streaming. It restarts with each read or write, so it does not limit how long a whole query takes. When it's exceeded, the query fails and the input reconnects, resuming from its last checkpoint. This prevents the input from hanging indefinitely if the database stops responding without closing the connection. It must exceed the longest time Oracle takes to return the first rows of any query, such as a snapshot query against a large table. Set to `0` to disable. A `TIMEOUT`, `READ TIMEOUT` or `SOCKET TIMEOUT` query parameter in `connection_string`, matched case-insensitively, takes precedence.").
 		ShortDescription("Maximum seconds to wait for each network read or write to Oracle before failing and reconnecting. Set to 0 to disable it.").
-		Default(300).
+		Default(defaultSocketTimeout).
 		LintRule(`root = if this < 0 { [ "` + ociFieldSocketTimeout + ` must be greater than or equal to 0" ] }`),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
