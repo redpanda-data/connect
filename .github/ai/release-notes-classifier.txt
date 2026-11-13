@@ -6,6 +6,7 @@ Skip PRs entirely if they match any of these categories — do not emit entries 
 - Dependency bumps and go.mod-only changes
 - Code maintenance, refactoring, linting, and chores (commit prefix: chore:)
 - Internal tooling, test-only changes, and developer workflow improvements
+- Pull requests that only modify files ending in _test.go
 Use commit message prefixes to determine system (e.g. kafka, s3).
 If no prefix, infer from changed code or PR context.
 If the change is general use "general" as the system.
