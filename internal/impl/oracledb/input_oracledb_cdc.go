@@ -101,7 +101,7 @@ This input adds the following metadata fields to each message:
 - ` + "`rs_id`" + `: The LogMiner record set ID from ` + "`V$LOGMNR_CONTENTS.RS_ID`" + `, identifying the redo record that produced the change. Use ` + "`rs_id`" + `, ` + "`ssn`" + ` and ` + "`row_seq`" + ` together to identify one row change and to order the changes of a transaction. Not present on snapshot (` + "`read`" + `) messages, nor on LOB-only synthetic updates.
 - ` + "`ssn`" + `: The SQL sequence number from ` + "`V$LOGMNR_CONTENTS.SSN`" + `. Compare it numerically. Not present whenever ` + "`rs_id`" + ` is not present.
 - ` + "`row_seq`" + `: The position of the row change among the consecutive row changes that report the same ` + "`rs_id`" + ` and ` + "`ssn`" + `. It starts at 0 in redo order. Oracle reports the same ` + "`rs_id`" + ` and ` + "`ssn`" + ` for every row of an array DML redo record, such as a bulk ` + "`DELETE`" + ` of up to 255 rows. This field tells those rows apart. It is 0 for every other change. LogMiner returns the rows of one redo record one after the other, and the connector counts them in that order. Compare it numerically. Not present whenever ` + "`rs_id`" + ` is not present.
-- ` + "`schema`" + `: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
+- ` + "`schema`" + `: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart. ` + "`DATE`" + ` columns are declared as timestamps in milliseconds, and every ` + "`TIMESTAMP`" + ` variant is declared in microseconds.
 
 == Permissions
 
@@ -154,7 +154,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		string(SnapshotModeNone),
 		string(SnapshotModeSnapshotOnly),
 		string(SnapshotModeSnapshotAndStream)).
-		Description("Controls snapshot behavior. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
+		Description("Controls snapshot behavior. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming. Only tables with a `" + ociFieldSnapshotFilters + "` entry are snapshotted in primary key order. Rows of other tables arrive in no guaranteed order.").
 		ShortDescription("Controls snapshot behaviour, from skipping it entirely to a full snapshot before streaming.").
 		Optional().
 		Version("4.99.0"),
@@ -188,7 +188,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 			Description(`Controls how the SCN range mined per cycle is sized:
 
 - `+"`"+string(logminer.WindowStrategySCNWindow)+"` (default): Grows and shrinks a fixed SCN increment (`"+ociFieldSCNWindowSize+"`) based on its backlog, bounded by `"+ociFieldMinSCNWindowSize+"` and `"+ociFieldMaxSCNWindowSize+"`"+`.
-- `+"`"+string(logminer.WindowStrategyRedoVolume)+"`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `"+ociFieldRedoVolumeMin+"` and `"+ociFieldRedoVolumeGrowthMax+"`), independent of raw SCN movement. This can be helpful when a database's SCN can advance without matching real transaction volume (for example, a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB)), since `"+string(logminer.WindowStrategySCNWindow)+"` would otherwise burn cycles growing its window over mostly-empty ranges, while `"+string(logminer.WindowStrategyRedoVolume)+"` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), the `"+string(logminer.WindowStrategyRedoVolume)+"` budget applies per open thread, so volume mined per cycle scales with the number of open threads.").
+- `+"`"+string(logminer.WindowStrategyRedoVolume)+"`: Sizes the range by a fixed redo-volume budget calculated by log size (configured by `"+ociFieldRedoVolumeMin+"` and `"+ociFieldRedoVolumeGrowthMax+"`), independent of raw SCN movement. This can be helpful when a database's SCN can advance without matching real transaction volume (for example, a Multitenant Container Database (CDB) shared SCN bumped by another Pluggable Database (PDB)), since `"+string(logminer.WindowStrategySCNWindow)+"` would otherwise burn cycles growing its window over mostly-empty ranges, while `"+string(logminer.WindowStrategyRedoVolume)+"` sizes each cycle by the redo it actually reads. On Real Application Clusters (RAC), the `"+string(logminer.WindowStrategyRedoVolume)+"` budget applies per open thread, so volume mined per cycle scales with the number of open threads.\n\nThe input fails at startup if a field that belongs to the other strategy is set to a value other than its default.").
 			ShortDescription("How the mined SCN range per cycle is sized: by a growing/shrinking SCN window, or by a fixed redo-volume budget.").
 			Default(string(logminer.WindowStrategySCNWindow)).
 			Advanced(),
@@ -259,7 +259,7 @@ A table with a query here is never split into parallel chunks, whatever ` + "`" 
 		Optional(),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
-		Description("Regular expressions for tables to include.").
+		Description("Regular expressions for tables to include. Tables owned by common users, whose names start with `C##`, are never captured, even when a pattern matches them.").
 		Example("SCHEMA.PRODUCTS"),
 	).
 	Field(service.NewStringListField(ociFieldTablesExclude).

@@ -132,6 +132,8 @@ messages that could have been already delivered to consumers.
 
 It is the consumer’s responsibility to perform idempotency checks when processing messages.
 
+This input keeps one batch in flight to preserve event order. It delivers the next batch only after the current one is acknowledged, so a higher output `+"`max_in_flight`"+` does not raise throughput. Each batch holds the events of one request, so `+"`event_count_max`"+` sets the maximum batch size.
+
 == Upgrading
 
 The TigerBeetle client version must not be newer than the cluster version, as it will fail
@@ -155,7 +157,10 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				Description("A xref:components:caches/about.adoc[cache resource] "+
 					"used to track progress by storing the last acknowledged timestamp.\n"+
 					"This allows Redpanda Connect to resume from the latest delivered event "+
-					"upon restart.").
+					"upon restart.\n"+
+					"The input stores the timestamp under the key `timestamp_last_<cluster_id>` "+
+					"as an 8-byte little-endian unsigned integer.\n"+
+					"A value of any other length makes the input fail to connect.").
 				ShortDescription("Cache resource tracking progress by storing the last acknowledged timestamp."),
 			service.NewStringField(fieldRateLimit).
 				Description("An optional xref:components:rate_limits/about.adoc[rate limit] "+

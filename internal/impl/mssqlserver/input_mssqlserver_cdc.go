@@ -100,7 +100,7 @@ Operational notes:
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("Whether to stream a snapshot of all existing data before streaming CDC changes. When set to `true`, the connector first queries all existing table data, then switches to streaming incremental changes from the change tables. When set to `false`, no snapshot is taken and, on first run, streaming begins from the start of each table's existing change table: every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not only changes from the current LSN onward. To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty. The snapshot reads each table in a transaction at `SNAPSHOT` isolation, so the database must allow it: run `ALTER DATABASE <database> SET ALLOW_SNAPSHOT_ISOLATION ON` before enabling this field.").
+		Description("Whether to stream a snapshot of all existing data before streaming CDC changes. When set to `true`, the connector first queries all existing table data, then switches to streaming incremental changes from the change tables. When set to `false`, no snapshot is taken and, on first run, streaming begins from the start of each table's existing change table: every change retained by SQL Server's CDC capture and cleanup jobs (three days by default) is replayed, not only changes from the current LSN onward. To begin from the present on a table that already holds change history, disable and re-enable CDC on the table immediately before starting the pipeline so that its change table starts empty. Each snapshotted table must have a primary key, or the snapshot fails. The snapshot reads each table in a transaction at `SNAPSHOT` isolation, so the database must allow it: run `ALTER DATABASE <database> SET ALLOW_SNAPSHOT_ISOLATION ON` before enabling this field.").
 		ShortDescription("Snapshot existing data first. Otherwise streaming replays everything retained in the change tables.").
 		Example(true).
 		Default(false),
@@ -111,11 +111,11 @@ Operational notes:
 		Default(1000),
 	).
 	Field(service.NewStringListField(fieldTablesInclude).
-		Description("Regular expressions for tables to include in CDC streaming. Specify table names using the format `schema.table` (such as `dbo.orders`, `sales.customers`). Each pattern is treated as a regular expression, allowing wildcards and pattern matching. All specified tables must have CDC enabled in SQL Server.").
+		Description("Regular expressions for tables to include in CDC streaming. Specify table names using the format `schema.table` (such as `dbo.orders`, `sales.customers`). Each pattern is treated as a regular expression, allowing wildcards and pattern matching. Patterns are not anchored, so `dbo.orders` also matches `dbo.orders_archive`. To match one table exactly, use `^dbo\\.orders$`. Every matched table must have CDC enabled with a capture instance named `<schema>_<table>`, which is the SQL Server default. Otherwise the input fails at startup with `no change table found for table`.").
 		Example("dbo.products"),
 	).
 	Field(service.NewStringListField(fieldTablesExclude).
-		Description("Regular expressions for tables to exclude from CDC streaming. Use this to filter out specific tables from the include patterns. Table names should follow the `schema.table` format. Exclude patterns are applied after include patterns, allowing you to include broad patterns while excluding specific tables.").
+		Description("Regular expressions for tables to exclude from CDC streaming. Use this to filter out specific tables from the include patterns. Table names should follow the `schema.table` format. Exclude patterns are applied after include patterns, allowing you to include broad patterns while excluding specific tables. Exclude patterns are also not anchored.").
 		Example("dbo.privatetable").
 		Optional(),
 	).
@@ -124,7 +124,7 @@ Operational notes:
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").Version("4.67.0").
+		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table. The stored procedure is named `CdcCheckpointCacheUpdate` in the table's schema, and each input points it at its own table when it starts. Two inputs whose checkpoint tables share a schema overwrite each other's checkpoints, so give each input its own schema.").Version("4.67.0").
 		Default(defaultCheckpointCache).
 		Example("dbo.checkpoint_cache").
 		Optional(),
@@ -135,7 +135,7 @@ Operational notes:
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheKey).
-		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").Version("4.67.0").
+		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache. The key applies only when `" + fieldCheckpointCache + "` is set. The default Microsoft SQL Server based cache ignores it and always stores one row.").Version("4.67.0").
 		Default("microsoft_sql_server_cdc").
 		Optional(),
 	).

@@ -139,13 +139,37 @@ Consumes change records from a Google Cloud Spanner change stream. This input al
 you to track and process database changes in real time, making it useful for data
 replication, event-driven architectures, and maintaining derived data stores.
 
-The input reads from a specified change stream within a Spanner database and converts
-each change record into a message. The message payload contains the change records in
-JSON format, and metadata is added with details about the Spanner instance, database,
-and stream.
+The input reads from a specified change stream within a Spanner database and creates
+one message for each modification (` + "`" + `Mod` + "`" + `) in a data change record. The message
+payload is a JSON object with the ` + "`" + `keys` + "`" + `, ` + "`" + `new_values` + "`" + `, and ` + "`" + `old_values` + "`" + ` of the
+modified row.
+
+The input detects whether the database uses the GoogleSQL or PostgreSQL dialect. Neither
+dialect needs extra configuration.
+
+Spanner splits and merges change stream partitions over time. The input reads a child
+partition only after all its parent partitions finish, so changes to a single key keep
+commit timestamp order.
 
 Change streams provide a way to track mutations to your Spanner database tables. For
 more information about Spanner change streams, refer to the link:https://cloud.google.com/spanner/docs/change-streams[Google Cloud documentation^].
+
+== Metadata
+
+This input adds the following metadata fields to each message. The values come from the
+data change record that contains the modification.
+
+- ` + "`" + `table_name` + "`" + `
+- ` + "`" + `mod_type` + "`" + `
+- ` + "`" + `commit_timestamp` + "`" + `
+- ` + "`" + `record_sequence` + "`" + `
+- ` + "`" + `server_transaction_id` + "`" + `
+- ` + "`" + `is_last_record_in_transaction_in_partition` + "`" + `
+- ` + "`" + `value_capture_type` + "`" + `
+- ` + "`" + `number_of_records_in_transaction` + "`" + `
+- ` + "`" + `number_of_partitions_in_transaction` + "`" + `
+- ` + "`" + `transaction_tag` + "`" + `
+- ` + "`" + `is_system_transaction` + "`" + `
 `).
 		Field(service.NewStringField(siFieldCredentialsJSON).Optional().Description(`Base64-encoded JSON credentials file for authenticating to GCP with a service account. If not provided, Application Default Credentials (ADC) is used.
 
@@ -171,7 +195,7 @@ The timestamp must be in RFC3339 format, such as ` + "`" + `2023-10-01T00:00:00Z
 		Field(service.NewStringField(siFieldHeartbeatInterval).Advanced().Description(`The interval at which Spanner emits heartbeat records on the change stream when a partition has no data changes. The input uses heartbeat records to advance partition watermarks. Heartbeat records are not emitted as messages.
 
 Supported time units are ` + "`" + `ns` + "`" + `, ` + "`" + `us` + "`" + `, ` + "`" + `ms` + "`" + `, ` + "`" + `s` + "`" + `, ` + "`" + `m` + "`" + `, and ` + "`" + `h` + "`" + `. For example, ` + "`" + `1s` + "`" + ` requests a heartbeat record every second.`).Default("10s")).
-		Field(service.NewStringField(siFieldMetadataTable).Advanced().Optional().Description("The table to store metadata in (default: `cdc_metadata_<stream_id>`).").Default("")).
+		Field(service.NewStringField(siFieldMetadataTable).Advanced().Optional().Description("The table to store partition metadata in (default: `cdc_metadata_<stream_id>`). On every start, the input creates this table and two indexes if they do not exist. This DDL runs each time, so the service account needs the `spanner.databases.updateDdl` permission for as long as the pipeline runs. The indexes are named `WatermarkIdx_<database_id>_<suffix>` and `CreatedAtIdx_<database_id>_<suffix>`. The suffix is a hash of the database ID and table name, so the names stay the same across restarts. If you create the table yourself with other index names, the input adds these two indexes once. Spanner deletes each partition row one day after the partition finishes, so the table needs no cleanup job.").Default("")).
 		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Advanced().Description("How frequently to query Spanner for the minimum watermark, as a duration string.").Default("5s")).
 		Field(service.NewStringListField(siFieldAllowedModTypes).Advanced().Optional().Description("List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE").
 			ShortDescription("Modification types to process: INSERT, UPDATE, DELETE. All are processed if unset.").Example([]string{"INSERT", "UPDATE", "DELETE"})).

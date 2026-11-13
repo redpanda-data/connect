@@ -133,6 +133,8 @@ This input supports three table discovery modes:
 
 When the input streams from more than one table, it reads from all matching tables simultaneously. Each table maintains its own checkpoint state. In `+"`tag`"+` or `+"`includelist`"+` mode, use `+"`table_discovery_interval`"+` to periodically rescan for new tables (useful for dynamically tagged tables).
 
+In `+"`tag`"+` mode, the input calls `+"`dynamodb:ListTables`"+`, then `+"`dynamodb:DescribeTable`"+` and `+"`dynamodb:ListTagsOfResource`"+` on every table it lists. Grant those two actions on every table in the region, not only on the tables that match the filter. A table the input cannot describe or read tags from is skipped with a warning.
+
 == Prerequisites
 
 The source DynamoDB table(s) must have https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html[DynamoDB Streams^] enabled. You can enable streams with one of these view types:
@@ -150,7 +152,7 @@ When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+` or `+"`snapshot_and_c
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
-Snapshots are supported only when streaming from a single table.
+Snapshots are supported only when streaming from a single table. With `+"`table_discovery_mode: tag`"+`, any `+"`snapshot_mode`"+` other than `+"`none`"+` fails at startup, even when the filter matches only one table. An `+"`includelist`"+` with exactly one table supports snapshots.
 
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `+"`snapshot_segments`"+` and `+"`snapshot_throttle`"+` to control RCU consumption.
 
@@ -160,7 +162,7 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses.
 
-A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one: the first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position; a parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged); and a parent shard the stream reports as not found. A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged.
+A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one: the first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position; a parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged); and a parent shard the stream reports as not found. A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged. In `+"`snapshot_and_cdc`"+` mode, a restart after a completed snapshot handles this differently. If any shard checkpoint points at trimmed stream data, the input re-runs the full snapshot instead of resuming from `+"`TRIM_HORIZON`"+`.
 
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
@@ -182,11 +184,12 @@ Attribute values are converted from DynamoDB's typed format, such as `+"`{\"S\":
 
 This input adds the following metadata fields to each message:
 
-- `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (empty for snapshot records)
-- `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (empty for snapshot records)
-- `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
+- `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (not set on snapshot records)
+- `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (not set on snapshot records)
+- `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (not set on snapshot records)
 - `+"`dynamodb_event_name`"+` - The type of change: `+"`INSERT`"+`, `+"`MODIFY`"+`, `+"`REMOVE`"+`, or `+"`READ`"+` (for snapshot records)
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
+- `+"`dynamodb_snapshot_segment`"+` - The scan segment that read the record (set only on snapshot records)
 
 == Metrics
 
@@ -275,7 +278,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes.").Version("4.82.0").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. Snapshots require a single table. Any mode other than `none` fails at startup with `table_discovery_mode: tag` or with more than one table in `tables`.").Version("4.82.0").
 				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).

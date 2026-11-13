@@ -346,9 +346,9 @@ Schema metadata is discovered using a two-tier strategy:
 				Description("When set to `true`, this input streams a snapshot of all existing data in the source collections before streaming data changes. Mutually exclusive with `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"`, which reads them alongside the changes instead.").
 				Default(false),
 			service.NewIntField(fieldSnapshotParallelism).
-				Description(`Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot.
+				Description(`Specifies the number of connections to use when reading the initial snapshot from one or more collections. Increase this number to enable parallel processing of the snapshot. This limit applies to all collections together, so with the value `+"`"+`1`+"`"+` the input reads the collections one at a time.
 
-This feature uses the `+"`"+`splitVector`+"`"+` command to split snapshot data into chunks for more efficient processing.
+This feature uses the `+"`"+`splitVector`+"`"+` command to split snapshot data into chunks for more efficient processing. If the server refuses `+"`"+`splitVector`+"`"+`, as MongoDB Atlas does, the input logs a warning and reads that collection with one sequential scan. To read in parallel on these servers, set `+"`"+`snapshot_auto_bucket_sharding`+"`"+` to `+"`"+`true`+"`"+`.
 
 This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"+`true`+"`"+`.`).
 				Default(1).
@@ -370,7 +370,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 					ShortDescription("Read the collections in chunks, alongside change streaming.").
 					Default(false),
 				service.NewIntField(fieldIncSnapshotChunkSize).
-					Description("The number of documents read per chunk. A released chunk is in flight as a whole, so it must not exceed `"+fieldCheckpointLimit+"`, and keeping it well below leaves room for streamed changes and the next chunk alongside it.").
+					Description("The number of documents read per chunk. A released chunk is in flight as a whole, so the input fails to start if this value exceeds `"+fieldCheckpointLimit+"`. Keep it well below that limit to leave room for streamed changes and the next chunk alongside it.").
 					Default(defaultIncSnapshotChunkSize).
 					LintRule(`match {
   this < 1 => ["field chunk_size must be greater or equal to 1."],
@@ -387,7 +387,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				Version("4.116.0").
 				Advanced(),
 			service.NewStringField(fieldSignalCollection).
-				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` in `"+fieldIncSnapshot+"."+fieldIncSnapshotChunkSize+"` chunks alongside streaming, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, in every snapshot mode: `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"` is not required. Signal inserts are also emitted as regular messages with the `collection` metadata set to this collection, so filter them out downstream if they are not wanted.").
+				Description("A collection in `"+fieldClientDatabase+"` to watch for signals, documents that control the input while it runs. Each signal has a `type` and a `data` field: `"+replication.LogSignalType+"` logs `data.message`, and `"+replication.SnapshotSignalType+"` reads the collections named in `data.collections` in `"+fieldIncSnapshot+"."+fieldIncSnapshotChunkSize+"` chunks alongside streaming, for example `{\"type\": \""+replication.SnapshotSignalType+"\", \"data\": {\"collections\": [\"orders\"]}}`, in every snapshot mode: `"+fieldIncSnapshot+"."+fieldIncSnapshotEnabled+"` is not required. Signal inserts are also emitted as regular messages with the `collection` metadata set to this collection, so filter them out downstream if they are not wanted. The input fails to start if this collection is also listed in `"+fieldCollections+"`.").
 				ShortDescription("A collection watched for signal documents that control the input at runtime.").
 				Optional().
 				Version("4.116.0"),
@@ -420,7 +420,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				marshalModeRelaxed: "A string format that emphasizes readability and interoperability at the expense of type preservation." +
 					"That is, conversion from relaxed format to BSON can lose type information.",
 			}).
-				Description("Controls the format used to convert a message from BSON to JSON when it is received by Redpanda Connect.").
+				Description("Controls the format used to convert a message from BSON to JSON when it is received by Redpanda Connect. In both modes, `Decimal128` values are emitted as plain decimal strings, such as `\"19.90\"`, not as `$numberDecimal` objects.").
 				Default(marshalModeCanonical).
 				Advanced(),
 			service.NewStringField(fieldClientAppName).
