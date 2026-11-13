@@ -99,7 +99,7 @@ When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this in
 
 Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
 
-A zero date such as `+"`0000-00-00`"+` has no timestamp form. When streamed, it becomes `+"`null`"+`. In the snapshot, it becomes `+"`0001-01-01T00:00:00Z`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+` when streamed, but the snapshot moves it to a nearby valid date.
+A zero date such as `+"`0000-00-00`"+` has no timestamp form, so it becomes `+"`null`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+`. The snapshot and the stream give the same value.
 
 == Metadata
 
@@ -245,8 +245,11 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	if err != nil {
 		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
 	}
-	// We require this configuration option is enabled.
-	i.mysqlConfig.ParseTime = true
+	// The snapshot parses DATE, DATETIME and TIMESTAMP strings itself. With
+	// parseTime, the driver gives 0001-01-01 for a zero date and moves a
+	// partial-zero date such as 2024-00-15 to 2023-12-15. After that, the
+	// snapshot cannot tell these values from real dates.
+	i.mysqlConfig.ParseTime = false
 
 	// Configure TLS if specified
 	if i.customTLSConfig, err = conf.FieldTLS("tls"); err != nil {
@@ -578,7 +581,7 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 			return fmt.Errorf("fetching column types: %s", err)
 		}
 
-		values, mappers := prepSnapshotScannerAndMappers(colTypes)
+		values, mappers := prepSnapshotScannerAndMappers(colTypes, i.mysqlConfig.Loc)
 		columns, err := batchRows.Columns()
 		if err != nil {
 			_ = batchRows.Close()
@@ -604,7 +607,14 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 				}
 				row[columns[idx]] = v
 				if _, ok := lastSeenPksValues[columns[idx]]; ok {
-					lastSeenPksValues[columns[idx]] = v
+					// The next batch starts after this key. Use the string
+					// that MySQL gave where there is one: a zero date maps
+					// to nil, and nil matches no row.
+					if s, ok := value.(*sql.NullString); ok && s.Valid {
+						lastSeenPksValues[columns[idx]] = s.String
+					} else {
+						lastSeenPksValues[columns[idx]] = v
+					}
 				}
 			}
 
@@ -649,7 +659,9 @@ func snapshotValueMapper[T any](v any) (any, error) {
 	return s.V, nil
 }
 
-func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
+// prepSnapshotScannerAndMappers gives a scan destination and a mapper for each
+// snapshot column. loc is the time zone of DATE, DATETIME and TIMESTAMP values.
+func prepSnapshotScannerAndMappers(cols []*sql.ColumnType, loc *time.Location) (values []any, mappers []func(any) (any, error)) {
 	stringMapping := func(mapper func(s string) (any, error)) func(any) (any, error) {
 		return func(v any) (any, error) {
 			s, ok := v.(*sql.NullString)
@@ -670,17 +682,10 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 			val = new(sql.Null[[]byte])
 			mapper = snapshotValueMapper[[]byte]
 		case "DATETIME", "TIMESTAMP":
-			val = new(sql.NullTime)
-			mapper = func(v any) (any, error) {
-				s, ok := v.(*sql.NullTime)
-				if !ok {
-					return nil, fmt.Errorf("expected %T got %T", time.Time{}, v)
-				}
-				if !s.Valid {
-					return nil, nil
-				}
-				return s.Time, nil
-			}
+			val = new(sql.NullString)
+			mapper = stringMapping(func(s string) (any, error) {
+				return parseMySQLTime("2006-01-02 15:04:05", s, loc)
+			})
 		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "YEAR",
 			"UNSIGNED TINYINT", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT":
 			val = new(sql.NullInt32)
@@ -755,17 +760,10 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return n, nil
 			}
 		case "DATE":
-			val = new(sql.NullTime)
-			mapper = func(v any) (any, error) {
-				s, ok := v.(*sql.NullTime)
-				if !ok {
-					return nil, fmt.Errorf("expected %T got %T", &sql.NullTime{}, v)
-				}
-				if !s.Valid {
-					return nil, nil
-				}
-				return s.Time, nil
-			}
+			val = new(sql.NullString)
+			mapper = stringMapping(func(s string) (any, error) {
+				return parseMySQLTime("2006-01-02", s, loc)
+			})
 		default:
 			val = new(sql.Null[string])
 			mapper = snapshotValueMapper[string]
@@ -1067,26 +1065,26 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	return nil
 }
 
-// parseBinlogTime parses a DATE or DATETIME string from the binlog decoder
-// into a time.Time in UTC. It returns nil for a zero or partial-zero date.
-func parseBinlogTime(layout, s string) (any, error) {
+// parseMySQLTime parses a DATE or DATETIME string from the binlog decoder or
+// the snapshot into a time.Time in loc. It returns nil for a zero or
+// partial-zero date.
+func parseMySQLTime(layout, s string, loc *time.Location) (any, error) {
 	// go-mysql gives a string for DATE, for a zero DATETIME, and for a
-	// DATETIME before 1970. The string always starts with YYYY-MM-DD.
+	// DATETIME before 1970. The SQL driver gives a string for every value,
+	// because parseTime is off. The string always starts with YYYY-MM-DD.
+	// time.ParseInLocation accepts the optional fraction (DATETIME(6)).
 	//
 	// MySQL can store a zero date (0000-00-00) and a date with a zero month
 	// or day (2024-00-15, a date where only the year is known). time.Time
 	// cannot hold a zero month or day, so give nil. This loses the known
 	// part of a partial-zero date. We accept that, because the schema type
-	// is a timestamp, and a string does not match it.
-	//
-	// The snapshot gives different values for the same rows: the SQL driver
-	// gives 0001-01-01 for a zero date, and moves 2024-00-15 to 2023-12-15.
-	// Do not copy that here, because it makes a date that is not in the
-	// database.
+	// is a timestamp, and a string does not match it. Do not give
+	// 0001-01-01 or a nearby valid date, because that makes a date that is
+	// not in the database.
 	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
 		return nil, nil
 	}
-	return time.Parse(layout, s)
+	return time.ParseInLocation(layout, s, loc)
 }
 
 func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
@@ -1162,7 +1160,7 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	case schema.TYPE_DATE:
 		switch d := v.(type) {
 		case string:
-			return parseBinlogTime("2006-01-02", d)
+			return parseMySQLTime("2006-01-02", d, time.UTC)
 		case time.Time:
 			return d, nil
 		default:
@@ -1170,8 +1168,7 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		}
 	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
 		if s, ok := v.(string); ok {
-			// time.Parse accepts the optional fraction (DATETIME(6)).
-			return parseBinlogTime("2006-01-02 15:04:05", s)
+			return parseMySQLTime("2006-01-02 15:04:05", s, time.UTC)
 		}
 		return v, nil
 	case schema.TYPE_ENUM:
