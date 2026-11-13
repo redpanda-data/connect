@@ -336,19 +336,22 @@ Add the import to the appropriate bundle package(s):
 
 **File**: `internal/plugins/info.csv`
 
-All 8 columns:
+All 9 columns:
 ```
-name,type,commercial_name,version,support,deprecated,cloud,cloud_with_gpu
+name,type,commercial_name,support,deprecated,cloud,cloud_with_gpu,cloud_unsupported_reason,use_cases
 ```
 
 - `name`: component name (e.g., `foo`)
 - `type`: component type (e.g., `input`, `output`, `processor`, `cache`, `scanner`, `rate_limit`, `metric`)
 - `commercial_name`: display name
-- `version`: version introduced
 - `support`: `community`, `certified`, or `enterprise`
 - `deprecated`: `y` or `n`
 - `cloud`: `y` if available in cloud distribution
 - `cloud_with_gpu`: `y` if requires GPU for AI workloads
+- `cloud_unsupported_reason`: why a component with `cloud: n` can't run in cloud
+- `use_cases`: use-case IDs from `UseCaseIDs` in `internal/plugins/info.go`, separated by `;` with no spaces (e.g., `change-data-capture;data-lakehouse`). Leave blank unless a use case clearly applies. The docs component catalog filters by it.
+
+Run `go run ./cmd/tools/plugins_csv_fmt` to align the file after editing.
 
 ### 7. Add Tests
 
