@@ -144,3 +144,82 @@ aws_s3:
 		})
 	}
 }
+
+func TestBucketInterpolationConfigParsing(t *testing.T) {
+	const baseConfig = `
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+`
+
+	tests := []struct {
+		name         string
+		bucketYAML   string
+		expectStatic bool
+		expected     string
+		errContains  string
+	}{
+		{
+			name:         "static bucket",
+			bucketYAML:   `bucket: foo`,
+			expectStatic: true,
+			expected:     "foo",
+		},
+		{
+			name:       "interpolated bucket",
+			bucketYAML: `bucket: '${! metadata("client_id") }-logs'`,
+			expected:   "acme-logs",
+		},
+		{
+			name:        "empty static bucket is rejected",
+			bucketYAML:  `bucket: ""`,
+			errContains: "must not be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := s3oOutputSpec().ParseYAML(tt.bucketYAML+"\n"+baseConfig, nil)
+			require.NoError(t, err)
+
+			conf, err := s3oConfigFromParsed(parsed)
+			if tt.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+				return
+			}
+			require.NoError(t, err)
+
+			_, isStatic := conf.Bucket.Static()
+			assert.Equal(t, tt.expectStatic, isStatic)
+
+			msg := service.NewMessage(nil)
+			msg.MetaSetMut("client_id", "acme")
+			got, err := conf.Bucket.TryString(msg)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestBucketInterpolationConnectionTestDynamic(t *testing.T) {
+	parsed, err := s3oOutputSpec().ParseYAML(`
+bucket: '${! metadata("client_id") }-logs'
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+`, nil)
+	require.NoError(t, err)
+
+	conf, err := s3oConfigFromParsed(parsed)
+	require.NoError(t, err)
+
+	w, err := newAmazonS3Writer(conf, service.MockResources())
+	require.NoError(t, err)
+
+	res := w.ConnectionTest(t.Context())
+	require.Len(t, res, 1)
+	assert.NoError(t, res[0].Err)
+}
