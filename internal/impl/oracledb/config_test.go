@@ -11,6 +11,7 @@ package oracledb
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -434,9 +435,9 @@ logminer: {}
 		errContains   string
 	}{
 		{
-			name:          "unset defaults to 300 seconds",
+			name:          "unset uses the default",
 			yaml:          minimalOracleCDCYAML,
-			wantOverrides: map[string]string{"TIMEOUT": "300"},
+			wantOverrides: map[string]string{"TIMEOUT": strconv.Itoa(defaultSocketTimeout)},
 		},
 		{
 			name:          "explicit 30 becomes a TIMEOUT override",
@@ -519,14 +520,14 @@ logminer: {}
 				if tt.wantNoOverr {
 					assert.Empty(t, overrides, "no TIMEOUT override must be added when connection_string already sets a socket timeout")
 				} else {
-					assert.Equal(t, map[string]string{"TIMEOUT": "300"}, overrides,
+					assert.Equal(t, map[string]string{"TIMEOUT": strconv.Itoa(defaultSocketTimeout)}, overrides,
 						"CONNECT TIMEOUT is not a socket timeout, so the default TIMEOUT override must still be added")
 				}
 			})
 		}
 	})
 
-	t.Run("default override produces a TIMEOUT=300 query param in the final connection string", func(t *testing.T) {
+	t.Run("default override produces a TIMEOUT query param with the default in the final connection string", func(t *testing.T) {
 		conf, err := oracleDBStreamConfigSpec.ParseYAML(minimalOracleCDCYAML, nil)
 		require.NoError(t, err)
 
@@ -538,7 +539,7 @@ logminer: {}
 
 		built, err := buildConnectionString(connStr, overrides, service.MockResources().Logger())
 		require.NoError(t, err)
-		assert.Contains(t, built, "TIMEOUT=300")
+		assert.Contains(t, built, "TIMEOUT="+strconv.Itoa(defaultSocketTimeout))
 	})
 }
 
