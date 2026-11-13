@@ -617,13 +617,15 @@ func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
 	}
 }
 
-// snapshotSequenceBuffer tracks sequence numbers seen during snapshot for deduplication.
+// snapshotSequenceBuffer tracks the snapshot start time of each item the
+// snapshot emitted. CDC events use it to skip versions of an item that the
+// snapshot already emitted.
 //
 // Architecture: Lock-free sharded hash table design
 //
-// Instead of a single map[string]string with one lock (which would cause severe contention
-// with parallel snapshot segment readers), this uses 32 independent shards, each with its
-// own lock. Keys are distributed across shards using FNV-1a hash.
+// Instead of a single map with one lock (which would cause severe contention
+// with parallel snapshot segment readers), this uses 32 independent shards,
+// each with its own lock. Keys are distributed across shards using FNV-1a hash.
 //
 // Concurrency improvement: 10-30x less lock contention on high-core machines
 //
@@ -645,8 +647,13 @@ type snapshotSequenceBuffer struct {
 // bufferShard is a single shard of the buffer with its own lock.
 // Each shard handles ~1/32 of all keys (on average, due to FNV-1a distribution).
 type bufferShard struct {
-	mu        sync.RWMutex
-	sequences map[string]string // item key -> sequence number seen in snapshot
+	mu sync.RWMutex
+
+	// sequences maps an item key to the snapshot start time. It stores
+	// time.Time, not a formatted string, because the snapshot start is in the
+	// host zone and the stream record time is in UTC. Strings in different
+	// zones do not compare in time order.
+	sequences map[string]time.Time
 }
 
 func newSnapshotSequenceBuffer(maxSize int) *snapshotSequenceBuffer {
@@ -655,7 +662,7 @@ func newSnapshotSequenceBuffer(maxSize int) *snapshotSequenceBuffer {
 	}
 	// Initialize each shard
 	for i := range buf.shards {
-		buf.shards[i].sequences = make(map[string]string, maxSize/numBufferShards)
+		buf.shards[i].sequences = make(map[string]time.Time, maxSize/numBufferShards)
 	}
 	return buf
 }
@@ -687,7 +694,7 @@ func (s *snapshotSequenceBuffer) getShard(key string) *bufferShard {
 	return &s.shards[hash%numBufferShards]
 }
 
-func (s *snapshotSequenceBuffer) RecordSnapshotItem(key, sequenceNum string) {
+func (s *snapshotSequenceBuffer) RecordSnapshotItem(key string, snapshotStart time.Time) {
 	// Quick overflow check without locking
 	if s.overflow.Load() {
 		return
@@ -699,7 +706,7 @@ func (s *snapshotSequenceBuffer) RecordSnapshotItem(key, sequenceNum string) {
 
 	// Check if key already exists (update, not insert)
 	if _, exists := shard.sequences[key]; exists {
-		shard.sequences[key] = sequenceNum
+		shard.sequences[key] = snapshotStart
 		return
 	}
 
@@ -714,10 +721,10 @@ func (s *snapshotSequenceBuffer) RecordSnapshotItem(key, sequenceNum string) {
 		return
 	}
 
-	shard.sequences[key] = sequenceNum
+	shard.sequences[key] = snapshotStart
 }
 
-func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key, sequenceNum string) bool {
+func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key string, cdcTime time.Time) bool {
 	// If buffer overflowed, we can't deduplicate reliably
 	// Better to emit duplicates than lose data
 	if s.overflow.Load() {
@@ -726,16 +733,17 @@ func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key, sequenceNum string) boo
 
 	shard := s.getShard(key)
 	shard.mu.RLock()
-	snapshotSeq, exists := shard.sequences[key]
+	snapshotStart, exists := shard.sequences[key]
 	shard.mu.RUnlock()
 
 	if !exists {
 		return false
 	}
 
-	// Skip if CDC event sequence <= snapshot sequence
-	// This means we already emitted this version in the snapshot
-	return sequenceNum <= snapshotSeq
+	// Skip only if the CDC event happened before the snapshot start, so the snapshot already emitted this version.
+	// ApproximateCreationDateTime is rounded down to the second, but the snapshot start keeps nanoseconds. An event
+	// stamped in the start second can have happened after the start, so we keep it (a possible duplicate, not a loss).
+	return cdcTime.Before(snapshotStart.Truncate(time.Second))
 }
 
 func (s *snapshotSequenceBuffer) IsOverflow() bool {
@@ -2371,6 +2379,44 @@ func (d *dynamoDBCDCInput) periodicTableDiscovery(ctx context.Context) {
 	}
 }
 
+// newShardInitBackoff returns the backoff between retries of a table
+// coordinator's first shard refresh, capped at the shard refresh interval.
+func (d *dynamoDBCDCInput) newShardInitBackoff() backoff.BackOff {
+	maxWait := d.shardRefreshInterval()
+	eb := backoff.NewExponentialBackOff()
+	eb.InitialInterval = min(time.Second, maxWait)
+	eb.MaxInterval = maxWait
+	eb.MaxElapsedTime = 0 // Never give up
+	return eb
+}
+
+// initTableShards runs a table coordinator's first shard refresh, retrying
+// with boff until it succeeds or ctx ends: giving up would leave the table
+// unread until restart. It reports false only when ctx ended.
+func (d *dynamoDBCDCInput) initTableShards(ctx context.Context, tableName string, ts *tableStream, boff backoff.BackOff) bool {
+	for {
+		err := d.refreshTableShards(ctx, tableName, ts)
+		if err == nil {
+			return true
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			wait = d.shardRefreshInterval()
+		}
+		d.log.Errorf("Failed to initialize shards for table %s, retrying in %s: %v", tableName, wait, err)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
+}
+
 // startTableStreamCoordinator manages shard readers for a specific table stream
 func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tableName string, ts *tableStream) {
 	d.log.Infof("Starting coordinator for table stream: %s", tableName)
@@ -2381,11 +2427,8 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 	hasShards := len(ts.shardReaders) > 0
 	ts.mu.RUnlock()
 
-	if !hasShards {
-		if err := d.refreshTableShards(ctx, tableName, ts); err != nil {
-			d.log.Errorf("Failed to initialize shards for table %s: %v", tableName, err)
-			return
-		}
+	if !hasShards && !d.initTableShards(ctx, tableName, ts, d.newShardInitBackoff()) {
+		return
 	}
 
 	// Track running shard readers for this table
@@ -2948,9 +2991,8 @@ func convertTableRecordsToBatch(records []types.Record, tableName, shardID strin
 
 		// CDC deduplication: skip records already seen in snapshot
 		if dedupeBuffer != nil && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
-			cdcTimestamp := record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano)
 			keyStr := buildItemKeyFromStream(record.Dynamodb.Keys)
-			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, cdcTimestamp) {
+			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, *record.Dynamodb.ApproximateCreationDateTime) {
 				continue
 			}
 		}
@@ -3482,7 +3524,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 			keyStr := buildItemKeyString(item, keySchema)
 			if keyStr != "" {
 				// Record this item in the snapshot buffer (with timestamp as sequence for deduplication)
-				buffer.RecordSnapshotItem(keyStr, startTime.Format(time.RFC3339Nano))
+				buffer.RecordSnapshotItem(keyStr, startTime)
 			}
 		}
 
@@ -3677,9 +3719,8 @@ func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID
 
 		// CDC deduplication: skip records already seen in snapshot
 		if dedupeBuffer != nil && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
-			cdcTimestamp := record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano)
 			keyStr := buildItemKeyFromStream(record.Dynamodb.Keys)
-			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, cdcTimestamp) {
+			if keyStr != "" && dedupeBuffer.ShouldSkipCDCEvent(keyStr, *record.Dynamodb.ApproximateCreationDateTime) {
 				continue
 			}
 		}

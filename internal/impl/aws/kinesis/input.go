@@ -798,6 +798,33 @@ func isShardFinished(s types.Shard) bool {
 	return *s.SequenceNumberRange.EndingSequenceNumber != "null"
 }
 
+// kinesisListShardsAPI is the subset of the Kinesis API used for shard
+// discovery.
+type kinesisListShardsAPI interface {
+	ListShards(ctx context.Context, params *kinesis.ListShardsInput, optFns ...func(*kinesis.Options)) (*kinesis.ListShardsOutput, error)
+}
+
+// listAllShards returns every shard of the stream, following ListShards
+// pagination. A single ListShards call returns at most 1000 shards and sets
+// NextToken when more remain; the token alone identifies the stream on the
+// following calls, and the API rejects a request that carries both the token
+// and a stream identifier.
+func listAllShards(ctx context.Context, api kinesisListShardsAPI, streamARN string) ([]types.Shard, error) {
+	var shards []types.Shard
+	input := &kinesis.ListShardsInput{StreamARN: &streamARN}
+	for {
+		res, err := api.ListShards(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		shards = append(shards, res.Shards...)
+		if res.NextToken == nil || *res.NextToken == "" {
+			return shards, nil
+		}
+		input = &kinesis.ListShardsInput{NextToken: res.NextToken}
+	}
+}
+
 func (k *kinesisReader) runBalancedShards() {
 	var wg sync.WaitGroup
 	defer func() {
@@ -810,9 +837,7 @@ func (k *kinesisReader) runBalancedShards() {
 
 	for {
 		for _, info := range k.streams {
-			shardsRes, err := k.svc.ListShards(k.ctx, &kinesis.ListShardsInput{
-				StreamARN: &info.arn,
-			})
+			shards, err := listAllShards(k.ctx, k.svc, info.arn)
 
 			var clientClaims map[string][]awsKinesisClientClaim
 			if err == nil {
@@ -832,9 +857,8 @@ func (k *kinesisReader) runBalancedShards() {
 				k.clientShardsMetric.Set(0)
 			}
 
-			totalShards := len(shardsRes.Shards)
-			unclaimedShards := make(map[string]string, totalShards)
-			for _, s := range shardsRes.Shards {
+			unclaimedShards := make(map[string]string, len(shards))
+			for _, s := range shards {
 				if !isShardFinished(s) {
 					unclaimedShards[*s.ShardId] = ""
 				}

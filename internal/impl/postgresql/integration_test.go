@@ -1153,14 +1153,13 @@ func TestIntegrationSnapshotParallel(t *testing.T) {
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	// Pre-insert rows into both tables so both pipelines have snapshot data.
-	const numRows = 100
-	for range numRows {
-		_, err = db.Exec("INSERT INTO seq DEFAULT VALUES")
-		require.NoError(t, err)
-		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('test', NOW())`)
-		require.NoError(t, err)
-	}
+	// Pre-insert rows into both tables so both pipelines have snapshot data. The tables
+	// span dozens of pages, so each is split into chunks that its workers page through at
+	// the same time.
+	const numRows = 10_000
+	db.MustExec(t, "INSERT INTO seq SELECT FROM generate_series(1, $1)", numRows)
+	db.MustExec(t, `INSERT INTO flights (name, created_at) SELECT 'test', NOW() FROM generate_series(1, $1)`, numRows)
+	db.MustExec(t, "VACUUM ANALYZE seq, flights") // run this to ensure consistent runs
 
 	buildPipeline := func(slotName string) (*service.Stream, *[]int64, *sync.Mutex) {
 		// max_parallel_snapshot_tables: 2 exercises the parallel errgroup scan path within

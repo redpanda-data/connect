@@ -67,10 +67,12 @@ func TestInfluxIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// The test expects exactly 1 point, which is the final flush of Close. With a long interval, no loop tick can
+	// write another point first, even when the runner is slow.
 	pConf, err := configSpec().ParseYAML(fmt.Sprintf(`
 url: %v
 db: db0
-interval: 1s
+interval: 1h
 tags:
   hostname: localhost
 `, url), nil)
@@ -80,7 +82,6 @@ tags:
 	if err != nil {
 		t.Fatalf("problem creating to InfluxDB: %s", err)
 	}
-	i.client = c
 
 	t.Run("testInfluxConnect", func(t *testing.T) {
 		testInfluxConnect(t, i, c)

@@ -3,11 +3,35 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.118.0 - TBD
+## 4.119.0 - TBD
 
 ### Added
 
 - aerospike: New `aerospike` output. ([@abhilashmandaliya](https://github.com/abhilashmandaliya), [#5020](https://github.com/redpanda-data/connect/pull/5020))
+
+## 4.118.0 - 2026-11-13
+
+### Added
+
+- azure: Azure Blob Storage output now supports blob index tags for organizing and filtering blobs, with configuration-time validation and best-effort tag application for pre-existing append blobs. ([@cadiidii](https://github.com/cadiidii), [#4204](https://github.com/redpanda-data/connect/pull/4204))
+- telemetry: Pipeline ID from the control plane is now included in the anonymous telemetry payload for correlation with usage and billing data. ([@prakhargarg105](https://github.com/prakhargarg105), [#4758](https://github.com/redpanda-data/connect/pull/4758))
+
+### Fixed
+
+- dynamodb: DynamoDB CDC input now correctly deduplicates snapshots and CDC events across different time zones and within the same second. ([@Leward](https://github.com/Leward), [#5057](https://github.com/redpanda-data/connect/pull/5057))
+- dynamodb: AWS DynamoDB CDC input now properly resumes snapshots with the correct segment count. ([@squiidz](https://github.com/squiidz), [#5181](https://github.com/redpanda-data/connect/pull/5181))
+- dynamodb: AWS DynamoDB CDC input now retries table coordinator shard refresh on failure instead of giving up. ([@squiidz](https://github.com/squiidz), [#5182](https://github.com/redpanda-data/connect/pull/5182))
+- influxdb: InfluxDB metrics exporter now properly stops its flush loop on close, preventing goroutine leaks and duplicate metric writes. ([@Leward](https://github.com/Leward), [#5130](https://github.com/redpanda-data/connect/pull/5130))
+- kafka: Sarama Kafka output now supports idempotent writes by properly configuring RequiredAcks and MaxOpenRequests when idempotent_write is enabled. ([@Leward](https://github.com/Leward), [#5167](https://github.com/redpanda-data/connect/pull/5167))
+- mongodb: MongoDB CDC input now ensures the incremental snapshot waits for the majority snapshot to reach the stream start, preventing data loss from concurrent writes. ([@Leward](https://github.com/Leward), [#5132](https://github.com/redpanda-data/connect/pull/5132))
+- mssqlserver: SQL Server CDC input now correctly captures streaming changes by clearing snapshot messages before streaming inserts. ([@Leward](https://github.com/Leward), [#5122](https://github.com/redpanda-data/connect/pull/5122))
+- postgres: PostgreSQL CDC input now prevents parallel snapshot chunks from moving each other's bounds during processing. ([@josephwoodward](https://github.com/josephwoodward), [#5204](https://github.com/redpanda-data/connect/pull/5204))
+- sftp: SFTP input now correctly counts minimum_age from whole-second modification times, preventing premature reads of files with incomplete data. ([@Leward](https://github.com/Leward), [#5125](https://github.com/redpanda-data/connect/pull/5125))
+
+### Changed
+
+- oracledb: Oracle CDC input now uses partitioned table snapshots for improved performance and reliability when capturing changes from large tables. ([@josephwoodward](https://github.com/josephwoodward), [#5006](https://github.com/redpanda-data/connect/pull/5006))
+- otel: Update to OTEL package to address CVE includes breaking change (see [here](https://github.com/open-telemetry/opentelemetry-go/pull/8490)) - use `go.opentelemetry.io/otel/attribute.Value` and `go.opentelemetry.io/otel/attribute.KeyValue` for log bodies and attributes in `go.opentelemetry.io/otel/log`, `go.opentelemetry.io/otel/log/logtest`, `go.opentelemetry.io/otel/sdk/log`, and `go.opentelemetry.io/otel/sdk/log/logtest`. ([@josephwoodward](https://github.com/josephwoodward), [#5207](https://github.com/redpanda-data/connect/pull/5207))
 
 ## 4.117.0 - 2026-11-06
 
