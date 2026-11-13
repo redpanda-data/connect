@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,6 +125,89 @@ storage:
 			cfg, err := parseCommitConfig(conf)
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantDisable, cfg.DisableCleanupOnFailure)
+		})
+	}
+}
+
+// TestParseCommitConfigUnsupportedUpdateRetryInterval pins the
+// `commit.unsupported_update_retry_interval` plumbing: absent commit object
+// and absent field both yield the one-hour default, and an explicit value is
+// carried through to CommitConfig.
+func TestParseCommitConfigUnsupportedUpdateRetryInterval(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       time.Duration
+	}{
+		{name: "commit object absent uses default", commitYAML: "", want: time.Hour},
+		{name: "field absent uses default", commitYAML: "commit:\n  max_retries: 2\n", want: time.Hour},
+		{name: "explicit value is carried", commitYAML: "commit:\n  unsupported_update_retry_interval: 15m\n", want: 15 * time.Minute},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.UnsupportedUpdateRetryInterval)
+		})
+	}
+}
+
+// TestParseCommitConfigMaxSnapshotAge pins the `commit.max_snapshot_age`
+// default: snapshots older than defaultMaxSnapshotAge (5 days, the Iceberg
+// default) are expired unless the config sets another age. The "field absent"
+// case goes through the spec's Default string, so it also pins that the string
+// and the constant agree.
+func TestParseCommitConfigMaxSnapshotAge(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       time.Duration
+	}{
+		{
+			name:       "commit object absent",
+			commitYAML: "",
+			want:       defaultMaxSnapshotAge,
+		},
+		{
+			name:       "field absent",
+			commitYAML: "commit:\n  max_retries: 2\n",
+			want:       defaultMaxSnapshotAge,
+		},
+		{
+			name:       "explicit zero",
+			commitYAML: "commit:\n  max_snapshot_age: 0s\n",
+			want:       0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.MaxSnapshotAge)
 		})
 	}
 }

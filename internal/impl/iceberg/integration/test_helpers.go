@@ -141,6 +141,16 @@ type routerOpts struct {
 	caseSensitive bool
 	schemaEvoCfg  icebergimpl.SchemaEvolutionConfig
 	rowOpCfg      icebergimpl.RowOpConfig
+	commitCfg     *icebergimpl.CommitConfig
+}
+
+// WithCommitConfig overrides the test router's commit configuration. The
+// default mirrors the product defaults: manifest merge on, 5-day retention
+// and 3 retries.
+func WithCommitConfig(cfg icebergimpl.CommitConfig) RouterOption {
+	return func(o *routerOpts) {
+		o.commitCfg = &cfg
+	}
 }
 
 // WithSchemaEvolution enables schema evolution on the test router.
@@ -192,8 +202,11 @@ func (infra *testInfrastructure) NewRouter(
 	logger := service.MockResources().Logger()
 	commitCfg := icebergimpl.CommitConfig{
 		ManifestMergeEnabled: true,
-		MaxSnapshotAge:       24 * time.Hour,
+		MaxSnapshotAge:       5 * 24 * time.Hour, // the product default
 		MaxRetries:           3,
+	}
+	if o.commitCfg != nil {
+		commitCfg = *o.commitCfg
 	}
 	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, o.rowOpCfg, nil, logger)
 	t.Cleanup(func() { router.Close() })
