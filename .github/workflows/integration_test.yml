@@ -20,6 +20,16 @@ on:
         required: false
         default: ''
         type: string
+      parallel:
+        description: 'Number of packages to test at the same time.'
+        required: false
+        default: '16'
+        type: string
+
+# The runner has 32 vCPUs. With 16 packages at the same time, the test step takes about 7 minutes instead of about 35.
+# 8 packages are not more stable and are slower. A schedule run has no inputs, so it uses the fallback.
+env:
+  PARALLEL: ${{ github.event.inputs.parallel || '16' }}
 
 jobs:
   integration-test:
@@ -43,11 +53,17 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      # Linux AIO events are shared by all containers on the host, and the default limit is 65536. Redpanda and
+      # MySQL reserve them at startup, so packages that run at the same time use them up, and containers fail
+      # with "io_setup() failed with EAGAIN" or exit early.
+      - name: Raise the AIO limit
+        run: sudo sysctl -w fs.aio-max-nr=1048576
+
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
       - name: Run Integration Tests
-        run: task test:integration -- --output-dir "${{ runner.temp }}/integration"
+        run: task test:integration -- --output-dir "${{ runner.temp }}/integration" --parallel "${PARALLEL}"
         timeout-minutes: 120
 
       - name: Write Summary
@@ -167,6 +183,13 @@ jobs:
             echo "go_mod=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Linux AIO events are shared by all containers on the host, and the default limit is 65536. Redpanda and
+      # MySQL reserve them at startup, so packages that run at the same time use them up, and containers fail
+      # with "io_setup() failed with EAGAIN" or exit early.
+      - name: Raise the AIO limit
+        if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
+        run: sudo sysctl -w fs.aio-max-nr=1048576
+
       # On a pull request the filter comes from the detect step. An empty
       # filter means every package in packages.json, which does not fit the
       # 30-minute budget, so a pull request never runs it:
@@ -193,7 +216,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         env:
           FILTER: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
-        run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}
+        run: task test:integration -- --output-dir "${{ runner.temp }}/integration" --parallel "${PARALLEL}" ${FILTER}
         timeout-minutes: 30
 
       - name: No integration test depends on the change
