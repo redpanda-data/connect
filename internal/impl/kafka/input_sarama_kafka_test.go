@@ -15,9 +15,12 @@
 package kafka
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,4 +64,45 @@ topics: %v
 			assert.Contains(t, err.Error(), test.errStr)
 		})
 	}
+}
+
+func TestKafkaExplicitPartitionsCloseStopsConsumers(t *testing.T) {
+	broker := sarama.NewMockBroker(t, 1)
+	defer broker.Close()
+
+	broker.SetHandlerByMap(map[string]sarama.MockResponse{
+		"ApiVersionsRequest": sarama.NewMockApiVersionsResponse(t).SetApiKeys([]sarama.ApiVersionsResponseKey{
+			{ApiKey: 1, MinVersion: 0, MaxVersion: 11}, // Fetch
+			{ApiKey: 2, MinVersion: 0, MaxVersion: 5},  // ListOffsets
+			{ApiKey: 3, MinVersion: 0, MaxVersion: 7},  // Metadata
+		}),
+		"MetadataRequest": sarama.NewMockMetadataResponse(t).
+			SetBroker(broker.Addr(), broker.BrokerID()).
+			SetLeader("foo", 0, broker.BrokerID()),
+		"OffsetRequest": sarama.NewMockOffsetResponse(t).
+			SetOffset("foo", 0, sarama.OffsetOldest, 0).
+			SetOffset("foo", 0, sarama.OffsetNewest, 0),
+		"FetchRequest": sarama.NewMockFetchResponse(t, 1),
+	})
+
+	pConf, err := iskConfigSpec().ParseYAML(fmt.Sprintf(`
+addresses: [ %v ]
+topics: [ foo:0 ]
+`, broker.Addr()), nil)
+	require.NoError(t, err)
+
+	k, err := newKafkaReaderFromParsed(pConf, service.MockResources())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	require.NoError(t, k.Connect(ctx))
+	require.NoError(t, k.Close(ctx))
+
+	// Close returns only after the commit goroutine stops, and that goroutine
+	// sets msgChan to nil as its last step.
+	k.cMut.Lock()
+	defer k.cMut.Unlock()
+	assert.Nil(t, k.msgChan)
 }
