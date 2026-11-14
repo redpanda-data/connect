@@ -49,6 +49,7 @@ const (
 	esoFieldBatching            = "batching"
 	esoFieldAWS                 = "aws"
 	esoFieldCompressRequestBody = "compress_request_body"
+	esoFieldPerMessageErrors    = "per_message_errors"
 	// ESOFieldAWSEnabled enabled field.
 	ESOFieldAWSEnabled = "enabled"
 )
@@ -84,6 +85,8 @@ type esoConfig struct {
 	indexStr    *service.InterpolatedString
 	pipelineStr *service.InterpolatedString
 	routingStr  *service.InterpolatedString
+
+	perMessageErrors bool
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
@@ -124,6 +127,9 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	}
 
 	if conf.clientOpts.Client.CompressRequestBody, err = pConf.FieldBool(esoFieldCompressRequestBody); err != nil {
+		return
+	}
+	if conf.perMessageErrors, err = pConf.FieldBool(esoFieldPerMessageErrors); err != nil {
 		return
 	}
 
@@ -173,6 +179,12 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 				Description("Enable gzip compression of HTTP request bodies on the OpenSearch client. OpenSearch 2.x servers accept `Content-Encoding: gzip` natively; this is useful to reduce bandwidth on cross-cloud or cross-region bulk writes.").
 				Default(false).
 				Advanced(),
+			service.NewBoolField(esoFieldPerMessageErrors).
+				Description("Whether to report as failed only the messages of a batch that were not written. The output can split each batch into several bulk requests. By default, when one of those requests fails as a whole, for example with a `429 Too Many Requests` response, every message of the batch is reported as failed, including the messages that the other requests wrote, so they are retried and written again. When enabled, the output tracks the result of each message and reports as failed only the messages that OpenSearch rejected, the messages of the requests that failed, and any message that the bulk response has no result for. Inputs with `auto_replay_nacks` enabled, and other components that handle errors per message, then retry only those messages. Tracking the results adds a little work for each message.").
+				ShortDescription("Report as failed only the messages of a batch that were not written, rather than the whole batch.").
+				Default(false).
+				Advanced().
+				Version("4.119.0"),
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
@@ -212,6 +224,11 @@ func init() {
 type Output struct {
 	log  *service.Logger
 	conf esoConfig
+
+	// Zero values keep the opensearch-go defaults. Tests set them to make the
+	// split of a batch into bulk requests deterministic.
+	bulkNumWorkers int
+	bulkFlushBytes int
 
 	client *opensearchapi.Client
 }
@@ -254,6 +271,118 @@ type pendingBulkIndex struct {
 	ID       string
 }
 
+// errNoBulkResult fails a message that the bulk response has no result for,
+// so that it is retried rather than acknowledged without a confirmation.
+var errNoBulkResult = errors.New("bulk response has no result for the message")
+
+// bulkResults collects what the bulk indexer reports for the messages of a
+// batch. The indexer calls back from its worker goroutines and from Close.
+type bulkResults struct {
+	mu         sync.Mutex
+	batch      service.MessageBatch
+	requestErr error
+	// The indexer reports each failed request twice, so the different
+	// request errors are counted by their text.
+	requestErrTexts map[string]struct{} // only with per_message_errors
+	itemsErr        *service.BatchError // only without per_message_errors
+	items           []bulkItemResult    // only with per_message_errors
+}
+
+type bulkItemResult struct {
+	written bool
+	err     error
+}
+
+func newBulkResults(batch service.MessageBatch, perMessageErrors bool) *bulkResults {
+	r := &bulkResults{batch: batch}
+	if perMessageErrors {
+		r.items = make([]bulkItemResult, len(batch))
+	}
+	return r
+}
+
+func (r *bulkResults) requestFailed(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.requestErr = err
+	if r.items == nil {
+		return
+	}
+	if r.requestErrTexts == nil {
+		r.requestErrTexts = map[string]struct{}{}
+	}
+	r.requestErrTexts[err.Error()] = struct{}{}
+}
+
+func (r *bulkResults) itemWritten(i int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.items == nil {
+		return
+	}
+	r.items[i].written = true
+}
+
+func (r *bulkResults) itemFailed(i int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.items != nil {
+		r.items[i].err = err
+		return
+	}
+	if r.itemsErr == nil {
+		r.itemsErr = service.NewBatchError(r.batch, err)
+	}
+	r.itemsErr.Failed(i, err)
+}
+
+// batchErr returns nil when no message failed. The indexer reports a failed
+// request without the items it carried, so without per_message_errors that
+// fails the whole batch. With it, a message is only acknowledged when the
+// bulk response confirms it. A message without a result cannot be traced to
+// its request, so it fails with the request error when every failed request
+// reported the same one, with an error that counts the different ones and
+// wraps the last otherwise, or with errNoBulkResult when no request failed.
+func (r *bulkResults) batchErr() *service.BatchError {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.items == nil {
+		if r.requestErr != nil {
+			return service.NewBatchError(r.batch, r.requestErr)
+		}
+		return r.itemsErr
+	}
+
+	noResultErr := r.requestErr
+	switch n := len(r.requestErrTexts); {
+	case n == 0:
+		noResultErr = errNoBulkResult
+	case n > 1:
+		noResultErr = fmt.Errorf("bulk requests failed with %d different errors, last: %w", n, r.requestErr)
+	}
+
+	var bErr *service.BatchError
+	for i, item := range r.items {
+		err := item.err
+		if err == nil && !item.written {
+			err = noResultErr
+		}
+		if err == nil {
+			continue
+		}
+		if bErr == nil {
+			headline := err
+			if r.requestErr != nil {
+				headline = noResultErr
+			}
+			bErr = service.NewBatchError(r.batch, headline)
+		}
+		bErr.Failed(i, err)
+	}
+	return bErr
+}
+
 // WriteBatch writes a message batch to the output.
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
@@ -288,31 +417,29 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		requests[i] = pbi
 	}
 
-	var bBulkErr *service.BatchError
+	results := newBulkResults(msg, e.conf.perMessageErrors)
 
 	start := time.Now()
 	b, _ := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
-		Client: e.client,
+		Client:     e.client,
+		NumWorkers: e.bulkNumWorkers,
+		FlushBytes: e.bulkFlushBytes,
 		OnError: func(_ context.Context, err error) {
-			bBulkErr = service.NewBatchError(msg, err)
+			results.requestFailed(err)
 		},
 	})
 
-	var bErr *service.BatchError
-	var bErrMut sync.Mutex
-
 	for i, v := range requests {
 		bulkReq, err := buildBulkableRequest(v, func(err error) {
-			bErrMut.Lock()
-			defer bErrMut.Unlock()
-
-			if bErr == nil {
-				bErr = service.NewBatchError(msg, err)
-			}
-			bErr = bErr.Failed(i, err)
+			results.itemFailed(i, err)
 		})
 		if err != nil {
 			return err
+		}
+		if e.conf.perMessageErrors {
+			bulkReq.OnSuccess = func(context.Context, opensearchutil.BulkIndexerItem, opensearchapi.BulkRespItem) {
+				results.itemWritten(i)
+			}
 		}
 		if err = b.Add(ctx, *bulkReq); err != nil {
 			return err
@@ -323,11 +450,10 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		return err
 	}
 
-	if bBulkErr != nil {
-		return bBulkErr
-	}
-
-	if bErr != nil {
+	if bErr := results.batchErr(); bErr != nil {
+		if e.conf.perMessageErrors {
+			e.log.Debugf("Reporting %d of %d messages as failed", bErr.IndexedErrors(), len(msg))
+		}
 		return bErr
 	}
 
