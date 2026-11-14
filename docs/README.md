@@ -1,6 +1,6 @@
 # Connect reference docs
 
-The reference docs for Redpanda Connect components and Bloblang are generated from the specs in this repo and published at https://docs.redpanda.com/connect/. They aren't committed. To change what a field or component page says, edit the spec in `internal/impl/` (or the shared field helpers in benthos).
+The reference docs for Redpanda Connect components and Bloblang are generated from the specs in this repo and published at https://docs.redpanda.com/connect/. They aren't committed. To change what a field or component page says, edit the spec in `internal/impl/` (or the shared field helpers in benthos). The first line of every generated partial names the file that registers its component or Bloblang function, for example `redpanda-data/benthos@v4.84.0:internal/impl/pure/processor_mapping.go`, so a reader of the docs or of their Markdown export can tell which repository and file the text comes from. A component registered in a loop or from a struct field keeps a repository-level banner; the generator lists those when it runs.
 
 ## How they're published
 

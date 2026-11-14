@@ -241,7 +241,7 @@ func TestRenderBloblangSpecParams(t *testing.T) {
 		]}
 	}`), &spec))
 
-	got := renderBloblangSpec(spec, "method")
+	got := renderBloblangSpec(spec, "method", repoSource)
 	assert.Contains(t, got, "[CAUTION]\n====\nThis method is in beta.")
 	assert.Contains(t, got, "| `indent` (optional)\n| `string`\n| Indentation for each level. Default: `+\"    \"+`.\n")
 	assert.Contains(t, got, "| `no_indent` (optional)\n| `bool`\n| Disables indentation. Default: `+false+`.\n")
@@ -259,7 +259,7 @@ func TestRenderBloblangSpecParams(t *testing.T) {
 			{"name": "retries", "type": "int", "description": "How many times to retry.\nZero disables retries.", "default": 0}
 		]}
 	}`), &conditional))
-	got = renderBloblangSpec(conditional, "function")
+	got = renderBloblangSpec(conditional, "function", repoSource)
 	assert.Contains(t, got, "| `path`\n| `string`\n|\nifndef::env-cloud[]\nA path on the local disk, which Cloud pipelines don't have.\nendif::[]\n\n",
 		"a directive starts at column 0 on the line after the cell bar")
 	assert.Contains(t, got, "| `retries` (optional)\n| `int`\n|\nHow many times to retry.\nZero disables retries. Default: `+0+`.\n\n",
@@ -267,13 +267,13 @@ func TestRenderBloblangSpecParams(t *testing.T) {
 
 	variadic := bloblangSpec{Name: "concat", Status: "stable"}
 	require.NoError(t, json.Unmarshal([]byte(`{"variadic": true}`), &variadic.Params))
-	got = renderBloblangSpec(variadic, "method")
+	got = renderBloblangSpec(variadic, "method", repoSource)
 	assert.Contains(t, got, "== Parameters\n\nThis method accepts any number of arguments.\n")
 	assert.NotContains(t, got, "CAUTION")
 
-	assert.Contains(t, renderBloblangSpec(bloblangSpec{Name: "counter", Status: "experimental"}, "function"),
+	assert.Contains(t, renderBloblangSpec(bloblangSpec{Name: "counter", Status: "experimental"}, "function", repoSource),
 		"[CAUTION]\n====\nThis function is experimental.")
-	assert.Contains(t, renderBloblangSpec(bloblangSpec{Name: "old", Status: "deprecated"}, "function"),
+	assert.Contains(t, renderBloblangSpec(bloblangSpec{Name: "old", Status: "deprecated"}, "function", repoSource),
 		"[WARNING]\n====\nThis function is deprecated")
 }
 
