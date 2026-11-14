@@ -296,3 +296,55 @@ meta:
 
 	defer r.Close(ctx)
 }
+
+func TestResourcesWrapperHasTool(t *testing.T) {
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Testing",
+		Version: "1.0.0",
+	}, nil)
+
+	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
+
+	require.NoError(t, r.AddCacheYAML([]byte(`
+label: foocache
+memory: {}
+meta:
+  mcp:
+    enabled: true
+    description: my foo cache
+`)))
+
+	require.NoError(t, r.AddProcessorYAML([]byte(`
+label: upper
+mapping: 'root = content().uppercase()'
+meta:
+  mcp:
+    enabled: true
+    description: uppercases things
+`)))
+
+	require.NoError(t, r.AddProcessorYAML([]byte(`
+label: hidden
+mapping: 'root = this'
+meta:
+  mcp:
+    enabled: false
+`)))
+
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "get-foocache", want: true},
+		{name: "set-foocache", want: true},
+		{name: "upper", want: true},
+		{name: "foocache", want: false},
+		{name: "hidden", want: false},
+		{name: "not-a-tool", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, r.HasTool(test.name))
+		})
+	}
+}
