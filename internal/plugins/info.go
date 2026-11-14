@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -73,6 +74,48 @@ type PluginInfo struct {
 	Cloud                  bool
 	CloudWithGPU           bool
 	CloudUnsupportedReason string
+	UseCases               []string
+}
+
+// UseCaseIDs lists the use-case IDs that the use_cases column of info.csv
+// accepts. They match the use-case scheme of the shared docs taxonomy, which
+// the docs component catalog filters by.
+var UseCaseIDs = []string{
+	"change-data-capture",
+	"data-fan-out",
+	"data-lakehouse",
+	"data-warehousing",
+	"disaster-recovery",
+	"event-driven-microservices",
+	"kafka-migration",
+	"real-time-analytics",
+	"schema-management",
+	"stream-processing",
+	"ai-pipelines",
+	"log-and-observability-pipelines",
+	"iot-ingestion",
+	"object-storage-archiving",
+	"search-indexing",
+}
+
+// parseUseCases parses a use_cases value: zero or more IDs from UseCaseIDs,
+// separated by semicolons with no spaces. A blank value means no use case.
+func parseUseCases(v string) ([]string, error) {
+	if v == "" {
+		return nil, nil
+	}
+	ids := strings.Split(v, ";")
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		if !slices.Contains(UseCaseIDs, id) {
+			return nil, fmt.Errorf("unknown use case %q, expected one of: %v", id, strings.Join(UseCaseIDs, ", "))
+		}
+		if _, dup := seen[id]; dup {
+			return nil, fmt.Errorf("use case %q is listed more than once", id)
+		}
+		seen[id] = struct{}{}
+	}
+	return ids, nil
 }
 
 func basePluginInfo(name string, typeStr TypeName, view *service.ConfigView) PluginInfo {
@@ -89,7 +132,14 @@ func (c PluginInfo) key() string {
 	return fmt.Sprintf("%v-%v", c.Name, c.Type)
 }
 
-func pluginInfoFromMap(m map[string]string) PluginInfo {
+func pluginInfoFromMap(m map[string]string) (PluginInfo, error) {
+	useCases, err := parseUseCases(m["use_cases"])
+	if err != nil {
+		return PluginInfo{}, fmt.Errorf("plugin %v-%v: %w", m["name"], m["type"], err)
+	}
+	if m["deprecated"] == "y" && len(useCases) > 0 {
+		return PluginInfo{}, fmt.Errorf("plugin %v-%v: a deprecated plugin must not list use cases", m["name"], m["type"])
+	}
 	supportStr := m["support"]
 	if supportStr == "" {
 		supportStr = "community"
@@ -103,7 +153,8 @@ func pluginInfoFromMap(m map[string]string) PluginInfo {
 		Cloud:                  m["cloud"] == "y",
 		CloudWithGPU:           m["cloud_with_gpu"] == "y",
 		CloudUnsupportedReason: m["cloud_unsupported_reason"],
-	}
+		UseCases:               useCases,
+	}, nil
 }
 
 type columnInfo struct {
@@ -112,7 +163,7 @@ type columnInfo struct {
 }
 
 func pluginInfoMapColumns() []columnInfo {
-	return []columnInfo{{"name", 26}, {"type", 10}, {"commercial_name", 26}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 15}, {"cloud_unsupported_reason", 0}}
+	return []columnInfo{{"name", 26}, {"type", 10}, {"commercial_name", 26}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 15}, {"cloud_unsupported_reason", 0}, {"use_cases", 0}}
 }
 
 func (c PluginInfo) toMap() map[string]string {
@@ -125,6 +176,7 @@ func (c PluginInfo) toMap() map[string]string {
 		"cloud":                    formatBool(c.Cloud),
 		"cloud_with_gpu":           formatBool(c.CloudWithGPU),
 		"cloud_unsupported_reason": c.CloudUnsupportedReason,
+		"use_cases":                strings.Join(c.UseCases, ";"),
 	}
 }
 
@@ -175,7 +227,10 @@ func init() {
 		for i, v := range c {
 			cMap[columnNames[i]] = strings.TrimSpace(v)
 		}
-		info := pluginInfoFromMap(cMap)
+		info, err := pluginInfoFromMap(cMap)
+		if err != nil {
+			panic(fmt.Errorf("internal/plugins/info.csv: %w", err))
+		}
 		BaseInfo[info.key()] = info
 	}
 }

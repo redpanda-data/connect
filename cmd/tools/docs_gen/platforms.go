@@ -561,11 +561,13 @@ type catalogEntry struct {
 	CgoOnly         bool     `json:"cgo_only"`
 	Support         string   `json:"support"`
 	CommercialNames []string `json:"commercial_names"`
+	UseCases        []string `json:"use_cases"`
 }
 
 // renderCatalog renders partials/platforms/catalog.json: one entry per
 // documented component, sorted by type and then name, with its availability
-// and its internal/plugins/info.csv support level and commercial name.
+// and its internal/plugins/info.csv support level, commercial name, and use
+// cases.
 func renderCatalog(full *fullSchema, plat platformSet, info plugins.InfoCollection) (string, error) {
 	type infoKey struct {
 		t    plugins.TypeName
@@ -597,12 +599,14 @@ func renderCatalog(full *fullSchema, plat platformSet, info plugins.InfoCollecti
 				CloudAI:         p.CloudAI,
 				CgoOnly:         p.CgoOnly,
 				CommercialNames: []string{},
+				UseCases:        []string{},
 			}
 			if r, ok := rows[infoKey{t, c.Name}]; ok {
 				e.Support = r.Support
 				if r.CommercialName != "" {
 					e.CommercialNames = append(e.CommercialNames, r.CommercialName)
 				}
+				e.UseCases = append(e.UseCases, r.UseCases...)
 			}
 			entries = append(entries, e)
 		}
