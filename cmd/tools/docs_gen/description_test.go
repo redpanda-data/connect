@@ -108,9 +108,9 @@ func TestRenderDescriptionPartial(t *testing.T) {
 	excluded := func(_, name string) bool { return name == "grok" }
 
 	got := renderDescriptionPartial(c, "inputs", componentPlatform{CgoOnly: true}, excluded)
-	assert.Contains(t, got, "// tag::meta[]\n:description: Consumes messages from a ZeroMQ socket.\n:status: beta\n:page-cgo-only: true\n// end::meta[]\n")
+	assert.Contains(t, got, "// tag::meta[]\n:description: Consumes messages from a ZeroMQ socket.\n:status: beta\n:page-cgo-only: true\nifndef::env-cloud[]\n:page-introduced-in: 4.1.0\nendif::[]\n// end::meta[]\n")
 	assert.Contains(t, got, "// tag::body[]\n[CAUTION]\n====\nThis component is in beta.")
-	assert.Contains(t, got, "ifndef::env-cloud[]\nIntroduced in version 4.1.0.\nendif::[]")
+	assert.NotContains(t, got, "Introduced in version", "the version is a page attribute, not body text")
 	assert.Contains(t, got, "// tag::footnotes[]\n== Patterns\n\nUse xref:components:processors/grok.adoc[grok].\n// end::footnotes[]\n")
 	assert.NotContains(t, got, "ifdef::env-cloud[]", "components that Cloud doesn't include keep their links")
 
