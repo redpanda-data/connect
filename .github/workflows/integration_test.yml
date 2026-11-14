@@ -95,6 +95,12 @@ jobs:
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
+    # Read by notify-rpcn-bot. The outcome comes from the runner, not from
+    # anything the tested code can write. The filter can come from a PR comment
+    # or a step that runs PR code, so treat it as untrusted text.
+    outputs:
+      integration_outcome: ${{ steps.integration.outcome }}
+      filter: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
     steps:
       - name: Check commenter permissions
         if: ${{ github.event_name == 'issue_comment' }}
@@ -190,6 +196,7 @@ jobs:
       # test; without this guard the empty filter runs every package and the step
       # times out.
       - name: Run Integration Tests
+        id: integration
         if: ${{ github.event_name != 'pull_request' || steps.detect.outputs.filters != '' }}
         env:
           FILTER: ${{ steps.parse.outputs.filter || steps.detect.outputs.filters || github.event.inputs.filter }}
@@ -230,3 +237,61 @@ jobs:
           name: integration-test-output
           path: ${{ runner.temp }}/integration/
           retention-days: 7
+
+  # Tells rpcn-bot (internal-agents repo, agents/rpcn-bot) that a filtered run
+  # passed; the bot posts a summary in #team-redpanda-connect. Trial on this
+  # job first; the nightly integration-test job gets the same later.
+  #
+  # A separate job, never a step in integration-test-filter: on issue_comment
+  # that job checks out and runs the PR's code (including fork PRs) with the
+  # base repo's secrets available, and anything it runs can rewrite
+  # $GITHUB_PATH, $GITHUB_ENV or files on disk before a later step. This job
+  # gets a fresh runner, checks out nothing, and is the only place the
+  # rpcn-bot secrets appear.
+  #
+  # integration_outcome, not the job result: the test step is skipped on a
+  # pull request that no package depends on, and that must not report as a
+  # pass. Skips when the secrets or URL are absent; a failed notification
+  # only warns.
+  notify-rpcn-bot:
+    needs: [integration-test-filter]
+    if: ${{ always() && needs.integration-test-filter.outputs.integration_outcome == 'success' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Notify rpcn-bot
+        env:
+          RPCN_BOT_CLIENT_ID: ${{ secrets.RPCN_BOT_CLIENT_ID }}
+          RPCN_BOT_CLIENT_SECRET: ${{ secrets.RPCN_BOT_CLIENT_SECRET }}
+          RPCN_BOT_URL: ${{ vars.RPCN_BOT_GATEWAY_URL }}
+          FILTER: ${{ needs.integration-test-filter.outputs.filter }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$RPCN_BOT_CLIENT_ID" ] || [ -z "$RPCN_BOT_URL" ]; then
+            echo "rpcn-bot secrets or RPCN_BOT_GATEWAY_URL not set; skipping notification"
+            exit 0
+          fi
+          # Bodies are built with jq --arg: the filter is untrusted text and
+          # must not be able to break or extend the JSON.
+          TOKEN=$(jq -n --arg id "$RPCN_BOT_CLIENT_ID" --arg secret "$RPCN_BOT_CLIENT_SECRET" \
+              '{client_id: $id, client_secret: $secret, audience: "cloudv2-production.redpanda.cloud", grant_type: "client_credentials"}' \
+            | curl -sf https://auth.prd.cloud.redpanda.com/oauth/token -H 'Content-Type: application/json' -d @- \
+            | jq -r .access_token) || TOKEN=""
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::warning::rpcn-bot notification skipped: could not get a Redpanda Cloud token"
+            exit 0
+          fi
+
+          TEXT="Integration tests passed (${GITHUB_EVENT_NAME}) for packages: ${FILTER:-all}."
+          if [ -n "$PR_NUMBER" ]; then
+            TEXT="$TEXT PR: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}."
+          fi
+          TEXT="$TEXT Run: ${RUN_URL}. Post a one-line summary for the team."
+
+          # C076AV2M5MH = #team-redpanda-connect
+          jq -n --arg text "$TEXT" '{text: $text, channel: "C076AV2M5MH", source: "github-actions/integration-tests"}' \
+            | curl -sf -X POST "$RPCN_BOT_URL" \
+                -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d @- \
+            || echo "::warning::rpcn-bot notification failed"
