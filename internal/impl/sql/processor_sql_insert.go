@@ -229,6 +229,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		if err != nil {
 			return nil, err
 		}
+		s.logger.Tracef("Executing query: %s", sqlStr)
 		if stmt, err = tx.Prepare(sqlStr); err != nil {
 			_ = tx.Rollback()
 			return nil, err
@@ -275,6 +276,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 
 	var err error
 	if tx == nil {
+		s.logger.Tracef("Executing query: %s", lazySQL{insertBuilder})
 		_, err = insertBuilder.RunWith(s.db).ExecContext(ctx)
 	} else {
 		err = tx.Commit()

@@ -455,6 +455,7 @@ func (s *sqlRawOutput) writeBatchPerMessage(
 			}
 		}
 
+		s.logger.Tracef("Executing query: %s (%d args)", queryStr, len(args))
 		if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
 			return fmt.Errorf("running query: %w", err)
 		}
@@ -609,6 +610,7 @@ func (s *sqlRawOutput) execQuery(
 		}
 	}
 
+	s.logger.Tracef("Executing query: %s (%d args)", queryStr, len(args))
 	if _, err := tx.ExecContext(ctx, queryStr, args...); err != nil {
 		return fmt.Errorf("running query: %w", err)
 	}
