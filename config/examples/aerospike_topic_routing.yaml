@@ -1,0 +1,66 @@
+# Route Kafka topics to Aerospike namespaces and sets on one cluster.
+# Producers and JSON stay the same. There is no topics: tree on output.aerospike.
+#
+# The test and payments namespaces must already be declared on the server.
+# Namespaces cannot be created at runtime.
+#
+# A name that is not declared returns code 20 (INVALID_NAMESPACE) for that
+# message. The rest of the batch still writes. The rejection is permanent, so
+# with auto_replay_nacks on (the default) that message is replayed forever and
+# holds the partition. Each branch below is wrapped in output.fallback so the
+# rejected message is published to aerospike-rejects instead of retried.
+#
+# A. Topic name is the namespace (topic "test" -> ns test, topic "payments" -> ns payments):
+#      namespace: '${! meta("kafka_topic") }'
+#      set: users
+#      key: '${! meta("kafka_key") }'
+#      bins: 'root = this'
+#      operation: replace
+#
+# B and D. Two topics, one namespace, set name is the topic (users and orders -> ns test):
+#      namespace: test
+#      set: '${! meta("kafka_topic") }'
+#
+# C. One topic. The namespace comes from a JSON field and must already be
+# declared. The set is limited to clicks or views. Any other set_name throws
+# before a write, so it cannot create a set:
+#      {"id":"e-1","namespace_name":"payments","set_name":"clicks","n":1}
+#      namespace: '${! json("namespace_name") }'
+#      set: '${! if ["clicks", "views"].contains(json("set_name")) { json("set_name") } else { throw("set_name is not allowed") } }'
+#
+# A small fixed topic list is fine as a set name. Do not interpolate an unbounded value.
+# The runnable pipeline below is case A for test and payments, and case C for events.
+input:
+  redpanda:
+    seed_brokers: ["127.0.0.1:19092"]
+    topics: [test, payments, events]
+    consumer_group: aerospike-sink
+output:
+  switch:
+    cases:
+      - check: meta("kafka_topic") == "events"
+        output:
+          fallback:
+            - aerospike:
+                hosts: ["127.0.0.1:3000"]
+                namespace: '${! json("namespace_name") }'
+                set: '${! if ["clicks", "views"].contains(json("set_name")) { json("set_name") } else { throw("set_name is not allowed") } }'
+                key: '${! json("id") }'
+                bins: 'root = this.without("id", "namespace_name", "set_name")'
+                operation: replace
+            - redpanda:
+                seed_brokers: ["127.0.0.1:19092"]
+                topic: aerospike-rejects
+      - check: meta("kafka_topic") == "test" || meta("kafka_topic") == "payments"
+        output:
+          fallback:
+            - aerospike:
+                hosts: ["127.0.0.1:3000"]
+                namespace: '${! meta("kafka_topic") }'
+                set: users
+                key: '${! meta("kafka_key") }'
+                bins: 'root = this'
+                operation: replace
+            - redpanda:
+                seed_brokers: ["127.0.0.1:19092"]
+                topic: aerospike-rejects

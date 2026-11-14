@@ -1,0 +1,128 @@
+# Consume Redpanda topics and write each one to Aerospike.
+# The operation is chosen per topic. The message JSON does not carry an operation.
+#
+# Topics:
+#   users          {"user_id":"u-42","email":"a@b.com","ttl":"24H"}
+#                  replace the record; ttl accepts 24H, 1D, 5M, 60S, 3600, -1, -2, 0
+#   payments       {"id":"p-1","amount":9.50}
+#                  merge bins; the set name is the topic name
+#   user-deletes   {"user_id":"u-42"}
+#                  delete the users record with that key
+#
+# A null body on users deletes the record when tombstone_as_delete is true.
+# The Kafka message key must be the user id, because a tombstone has no JSON body.
+#
+# ignore_error_codes is unset, so a permanent reject keeps retrying.
+# config/examples/aerospike_kafka_dlq.yaml shows one namespace with fallback and
+# ignore_error_codes, and another namespace with neither.
+# Listing 13, 20, 21, or 22 acknowledges the message inside this output, so a
+# fallback never receives it. When the namespace comes from the message, leave
+# 20 off that list and use the fallback example instead. A typo is then published
+# rather than dropped.
+#
+# Run (local Redpanda :19092, Aerospike namespace test, cluster-name redpanda-demo):
+#   task run CONF=./config/examples/aerospike_kafka_topics.yaml
+#
+# Kafka broker TLS/SASL belongs on input.redpanda, not this output.
+http:
+  enabled: false
+input:
+  redpanda:
+    seed_brokers: ["127.0.0.1:19092"]
+    topics: [users, payments, user-deletes]
+    consumer_group: aerospike-sink
+    # earliest = replay available records; latest = new records only;
+    # committed = require a prior committed offset (Kafka auto.offset.reset=none).
+    start_offset: earliest
+output:
+  switch:
+    retry_until_success: false
+    cases:
+      # Replace the users record. Key is user_id, or the Kafka message key when the body is empty.
+      - check: meta("kafka_topic") == "users"
+        output:
+          aerospike:
+            hosts: ["127.0.0.1:3000"]
+            # ciphers is the TLS 1.2 allow-list. Empty leaves the tls default.
+            # It applies only when tls.enabled is true. TLS 1.3 suites stay on
+            # unless protocols is TLSv1.2. ciphers with protocols: [TLSv1.3]
+            # fails startup.
+            # ciphers:
+            #   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+            #   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+            # protocols is the version allow-list. Empty offers TLS 1.2 and TLS 1.3.
+            # protocols:
+            #   - TLSv1.2
+            # revoke_certificates rejects a listed serial. Use a decimal integer,
+            # or hex with a 0x prefix. openssl x509 -noout -serial prints hex.
+            # A serial is unique only for its issuing CA. With skip_cert_verify,
+            # only certificates the server sends are checked.
+            # revoke_certificates:
+            #   - "123123"
+            #   - "0x1E0F3"
+            # password_file is the first line of a file, read once at startup.
+            # An empty first line fails startup. A rotated file is read on restart.
+            # credentials:
+            #   username: rpcn
+            #   password_file: /var/secrets/aerospike-password
+            cluster_name: redpanda-demo
+            namespace: test
+            set: users
+            key: '${! json("user_id").catch(meta("kafka_key")) }'
+            bins: 'root = this.without("user_id", "ttl")'
+            # replace leaves a null bin out of the write. A message whose every bin
+            # is null is rejected, and ignore_error_codes does not cover it.
+            # replace_only also fails a missing key with KEY_NOT_FOUND (code 2).
+            # List 2 in ignore_error_codes to drop it, or use output.fallback.
+            operation: replace
+            tombstone_as_delete: true
+            ttl: '${! json("ttl").or("keep") }'
+            # ignore_error_codes: [13, 20, 21, 22]
+            #   13 RECORD_TOO_BIG is returned by the server.
+            #   20 INVALID_NAMESPACE is a namespace that is not declared on the
+            #   cluster. The other records in the batch are still written.
+            #   A missing field that resolves to "null" is not code 20.
+            #   When the namespace comes from the message, leave 20 unlisted and
+            #   use output.fallback so a typo is published instead of dropped.
+            #   21 BIN_NAME_TOO_LONG also covers a top-level name longer than 15 bytes,
+            #   which is rejected here and never sent.
+            #   22 FAIL_FORBIDDEN is returned when a positive ttl is written to a
+            #   namespace with nsup-period 0. 0, -1, and -2 do not return 22.
+            #   Several messages for one key in this batch fold into one record.
+            #   A listed code acknowledges every message that folded in.
+            batching:
+              count: 10
+              period: 200ms
+              # byte_size: 0
+              # check: ""
+            # max_in_flight: 64 # 1 keeps writes to one key in stream order
+      # Merge bins into the payments set. The set name is the topic name. Key is id.
+      # Optional fields, including ignore_error_codes, are listed on the users output.
+      - check: meta("kafka_topic") == "payments"
+        output:
+          aerospike:
+            hosts: ["127.0.0.1:3000"]
+            cluster_name: redpanda-demo
+            namespace: test
+            set: '${! meta("kafka_topic") }'
+            key: '${! json("id") }'
+            bins: 'root = this.without("id")'
+            operation: write
+            ttl: keep
+            batching:
+              count: 10
+              period: 200ms
+      # Delete the users record. This topic carries only the key.
+      # Optional fields, including ignore_error_codes, are listed on the users output.
+      - check: meta("kafka_topic") == "user-deletes"
+        output:
+          aerospike:
+            hosts: ["127.0.0.1:3000"]
+            cluster_name: redpanda-demo
+            namespace: test
+            set: users
+            key: '${! json("user_id") }'
+            operation: delete
+logger:
+  level: INFO
+  format: logfmt
