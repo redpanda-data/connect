@@ -1094,3 +1094,41 @@ func TestEcsAvroLogicalTypeOptionalUnion(t *testing.T) {
 	assert.Equal(t, schema.TimeUnitMillis, f.Logical.Timestamp.Unit)
 	assert.True(t, f.Logical.Timestamp.AdjustToUTC)
 }
+
+func TestEcsAvroFromBytesNestedMapArrayValues(t *testing.T) {
+	// Map values and array items may be inline complex types or named-type
+	// references, not only primitive type names.
+	spec := []byte(`{
+		"type": "record",
+		"name": "Rec",
+		"fields": [
+			{"name": "Inner", "type": {"type": "record", "name": "Inner", "fields": [{"name": "x", "type": "long"}]}},
+			{"name": "mapOfArrays", "type": ["null", {"type": "map", "values": {"type": "array", "items": "long"}}], "default": null},
+			{"name": "mapOfMaps", "type": {"type": "map", "values": {"type": "map", "values": "string"}}},
+			{"name": "arrayOfRecords", "type": {"type": "array", "items": "Inner"}}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 4)
+
+	mapOfArrays := c.Children[1]
+	assert.Equal(t, schema.Map, mapOfArrays.Type)
+	assert.True(t, mapOfArrays.Optional)
+	require.Len(t, mapOfArrays.Children, 1)
+	assert.Equal(t, schema.Array, mapOfArrays.Children[0].Type)
+	require.Len(t, mapOfArrays.Children[0].Children, 1)
+	assert.Equal(t, schema.Int64, mapOfArrays.Children[0].Children[0].Type)
+
+	mapOfMaps := c.Children[2]
+	require.Len(t, mapOfMaps.Children, 1)
+	assert.Equal(t, schema.Map, mapOfMaps.Children[0].Type)
+	require.Len(t, mapOfMaps.Children[0].Children, 1)
+	assert.Equal(t, schema.String, mapOfMaps.Children[0].Children[0].Type)
+
+	arrayOfRecords := c.Children[3]
+	require.Len(t, arrayOfRecords.Children, 1)
+	assert.Equal(t, schema.Object, arrayOfRecords.Children[0].Type)
+	require.Len(t, arrayOfRecords.Children[0].Children, 1)
+	assert.Equal(t, schema.Int64, arrayOfRecords.Children[0].Children[0].Type)
+}
