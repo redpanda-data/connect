@@ -674,13 +674,23 @@ func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error)
 		return nil, nil
 	}
 
-	valBytes, err := msg.AsBytes()
+	// Convert the Bloblang result to MongoDB Extended JSON so that richer Go
+	// types survive the round trip to BSON. Marshalling the structured value
+	// directly (rather than via Message.AsBytes) preserves types such as
+	// time.Time, which is encoded as {"$date": ...} and therefore decoded back
+	// into a BSON DateTime instead of a plain string.
+	structured, err := msg.AsStructured()
+	if err != nil {
+		return nil, err
+	}
+
+	valBytes, err := bson.MarshalExtJSON(structured, false, false)
 	if err != nil {
 		return nil, err
 	}
 
 	var ejsonVal any
-	if err := bson.UnmarshalExtJSON(valBytes, true, &ejsonVal); err != nil {
+	if err := bson.UnmarshalExtJSON(valBytes, false, &ejsonVal); err != nil {
 		return nil, err
 	}
 	return ejsonVal, nil
