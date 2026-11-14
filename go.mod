@@ -83,6 +83,7 @@ require (
 	github.com/benhoyt/goawk v1.32.0
 	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
+	github.com/bufbuild/protocompile v0.14.1
 	github.com/bufbuild/prototransform v0.4.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/bwmarrin/snowflake v0.3.0
@@ -132,6 +133,7 @@ require (
 	github.com/microsoft/go-mssqldb v1.11.2
 	github.com/microsoft/gocosmos v1.1.1
 	github.com/moby/moby/api v1.56.1
+	github.com/moby/moby/client v0.6.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/nats-io/nats.go v1.55.0
 	github.com/nats-io/nkeys v0.4.16
@@ -446,7 +448,6 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.3.0 // indirect
-	github.com/moby/moby/client v0.6.2 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/sys/sequential v0.7.0 // indirect
 	github.com/moby/sys/user v0.4.1 // indirect

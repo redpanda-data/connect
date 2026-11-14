@@ -1,0 +1,114 @@
+input:
+  label: audit_log
+  redpanda:
+    seed_brokers: [ "${REDPANDA_BROKERS}" ]
+    topics: [ "${secrets.AUDIT_LOG_EXPORT_TOPIC}" ]
+    consumer_group: "audit-log-export-${REDPANDA_PIPELINE_ID}"
+    start_from_oldest: true
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 5000
+    fetch_max_bytes: 8MiB
+    fetch_max_partition_bytes: 512KiB
+    client_id: "audit-log-export"
+    tls:
+      enabled: ${REDPANDA_TLS_ENABLED}
+    sasl:
+      - mechanism: SCRAM-SHA-256
+        username: "${secrets.AUDIT_LOG_EXPORT_KAFKA_USERNAME}"
+        password: "${secrets.AUDIT_LOG_EXPORT_KAFKA_PASSWORD}"
+
+pipeline:
+  processors:
+    - label: decode_audit_event
+      schema_registry_decode:
+        url: "${REDPANDA_SCHEMA_REGISTRY_URL}"
+        basic_auth:
+          enabled: true
+          username: "${secrets.AUDIT_LOG_EXPORT_KAFKA_USERNAME}"
+          password: "${secrets.AUDIT_LOG_EXPORT_KAFKA_PASSWORD}"
+        protobuf:
+          use_proto_names: true
+          use_enum_numbers: true
+
+    - label: to_ocsf_json
+      mapping: |
+        root = this
+        if this.exists("time") { root.time = this.time.number() }
+        meta event_date = (this.time.or(0).number() / 1000).ts_format("2006/01/02", "UTC")
+        # The source schema is one message for two OCSF classes; attributes that
+        # OCSF 1.8 does not define for the event's class move under `unmapped`.
+        let profiles = this.metadata.profiles.or([])
+        if this.class_uid == 6003 {
+          if this.exists("entity") {
+            root.unmapped.entity = this.entity
+            root.entity = deleted()
+          }
+          if this.exists("entity_result") {
+            root.unmapped.entity_result = this.entity_result
+            root.entity_result = deleted()
+          }
+          if this.exists("trace") && !$profiles.contains("trace") {
+            root.metadata.profiles = $profiles.append("trace")
+          }
+        }
+        if this.class_uid == 3004 {
+          if this.exists("api") {
+            root.unmapped.api = this.api
+            root.api = deleted()
+          }
+          if this.exists("resources") {
+            root.unmapped.resources = this.resources
+            root.resources = deleted()
+          }
+          if this.exists("trace") {
+            root.unmapped.trace = this.trace
+            root.trace = deleted()
+          }
+        }
+
+    # Do not replace this with `catch`: `catch` clears the error flag, so a
+    # message that failed to decode would be exported instead of rejected.
+    - label: log_poison_message
+      switch:
+        - check: errored()
+          processors:
+            - log:
+                level: ERROR
+                message: 'audit event could not be exported, will retry: ${! error() }'
+                fields_mapping: |
+                  root.kafka_topic = meta("kafka_topic")
+                  root.kafka_partition = meta("kafka_partition")
+                  root.kafka_offset = meta("kafka_offset")
+
+output:
+  label: s3
+  reject_errored:
+    aws_s3:
+      bucket: "${secrets.AUDIT_LOG_EXPORT_S3_BUCKET}"
+      region: "${secrets.AUDIT_LOG_EXPORT_S3_REGION}"
+      path: '${secrets.AUDIT_LOG_EXPORT_S3_PREFIX:audit-log}/${! meta("event_date") }/${! meta("kafka_topic") }-p${! meta("kafka_partition") }-o${! meta("kafka_offset") }-n${! meta("batch_count") }-${! meta("batch_hash") }.ndjson.gz'
+      content_type: application/gzip
+      object_canned_acl: "${secrets.AUDIT_LOG_EXPORT_S3_OBJECT_ACL:bucket-owner-full-control}"
+      server_side_encryption: "${secrets.AUDIT_LOG_EXPORT_S3_SSE:}"
+      kms_key_id: "${secrets.AUDIT_LOG_EXPORT_S3_KMS_KEY_ID:}"
+      endpoint: "${secrets.AUDIT_LOG_EXPORT_S3_ENDPOINT:}"
+      force_path_style_urls: ${secrets.AUDIT_LOG_EXPORT_S3_FORCE_PATH_STYLE:false}
+      credentials:
+        id: "${secrets.AUDIT_LOG_EXPORT_AWS_ACCESS_KEY_ID:}"
+        secret: "${secrets.AUDIT_LOG_EXPORT_AWS_SECRET_ACCESS_KEY:}"
+        role: "${secrets.AUDIT_LOG_EXPORT_AWS_ROLE_ARN:}"
+        role_external_id: "${secrets.AUDIT_LOG_EXPORT_AWS_ROLE_EXTERNAL_ID:}"
+      max_in_flight: 4
+      timeout: 60s
+      batching:
+        count: ${secrets.AUDIT_LOG_EXPORT_BATCH_COUNT:2000}
+        byte_size: 16777216
+        period: "${secrets.AUDIT_LOG_EXPORT_BATCH_PERIOD:60s}"
+        processors:
+          - mapping: 'meta batch_count = batch_size()'
+          - archive:
+              format: lines
+          - mapping: 'meta batch_hash = content().hash("xxhash64")'
+          - compress:
+              algorithm: gzip
