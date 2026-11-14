@@ -39,7 +39,7 @@ func registerWithSchemaRegistryHeader() {
 		).
 		Example(
 			"Use schema ID from metadata to add header dynamically",
-			`root = with_schema_registry_header(meta("schema_id").number(), content())`,
+			`root = with_schema_registry_header(metadata("schema_id").number(), content())`,
 		)
 
 	bloblang.MustRegisterFunctionV2("with_schema_registry_header", spec, func(args *bloblang.ParsedParams) (bloblang.Function, error) {

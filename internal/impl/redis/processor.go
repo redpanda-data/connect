@@ -81,7 +81,7 @@ pipeline:
           - redis:
               url: TODO
               command: scard
-              args_mapping: 'root = [ meta("set_key") ]'
+              args_mapping: 'root = [ metadata("set_key") ]'
         result_map: 'root.cardinality = this'
 `).
 		Example("Running Total",

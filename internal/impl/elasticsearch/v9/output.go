@@ -220,7 +220,7 @@ output:
     urls: ['http://localhost:9200']
     index: "things"
     action: "index"
-    id: ${! meta("id") }
+    id: ${! @id }
 `).
 		Example("Indexing documents from S3", "Here we read messages from a AWS S3 bucket and write them to an Elasticsearch index using the S3 key as the ID for the Elasticsearch document.", `
 input:
@@ -234,7 +234,7 @@ output:
     urls: ['http://localhost:9200']
     index: "cool-bug-facts"
     action: "index"
-    id: ${! meta("s3_key") }
+    id: ${! @s3_key }
 `).
 		Example("Authenticating with an API key", "Set the `api_key` field to authenticate requests with an Elasticsearch API key. If `api_key` is set, it supersedes the `basic_auth` configuration.", `
 output:

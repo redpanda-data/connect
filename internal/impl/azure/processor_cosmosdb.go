@@ -68,7 +68,7 @@ input:
         database: testdb
         container: blobfish
         partition_keys_map: root = json("habitat")
-        item_id: ${! meta("id") }
+        item_id: ${! @id }
         operation: Patch
         patch_operations:
           # Add a new /diet field
