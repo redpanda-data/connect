@@ -15,10 +15,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // SearchIssuesResource performs a search for the issues resource.
@@ -93,7 +93,7 @@ func (j *Client) searchAllIssues(ctx context.Context, queryParams map[string]str
 // searchIssuesPage function to get a single page of issues using nextPageToken strategy
 // The MaxResults can be overridden by the processor parameters (up to 5000 - default 50).
 func (j *Client) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*SearchJQLResponse, error) {
-	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/search/jql")
+	apiUrl, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/search/jql")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -133,7 +133,7 @@ func (j *Client) searchIssuesPage(ctx context.Context, qp map[string]string, nex
 func (j *Client) SearchIssueTransitionsResource(ctx context.Context, q *JsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/issue/" + q.Issue + "/transitions")
+	apiUrl, err := redact.ParseURL(j.baseURL + jiraAPIBasePath + "/issue/" + q.Issue + "/transitions")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}

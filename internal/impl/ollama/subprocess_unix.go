@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/singleton"
 )
 
@@ -78,11 +79,11 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("downloading ollama binary: %w", err)
+		return fmt.Errorf("downloading ollama binary: %w", redact.Error(err, redact.Conns(url)))
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("downloading ollama binary: %w", err)
+		return fmt.Errorf("downloading ollama binary: %w", redact.Error(err, redact.Conns(url)))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -115,7 +116,7 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return fmt.Errorf("unable to read tarball at %s: %w", url, err)
+			return fmt.Errorf("unable to read tarball at %s: %w", redact.String(url), err)
 		}
 		if !header.FileInfo().Mode().IsRegular() {
 			continue

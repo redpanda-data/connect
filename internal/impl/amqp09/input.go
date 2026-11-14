@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 func amqp09InputSpec() *service.ConfigSpec {
@@ -593,7 +593,7 @@ func (a *amqp09Reader) reDial(urls []string) (conn *amqp.Connection, err error) 
 
 // dial attempts to connect to amqp URL.
 func (a *amqp09Reader) dial(amqpURL string) (conn *amqp.Connection, err error) {
-	u, err := url.Parse(amqpURL)
+	u, err := redact.ParseURL(amqpURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid AMQP URL: %w", err)
 	}
