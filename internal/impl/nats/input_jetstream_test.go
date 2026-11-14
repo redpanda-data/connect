@@ -15,6 +15,7 @@
 package nats
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -286,4 +287,24 @@ func TestAssignMessageMetadata(t *testing.T) {
 		val, _ = msg.MetaGetMut("nats_num_pending")
 		assert.Equal(t, highIntStr, val)
 	})
+}
+
+func TestSubscriptionGone(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "connection closed", err: nats.ErrConnectionClosed, want: true},
+		{name: "subscription closed under a fetch", err: errors.Join(nats.ErrBadSubscription, nats.ErrSubscriptionClosed), want: true},
+		{name: "invalid subscription", err: nats.ErrBadSubscription, want: true},
+		{name: "fetch timeout", err: nats.ErrTimeout, want: false},
+		{name: "disconnected during fetch", err: nats.ErrFetchDisconnected, want: false},
+		{name: "no responders", err: nats.ErrNoResponders, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, subscriptionGone(test.err))
+		})
+	}
 }
