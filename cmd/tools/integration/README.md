@@ -77,4 +77,4 @@ The `affected` subcommand reads changed file paths on stdin and prints the packa
 git diff --name-only origin/main...HEAD | go run ./cmd/tools/integration affected
 ```
 
-A change to a Go package selects every package whose test binary (`go list -test -deps`) includes it. A `_test.go` file or a file under `testdata/` selects only its own package. When the run would select more than `--max-packages` packages (default 20), `filters` is empty and `budget_exceeded=true`.
+A change to a Go package selects every package whose test binary (`go list -test -deps`) includes it. A `_test.go` file or a file under `testdata/` selects only its own package.
