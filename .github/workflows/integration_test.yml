@@ -99,14 +99,18 @@ jobs:
             echo "allowed=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # A pull request whose title starts with build(deps) runs the full suite in integration-test, so this job skips it.
+  # Its go.mod change would otherwise run the full suite here too.
   integration-test-filter:
     needs: [check-author-access]
     if: >-
       always() && (
-        needs.check-author-access.outputs.allowed == 'true' ||
+        (github.event_name == 'pull_request' && !startsWith(github.event.pull_request.title, 'build(deps)') && (
+          needs.check-author-access.outputs.allowed == 'true' ||
+          contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+        )) ||
         (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '') ||
-        (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '')
       )
     runs-on: ubuntu-latest-32
     env:
