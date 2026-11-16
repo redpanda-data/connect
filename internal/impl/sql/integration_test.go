@@ -1086,12 +1086,20 @@ func TestIntegrationMSSQL(t *testing.T) {
 	// the start ("This program has encountered a fatal error"). The port can be open before that, so also wait for
 	// the log line that the mssql module waits for. The log wait fails as soon as the container exits, and then the
 	// test starts a new container.
+	//
+	// All attempts share one start deadline, so that the start and the readiness wait together stay well below the
+	// 10m timeout of the package (cmd/tools/integration/packages.json). A crash fails fast and leaves time for a new
+	// attempt. A slow start can use all of the time.
 	const maxAttempts = 3
+	startDeadline := time.Now().Add(5 * time.Minute)
 	var (
 		ctr testcontainers.Container
 		err error
 	)
 	for attempt := 1; ; attempt++ {
+		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
+		// when it runs in parallel with the other tests, so set the deadline explicitly.
+		waitFor := time.Until(startDeadline)
 		ctr, err = testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
 			testcontainers.WithImagePlatform("linux/amd64"),
 			testcontainers.WithExposedPorts("1433/tcp"),
@@ -1099,19 +1107,22 @@ func TestIntegrationMSSQL(t *testing.T) {
 				"ACCEPT_EULA": "Y",
 				"SA_PASSWORD": testPassword,
 			}),
-			// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
-			// when it runs in parallel with the other tests, so set the deadline explicitly.
-			testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
-				wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
-				wait.ForLog("Recovery is complete.").WithStartupTimeout(3*time.Minute),
+			testcontainers.WithWaitStrategyAndDeadline(waitFor,
+				wait.ForListeningPort("1433/tcp").WithStartupTimeout(waitFor),
+				wait.ForLog("Recovery is complete.").WithStartupTimeout(waitFor),
 			),
 		)
-		testcontainers.CleanupContainer(t, ctr)
-		if err == nil || attempt == maxAttempts {
+		if err == nil || attempt == maxAttempts || time.Until(startDeadline) < time.Minute {
 			break
 		}
 		t.Logf("SQL Server start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+		// Stop the failed container now, not at the end of the test. A container that is still running adds load to
+		// the Docker host, and that load is what makes SQL Server crash.
+		if termErr := testcontainers.TerminateContainer(ctr); termErr != nil {
+			t.Logf("Cannot terminate the failed SQL Server container: %v", termErr)
+		}
 	}
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
 	mp, err := ctr.MappedPort(t.Context(), "1433/tcp")
@@ -1135,29 +1146,37 @@ func TestIntegrationMSSQL(t *testing.T) {
 	}
 
 	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", mp.Port())
-	// lastErr keeps the error of the last try. Without it, a failed wait only says "Condition never satisfied".
-	var lastErr error
-	ready := assert.Eventually(t, func() bool {
-		if db != nil {
-			db.Close()
+	connect := func() error {
+		var err error
+		if db, err = sql.Open("mssql", dsn); err != nil {
+			return err
 		}
-		db, lastErr = sql.Open("mssql", dsn)
-		if lastErr != nil {
-			return false
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		if err = db.PingContext(ctx); err == nil {
+			_, err = createTable("footable")
 		}
-		if lastErr = db.Ping(); lastErr != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-		if _, lastErr = createTable("footable"); lastErr != nil {
+		if err != nil {
 			db.Close()
 			db = nil
-			return false
 		}
-		return true
-	}, 3*time.Minute, time.Second)
-	if !ready {
+		return err
+	}
+	// This loop runs in the test goroutine and not in assert.Eventually. Eventually runs the condition in a goroutine
+	// and does not wait for it at the timeout, so a try that is still running would write db and lastErr while the
+	// test reads them. lastErr keeps the error of the last try, so that a failed wait shows the cause.
+	// "Recovery is complete." is in the log, so SQL Server must accept connections soon.
+	readyDeadline := time.Now().Add(time.Minute)
+	lastErr := connect()
+	for lastErr != nil && time.Now().Before(readyDeadline) {
+		select {
+		case <-t.Context().Done():
+			require.FailNow(t, "Test context done", "last error: %v", lastErr)
+		case <-time.After(time.Second):
+		}
+		lastErr = connect()
+	}
+	if lastErr != nil {
 		// The port can be open while SQL Server is not ready, or the container can stop after the port wait (for
 		// example exit code 139). Log the container state and logs to show which case it is.
 		if state, stateErr := ctr.State(t.Context()); stateErr != nil {
