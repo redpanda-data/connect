@@ -17,7 +17,7 @@
 // Usage:
 //
 //	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [--parallel n] [filter...]
-//	git diff --name-only <base>...HEAD | go run ./cmd/tools/integration affected [--max-packages 20]
+//	git diff --name-only <base>...HEAD | go run ./cmd/tools/integration affected
 package main
 
 import (
