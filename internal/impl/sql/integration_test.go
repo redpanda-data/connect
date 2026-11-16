@@ -1428,12 +1428,8 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		if db, err = sql.Open("gocosmos", dsn); err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-		if err = db.PingContext(ctx); err == nil {
-			if _, err = db.Exec(fmt.Sprintf(`create database if not exists %s`, dummyDatabase)); err == nil {
-				_, err = createContainer(dummyContainer)
-			}
+		if _, err = db.Exec(fmt.Sprintf(`create database if not exists %s`, dummyDatabase)); err == nil {
+			_, err = createContainer(dummyContainer)
 		}
 		if err != nil {
 			db.Close()
