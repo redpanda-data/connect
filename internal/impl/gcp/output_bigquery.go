@@ -154,6 +154,7 @@ func gcpBigQueryConfig() *service.ConfigSpec {
 
 By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[GCP credentials].
 
+[[format-overview]]
 == Format
 
 This output currently supports only CSV, NEWLINE_DELIMITED_JSON and PARQUET, formats. Learn more about how to use GCP BigQuery with them here:
@@ -183,6 +184,7 @@ And:
 
 The same is true for the CSV format.
 
+[[csv-overview]]
 === CSV
 
 For the CSV format when the field ` + "`csv.header`" + ` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.

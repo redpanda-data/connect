@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -20,6 +20,8 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -80,7 +82,7 @@ func newCheckpointCache(
 		return nil, fmt.Errorf("invalid checkpoint cache multipart table name: %w", err)
 	}
 
-	if db, err = sql.Open("mssql", connStr); err != nil {
+	if db, err = sqlredact.Open("mssql", connStr); err != nil {
 		return nil, fmt.Errorf("connecting to microsoft sql server for caching checkpoints: %w", err)
 	}
 

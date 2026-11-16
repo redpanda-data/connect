@@ -16,7 +16,11 @@ package influxdb
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -141,4 +145,32 @@ db: db0
 			t.Errorf("number of values was not expected %d", len(values))
 		}
 	}
+}
+
+func TestInfluxCloseStopsFlushLoop(t *testing.T) {
+	var writes atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/write" {
+			writes.Add(1)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	i := fromYAML(t, `
+url: %v
+db: db0
+interval: 10ms
+`, srv.URL)
+	i.NewGaugeCtor("testing")().Set(31337)
+
+	// Let the flush loop write at least once, so that the check below runs
+	// while the loop is active.
+	require.Eventually(t, func() bool { return writes.Load() > 0 }, time.Second, 5*time.Millisecond)
+
+	require.NoError(t, i.Close(t.Context()))
+	afterClose := writes.Load()
+
+	require.Never(t, func() bool { return writes.Load() > afterClose }, 100*time.Millisecond, 10*time.Millisecond,
+		"the flush loop wrote metrics after Close")
 }

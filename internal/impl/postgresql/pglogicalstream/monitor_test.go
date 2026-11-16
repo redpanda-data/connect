@@ -103,6 +103,50 @@ func TestMonitorUnanalysedTableRowEstimate(t *testing.T) {
 	})
 }
 
+func TestMonitorResnapshotProgress(t *testing.T) {
+	table := TableFQN{Schema: `"public"`, Table: `"cart"`}
+
+	snapshot := func(m *Monitor, rows int) {
+		m.TrackSnapshotTable(t.Context(), table)
+		m.UpdateSnapshotProgressForTable(table, rows)
+	}
+
+	t.Run("without resetting metrics, a second snapshot reads above 1", func(t *testing.T) {
+		// Pins the failure ForgetSnapshotTable exists for, so the test below
+		// is known to exercise it.
+		m := newTestMonitor(t, &estimateStub{count: 500})
+		snapshot(m, 500)
+		m.MarkSnapshotComplete(table)
+
+		snapshot(m, 250)
+		assert.InDelta(t, 1.5, m.Report().TableProgress[table], 0.0001)
+	})
+
+	t.Run("resetting metrics starts the next snapshot from zero against a fresh estimate", func(t *testing.T) {
+		stub := &estimateStub{count: 500}
+		m := newTestMonitor(t, stub)
+		snapshot(m, 500)
+		m.MarkSnapshotComplete(table)
+		require.InDelta(t, 1.0, m.Report().TableProgress[table], 0.0001)
+
+		m.ResetSnapshotTable(table)
+		assert.NotContains(t, m.Report().TableProgress, table)
+
+		// The table has grown since the first snapshot.
+		stub.mu.Lock()
+		stub.count = 800
+		stub.mu.Unlock()
+
+		snapshot(m, 400)
+		assert.InDelta(t, 0.5, m.Report().TableProgress[table], 0.0001,
+			"progress must count only this snapshot's rows, against the new estimate")
+		assert.Equal(t, 2, stub.queryCount(), "the estimate must be re-read after forgetting")
+
+		m.MarkSnapshotComplete(table)
+		assert.InDelta(t, 1.0, m.Report().TableProgress[table], 0.0001)
+	})
+}
+
 // estimateStub is a driver.Driver that answers the `SELECT reltuples ...`
 // query with a single row holding its current count. Unlike fakeQueryDriver
 // in incremental_snapshot_test.go, whose rows are fixed when it is built,

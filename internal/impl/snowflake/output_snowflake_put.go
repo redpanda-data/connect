@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -29,6 +29,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -109,6 +110,7 @@ openssl pkcs8 -in rsa_key_original.p8 -topk8 -v2 des3 -out rsa_key.p8
 
 Please consult the https://linux.die.net/man/1/pkcs8[pkcs8 command documentation^] for details on PKCS#5 algorithms.
 
+[[batching-overview]]
 == Batching
 
 It's common to want to upload messages to Snowflake as batched archives. The easiest way to do this is to batch your
@@ -118,6 +120,7 @@ processor.
 
 For the optimal batch size, please consult the Snowflake https://docs.snowflake.com/en/user-guide/data-load-considerations-prepare.html[documentation^].
 
+[[snowpipe-overview]]
 == Snowpipe
 
 Given a table called `+"`BENTHOS_TBL`"+` with one column of type `+"`variant`"+`:
@@ -664,7 +667,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 func (s *snowflakeWriter) Connect(context.Context) error {
 	var err error
-	s.db, err = sql.Open("snowflake", s.dsn)
+	s.db, err = sqlredact.Open("snowflake", s.dsn)
 	if err != nil {
 		return fmt.Errorf("connecting to snowflake: %s", err)
 	}

@@ -38,7 +38,7 @@ func outputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Sends message parts as files to a HDFS directory.`).
-		Description(`Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
+		Description(`Each file is written with the path specified with the `+"`path`"+` field, in order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			hostsField(oFieldHosts),
 			userField(oFieldUser),

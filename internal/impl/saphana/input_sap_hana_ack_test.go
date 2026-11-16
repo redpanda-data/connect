@@ -1117,3 +1117,143 @@ checkpoint_cache: %s
 	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
 	assert.Equal(t, int64(60), lag)
 }
+
+// After a restart, the lag gauge starts from the loaded checkpoint, so a
+// restart into a stall (downstream or cache down, no ack ever resolves) shows
+// a growing lag instead of no lag.
+func TestSAPHANAInputLagSeededFromLoadedCheckpoint(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+	dbNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	cpHWM := dbNow.Add(-10 * time.Minute)
+	raw, err := json.Marshal(&sapHANACheckpointState{Source: `"T"`, TimestampHWM: &cpHWM})
+	require.NoError(t, err)
+	require.NoError(t, res.AccessCache(t.Context(), testCacheName, func(c service.Cache) {
+		require.NoError(t, c.Set(t.Context(), "sap_hana_hwm", raw, nil))
+	}))
+
+	t.Log("Given: a restarted input that loads a checkpoint ten minutes behind the database clock")
+	s, mock := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+poll_interval: 1ms
+fetch_size: 10
+max_retries: 0
+timestamp_delay: 0s
+checkpoint_cache: %s
+`, testCacheName))
+	// The host clock runs an hour behind the database clock.
+	hostNow := dbNow.Add(-time.Hour)
+	s.cp.now = func() time.Time { return hostNow }
+	_, err = s.loadCheckpoint(t.Context())
+	require.NoError(t, err)
+	_, ok := exp.get("sap_hana_hwm_lag_seconds")
+	assert.False(t, ok, "no lag before a poll reads the database clock")
+
+	t.Log("When: a poll delivers a batch that is never acknowledged")
+	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+	mock.ExpectQuery(testTSWindowQuery).WithArgs(cpHWM, dbNow).
+		WillReturnRows(sqlmock.NewRows([]string{"TS"}).AddRow(cpHWM.Add(time.Minute)))
+	_, _, err = s.ReadBatch(t.Context())
+	require.NoError(t, err)
+
+	t.Log("Then: the lag is the database clock minus the loaded checkpoint")
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64((10*time.Minute)/time.Second), lag)
+
+	t.Log("When: five minutes pass with no poll and no ack")
+	hostNow = hostNow.Add(5 * time.Minute)
+	s.cp.refreshLag()
+
+	t.Log("Then: the lag keeps growing")
+	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
+	assert.Equal(t, int64((15*time.Minute)/time.Second), lag)
+}
+
+// Without a loaded checkpoint, the lag gauge starts from
+// timestamp_initial_value, the position a restart would resume from.
+func TestSAPHANAInputLagSeededFromTimestampInitialValue(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+
+	t.Log("Given: a first start with an empty checkpoint cache and an initial value one hour behind the database clock")
+	s, mock := newTestInput(t, res, fmt.Sprintf(`
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+timestamp_initial_value: "2026-01-01T11:00:00Z"
+poll_interval: 1ms
+fetch_size: 10
+max_retries: 0
+timestamp_delay: 0s
+checkpoint_cache: %s
+`, testCacheName))
+	dbNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	initial := time.Date(2026, 1, 1, 11, 0, 0, 0, time.UTC)
+	hostNow := dbNow
+	s.cp.now = func() time.Time { return hostNow }
+	_, err := s.loadCheckpoint(t.Context())
+	require.NoError(t, err)
+
+	t.Log("When: a poll delivers a batch that is never acknowledged")
+	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+	mock.ExpectQuery(testTSWindowQuery).WithArgs(initial, dbNow).
+		WillReturnRows(sqlmock.NewRows([]string{"TS"}).AddRow(initial.Add(time.Minute)))
+	_, _, err = s.ReadBatch(t.Context())
+	require.NoError(t, err)
+
+	t.Log("Then: the lag is the database clock minus the initial value")
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64(time.Hour/time.Second), lag)
+}
+
+// Without checkpoint_cache, the lag gauge also starts from
+// timestamp_initial_value, the in-memory position before any ack, and then
+// follows the acknowledged in-memory position.
+func TestSAPHANAInputLagSeededWithoutCheckpointCache(t *testing.T) {
+	res, exp := resourcesWithGauges(t)
+
+	t.Log("Given: an input without checkpoint_cache and an initial value one hour behind the database clock")
+	s, mock := newTestInput(t, res, `
+dsn: hdb://user:pass@host:39017
+mode: timestamp
+table: T
+timestamp_column: TS
+timestamp_initial_value: "2026-01-01T11:00:00Z"
+poll_interval: 1ms
+fetch_size: 10
+max_retries: 0
+timestamp_delay: 0s
+`)
+	dbNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	initial := time.Date(2026, 1, 1, 11, 0, 0, 0, time.UTC)
+	hostNow := dbNow
+	s.cp.now = func() time.Time { return hostNow }
+	_, err := s.loadCheckpoint(t.Context())
+	require.NoError(t, err)
+
+	t.Log("When: a poll delivers a batch that is not acknowledged yet")
+	mock.ExpectQuery(hanaClockQuery).WithArgs(float64(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"NOW"}).AddRow(dbNow))
+	mock.ExpectQuery(testTSWindowQuery).WithArgs(initial, dbNow).
+		WillReturnRows(sqlmock.NewRows([]string{"TS"}).AddRow(initial.Add(time.Minute)))
+	_, ack, err := s.ReadBatch(t.Context())
+	require.NoError(t, err)
+
+	t.Log("Then: the lag is the database clock minus the initial value")
+	lag, ok := exp.get("sap_hana_hwm_lag_seconds")
+	require.True(t, ok)
+	assert.Equal(t, int64(time.Hour/time.Second), lag)
+
+	t.Log("When: the batch is acknowledged")
+	require.NoError(t, ack(t.Context(), nil))
+
+	t.Log("Then: the lag follows the acknowledged window bound, not the initial value")
+	lag, _ = exp.get("sap_hana_hwm_lag_seconds")
+	assert.Equal(t, int64(0), lag)
+}
