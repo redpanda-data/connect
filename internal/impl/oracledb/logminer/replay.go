@@ -52,9 +52,10 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 			if err != nil {
 				return nil, fmt.Errorf("getting carried-over transaction %s for LOB replay: %w", id, err)
 			}
-			// If the earlier reset failed after the rollback, the transaction is
-			// not in the cache. prev.fromSCN is at or below the start of each
-			// replayed transaction, so the checkpoint can only be too low.
+			// If the earlier reset failed after RollbackTransaction, the
+			// transaction is not in the cache. prev.fromSCN is at or below the
+			// start of each replayed transaction, so the checkpoint can only be
+			// too low.
 			startSCNs[id] = prev.fromSCN
 			if txn != nil {
 				startSCNs[id] = txn.SCN
