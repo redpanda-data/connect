@@ -750,6 +750,13 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.incrCommitFailure()
 				return attempt > 1, joinUnresolvedUnknown(fatalErr, unresolvedUnknown)
 			} else if retry {
+				// This learn-and-strip retry exists for one catalog behaviour:
+				// the Databricks Unity Catalog rejects a commit whose table
+				// properties carry a key it prohibits and names that key in
+				// the 400 (prohibitedKeysRe). No other supported catalog does
+				// this. A catalog that never names a key never reaches this
+				// branch, so the retry is inert everywhere else.
+				//
 				// With max_retries: 1 the stripped commit would otherwise never
 				// run, and a catalog that names a key as prohibited would wedge
 				// the table. It cannot loop: noteProhibitedKeys asks for a retry
