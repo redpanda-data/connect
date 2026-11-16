@@ -44,12 +44,11 @@ type ConnectCacheResource struct {
 	// and is easier to apply to all caches than making them cache specific (given users can
 	// configure in-memory cache as part of a cache_resource).
 	startSCNs map[sqlredo.TransactionID]uint64
-	// runID identifies this instance. Each transaction metadata key stores the
-	// runID that wrote it. readMetadata ignores and deletes a key with another
-	// runID: a durable backend (for example Redis) keeps the keys of the
-	// previous run, and the connector mines all their events again from the
-	// checkpoint. Without it, the commit publishes each event of a transaction
-	// that was open at the restart two times.
+	// runID identifies this instance. Each metadata key stores the runID that
+	// wrote it. After a restart, a durable backend (for example Redis) still has
+	// the keys of the previous run, and the connector mines their events again.
+	// readMetadata deletes those keys, so that the commit does not publish the
+	// events two times.
 	runID string
 }
 
@@ -337,8 +336,8 @@ func (c *ConnectCacheResource) readMetadata(ctx context.Context, txnID sqlredo.T
 		return nil, getErr
 	}
 	if meta.RunID != c.runID {
-		// The connector mines these events again, so drop the copies. Metadata
-		// from a version without RunID has "" and is also dropped.
+		// Keys from an earlier run (see runID). Metadata from a version
+		// without RunID has "" and is also dropped.
 		c.log.Debugf("Deleting transaction %s with %d events left in the cache by an earlier run", txnID, meta.EventCount)
 		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
 		return nil, nil
