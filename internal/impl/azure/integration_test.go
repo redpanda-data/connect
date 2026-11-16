@@ -494,10 +494,13 @@ input:
 		require.NoError(t, err)
 
 		sb := service.NewStreamBuilder()
+		// A visibility timeout far longer than the wait below makes the reset the
+		// only way the rejected message can come back in time.
 		require.NoError(t, sb.AddInputYAML(fmt.Sprintf(`
 azure_queue_storage:
   queue_name: %s
   storage_connection_string: %s
+  dequeue_visibility_timeout: 5m
 `, queueName, connString)))
 		require.NoError(t, sb.SetLoggerYAML(`level: OFF`))
 

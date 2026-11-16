@@ -88,7 +88,7 @@ func (f *fakeQueueService) snapshot() (deleted []string, updated map[string]stri
 	return deleted, updated
 }
 
-func newQueueStorageInputForServer(t *testing.T, srv *httptest.Server) *azureQueueStorage {
+func newQueueStorageInputForServer(t *testing.T, srv *httptest.Server, extraYAML ...string) *azureQueueStorage {
 	t.Helper()
 
 	u, err := url.Parse(srv.URL)
@@ -98,7 +98,8 @@ func newQueueStorageInputForServer(t *testing.T, srv *httptest.Server) *azureQue
 	pConf, err := qsiSpec().ParseYAML(fmt.Sprintf(`
 queue_name: test-queue
 storage_connection_string: %s
-`, connString), service.NewEnvironment())
+%s
+`, connString, strings.Join(extraYAML, "\n")), service.NewEnvironment())
 	require.NoError(t, err)
 
 	conf, err := qsiConfigFromParsed(pConf)
@@ -144,4 +145,23 @@ func TestQueueStorageInputNackKeepsMessages(t *testing.T) {
 	deleted, updated := fake.snapshot()
 	assert.Empty(t, deleted, "a rejected message must not be deleted from the queue")
 	assert.Equal(t, map[string]string{"a": "0", "b": "0"}, updated, "a rejected message must be made visible again immediately")
+}
+
+// With reset_visibility disabled a rejected message is neither deleted nor
+// released: it stays hidden until the dequeue visibility timeout expires.
+func TestQueueStorageInputNackWithoutResetVisibility(t *testing.T) {
+	fake := newFakeQueueService("a", "b")
+	srv := httptest.NewServer(fake)
+	t.Cleanup(srv.Close)
+
+	input := newQueueStorageInputForServer(t, srv, "reset_visibility: false")
+	batch, ackFn, err := input.ReadBatch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, batch, 2)
+
+	require.NoError(t, ackFn(t.Context(), errors.New("processing failed")))
+
+	deleted, updated := fake.snapshot()
+	assert.Empty(t, deleted, "a rejected message must not be deleted from the queue")
+	assert.Empty(t, updated, "the visibility timeout must be left alone")
 }

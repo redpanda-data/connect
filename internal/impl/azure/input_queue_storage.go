@@ -32,6 +32,7 @@ const (
 	qsiFieldQueueName                = "queue_name"
 	qsiFieldDequeueVisibilityTimeout = "dequeue_visibility_timeout"
 	qsiFieldTrackProperties          = "track_properties"
+	qsiFieldResetVisibility          = "reset_visibility"
 )
 
 type qsiConfig struct {
@@ -40,6 +41,7 @@ type qsiConfig struct {
 	DequeueVisibilityTimeout time.Duration
 	MaxInFlight              int
 	TrackProperties          bool
+	ResetVisibility          bool
 }
 
 func qsiConfigFromParsed(pConf *service.ParsedConfig) (conf qsiConfig, err error) {
@@ -56,6 +58,9 @@ func qsiConfigFromParsed(pConf *service.ParsedConfig) (conf qsiConfig, err error
 		return
 	}
 	if conf.TrackProperties, err = pConf.FieldBool(qsiFieldTrackProperties); err != nil {
+		return
+	}
+	if conf.ResetVisibility, err = pConf.FieldBool(qsiFieldResetVisibility); err != nil {
 		return
 	}
 	return
@@ -78,7 +83,7 @@ This input adds the following metadata fields to each message:
 
 Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.
 
-Messages are deleted from the queue after they are acknowledged. A rejected message is not deleted. Instead its visibility timeout is reset to zero so that the queue redelivers it right away.`).
+Messages are deleted from the queue after they are acknowledged. A rejected message is not deleted. By default its visibility timeout is reset to zero so that the queue redelivers it right away. Set `+"`reset_visibility`"+` to `+"`false`"+` to redeliver it after the `+"`dequeue_visibility_timeout`"+` expires instead.`).
 		Fields(
 			service.NewInterpolatedStringField(qsiFieldQueueName).
 				Description(`The name of the source storage queue.`).
@@ -96,6 +101,12 @@ Messages are deleted from the queue after they are acknowledged. A rejected mess
 				Description("If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact.").
 				ShortDescription("Poll the queue on each read for properties such as message lag, at a performance cost.").
 				Default(false).
+				Advanced(),
+			service.NewBoolField(qsiFieldResetVisibility).
+				Description("Whether to reset the visibility timeout of a rejected message to zero, so that the queue redelivers it right away. Set to `false` to keep the message hidden until the `dequeue_visibility_timeout` expires, which spaces out retries of a message that keeps failing.").
+				ShortDescription("Reset the visibility timeout of a rejected message to zero for immediate redelivery.").
+				Version("4.119.0").
+				Default(true).
 				Advanced(),
 			service.NewStringField(bscFieldStorageSASToken).Deprecated().Default(""), // This field was never implemented
 		)
@@ -186,7 +197,9 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 	}
 	return batch, func(ctx context.Context, res error) error {
 		if res != nil {
-			a.releaseMessages(ctx, queueClient, dqm)
+			if a.conf.ResetVisibility {
+				a.releaseMessages(ctx, queueClient, dqm)
+			}
 			return nil
 		}
 		return deleteMessages(ctx, queueClient, dqm)
