@@ -1078,19 +1078,15 @@ func TestIntegrationMySQL(t *testing.T) {
 }
 
 // startMSSQLContainer starts the SQL Server container for
-// TestIntegrationMSSQL and stops it at the end of the test. It returns when
-// SQL Server runs queries, and it starts a new container when SQL Server
-// crashes before that.
+// TestIntegrationMSSQL and stops it at the end of the test.
 func startMSSQLContainer(t *testing.T, password string) testcontainers.Container {
 	t.Helper()
 	// When other test packages load the Docker host, SQL Server 2025 can crash in sqlpal.dll a few seconds after
-	// the start ("This program has encountered a fatal error"). The port can be open before that, so wait until a
-	// query runs. ForSQL checks the container state at each try, so it fails as soon as the container exits, and
-	// then the test starts a new container. When the wait fails, testcontainers logs the container logs.
+	// the start. The port can be open before that, so wait until a query runs. ForSQL fails as soon as the container
+	// exits, and then the test starts a new container. When the wait fails, testcontainers logs the container logs.
 	//
-	// All attempts share one start deadline, so that the start stays well below the 10m timeout of the package
-	// (cmd/tools/integration/packages.json). A crash fails fast and leaves time for a new attempt. A slow start can
-	// use all of the time.
+	// All attempts share one deadline, to stay well below the 10m package timeout
+	// (cmd/tools/integration/packages.json).
 	const maxAttempts = 3
 	startDeadline := time.Now().Add(5 * time.Minute)
 	var (
@@ -1118,8 +1114,7 @@ func startMSSQLContainer(t *testing.T, password string) testcontainers.Container
 			break
 		}
 		t.Logf("SQL Server start attempt %d/%d failed: %v", attempt, maxAttempts, err)
-		// Stop the failed container now, not at the end of the test. A container that is still running adds load to
-		// the Docker host, and that load is what makes SQL Server crash.
+		// A failed container that still runs adds load to the Docker host, and that load makes SQL Server crash.
 		if termErr := testcontainers.TerminateContainer(ctr); termErr != nil {
 			t.Logf("Cannot terminate the failed SQL Server container: %v", termErr)
 		}
