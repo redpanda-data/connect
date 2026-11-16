@@ -10,14 +10,44 @@ env:
   AWS_DEFAULT_REGION: "{{.REGION}}"
 
 tasks:
-  run:
-    desc: Start DynamoDB, seed all tables, and run the benchmark
+  # The bench:* tasks are the interface every suite exposes, see
+  # cmd/tools/bench/README.md. `go run ./cmd/tools/bench run aws_dynamodb_cdc`
+  # from the repository root drives them and writes a result JSON document.
+
+  bench:up:
+    desc: Start DynamoDB Local and create the tables
     cmds:
+      - task: bench:down
       - task: dynamodb:up
       - cmd: sleep 2
       - task: create
+
+  bench:load:
+    desc: Seed the three tables (450k items)
+    cmds:
       - task: seed
+
+  bench:run:
+    desc: Run the benchmark pipeline until interrupted
+    cmds:
       - go run ../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+
+  bench:reset:
+    desc: Drop the checkpoint table so the next run reads the streams from the start
+    cmds:
+      - task: drop-checkpoint
+
+  bench:down:
+    desc: Stop and remove DynamoDB Local
+    cmds:
+      - task: dynamodb:down
+
+  run:
+    desc: Start DynamoDB, seed all tables, and run the benchmark
+    cmds:
+      - task: bench:up
+      - task: bench:load
+      - task: bench:run
 
   seed:
     desc: Seed all tables in parallel

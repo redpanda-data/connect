@@ -8,37 +8,41 @@ Docker (for DynamoDB Local) and Go (already required to build the project).
 
 ## How to Run
 
+From the repository root:
+
 ```bash
-task run
+go run ./cmd/tools/bench run aws_dynamodb_cdc
 ```
 
-This starts DynamoDB Local, creates the tables, seeds 450k items (3 tables × 150k), and runs the benchmark in one shot.
+This starts DynamoDB Local, creates the tables, seeds 450k items (3 tables × 150k), runs the benchmark until the streams are drained, removes the container, and prints the result. The samples and the summary are written to `target/bench/aws_dynamodb_cdc/streams/<timestamp>/result.json`. See [`cmd/tools/bench`](../../../../../cmd/tools/bench/README.md) for the flags and the result schema.
+
+To watch the rolling stats yourself instead, run `task run` in this directory and stop it with Ctrl-C.
 
 ### Re-running
 
-To run the benchmark again without re-seeding:
+To run the benchmark again without re-seeding, keep the container up the first time:
 
 ```bash
-task drop-checkpoint
-go run ../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+go run ./cmd/tools/bench run --keep aws_dynamodb_cdc
+go run ./cmd/tools/bench run --skip-setup aws_dynamodb_cdc
 ```
 
 ### Individual tasks
 
 ```bash
-task dynamodb:up      # start container
-task create           # create tables
-task seed             # seed all tables in parallel
-task drop-checkpoint  # reset checkpoint between runs
-task dynamodb:down    # stop and remove container
+task bench:up         # start the container and create the tables
+task bench:load       # seed all tables in parallel
+task bench:reset      # drop the checkpoint table between runs
+task bench:run        # run the pipeline until interrupted
+task bench:down       # stop and remove the container
 ```
 
 ## Notes
 
 - DynamoDB Streams retain records for **24 hours**. Insert data and run the benchmark promptly.
 - DynamoDB Local runs in-memory (`-inMemory` flag), so data is lost on container restart.
-- To re-run a benchmark: `task drop-checkpoint` then restart Connect.
-- To reset all data: `task dynamodb:down && task dynamodb:up && task create`.
+- To re-run a benchmark: `task bench:reset` then `task bench:run`.
+- To reset all data: `task bench:up`, which replaces the container.
 
 ### Expected Output
 

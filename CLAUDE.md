@@ -95,6 +95,14 @@ task docs                         # Generate documentation and validate examples
 
 `task docs` writes the generated reference docs to `docs/modules/`, which is gitignored. Each release attaches them to the GitHub release, and the docs site reads them from there. To change what the docs say, edit the spec in Go; see `docs/README.md`.
 
+### Benchmarks
+```bash
+go run ./cmd/tools/bench list --json   # Benchmark suites, their prerequisites and scenarios
+go run ./cmd/tools/bench run <suite>   # Run a suite, write target/bench/.../result.json
+```
+
+See `cmd/tools/bench/README.md` for the suite contract and the result schema, and `docs/benchmarking.md` for how to write a suite.
+
 ### Running Locally
 ```bash
 task run                          # Run with default config (config/dev.yaml)

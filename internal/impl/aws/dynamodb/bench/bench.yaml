@@ -1,0 +1,12 @@
+name: aws_dynamodb_cdc
+component: aws_dynamodb_cdc
+kind: input
+summary: Read throughput of the DynamoDB CDC input over the streams of three tables on DynamoDB Local
+results: docs/benchmark-results/dynamodb-cdc.md
+requires:
+  tools: [docker, go]
+  notes: DynamoDB Local listens on port 8000 and keeps the tables in memory.
+scenarios:
+  - name: streams
+    description: Drain the stream records of 450k seeded items (3 tables x 150k), one shard per table
+    max_duration: 5m

@@ -13,6 +13,26 @@ The general approach:
 3. Run Redpanda Connect with the connector configured, using the built-in `benchmark` processor to measure throughput
 4. Record results (msg/sec, MB/sec) in the PR description
 
+## Standard Suite Interface
+
+Suites follow one contract so that a person or an agent can discover them, run them and read their results the same way:
+
+- a `bench.yaml` manifest that names the suite, the connector under test, the prerequisites (tools, environment variables) and the scenarios,
+- a Taskfile with the tasks `bench:up`, `bench:load`, `bench:reset`, `bench:run` and `bench:down`,
+- a pipeline with the `benchmark` processor at `interval: 1s`.
+
+The [`cmd/tools/bench`](../cmd/tools/bench/README.md) tool works on that contract:
+
+```bash
+go run ./cmd/tools/bench list --json           # every suite, its prerequisites and scenarios
+go run ./cmd/tools/bench run aws_dynamodb_cdc  # set up, measure, tear down, write result.json
+go run ./cmd/tools/bench check                 # validate the manifests (also runs in the unit tests)
+```
+
+`run` stops the measurement once the source is drained and writes `target/bench/<suite>/<scenario>/<timestamp>/result.json` with the samples, a summary (median, p5, p95, peak, mean in msg/s and MB/s), the commit and the host. The [tool's README](../cmd/tools/bench/README.md) documents the manifest, the tasks and the result schema.
+
+New suites must follow the contract. Existing suites are being migrated one at a time: `list` shows the ones that are not there yet with what they lack, and those still run by hand from their README. The [DynamoDB CDC suite](../internal/impl/aws/dynamodb/bench/) is the reference.
+
 ## Real-Endpoint Benchmarks and Soaks (AWS)
 
 The local Docker path above is the first phase. The second phase — real
@@ -37,7 +57,8 @@ Place benchmarking files in `internal/impl/<component>/bench/`:
 ```
 internal/impl/<component>/bench/
 ├── README.md                # How to run, prerequisites, expected output
-├── Taskfile.yaml            # Task runner for orchestration
+├── bench.yaml               # Manifest: name, prerequisites, scenarios
+├── Taskfile.yaml            # Task runner with the bench:* tasks
 ├── benchmark_config.yaml    # Redpanda Connect pipeline config
 ├── docker-compose.yml       # (optional) Multi-service setups
 ├── create.sql               # (optional) Schema creation scripts
@@ -172,15 +193,29 @@ Key configuration points:
 
 ### 4. Run the Benchmark
 
-Wire everything together in the Taskfile so `task` (or `task run`) executes the full sequence:
+Expose the steps as the `bench:*` tasks of the [standard interface](#standard-suite-interface), so the full sequence runs with `go run ./cmd/tools/bench run <suite>`:
 
 ```yaml
-  run:
+  bench:up:
     cmds:
       - task: service:up
       - task: create
+
+  bench:load:
+    cmds:
       - task: seed
+
+  bench:reset:
+    cmds:
+      - task: drop-checkpoint
+
+  bench:run:
+    cmds:
       - go run ../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+
+  bench:down:
+    cmds:
+      - task: service:down
 ```
 
 Or for manual step-by-step execution:
