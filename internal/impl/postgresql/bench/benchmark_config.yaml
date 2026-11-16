@@ -4,35 +4,51 @@ http:
 input:
   postgres_cdc:
     dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
-    stream_snapshot: true
+    stream_snapshot: false
     schema: public
     tables:
       - users
       - products
       - cart
     slot_name: bench_slot
+    signal_table_name: rpcn_signal_table
+    incremental_snapshot:
+      enabled: true
+      chunk_size: 1024
+      heartbeat_interval: 1s
+      retry_cooldown: 30s
+      checkpoint_cache: snap_cache
+      checkpoint_cache_key: postgres_cdc_incremental_snapshot
     batching:
       count: 1000
       period: 1s
 
-# pipeline:
-#   processors:
-#     - mapping: |
-#         root.payload = this
-#         root.metadata = @
+pipeline:
+  processors:
+    - mapping: |
+        root.id = this.id
+        root.op = @operation
+        root.table = @table
 
 output:
-  processors:
-    - benchmark:
-        interval: 1s
-        count_bytes: true
+  # processors:
+  #   - benchmark:
+  #       interval: 1s
+  #       count_bytes: true
   # file:
   #   path: "./benchmark_results.json"
   #   codec: lines
-  drop: {}
+  # drop: {}
+  stdout: {}
 
 logger:
   level: INFO
+
+cache_resources:
+  - label: snap_cache
+    # memory: {}
+    file:
+      directory: "./checkpoints/"
 
 metrics:
   prometheus:

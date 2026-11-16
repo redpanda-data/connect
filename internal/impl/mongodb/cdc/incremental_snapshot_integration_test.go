@@ -584,6 +584,11 @@ mongodb_cdc:
 	require.Eventually(t, func() bool {
 		return len(h.logs.matching("signal test done")) > 0
 	}, time.Minute, 100*time.Millisecond, "the log signal was not seen")
+	// The input logs a signal when it handles it, which can be before the output
+	// gets the insert of that signal. Wait for the output too, or Stop can drop it.
+	require.Eventually(t, func() bool {
+		return replay(h.output).signals == 4
+	}, time.Minute, 100*time.Millisecond, "not all signal inserts were emitted")
 	incremental.Stop(t)
 	wait()
 

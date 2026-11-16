@@ -37,10 +37,11 @@ To preview your changes in a docs build, point the docs build at your generated 
 |----------------------------------------------------------------------------------------|-----------------|----------------------|
 | Field reference, examples, metadata, and descriptions (`modules/components/partials/`) | connect         | Generated from specs |
 | Common and Advanced config snippets (`modules/components/examples/`)                   | connect         | Generated from specs |
+| Config snippet block for each component page (`modules/components/partials/config/`)   | connect         | Generated from specs |
 | Bloblang function and method reference (`modules/components/partials/bloblang-*`)      | connect         | Generated from specs |
 | Component pages, guides, cookbooks, navigation, and the component catalog              | rp-connect-docs | Docs team            |
 
-Each component page in rp-connect-docs is written by hand and includes the generated partials. Keeping the reference data in the specs means it changes in the same pull request as the code it describes. Keeping the pages in rp-connect-docs lets writers add context, such as prerequisites, tutorials, and Redpanda Cloud notes, without editing Go.
+Each component page in rp-connect-docs is written by hand and includes the generated partials. For its config snippets a page includes `connect:components:partial$config/<type>/<name>.adoc`, which shows Common and Advanced tabs when the two snippets differ and one code block when they're the same. `<type>` is the directory the examples use, such as `rate-limits`. Keeping the reference data in the specs means it changes in the same pull request as the code it describes. Keeping the pages in rp-connect-docs lets writers add context, such as prerequisites, tutorials, and Redpanda Cloud notes, without editing Go.
 
 ## Writing doc strings
 

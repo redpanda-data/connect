@@ -22,6 +22,7 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
+	"github.com/cenkalti/backoff/v4"
 	_ "github.com/sijms/go-ora/v2"
 	"golang.org/x/sync/errgroup"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -41,6 +43,7 @@ const (
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	ociFieldSnapshotConnBackoff       = "snapshot_connection_backoff"
 	ociFieldTablesExclude             = "exclude"
 	ociFieldTablesInclude             = "include"
 	ociFieldCheckpointLimit           = "checkpoint_limit"
@@ -105,13 +108,15 @@ This input adds the following metadata fields to each message:
 
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 
+When ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is greater than 1, tables with an enabled and validated primary key and no ` + "`" + ociFieldSnapshotFilters + "`" + ` entry are considered for splitting into parallel chunks. Planning and reading those chunks uses flashback queries (` + "`AS OF SCN`" + `) pinned to the SCN captured at the start of the snapshot. For tables it does not own, the Connect user then requires the ` + "`FLASHBACK`" + ` object privilege on each table (` + "`GRANT FLASHBACK ON <schema>.<table> TO <user>`" + `) or ` + "`GRANT FLASHBACK ANY TABLE TO <user>`" + `, in addition to ` + "`SELECT`" + `. A table the user can't read with flashback queries isn't split: a warning is logged and a single reader reads it with a full scan, as when ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is 1. Because every chunk reads as of that one SCN, the database's undo retention must also cover the full duration of the snapshot, otherwise reads fail with ORA-01555 (snapshot too old).
+
 == Performance
 
 Streaming throughput is bounded by the LogMiner session, not by CPU. Each pipeline mines the redo stream through a single synchronous LogMiner reader, so adding cores to Redpanda Connect does not raise the capture rate. To capture more aggregate change volume from one database, run multiple pipelines that each ` + "`include`" + ` a disjoint set of tables. Every pipeline gets its own LogMiner reader.
 
 Large transactions and driver fetch size: left to itself, the Oracle driver sizes each fetch to roughly 128 KiB based on the declared maximum width of the selected columns. As a result, wide columns such as LogMiner's redo SQL yield only a handful of rows per network round trip. This can make large committed transactions appear minutes late while the database, network and connector all look idle. Each round trip costs a full network exchange, and a large transaction requires thousands of them. The connector therefore fetches ` + "`" + ociFieldPrefetchRows + "`" + ` rows per round trip (500 by default). Raise it for large transactions over high-latency links. A ` + "`PREFETCH_ROWS`" + ` query parameter in ` + "`" + ociFieldConnectionString + "`" + ` takes precedence over the field.
 
-Redo log retention must cover idle periods, not just outages: the SCN checkpoint only advances when messages are delivered, so a monitored table set that goes idle leaves the checkpoint stationary while the database ages out redo/archive logs. If the checkpointed SCN is no longer available when activity resumes or the pipeline restarts, the input cannot resume and repeatedly fails with ORA-01292. Ensure archive log retention exceeds the longest plausible idle period, and alert on a stagnant checkpoint SCN or repeated ORA errors.
+The checkpoint advances about every 10 seconds after every delivered batch is acknowledged, also while the monitored tables are idle. On an idle database it can stay up to ` + "`" + ociFieldLogMiner + "." + ociFieldMinSCNWindowSize + "`" + ` SCNs behind the current SCN, because the input does not mine smaller ranges. It never moves past the start of a transaction that is still open. With ` + "`" + ociFieldBatching + ".count`" + ` and no ` + "`" + ociFieldBatching + ".period`" + `, rows can wait in the batcher until more rows arrive, and the checkpoint does not advance until they flush. Set a ` + "`period`" + ` to prevent this. Keep redo logs for longer than the longest open transaction and the longest pipeline outage. If the checkpointed SCN is no longer available, the input cannot resume and fails with ORA-01291. Alert on a stagnant checkpoint SCN or repeated ORA errors.
 
 A flashback or point-in-time recovery on the source database followed by ` + "`OPEN RESETLOGS`" + ` permanently invalidates any checkpoint taken before that event. The checkpoint belongs to a prior database incarnation, and no log file from either incarnation covers the gap. This is a different failure from the retention case above, and it surfaces as ORA-01291. Increasing retention will not help, because the problem is incarnation identity rather than log availability. Recovery always requires clearing the connector's checkpoint so it resumes from the database's current SCN. With the default Oracle-based checkpoint cache, the checkpoint row lives in the same database, so the flashback rolls it back rather than clearing it. It must be deleted explicitly. Clearing the checkpoint alone loses any changes committed between the last checkpoint and the restart. To avoid that gap, clear the checkpoint and set ` + "`" + ociFieldSnapshotMode + "`" + ` to ` + "`snapshot_and_stream`" + ` together. Setting ` + "`" + ociFieldSnapshotMode + "`" + ` alone has no effect, since a checkpoint that is still present skips snapshotting entirely.
 		`).
@@ -155,10 +160,18 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		Optional().
 		Version("4.99.0"),
 	).
-	Field(cdcreplication.MaxParallelSnapshotTablesField()).
+	Field(cdcreplication.MaxParallelSnapshotTablesField("Each reader reads one table, or one range chunk of a large table. Tables are only split into chunks when this is greater than 1.\n\nA table is not split, and is read by a single reader alongside the other tables, when it has a `" + ociFieldSnapshotFilters + "` entry. The same is true when it has no primary key, or one that isn't enabled and validated, or when it has too few distinct keys to split. It is also true when it has a key that must be sampled (anything other than a single NUMBER, FLOAT, DATE or TIMESTAMP column) but no optimizer statistics.\n\nTables are split into at most one chunk per 10,000 rows, so tables with fewer than 20,000 rows aren't split. The row count comes from the table's optimizer statistics. When those are missing or show fewer than 20,000 rows, for example because they're stale, the connector counts the table's rows instead, stopping once it has counted enough to plan every chunk.\n\nEach parallel reader holds its own database connection, so keep this well below the database's `processes` and `sessions` limits, allowing for the other connections the database serves. If the database runs out of connections, readers wait for one to be released and retry with backoff. The snapshot fails only if no reader can get a connection in time. See `" + ociFieldSnapshotConnBackoff + "`.").
+		LintRule(`root = if this <= 0 { [ "` + ociFieldMaxParallelSnapshotTables + ` must be greater than 0" ] }`),
+	).
 	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
-		Description("The maximum number of rows fetched per query when taking a snapshot of a table with a `" + ociFieldSnapshotFilters + "` entry configured. Tables without one are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
-		Default(1000),
+		Description("The maximum number of rows fetched per query when taking a snapshot of a table that is paged by primary key. This applies to tables with a `" + ociFieldSnapshotFilters + "` entry configured. It also applies to tables with a primary key that are split into parallel range chunks, which happens only when `" + ociFieldMaxParallelSnapshotTables + "` is greater than 1. All other tables are streamed through a single unordered cursor, where this value only paces how often a cancellation is checked.").
+		Default(1000).
+		LintRule(`root = if this <= 0 { [ "` + ociFieldSnapshotMaxBatchSize + ` must be greater than 0" ] }`),
+	).
+	Field(service.NewBackOffField(ociFieldSnapshotConnBackoff, false, replication.DefaultSnapshotConnBackoff()).
+		Description("Instead of failing a snapshot, the connector retries acquiring a connection when the database has no capacity for another one, for example when `" + ociFieldMaxParallelSnapshotTables + "` exceeds its `processes` or `sessions` limits. Readers wait for a connection to be released, retrying with exponential backoff. The snapshot fails only if a reader can't get one within `" + ociFieldSnapshotConnBackoff + ".max_elapsed_time` while no other reader holds a connection. While another reader holds one, the snapshot is still progressing, so the reader keeps waiting.").
+		Version("4.118.0").
+		Advanced(),
 	).
 	// logminer config
 	Field(service.NewObjectField(ociFieldLogMiner,
@@ -236,7 +249,9 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 	Field(service.NewStringMapField(ociFieldSnapshotFilters).
 		Description(`A map of fully-qualified table names (for example ` + "`" + `SCHEMA.TABLE` + "`" + `) to SQL ` + "`" + `SELECT` + "`" + ` queries that override the default snapshot query for each table. Use this to filter or shape the rows captured during the initial snapshot.
 
-Each query must project every column of the table's primary key (all columns of a composite key), even if it otherwise selects only a subset of columns. During a snapshot, Redpanda Connect pages through a table's rows by filtering and sorting on the full primary key against the query's own result set. If a primary key column isn't projected, the snapshot fails part-way through, after the first batch of rows is read.`).Version("4.101.0").
+Each query must project every column of the table's primary key (all columns of a composite key), even if it otherwise selects only a subset of columns. During a snapshot, Redpanda Connect pages through a table's rows by filtering and sorting on the full primary key against the query's own result set. If a primary key column isn't projected, the snapshot fails part-way through, after the first batch of rows is read.
+
+A table with a query here is never split into parallel chunks, whatever ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is set to. A single reader pages through it in one ` + "`READ ONLY`" + ` transaction. It is also read without flashback queries (` + "`AS OF SCN`" + `), so it reflects the table when that transaction starts rather than the SCN captured at the start of the snapshot.`).Version("4.101.0").
 		ShortDescription("A map of fully-qualified table names to SELECT queries, overriding the default snapshot query per table.").
 		Example(map[string]any{
 			"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
@@ -293,6 +308,7 @@ type Config struct {
 	SnapshotMode         SnapshotMode
 	SnapshotMaxBatchSize int
 	SnapshotMaxWorkers   int
+	SnapshotConnBackoff  *backoff.ExponentialBackOff
 	SnapshotFilters      map[string]string
 	TablesFilter         *confx.RegexpFilter
 	SCNCache             string
@@ -361,8 +377,16 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 	if snapshotMaxWorkers, err = conf.FieldInt(ociFieldMaxParallelSnapshotTables); err != nil {
 		return nil, err
+	} else if snapshotMaxWorkers <= 0 {
+		return nil, fmt.Errorf("%s must be greater than 0, got %d", ociFieldMaxParallelSnapshotTables, snapshotMaxWorkers)
 	}
 	if snapshotMaxBatchSize, err = conf.FieldInt(ociFieldSnapshotMaxBatchSize); err != nil {
+		return nil, err
+	} else if snapshotMaxBatchSize <= 0 {
+		return nil, fmt.Errorf("%s must be greater than 0, got %d", ociFieldSnapshotMaxBatchSize, snapshotMaxBatchSize)
+	}
+	snapshotConnBackoff, err := conf.FieldBackOff(ociFieldSnapshotConnBackoff)
+	if err != nil {
 		return nil, err
 	}
 	if lmCfg, err = parseLogMinerConfig(conf); err != nil {
@@ -465,6 +489,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			SnapshotMode:         snapshotMode,
 			SnapshotMaxWorkers:   snapshotMaxWorkers,
 			SnapshotMaxBatchSize: snapshotMaxBatchSize,
+			SnapshotConnBackoff:  snapshotConnBackoff,
 			SnapshotFilters:      snapshotFilters,
 			SCNCache:             scnCache,
 			SCNCacheKey:          scnCacheKey,
@@ -557,7 +582,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		o.db = nil
 	}
 
-	if o.db, err = sql.Open("oracle", o.cfg.ConnectionString); err != nil {
+	if o.db, err = sqlredact.Open("oracle", o.cfg.ConnectionString); err != nil {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {
@@ -673,13 +698,12 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	}
 	var (
 		snapshotter *replication.Snapshot
-		// logminer processor
-		streaming streamProcessor
+		streaming   streamProcessor // logminer processor
 	)
 
 	// no cached SCN means we're not recovering from a restart
 	if !o.cfg.SnapshotMode.IsSnapshotNone() && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.cfg.SnapshotConnBackoff, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {

@@ -25,7 +25,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	qdb "github.com/questdb/go-questdb-client/v4"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -80,23 +79,45 @@ output:
 `
 	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
 		pgConn, err := pgconn.Connect(ctx, fmt.Sprintf("postgresql://admin:quest@localhost:%v", pgPort))
-		require.NoError(t, err)
+		if err != nil {
+			return "", nil, err
+		}
 		defer pgConn.Close(ctx)
 
-		result := pgConn.ExecParams(ctx, fmt.Sprintf("SELECT content, id FROM '%v' WHERE id=%v", testID, messageID), nil, nil, nil, nil)
-
-		result.NextRow()
-		id, err := strconv.Atoi(string(result.Values()[1]))
-		assert.NoError(t, err)
-		data := map[string]any{
-			"content": string(result.Values()[0]),
-			"id":      id,
+		// QuestDB creates WAL tables for ILP writes. A WAL table shows new rows
+		// only after a background job applies the WAL, so a query right after
+		// the write can find no table or no rows. Query again until the row
+		// shows or the deadline expires.
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		query := fmt.Sprintf("SELECT content, id FROM '%v' WHERE id=%v", testID, messageID)
+		var res *pgconn.Result
+		for {
+			res = pgConn.ExecParams(ctx, query, nil, nil, nil, nil).Read()
+			if res.Err == nil && len(res.Rows) > 0 {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return "", nil, fmt.Errorf("row %v not visible in table %v: last error: %v, rows: %v: %w", messageID, testID, res.Err, len(res.Rows), ctx.Err())
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+		if len(res.Rows) != 1 {
+			return "", nil, fmt.Errorf("want 1 row with id %v, got %v", messageID, len(res.Rows))
 		}
 
-		assert.False(t, result.NextRow())
-
-		outputBytes, err := json.Marshal(data)
-		require.NoError(t, err)
+		id, err := strconv.Atoi(string(res.Rows[0][1]))
+		if err != nil {
+			return "", nil, err
+		}
+		outputBytes, err := json.Marshal(map[string]any{
+			"content": string(res.Rows[0][0]),
+			"id":      id,
+		})
+		if err != nil {
+			return "", nil, err
+		}
 		return string(outputBytes), nil, nil
 	}
 

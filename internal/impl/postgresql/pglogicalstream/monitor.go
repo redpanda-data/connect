@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,10 @@ import (
 type Report struct {
 	WalLagInBytes int64
 	TableProgress map[TableFQN]float64
+	// TablesMissingFromPublication counts the required tables a watched
+	// publication does not cover, as of the last check. Zero when no
+	// publication is watched.
+	TablesMissingFromPublication int64
 }
 
 // Monitor is a structure that allows monitoring the progress of snapshot ingestion and replication lag
@@ -45,6 +50,15 @@ type Monitor struct {
 	// replicationLagInBytes is the replication lag in bytes measured by
 	// finding the difference between the latest LSN and the last confirmed LSN for the replication slot
 	replicationLagInBytes atomic.Int64
+
+	// publicationMu guards publication, publicationTables and
+	// lastMissingFromPublication, which WatchPublication sets after the loop
+	// has started.
+	publicationMu              sync.Mutex
+	publication                string
+	publicationTables          []TableFQN
+	lastMissingFromPublication string
+	missingFromPublication     atomic.Int64
 
 	dbConn   *sql.DB
 	slotName string
@@ -77,7 +91,10 @@ func NewMonitor(
 		slotName:              slotName,
 		logger:                logger,
 	}
-	m.loop = asyncroutine.NewPeriodicWithContext(config.WalMonitorInterval, m.readReplicationLag)
+	m.loop = asyncroutine.NewPeriodicWithContext(config.WalMonitorInterval, func(ctx context.Context) {
+		m.readReplicationLag(ctx)
+		m.checkPublication(ctx)
+	})
 	for _, table := range tables {
 		m.snapshotProgress[table] = &atomic.Int64{}
 		m.tableStat[table] = 0
@@ -143,6 +160,16 @@ func (m *Monitor) TrackSnapshotTable(ctx context.Context, table TableFQN) {
 	delete(m.estimateFailed, table)
 	m.snapshotProgress[table] = &atomic.Int64{}
 	m.tableStat[table] = estimate
+}
+
+// ResetSnapshotTable clears a re-queued table's progress and row estimate so
+// its next snapshot counts from zero against a fresh estimate.
+func (m *Monitor) ResetSnapshotTable(table TableFQN) {
+	m.snapshotMu.Lock()
+	defer m.snapshotMu.Unlock()
+	delete(m.snapshotProgress, table)
+	delete(m.tableStat, table)
+	delete(m.estimateFailed, table)
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress.
@@ -214,6 +241,58 @@ func (m *Monitor) readReplicationLag(ctx context.Context) {
 	m.replicationLagInBytes.Store(lagbytes)
 }
 
+// WatchPublication makes every monitor tick check that publication still
+// covers tables, logging an error and counting the tables it does not. It is
+// for an externally managed publication, which can change while the stream
+// runs: a table dropped from one simply stops streaming, with nothing else to
+// say so until the next connect.
+func (m *Monitor) WatchPublication(publication string, tables []TableFQN) {
+	m.publicationMu.Lock()
+	defer m.publicationMu.Unlock()
+	m.publication = publication
+	m.publicationTables = slices.Clone(tables)
+}
+
+func (m *Monitor) checkPublication(ctx context.Context) {
+	m.publicationMu.Lock()
+	defer m.publicationMu.Unlock()
+	if m.publication == "" {
+		return
+	}
+
+	var missing []string
+	for _, table := range m.publicationTables {
+		q, err := publicationCoversTableQuery(m.publication, table.String())
+		if err != nil {
+			m.logger.Warnf("Unable to build the publication membership query for table %s: %s", table, err)
+			return
+		}
+		var covered bool
+		if err := m.dbConn.QueryRowContext(ctx, q).Scan(&covered); err != nil {
+			// Unknown rather than missing, so the last result stands.
+			m.logger.Warnf("Unable to check whether publication %s includes table %s: %s", m.publication, table, err)
+			return
+		}
+		if !covered {
+			missing = append(missing, table.String())
+		}
+	}
+
+	m.missingFromPublication.Store(int64(len(missing)))
+	// Logged on a change rather than on every tick.
+	current := strings.Join(missing, ", ")
+	if current == m.lastMissingFromPublication {
+		return
+	}
+	m.lastMissingFromPublication = current
+	if current == "" {
+		m.logger.Infof("Publication %s includes every configured table again; changes made while a table was missing from it were not captured, so request an incremental snapshot of that table to backfill them", m.publication)
+		return
+	}
+	m.logger.Errorf("Publication %s no longer includes table(s) %s, so PostgreSQL is not capturing their changes and they are lost: add them back with ALTER PUBLICATION %s ADD TABLE and request an incremental snapshot of them to backfill the missed changes, or remove them from the input's tables",
+		m.publication, current, m.publication)
+}
+
 // Report returns a snapshot of the monitor's state.
 func (m *Monitor) Report() *Report {
 	// report the snapshot ingestion progress
@@ -229,8 +308,9 @@ func (m *Monitor) Report() *Report {
 		progress[table] = float64(read.Load()) / total
 	}
 	return &Report{
-		WalLagInBytes: m.replicationLagInBytes.Load(),
-		TableProgress: progress,
+		WalLagInBytes:                m.replicationLagInBytes.Load(),
+		TableProgress:                progress,
+		TablesMissingFromPublication: m.missingFromPublication.Load(),
 	}
 }
 

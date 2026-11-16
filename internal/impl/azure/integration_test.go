@@ -256,7 +256,7 @@ input:
 		})
 		require.NoError(t, err)
 		w := &azureBlobStorageWriter{conf: bsoConfig{client: raceClient}}
-		require.NoError(t, w.uploadBlob(t.Context(), containerName, blobName, "APPEND", []byte("second")))
+		require.NoError(t, w.uploadBlob(t.Context(), containerName, blobName, "APPEND", []byte("second"), nil))
 
 		resp, err := seedClient.DownloadStream(t.Context(), containerName, blobName, nil)
 		require.NoError(t, err)
@@ -264,6 +264,196 @@ input:
 		content, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, "firstsecond", string(content))
+	})
+
+	t.Run("blob_storage_tags", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: tagged-blob.txt
+blob_type: BLOCK
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: test-suite
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		msg := service.NewMessage([]byte("hello world"))
+		require.NoError(t, writer.Write(t.Context(), msg))
+
+		blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-blob.txt")
+
+		// Assert the payload too, so a regression that tags correctly but corrupts
+		// the body cannot pass.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "hello world", string(body))
+
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "test-suite",
+		}, tags)
+	})
+
+	t.Run("blob_storage_tags_append", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: tagged-append-blob.txt
+blob_type: APPEND
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: ${! content() }
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("first"))))
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("second"))))
+
+		blobClient := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-append-blob.txt")
+
+		// Each message must be appended exactly once.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "firstsecond", string(body))
+
+		// Tags are applied when the blob is created and not re-sent with later
+		// appends, so Source reflects the message that created the blob rather
+		// than the most recent one. An implementation that re-tagged on every
+		// append would leave "second" here.
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "first",
+		}, tags)
+	})
+
+	// A blob this output did not create never passes through the creation path,
+	// and so is never tagged. Documented behaviour, pinned here.
+	t.Run("blob_storage_tags_append_preexisting_blob", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		containerClient := client.ServiceClient().NewContainerClient(containerName)
+
+		// Simulate a blob left behind by an earlier run that had no tags configured.
+		_, err = containerClient.NewAppendBlobClient("existing-blob.txt").Create(t.Context(), nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: existing-blob.txt
+blob_type: APPEND
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: test-suite
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
+
+		blobClient := containerClient.NewBlobClient("existing-blob.txt")
+
+		resp, err := blobClient.GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		// Tags are only applied when this output creates the blob, so a blob left
+		// behind by an earlier run stays untagged. This pins the documented
+		// limitation: writing tags here instead would cost a request per message
+		// and only ever reflect the last one.
+		assert.Empty(t, tags)
+
+		// The pre-existing blob must be appended to, not recreated.
+		dl, err := blobClient.DownloadStream(t.Context(), nil)
+		require.NoError(t, err)
+		body, err := io.ReadAll(dl.Body)
+		require.NoError(t, err)
+		require.NoError(t, dl.Body.Close())
+		assert.Equal(t, "payload", string(body))
 	})
 
 	t.Run("queue_storage", func(t *testing.T) {
@@ -294,9 +484,10 @@ input:
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cosmosStartupTimeout := 30 * time.Second
+	// The wait stops before the package timeout, so that the test can log why the emulator is not ready.
+	cosmosStartupTimeout := 2 * time.Minute
 	if deadline, ok := t.Deadline(); ok {
-		cosmosStartupTimeout = time.Until(deadline) - 100*time.Millisecond
+		cosmosStartupTimeout = min(cosmosStartupTimeout, time.Until(deadline)-100*time.Millisecond)
 	}
 
 	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
@@ -310,8 +501,12 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			// the container's internal Docker bridge IP (e.g. 172.17.0.x).
 			"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
 		}),
-		testcontainers.WithWaitStrategy(
+		// The emulator accepts connections and serves its certificate before all partitions are up. Requests sent
+		// before that can fail with 408 Request Timeout. A bare "Started" line follows "Started N/N partitions".
+		// WithWaitStrategy would limit the wait to 60s.
+		testcontainers.WithWaitStrategyAndDeadline(cosmosStartupTimeout,
 			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
+			wait.ForLog(`(?m)^Started\r?$`).AsRegexp().WithStartupTimeout(cosmosStartupTimeout),
 		),
 	)
 	testcontainers.CleanupContainer(t, cosmosCtr)
@@ -357,6 +552,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
 
+	// The emulator serves its certificate when it logs "Started", so this check does not need the startup timeout.
 	require.Eventually(t, func() bool {
 		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
 		if err != nil {
@@ -372,7 +568,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			return false
 		}
 		return len(body) > 0
-	}, cosmosStartupTimeout, time.Second, "Failed to start CosmosDB emulator")
+	}, 30*time.Second, time.Second, "Failed to start CosmosDB emulator")
 
 	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dummyDatabase := "Asgard"

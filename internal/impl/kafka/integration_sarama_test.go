@@ -173,6 +173,8 @@ output:
     addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    # Without idempotence, a retried produce request can write a copy and fail the exact-set checks.
+    idempotent_write: true
     retry_as_batch: $VAR3
     metadata:
       exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
@@ -341,6 +343,8 @@ output:
     addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    # Without idempotence, a retried produce request can write a copy and fail the exact-set checks.
+    idempotent_write: true
     retry_as_batch: $VAR3
     metadata:
       exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]

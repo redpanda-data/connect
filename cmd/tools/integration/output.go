@@ -21,16 +21,27 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
 )
 
 // Output writes colored text to the terminal and markdown to an index file.
+// The run writes its header and summary with Output, and each package writes
+// its results with a PackageOutput from Output.Package.
 type Output struct {
+	// mu makes sure that the text of one package is written to the terminal
+	// and the index file as one block.
+	mu        sync.Mutex
 	term      io.Writer
 	indexPath string
-	buf       bytes.Buffer
+	// buffered tells Package to give each package a buffer for its terminal
+	// text, so that packages that run at the same time do not mix their
+	// lines. When it is false, a package writes to the terminal at once. This
+	// is only readable when one package runs at a time, but it shows the RUN
+	// lines of a long package while it runs.
+	buffered bool
 
 	greenPr  *color.Color
 	redPr    *color.Color
@@ -39,14 +50,16 @@ type Output struct {
 	boldPr   *color.Color
 }
 
-// NewOutput creates a new Output.
-func NewOutput(term io.Writer, indexPath string) *Output {
+// NewOutput creates a new Output. Set buffered when packages run at the same
+// time.
+func NewOutput(term io.Writer, indexPath string, buffered bool) *Output {
 	if os.Getenv("FORCE_COLOR") != "" || os.Getenv("CI") != "" {
 		color.NoColor = false
 	}
 	return &Output{
 		term:      term,
 		indexPath: indexPath,
+		buffered:  buffered,
 		greenPr:   color.New(color.FgGreen),
 		redPr:     color.New(color.FgRed),
 		yellowPr:  color.New(color.FgYellow),
@@ -75,52 +88,82 @@ func (o *Output) Blank() {
 	fmt.Fprintln(o.term)
 }
 
-func (o *Output) PackageHeader(tag string, num, total int, short string) {
-	o.boldPr.Fprintf(o.term, "[%d/%d] %s\n", num, total, short)
-	o.buf.Reset()
-	fmt.Fprintf(&o.buf, "## %s\n\n", tag)
+// PackageOutput collects the results of one package. Its markdown goes to the
+// index file as one section when the package is done. Only the goroutine that
+// runs the package uses it.
+type PackageOutput struct {
+	o *Output
+	// short is the short package name in the header and result lines.
+	short string
+	// term is where the terminal text goes: the terminal itself for a
+	// streamed package, termBuf for a buffered package.
+	term io.Writer
+	// termBuf holds the terminal text of a buffered package until the package
+	// is done. It is nil for a streamed package. It is not derived from term
+	// with a type assertion, because Output.term can also be a *bytes.Buffer
+	// (as in tests), and a streamed package would then write its text twice.
+	termBuf *bytes.Buffer
+	md      bytes.Buffer
 }
 
-func (o *Output) TestRun(name string) {
-	o.dimPr.Fprintln(o.term, "  RUN  "+name)
+// Package starts the output of one package and writes its header. When
+// Output.buffered is set, the terminal text of the package is written as one
+// block when the package is done.
+func (o *Output) Package(tag string, num, total int, short string) *PackageOutput {
+	p := &PackageOutput{o: o, short: short, term: o.term}
+	if o.buffered {
+		p.termBuf = &bytes.Buffer{}
+		p.term = p.termBuf
+	}
+	o.boldPr.Fprintf(p.term, "[%d/%d] %s\n", num, total, short)
+	fmt.Fprintf(&p.md, "## %s\n\n", tag)
+	return p
+}
+
+func (p *PackageOutput) Error(text string) {
+	p.o.redPr.Fprintln(p.term, text)
+}
+
+func (p *PackageOutput) TestRun(name string) {
+	p.o.dimPr.Fprintln(p.term, "  RUN  "+name)
 }
 
 // testLine writes a single test result line to both terminal and markdown buffer.
-func (o *Output) testLine(clr *color.Color, status, name, detail string) {
+func (p *PackageOutput) testLine(clr *color.Color, status, name, detail string) {
 	line := fmt.Sprintf("  %s %s", status, name)
 	mdLine := fmt.Sprintf("- %s %s", status, name)
 	if detail != "" {
 		line += " " + detail
 		mdLine += " " + detail
 	}
-	clr.Fprintln(o.term, line)
-	fmt.Fprintln(&o.buf, mdLine)
+	clr.Fprintln(p.term, line)
+	fmt.Fprintln(&p.md, mdLine)
 }
 
-func (o *Output) TestPass(name, elapsed string, cached bool) {
+func (p *PackageOutput) TestPass(name, elapsed string, cached bool) {
 	if cached {
-		o.testLine(o.dimPr, "PASS", name, "(cached)")
+		p.testLine(p.o.dimPr, "PASS", name, "(cached)")
 	} else {
-		o.testLine(o.greenPr, "PASS", name, "("+elapsed+")")
+		p.testLine(p.o.greenPr, "PASS", name, "("+elapsed+")")
 	}
 }
 
-func (o *Output) TestFail(name, elapsed, outFile string, line int, cached bool) {
+func (p *PackageOutput) TestFail(name, elapsed, outFile string, line int, cached bool) {
 	base := filepath.Base(outFile)
-	clr := o.redPr
+	clr := p.o.redPr
 	suffix := "(" + elapsed + ")"
 	if cached {
-		clr = o.dimPr
+		clr = p.o.dimPr
 		suffix = "(cached)"
 	}
 	ref := fmt.Sprintf("%s:%d", outFile, line)
-	o.testLine(clr, "FAIL", name, suffix+" -> task test:show -- "+ref)
+	p.testLine(clr, "FAIL", name, suffix+" -> task test:show -- "+ref)
 	// Replace the markdown line with a clickable link.
-	o.replaceLastBufLine(fmt.Sprintf("- FAIL %s %s — [%s:%d](%s:%d)",
+	p.replaceLastMDLine(fmt.Sprintf("- FAIL %s %s — [%s:%d](%s:%d)",
 		name, suffix, base, line, base, line))
 }
 
-func (o *Output) TestSkip(name, elapsed, reason string, cached bool) {
+func (p *PackageOutput) TestSkip(name, elapsed, reason string, cached bool) {
 	var detail string
 	switch {
 	case cached && reason != "":
@@ -134,47 +177,58 @@ func (o *Output) TestSkip(name, elapsed, reason string, cached bool) {
 	}
 
 	if cached {
-		o.testLine(o.dimPr, "SKIP", name, detail)
+		p.testLine(p.o.dimPr, "SKIP", name, detail)
 	} else {
-		o.testLine(o.yellowPr, "SKIP", name, detail)
+		p.testLine(p.o.yellowPr, "SKIP", name, detail)
 	}
 }
 
-// replaceLastBufLine replaces the last line in buf with replacement.
-func (o *Output) replaceLastBufLine(replacement string) {
-	data := o.buf.Bytes()
+// replaceLastMDLine replaces the last line in md with replacement.
+func (p *PackageOutput) replaceLastMDLine(replacement string) {
+	data := p.md.Bytes()
 	// Find the second-to-last newline.
 	if idx := bytes.LastIndexByte(data[:len(data)-1], '\n'); idx >= 0 {
-		o.buf.Truncate(idx + 1)
+		p.md.Truncate(idx + 1)
 	} else {
-		o.buf.Reset()
+		p.md.Reset()
 	}
-	fmt.Fprintln(&o.buf, replacement)
+	fmt.Fprintln(&p.md, replacement)
 }
 
-func (o *Output) PackageResult(short string, status TestResult, duration time.Duration) {
+// Result writes the package result and ends the package output.
+func (p *PackageOutput) Result(status TestResult, duration time.Duration) {
 	switch status {
 	case ResultPass:
-		o.greenPr.Fprintf(o.term, "✓ %s%s\n", short, fmtDuration(duration))
+		p.o.greenPr.Fprintf(p.term, "✓ %s%s\n", p.short, fmtDuration(duration))
 	case ResultFail:
-		o.redPr.Fprintf(o.term, "✗ %s%s\n", short, fmtDuration(duration))
+		p.o.redPr.Fprintf(p.term, "✗ %s%s\n", p.short, fmtDuration(duration))
 	case ResultSkip:
-		o.yellowPr.Fprintf(o.term, "⊘ %s (skipped)\n", short)
+		p.o.yellowPr.Fprintf(p.term, "⊘ %s (skipped)\n", p.short)
 	}
-	fmt.Fprintln(o.term)
-	o.flushPackage()
+	p.done()
 }
 
-func (o *Output) PackageDone() {
-	fmt.Fprintln(o.term)
-	o.flushPackage()
+// Cached writes the line of a package that passed in an earlier run and ends
+// the package output.
+func (p *PackageOutput) Cached() {
+	p.o.dimPr.Fprintf(p.term, "● %s (cached)\n", p.short)
+	p.done()
 }
 
-func (o *Output) flushPackage() {
+// done writes the buffered terminal text and the markdown section of the
+// package.
+func (p *PackageOutput) done() {
+	fmt.Fprintln(p.term)
+	fmt.Fprintln(&p.md)
+
+	o := p.o
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if p.termBuf != nil {
+		_, _ = p.termBuf.WriteTo(o.term)
+	}
 	o.writeFile(os.O_WRONLY|os.O_APPEND, func(f *os.File) {
-		fmt.Fprintln(&o.buf)
-		_, err := f.Write(o.buf.Bytes())
-		if err != nil {
+		if _, err := f.Write(p.md.Bytes()); err != nil {
 			log.Fatal("failed to write package results to index file: ", err)
 		}
 	})

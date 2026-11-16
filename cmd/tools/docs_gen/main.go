@@ -111,6 +111,7 @@ var generatedDirs = []string{
 	"partials/examples",
 	"partials/metadata",
 	"partials/descriptions",
+	"partials/config",
 	"partials/availability",
 	"partials/platforms",
 	"partials/bloblang",

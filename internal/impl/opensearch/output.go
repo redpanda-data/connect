@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/esoutput"
@@ -238,7 +239,7 @@ func (e *Output) Connect(context.Context) error {
 
 	client, err := opensearchapi.NewClient(e.conf.clientOpts)
 	if err != nil {
-		return err
+		return redact.Error(err, redact.Conns(e.conf.clientOpts.Client.Addresses...))
 	}
 
 	e.client = client
