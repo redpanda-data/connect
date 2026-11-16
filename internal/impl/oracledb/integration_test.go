@@ -191,31 +191,40 @@ oracledb_cdc:
 	})
 }
 
-func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
+func TestIntegrationOracleDBCDCSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	t.Run("range-based partitioned tables", func(t *testing.T) {
+		// Create tables
+		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".small", "CREATE TABLE "+db.Schema+".small (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
-	// Insert 3000 rows across tables for initial snapshot streaming
-	want := 3000
-	for range 1000 {
-		db.MustExec("INSERT INTO " + db.Schema + ".foo (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO " + db.Schema + ".foo2 (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO " + db.Schema2 + ".bar (id) VALUES (DEFAULT)")
-	}
+		// bulk insert snapshot rows. FOO2's statistics are set to a stale 1000 rows and the other
+		// tables have none, so planning counts their rows: each large table has enough for 3
+		// chunks of 10,000 rows, the small one too few to chunk.
+		const (
+			rowsPerTable = 30000
+			smallRows    = 1000
+		)
+		tableNames := []string{db.Schema + ".foo", db.Schema + ".foo2", db.Schema2 + ".bar"}
+		for _, table := range tableNames {
+			db.MustExec("BEGIN FOR i IN 1..:1 LOOP INSERT INTO "+table+" (id) VALUES (DEFAULT); END LOOP; COMMIT; END;", rowsPerTable)
+		}
+		db.MustExec("BEGIN FOR i IN 1..:1 LOOP INSERT INTO "+db.Schema+".small (id) VALUES (DEFAULT); END LOOP; COMMIT; END;", smallRows)
+		db.MustExec("BEGIN DBMS_STATS.SET_TABLE_STATS(ownname => :1, tabname => 'FOO2', numrows => 1000); END;", strings.ToUpper(db.Schema))
+		want := rowsPerTable*len(tableNames) + smallRows
 
-	var (
-		batch  oracledbtest.MsgBatch
-		stream *service.Stream
-	)
-	t.Log("Launching component...")
-	{
-		cfg := `
+		var (
+			batch  oracledbtest.MsgBatch
+			stream *service.Stream
+		)
+		t.Log("Launching component...")
+		{
+			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
   checkpoint_cache_table_name: ` + db.CheckpointTable() + `
@@ -226,41 +235,126 @@ oracledb_cdc:
     scn_window_size: 20000
     min_scn_window_size: 0
     backoff_interval: 1s
+  include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR", "` + db.Schema + `.SMALL"]
+  exclude: ["` + db.Schema + `.DOESNOTEXIST"]`
+
+			var logBuf oracledbtest.SyncBuffer
+			stream = oracledbtest.StartPipelineWithLogger(t, cfg, slog.New(slog.NewTextHandler(io.MultiWriter(t.Output(), &logBuf), nil)), batch.Consumer())
+
+			t.Log("Verifying snapshot changes...")
+			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
+
+			t.Log("Verifying every table was split into parallel chunks...")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB2_F90071E9.BAR' split into 3 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.FOO' split into 3 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.FOO2' split into 3 parallel chunks by interpolating its key range")
+			assert.Contains(t, logBuf.String(), "Launching snapshot of table 'TESTDB_F90071E9.SMALL'\"", "Expected the small table to be snapshotted with a full scan")
+
+			msgs := batch.Clone()
+			expectedSCN, _ := msgs[0].MetaGetMut("scn")
+			expectedCommitTs, _ := msgs[0].MetaGetMut("commit_ts_ms")
+			for i, msg := range msgs {
+				scn, ok := msg.MetaGet("scn")
+				assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
+				assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
+				assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+
+				commitTs, ok := msg.MetaGet("commit_ts_ms")
+				assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
+				assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
+				assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
+
+				username, hasUsername := msg.MetaGet("username")
+				assert.Falsef(t, hasUsername, "Expected snapshot message[%d] to have no 'username' metadata, got %q", i, username)
+
+				rsID, hasRSID := msg.MetaGet("rs_id")
+				assert.Falsef(t, hasRSID, "Expected snapshot message[%d] to have no 'rs_id' metadata, got %q", i, rsID)
+				ssn, hasSSN := msg.MetaGet("ssn")
+				assert.Falsef(t, hasSSN, "Expected snapshot message[%d] to have no 'ssn' metadata, got %q", i, ssn)
+				rowSeq, hasRowSeq := msg.MetaGet("row_seq")
+				assert.Falsef(t, hasRowSeq, "Expected snapshot message[%d] to have no 'row_seq' metadata, got %q", i, rowSeq)
+			}
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("single worker full scan", func(t *testing.T) {
+		// Create tables
+		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo", "CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo2", "CREATE TABLE "+db.Schema+".foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema2+".bar", "CREATE TABLE "+db.Schema2+".bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+		// bulk insert snapshot rows
+		const rowsPerTable = 5000
+		tableNames := []string{db.Schema + ".foo", db.Schema + ".foo2", db.Schema2 + ".bar"}
+		for _, table := range tableNames {
+			db.MustExec("BEGIN FOR i IN 1..:1 LOOP INSERT INTO "+table+" (id) VALUES (DEFAULT); END LOOP; COMMIT; END;", rowsPerTable)
+		}
+		want := rowsPerTable * len(tableNames)
+
+		var (
+			batch  oracledbtest.MsgBatch
+			stream *service.Stream
+		)
+		t.Log("Launching component...")
+		{
+			cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  snapshot_mode: snapshot_only
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 1
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
   include: ["` + db.Schema + `.FOO", "` + db.Schema + `.FOO2", "` + db.Schema2 + `.BAR"]
   exclude: ["` + db.Schema + `.DOESNOTEXIST"]`
 
-		stream = oracledbtest.StartPipeline(t, cfg, batch.Consumer())
+			var logBuf oracledbtest.SyncBuffer
+			stream = oracledbtest.StartPipelineWithLogger(t, cfg, slog.New(slog.NewTextHandler(io.MultiWriter(t.Output(), &logBuf), nil)), batch.Consumer())
 
-		t.Log("Verifying snapshot changes...")
-		oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
+			t.Log("Verifying snapshot changes...")
+			oracledbtest.WaitForCount(t, batch.Count, want, time.Minute*5)
 
-		msgs := batch.Clone()
-		expectedSCN, _ := msgs[0].MetaGetMut("scn")
-		expectedCommitTs, _ := msgs[0].MetaGetMut("commit_ts_ms")
-		for i, msg := range msgs {
-			scn, ok := msg.MetaGet("scn")
-			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
-			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
-			assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+			t.Log("Verifying every table was read with a single full scan, not split into chunks...")
+			for _, table := range tableNames {
+				msg := fmt.Sprintf(`msg="Launching snapshot of table '%s'"`, strings.ToUpper(table))
+				assert.Containsf(t, logBuf.String(), msg, "Expected table '%s' to be snapshotted with a full scan", table)
+			}
+			assert.NotContains(t, logBuf.String(), "parallel chunks", "Expected no table to be split into chunks with a single worker")
 
-			commitTs, ok := msg.MetaGet("commit_ts_ms")
-			assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
-			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
-			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
+			msgs := batch.Clone()
+			expectedSCN, _ := msgs[0].MetaGetMut("scn")
+			expectedCommitTs, _ := msgs[0].MetaGetMut("commit_ts_ms")
+			for i, msg := range msgs {
+				scn, ok := msg.MetaGet("scn")
+				assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
+				assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
+				assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
 
-			username, hasUsername := msg.MetaGet("username")
-			assert.Falsef(t, hasUsername, "Expected snapshot message[%d] to have no 'username' metadata, got %q", i, username)
+				commitTs, ok := msg.MetaGet("commit_ts_ms")
+				assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
+				assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
+				assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
 
-			rsID, hasRSID := msg.MetaGet("rs_id")
-			assert.Falsef(t, hasRSID, "Expected snapshot message[%d] to have no 'rs_id' metadata, got %q", i, rsID)
-			ssn, hasSSN := msg.MetaGet("ssn")
-			assert.Falsef(t, hasSSN, "Expected snapshot message[%d] to have no 'ssn' metadata, got %q", i, ssn)
-			rowSeq, hasRowSeq := msg.MetaGet("row_seq")
-			assert.Falsef(t, hasRowSeq, "Expected snapshot message[%d] to have no 'row_seq' metadata, got %q", i, rowSeq)
+				username, hasUsername := msg.MetaGet("username")
+				assert.Falsef(t, hasUsername, "Expected snapshot message[%d] to have no 'username' metadata, got %q", i, username)
+
+				rsID, hasRSID := msg.MetaGet("rs_id")
+				assert.Falsef(t, hasRSID, "Expected snapshot message[%d] to have no 'rs_id' metadata, got %q", i, rsID)
+				ssn, hasSSN := msg.MetaGet("ssn")
+				assert.Falsef(t, hasSSN, "Expected snapshot message[%d] to have no 'ssn' metadata, got %q", i, ssn)
+				rowSeq, hasRowSeq := msg.MetaGet("row_seq")
+				assert.Falsef(t, hasRowSeq, "Expected snapshot message[%d] to have no 'row_seq' metadata, got %q", i, rowSeq)
+			}
 		}
-	}
 
-	require.NoError(t, stream.StopWithin(time.Second*10))
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
 }
 
 func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
@@ -387,6 +481,84 @@ oracledb_cdc:
 		}, time.Minute*2, time.Millisecond*500)
 
 		require.NoError(t, streamResume.StopWithin(time.Second*10))
+	}
+}
+
+// TestIntegrationOracleDBCDCIdleCheckpoint regression-tests CON-583. The monitored table
+// stays quiet while another table commits changes. The saved checkpoint must still move
+// forward, or a restart fails with ORA-01291 after the archive logs are purged. It runs
+// with each window strategy, because each strategy sizes the mined range in its own way.
+func TestIntegrationOracleDBCDCIdleCheckpoint(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	for _, windowStrategy := range []string{"scn_window", "redo_volume"} {
+		t.Run(windowStrategy, func(t *testing.T) {
+			t.Parallel()
+
+			connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+			tracked := db.Schema + ".idle_tracked"
+			untracked := db.Schema + ".idle_untracked"
+			require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), tracked,
+				"CREATE TABLE "+tracked+" (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+			db.MustExec("CREATE TABLE " + untracked + " (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)")
+
+			const checkpointKey = "idle_checkpoint_test"
+			savedSCN := func() (replication.SCN, error) {
+				var raw []byte
+				if err := db.QueryRowContext(t.Context(),
+					"SELECT cache_val FROM "+db.CheckpointTable()+" WHERE cache_key = :1", checkpointKey,
+				).Scan(&raw); err != nil {
+					return replication.InvalidSCN, err
+				}
+				return replication.SCNFromBytes(raw)
+			}
+
+			// min_scn_window_size: 0 is required. The 100 commits below can move the SCN by fewer
+			// than the default 1000. That skips the mining cycle, so the checkpoint does not reach
+			// targetSCN.
+			stream := oracledbtest.StartPipelineAndWaitForStreaming(t, `
+oracledb_cdc:
+  connection_string: `+connStr+`
+  checkpoint_cache_table_name: `+db.CheckpointTable()+`
+  snapshot_mode: none
+  logminer:
+    window_strategy: `+windowStrategy+`
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["`+strings.ToUpper(tracked)+`"]
+  checkpoint_cache_key: `+checkpointKey+`
+  batching:
+    count: 1`, func(context.Context, service.MessageBatch) error { return nil })
+			t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+			t.Log("Given: a first checkpoint from a row on the monitored table")
+			db.MustExec("INSERT INTO " + tracked + " (id) VALUES (DEFAULT)")
+			require.Eventually(t, func() bool {
+				_, err := savedSCN()
+				return err == nil
+			}, 30*time.Second, 500*time.Millisecond, "no checkpoint saved for the monitored table")
+
+			t.Log("When: 100 commits on the table that is not monitored")
+			// The commits move the database SCN forward. The input mines this range but delivers no messages.
+			db.MustExec(`
+	BEGIN
+		FOR i IN 1..100 LOOP
+			INSERT INTO ` + untracked + ` (id) VALUES (DEFAULT);
+			COMMIT;
+		END LOOP;
+	END;`)
+			var targetSCN replication.SCN
+			require.NoError(t, db.QueryRowContext(t.Context(), "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&targetSCN))
+
+			t.Log("Then: the saved checkpoint reaches the target SCN")
+			// No new message is delivered, so only the mined position can move the checkpoint.
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				scn, err := savedSCN()
+				require.NoError(c, err)
+				assert.GreaterOrEqual(c, scn, targetSCN, "saved checkpoint must reach the database SCN")
+			}, 30*time.Second, time.Second, "the mined position is marked about every 10 seconds")
+		})
 	}
 }
 

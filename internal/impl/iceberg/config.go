@@ -359,7 +359,7 @@ See the Row-level operations section above for the full semantics, the format-ve
 				ShortDescription("The row-level operation per message: insert, upsert or delete.").
 				Example("insert").
 				Example(`${! metadata("op") }`).
-				Example(`${! this.op == "d" ? "delete" : "upsert" }`).
+				Example(`${! if this.op == "d" { "delete" } else { "upsert" } }`).
 				Default("insert").
 				Advanced(),
 

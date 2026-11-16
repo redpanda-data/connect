@@ -986,6 +986,16 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 	}
 
+	// start is the resume token the change stream opens from: the checkpoint
+	// token, else the token captured above. Nil starts the stream at the
+	// operation after the majority committed oplog time (ts).
+	// Read the local resumeToken, not m.resumeToken: acks advance the field
+	// while the stream runs.
+	start := resumeToken
+	if start == nil {
+		start = initialResumeToken
+	}
+
 	var incRun *incSnapshotRun
 	if m.readsIncrementally() {
 		// Without incremental_snapshot.enabled, incResume marks every
@@ -993,6 +1003,19 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		// a first start the blocking snapshot, if any, covers the collections.
 		if incRun, err = newIncSnapshotRun(m.db, m.collections, m.incChunkSize, m.incRetryCooldown, incResume, m.logger, m.metrics); err != nil {
 			return fmt.Errorf("unable to set up the incremental snapshot: %w", err)
+		}
+		// The chunk reads must see every write the stream skips: refer to
+		// incSnapshotDeps.Prepare. Without a token the stream starts after
+		// the majority optime, so it skips no write a majority read misses.
+		if start != nil {
+			at, err := resumeTokenTimestamp(start)
+			if err != nil {
+				// A Warn, not an error: a token format this code cannot read would then stop the input on each
+				// connect. Without the wait, a chunk can miss a write that the stream also skips.
+				m.logger.Warnf("Unable to read the stream start from its resume token, so the incremental snapshot does not wait for the majority snapshot to reach it. A chunk can miss a write that is not majority committed yet: %v", err)
+			} else {
+				incRun.deps.streamStart = at
+			}
 		}
 	}
 
@@ -1029,10 +1052,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				opts = opts.SetShowExpandedEvents(true)
 			}
 		}
-		// resumeToken is this connection's start position, fixed when the epoch
-		// opened, so no locking is needed to read it - unlike m.resumeToken, which
-		// acks advance while the stream runs.
-		if resumeToken != nil {
+		if start != nil {
 			// This used to carry a TODO about the resume token being invalidated by a
 			// collection drop or rename. Measured against a mongo:7 replica set, that
 			// does not happen to the stream this input opens: the watch is
@@ -1045,9 +1065,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			// event is filtered out by the ns.coll $match, so the cursor just closes
 			// and the next connection resumes from the last position, again
 			// successfully. See TestIntegrationMongoCDCCollectionDropAndRename.
-			opts = opts.SetResumeAfter(resumeToken)
-		} else if initialResumeToken != nil {
-			opts = opts.SetResumeAfter(initialResumeToken)
+			opts = opts.SetResumeAfter(start)
 		} else {
 			// If there are no writes between snapshot and streaming, we want to skip the last
 			// document that will be read in the snapshot.

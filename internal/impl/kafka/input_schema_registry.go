@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
@@ -131,8 +132,8 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return
 	}
 	var srURL *url.URL
-	if srURL, err = url.Parse(srURLStr); err != nil {
-		return nil, fmt.Errorf("parsing URL: %s", err)
+	if srURL, err = redact.ParseURL(srURLStr); err != nil {
+		return nil, fmt.Errorf("parsing URL: %w", err)
 	}
 
 	if i.includeDeleted, err = pConf.FieldBool(sriFieldIncludeDeleted); err != nil {

@@ -53,6 +53,10 @@ type Config struct {
 	// table are treated as control signals rather than data, and the table is
 	// excluded from snapshot scans.
 	SignalTableName string
+	// ExternallyManagedPublication stops the stream from creating or altering
+	// the publication. It is instead required to exist and to cover DBTables
+	// and the signal table. The zero value keeps the connector managing it.
+	ExternallyManagedPublication bool
 
 	Logger *service.Logger
 

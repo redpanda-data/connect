@@ -92,6 +92,42 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 	return replay, nil
 }
 
+// lowWatermarkSCN is the SCN that a checkpoint must stay at or below so that it
+// does not move past an open transaction. Both checkpoint paths use it.
+//
+// txnCache.LowWatermarkSCN alone is not enough. planLOBReplay takes the
+// replayed transactions out of txnCache until their rows are mined again. If
+// ORA-01368 stops the cycle in that gap, lm.lobReplay stays set and is the only
+// record that they are open. So the result is the minimum of:
+//
+//   - txnCache.LowWatermarkSCN, for the transactions in the cache.
+//   - lm.lobReplay.fromSCN, for the transactions of an open LOB replay.
+//
+// Both values ignore excludeTxnID, so that a committing transaction does not
+// hold back its own checkpoint.
+func (lm *LogMiner) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
+	low := lm.txnCache.LowWatermarkSCN(excludeTxnID)
+	// fromSCN can be too low: it does not go up when a replayed transaction
+	// ends. This only delays the checkpoint, which is safe.
+	if lm.lobReplay.hasOpenOtherThan(excludeTxnID) {
+		low = min(low, lm.lobReplay.fromSCN)
+	}
+	return low
+}
+
+// hasOpenOtherThan reports whether the replay has an open transaction other
+// than id.
+func (r *lobReplay) hasOpenOtherThan(id sqlredo.TransactionID) bool {
+	if r == nil {
+		return false
+	}
+	others := len(r.txns)
+	if _, exists := r.txns[id]; exists {
+		others--
+	}
+	return others > 0
+}
+
 // end removes a committed or rolled back transaction from the replay, so a
 // retry that carries the replay over doesn't re-mine and publish it again.
 func (r *lobReplay) end(id sqlredo.TransactionID) {

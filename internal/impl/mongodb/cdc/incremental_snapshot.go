@@ -268,6 +268,14 @@ type incSnapshotDeps struct {
 	watermarkCollection func() string
 	// streamedThrough reports how far the change stream has been consumed.
 	streamedThrough func() bson.Timestamp
+	// collections are the configured collections. Prepare reads each one, so
+	// on a sharded cluster every shard that owns one of them waits.
+	collections []string
+	// streamStart is the cluster time of the token the change stream opened
+	// from: the stream returns no change before it. Prepare waits until a
+	// majority read sees every write before it. Zero means no wait.
+	streamStart bson.Timestamp
+	logger      *service.Logger
 }
 
 var _ incrementalsnapshot.Deps[clusterTimeWatermark] = (*incSnapshotDeps)(nil)
@@ -405,8 +413,43 @@ func (d *incSnapshotDeps) ResolveWatermark(ctx context.Context) (clusterTimeWate
 	return newClusterTimeWatermark(bson.Timestamp{T: t, I: i}, streamed), nil
 }
 
-// Prepare has nothing to do: a cluster time needs no connection state.
-func (*incSnapshotDeps) Prepare(context.Context) error {
+// Prepare waits until a majority read sees every write the change stream
+// skips, before the first chunk read.
+//
+// A new change stream starts one tick after the last write the server has
+// applied, not after the last majority-committed write. A write between the two
+// never streams, and a majority chunk read does not see it until it commits.
+// Without the wait, the chunk is released with the older document and the write
+// is lost. A loaded server can take hundreds of milliseconds to commit one write,
+// which is enough to read and release every chunk of a small collection.
+//
+// The read sets afterClusterTime, so the server holds it until its majority
+// snapshot reaches that time. Majority snapshots only move forward, so one wait
+// covers every later chunk read on this connection.
+func (d *incSnapshotDeps) Prepare(ctx context.Context) error {
+	if d.streamStart.IsZero() {
+		return nil
+	}
+	// The tick before the start: the start itself can be ahead of every write,
+	// and the server rejects an afterClusterTime ahead of its cluster time.
+	skipped := prevTimestamp(d.streamStart)
+	// The wait has no timeout: without a majority it lasts until shutdown.
+	d.logger.Debugf("Incremental snapshot waiting for the majority snapshot to reach %v", d.streamStart)
+	db := d.primary()
+	for _, coll := range d.collections {
+		err := db.RunCommand(ctx, bson.D{
+			{Key: "find", Value: coll},
+			{Key: "limit", Value: 1},
+			{Key: "projection", Value: bson.D{{Key: "_id", Value: 1}}},
+			{Key: "readConcern", Value: bson.D{
+				{Key: "level", Value: "majority"},
+				{Key: "afterClusterTime", Value: skipped},
+			}},
+		}).Err()
+		if err != nil {
+			return fmt.Errorf("waiting for the majority snapshot to reach the stream start %v: %w", d.streamStart, err)
+		}
+	}
 	return nil
 }
 
@@ -553,6 +596,8 @@ func newIncSnapshotRun(db *mongo.Database, collections []string, chunkSize int, 
 			return collections[0]
 		},
 		streamedThrough: func() bson.Timestamp { return run.through },
+		collections:     collections,
+		logger:          logger,
 	}
 	deps := &watermarkRecorder{incSnapshotDeps: run.deps, run: run}
 	if err := run.setUp(deps, collections, chunkSize, retryCooldown, resume); err != nil {

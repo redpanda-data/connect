@@ -21,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 )
 
 const (
@@ -84,7 +85,7 @@ func newCheckpointCache(
 		return nil, fmt.Errorf("invalid checkpoint cache table name: %w", err)
 	}
 
-	if db, err = sql.Open("oracle", connStr); err != nil {
+	if db, err = sqlredact.Open("oracle", connStr); err != nil {
 		return nil, fmt.Errorf("connecting to oracle database for caching checkpoints: %w", err)
 	}
 

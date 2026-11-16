@@ -113,8 +113,10 @@ func (tc *InMemoryCache) AddEvent(_ context.Context, txnID sqlredo.TransactionID
 			tc.discardedTxns[txnID] = struct{}{}
 		}
 	} else {
-		// Transaction not started yet, create it. This is an edgecase that _shouldn't_ happen.
-		tc.log.Warnf("Transaction %s not found for event, creating...", txnID)
+		// After a restart, the checkpoint can be past the START of a
+		// transaction with no monitored events yet (LowWatermarkSCN skips
+		// it). All its monitored events are after the checkpoint.
+		tc.log.Debugf("Starting transaction %s at SCN %d, its START is before the resume position", txnID, scn)
 		t := &Transaction{
 			ID:     txnID,
 			SCN:    scn,

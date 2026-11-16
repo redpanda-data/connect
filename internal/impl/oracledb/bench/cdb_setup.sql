@@ -23,6 +23,8 @@ ALTER USER c##testdb SET CONTAINER_DATA = ALL CONTAINER = CURRENT;
 /
 GRANT SET CONTAINER TO c##testdb CONTAINER=ALL;
 /
+GRANT FLASHBACK ANY TABLE TO c##testdb CONTAINER=ALL;
+/
 
 -- ============================================================================
 -- STAGE 2: Create C##RPCN in CDB$ROOT
