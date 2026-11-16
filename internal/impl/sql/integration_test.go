@@ -25,9 +25,11 @@ import (
 	"time"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/log"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -1076,36 +1078,72 @@ func TestIntegrationMySQL(t *testing.T) {
 	testSuite(t, "mysql", dsn, createTable)
 }
 
+// startMSSQLContainer starts the SQL Server container for
+// TestIntegrationMSSQL and stops it at the end of the test.
+func startMSSQLContainer(t *testing.T, password string) testcontainers.Container {
+	t.Helper()
+	// When other test packages load the Docker host, SQL Server 2025 can crash in sqlpal.dll a few seconds after
+	// the start. The port can be open before that, so wait until a query runs. ForSQL fails as soon as the container
+	// exits, and then the test starts a new container. The retry is only for a container that exits: a container
+	// that hangs uses all of the deadline. When the wait fails, testcontainers writes the container logs to the test
+	// log.
+	//
+	// All attempts share one deadline, to stay well below the 10m package timeout
+	// (cmd/tools/integration/packages.json).
+	const maxAttempts = 3
+	var (
+		startDeadline = time.Now().Add(5 * time.Minute)
+		ctr           testcontainers.Container
+		err           error
+	)
+	for attempt := 1; ; attempt++ {
+		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
+		// when it runs in parallel with the other tests, so set the deadline explicitly.
+		waitFor := time.Until(startDeadline)
+		ctr, err = testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
+			testcontainers.WithLogger(log.TestLogger(t)),
+			testcontainers.WithImagePlatform("linux/amd64"),
+			testcontainers.WithExposedPorts("1433/tcp"),
+			testcontainers.WithEnv(map[string]string{
+				"ACCEPT_EULA": "Y",
+				"SA_PASSWORD": password,
+			}),
+			testcontainers.WithWaitStrategyAndDeadline(waitFor,
+				wait.ForSQL("1433/tcp", "mssql", func(host string, port network.Port) string {
+					return mssqlDSN(password, host, port.Port())
+				}).WithStartupTimeout(waitFor).WithPollInterval(time.Second),
+			),
+		)
+		if err == nil || attempt == maxAttempts || time.Until(startDeadline) < time.Minute {
+			break
+		}
+		t.Logf("SQL Server start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+		// A failed container that still runs adds load to the Docker host, and that load makes SQL Server crash.
+		if termErr := testcontainers.TerminateContainer(ctr); termErr != nil {
+			t.Logf("Cannot terminate the failed SQL Server container: %v", termErr)
+		}
+	}
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+	return ctr
+}
+
+func mssqlDSN(password, host, port string) string {
+	return fmt.Sprintf("sqlserver://sa:%s@%s:%s?database=master", password, host, port)
+}
+
 func TestIntegrationMSSQL(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
-	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("1433/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"ACCEPT_EULA": "Y",
-			"SA_PASSWORD": testPassword,
-		}),
-		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
-		// when it runs in parallel with the other tests, so set the deadline explicitly.
-		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
-			wait.ForListeningPort("1433/tcp").WithStartupTimeout(3*time.Minute),
-		),
-	)
-	testcontainers.CleanupContainer(t, ctr)
+	mp, err := startMSSQLContainer(t, testPassword).MappedPort(t.Context(), "1433/tcp")
 	require.NoError(t, err)
 
-	mp, err := ctr.MappedPort(t.Context(), "1433/tcp")
+	dsn := mssqlDSN(testPassword, "localhost", mp.Port())
+	db, err := sql.Open("mssql", dsn)
 	require.NoError(t, err)
-
-	var db *sql.DB
-	t.Cleanup(func() {
-		if db != nil {
-			db.Close()
-		}
-	})
+	t.Cleanup(func() { db.Close() })
 
 	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
@@ -1116,28 +1154,8 @@ func TestIntegrationMSSQL(t *testing.T) {
 		)`, name))
 		return name, err
 	}
-
-	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", mp.Port())
-	require.Eventually(t, func() bool {
-		if db != nil {
-			db.Close()
-		}
-		db, err = sql.Open("mssql", dsn)
-		if err != nil {
-			return false
-		}
-		if err = db.Ping(); err != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-		if _, err := createTable("footable"); err != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-		return true
-	}, 3*time.Minute, time.Second)
+	_, err = createTable("footable")
+	require.NoError(t, err)
 
 	testSuite(t, "mssql", dsn, createTable)
 }
