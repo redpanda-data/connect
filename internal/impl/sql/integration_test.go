@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -1333,6 +1334,42 @@ create table %s (
 	testSuite(t, "trino", dsn, createTable)
 }
 
+// waitReady calls connect until it returns nil, for at most timeout. If the
+// service in ctr is not ready by then, it logs the container state and logs
+// and fails the test with the last error of connect. name identifies the
+// service in the messages.
+func waitReady(t *testing.T, name string, ctr testcontainers.Container, timeout time.Duration, connect func() error) {
+	t.Helper()
+	// This loop runs in the test goroutine and not in assert.Eventually. Eventually runs the condition in a goroutine
+	// and does not wait for it at the timeout, so a try that is still running would write the variables of connect
+	// while the test reads them. lastErr keeps the error of the last try, so that a failed wait shows the cause.
+	deadline := time.Now().Add(timeout)
+	lastErr := connect()
+	for lastErr != nil && time.Now().Before(deadline) {
+		time.Sleep(time.Second)
+		lastErr = connect()
+	}
+	if lastErr == nil {
+		return
+	}
+	// The port can be open while the service is not ready, or the container can stop after the port wait. Log the
+	// container state and logs to show which case it is.
+	if state, err := ctr.State(t.Context()); err != nil {
+		t.Logf("Cannot get the %s container state: %v", name, err)
+	} else {
+		t.Logf("%s container state: status=%s exit_code=%d oom_killed=%v error=%q",
+			name, state.Status, state.ExitCode, state.OOMKilled, state.Error)
+	}
+	if logs, err := ctr.Logs(t.Context()); err != nil {
+		t.Logf("Cannot get the %s container logs: %v", name, err)
+	} else {
+		b, _ := io.ReadAll(logs)
+		logs.Close()
+		t.Logf("%s container logs:\n%s", name, b)
+	}
+	require.FailNow(t, name+" is not ready", "last error: %v", lastErr)
+}
+
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -1373,8 +1410,10 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		}
 	})
 
+	// The readiness wait below can run this more than once for the same name, so the statement must not fail when
+	// the collection exists.
 	createContainer := func(name string) (string, error) {
-		_, err := db.Exec(fmt.Sprintf(`create collection %s with pk=/foo`, name))
+		_, err := db.Exec(fmt.Sprintf(`create collection if not exists %s with pk=/foo`, name))
 		return name, err
 	}
 
@@ -1386,31 +1425,27 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		mp.Port(), emulatorAccountKey, dummyDatabase,
 	)
 
-	require.Eventually(t, func() bool {
-		if db != nil {
-			db.Close()
+	// Each try must be idempotent. A try can create the database and then fail to create the collection, for example
+	// with a 408 or a client timeout while the emulator starts its partitions. With a plain "create database", all
+	// later tries then fail with 409 Conflict until the wait stops.
+	waitReady(t, "Cosmos DB emulator", ctr, 3*time.Minute, func() error {
+		var err error
+		if db, err = sql.Open("gocosmos", dsn); err != nil {
+			return err
 		}
-		db, err = sql.Open("gocosmos", dsn)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		if err = db.PingContext(ctx); err == nil {
+			if _, err = db.Exec(fmt.Sprintf(`create database if not exists %s`, dummyDatabase)); err == nil {
+				_, err = createContainer(dummyContainer)
+			}
+		}
 		if err != nil {
-			return false
-		}
-		if err = db.Ping(); err != nil {
 			db.Close()
 			db = nil
-			return false
 		}
-		if _, err := db.Exec(fmt.Sprintf(`create database %s`, dummyDatabase)); err != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-		if _, err := createContainer(dummyContainer); err != nil {
-			db.Close()
-			db = nil
-			return false
-		}
-		return true
-	}, 3*time.Minute, time.Second)
+		return err
+	})
 
 	// TODO: Enable the full test suite once https://github.com/microsoft/gocosmos/issues/15 is addressed and increase
 	// increase `AZURE_COSMOS_EMULATOR_PARTITION_COUNT` so the emulator can create all the required containers. Note
