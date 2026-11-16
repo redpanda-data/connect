@@ -40,20 +40,21 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		fromSCN:      math.MaxUint64,
 		processedSCN: lm.currentSCN,
 	}
-	// startSCNs is the start SCN of each transaction, which the reset keeps.
+	// startSCNs holds the start SCN of each replayed transaction.
+	// RollbackTransaction deletes it from the cache, so the reset reads it here.
 	startSCNs := make(map[sqlredo.TransactionID]uint64)
-	// A replay left over from a failed attempt already reset its transactions,
-	// so they may have no LOB state until their rows are re-mined. They must
-	// stay in the set or their rows would be skipped.
+	// A replay that failed already cleared the LOB state of its transactions,
+	// so the candidates below do not include them. Keep them in the set, or the
+	// next window skips their early rows.
 	if prev := lm.lobReplay; prev != nil {
 		for id := range prev.txns {
 			txn, err := lm.txnCache.GetTransaction(ctx, id)
 			if err != nil {
 				return nil, fmt.Errorf("getting carried-over transaction %s for LOB replay: %w", id, err)
 			}
-			// A reset that failed after the rollback leaves the transaction
-			// absent. prev.fromSCN is a safe start SCN, because it is at or below
-			// the start of each replayed transaction.
+			// If the earlier reset failed after the rollback, the transaction is
+			// not in the cache. prev.fromSCN is at or below the start of each
+			// replayed transaction, so the checkpoint can only be too low.
 			startSCNs[id] = prev.fromSCN
 			if txn != nil {
 				startSCNs[id] = txn.SCN
@@ -93,23 +94,23 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		return nil, nil
 	}
 
-	// Record the set before resetting it, so a reset that fails part way leaves
-	// the reset transactions carried over to the next attempt.
+	// Store the replay before the reset. If the reset fails part way, the next
+	// attempt carries over the transactions that it already reset.
 	lm.lobReplay = replay
 	for id := range replay.txns {
 		if err := lm.txnCache.RollbackTransaction(ctx, id); err != nil {
 			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)
 		}
-		// Start the transaction again with no events, so that the cache holds
-		// the checkpoint below it until it commits or rolls back. Without this,
-		// the checkpoint can move past the transaction if ORA-01368 stops the
-		// cycle before its rows are mined again. With no DML events, it counts
-		// in the low watermark only if marked.
+		// Add the transaction again at its start SCN, with no events. Then
+		// LowWatermarkSCN keeps the checkpoint below it until it commits or rolls
+		// back, also if ORA-01368 stops this cycle before its rows are mined
+		// again. A transaction with no DML events counts in LowWatermarkSCN only
+		// after IncludeInLowWatermark.
 		if err := lm.txnCache.StartTransaction(ctx, id, startSCNs[id]); err != nil {
 			return nil, fmt.Errorf("restarting transaction %s for LOB replay: %w", id, err)
 		}
 		if err := lm.txnCache.IncludeInLowWatermark(ctx, id); err != nil {
-			return nil, fmt.Errorf("holding checkpoint for transaction %s for LOB replay: %w", id, err)
+			return nil, fmt.Errorf("holding checkpoint below transaction %s for LOB replay: %w", id, err)
 		}
 		delete(lm.lobStates, id)
 		delete(lm.pendingLOBWrites, id)

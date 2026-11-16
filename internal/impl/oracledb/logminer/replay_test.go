@@ -311,9 +311,10 @@ func TestCheckpointMinedPositionInterruptedLOBReplay(t *testing.T) {
 	assert.Equal(t, []replication.SCN{29}, pub.windows, "checkpoint must stay below the start of the interrupted LOB replay")
 }
 
-// TestCommitCheckpointDuringLOBReplay verifies that the commit path stays below
-// the transactions of an open LOB replay. planLOBReplay keeps them in txnCache,
-// so the low watermark counts them before their rows are mined again.
+// TestCommitCheckpointDuringLOBReplay verifies that the commit path keeps the
+// checkpoint below the open transactions of a LOB replay, also before their
+// rows are mined again. When the oldest replayed transaction ends, the
+// checkpoint moves up to the next one.
 func TestCommitCheckpointDuringLOBReplay(t *testing.T) {
 	ctx := t.Context()
 	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`

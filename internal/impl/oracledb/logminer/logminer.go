@@ -472,9 +472,9 @@ func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) 
 // minedCheckpointSCN returns the SCN that is safe to checkpoint after a mining
 // cycle, or InvalidSCN if there is none. It stays below open transactions, as the
 // commit path does. The low watermark also counts transactions with only LOB
-// events (see TransactionCache.IncludeInLowWatermark), and planLOBReplay keeps
-// the transactions of an open LOB replay in the cache, so LOB state in memory
-// needs no extra check.
+// events (see TransactionCache.IncludeInLowWatermark). planLOBReplay keeps the
+// transactions of an open LOB replay in the cache, so LOB state in memory needs
+// no extra check.
 func minedCheckpointSCN(currentSCN, lowWatermark uint64) replication.SCN {
 	return replication.SCN(capBelowOpenTxn(currentSCN, lowWatermark))
 }
