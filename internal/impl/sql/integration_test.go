@@ -18,7 +18,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"time"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -1078,18 +1078,19 @@ func TestIntegrationMySQL(t *testing.T) {
 }
 
 // startMSSQLContainer starts the SQL Server container for
-// TestIntegrationMSSQL and stops it at the end of the test. It starts a new
-// container when SQL Server crashes during the start.
+// TestIntegrationMSSQL and stops it at the end of the test. It returns when
+// SQL Server runs queries, and it starts a new container when SQL Server
+// crashes before that.
 func startMSSQLContainer(t *testing.T, password string) testcontainers.Container {
 	t.Helper()
 	// When other test packages load the Docker host, SQL Server 2025 can crash in sqlpal.dll a few seconds after
-	// the start ("This program has encountered a fatal error"). The port can be open before that, so also wait for
-	// the log line that the mssql module waits for. The log wait fails as soon as the container exits, and then the
-	// test starts a new container.
+	// the start ("This program has encountered a fatal error"). The port can be open before that, so wait until a
+	// query runs. ForSQL checks the container state at each try, so it fails as soon as the container exits, and
+	// then the test starts a new container. When the wait fails, testcontainers logs the container logs.
 	//
-	// All attempts share one start deadline, so that the start and the readiness wait together stay well below the
-	// 10m timeout of the package (cmd/tools/integration/packages.json). A crash fails fast and leaves time for a new
-	// attempt. A slow start can use all of the time.
+	// All attempts share one start deadline, so that the start stays well below the 10m timeout of the package
+	// (cmd/tools/integration/packages.json). A crash fails fast and leaves time for a new attempt. A slow start can
+	// use all of the time.
 	const maxAttempts = 3
 	startDeadline := time.Now().Add(5 * time.Minute)
 	var (
@@ -1108,8 +1109,9 @@ func startMSSQLContainer(t *testing.T, password string) testcontainers.Container
 				"SA_PASSWORD": password,
 			}),
 			testcontainers.WithWaitStrategyAndDeadline(waitFor,
-				wait.ForListeningPort("1433/tcp").WithStartupTimeout(waitFor),
-				wait.ForLog("Recovery is complete.").WithStartupTimeout(waitFor),
+				wait.ForSQL("1433/tcp", "mssql", func(host string, port network.Port) string {
+					return mssqlDSN(password, host, port.Port())
+				}).WithStartupTimeout(waitFor).WithPollInterval(time.Second),
 			),
 		)
 		if err == nil || attempt == maxAttempts || time.Until(startDeadline) < time.Minute {
@@ -1127,44 +1129,8 @@ func startMSSQLContainer(t *testing.T, password string) testcontainers.Container
 	return ctr
 }
 
-// waitReady calls connect until it returns nil, for at most timeout. If the
-// service in ctr is not ready by then, it logs the container state and logs
-// and fails the test with the last error of connect. name identifies the
-// service in the messages.
-func waitReady(t *testing.T, name string, ctr testcontainers.Container, timeout time.Duration, connect func() error) {
-	t.Helper()
-	// This loop runs in the test goroutine and not in assert.Eventually. Eventually runs the condition in a goroutine
-	// and does not wait for it at the timeout, so a try that is still running would write the variables of connect
-	// while the test reads them. lastErr keeps the error of the last try, so that a failed wait shows the cause.
-	deadline := time.Now().Add(timeout)
-	lastErr := connect()
-	for lastErr != nil && time.Now().Before(deadline) {
-		select {
-		case <-t.Context().Done():
-			require.FailNow(t, "Test context done", "last error: %v", lastErr)
-		case <-time.After(time.Second):
-		}
-		lastErr = connect()
-	}
-	if lastErr == nil {
-		return
-	}
-	// The port can be open while the service is not ready, or the container can stop after the port wait. Log the
-	// container state and logs to show which case it is.
-	if state, err := ctr.State(t.Context()); err != nil {
-		t.Logf("Cannot get the %s container state: %v", name, err)
-	} else {
-		t.Logf("%s container state: status=%s exit_code=%d oom_killed=%v error=%q",
-			name, state.Status, state.ExitCode, state.OOMKilled, state.Error)
-	}
-	if logs, err := ctr.Logs(t.Context()); err != nil {
-		t.Logf("Cannot get the %s container logs: %v", name, err)
-	} else {
-		b, _ := io.ReadAll(logs)
-		logs.Close()
-		t.Logf("%s container logs:\n%s", name, b)
-	}
-	require.FailNow(t, name+" is not ready", "last error: %v", lastErr)
+func mssqlDSN(password, host, port string) string {
+	return fmt.Sprintf("sqlserver://sa:%s@%s:%s?database=master", password, host, port)
 }
 
 func TestIntegrationMSSQL(t *testing.T) {
@@ -1176,12 +1142,10 @@ func TestIntegrationMSSQL(t *testing.T) {
 	mp, err := ctr.MappedPort(t.Context(), "1433/tcp")
 	require.NoError(t, err)
 
-	var db *sql.DB
-	t.Cleanup(func() {
-		if db != nil {
-			db.Close()
-		}
-	})
+	dsn := mssqlDSN(testPassword, "localhost", mp.Port())
+	db, err := sql.Open("mssql", dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	createTable := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
@@ -1192,25 +1156,8 @@ func TestIntegrationMSSQL(t *testing.T) {
 		)`, name))
 		return name, err
 	}
-
-	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", mp.Port())
-	// "Recovery is complete." is in the log, so SQL Server must accept connections soon.
-	waitReady(t, "SQL Server", ctr, time.Minute, func() error {
-		var err error
-		if db, err = sql.Open("mssql", dsn); err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-		if err = db.PingContext(ctx); err == nil {
-			_, err = createTable("footable")
-		}
-		if err != nil {
-			db.Close()
-			db = nil
-		}
-		return err
-	})
+	_, err = createTable("footable")
+	require.NoError(t, err)
 
 	testSuite(t, "mssql", dsn, createTable)
 }
