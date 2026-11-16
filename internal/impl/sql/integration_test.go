@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -1328,18 +1329,14 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	}
 	t.Parallel()
 
-	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
-		testcontainers.WithImagePlatform("linux/amd64"),
-		testcontainers.WithExposedPorts("8081/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			// The bigger the value, the longer it takes for the container to start up.
-			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "2",
-			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
-		}),
-		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, the emulator can need more time to start
-		// when it runs in parallel with the other tests, so set the deadline explicitly.
-		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
-			wait.ForListeningPort("8081/tcp").WithStartupTimeout(3*time.Minute),
+	// The vNext emulator is a native Linux image (amd64 and arm64) that serves plain HTTP. It reports readiness on
+	// port 8080.
+	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest",
+		testcontainers.WithExposedPorts("8081/tcp", "8080/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/ready").WithPort("8080/tcp").WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}),
 		),
 	)
 	testcontainers.CleanupContainer(t, ctr)
@@ -1364,7 +1361,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	dummyContainer := "ChallengerDeep"
 	emulatorAccountKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dsn := fmt.Sprintf(
-		"AccountEndpoint=https://localhost:%s;AccountKey=%s;DefaultDb=%s;AutoId=true;InsecureSkipVerify=true",
+		"AccountEndpoint=http://localhost:%s;AccountKey=%s;DefaultDb=%s;AutoId=true",
 		mp.Port(), emulatorAccountKey, dummyDatabase,
 	)
 
