@@ -1340,9 +1340,8 @@ create table %s (
 // service in the messages.
 func waitReady(t *testing.T, name string, ctr testcontainers.Container, timeout time.Duration, connect func() error) {
 	t.Helper()
-	// This loop runs in the test goroutine and not in assert.Eventually. Eventually runs the condition in a goroutine
-	// and does not wait for it at the timeout, so a try that is still running would write the variables of connect
-	// while the test reads them. lastErr keeps the error of the last try, so that a failed wait shows the cause.
+	// Not assert.Eventually: it runs the condition in a goroutine and does not wait for it at the timeout, so a try
+	// that is still running would write the variables of connect while the test reads them.
 	deadline := time.Now().Add(timeout)
 	lastErr := connect()
 	for lastErr != nil && time.Now().Before(deadline) {
@@ -1352,8 +1351,6 @@ func waitReady(t *testing.T, name string, ctr testcontainers.Container, timeout 
 	if lastErr == nil {
 		return
 	}
-	// The port can be open while the service is not ready, or the container can stop after the port wait. Log the
-	// container state and logs to show which case it is.
 	if state, err := ctr.State(t.Context()); err != nil {
 		t.Logf("Cannot get the %s container state: %v", name, err)
 	} else {
@@ -1410,8 +1407,6 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		}
 	})
 
-	// The readiness wait below can run this more than once for the same name, so the statement must not fail when
-	// the collection exists.
 	createContainer := func(name string) (string, error) {
 		_, err := db.Exec(fmt.Sprintf(`create collection if not exists %s with pk=/foo`, name))
 		return name, err
