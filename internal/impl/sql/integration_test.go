@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/log"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -1083,21 +1084,24 @@ func startMSSQLContainer(t *testing.T, password string) testcontainers.Container
 	t.Helper()
 	// When other test packages load the Docker host, SQL Server 2025 can crash in sqlpal.dll a few seconds after
 	// the start. The port can be open before that, so wait until a query runs. ForSQL fails as soon as the container
-	// exits, and then the test starts a new container. When the wait fails, testcontainers logs the container logs.
+	// exits, and then the test starts a new container. The retry is only for a container that exits: a container
+	// that hangs uses all of the deadline. When the wait fails, testcontainers writes the container logs to the test
+	// log.
 	//
 	// All attempts share one deadline, to stay well below the 10m package timeout
 	// (cmd/tools/integration/packages.json).
 	const maxAttempts = 3
-	startDeadline := time.Now().Add(5 * time.Minute)
 	var (
-		ctr testcontainers.Container
-		err error
+		startDeadline = time.Now().Add(5 * time.Minute)
+		ctr           testcontainers.Container
+		err           error
 	)
 	for attempt := 1; ; attempt++ {
 		// WithWaitStrategy stops the wait after 60s. Under amd64 emulation, SQL Server can need more time to start
 		// when it runs in parallel with the other tests, so set the deadline explicitly.
 		waitFor := time.Until(startDeadline)
 		ctr, err = testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
+			testcontainers.WithLogger(log.TestLogger(t)),
 			testcontainers.WithImagePlatform("linux/amd64"),
 			testcontainers.WithExposedPorts("1433/tcp"),
 			testcontainers.WithEnv(map[string]string{
@@ -1133,8 +1137,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
-	ctr := startMSSQLContainer(t, testPassword)
-	mp, err := ctr.MappedPort(t.Context(), "1433/tcp")
+	mp, err := startMSSQLContainer(t, testPassword).MappedPort(t.Context(), "1433/tcp")
 	require.NoError(t, err)
 
 	dsn := mssqlDSN(testPassword, "localhost", mp.Port())
