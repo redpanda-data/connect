@@ -977,6 +977,131 @@ func TestIncludeInLowWatermark(t *testing.T) {
 	}
 }
 
+// TestResetTransaction verifies ResetTransaction on each transaction cache
+// implementation. A reset transaction has no events but stays open at its start
+// SCN, and the low watermark counts it until it commits.
+func TestResetTransaction(t *testing.T) {
+	ctx := t.Context()
+	oldRow := &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "OLD"}
+	newRow := &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "NEW"}
+
+	caches := map[string]func(maxEvents int) TransactionCache{
+		"in memory": func(maxEvents int) TransactionCache {
+			return NewInMemoryCache(maxEvents, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+		"connect cache resource": func(maxEvents int) TransactionCache {
+			res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+			cfg := TransactionCacheConfig{CacheName: "txn_cache", CacheKey: "oracledb_cdc", MaxEvents: maxEvents}
+			return NewConnectCacheResource(res, cfg, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		},
+	}
+
+	tests := []struct {
+		name             string
+		maxEvents        int
+		setup            func(t *testing.T, c TransactionCache)
+		wantInCache      bool
+		wantTables       []string
+		wantLowWatermark uint64
+	}{
+		{
+			name: "reset drops the events and keeps the start SCN",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, oldRow))
+				require.NoError(t, c.AddEvent(ctx, "txA", 102, oldRow))
+				require.NoError(t, c.ResetTransaction(ctx, "txA"))
+			},
+			wantInCache:      true,
+			wantTables:       []string{},
+			wantLowWatermark: 100,
+		},
+		{
+			name: "events after a reset replace the old events",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, oldRow))
+				require.NoError(t, c.AddEvent(ctx, "txA", 102, oldRow))
+				require.NoError(t, c.ResetTransaction(ctx, "txA"))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, newRow))
+			},
+			wantInCache:      true,
+			wantTables:       []string{"NEW"},
+			wantLowWatermark: 100,
+		},
+		{
+			name: "a START mined again after a reset keeps the start SCN",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, oldRow))
+				require.NoError(t, c.ResetTransaction(ctx, "txA"))
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+			},
+			wantInCache:      true,
+			wantTables:       []string{},
+			wantLowWatermark: 100,
+		},
+		{
+			name: "reset of a missing transaction does nothing",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.ResetTransaction(ctx, "txA"))
+			},
+			wantInCache:      false,
+			wantLowWatermark: math.MaxUint64,
+		},
+		{
+			// The event after the reset shows that the transaction stays
+			// discarded. If the reset cleared the discarded mark, AddEvent would
+			// open the transaction again.
+			name:      "reset of a discarded transaction does nothing",
+			maxEvents: 1,
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, oldRow))
+				require.NoError(t, c.AddEvent(ctx, "txA", 102, oldRow))
+				require.NoError(t, c.ResetTransaction(ctx, "txA"))
+				require.NoError(t, c.AddEvent(ctx, "txA", 103, newRow))
+			},
+			wantInCache:      false,
+			wantLowWatermark: math.MaxUint64,
+		},
+		{
+			name: "committed transaction is no longer counted after a reset",
+			setup: func(t *testing.T, c TransactionCache) {
+				require.NoError(t, c.StartTransaction(ctx, "txA", 100))
+				require.NoError(t, c.AddEvent(ctx, "txA", 101, oldRow))
+				require.NoError(t, c.ResetTransaction(ctx, "txA"))
+				require.NoError(t, c.CommitTransaction(ctx, "txA"))
+			},
+			wantInCache:      false,
+			wantLowWatermark: math.MaxUint64,
+		},
+	}
+	for cacheName, newCache := range caches {
+		for _, test := range tests {
+			t.Run(cacheName+"/"+test.name, func(t *testing.T) {
+				c := newCache(test.maxEvents)
+				test.setup(t, c)
+
+				txn, err := c.GetTransaction(ctx, "txA")
+				require.NoError(t, err)
+				if !test.wantInCache {
+					assert.Nil(t, txn)
+				} else {
+					require.NotNil(t, txn)
+					assert.Equal(t, uint64(100), txn.SCN)
+					tables := []string{}
+					for _, ev := range txn.Events {
+						tables = append(tables, ev.Table)
+					}
+					assert.Equal(t, test.wantTables, tables)
+				}
+				assert.Equal(t, test.wantLowWatermark, c.LowWatermarkSCN(""))
+			})
+		}
+	}
+}
+
 // RS_ID and SSN must survive both transaction cache kinds. The Connect cache
 // resource stores events as JSON, so this also covers cache_resource.go.
 func TestProcessRedoEventPropagatesRecordIdentity(t *testing.T) {

@@ -255,9 +255,9 @@ func TestPlanLOBReplay(t *testing.T) {
 		assert.Equal(t, uint64(150), again.processedSCN)
 	})
 
-	t.Run("partial rollback failure carries all transactions over", func(t *testing.T) {
+	t.Run("partial reset failure carries all transactions over", func(t *testing.T) {
 		lm, _, inner := newLOBReplayMiner(t)
-		cache := &failingRollbackCache{TransactionCache: inner, failID: "t2", fail: true}
+		cache := &failingResetCache{TransactionCache: inner, failID: "t2", fail: true}
 		lm.txnCache = cache
 		lm.currentSCN = 100
 		for id, scn := range map[sqlredo.TransactionID]uint64{"t1": 30, "t2": 20, "t3": 40} {
@@ -668,16 +668,16 @@ func lobWriteEv(scn uint64, txn sqlredo.TransactionID, data string, offset int) 
 		fmt.Sprintf(" buf_c := '%s';\n  dbms_lob.write(loc_c, %d, %d, buf_c);", data, len(data), offset))
 }
 
-// failingRollbackCache fails RollbackTransaction for failID while fail is set.
-type failingRollbackCache struct {
+// failingResetCache fails ResetTransaction for failID while fail is set.
+type failingResetCache struct {
 	TransactionCache
 	failID sqlredo.TransactionID
 	fail   bool
 }
 
-func (c *failingRollbackCache) RollbackTransaction(ctx context.Context, id sqlredo.TransactionID) error {
+func (c *failingResetCache) ResetTransaction(ctx context.Context, id sqlredo.TransactionID) error {
 	if c.fail && id == c.failID {
-		return fmt.Errorf("injected rollback failure for %s", id)
+		return fmt.Errorf("injected reset failure for %s", id)
 	}
-	return c.TransactionCache.RollbackTransaction(ctx, id)
+	return c.TransactionCache.ResetTransaction(ctx, id)
 }

@@ -40,26 +40,11 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		fromSCN:      math.MaxUint64,
 		processedSCN: lm.currentSCN,
 	}
-	// startSCNs holds the start SCN of each replayed transaction.
-	// RollbackTransaction deletes it from the cache, so the reset reads it here.
-	startSCNs := make(map[sqlredo.TransactionID]uint64)
 	// A replay that failed already cleared the LOB state of its transactions,
 	// so the candidates below do not include them. Keep them in the set, or the
 	// next window skips their early rows.
 	if prev := lm.lobReplay; prev != nil {
 		for id := range prev.txns {
-			txn, err := lm.txnCache.GetTransaction(ctx, id)
-			if err != nil {
-				return nil, fmt.Errorf("getting carried-over transaction %s for LOB replay: %w", id, err)
-			}
-			// If the earlier reset failed after RollbackTransaction, the
-			// transaction is not in the cache. prev.fromSCN is at or below the
-			// start of each replayed transaction, so the checkpoint can only be
-			// too low.
-			startSCNs[id] = prev.fromSCN
-			if txn != nil {
-				startSCNs[id] = txn.SCN
-			}
 			replay.txns[id] = struct{}{}
 			lm.log.Debugf("LOB transaction %s is carried over from an interrupted replay; re-mining it from SCN %d", id, prev.fromSCN)
 		}
@@ -87,7 +72,6 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 			continue
 		}
 		replay.txns[id] = struct{}{}
-		startSCNs[id] = txn.SCN
 		replay.fromSCN = min(replay.fromSCN, txn.SCN)
 		lm.log.Debugf("LOB transaction %s started at SCN %d is still open at the window boundary (SCN %d); re-mining it from its start", id, txn.SCN, replay.processedSCN)
 	}
@@ -99,19 +83,12 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 	// attempt carries over the transactions that it already reset.
 	lm.lobReplay = replay
 	for id := range replay.txns {
-		if err := lm.txnCache.RollbackTransaction(ctx, id); err != nil {
-			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)
-		}
-		// Add the transaction again at its start SCN, with no events. Then
+		// The reset keeps the transaction open at its start SCN. Then
 		// LowWatermarkSCN keeps the checkpoint below it until it commits or rolls
 		// back, also if ORA-01368 stops this cycle before its rows are mined
-		// again. A transaction with no DML events counts in LowWatermarkSCN only
-		// after IncludeInLowWatermark.
-		if err := lm.txnCache.StartTransaction(ctx, id, startSCNs[id]); err != nil {
-			return nil, fmt.Errorf("restarting transaction %s for LOB replay: %w", id, err)
-		}
-		if err := lm.txnCache.IncludeInLowWatermark(ctx, id); err != nil {
-			return nil, fmt.Errorf("holding checkpoint below transaction %s for LOB replay: %w", id, err)
+		// again.
+		if err := lm.txnCache.ResetTransaction(ctx, id); err != nil {
+			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)
 		}
 		delete(lm.lobStates, id)
 		delete(lm.pendingLOBWrites, id)
