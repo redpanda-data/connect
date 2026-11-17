@@ -401,7 +401,7 @@ func (a *amazonS3Writer) ConnectionTest(ctx context.Context) service.ConnectionT
 	if !isStatic {
 		// A dynamic bucket can only be resolved against a message, so there
 		// is no single bucket to check without sending data.
-		return service.ConnectionTestSucceeded().AsList()
+		return service.ConnectionTestNotSupported().AsList()
 	}
 
 	client := s3.NewFromConfig(a.conf.aconf, func(o *s3.Options) {
@@ -565,7 +565,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		}
 
 		if _, err := a.uploader.UploadObject(ctx, uploadInput); err != nil {
-			return err
+			return fmt.Errorf("uploading to bucket %s: %w", bucket, err)
 		}
 		return nil
 	})
