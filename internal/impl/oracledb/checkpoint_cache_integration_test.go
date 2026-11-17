@@ -27,6 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb"
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 // TestIntegrationMigrateCheckpointCache can be deleted once we're happy customers have migrated.
@@ -181,7 +182,8 @@ func TestIntegrationProbeCheckpointMerge(t *testing.T) {
 			err := oracledb.ProbeCheckpointMerge(t.Context(), userDB, table)
 			if tc.wantDenied {
 				require.Error(t, err)
-				assert.Truef(t, oracledb.IsInsufficientPrivileges(err), "expected a missing privilege error, got: %v", err)
+				_, ok := replication.IsMissingPrivilege(err)
+				assert.Truef(t, ok, "expected a missing privilege error, got: %v", err)
 			} else {
 				require.NoError(t, err)
 			}

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
-	goora "github.com/sijms/go-ora/v2/network"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
@@ -41,12 +40,6 @@ const (
 	// that probe the same table at the same time wait for each other on the
 	// probe key, but only until the first one rolls back.
 	checkpointMergeProbeTimeout = 10 * time.Second
-	// errCodeInsufficientPrivileges is ORA-01031 (insufficient privileges).
-	errCodeInsufficientPrivileges = 1031
-	// errCodeMissingPrivilege is ORA-41900 (missing <privilege> privilege on
-	// <object>). Oracle 23ai returns it in place of ORA-01031 for a missing
-	// object privilege.
-	errCodeMissingPrivilege = 41900
 )
 
 // allowedTableIdentifiers is used for validating cache table names
@@ -120,10 +113,11 @@ func newCheckpointCache(
 	probeCtx, cancel := context.WithTimeout(ctx, checkpointMergeProbeTimeout)
 	err = probeCheckpointMerge(probeCtx, db, cacheTable)
 	cancel()
+	_, missingPrivilege := replication.IsMissingPrivilege(err)
 	switch {
 	case err == nil:
 		mergeAllowed.Set(1)
-	case isInsufficientPrivileges(err):
+	case missingPrivilege:
 		mergeAllowed.Set(0)
 		log.Warnf("The Connect user cannot write checkpoints to '%s' with MERGE: %v. "+
 			"A future version writes checkpoints with MERGE instead of the stored procedure %s.%s, and then needs the INSERT and UPDATE privileges on this table. "+
@@ -304,16 +298,6 @@ func probeCheckpointMerge(ctx context.Context, db *sql.DB, tbl cacheTable) (err 
 	// go-ora driver handles []byte parameters as RAW type
 	_, err = tx.ExecContext(ctx, checkpointMergeQuery(tbl), checkpointMergeProbeKey, make([]byte, 8))
 	return err
-}
-
-// isInsufficientPrivileges reports whether err is a missing privilege error:
-// ORA-01031, or ORA-41900 on Oracle 23ai.
-func isInsufficientPrivileges(err error) bool {
-	var oraErr *goora.OracleError
-	if !errors.As(err, &oraErr) {
-		return false
-	}
-	return oraErr.ErrCode == errCodeInsufficientPrivileges || oraErr.ErrCode == errCodeMissingPrivilege
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {

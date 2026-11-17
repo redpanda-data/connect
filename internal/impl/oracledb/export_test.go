@@ -22,7 +22,3 @@ func ProbeCheckpointMerge(ctx context.Context, db *sql.DB, table string) error {
 	}
 	return probeCheckpointMerge(ctx, db, tbl)
 }
-
-// IsInsufficientPrivileges exposes isInsufficientPrivileges to the integration
-// tests in package oracledb_test.
-var IsInsufficientPrivileges = isInsufficientPrivileges
