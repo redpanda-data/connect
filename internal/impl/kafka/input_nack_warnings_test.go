@@ -335,40 +335,9 @@ func TestNackWarningInputPartialBatchError(t *testing.T) {
 	assert.Same(t, bErr, child.acks[0])
 }
 
-func TestWrapBatchInputNackWarningsInterval(t *testing.T) {
-	spec := service.NewConfigSpec().Fields(
-		service.NewAutoRetryNacksToggleField(),
-		NewNackWarningIntervalField(),
-	)
-
-	tests := []struct {
-		name string
-		yaml string
-		want time.Duration
-	}{
-		{name: "default", yaml: "", want: 10 * time.Second},
-		{name: "custom", yaml: "nack_warning_interval: 1m", want: time.Minute},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			conf, err := spec.ParseYAML(tc.yaml, nil)
-			require.NoError(t, err)
-
-			res, _, _ := newNackTestResources(t)
-			rdr, err := WrapBatchInputNackWarnings(conf, res, NackMetricNameRedpanda, &nackTestInput{})
-			require.NoError(t, err)
-			in, ok := rdr.(*nackWarningInput)
-			require.True(t, ok)
-			assert.Equal(t, tc.want, in.warnInterval)
-			assert.True(t, in.replay)
-		})
-	}
-}
-
 func TestWrapBatchInputNackWarningsAutoReplay(t *testing.T) {
 	spec := service.NewConfigSpec().Fields(
 		service.NewAutoRetryNacksToggleField(),
-		NewNackWarningIntervalField(),
 	)
 
 	tests := []struct {
@@ -394,6 +363,7 @@ func TestWrapBatchInputNackWarningsAutoReplay(t *testing.T) {
 				in, ok := rdr.(*nackWarningInput)
 				require.True(t, ok)
 				assert.Equal(t, tc.replay, in.replay)
+				assert.Equal(t, nackWarningInterval, in.warnInterval)
 
 				batch, aFn, err := rdr.ReadBatch(t.Context())
 				require.NoError(t, err)

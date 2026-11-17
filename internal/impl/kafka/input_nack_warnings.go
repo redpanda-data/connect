@@ -32,21 +32,12 @@ const (
 	// by the Kafka branded inputs.
 	NackMetricNameKafka = "kafka_nacks"
 
-	// NackWarningIntervalFieldName is the name of the field bounding how often
-	// an input wrapped by WrapBatchInputNackWarnings logs a warning.
-	NackWarningIntervalFieldName = "nack_warning_interval"
+	// nackWarningInterval is the minimum time between two warnings logged by
+	// an input wrapped by WrapBatchInputNackWarnings. A partition stuck
+	// replaying the same batch produces one warning per interval instead of
+	// one per attempt.
+	nackWarningInterval = 10 * time.Second
 )
-
-// NewNackWarningIntervalField returns the field read by
-// WrapBatchInputNackWarnings. A partition stuck replaying the same batch
-// produces one warning per interval instead of one per attempt.
-func NewNackWarningIntervalField() *service.ConfigField {
-	return service.NewDurationField(NackWarningIntervalFieldName).
-		Description("The minimum time between two warnings about records rejected by the output. Rejections between warnings are summed up in the next warning and counted by the rejected records metric.").
-		Default("10s").
-		Advanced().
-		Version("4.119.0")
-}
 
 // WrapBatchInputNackWarnings applies auto_replay_nacks to a Kafka batch input,
 // as service.AutoRetryNacksBatchedToggled does, and wraps the result so that
@@ -63,7 +54,7 @@ func NewNackWarningIntervalField() *service.ConfigField {
 //
 // Each rejected message increments a counter named metricName with topic and
 // partition labels, and a warning is logged at most once every
-// nack_warning_interval. The warning carries the number of consecutive
+// nackWarningInterval. The warning carries the number of consecutive
 // rejections of the partition, which, for the ordered readers that keep one
 // batch in flight per partition, is the number of times the same records were
 // rejected.
@@ -72,14 +63,10 @@ func WrapBatchInputNackWarnings(conf *service.ParsedConfig, res *service.Resourc
 	if err != nil {
 		return nil, err
 	}
-	interval, err := conf.FieldDuration(NackWarningIntervalFieldName)
-	if err != nil {
-		return nil, err
-	}
 	if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
 		return nil, err
 	}
-	return newNackWarningInput(res, metricName, replay, interval, rdr), nil
+	return newNackWarningInput(res, metricName, replay, nackWarningInterval, rdr), nil
 }
 
 func newNackWarningInput(res *service.Resources, metricName string, replay bool, warnInterval time.Duration, rdr service.BatchInput) *nackWarningInput {
@@ -236,5 +223,5 @@ func (n *nackWarningInput) observeNack(tp topicPartition, offset string, size in
 // naming its counter metricName. Callers add the section heading, so that it
 // fits the heading levels of their description.
 func nackWarningsDescription(metricName string) string {
-	return `Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens, the input logs a warning at most once per ` + "<<nack_warning_interval,`nack_warning_interval`>>" + ` and increments the ` + "`" + metricName + "`" + ` counter. The counter has ` + "`topic`" + ` and ` + "`partition`" + ` labels. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.`
+	return `Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens, the input logs a warning at most once every 10 seconds and increments the ` + "`" + metricName + "`" + ` counter. The counter has ` + "`topic`" + ` and ` + "`partition`" + ` labels. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.`
 }

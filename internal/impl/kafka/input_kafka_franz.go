@@ -66,7 +66,6 @@ func FranzKafkaInputConfigFields() []*service.ConfigField {
 		FranzReaderUnorderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
-			NewNackWarningIntervalField(),
 			service.NewForceTimelyNacksField(),
 		},
 	)

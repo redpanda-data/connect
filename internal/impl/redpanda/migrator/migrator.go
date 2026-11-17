@@ -112,8 +112,7 @@ This input adds the following metadata fields to each message:
 		// Schema registry fields
 		Field(schemaRegistryField().Optional()).
 		// Other fields
-		Field(service.NewAutoRetryNacksToggleField()).
-		Field(kafka.NewNackWarningIntervalField())
+		Field(service.NewAutoRetryNacksToggleField())
 }
 
 func migratorOutputConfig() *service.ConfigSpec {

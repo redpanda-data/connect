@@ -164,7 +164,6 @@ To change strategies on a running group, first roll out a list with the old stra
 				Advanced().
 				Version("4.114.0"),
 			service.NewAutoRetryNacksToggleField(),
-			NewNackWarningIntervalField(),
 			service.NewForceTimelyNacksField(),
 			service.NewExtractTracingSpanMappingField().Version("4.85.0"),
 		},
