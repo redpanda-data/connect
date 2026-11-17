@@ -61,16 +61,14 @@ func TestIntegrationCheckpointCacheConcurrentCreate(t *testing.T) {
 		start   = make(chan struct{})
 	)
 	for i := range pipelines {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			ok, err := createCacheTable(t.Context(), cacheDB, tbl, "k", service.MockResources().Logger())
 			errs[i] = err
 			if ok {
 				created.Add(1)
 			}
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()
