@@ -34,11 +34,11 @@ type lobReplay struct {
 // planLOBReplay selects the open transactions with LOB state, resets them so
 // they are rebuilt from scratch, and returns the window to re-mine. It returns
 // nil when there is nothing to replay.
-func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
+func (lm *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (*lobReplay, error) {
 	replay := &lobReplay{
 		txns:         make(map[sqlredo.TransactionID]struct{}),
 		fromSCN:      math.MaxUint64,
-		processedSCN: lm.currentSCN,
+		processedSCN: currentSCN,
 	}
 	// A replay left over from a failed attempt already rolled back its
 	// transactions, so they may be absent from the cache until their rows are
@@ -49,7 +49,7 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 			lm.log.Debugf("LOB transaction %s is carried over from an interrupted replay; re-mining it from SCN %d", id, prev.fromSCN)
 		}
 		replay.fromSCN = prev.fromSCN
-		replay.processedSCN = max(prev.processedSCN, lm.currentSCN)
+		replay.processedSCN = max(prev.processedSCN, currentSCN)
 	}
 
 	candidates := make(map[sqlredo.TransactionID]struct{}, len(lm.lobStates)+len(lm.pendingLOBWrites))
@@ -105,7 +105,7 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 //
 // Both values ignore excludeTxnID, so that a committing transaction does not
 // hold back its own checkpoint.
-func (lm *LogMiner) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
+func (lm *redoProcessor) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
 	low := lm.txnCache.LowWatermarkSCN(excludeTxnID)
 	// fromSCN can be too low: it does not go up when a replayed transaction
 	// ends. This only delays the checkpoint, which is safe.
