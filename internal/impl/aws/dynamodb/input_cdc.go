@@ -162,13 +162,26 @@ NOTE: Snapshots use eventually consistent reads and do not provide point-in-time
 
 Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses.
 
-A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one: the first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position; a parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged); and a parent shard the stream reports as not found. A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged. In `+"`snapshot_and_cdc`"+` mode, a restart after a completed snapshot handles this differently. If any shard checkpoint points at trimmed stream data, the input re-runs the full snapshot instead of resuming from `+"`TRIM_HORIZON`"+`.
-
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
 Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Namespaces do not coordinate consumers: two pipelines sharing the _same_ namespace still overwrite each other's checkpoints.
 
 The namespace is prefixed to the checkpoint key. When a pipeline restarts under a namespace that has no checkpoints yet, it starts from `+"`start_from`"+`. With `+"`start_from: trim_horizon`"+`, this replays all records still available in the stream's 24-hour retention window. Switching back to a previously used namespace resumes from that namespace's last checkpoints.
+
+=== Ordering across shard splits
+
+DynamoDB Streams splits shards over time. The input reads a child shard only after its parent shard is read to the end, so the changes to an item keep their order. In these cases the input reads a child shard without waiting, and an older change to an item can arrive after a newer one:
+
+- The first start with `+"`start_from: latest`"+`. Every shard starts at its latest position.
+- A parent shard that the input cannot open for several refresh cycles. A warning is logged.
+- A parent shard that the stream reports as not found.
+
+=== Downtime longer than the stream retention
+
+DynamoDB Streams keeps records for 24 hours. If the pipeline stops for longer, a stored checkpoint can point at records that are gone, and the changes between the checkpoint and the oldest kept record are lost. A warning is logged.
+
+- With `+"`snapshot_mode: none`"+`, the shard resumes from `+"`TRIM_HORIZON`"+`.
+- With `+"`snapshot_mode: snapshot_and_cdc`"+` and a completed snapshot, the input runs the full snapshot again, so every item gets its current state. The CDC readers also resume from `+"`TRIM_HORIZON`"+`, so expect duplicates. The intermediate changes are still lost.
 
 == Alternative
 

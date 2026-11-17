@@ -111,7 +111,7 @@ Operational notes:
 		Default(1000),
 	).
 	Field(service.NewStringListField(fieldTablesInclude).
-		Description("Regular expressions for tables to include in CDC streaming. Specify table names using the format `schema.table` (such as `dbo.orders`, `sales.customers`). Each pattern is treated as a regular expression, allowing wildcards and pattern matching. Patterns are not anchored, so `dbo.orders` also matches `dbo.orders_archive`. To match one table exactly, use `^dbo\\.orders$`. Every matched table must have CDC enabled with a capture instance named `<schema>_<table>`, which is the SQL Server default. Otherwise the input fails at startup with `no change table found for table`.").
+		Description("Regular expressions for tables to include in CDC streaming. Specify table names using the format `schema.table` (such as `dbo.orders`, `sales.customers`). Each pattern is treated as a regular expression, allowing wildcards and pattern matching. Patterns are not anchored, so `dbo.orders` also matches `dbo.orders_archive`. To match one table exactly, use `^dbo\\.orders$`. Every matched table must have CDC enabled with a capture instance named `<schema>_<table>`, which is the SQL Server default. Otherwise the input cannot connect and keeps retrying with the error `no change table found for table`.").
 		Example("dbo.products"),
 	).
 	Field(service.NewStringListField(fieldTablesExclude).

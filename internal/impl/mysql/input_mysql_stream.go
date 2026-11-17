@@ -99,7 +99,7 @@ The binlog position is stored in `+"`checkpoint_cache`"+` only after the snapsho
 
 When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the current binlog position. In both modes, a restart resumes streaming from the binlog position stored in `+"`checkpoint_cache`"+`.
 
-The stored position is a binlog file name and offset on one server, not a GTID. After a failover to another server, the stored position is no longer valid. If the server purges the binlog file that the stored position names, the input fails to connect and keeps retrying. It does not take a snapshot or skip to the current position. In either case, delete the stored position from `+"`checkpoint_cache`"+` to start again.
+The stored position is a binlog file name and offset on one server, not a GTID. After a failover to another server, the stored position is no longer valid. If the server purges the binlog file that the stored position names, the input logs an error and reconnects repeatedly. It does not take a snapshot or skip to the current position. In either case, delete the stored position from `+"`checkpoint_cache`"+` to start again.
 
 == Data types
 

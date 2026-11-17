@@ -123,7 +123,7 @@ Each ` + "`/data/...`" + ` topic requires Change Data Capture to be enabled for 
 			ShortDescription("Paginate a full REST snapshot of every CDC sObject in topics before opening a streaming subscription.").
 			Default(true)).
 		Field(service.NewStringEnumField(sfciFieldReplayPreset, sfciReplayLatest, sfciReplayEarliest).
-			Description("Initial replay position used per topic only on first run (when no checkpoint exists in the cache); ignored once a topic's replay ID has been written.\n\n- `latest`: Start from new events only; any changes between prior run and Connect are skipped.\n- `earliest`: Replay from the retention start (24h standard, 72h with enhanced retention). Use to recover missed events after outages.\n\nIf Salesforce rejects a stored replay ID, for example after an outage longer than the retention window, the input deletes it, logs a warning, and resubscribes from this preset. With `latest`, the changes from that gap are not delivered and the pipeline does not fail.").
+			Description("Initial replay position used per topic only on first run (when no checkpoint exists in the cache); ignored once a topic's replay ID has been written.\n\n- `latest`: Start from new events only; any changes between prior run and Connect are skipped.\n- `earliest`: Replay from the retention start (24h standard, 72h with enhanced retention). Use to recover missed events after outages.").
 			ShortDescription("Initial replay position per topic, used only on the first run when no checkpoint exists.").
 			Default(sfciReplayLatest)).
 		Field(service.NewIntField(sfciFieldSnapshotMaxBatchSize).

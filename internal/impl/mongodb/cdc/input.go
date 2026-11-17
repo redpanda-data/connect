@@ -420,7 +420,7 @@ This field is only applicable when `+"`"+`stream_snapshot`+"`"+` is set to `+"`"
 				marshalModeRelaxed: "A string format that emphasizes readability and interoperability at the expense of type preservation." +
 					"That is, conversion from relaxed format to BSON can lose type information.",
 			}).
-				Description("Controls the format used to convert a message from BSON to JSON when it is received by Redpanda Connect. In both modes, `Decimal128` values are emitted as plain decimal strings, such as `\"19.90\"`, not as `$numberDecimal` objects.").
+				Description("Controls the format used to convert a message from BSON to JSON when it is received by Redpanda Connect. In both modes, `Decimal128` values are emitted as plain decimal strings, such as `\"19.90\"`, not as `$numberDecimal` objects. `NaN` and `Infinity` values keep the object form, such as `{\"$numberDecimal\": \"NaN\"}`.").
 				Default(marshalModeCanonical).
 				Advanced(),
 			service.NewStringField(fieldClientAppName).
