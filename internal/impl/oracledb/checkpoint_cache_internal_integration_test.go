@@ -36,6 +36,7 @@ func TestIntegrationCheckpointCacheNameIsAView(t *testing.T) {
 
 	c, err := newCheckpointCache(t.Context(), connStr, viewName, "k", service.MockResources().Logger())
 	require.ErrorContains(t, err, "ORA-00955")
+	require.ErrorContains(t, err, "not a table visible to this user")
 	require.Nil(t, c)
 }
 

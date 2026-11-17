@@ -246,9 +246,14 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 		// migration is necessary. Re-check because the name can also belong to a view or to another user's table.
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeNameAlreadyUsed {
-			if exists, checkErr := cacheTableExists(ctx, db, tbl); checkErr == nil && exists {
+			exists, checkErr := cacheTableExists(ctx, db, tbl)
+			if checkErr != nil {
+				return false, fmt.Errorf("creating table: %w (re-check failed: %v)", err, checkErr)
+			}
+			if exists {
 				return false, nil
 			}
+			return false, fmt.Errorf("creating table: name is used by an object that is not a table visible to this user: %w", err)
 		}
 		return false, fmt.Errorf("creating table: %w", err)
 	}
