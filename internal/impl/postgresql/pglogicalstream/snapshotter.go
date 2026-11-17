@@ -443,6 +443,20 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				}
 				return result, nil
 			}
+		case "BYTEA":
+			// The stream path emits BYTEA as []byte. Scanning it as a string, as
+			// the default arm would, keeps the bytes in memory but not through
+			// marshalling: encoding/json replaces every byte that is not valid
+			// UTF-8, so the snapshot row would carry a different value than a
+			// streamed one.
+			scanArgs[i] = new([]byte)
+			valueGetters[i] = func(v any) (any, error) {
+				b := *v.(*[]byte)
+				if b == nil {
+					return nil, nil
+				}
+				return b, nil
+			}
 		default: // NUMERIC and other unhandled types scan as string.
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
