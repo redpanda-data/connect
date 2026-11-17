@@ -364,3 +364,79 @@ func TestWrapBatchInputNackWarningsInterval(t *testing.T) {
 		})
 	}
 }
+
+func TestWrapBatchInputNackWarningsAutoReplay(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(
+		service.NewAutoRetryNacksToggleField(),
+		NewNackWarningIntervalField(),
+	)
+
+	tests := []struct {
+		name   string
+		yaml   string
+		replay bool
+	}{
+		{name: "default replays", yaml: "", replay: true},
+		{name: "replay", yaml: "auto_replay_nacks: true", replay: true},
+		{name: "drop", yaml: "auto_replay_nacks: false", replay: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// The bubble's fake clock skips the back off of the replay.
+			synctest.Test(t, func(t *testing.T) {
+				conf, err := spec.ParseYAML(tc.yaml, nil)
+				require.NoError(t, err)
+
+				res, logs, _ := newNackTestResources(t)
+				child := &nackTestInput{batches: []service.MessageBatch{kafkaBatch("foo", 0, 10, 2)}}
+				rdr, err := WrapBatchInputNackWarnings(conf, res, NackMetricNameRedpanda, child)
+				require.NoError(t, err)
+				in, ok := rdr.(*nackWarningInput)
+				require.True(t, ok)
+				assert.Equal(t, tc.replay, in.replay)
+
+				batch, aFn, err := rdr.ReadBatch(t.Context())
+				require.NoError(t, err)
+				require.Len(t, batch, 2)
+				rejected := errors.New("boom")
+				require.NoError(t, aFn(t.Context(), rejected))
+				require.Len(t, logs.warnings(), 1)
+
+				if !tc.replay {
+					// The rejection reaches the reader, which commits past
+					// the records, and nothing is read again.
+					_, _, err = rdr.ReadBatch(t.Context())
+					require.ErrorIs(t, err, service.ErrEndOfInput)
+					child.mu.Lock()
+					defer child.mu.Unlock()
+					assert.Equal(t, []error{rejected}, child.acks)
+					return
+				}
+
+				// The auto retry wrapper holds the rejection back from the
+				// reader and hands the same records out again.
+				replayed, aFn, err := rdr.ReadBatch(t.Context())
+				require.NoError(t, err)
+				require.Len(t, replayed, 2)
+				for i, msg := range replayed {
+					want, err := batch[i].AsBytes()
+					require.NoError(t, err)
+					got, err := msg.AsBytes()
+					require.NoError(t, err)
+					assert.Equal(t, string(want), string(got))
+					offset, _ := msg.MetaGet("kafka_offset")
+					assert.Equal(t, fmt.Sprint(10+i), offset)
+				}
+				child.mu.Lock()
+				assert.Empty(t, child.acks)
+				child.mu.Unlock()
+
+				// Delivering the replay acknowledges the reader once.
+				require.NoError(t, aFn(t.Context(), nil))
+				child.mu.Lock()
+				defer child.mu.Unlock()
+				assert.Equal(t, []error{nil}, child.acks)
+			})
+		})
+	}
+}
