@@ -296,3 +296,65 @@ meta:
 
 	defer r.Close(ctx)
 }
+
+func TestResourcesWrapperInputEndOfInput(t *testing.T) {
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Testing",
+		Version: "1.0.0",
+	}, nil)
+
+	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
+
+	require.NoError(t, r.AddInputYAML([]byte(`
+label: three
+generate:
+  count: 3
+  interval: ""
+  mapping: 'root.n = counter()'
+meta:
+  mcp:
+    enabled: true
+    description: emits three messages and then ends
+`)))
+
+	_, err := r.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
+	defer done()
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	go func() {
+		_ = s.Run(ctx, serverTransport)
+	}()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer session.Close()
+
+	read := func(count int) (*mcp.CallToolResult, error) {
+		return session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "three",
+			Arguments: map[string]any{"count": count},
+		})
+	}
+
+	res, err := read(2)
+	require.NoError(t, err)
+	require.Len(t, res.Content, 2)
+
+	// Ask for more messages than remain: the one left must be returned rather
+	// than dropped, as it has already been acknowledged.
+	res, err = read(5)
+	require.NoError(t, err)
+	require.Len(t, res.Content, 1)
+	text, ok := res.Content[0].(*mcp.TextContent)
+	require.True(t, ok)
+	assert.JSONEq(t, `{"n":3}`, text.Text)
+
+	_, err = read(1)
+	require.ErrorContains(t, err, "end of input")
+
+	defer r.Close(ctx)
+}
