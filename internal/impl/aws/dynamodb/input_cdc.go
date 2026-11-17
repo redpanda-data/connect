@@ -2889,12 +2889,20 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 }
 
 // completeTableShard hands a multi-table shard read to the end of its closed
-// shard to the batcher, whose persister writes the completion once its last
-// batch is acknowledged (see RecordBatcher.CloseShard), then marks it
-// exhausted and completed (see markShardCompleted) and wakes the coordinator
-// so child shards held back behind it start right away. The completion write
-// runs on the persister's own context, so the cleanup ticker cancelling this
-// reader's context cannot fail it.
+// shard to the batcher, then marks it exhausted and completed (see
+// markShardCompleted) and wakes the coordinator so child shards held back
+// behind it start right away. The batcher's persister writes the completion
+// marker later, once the shard's last batch is acknowledged (see
+// RecordBatcher.CloseShard), on its own context, so the cleanup ticker
+// cancelling this reader's context cannot fail it.
+//
+// Children are therefore released before the parent's marker is durable. A
+// crash before the marker lands re-reads the parent from its last
+// checkpoint after the children's newer records were delivered, so those
+// duplicates arrive out of per-key order. Nothing is lost. Holding the
+// children until the batcher no longer tracks the parent closes the window
+// and is tracked separately; do not move markShardCompleted after a
+// synchronous write here, the persister is the only checkpoint writer.
 func (d *dynamoDBCDCInput) completeTableShard(tableName string, ts *tableStream, shardID string) {
 	ts.recordBatcher.CloseShard(shardID)
 
@@ -3149,8 +3157,10 @@ func (d *dynamoDBCDCInput) cleanupExhaustedShards(activeShards map[string]contex
 }
 
 // completeShard hands a single-table shard read to the end of its closed shard
-// to the batcher, then marks it exhausted and completed; see
-// completeTableShard.
+// to the batcher, then marks it exhausted and completed. As in
+// completeTableShard, child shards are released before the parent's
+// completion marker is durable, so a crash in between redelivers parent
+// records out of per-key order (no loss).
 func (d *dynamoDBCDCInput) completeShard(shardID string) {
 	d.recordBatcher.CloseShard(shardID)
 

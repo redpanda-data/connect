@@ -490,6 +490,15 @@ type checkpointer interface {
 // and forgets the shard's tracker entry. A failed write keeps the entry and
 // is retried by the persister until it lands, the shutdown Flush writes it,
 // or the shard ages out of the stream (ForgetShard).
+//
+// CloseShard returns before the completion marker is written, and callers
+// release the shard's children right after it (see completeShard), so a
+// child can start while its parent's marker is still pending: one write
+// normally, up to checkpoint_retry_max_interval between attempts while the
+// checkpoint table fails. A crash in that window re-reads the parent from
+// its last checkpoint after the child's newer records were delivered: no
+// loss, but the redelivered parent records arrive out of per-key order.
+// Gating child release on the marker write is tracked separately.
 func (b *RecordBatcher) CloseShard(shardID string) {
 	if b == nil {
 		return
