@@ -9,9 +9,11 @@
 package oracledb_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +25,7 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb"
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
 )
 
@@ -139,4 +142,99 @@ END;`)
 	finalSCN := binary.LittleEndian.Uint64(finalSCNBytes)
 	initialSCN := binary.LittleEndian.Uint64(expectedSCN)
 	assert.Greaterf(t, finalSCN, initialSCN, "expected final SCN (%d) to have advanced beyond initial SCN (%d)", finalSCN, initialSCN)
+}
+
+// TestIntegrationProbeCheckpointMerge makes sure that the probe reports a user
+// that cannot write a checkpoint with MERGE, and that it leaves no row in the
+// checkpoint table. The old stored procedure runs with the rights of its owner,
+// so a user with only EXECUTE on it can write checkpoints. MERGE runs with the
+// rights of the user, and needs INSERT and UPDATE on the table.
+func TestIntegrationProbeCheckpointMerge(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	table := db.Schema + ".CDC_CHECKPOINT_PROBE"
+	db.MustExecContext(t.Context(), `CREATE TABLE `+table+` (cache_key VARCHAR2(128) NOT NULL PRIMARY KEY, cache_val RAW(8))`)
+
+	tests := []struct {
+		name       string
+		grants     string
+		wantDenied bool
+	}{
+		{
+			name:       "select and update",
+			grants:     "SELECT, UPDATE",
+			wantDenied: true,
+		},
+		{
+			name:       "select, insert and update",
+			grants:     "SELECT, INSERT, UPDATE",
+			wantDenied: false,
+		},
+	}
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			user := fmt.Sprintf("%s_P%d", db.Schema, i)
+			userDB := createUserWithGrants(t, db, connStr, user, "GRANT "+tc.grants+" ON "+table+" TO "+user)
+
+			err := oracledb.ProbeCheckpointMerge(t.Context(), userDB, table)
+			if tc.wantDenied {
+				require.Error(t, err)
+				assert.Truef(t, oracledb.IsInsufficientPrivileges(err), "expected a missing privilege error, got: %v", err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			var rows int
+			require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows))
+			assert.Zero(t, rows, "expected the probe to roll back its row")
+		})
+	}
+}
+
+// createUserWithGrants creates a user with CREATE SESSION and the grants, and
+// returns a connection pool for it. It drops the user when the test ends.
+func createUserWithGrants(t *testing.T, db *oracledbtest.TestDB, connStr, user string, grants ...string) *sql.DB {
+	t.Helper()
+	ctx := t.Context()
+
+	conn, err := db.Conn(ctx)
+	require.NoError(t, err)
+	defer conn.Close()
+	// Local users in CDB$ROOT need _ORACLE_SCRIPT (to avoid ORA-65096). It is a
+	// session setting.
+	_, err = conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`)
+	require.NoError(t, err)
+	for _, q := range append([]string{"CREATE USER " + user + " IDENTIFIED BY probe123", "GRANT CREATE SESSION TO " + user}, grants...) {
+		_, err = conn.ExecContext(ctx, q)
+		require.NoErrorf(t, err, "creating user %s: %s", user, q)
+	}
+	t.Cleanup(func() {
+		// t.Context() is cancelled before cleanup runs.
+		ctx := context.Background()
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+			return
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`); err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+			return
+		}
+		if _, err := conn.ExecContext(ctx, "DROP USER "+user+" CASCADE"); err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+		}
+	})
+
+	u, err := url.Parse(connStr)
+	require.NoError(t, err)
+	u.User = url.UserPassword(user, "probe123")
+	userDB, err := sql.Open("oracle", u.String())
+	require.NoError(t, err)
+	// Registered after the drop, so it runs first: Oracle cannot drop a user
+	// that is connected (ORA-01940).
+	t.Cleanup(func() { assert.NoError(t, userDB.Close()) })
+	return userDB
 }

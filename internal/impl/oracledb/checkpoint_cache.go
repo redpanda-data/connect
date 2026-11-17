@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
+	goora "github.com/sijms/go-ora/v2/network"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
@@ -32,6 +33,20 @@ const (
 	defaultStoredProcName = "CDC_CHECKPOINT_CACHE_UPDATE"
 	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
 	checkpointCacheKeyLimit = 128
+	// checkpointMergeProbeKey is the cache key that probeCheckpointMerge
+	// inserts and rolls back. No pipeline uses it as its checkpoint key, so the
+	// MERGE takes its INSERT branch.
+	checkpointMergeProbeKey = "__rpcn_checkpoint_merge_probe"
+	// checkpointMergeProbeTimeout limits the probe at start up. Two pipelines
+	// that probe the same table at the same time wait for each other on the
+	// probe key, but only until the first one rolls back.
+	checkpointMergeProbeTimeout = 10 * time.Second
+	// errCodeInsufficientPrivileges is ORA-01031 (insufficient privileges).
+	errCodeInsufficientPrivileges = 1031
+	// errCodeMissingPrivilege is ORA-41900 (missing <privilege> privilege on
+	// <object>). Oracle 23ai returns it in place of ORA-01031 for a missing
+	// object privilege.
+	errCodeMissingPrivilege = 41900
 )
 
 // allowedTableIdentifiers is used for validating cache table names
@@ -65,6 +80,7 @@ func newCheckpointCache(
 	connStr string,
 	cacheTableName string,
 	cacheKey string,
+	metrics *service.Metrics,
 	log *service.Logger,
 ) (*checkpointCache, error) {
 	var (
@@ -96,6 +112,25 @@ func newCheckpointCache(
 		log.Infof("Created checkpoint cache table '%s'", cacheTable.String())
 	} else {
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
+	}
+
+	// The probe only reports. Checkpoints are still written with the stored
+	// procedure, which works without the grants that the MERGE needs.
+	mergeAllowed := metrics.NewGauge("oracledb_cdc_checkpoint_merge_allowed")
+	probeCtx, cancel := context.WithTimeout(ctx, checkpointMergeProbeTimeout)
+	err = probeCheckpointMerge(probeCtx, db, cacheTable)
+	cancel()
+	switch {
+	case err == nil:
+		mergeAllowed.Set(1)
+	case isInsufficientPrivileges(err):
+		mergeAllowed.Set(0)
+		log.Warnf("The Connect user cannot write checkpoints to '%s' with MERGE: %v. "+
+			"A future version writes checkpoints with MERGE instead of the stored procedure %s.%s, and then needs the INSERT and UPDATE privileges on this table. "+
+			"Grant them before you upgrade: GRANT INSERT, UPDATE ON %s TO <user>",
+			cacheTable.String(), err, cacheTable.schema, defaultStoredProcName, cacheTable.String())
+	default:
+		log.Warnf("Could not check if the Connect user can write checkpoints to '%s' with MERGE: %v", cacheTable.String(), err)
 	}
 
 	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
@@ -235,6 +270,50 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 	}
 
 	return true, nil
+}
+
+// checkpointMergeQuery returns the MERGE that upserts a checkpoint in tbl. It
+// takes the key as :1 and the value as :2.
+func checkpointMergeQuery(tbl cacheTable) string {
+	return fmt.Sprintf(`
+		MERGE INTO %s t
+		USING (SELECT :1 AS cache_key, :2 AS cache_val FROM dual) s
+		ON (t.cache_key = s.cache_key)
+		WHEN MATCHED THEN UPDATE SET t.cache_val = s.cache_val
+		WHEN NOT MATCHED THEN INSERT (cache_key, cache_val) VALUES (s.cache_key, s.cache_val)`, tbl.String())
+}
+
+// probeCheckpointMerge runs checkpointMergeQuery in a transaction and rolls it
+// back. It returns an error if the user of db cannot run that MERGE on tbl.
+//
+// The stored procedure runs with the rights of its owner, so a user with only
+// EXECUTE on it can write checkpoints. A MERGE runs with the rights of the
+// user, so it needs INSERT and UPDATE on tbl. A future version replaces the
+// stored procedure with this MERGE, and the probe finds the users that would
+// then fail to write checkpoints.
+func probeCheckpointMerge(ctx context.Context, db *sql.DB, tbl cacheTable) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && err == nil {
+			err = fmt.Errorf("rolling back: %w", rbErr)
+		}
+	}()
+	// go-ora driver handles []byte parameters as RAW type
+	_, err = tx.ExecContext(ctx, checkpointMergeQuery(tbl), checkpointMergeProbeKey, make([]byte, 8))
+	return err
+}
+
+// isInsufficientPrivileges reports whether err is a missing privilege error:
+// ORA-01031, or ORA-41900 on Oracle 23ai.
+func isInsufficientPrivileges(err error) bool {
+	var oraErr *goora.OracleError
+	if !errors.As(err, &oraErr) {
+		return false
+	}
+	return oraErr.ErrCode == errCodeInsufficientPrivileges || oraErr.ErrCode == errCodeMissingPrivilege
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
