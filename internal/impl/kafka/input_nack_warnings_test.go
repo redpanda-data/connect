@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -183,81 +184,83 @@ func newNackTestResources(t *testing.T) (*service.Resources, *logCapture, *count
 const testNackWarnInterval = 10 * time.Second
 
 func TestNackWarningInputReplay(t *testing.T) {
-	res, logs, metrics := newNackTestResources(t)
+	// The bubble's fake clock lets time.Sleep move past the warning interval
+	// without waiting.
+	synctest.Test(t, func(t *testing.T) {
+		res, logs, metrics := newNackTestResources(t)
 
-	child := &nackTestInput{batches: []service.MessageBatch{
-		kafkaBatch("foo", 0, 10, 2),
-		kafkaBatch("foo", 0, 10, 2),
-		kafkaBatch("foo", 0, 10, 2),
-		kafkaBatch("foo", 0, 10, 2),
-		kafkaBatch("foo", 1, 50, 1),
-		kafkaBatch("foo", 0, 10, 2),
-	}}
+		child := &nackTestInput{batches: []service.MessageBatch{
+			kafkaBatch("foo", 0, 10, 2),
+			kafkaBatch("foo", 0, 10, 2),
+			kafkaBatch("foo", 0, 10, 2),
+			kafkaBatch("foo", 0, 10, 2),
+			kafkaBatch("foo", 1, 50, 1),
+			kafkaBatch("foo", 0, 10, 2),
+		}}
 
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	in := newNackWarningInput(res, NackMetricNameRedpanda, true, testNackWarnInterval, child)
-	in.now = func() time.Time { return now }
+		in := newNackWarningInput(res, NackMetricNameRedpanda, true, testNackWarnInterval, child)
 
-	rejected := errors.New("boom")
-	nack := func() {
-		t.Helper()
+		rejected := errors.New("boom")
+		nack := func() {
+			t.Helper()
+			batch, aFn, err := in.ReadBatch(t.Context())
+			require.NoError(t, err)
+			require.Len(t, batch, 2)
+			require.NoError(t, aFn(t.Context(), rejected))
+		}
+
+		// The first rejection warns right away.
+		nack()
+		warnings := logs.warnings()
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "Output rejected 2 message(s) of topic foo partition 0 starting at offset 10")
+		assert.Contains(t, warnings[0], "1 consecutive rejection(s) on this partition")
+		assert.Contains(t, warnings[0], "2 message(s) rejected since the last warning")
+		assert.Contains(t, warnings[0], "replayed until they are delivered")
+		assert.Contains(t, warnings[0], "Error: boom")
+
+		// Further rejections inside the interval are counted but not logged.
+		time.Sleep(testNackWarnInterval / 2)
+		nack()
+		nack()
+		assert.Len(t, logs.warnings(), 1)
+
+		// Once the interval has passed the next rejection warns again, summing
+		// up what happened since.
+		time.Sleep(testNackWarnInterval)
+		nack()
+		warnings = logs.warnings()
+		require.Len(t, warnings, 2)
+		assert.Contains(t, warnings[1], "4 consecutive rejection(s) on this partition")
+		assert.Contains(t, warnings[1], "6 message(s) rejected since the last warning")
+
+		// A successful delivery on the partition resets its consecutive count,
+		// while another partition's count is independent.
 		batch, aFn, err := in.ReadBatch(t.Context())
 		require.NoError(t, err)
-		require.Len(t, batch, 2)
+		require.Len(t, batch, 1)
+		time.Sleep(testNackWarnInterval)
 		require.NoError(t, aFn(t.Context(), rejected))
-	}
+		warnings = logs.warnings()
+		require.Len(t, warnings, 3)
+		assert.Contains(t, warnings[2], "topic foo partition 1 starting at offset 50")
+		assert.Contains(t, warnings[2], "1 consecutive rejection(s) on this partition")
 
-	// The first rejection warns right away.
-	nack()
-	warnings := logs.warnings()
-	require.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], "Output rejected 2 message(s) of topic foo partition 0 starting at offset 10")
-	assert.Contains(t, warnings[0], "1 consecutive rejection(s) on this partition")
-	assert.Contains(t, warnings[0], "2 message(s) rejected since the last warning")
-	assert.Contains(t, warnings[0], "replayed until they are delivered")
-	assert.Contains(t, warnings[0], "Error: boom")
+		batch, aFn, err = in.ReadBatch(t.Context())
+		require.NoError(t, err)
+		require.Len(t, batch, 2)
+		require.NoError(t, aFn(t.Context(), nil))
+		assert.Empty(t, in.consecutive[topicPartition{"foo", "0"}])
+		assert.Equal(t, 1, in.consecutive[topicPartition{"foo", "1"}])
 
-	// Further rejections inside the interval are counted but not logged.
-	now = now.Add(testNackWarnInterval / 2)
-	nack()
-	nack()
-	assert.Len(t, logs.warnings(), 1)
+		// Every acknowledgement reached the child unchanged.
+		child.mu.Lock()
+		defer child.mu.Unlock()
+		assert.Equal(t, []error{rejected, rejected, rejected, rejected, rejected, nil}, child.acks)
 
-	// Once the interval has passed the next rejection warns again, summing
-	// up what happened since.
-	now = now.Add(testNackWarnInterval)
-	nack()
-	warnings = logs.warnings()
-	require.Len(t, warnings, 2)
-	assert.Contains(t, warnings[1], "4 consecutive rejection(s) on this partition")
-	assert.Contains(t, warnings[1], "6 message(s) rejected since the last warning")
-
-	// A successful delivery on the partition resets its consecutive count,
-	// while another partition's count is independent.
-	batch, aFn, err := in.ReadBatch(t.Context())
-	require.NoError(t, err)
-	require.Len(t, batch, 1)
-	now = now.Add(testNackWarnInterval)
-	require.NoError(t, aFn(t.Context(), rejected))
-	warnings = logs.warnings()
-	require.Len(t, warnings, 3)
-	assert.Contains(t, warnings[2], "topic foo partition 1 starting at offset 50")
-	assert.Contains(t, warnings[2], "1 consecutive rejection(s) on this partition")
-
-	batch, aFn, err = in.ReadBatch(t.Context())
-	require.NoError(t, err)
-	require.Len(t, batch, 2)
-	require.NoError(t, aFn(t.Context(), nil))
-	assert.Empty(t, in.consecutive[topicPartition{"foo", "0"}])
-	assert.Equal(t, 1, in.consecutive[topicPartition{"foo", "1"}])
-
-	// Every acknowledgement reached the child unchanged.
-	child.mu.Lock()
-	defer child.mu.Unlock()
-	assert.Equal(t, []error{rejected, rejected, rejected, rejected, rejected, nil}, child.acks)
-
-	assert.Equal(t, int64(8), metrics.counter("redpanda_nacks{foo,0}"))
-	assert.Equal(t, int64(1), metrics.counter("redpanda_nacks{foo,1}"))
+		assert.Equal(t, int64(8), metrics.counter("redpanda_nacks{foo,0}"))
+		assert.Equal(t, int64(1), metrics.counter("redpanda_nacks{foo,1}"))
+	})
 }
 
 func TestNackWarningInputDrop(t *testing.T) {

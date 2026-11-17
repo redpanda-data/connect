@@ -95,7 +95,11 @@ The Kafka input allows parallel processing of messages from different topic part
 To enforce ordered processing of partition messages, set `+"<<checkpoint_limit,`checkpoint_limit`>> to `1`"+`. Partitions are then processed in lock-step, where a message is only processed once the prior message is delivered.
 
 Batching messages before processing can be enabled using the `+"<<batching,`batching`>>"+` field, and this batching is performed per-partition such that messages of a batch will always originate from the same partition. This batching mechanism is capable of creating batches of greater size than the `+"<<checkpoint_limit,`checkpoint_limit`>>"+`, in which case the next batch will only be created upon delivery of the current one.
+
+== Rejected records
+
 `+nackWarningsDescription(NackMetricNameKafka)+`
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -196,10 +200,6 @@ Unfortunately this error message will appear for a wide range of connection prob
 func init() {
 	service.MustRegisterBatchInput("kafka", iskConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (rdr service.BatchInput, err error) {
 		if rdr, err = newKafkaReaderFromParsed(conf, mgr); err != nil {
-			return
-		}
-
-		if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
 			return
 		}
 

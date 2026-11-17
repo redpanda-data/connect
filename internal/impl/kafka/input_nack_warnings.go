@@ -48,17 +48,18 @@ func NewNackWarningIntervalField() *service.ConfigField {
 		Version("4.118.0")
 }
 
-// WrapBatchInputNackWarnings wraps a Kafka batch input so that batches
-// rejected by the output are counted and reported.
+// WrapBatchInputNackWarnings applies auto_replay_nacks to a Kafka batch input,
+// as service.AutoRetryNacksBatchedToggled does, and wraps the result so that
+// batches rejected by the output are counted and reported.
 //
 // The Kafka readers cannot propagate a rejection to the broker. When
 // auto_replay_nacks is enabled the auto retry wrapper replays a rejected batch
 // with back off until it is delivered, so the offsets of its partition never
 // advance and the consumer lag grows, without a single log line. When it is
 // disabled the reader commits past the rejected records and they are lost.
-// Either way the rejection is invisible to operators, hence this wrapper: it
-// must sit outside the auto retry wrapper, so that it sees every rejection
-// including the replays.
+// Either way the rejection is invisible to operators, hence this wrapper. It
+// sits outside the auto retry wrapper, so that it sees every rejection
+// including the replays, which is why it applies that wrapper itself.
 //
 // Each rejected message increments a counter named metricName with topic and
 // partition labels, and a warning is logged at most once every
@@ -75,6 +76,9 @@ func WrapBatchInputNackWarnings(conf *service.ParsedConfig, res *service.Resourc
 	if err != nil {
 		return nil, err
 	}
+	if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+		return nil, err
+	}
 	return newNackWarningInput(res, metricName, replay, interval, rdr), nil
 }
 
@@ -85,7 +89,6 @@ func newNackWarningInput(res *service.Resources, metricName string, replay bool,
 		nacks:        res.Metrics().NewCounter(metricName, "topic", "partition"),
 		replay:       replay,
 		warnInterval: warnInterval,
-		now:          time.Now,
 		consecutive:  map[topicPartition]int{},
 	}
 }
@@ -106,7 +109,6 @@ type nackWarningInput struct {
 	replay bool
 
 	warnInterval time.Duration
-	now          func() time.Time
 
 	mut sync.Mutex
 	// consecutive counts the rejections of each partition since its last
@@ -142,10 +144,13 @@ func (n *nackWarningInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 	idx := batch.Index()
 	return batch, func(ctx context.Context, ackErr error) error {
 		if ackErr == nil {
-			n.observe(batchOrigin(batch), "", 0, nil)
+			tp := batchOrigin(batch)
+			n.mut.Lock()
+			delete(n.consecutive, tp)
+			n.mut.Unlock()
 		} else {
 			tp, offset, size := rejectedOrigin(batch, idx, ackErr)
-			n.observe(tp, offset, size, ackErr)
+			n.observeNack(tp, offset, size, ackErr)
 		}
 		return aFn(ctx, ackErr)
 	}, nil
@@ -202,20 +207,17 @@ func rejectedOrigin(batch service.MessageBatch, idx *service.Indexer, ackErr err
 	return
 }
 
-func (n *nackWarningInput) observe(tp topicPartition, offset string, size int, ackErr error) {
+// observeNack counts size rejected messages of partition tp and logs a
+// warning unless one was logged less than warnInterval ago.
+func (n *nackWarningInput) observeNack(tp topicPartition, offset string, size int, ackErr error) {
 	n.mut.Lock()
 	defer n.mut.Unlock()
-
-	if ackErr == nil {
-		delete(n.consecutive, tp)
-		return
-	}
 
 	n.nacks.Incr(int64(size), tp.topic, tp.partition)
 	n.consecutive[tp]++
 	n.sinceWarn += int64(size)
 
-	now := n.now()
+	now := time.Now()
 	if !n.lastWarn.IsZero() && now.Sub(n.lastWarn) < n.warnInterval {
 		return
 	}
@@ -229,13 +231,10 @@ func (n *nackWarningInput) observe(tp topicPartition, offset string, size int, a
 	n.sinceWarn = 0
 }
 
-// nackWarningsDescription returns the documentation section describing how an
-// input wrapped by WrapBatchInputNackWarnings reports rejected records,
-// naming its counter metricName.
+// nackWarningsDescription returns the documentation paragraph describing how
+// an input wrapped by WrapBatchInputNackWarnings handles rejected records,
+// naming its counter metricName. Callers add the section heading, so that it
+// fits the heading levels of their description.
 func nackWarningsDescription(metricName string) string {
-	return `
-== Rejected records
-
-Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens, the input logs a warning at most once per ` + "<<nack_warning_interval,`nack_warning_interval`>>" + ` and increments the ` + "`" + metricName + "`" + ` counter. The counter has ` + "`topic`" + ` and ` + "`partition`" + ` labels. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.
-`
+	return `Kafka has no way to reject a record, so this input handles rejections itself. An output rejects a record when it cannot deliver it, or when a ` + "xref:components:outputs/reject_errored.adoc[`reject_errored`]" + ` output receives a record that failed its processors. When ` + "`auto_replay_nacks`" + ` is ` + "`true`" + `, which is the default, the input replays the rejected batch with back off until it is delivered. The offsets of that partition do not advance until then, so a persistent output error stalls the partition and its consumer lag grows. While this happens, the input logs a warning at most once per ` + "<<nack_warning_interval,`nack_warning_interval`>>" + ` and increments the ` + "`" + metricName + "`" + ` counter. The counter has ` + "`topic`" + ` and ` + "`partition`" + ` labels. To keep the pipeline flowing, route failed records to a ` + "xref:components:outputs/fallback.adoc[`fallback`]" + ` output, or set ` + "`auto_replay_nacks`" + ` to ` + "`false`" + ` to drop rejected records.`
 }
