@@ -16,6 +16,7 @@ package confluent
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ import (
 
 func avroUnmarshal(t *testing.T, c schema.Common, recordName, namespace string) any {
 	t.Helper()
-	out, err := commonToAvroSchema(c, recordName, namespace)
+	out, err := commonToAvroSchema(c, recordName, namespace, avroCommonOpts{})
 	require.NoError(t, err)
 	var result any
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
@@ -189,15 +190,171 @@ func TestCommonToAvroDecimalOptionalUnion(t *testing.T) {
 }
 
 func TestCommonToAvroDecimalMissingLogical(t *testing.T) {
-	_, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.Decimal}, "", "")
+	_, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.Decimal}, "", "", avroCommonOpts{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing precision/scale")
 }
 
 func TestCommonToAvroBigDecimalRejected(t *testing.T) {
-	_, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.BigDecimal}, "", "")
+	_, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.BigDecimal}, "", "", avroCommonOpts{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "BigDecimal")
+	assert.Contains(t, err.Error(), "avro.big_decimal_as", "the error should name the option that fixes it")
+}
+
+func TestCommonToAvroBigDecimalAs(t *testing.T) {
+	decimal := map[string]any{"type": "bytes", "logicalType": "decimal", "precision": float64(20), "scale": float64(4)}
+	decimalOpts := avroCommonOpts{bigDecimalAs: avroBigDecimalAsDecimal, bigDecimalPrecision: 20, bigDecimalScale: 4}
+	tests := []struct {
+		name     string
+		opts     avroCommonOpts
+		optional bool
+		want     any
+	}{
+		{name: "decimal", opts: decimalOpts, want: decimal},
+		{name: "optional decimal", opts: decimalOpts, optional: true, want: []any{"null", decimal}},
+		{name: "string", opts: avroCommonOpts{bigDecimalAs: avroBigDecimalAsString}, want: "string"},
+		{name: "optional string", opts: avroCommonOpts{bigDecimalAs: avroBigDecimalAsString}, optional: true, want: []any{"null", "string"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.BigDecimal, Optional: tt.optional}, "", "", tt.opts)
+			require.NoError(t, err)
+			var got any
+			require.NoError(t, json.Unmarshal([]byte(out), &got))
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCommonToAvroAnyAs(t *testing.T) {
+	tests := []struct {
+		name string
+		opts avroCommonOpts
+		want string
+	}{
+		{name: "default", opts: avroCommonOpts{}, want: `"bytes"`},
+		{name: "bytes", opts: avroCommonOpts{anyAs: avroAnyAsBytes}, want: `"bytes"`},
+		{name: "json_string", opts: avroCommonOpts{anyAs: avroAnyAsJSONString}, want: `"string"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := commonToAvroSchema(schema.Common{Name: "doc", Type: schema.Any}, "", "", tt.opts)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, out)
+		})
+	}
+}
+
+func TestCommonToAvroValueCoercerNotNeeded(t *testing.T) {
+	c := schema.Common{Type: schema.Object, Children: []schema.Common{
+		{Name: "s", Type: schema.String},
+		{Name: "n", Type: schema.BigDecimal},
+		{Name: "j", Type: schema.Any},
+	}}
+	for name, opts := range map[string]avroCommonOpts{
+		"defaults":               {},
+		"big decimal as decimal": {bigDecimalAs: avroBigDecimalAsDecimal, bigDecimalPrecision: 38, bigDecimalScale: 10},
+		"any as bytes":           {anyAs: avroAnyAsBytes},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Nil(t, commonToAvroValueCoercer(c, opts), "no field changes type, so no coercer should be built")
+		})
+	}
+}
+
+func TestCommonToAvroValueCoercer(t *testing.T) {
+	c := schema.Common{Type: schema.Object, Children: []schema.Common{
+		{Name: "n", Type: schema.BigDecimal, Optional: true},
+		{Name: "j", Type: schema.Any, Optional: true},
+		{Name: "s", Type: schema.String},
+		{Name: "nested", Type: schema.Object, Children: []schema.Common{
+			{Name: "n2", Type: schema.BigDecimal},
+		}},
+		{Name: "arr", Type: schema.Array, Children: []schema.Common{{Type: schema.Any, Optional: true}}},
+		{Name: "m", Type: schema.Map, Children: []schema.Common{{Type: schema.BigDecimal}}},
+	}}
+	coerce := commonToAvroValueCoercer(c, avroCommonOpts{bigDecimalAs: avroBigDecimalAsString, anyAs: avroAnyAsJSONString})
+	require.NotNil(t, coerce)
+
+	got, err := coerce(map[string]any{
+		"n":      json.Number("123.4500"),
+		"j":      map[string]any{"a": []any{json.Number("1"), json.Number("2")}},
+		"s":      "unchanged",
+		"nested": map[string]any{"n2": 1.5},
+		"arr":    []any{map[string]any{"k": "v"}, "already text", nil},
+		"m":      map[string]any{"x": int64(7)},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{
+		"n":      "123.4500",
+		"j":      `{"a":[1,2]}`,
+		"s":      "unchanged",
+		"nested": map[string]any{"n2": "1.5"},
+		"arr":    []any{`{"k":"v"}`, "already text", nil},
+		"m":      map[string]any{"x": "7"},
+	}, got)
+
+	_, err = coerce(map[string]any{"n": true})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `field "n"`)
+
+	missing, err := coerce(map[string]any{"s": "only"})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"s": "only"}, missing, "absent fields stay absent")
+}
+
+func TestCoerceBigDecimalToString(t *testing.T) {
+	tests := []struct {
+		in      any
+		want    any
+		wantErr bool
+	}{
+		{in: nil, want: nil},
+		{in: "12.340", want: "12.340"},
+		{in: json.Number("-0.000001"), want: "-0.000001"},
+		{in: 0.1, want: "0.1"},
+		{in: float32(1.5), want: "1.5"},
+		{in: 1e21, want: "1000000000000000000000"},
+		{in: int64(-42), want: "-42"},
+		{in: uint8(7), want: "7"},
+		{in: true, wantErr: true},
+		{in: []byte("1"), wantErr: true},
+	}
+	for _, tt := range tests {
+		got, err := coerceBigDecimalToString(tt.in)
+		if tt.wantErr {
+			assert.Error(t, err, "%T", tt.in)
+			continue
+		}
+		require.NoError(t, err, "%T", tt.in)
+		assert.Equal(t, tt.want, got, "%T", tt.in)
+	}
+}
+
+func TestCoerceAnyToJSONString(t *testing.T) {
+	tests := []struct {
+		in      any
+		want    any
+		wantErr bool
+	}{
+		{in: nil, want: nil},
+		{in: "1 day 02:00:00", want: "1 day 02:00:00"},
+		{in: map[string]any{"b": 1, "a": []any{true, nil}}, want: `{"a":[true,null],"b":1}`},
+		{in: []any{"x", json.Number("2.5")}, want: `["x",2.5]`},
+		{in: json.Number("5"), want: "5"},
+		{in: false, want: "false"},
+		{in: math.NaN(), wantErr: true},
+	}
+	for _, tt := range tests {
+		got, err := coerceAnyToJSONString(tt.in)
+		if tt.wantErr {
+			assert.Error(t, err, "%v", tt.in)
+			continue
+		}
+		require.NoError(t, err, "%v", tt.in)
+		assert.Equal(t, tt.want, got, "%v", tt.in)
+	}
 }
 
 func TestSanitizeAvroName(t *testing.T) {
@@ -335,7 +492,7 @@ func TestCommonToAvroTimeOfDayRejectsAdjustToUTC(t *testing.T) {
 		Type:    schema.TimeOfDay,
 		Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
 	}
-	_, err := commonToAvroSchema(c, "Row", "")
+	_, err := commonToAvroSchema(c, "Row", "", avroCommonOpts{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "AdjustToUTC=true")
 	assert.Contains(t, err.Error(), "shift_start")
@@ -354,7 +511,7 @@ func TestCommonToAvroTimeOfDayRejectsUnsupportedUnit(t *testing.T) {
 				Type:    schema.TimeOfDay,
 				Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: u}},
 			}
-			_, err := commonToAvroSchema(c, "Row", "")
+			_, err := commonToAvroSchema(c, "Row", "", avroCommonOpts{})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "MILLIS and MICROS")
 			assert.Contains(t, err.Error(), "open_at")
@@ -372,7 +529,7 @@ func TestCommonToAvroTimestampRejectsUnsupportedUnit(t *testing.T) {
 		Type:    schema.Timestamp,
 		Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitSeconds, AdjustToUTC: true}},
 	}
-	_, err := commonToAvroSchema(c, "Row", "")
+	_, err := commonToAvroSchema(c, "Row", "", avroCommonOpts{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "event_time")
 	assert.Contains(t, err.Error(), "MILLIS, MICROS, NANOS")
@@ -409,7 +566,7 @@ func TestCommonToAvroDecodeEncodeRoundTrip(t *testing.T) {
 			// Re-encode the decoded child and verify the logicalType is
 			// the same as what we started with.
 			f := c.Children[0]
-			out, err := commonToAvroSchema(f, "Inner", "")
+			out, err := commonToAvroSchema(f, "Inner", "", avroCommonOpts{})
 			require.NoError(t, err)
 			var rt map[string]any
 			require.NoError(t, json.Unmarshal([]byte(out), &rt))

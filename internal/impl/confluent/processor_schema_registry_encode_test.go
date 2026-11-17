@@ -36,6 +36,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/avro"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -2614,4 +2615,210 @@ avro:
 	require.NoError(t, err)
 	require.Greater(t, len(b), 5, "output must have wire header")
 	assert.Equal(t, byte(0x00), b[0], "magic byte")
+}
+
+func TestSchemaRegistryEncodeMetadataAvroBigDecimalAndAny(t *testing.T) {
+	tests := []struct {
+		name       string
+		avroConf   string
+		wantSchema map[string]any // field name → expected Avro type (without the null union)
+		wantN      any
+	}{
+		{
+			name: "big decimal as decimal",
+			avroConf: `
+  input_encoding: native
+  big_decimal_as: decimal
+  big_decimal_precision: 20
+  big_decimal_scale: 6
+  any_as: json_string`,
+			wantSchema: map[string]any{
+				"n": map[string]any{"type": "bytes", "logicalType": "decimal", "precision": float64(20), "scale": float64(6)},
+				"j": "string",
+			},
+			wantN: big.NewRat(123456789, 1000000),
+		},
+		{
+			name: "big decimal as string",
+			avroConf: `
+  input_encoding: native
+  big_decimal_as: string
+  any_as: json_string`,
+			wantSchema: map[string]any{"n": "string", "j": "string"},
+			wantN:      "123.456789",
+		},
+		{
+			// auto reads a raw payload as Avro JSON first, which rejects a
+			// number for a string field and an object for a string field, so
+			// the message falls through to the structured reader and is
+			// coerced there.
+			name: "auto input encoding",
+			avroConf: `
+  big_decimal_as: string
+  any_as: json_string`,
+			wantSchema: map[string]any{"n": "string", "j": "string"},
+			wantN:      "123.456789",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			urlStr, mockState := runMetaMockRegistry(t)
+			conf, err := schemaRegistryEncoderConfig().ParseYAML(fmt.Sprintf(`
+url: %s
+subject: cdc-value
+schema_metadata: schema
+format: avro
+avro:
+  raw_json: true%s
+`, urlStr, tt.avroConf), service.NewEnvironment())
+			require.NoError(t, err)
+			encoder, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
+			require.NoError(t, err)
+			defer func() { _ = encoder.Close(t.Context()) }()
+
+			schemaMeta := makeCommonSchemaMeta(t,
+				schema.Common{Name: "id", Type: schema.Int64},
+				schema.Common{Name: "n", Type: schema.BigDecimal, Optional: true},
+				schema.Common{Name: "j", Type: schema.Any, Optional: true},
+			)
+			// The shape CDC inputs emit: a JSON payload with the decimal as a
+			// number and the Any column as a nested document.
+			msg := service.NewMessage([]byte(`{"id":1,"n":123.456789,"j":{"a":[1,2]}}`))
+			msg.MetaSetMut("schema", schemaMeta)
+			nullMsg := service.NewMessage([]byte(`{"id":2,"n":null,"j":null}`))
+			nullMsg.MetaSetMut("schema", schemaMeta)
+
+			out, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg, nullMsg})
+			require.NoError(t, err)
+			require.Len(t, out, 1)
+			require.Len(t, out[0], 2)
+
+			// The registered schema carries the configured shapes.
+			registered := mockState.schemas[1]
+			var rec map[string]any
+			require.NoError(t, json.Unmarshal([]byte(registered), &rec))
+			for _, f := range rec["fields"].([]any) {
+				field := f.(map[string]any)
+				want, check := tt.wantSchema[field["name"].(string)]
+				if !check {
+					continue
+				}
+				assert.Equal(t, []any{"null", want}, field["type"], "field %v", field["name"])
+			}
+
+			// And the encoded values read back as the originals.
+			avroSchema, err := avro.Parse(registered)
+			require.NoError(t, err)
+			decode := func(m *service.Message) map[string]any {
+				require.NoError(t, m.GetError())
+				b, err := m.AsBytes()
+				require.NoError(t, err)
+				var native any
+				_, err = avroSchema.Decode(b[5:], &native)
+				require.NoError(t, err)
+				return native.(map[string]any)
+			}
+			got := decode(out[0][0])
+			assert.Equal(t, `{"a":[1,2]}`, got["j"])
+			if wantRat, isRat := tt.wantN.(*big.Rat); isRat {
+				gotRat, ok := got["n"].(*big.Rat)
+				require.True(t, ok, "decimal should decode as *big.Rat, got %T", got["n"])
+				assert.Zero(t, wantRat.Cmp(gotRat), "got %v", gotRat.FloatString(6))
+			} else {
+				assert.Equal(t, tt.wantN, got["n"])
+			}
+			gotNull := decode(out[0][1])
+			assert.Nil(t, gotNull["n"])
+			assert.Nil(t, gotNull["j"])
+		})
+	}
+}
+
+func TestSchemaRegistryEncodeMetadataAvroBigDecimalDefaultsReject(t *testing.T) {
+	urlStr, _ := runMetaMockRegistry(t)
+	conf, err := schemaRegistryEncoderConfig().ParseYAML(fmt.Sprintf(`
+url: %s
+subject: cdc-value
+schema_metadata: schema
+format: avro
+avro:
+  raw_json: true
+`, urlStr), service.NewEnvironment())
+	require.NoError(t, err)
+	encoder, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+	defer func() { _ = encoder.Close(t.Context()) }()
+
+	msg := service.NewMessage([]byte(`{"n":1.5}`))
+	msg.MetaSetMut("schema", makeCommonSchemaMeta(t, schema.Common{Name: "n", Type: schema.BigDecimal}))
+	out, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Error(t, out[0][0].GetError())
+	assert.Contains(t, out[0][0].GetError().Error(), "avro.big_decimal_as")
+}
+
+func TestSchemaRegistryEncodeMetadataAvroBigDecimalScaleOverflow(t *testing.T) {
+	urlStr, _ := runMetaMockRegistry(t)
+	conf, err := schemaRegistryEncoderConfig().ParseYAML(fmt.Sprintf(`
+url: %s
+subject: cdc-value
+schema_metadata: schema
+format: avro
+avro:
+  raw_json: true
+  input_encoding: native
+  big_decimal_as: decimal
+  big_decimal_scale: 2
+`, urlStr), service.NewEnvironment())
+	require.NoError(t, err)
+	encoder, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+	defer func() { _ = encoder.Close(t.Context()) }()
+
+	// A value the configured scale can't hold fails loudly instead of being
+	// rounded.
+	msg := service.NewMessage([]byte(`{"n":1.234}`))
+	msg.MetaSetMut("schema", makeCommonSchemaMeta(t, schema.Common{Name: "n", Type: schema.BigDecimal}))
+	out, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Error(t, out[0][0].GetError())
+}
+
+func TestSchemaRegistryEncodeMetadataAvroBigDecimalConfigValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		avroConf    string
+		errContains string
+	}{
+		{name: "precision too small", avroConf: "big_decimal_precision: 0", errContains: "avro.big_decimal_precision must be between 1 and 38"},
+		{name: "precision too large", avroConf: "big_decimal_precision: 39", errContains: "avro.big_decimal_precision must be between 1 and 38"},
+		{name: "negative scale", avroConf: "big_decimal_scale: -1", errContains: "avro.big_decimal_scale must be between 0"},
+		{name: "scale above precision", avroConf: "big_decimal_precision: 10\n  big_decimal_scale: 11", errContains: "avro.big_decimal_scale must be between 0"},
+		{name: "scale equal to precision", avroConf: "big_decimal_precision: 10\n  big_decimal_scale: 10"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := schemaRegistryEncoderConfig().ParseYAML(fmt.Sprintf(`
+url: http://example.com
+subject: foo
+schema_metadata: schema
+format: avro
+avro:
+  raw_json: true
+  big_decimal_as: decimal
+  %s
+`, tt.avroConf), service.NewEnvironment())
+			require.NoError(t, err)
+			e, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
+			if e != nil {
+				_ = e.Close(t.Context())
+			}
+			if tt.errContains == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
 }
