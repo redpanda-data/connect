@@ -45,7 +45,7 @@ func NewNackWarningIntervalField() *service.ConfigField {
 		Description("The minimum time between two warnings about records rejected by the output. Rejections between warnings are summed up in the next warning and counted by the rejected records metric.").
 		Default("10s").
 		Advanced().
-		Version("4.118.0")
+		Version("4.119.0")
 }
 
 // WrapBatchInputNackWarnings applies auto_replay_nacks to a Kafka batch input,
