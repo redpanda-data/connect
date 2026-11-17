@@ -6,7 +6,7 @@ runs:
   steps:
     - name: Install Go
       id: setup-go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v6.5.0
       with:
         go-version-file: 'go.mod'
         cache: false
@@ -22,7 +22,7 @@ runs:
 
     # CGO_ENABLED is in the key: a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
     - name: Cache Go
-      uses: actions/cache@v6
+      uses: actions/cache@v6.1.0
       with:
         path: |
           ${{ steps.go-env.outputs.gocache }}
