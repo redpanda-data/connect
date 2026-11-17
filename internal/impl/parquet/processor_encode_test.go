@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 
@@ -880,4 +881,80 @@ func TestParquetEncodeBigDecimalRejected(t *testing.T) {
 	_, err = proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "BigDecimal")
+}
+
+type encodeBenchColumn struct {
+	name, typ string
+	value     func(row int) any
+}
+
+// plainBenchColumns returns n columns cycling through types that need no
+// logical type coercion.
+func plainBenchColumns(n int) []encodeBenchColumn {
+	cols := make([]encodeBenchColumn, n)
+	for i := range cols {
+		name := fmt.Sprintf("c%03d", i)
+		switch i % 5 {
+		case 0:
+			cols[i] = encodeBenchColumn{name, "INT32", func(row int) any { return int64(row % 1000) }}
+		case 1:
+			cols[i] = encodeBenchColumn{name, "INT64", func(row int) any { return int64(row) * 7 }}
+		case 2:
+			cols[i] = encodeBenchColumn{name, "UTF8", func(row int) any { return fmt.Sprintf("value-%d", row%64) }}
+		case 3:
+			cols[i] = encodeBenchColumn{name, "BOOLEAN", func(row int) any { return row%2 == 0 }}
+		case 4:
+			cols[i] = encodeBenchColumn{name, "FLOAT", func(row int) any { return float64(row) / 3 }}
+		}
+	}
+	return cols
+}
+
+func benchmarkParquetEncode(b *testing.B, cols []encodeBenchColumn, rows int) {
+	var conf strings.Builder
+	conf.WriteString("default_compression: zstd\nschema:\n")
+	for _, c := range cols {
+		fmt.Fprintf(&conf, "  - { name: %s, type: %s, optional: true }\n", c.name, c.typ)
+	}
+	pConf, err := parquetEncodeProcessorConfig().ParseYAML(conf.String(), nil)
+	require.NoError(b, err)
+	proc, err := newParquetEncodeProcessorFromConfig(pConf, nil)
+	require.NoError(b, err)
+
+	batch := make(service.MessageBatch, rows)
+	for i := range batch {
+		row := make(map[string]any, len(cols))
+		for _, c := range cols {
+			row[c.name] = c.value(i)
+		}
+		batch[i] = service.NewMessage(nil)
+		batch[i].SetStructuredMut(row)
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := proc.ProcessBatch(b.Context(), batch); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*rows), "ns/row")
+}
+
+func BenchmarkParquetEncode(b *testing.B) {
+	const rows = 10_000
+
+	b.Run("schema=plain/columns=100", func(b *testing.B) {
+		benchmarkParquetEncode(b, plainBenchColumns(100), rows)
+	})
+	b.Run("schema=plain/columns=10", func(b *testing.B) {
+		benchmarkParquetEncode(b, plainBenchColumns(10), rows)
+	})
+	b.Run("schema=coercing/columns=10", func(b *testing.B) {
+		cols := append(plainBenchColumns(7),
+			encodeBenchColumn{"ts", "TIMESTAMP", func(int) any { return "2026-10-30T12:00:00Z" }},
+			encodeBenchColumn{"id", "UUID", func(int) any { return "6ba7b810-9dad-11d1-80b4-00c04fd430c8" }},
+			encodeBenchColumn{"doc", "JSON", func(row int) any { return map[string]any{"n": int64(row)} }},
+		)
+		benchmarkParquetEncode(b, cols, rows)
+	})
 }

@@ -648,3 +648,41 @@ batching:
 	require.NoError(t, inFlight.ackFn(t.Context(), nil))
 	require.Equal(t, []string{"0/25"}, acker.acked(), "acknowledging the earlier batch confirms through the filtered position")
 }
+
+func TestSelfManagePublicationField(t *testing.T) {
+	base := `
+dsn: postgres://user:pass@localhost:5432/db
+slot_name: my_slot
+schema: dbo
+tables:
+  - events
+`
+	env := service.NewEnvironment()
+
+	pConf, err := newPostgresCDCConfig().ParseYAML(base, env)
+	require.NoError(t, err)
+	managed, err := pConf.FieldBool(fieldSelfManagePublication)
+	require.NoError(t, err)
+	require.True(t, managed, "the connector keeps managing the publication unless told otherwise")
+
+	pConf, err = newPostgresCDCConfig().ParseYAML(base+"self_manage_publication: false\n", env)
+	require.NoError(t, err)
+	managed, err = pConf.FieldBool(fieldSelfManagePublication)
+	require.NoError(t, err)
+	require.False(t, managed)
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+	in, err := newPgStreamInputUnwrapped(pConf, mgr)
+	require.NoError(t, err)
+	require.True(t, in.streamConfig.ExternallyManagedPublication, "self_manage_publication: false must reach the stream")
+
+	pConf, err = newPostgresCDCConfig().ParseYAML(base, env)
+	require.NoError(t, err)
+	in, err = newPgStreamInputUnwrapped(pConf, mgr)
+	require.NoError(t, err)
+	require.False(t, in.streamConfig.ExternallyManagedPublication)
+
+	_, err = newPgStreamInput(pConf, mgr)
+	require.NoError(t, err)
+}

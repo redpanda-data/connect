@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func NewClient(logger *service.Logger, target string, baseURL *url.URL, workspac
 		ingestURL.Path = path.Join(ingestURL.Path, "timeplusd", timeplusdDAPIVersion, "ingest", "streams", stream)
 	}
 
-	logger = logger.With("target", TargetTimeplusd).With("host", ingestURL.Host).With("ingest_url", ingestURL.RequestURI())
+	logger = logger.With("target", TargetTimeplusd).With("host", ingestURL.Host).With("ingest_url", ingestURL.EscapedPath())
 	logger.Info("timeplus http client created")
 
 	return &Client{

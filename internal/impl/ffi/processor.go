@@ -75,7 +75,7 @@ Results are returned as an array, where the first element is the return value (i
 					service.NewStringAnnotatedEnumField("type", paramTypes).
 						Description("The data type of the parameter."),
 					service.NewBoolField("out").Default(false).
-						Description("If the parameter provided is an 'out' parameter, meaning if the function mutates the value, and the resulting value should be returned. This is only valid for pointer types."),
+						Description("If the parameter provided is an `out` parameter, meaning if the function mutates the value, and the resulting value should be returned. This is only valid for pointer types."),
 				).Description("The parameters of the function."),
 			).Description("The signature of the function."),
 		).Example(

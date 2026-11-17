@@ -289,16 +289,16 @@ func TestHTTPInput(t *testing.T) {
 
 				logger := lp.Logger("http-test-service")
 				record := log.Record{}
-				record.SetBody(log.StringValue("Test log message from http-test-service"))
+				record.SetBody(attribute.StringValue("Test log message from http-test-service"))
 				record.SetSeverity(log.SeverityWarn)
 				record.SetSeverityText("WARN")
 				record.AddAttributes(
-					log.String("http.method", "GET"),
-					log.String("http.url", "/api/products"),
-					log.Int("http.status_code", 404),
-					log.String("user.id", "54321"),
-					log.String("request.id", "req-xyz-789"),
-					log.Float64("response.time_ms", 23.45),
+					attribute.String("http.method", "GET"),
+					attribute.String("http.url", "/api/products"),
+					attribute.Int("http.status_code", 404),
+					attribute.String("user.id", "54321"),
+					attribute.String("request.id", "req-xyz-789"),
+					attribute.Float64("response.time_ms", 23.45),
 				)
 				logger.Emit(ctx, record)
 

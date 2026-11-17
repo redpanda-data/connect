@@ -1,0 +1,11 @@
+{
+  "cloud_only": [
+    "processors/a2a_message"
+  ],
+  "cgo_only": [
+    "inputs/tigerbeetle_cdc",
+    "inputs/zmq4",
+    "outputs/zmq4",
+    "processors/ffi"
+  ]
+}

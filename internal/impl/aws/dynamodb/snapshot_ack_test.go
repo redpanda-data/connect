@@ -34,7 +34,7 @@ type fakeProgressStore struct {
 	failNext error
 }
 
-func (f *fakeProgressStore) UpdateSnapshotProgress(_ context.Context, segment int, lastKey map[string]dynamodbtypes.AttributeValue, recordsRead int64) error {
+func (f *fakeProgressStore) UpdateSnapshotProgress(_ context.Context, segment, _ int, lastKey map[string]dynamodbtypes.AttributeValue, recordsRead int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.failNext != nil {
@@ -69,7 +69,7 @@ func keyVal(k map[string]dynamodbtypes.AttributeValue) string {
 
 func newTestSnapshotAckTracker(interval int) (*snapshotAckTracker, *fakeProgressStore) {
 	store := &fakeProgressStore{}
-	return newSnapshotAckTracker(store, interval, service.NewLoggerFromSlog(slog.Default())), store
+	return newSnapshotAckTracker(store, interval, 0, service.NewLoggerFromSlog(slog.Default())), store
 }
 
 func TestSnapshotAckTracker(t *testing.T) {

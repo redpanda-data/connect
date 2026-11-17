@@ -18,7 +18,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/oauth2"
@@ -236,18 +236,13 @@ func HTTPOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 	}
 
 	// Determine paths for each signal type
-	tracesURL, err := url.JoinPath(conf.Endpoint, "/v1/traces")
+	endpointURL, err := redact.ParseURL(conf.Endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("construct traces URL: %w", err)
+		return nil, fmt.Errorf("parse endpoint: %w", err)
 	}
-	logsURL, err := url.JoinPath(conf.Endpoint, "/v1/logs")
-	if err != nil {
-		return nil, fmt.Errorf("construct logs URL: %w", err)
-	}
-	metricsURL, err := url.JoinPath(conf.Endpoint, "/v1/metrics")
-	if err != nil {
-		return nil, fmt.Errorf("construct metrics URL: %w", err)
-	}
+	tracesURL := endpointURL.JoinPath("/v1/traces").String()
+	logsURL := endpointURL.JoinPath("/v1/logs").String()
+	metricsURL := endpointURL.JoinPath("/v1/metrics").String()
 
 	// Determine content type header
 	var contentType string
@@ -327,7 +322,7 @@ func (o *httpOTLPOutput) Connect(_ context.Context) error {
 		tr.TLSClientConfig = tlsConf
 	}
 	if o.conf.ProxyURL != "" {
-		proxyURL, err := url.Parse(o.conf.ProxyURL)
+		proxyURL, err := redact.ParseURL(o.conf.ProxyURL)
 		if err != nil {
 			return fmt.Errorf("parse proxy_url string: %w", err)
 		}
@@ -356,7 +351,7 @@ func (o *httpOTLPOutput) Connect(_ context.Context) error {
 		}
 	}
 
-	o.log.Infof("Connected to OTLP HTTP endpoint: %s", o.conf.Endpoint)
+	o.log.Infof("Connected to OTLP HTTP endpoint: %s", redact.String(o.conf.Endpoint))
 	return nil
 }
 
@@ -459,7 +454,7 @@ func (o *httpOTLPOutput) sendHTTPRequest(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create HTTP request: %w", err)
+		return fmt.Errorf("create HTTP request: %w", redact.Error(err, redact.Conns(url)))
 	}
 	for k, vv := range headers {
 		for _, v := range vv {
@@ -477,7 +472,7 @@ func (o *httpOTLPOutput) sendHTTPRequest(
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send HTTP request: %w", err)
+		return fmt.Errorf("send HTTP request: %w", redact.Error(err, redact.Conns(url)))
 	}
 	return o.handleResponse(signalType, resp)
 }

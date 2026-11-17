@@ -37,12 +37,23 @@ var (
 	errCodeRedoLogHeaderMismatch = 1368
 )
 
+// Publisher is the ChangePublisher that LogMiner sends change events and
+// checkpoint requests to. The snapshot does not checkpoint the mined position,
+// so this method is not part of replication.ChangePublisher.
+type Publisher interface {
+	replication.ChangePublisher
+	// CheckpointWindow records that every change up to scn is published, also
+	// when there were no rows for the monitored tables. scn becomes the resume
+	// position when every batch published before the call is acked.
+	CheckpointWindow(ctx context.Context, scn replication.SCN) error
+}
+
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
 	cfg          *Config
 	tables       []replication.UserTable
-	publisher    replication.ChangePublisher
+	publisher    Publisher
 	logCollector *LogFileCollector
 	currentSCN   uint64
 	windowSize   int
@@ -75,6 +86,9 @@ type LogMiner struct {
 	lobWarner lobReplayWarner
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
+	// lastCheckpointRequest is when checkpointMinedPosition last called CheckpointWindow.
+	// Used for rate-limiting checkpoint requests.
+	lastCheckpointRequest time.Time
 
 	publishLagMetric     *service.MetricTimer
 	timeToFirstRowMetric *service.MetricTimer
@@ -83,7 +97,7 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
 // txnCache sets the transaction buffer implementation; pass nil to use the default in-memory cache.
-func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher Publisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
 	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
@@ -190,6 +204,9 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		caughtUp, err := lm.miningCycle(ctx, conn)
 		if err != nil {
 			return fmt.Errorf("mining logs: %w", err)
+		}
+		if err := lm.checkpointMinedPosition(ctx, time.Now()); err != nil {
+			return fmt.Errorf("checkpointing mined position: %w", err)
 		}
 
 		wait := lm.cfg.MiningInterval
@@ -424,8 +441,54 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	return endSCN >= dbCurrentSCN, nil
 }
 
-// logMinerRangeClause is the SCN range every contents query starts with.
-const logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
+const (
+	// logMinerRangeClause is the SCN range every contents query starts with.
+	logMinerRangeClause = " WHERE SCN > :1 AND SCN <= :2"
+
+	// checkpointRequestInterval is the minimum time between two checkpoint
+	// requests for the mined position. These requests move the checkpoint forward
+	// when the monitored tables are quiet, so it does not point to archive logs
+	// that the database removed (see batchPublisher.CheckpointWindow).
+	checkpointRequestInterval = 10 * time.Second
+)
+
+// checkpointMinedPosition requests a checkpoint of the mined position from the
+// publisher, at most once per checkpointRequestInterval. It also requests one
+// after cycles with no rows for the monitored tables. See
+// publisher.CheckpointWindow.
+func (lm *LogMiner) checkpointMinedPosition(ctx context.Context, now time.Time) error {
+	if now.Sub(lm.lastCheckpointRequest) < checkpointRequestInterval {
+		return nil
+	}
+	scn := minedCheckpointSCN(lm.currentSCN, lm.lowWatermarkSCN(""))
+	if !scn.IsValid() {
+		// Nothing was requested, so the next cycle tries again.
+		return nil
+	}
+	lm.lastCheckpointRequest = now
+	return lm.publisher.CheckpointWindow(ctx, scn)
+}
+
+// minedCheckpointSCN returns the SCN that is safe to checkpoint after a mining
+// cycle, or InvalidSCN if there is none. It stays below open transactions, as the
+// commit path does. The low watermark also counts transactions with only LOB
+// events (see TransactionCache.IncludeInLowWatermark) and the transactions of an
+// open LOB replay (see LogMiner.lowWatermarkSCN), so LOB state in memory needs
+// no extra check.
+func minedCheckpointSCN(currentSCN, lowWatermark uint64) replication.SCN {
+	return replication.SCN(capBelowOpenTxn(currentSCN, lowWatermark))
+}
+
+// capBelowOpenTxn caps scn at lowWatermark-1, the last SCN before the oldest
+// open transaction started. A higher checkpoint skips the DML events of that
+// transaction on restart, because the query resumes from SCN > checkpoint.
+// lowWatermark is math.MaxUint64 when no transaction is open.
+func capBelowOpenTxn(scn, lowWatermark uint64) uint64 {
+	if lowWatermark != math.MaxUint64 && lowWatermark > 0 && lowWatermark-1 < scn {
+		return lowWatermark - 1
+	}
+	return scn
+}
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
@@ -622,17 +685,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("fetching transaction %s on commit: %w", redoEvent.TransactionID, err)
 		}
 		if txn != nil {
-			safeCheckpointSCN := redoEvent.SCN
-
 			// If other transactions are still open, we must not advance the
-			// checkpoint past their oldest event SCN - 1. Doing so would cause their
-			// already-seen events to be skipped on restart (the query resumes
-			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
-			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
-				if lowestOpenSCN-1 < safeCheckpointSCN {
-					safeCheckpointSCN = lowestOpenSCN - 1
-				}
-			}
+			// checkpoint past their start SCN - 1.
+			safeCheckpointSCN := capBelowOpenTxn(redoEvent.SCN, lm.lowWatermarkSCN(redoEvent.TransactionID))
 
 			if lm.cfg.LOBEnabled {
 				// Replay deferred LOB_WRITEs (BASICFILE DISABLE STORAGE IN ROW) before

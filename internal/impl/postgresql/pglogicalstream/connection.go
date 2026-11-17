@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -17,6 +17,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 var re = regexp.MustCompile(`^(\d+)`)
@@ -31,7 +33,7 @@ func openPgConnectionFromConfig(cfg *Config) (*sql.DB, error) {
 func openPgConnectionWithParams(cfg *Config, params map[string]string) (*sql.DB, error) {
 	parsedCfg, err := pgxpool.ParseConfig(cfg.DBRawDSN)
 	if err != nil {
-		return nil, err
+		return nil, redact.Error(err, redact.Conns(cfg.DBRawDSN))
 	}
 	parsedCfg.ConnConfig.Password = cfg.DBConfig.Password
 	parsedCfg.ConnConfig.TLSConfig = cfg.TLSConfig

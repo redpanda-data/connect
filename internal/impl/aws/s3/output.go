@@ -181,10 +181,12 @@ func s3oOutputSpec() *service.ConfigSpec {
 		Description(`
 In order to have a different path for each object you should use function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries], which are calculated per message of a batch.
 
+[[metadata-overview]]
 == Metadata
 
 Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the xref:configuration:metadata.adoc[metadata docs].
 
+[[tags-overview]]
 == Tags
 
 The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]:
@@ -199,10 +201,12 @@ output:
       Timestamp: ${!meta("Timestamp")}
 `+"```"+`
 
+[[credentials-overview]]
 == Credentials
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[AWS credentials].
 
+[[batching-overview]]
 == Batching
 
 It's common to want to upload messages to S3 as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"xref:components:processors/archive.adoc[`archive`]"+` and/or `+"xref:components:processors/compress.adoc[`compress`]"+` processor.

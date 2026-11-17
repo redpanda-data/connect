@@ -15,8 +15,13 @@
 package influxdb
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -140,5 +145,63 @@ db: db0
 		} else if len(values) != 1 {
 			t.Errorf("number of values was not expected %d", len(values))
 		}
+	}
+}
+
+func TestInfluxCloseStopsFlushLoop(t *testing.T) {
+	var writes atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/write" {
+			writes.Add(1)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	i := fromYAML(t, `
+url: %v
+db: db0
+interval: 10ms
+`, srv.URL)
+	i.NewGaugeCtor("testing")().Set(31337)
+
+	// Let the flush loop write at least once, so that the check below runs
+	// while the loop is active.
+	require.Eventually(t, func() bool { return writes.Load() > 0 }, time.Second, 5*time.Millisecond)
+
+	require.NoError(t, i.Close(t.Context()))
+	afterClose := writes.Load()
+
+	require.Never(t, func() bool { return writes.Load() > afterClose }, 100*time.Millisecond, 10*time.Millisecond,
+		"the flush loop wrote metrics after Close")
+}
+
+// TestInfluxWriteTimeout checks that a write to a server that does not respond
+// fails with a timeout error after the timeout field.
+func TestInfluxWriteTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // Never respond.
+	}))
+	t.Cleanup(srv.Close)
+	// Runs before srv.Close, so a write that hangs does not block it.
+	t.Cleanup(srv.CloseClientConnections)
+
+	// The 1h intervals keep the loop quiet, so only the write below reaches srv.
+	i := fromYAML(t, `
+url: %s
+db: db0
+interval: 1h
+ping_interval: 1h
+timeout: 50ms
+`, srv.URL)
+	t.Cleanup(i.cancel)
+
+	errc := make(chan error, 1)
+	go func() { errc <- i.publishRegistry() }()
+	select {
+	case err := <-errc:
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the write did not stop after the timeout")
 	}
 }

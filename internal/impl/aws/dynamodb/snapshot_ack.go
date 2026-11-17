@@ -28,7 +28,7 @@ const defaultSnapshotCheckpointBatchInterval = 10
 // snapshotProgressStore is the persistence surface used by the snapshot ack
 // tracker; satisfied by *Checkpointer.
 type snapshotProgressStore interface {
-	UpdateSnapshotProgress(ctx context.Context, segment int, lastKey map[string]dynamodbtypes.AttributeValue, recordsRead int64) error
+	UpdateSnapshotProgress(ctx context.Context, segment, totalSegments int, lastKey map[string]dynamodbtypes.AttributeValue, recordsRead int64) error
 }
 
 // segmentCheckpoint is the ordered-tracker payload for a snapshot segment:
@@ -65,21 +65,25 @@ type segmentAckState struct {
 type snapshotAckTracker struct {
 	store    snapshotProgressStore
 	interval int
-	log      *service.Logger
+	// totalSegments is the scan's segment count, stored with every
+	// position (see SnapshotCheckpoint.ScanSegments).
+	totalSegments int
+	log           *service.Logger
 
 	mu       sync.Mutex
 	segments map[int]*segmentAckState
 }
 
-func newSnapshotAckTracker(store snapshotProgressStore, interval int, log *service.Logger) *snapshotAckTracker {
+func newSnapshotAckTracker(store snapshotProgressStore, interval, totalSegments int, log *service.Logger) *snapshotAckTracker {
 	if interval <= 0 {
 		interval = defaultSnapshotCheckpointBatchInterval
 	}
 	return &snapshotAckTracker{
-		store:    store,
-		interval: interval,
-		log:      log,
-		segments: make(map[int]*segmentAckState),
+		store:         store,
+		interval:      interval,
+		totalSegments: totalSegments,
+		log:           log,
+		segments:      make(map[int]*segmentAckState),
 	}
 }
 
@@ -147,9 +151,9 @@ func (t *snapshotAckTracker) Ack(ctx context.Context, segment, n int, resolve fu
 	}
 	var persistErr error
 	if toPersist.complete {
-		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, nil, records)
+		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, t.totalSegments, nil, records)
 	} else {
-		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, toPersist.lastKey, records)
+		persistErr = t.store.UpdateSnapshotProgress(ctx, segment, t.totalSegments, toPersist.lastKey, records)
 	}
 	if persistErr != nil {
 		// Bookkeeping is deliberately untouched so the failed position is
@@ -193,7 +197,7 @@ func (t *snapshotAckTracker) FlushCompleted(ctx context.Context) error {
 		t.mu.Unlock()
 
 		st.persistMu.Lock()
-		err := t.store.UpdateSnapshotProgress(ctx, seg, nil, records)
+		err := t.store.UpdateSnapshotProgress(ctx, seg, t.totalSegments, nil, records)
 		if err == nil {
 			t.mu.Lock()
 			st.persistedComplete = true

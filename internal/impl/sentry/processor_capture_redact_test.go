@@ -12,30 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sentry
 
 import (
-	"os"
-	"os/exec"
-	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// dockerCleanup removes all Docker containers between test packages.
-// Skipped in CI environments.
-func dockerCleanup() {
-	if os.Getenv("CI") != "" {
-		return
-	}
+func TestCaptureProcessorDSNErrorRedacted(t *testing.T) {
+	conf, err := newCaptureProcessorConfig().ParseYAML(`
+dsn: "https://pub:S3cretPass@bad host/42"
+message: hello
+`, service.GlobalEnvironment())
+	require.NoError(t, err)
 
-	listCmd := exec.Command("docker", "ps", "-aq", "--filter", "label=org.testcontainers=true")
-	out, err := listCmd.Output()
-	if err != nil {
-		return
-	}
-	ids := strings.Fields(string(out))
-	if len(ids) == 0 {
-		return
-	}
-	args := append([]string{"rm", "-f"}, ids...)
-	_ = exec.Command("docker", args...).Run()
+	_, err = newCaptureProcessor(conf, service.MockResources())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "creating sentry client")
+	assert.NotContains(t, err.Error(), "S3cretPass")
 }

@@ -16,7 +16,8 @@
 //
 // Usage:
 //
-//	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [filter...]
+//	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [--parallel n] [filter...]
+//	git diff --name-only <base>...HEAD | go run ./cmd/tools/integration affected
 package main
 
 import (
@@ -37,6 +38,10 @@ func main() {
 		if err := cmdRun(os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "affected":
+		if err := cmdAffected(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	case "show":
 		if err := cmdShow(os.Args[2:]); err != nil {
 			log.Fatal(err)
@@ -52,6 +57,7 @@ func printUsage() {
 	log.Println("Commands:")
 	log.Println("  run      Run integration tests package by package")
 	log.Println("  show     Show test output for a failure reference (file:line)")
+	log.Println("  affected Read changed files on stdin, print the packages whose tests depend on them")
 	log.Println("")
 	log.Println("Flags for run:")
 	log.Println("  --output-dir   Directory for test output (default: .integration/<timestamp>)")
@@ -60,6 +66,7 @@ func printUsage() {
 	log.Println("  --race           Enable race detector (requires CGO_ENABLED=1)")
 	log.Println("  --unit           Run all tests, not just integration tests")
 	log.Println("  --cover-profile  Generate coverage profile per package (.cov files)")
+	log.Println("  --parallel       Number of packages to test at the same time (default: 1)")
 	log.Println("")
 	log.Println("Positional arguments are package filters (substring match).")
 	log.Println("Example: integration run kafka redis")

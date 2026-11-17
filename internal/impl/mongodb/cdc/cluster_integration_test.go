@@ -111,6 +111,23 @@ func (n *mongoNode) awaitEval(js, want string) {
 	require.NoError(n.t, awaitEvalOn(n.t.Context(), n.container, js, want))
 }
 
+// stopReplication stops the node from fetching the oplog of its sync source,
+// until resumeReplication or the end of the test.
+func (n *mongoNode) stopReplication() {
+	n.t.Helper()
+	n.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
+	n.t.Cleanup(func() {
+		// t.Context() is already cancelled during cleanup.
+		_, _ = evalOn(context.Background(), n.container, `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+	})
+}
+
+// resumeReplication undoes stopReplication.
+func (n *mongoNode) resumeReplication() {
+	n.t.Helper()
+	n.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+}
+
 // uri returns a host-reachable connection string for the node.
 func (n *mongoNode) uri(direct bool) string {
 	n.t.Helper()
@@ -346,7 +363,7 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
+	secondary.stopReplication()
 
 	// Applied on the primary only: a majority of two needs the secondary.
 	w1 := db.Collection("c", options.Collection().SetWriteConcern(writeconcern.W1()))
@@ -384,12 +401,132 @@ func TestIntegrationIncSnapshotDepsMajorityReads(t *testing.T) {
 	assert.Equal(t, []int32{1, 2, 3}, ids, "the chunk saw an unreplicated insert")
 
 	// Once replication resumes the write becomes majority and visible.
-	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
+	secondary.resumeReplication()
 	want := key(t, 4)
 	require.Eventually(t, func() bool {
 		maxKey, err := deps.ResolveMaxKey(ctx, table, nil)
 		return err == nil && assert.ObjectsAreEqual(want, maxKey)
 	}, time.Minute, 250*time.Millisecond)
+}
+
+// TestIntegrationIncSnapshotDepsPrepareWaitsForMajority starts the incremental
+// snapshot with a change stream that opens one tick after a write that the
+// primary has applied but a majority has not committed. The stream does not
+// return that write, and a majority chunk read does not see it until it
+// commits. Prepare must not return until a majority read sees the write, and
+// must return when it does.
+func TestIntegrationIncSnapshotDepsPrepareWaitsForMajority(t *testing.T) {
+	integration.CheckSkip(t)
+	// Starts its own containers on its own network.
+	t.Parallel()
+	primary, secondary := startTwoNodeReplicaSet(t)
+	client := connectTo(t, primary.uri(true))
+	db := client.Database("prepare")
+	ctx := t.Context()
+
+	_, err := db.Collection("c").InsertOne(ctx, bson.M{"_id": 1, "v": 0})
+	require.NoError(t, err)
+
+	secondary.stopReplication()
+
+	// Applied on the primary only: a majority of two needs the secondary.
+	sess, err := client.StartSession()
+	require.NoError(t, err)
+	defer sess.EndSession(ctx)
+	w1 := db.Collection("c", options.Collection().SetWriteConcern(writeconcern.W1()))
+	_, err = w1.UpdateOne(mongo.NewSessionContext(ctx, sess), bson.M{"_id": 1}, bson.M{"$set": bson.M{"v": 1}})
+	require.NoError(t, err)
+	writeTS := sess.OperationTime()
+	require.NotNil(t, writeTS)
+
+	deps := &incSnapshotDeps{
+		db:          db,
+		collections: []string{"c"},
+		streamStart: nextTimestamp(*writeTS),
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	err = deps.Prepare(waitCtx)
+	require.True(t, mongo.IsTimeout(err), "Prepare returned before the write was majority committed: %v", err)
+
+	secondary.resumeReplication()
+	waitCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	require.NoError(t, deps.Prepare(waitCtx))
+}
+
+// TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite starts the input
+// after a write that the primary has applied but a majority has not committed.
+//
+// MongoDB applies a write on the primary first. The write becomes majority
+// committed only when most members of the replica set have a copy of it. Until
+// then, a read with majority read concern returns the version of the document
+// before the write.
+//
+// In that window, the two sources of the incremental snapshot disagree about
+// the write:
+//   - The change stream starts one tick after the last write that the primary
+//     applied. The write is before the start, so the stream does not return
+//     it.
+//   - The chunk reads use majority read concern, so they return the version
+//     before the write.
+//
+// The snapshot can then emit the chunk with the older document, and the output
+// never has the write. The test expects foo/1 with v=1 in the output.
+func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
+	integration.CheckSkip(t)
+	// Starts its own containers on its own network.
+	t.Parallel()
+	primary, secondary := startTwoNodeReplicaSet(t)
+	uri := primary.uri(true)
+	h := newIncrementalHarnessOn(t, uri, connectTo(t, uri))
+	h.seed("foo", 3)
+
+	// Stop replication, then update foo/1. The write is applied on the primary
+	// only: a majority of two needs the secondary.
+	secondary.stopReplication()
+	w1 := h.db.Collection("foo", options.Collection().SetWriteConcern(writeconcern.W1()))
+	_, err := w1.UpdateOne(t.Context(), bson.M{"_id": 1}, bson.M{"$inc": bson.M{"v": 1}})
+	require.NoError(t, err)
+
+	// This replica set has no auth and no signal collection.
+	stream := h.stream(`
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  incremental_snapshot:
+    enabled: true
+    chunk_size: 20
+  collections:
+    - 'foo'
+`)
+	wait := stream.RunAsync(t)
+
+	// Keep replication stopped until the input either reads foo or waits for the
+	// majority snapshot. The "reading" log fires only when the first chunk is
+	// released, which is after Prepare, so a wait never logs it.
+	readingFoo := func() bool {
+		return len(h.logs.matching("Incremental snapshot reading collection foo")) > 0
+	}
+	waitingForMajority := func() bool {
+		out, err := evalOn(t.Context(), primary.container,
+			`db.currentOp({"command.readConcern.afterClusterTime": {$exists: true}}).inprog.length > 0`)
+		return err == nil && out == "true"
+	}
+	require.Eventually(t, func() bool {
+		return readingFoo() || waitingForMajority()
+	}, time.Minute, 100*time.Millisecond, "the input neither read foo nor waited for the majority snapshot")
+	secondary.resumeReplication()
+
+	h.waitReads("foo", 3)
+	stream.Stop(t)
+	wait()
+
+	got := replayChecked(t, h.output)
+	assert.Equal(t, map[string]float64{"foo/0": 0, "foo/1": 1, "foo/2": 0}, got.of("foo"), "the unreplicated update of foo/1 is missing from the output")
 }
 
 // TestIntegrationIncSnapshotDepsReadFromPrimary connects with
@@ -421,10 +558,7 @@ func TestIntegrationIncSnapshotDepsReadFromPrimary(t *testing.T) {
 	})
 	require.NoError(t, err)
 	secondary.awaitEval(`db.getMongo().setReadPref("secondary"); db.getSiblingDB("readpref").c.countDocuments({v: 0})`, "3")
-	secondary.eval(`db.adminCommand({configureFailPoint: "stopReplProducer", mode: "alwaysOn"})`)
-	t.Cleanup(func() {
-		_, _ = evalOn(context.Background(), secondary.container, `db.adminCommand({configureFailPoint: "stopReplProducer", mode: "off"})`)
-	})
+	secondary.stopReplication()
 	_, err = majority.UpdateMany(ctx, bson.D{}, bson.M{"$set": bson.M{"v": 1}})
 	require.NoError(t, err)
 

@@ -339,6 +339,83 @@ func TestShouldDeferMiningCycle(t *testing.T) {
 	}
 }
 
+// TestMinedCheckpointSCN regression-tests CON-583: a mining cycle with no rows
+// for the monitored tables must still give a checkpoint position.
+func TestMinedCheckpointSCN(t *testing.T) {
+	tests := []struct {
+		name         string
+		currentSCN   uint64
+		lowWatermark uint64
+		want         replication.SCN
+	}{
+		{
+			name:         "no open transaction checkpoints the mined position",
+			currentSCN:   1000,
+			lowWatermark: math.MaxUint64,
+			want:         1000,
+		},
+		{
+			name:         "open transaction below current SCN caps the checkpoint",
+			currentSCN:   1000,
+			lowWatermark: 900,
+			want:         899,
+		},
+		{
+			name:         "open transaction above current SCN does not cap it",
+			currentSCN:   1000,
+			lowWatermark: 1500,
+			want:         1000,
+		},
+		{
+			name:         "low watermark of 1 gives an invalid SCN",
+			currentSCN:   1000,
+			lowWatermark: 1,
+			want:         replication.InvalidSCN,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, minedCheckpointSCN(tt.currentSCN, tt.lowWatermark))
+		})
+	}
+}
+
+// TestCheckpointMinedPositionThrottle verifies that a checkpoint of the mined position is requested at most
+// once per checkpointRequestInterval. Each request can write the checkpoint and waits for earlier batches, so
+// a request after every mining cycle is too frequent.
+func TestCheckpointMinedPositionThrottle(t *testing.T) {
+	ctx := t.Context()
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default())))
+	start := time.Unix(1_700_000_000, 0)
+
+	lm.currentSCN = 100
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start))
+	lm.currentSCN = 200
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(checkpointRequestInterval-time.Second)))
+	lm.currentSCN = 300
+	require.NoError(t, lm.checkpointMinedPosition(ctx, start.Add(checkpointRequestInterval)))
+
+	assert.Equal(t, []replication.SCN{100, 300}, pub.windows)
+}
+
+// TestCheckpointMinedPositionOpenLOBTransaction verifies that an open transaction with only LOB events caps
+// the mined checkpoint below its start, and does not stop it. Its first LOB event puts it in the low watermark.
+func TestCheckpointMinedPositionOpenLOBTransaction(t *testing.T) {
+	ctx := t.Context()
+	locator := `declare lob_1 clob; begin select "DOC" into lob_1 from "TESTDB"."T" where "ID" = '42';`
+
+	lm, pub, cache := newLOBReplayMiner(t)
+	lm.currentSCN = 100
+	require.NoError(t, cache.StartTransaction(ctx, "open", 30))
+	require.NoError(t, lm.processRedoEvent(ctx, lobEv(31, "open", sqlredo.OpSelectLobLocator, locator)))
+	require.NoError(t, lm.processRedoEvent(ctx, lobWriteEv(32, "open", "abc", 1)))
+	require.NotEmpty(t, lm.lobStates)
+
+	require.NoError(t, lm.checkpointMinedPosition(ctx, time.Now()))
+	assert.Equal(t, []replication.SCN{29}, pub.windows)
+}
+
 // TestBasicfileOORInferFromLOBOnlyUpdate covers the exact CI failure scenario where:
 //   - A BASICFILE DISABLE STORAGE IN ROW LOB column (OOL_COL) has its LOB_WRITE events
 //     arrive before any DML event; all are deferred.
@@ -753,7 +830,7 @@ func TestLOBOnlyTransactionWithoutStartIsPublished(t *testing.T) {
 	assert.Equal(t, replication.SCN(140), pub.messages[0].CheckpointSCN)
 }
 
-func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
+func newLogMiner(pub Publisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher:        pub,
 		txnCache:         cache,
@@ -765,10 +842,19 @@ func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMi
 	}
 }
 
-type publisherStub struct{ messages []*replication.MessageEvent }
+type publisherStub struct {
+	messages []*replication.MessageEvent
+	// windows are the SCNs passed to CheckpointWindow, in call order.
+	windows []replication.SCN
+}
 
 func (p *publisherStub) Publish(_ context.Context, msg *replication.MessageEvent) error {
 	p.messages = append(p.messages, msg)
+	return nil
+}
+
+func (p *publisherStub) CheckpointWindow(_ context.Context, scn replication.SCN) error {
+	p.windows = append(p.windows, scn)
 	return nil
 }
 
