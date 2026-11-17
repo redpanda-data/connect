@@ -677,3 +677,162 @@ backoff:
 	assert.Error(t, failed[1])
 	assert.ErrorIs(t, failed[2], bazErr)
 }
+
+func TestDynamoDBBuildFailureWithPutFallbackAllWritten(t *testing.T) {
+	t.Parallel()
+
+	db := testDDBOWriter(t, `
+table: FooTable
+string_columns:
+  id: ${!json("id")}
+max_retries: 1
+backoff:
+  max_elapsed_time: 5s
+`)
+
+	putIDs := map[string]int{}
+
+	db.client = &mockDynamoDB{
+		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+			putIDs[input.Item["id"].(*types.AttributeValueMemberS).Value]++
+			return nil, nil
+		},
+		batchFn: func(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
+			require.Len(t, input.RequestItems["FooTable"], 2)
+			return nil, errors.New("woop")
+		},
+	}
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"foo"}`)),
+		service.NewMessage([]byte(`not json`)),
+		service.NewMessage([]byte(`{"id":"baz"}`)),
+	}
+	idx := msg.Index()
+
+	err := db.WriteBatch(t.Context(), msg)
+	require.Error(t, err)
+
+	assert.Equal(t, map[string]int{"foo": 1, "baz": 1}, putIDs)
+
+	// Every put succeeded, yet the message that failed to build must still
+	// be reported as failed.
+	failed := failedIndexes(t, err, idx)
+	require.Len(t, failed, 1)
+	assert.Error(t, failed[1])
+}
+
+// unprocessedItem returns the write request the output builds for a message
+// whose only column is id.
+func unprocessedItem(id string) types.WriteRequest {
+	return types.WriteRequest{
+		PutRequest: &types.PutRequest{
+			Item: map[string]types.AttributeValue{
+				"id": &types.AttributeValueMemberS{Value: id},
+			},
+		},
+	}
+}
+
+func TestDynamoDBBuildFailureUnprocessedDrained(t *testing.T) {
+	t.Parallel()
+
+	db := testDDBOWriter(t, `
+table: FooTable
+string_columns:
+  id: ${!json("id")}
+max_retries: 3
+backoff:
+  initial_interval: 1ms
+  max_interval: 1ms
+`)
+
+	var requests [][]types.WriteRequest
+
+	db.client = &mockDynamoDB{
+		fn: func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+			t.Error("not expected")
+			return nil, errors.New("not implemented")
+		},
+		batchFn: func(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
+			requests = append(requests, input.RequestItems["FooTable"])
+			if len(requests) == 1 {
+				return &dynamodb.BatchWriteItemOutput{
+					UnprocessedItems: map[string][]types.WriteRequest{
+						"FooTable": {unprocessedItem("baz")},
+					},
+				}, nil
+			}
+			return &dynamodb.BatchWriteItemOutput{}, nil
+		},
+	}
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"foo"}`)),
+		service.NewMessage([]byte(`not json`)),
+		service.NewMessage([]byte(`{"id":"baz"}`)),
+	}
+	idx := msg.Index()
+
+	err := db.WriteBatch(t.Context(), msg)
+	require.Error(t, err)
+
+	// The first request carries both items that built, the retry only the
+	// one left unprocessed.
+	require.Len(t, requests, 2)
+	assert.Equal(t, []types.WriteRequest{unprocessedItem("foo"), unprocessedItem("baz")}, requests[0])
+	assert.Equal(t, []types.WriteRequest{unprocessedItem("baz")}, requests[1])
+
+	// The retry drained the unprocessed items, so only the message that
+	// failed to build is reported as failed.
+	failed := failedIndexes(t, err, idx)
+	require.Len(t, failed, 1)
+	assert.Error(t, failed[1])
+}
+
+func TestDynamoDBBuildFailureUnprocessedExhausted(t *testing.T) {
+	t.Parallel()
+
+	db := testDDBOWriter(t, `
+table: FooTable
+string_columns:
+  id: ${!json("id")}
+max_retries: 2
+backoff:
+  initial_interval: 1ms
+  max_interval: 1ms
+`)
+
+	batchCalls := 0
+
+	db.client = &mockDynamoDB{
+		fn: func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+			t.Error("not expected")
+			return nil, errors.New("not implemented")
+		},
+		batchFn: func(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
+			batchCalls++
+			return &dynamodb.BatchWriteItemOutput{
+				UnprocessedItems: map[string][]types.WriteRequest{
+					"FooTable": {unprocessedItem("baz")},
+				},
+			}, nil
+		},
+	}
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"foo"}`)),
+		service.NewMessage([]byte(`not json`)),
+		service.NewMessage([]byte(`{"id":"baz"}`)),
+	}
+
+	err := db.WriteBatch(t.Context(), msg)
+	require.Error(t, err)
+	assert.Greater(t, batchCalls, 1)
+
+	// The unprocessed item cannot be matched back to its message, so the
+	// whole batch fails with a plain error rather than a batch error.
+	var batchErr *service.BatchError
+	assert.NotErrorAs(t, err, &batchErr)
+	assert.EqualError(t, err, "setting 1 items")
+}
