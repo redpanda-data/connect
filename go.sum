@@ -1537,8 +1537,8 @@ github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 h1:bsUq1dX0N8A
 github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/redis/go-redis/v9 v9.23.0 h1:/TTVdJa8BRNsybwwGGnmiYktHNlUXtbOQxlWpHBPL3s=
 github.com/redis/go-redis/v9 v9.23.0/go.mod h1:EWP2UUk+XDaI1s5nQB5mablZN6vccXlmBQTyfnF87D0=
-github.com/redpanda-data/benthos/v4 v4.84.0 h1:WlGxeMeHtxC0wADcFQeUKBuudd+AuDKDjjJddXfQfDU=
-github.com/redpanda-data/benthos/v4 v4.84.0/go.mod h1:WoDoLkNOiiYI00KTo/sRTadJpadT4pVfquJ+e6VOu+E=
+github.com/redpanda-data/benthos/v4 v4.84.1-0.20261030191824-661616fc0dc0 h1:kZ8kYlrgYHG9mOAwzY1RVypeIxZlrLCpmDZ7jT74j1M=
+github.com/redpanda-data/benthos/v4 v4.84.1-0.20261030191824-661616fc0dc0/go.mod h1:EWA7wx1CxjE56R3UM7fyu7arfQJ+sS0lSzJ9Q3p89og=
 github.com/redpanda-data/common-go/authz v0.3.0 h1:8IolTnjWKGI3XzoOj+V1MylS3+4Gu9LmBYoDcFVVZOQ=
 github.com/redpanda-data/common-go/authz v0.3.0/go.mod h1:VbPEegmc7lky14Ojp6lfO8T5OVVxKHKXX98VRKqMBjQ=
 github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0 h1:xL2THs63tUTZmTiBfBm/mrjFMrwQaHKduvgQ6gIizXg=
