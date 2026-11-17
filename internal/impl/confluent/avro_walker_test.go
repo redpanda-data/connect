@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestAvroPreservedReferences(t *testing.T) {
@@ -131,8 +133,7 @@ func TestAvroPreservedReferences(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			subj, err := service.NewInterpolatedString(test.subject)
-			require.NoError(t, err)
+			subj := servicetest.NewInterpolatedString(t, test.subject)
 
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
@@ -462,8 +463,7 @@ func TestAvroKafkaConnectTypes(t *testing.T) {
 		return nil, nil
 	})
 
-	subject, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
+	subject := servicetest.NewInterpolatedString(t, "root")
 
 	tests := []struct {
 		name   string
@@ -549,8 +549,7 @@ func TestAvroPreservedSchemaExtraction(t *testing.T) {
 		}), nil
 	})
 
-	subj, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "root")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)

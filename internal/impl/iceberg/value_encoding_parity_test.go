@@ -32,6 +32,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
 	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // This file pins the value-encoding parity invariant between the four write
@@ -223,7 +224,7 @@ func newMORWriter(t testing.TB, tbl *table.Table, idFields ...string) *writer {
 		table:         tbl,
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation:        mustInterp(t, `${! metadata("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! metadata("op") }`),
 			IdentifierFields: idFields,
 			MergeStrategy:    mergeStrategyMOR,
 		},

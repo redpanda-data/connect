@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // These tests exercise the real equality-delete write path and RowDelta commit
@@ -480,7 +482,7 @@ func TestWriteSkipsCleanupOnAmbiguousCommit(t *testing.T) {
 
 	w := newDeleteWriter(t, tbl)
 	w.committer = comm
-	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+	w.rowOpCfg.Operation = servicetest.NewInterpolatedString(t, `${! metadata("op") }`)
 
 	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
 	require.Error(t, err)
@@ -515,7 +517,7 @@ func TestWriteMORAmbiguousThenConflictStaysSticky(t *testing.T) {
 
 	w := newDeleteWriter(t, tbl)
 	w.committer = comm
-	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+	w.rowOpCfg.Operation = servicetest.NewInterpolatedString(t, `${! metadata("op") }`)
 
 	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
 	require.Error(t, err)
@@ -549,7 +551,7 @@ func TestWriteMORLandedFinalAttemptSucceeds(t *testing.T) {
 
 	w := newDeleteWriter(t, tbl)
 	w.committer = comm
-	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+	w.rowOpCfg.Operation = servicetest.NewInterpolatedString(t, `${! metadata("op") }`)
 
 	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})}),
 		"a landed-but-misreported final attempt must resolve to success via the token check, not surface an error")

@@ -21,6 +21,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // countManifestsByContent loads the table's current snapshot and tallies its
@@ -66,8 +68,7 @@ func TestCOWRowOperationsIntegration(t *testing.T) {
 	const ns, tbl = "cow_row_ops_ns", "cow_row_ops_test"
 	infra.EnsureNamespaceAbsent(t, ns)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 
 	router := infra.NewRouter(t, ns, tbl,
 		WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}),
