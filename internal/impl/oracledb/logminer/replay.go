@@ -34,7 +34,7 @@ type lobReplay struct {
 // planLOBReplay selects the open transactions with LOB state, resets them so
 // they are rebuilt from scratch, and returns the window to re-mine. It returns
 // nil when there is nothing to replay.
-func (lm *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (*lobReplay, error) {
+func (rp *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (*lobReplay, error) {
 	replay := &lobReplay{
 		txns:         make(map[sqlredo.TransactionID]struct{}),
 		fromSCN:      math.MaxUint64,
@@ -43,27 +43,27 @@ func (lm *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (
 	// A replay left over from a failed attempt already rolled back its
 	// transactions, so they may be absent from the cache until their rows are
 	// re-mined. They must stay in the set or their rows would be skipped.
-	if prev := lm.lobReplay; prev != nil {
+	if prev := rp.lobReplay; prev != nil {
 		for id := range prev.txns {
 			replay.txns[id] = struct{}{}
-			lm.log.Debugf("LOB transaction %s is carried over from an interrupted replay; re-mining it from SCN %d", id, prev.fromSCN)
+			rp.log.Debugf("LOB transaction %s is carried over from an interrupted replay; re-mining it from SCN %d", id, prev.fromSCN)
 		}
 		replay.fromSCN = prev.fromSCN
 		replay.processedSCN = max(prev.processedSCN, currentSCN)
 	}
 
-	candidates := make(map[sqlredo.TransactionID]struct{}, len(lm.lobStates)+len(lm.pendingLOBWrites))
-	for id := range lm.lobStates {
+	candidates := make(map[sqlredo.TransactionID]struct{}, len(rp.lobStates)+len(rp.pendingLOBWrites))
+	for id := range rp.lobStates {
 		candidates[id] = struct{}{}
 	}
-	for id := range lm.pendingLOBWrites {
+	for id := range rp.pendingLOBWrites {
 		candidates[id] = struct{}{}
 	}
 	for id := range candidates {
 		if _, carried := replay.txns[id]; carried {
 			continue
 		}
-		txn, err := lm.txnCache.GetTransaction(ctx, id)
+		txn, err := rp.txnCache.GetTransaction(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("getting transaction %s for LOB replay: %w", id, err)
 		}
@@ -73,7 +73,7 @@ func (lm *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (
 		}
 		replay.txns[id] = struct{}{}
 		replay.fromSCN = min(replay.fromSCN, txn.SCN)
-		lm.log.Debugf("LOB transaction %s started at SCN %d is still open at the window boundary (SCN %d); re-mining it from its start", id, txn.SCN, replay.processedSCN)
+		rp.log.Debugf("LOB transaction %s started at SCN %d is still open at the window boundary (SCN %d); re-mining it from its start", id, txn.SCN, replay.processedSCN)
 	}
 	if len(replay.txns) == 0 {
 		return nil, nil
@@ -81,13 +81,13 @@ func (lm *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (
 
 	// Record the set before resetting it, so a rollback that fails part way
 	// leaves the reset transactions carried over to the next attempt.
-	lm.lobReplay = replay
+	rp.lobReplay = replay
 	for id := range replay.txns {
-		if err := lm.txnCache.RollbackTransaction(ctx, id); err != nil {
+		if err := rp.txnCache.RollbackTransaction(ctx, id); err != nil {
 			return nil, fmt.Errorf("resetting transaction %s for LOB replay: %w", id, err)
 		}
-		delete(lm.lobStates, id)
-		delete(lm.pendingLOBWrites, id)
+		delete(rp.lobStates, id)
+		delete(rp.pendingLOBWrites, id)
 	}
 	return replay, nil
 }
@@ -97,20 +97,20 @@ func (lm *redoProcessor) planLOBReplay(ctx context.Context, currentSCN uint64) (
 //
 // txnCache.LowWatermarkSCN alone is not enough. planLOBReplay takes the
 // replayed transactions out of txnCache until their rows are mined again. If
-// ORA-01368 stops the cycle in that gap, lm.lobReplay stays set and is the only
+// ORA-01368 stops the cycle in that gap, rp.lobReplay stays set and is the only
 // record that they are open. So the result is the minimum of:
 //
 //   - txnCache.LowWatermarkSCN, for the transactions in the cache.
-//   - lm.lobReplay.fromSCN, for the transactions of an open LOB replay.
+//   - rp.lobReplay.fromSCN, for the transactions of an open LOB replay.
 //
 // Both values ignore excludeTxnID, so that a committing transaction does not
 // hold back its own checkpoint.
-func (lm *redoProcessor) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
-	low := lm.txnCache.LowWatermarkSCN(excludeTxnID)
+func (rp *redoProcessor) lowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
+	low := rp.txnCache.LowWatermarkSCN(excludeTxnID)
 	// fromSCN can be too low: it does not go up when a replayed transaction
 	// ends. This only delays the checkpoint, which is safe.
-	if lm.lobReplay.hasOpenOtherThan(excludeTxnID) {
-		low = min(low, lm.lobReplay.fromSCN)
+	if rp.lobReplay.hasOpenOtherThan(excludeTxnID) {
+		low = min(low, rp.lobReplay.fromSCN)
 	}
 	return low
 }
