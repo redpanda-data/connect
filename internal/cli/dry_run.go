@@ -54,7 +54,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 		Usage: "Parse {{.ProductName}} configs and test the connections of each plugin",
 		Flags: flags,
 		Description: `
-Parses each config and tests the connections of its components. It does not lint, so a misspelled field passes. To check fields, use the lint command.
+Parses each config and tests the connections of its components. For a pipeline config file, it does not lint, so a misspelled field passes. To check fields, use the lint command.
 
 A directory argument is read as a resource repository. Templates in templates/ are registered. Resources in resources/inputs, resources/caches, resources/processors and resources/outputs are tested. Pipeline config files in the directory are not tested. To test pipeline configs, pass the files or a glob:
 
