@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,6 +125,111 @@ storage:
 			cfg, err := parseCommitConfig(conf)
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantDisable, cfg.DisableCleanupOnFailure)
+		})
+	}
+}
+
+// TestParseCommitConfigMaxSnapshotAge pins the `commit.max_snapshot_age`
+// default: zero, so expiry is opt-in, whether the commit block is absent or
+// the field is. The "field absent" case goes through the spec's Default
+// string.
+func TestParseCommitConfigMaxSnapshotAge(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       time.Duration
+		wantErr    string
+	}{
+		{
+			name:       "commit object absent",
+			commitYAML: "",
+			want:       0,
+		},
+		{
+			name:       "field absent",
+			commitYAML: "commit:\n  max_retries: 2\n",
+			want:       0,
+		},
+		{
+			name:       "explicit zero",
+			commitYAML: "commit:\n  max_snapshot_age: 0s\n",
+			want:       0,
+		},
+		{
+			name:       "at the floor",
+			commitYAML: "commit:\n  max_snapshot_age: 1m\n",
+			want:       time.Minute,
+		},
+		{
+			// The lint rule rejects this too, but lint can be skipped, and
+			// a sub-minute age is the multi-writer rewrite case.
+			name:       "below the floor is rejected",
+			commitYAML: "commit:\n  max_snapshot_age: 30s\n",
+			wantErr:    "max_snapshot_age must be zero or at least 1m",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.MaxSnapshotAge)
+		})
+	}
+}
+
+// TestParseCommitConfigMaintenanceInterval pins the `commit.maintenance_interval`
+// default to the constant the maintenance pass uses, and the positive-value
+// check that holds when lint is skipped.
+func TestParseCommitConfigMaintenanceInterval(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       time.Duration
+		wantErr    string
+	}{
+		{name: "commit object absent", commitYAML: "", want: defaultMaintenanceInterval},
+		{name: "field absent", commitYAML: "commit:\n  max_retries: 2\n", want: defaultMaintenanceInterval},
+		{name: "explicit value", commitYAML: "commit:\n  maintenance_interval: 1h\n", want: time.Hour},
+		{name: "zero is rejected", commitYAML: "commit:\n  maintenance_interval: 0s\n", wantErr: "maintenance_interval must be a positive duration"},
+		{name: "negative is rejected", commitYAML: "commit:\n  maintenance_interval: -1m\n", wantErr: "maintenance_interval must be a positive duration"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.MaintenanceInterval)
 		})
 	}
 }

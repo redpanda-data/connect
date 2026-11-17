@@ -9,6 +9,8 @@
 package iceberg
 
 import (
+	"strconv"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -89,6 +91,7 @@ const (
 	ioFieldCommit               = "commit"
 	ioFieldManifestMergeEnabled = "manifest_merge_enabled"
 	ioFieldMaxSnapshotAge       = "max_snapshot_age"
+	ioFieldMaintenanceInterval  = "maintenance_interval"
 	ioFieldMaxCommitRetries     = "max_retries"
 	ioFieldCleanupOnFailure     = "cleanup_on_failure"
 
@@ -152,7 +155,7 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"Under `merge-on-read`, when this output auto-creates a table (via `schema_evolution`), the `identifier_fields` columns are created as *required* and registered as the table's Iceberg identifier-field-ids, so downstream engines and other writers see the primary key. A consequence is that a null or missing value in an identifier column is rejected on write, even for `insert`; identifier columns must therefore be present at creation: in the first message or declared via `schema_metadata`. Under `copy-on-write` the identifier fields are used only as the connector-side merge key and are *not* registered as identifier-field-ids, so auto-created columns are not forced required (this is also what lets engine-backed catalogs such as the Databricks Unity Catalog, which rejects identifier-field-ids at table creation, accept the `CREATE TABLE`). Pre-existing tables are never modified.\n" +
 	"\n" +
-	"*Batching and ordering.* Within a single batch the last `upsert`/`delete` per `identifier_fields` key wins. Each batch containing an `upsert`/`delete` is committed as its own snapshot (these commits are never coalesced, which is required for correctness), so a high-throughput mutation workload produces one snapshot per batch. Size batches accordingly and run regular table maintenance (snapshot expiry and compaction) to keep metadata manageable. Pure `insert`-only batches keep the original append fast path, which does coalesce commits.\n" +
+	"*Batching and ordering.* Within a single batch the last `upsert`/`delete` per `identifier_fields` key wins. Each batch containing an `upsert`/`delete` is committed as its own snapshot (these commits are never coalesced, which is required for correctness), so a high-throughput mutation workload produces one snapshot per batch. Size batches accordingly. Set `commit.max_snapshot_age` so this output expires old snapshots itself, and run compaction to keep metadata manageable. Pure `insert`-only batches keep the original append fast path, which does coalesce commits.\n" +
 	"\n" +
 	"Ordering only holds *within* a batch. With more than one batch in flight, concurrent batches can commit out of order, so a stale `upsert` may overwrite a newer one for the same key. Set `max_in_flight: 1` for keyed (change-data-capture) workloads to preserve per-key order: this is enforced by config linting whenever `row_operation` is anything other than a static `insert`.\n" +
 	"\n" +
@@ -185,7 +188,7 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"*Memory.* Under `copy-on-write` the whole new-row batch is materialised in memory as a single Arrow record while the batch commits, so a keyed batch's memory scales with its total row bytes. Size keyed batches to stay within the process memory budget rather than making them arbitrarily large.\n" +
 	"\n" +
-	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Run regular table maintenance: compaction (rewrite / bin-pack data files), snapshot expiry, and orphan-file removal. Orphan-file removal matters specifically for commits that fail *ambiguously* (the catalog may or may not have recorded them): the connector deliberately never deletes those attempts' newly-written data files, because the commit may still land and reference them; they are left for orphan-file removal to reclaim. The connector's own best-effort cleanup covers only commits whose failure was a definitive catalog rejection (and superseded attempts of a retried success). Setting `commit.cleanup_on_failure` to `false` turns that connector-side cleanup off altogether, on every write path, which makes periodic orphan-file removal mandatory rather than merely advisable.\n" +
+	"*Maintenance.* Because every mutating batch rewrites files and adds a snapshot, a high-churn `copy-on-write` workload accumulates data files and snapshots quickly. Set `commit.max_snapshot_age` so this output expires old snapshots itself. Run compaction (rewrite / bin-pack data files) and orphan-file removal regularly. Orphan-file removal matters specifically for commits that fail *ambiguously* (the catalog may or may not have recorded them): the connector deliberately never deletes those attempts' newly-written data files, because the commit may still land and reference them; they are left for orphan-file removal to reclaim. The connector's own best-effort cleanup covers only commits whose failure was a definitive catalog rejection (and superseded attempts of a retried success). Setting `commit.cleanup_on_failure` to `false` turns that connector-side cleanup off altogether, on every write path, which makes periodic orphan-file removal mandatory rather than merely advisable.\n" +
 	"\n" +
 	"*Commit retries.* Leave the standard Iceberg table property `commit.retry.num-retries` at its default `0` on tables this output writes to. The output's own commit retry (`commit.max_retries`) re-stages every attempt from a freshly reloaded table snapshot, which is safe under concurrent writers; the library-level replay a non-zero `commit.retry.num-retries` arms instead re-submits the original updates built against a now-stale snapshot, and under concurrent writers that replay can drop a peer commit's files from the table state. The output logs a warning when it finds the property armed on a table it writes to.\n" +
 	"\n" +
@@ -249,6 +252,15 @@ To use with AWS Glue Data Catalog:
 * Set `+"`schema_evolution.table_location`"+` to an S3 prefix (for example, `+"`s3://my-bucket/`"+`; a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
+* Set `+"`commit.max_snapshot_age`"+` on tables this output appends to for long. Glue rejects every commit to a table whose metadata exceeds its size limit, and a table that has hit it cannot be repaired in place. If the table's snapshot retention optimizer is enabled in Glue, leave the field unset instead. Glue then expires snapshots and deletes their files; expiry by this output would remove the snapshots first and leave the files as orphans.
+
+=== Databricks Unity Catalog
+
+Unity Catalog manages snapshot expiry itself and does not let external Iceberg clients expire snapshots. Leave `+"`commit.max_snapshot_age`"+` unset, or every maintenance pass logs a rejected attempt. Use `+"`merge_strategy: copy-on-write`"+` so Databricks can read the table (see <<merge-strategies,Merge strategies>>).
+
+=== Amazon S3 Tables
+
+S3 Tables manages snapshots itself and its Iceberg REST endpoint supports only standard table metadata operations. Leave `+"`commit.max_snapshot_age`"+` unset and snapshot management to S3 Tables.
 
 [[storage-overview]]
 == Storage
@@ -515,8 +527,21 @@ See the Row-level operations section above for the full constraints, including t
 					Description("Merge small manifest files during commits to reduce metadata overhead.").
 					Default(true),
 				service.NewDurationField(ioFieldMaxSnapshotAge).
-					Description("Maximum age of snapshots to retain for time-travel queries. Set to zero to disable removing old snapshots.").
-					Default("24h"),
+					Description("Snapshots older than this are expired from the table metadata. Zero, the default, keeps every snapshot, so expiry is opt-in. Before version 4.119.0 this field had no effect and a pipeline that set it kept every snapshot regardless. From 4.119.0 a set age takes effect from the first commit after upgrade. Time-travel queries to snapshots older than this age stop working for every engine that reads the table. An incremental reader whose checkpoint refers to an expired snapshot cannot resume from it.\n\nExpiry keeps the metadata file bounded on a continuously appending table. Some catalogs, such as AWS Glue, reject every commit once that file exceeds a size limit. A table that has hit such a limit cannot be repaired in place, so set an age on any table this output appends to for long. `24h` is a reasonable starting point; Iceberg's own default for `history.expire.max-snapshot-age-ms` is `120h`. A table that commits often needs a shorter age, so that the retained snapshots stay under the catalog's metadata size limit. In this version the expiry walk also grows with the square of the retained snapshot count, and it runs while the data commit that triggered the pass waits, so a shorter age keeps that wait short.\n\nExpiry runs as its own commit after a data commit lands, at most once every `maintenance_interval` per table. The first commit after startup runs a pass straight away. Data commits never carry it. That one data commit per interval waits for the extra round trip, and for the retries if the expiry commit conflicts with another writer. The expiry commit asserts the position of every ref on the table. Where another writer moves branches or tags concurrently it can conflict, and is attempted up to `max_retries` times before waiting for the next interval. A failed expiry commit is logged and retried at the next interval. Failures are counted in `iceberg_table_maintenance_failures_total{operation=\"expire_snapshots\"}`. The `iceberg_retained_snapshots{table=\"<namespace.table>\"}` gauge reports each table's snapshot count after each pass, one series per table this output writes, so growth can be alerted on before a catalog limit is reached.\n\nCatalogs that manage snapshots themselves should keep doing so. Databricks Unity Catalog does not let external clients expire snapshots, and Amazon S3 Tables manages snapshots itself. On those, leave this field at zero, or every pass logs a rejected attempt. When AWS Glue's snapshot retention optimizer is enabled, let it own expiry too: it deletes the expired files, and expiry here would remove the snapshots first and leave the files as orphans.\n\nThe current snapshot is always retained. Like Iceberg's `expire_snapshots` procedure, the expiry is table-wide. Other branches are expired by their own retention properties where set, and by this age otherwise. A tag or branch whose own `max-ref-age-ms` has elapsed is removed. A ref that pins a snapshot keeps it. A table that already carries the `history.expire.max-snapshot-age-ms` property (for example one created by Spark) keeps that retention instead of this age, and the mismatch is logged once.\n\nExpiry removes the snapshots from metadata only. The data, manifest and manifest-list files that only they referenced stay on storage. Iceberg orphan-file maintenance (for example `remove_orphan_files`) reclaims them.\n\nZero skips expiry entirely, also on tables with their own retention property. Values between zero and one minute are rejected at startup. With several writers, a short age lets another writer expire a snapshot this output has not yet confirmed landed. The rows would then be written again.").
+					ShortDescription("Expire snapshots older than this in a maintenance commit after data commits. Zero, the default, keeps every snapshot.").
+					Default("0s").
+					// Below a minute, another writer's expiry can remove a snapshot
+					// this output has not yet confirmed landed (an ambiguous commit
+					// is confirmed by finding its token on reload), and the rows
+					// would be written again.
+					LintRule(`root = if this.parse_duration().catch(0) != 0 && this.parse_duration().catch(0) < `+strconv.FormatInt(int64(minSnapshotAge), 10)+` { [ "`+ioFieldMaxSnapshotAge+` must be zero or at least 1m" ] }`),
+				service.NewDurationField(ioFieldMaintenanceInterval).
+					Description("How often the table-maintenance pass may run per table. The pass runs as its own commit after a data commit lands. It covers snapshot expiry (`max_snapshot_age`). The data commit that falls due for a pass waits for the extra round trip, and for the retries if the maintenance commit conflicts with another writer. A pass with nothing to do makes no catalog call. A shorter interval expires snapshots sooner on a table with a high commit rate. A longer one reduces the extra round trips, and the conflicts on a table with several writers. The value must be a positive duration.").
+					ShortDescription("How often the maintenance pass (snapshot expiry) may run per table, as its own commit after a data commit.").
+					Default("10m").
+					Version("4.119.0").
+					Advanced().
+					LintRule(`root = if this.parse_duration().catch(0) <= 0 { [ "`+ioFieldMaintenanceInterval+` must be a positive duration" ] }`),
 				service.NewIntField(ioFieldMaxCommitRetries).
 					Description("Maximum number of times to retry a failed transaction commit.").
 					Default(3).
@@ -525,7 +550,7 @@ See the Row-level operations section above for the full constraints, including t
 					// attempt the commit at all. Require >= 1.
 					LintRule(`root = if this < 1 { [ "max_retries must be at least 1" ] }`),
 				service.NewBoolField(ioFieldCleanupOnFailure).
-					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. The same sweep reclaims the superseded files of earlier attempts when a `copy-on-write` commit succeeds on retry (each attempt re-stages fresh rewrites). This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous, since such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table. Those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (snapshot expiry plus `remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").Version("4.105.0").
+					Description("Whether to remove the files a failed commit had already written. A commit's data files (and, under `merge-on-read`, its equality-delete files) are written to storage before the catalog commit, so a failed commit leaves them referenced by no snapshot; the default `true` removes them best-effort to limit orphaned objects. The same sweep reclaims the superseded files of earlier attempts when a `copy-on-write` commit succeeds on retry (each attempt re-stages fresh rewrites). This applies to every write path: append, `merge-on-read`, and `copy-on-write`.\n\nCleanup is already skipped automatically whenever a commit's outcome is ambiguous, since such a commit may still land server-side, and deleting files a landed snapshot references would corrupt the table. Those leftovers are always deferred to table maintenance regardless of this setting.\n\nSetting this to `false` disables cleanup entirely, as a safety valve: writes then never delete anything, and every failed commit leaves its files orphaned in storage for Iceberg orphan-file maintenance (`remove_orphan_files`) to reclaim. See the <<merge-strategies,Merge strategies>> section above for that maintenance guidance.").Version("4.105.0").
 					ShortDescription("Remove the files a failed commit had already written, and a retried commit's superseded earlier attempts. Disabling it leaves them orphaned for table maintenance to reclaim.").
 					Default(true).
 					Advanced(),
