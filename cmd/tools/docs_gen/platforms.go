@@ -444,14 +444,15 @@ func bloblangRegisterKind(fn string) (string, bool) {
 // bloblangSpecCtor recognizes the constructors benthos's internal query
 // package builds its Bloblang specs with, returning the kind and the index of
 // the name argument: NewFunctionSpec(category, name, ...) and
-// NewMethodSpec(name, ...), with their Deprecated and Hidden variants.
+// NewMethodSpec(name, ...), with their Deprecated and Hidden variants, which
+// all take the name first.
 func bloblangSpecCtor(fn string) (kind string, nameArg int, ok bool) {
-	fn = strings.TrimPrefix(fn, "New")
-	fn = strings.TrimPrefix(strings.TrimPrefix(fn, "Deprecated"), "Hidden")
 	switch fn {
-	case "FunctionSpec":
+	case "NewFunctionSpec":
 		return "function", 1, true
-	case "MethodSpec":
+	case "NewDeprecatedFunctionSpec", "NewHiddenFunctionSpec":
+		return "function", 0, true
+	case "NewMethodSpec", "NewDeprecatedMethodSpec", "NewHiddenMethodSpec":
 		return "method", 0, true
 	}
 	return "", 0, false

@@ -388,7 +388,8 @@ func init() { service.MustRegisterBatchOutput(outName, nil, nil) }`)
 	registerFunction(NewFunctionSpec(FunctionCategoryMessage, "batch_index", "x"))
 	registerMethod(NewMethodSpec("abs", "x"))
 	registerMethod(NewDeprecatedMethodSpec("old", "x"))
-	registerFunction(NewHiddenFunctionSpec(FunctionCategoryMessage, "hidden", "x"))
+	registerFunction(NewDeprecatedFunctionSpec("count", "x"))
+	registerFunction(NewHiddenFunctionSpec("hidden"))
 }`)
 	unreadable := write("d.go", `func init() {
 	for _, name := range []string{"floor", "ceil"} {
@@ -405,7 +406,7 @@ func init() { service.MustRegisterBatchOutput(outName, nil, nil) }`)
 		"bloblang-methods/compress", "bloblang-functions/uuid_v4", "bloblang-functions/fake", "bloblang-methods/decompress",
 	}, fileSources(bloblang, files, fset))
 	assert.Equal(t, []string{
-		"bloblang-functions/batch_index", "bloblang-methods/abs", "bloblang-methods/old", "bloblang-functions/hidden",
+		"bloblang-functions/batch_index", "bloblang-methods/abs", "bloblang-methods/old", "bloblang-functions/count", "bloblang-functions/hidden",
 	}, fileSources(core, files, fset), "benthos's internal spec constructors count as registrations")
 	assert.Empty(t, fileSources(unreadable, files, fset), "names the scan can't read are skipped, not errors")
 }
