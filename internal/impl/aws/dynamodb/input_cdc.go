@@ -273,18 +273,18 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Advanced(),
 			service.NewDurationField(dciFieldCheckpointRetryInitial).
 				Description("Time to wait before retrying a failed checkpoint write. The wait doubles after each consecutive failure, up to `checkpoint_retry_max_interval`, and resets after a successful write.").
-				ShortDescription("Time to wait before retrying a failed checkpoint write. Doubles on each consecutive failure.").
+				ShortDescription("Time to wait before retrying a failed checkpoint write, doubling on each consecutive failure.").
 				Default("1s").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_initial_interval must be greater than 0"] }`).
 				Advanced().
-				Version("4.116.0"),
+				Version("4.119.0"),
 			service.NewDurationField(dciFieldCheckpointRetryMax).
 				Description("Maximum time to wait between retries of a failed checkpoint write. While the checkpoint table keeps failing, acknowledged positions and closed shards' completion markers stay unpersisted for up to this long between attempts.").
 				ShortDescription("Maximum time to wait between retries of a failed checkpoint write.").
 				Default("30s").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_max_interval must be greater than 0"] }`).
 				Advanced().
-				Version("4.116.0"),
+				Version("4.119.0"),
 			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
