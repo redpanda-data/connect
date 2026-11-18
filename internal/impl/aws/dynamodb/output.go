@@ -336,6 +336,70 @@ func jsonToMap(path string, root any) (types.AttributeValue, error) {
 	return anyToAttributeValue(gObj.Data()), nil
 }
 
+// buildItem converts a single message of a batch into the DynamoDB item that
+// represents it, applying the configured TTL, string columns and JSON map
+// columns.
+func (d *dynamoDBWriter) buildItem(b service.MessageBatch, i int, p *service.Message) (map[string]types.AttributeValue, error) {
+	items := map[string]types.AttributeValue{}
+	if d.ttl != 0 && d.conf.TTLKey != "" {
+		items[d.conf.TTLKey] = &types.AttributeValueMemberN{
+			Value: strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10),
+		}
+	}
+	for k, v := range d.conf.StringColumns {
+		s, err := b.TryInterpolatedString(i, v)
+		if err != nil {
+			return nil, fmt.Errorf("string column %v interpolation error: %w", k, err)
+		}
+		items[k] = &types.AttributeValueMemberS{
+			Value: s,
+		}
+	}
+	if len(d.conf.JSONMapColumns) > 0 {
+		jRoot, err := p.AsStructured()
+		if err != nil {
+			d.log.Errorf("Failed to extract JSON maps from document: %v", err)
+			return nil, err
+		}
+		for k, v := range d.conf.JSONMapColumns {
+			attr, err := jsonToMap(v, jRoot)
+			if err != nil {
+				d.log.Warnf("Unable to extract JSON map path '%v' from document: %v", v, err)
+				return nil, err
+			}
+			if k == "" {
+				if mv, ok := attr.(*types.AttributeValueMemberM); ok {
+					maps.Copy(items, mv.Value)
+					continue
+				}
+			}
+			items[k] = attr
+		}
+	}
+	return items, nil
+}
+
+// buildFailure records a message of a batch that could not be converted into
+// a DynamoDB item, and therefore was never sent.
+type buildFailure struct {
+	index int
+	err   error
+}
+
+// newBatchError returns a batch error for b with the given headline that
+// already marks every message that failed to build as failed. Messages that
+// could not be built must be marked failed on every error returned from
+// WriteBatch, otherwise a batch error that only names the messages that failed
+// to write would report them as delivered and they would be acknowledged
+// without ever reaching DynamoDB.
+func newBatchError(b service.MessageBatch, headline error, buildFailures []buildFailure) *service.BatchError {
+	batchErr := service.NewBatchError(b, headline)
+	for _, f := range buildFailures {
+		batchErr.Failed(f.index, f.err)
+	}
+	return batchErr
+}
+
 func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch) error {
 	if d.client == nil {
 		return service.ErrNotConnected
@@ -347,54 +411,38 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 		d.boffPool.Put(boff)
 	}()
 
-	writeReqs := []types.WriteRequest{}
-	if err := b.WalkWithBatchedErrors(func(i int, p *service.Message) error {
-		items := map[string]types.AttributeValue{}
-		if d.ttl != 0 && d.conf.TTLKey != "" {
-			items[d.conf.TTLKey] = &types.AttributeValueMemberN{
-				Value: strconv.FormatInt(time.Now().Add(d.ttl).Unix(), 10),
-			}
-		}
-		for k, v := range d.conf.StringColumns {
-			s, err := b.TryInterpolatedString(i, v)
-			if err != nil {
-				return fmt.Errorf("string column %v interpolation error: %w", k, err)
-			}
-			items[k] = &types.AttributeValueMemberS{
-				Value: s,
-			}
-		}
-		if len(d.conf.JSONMapColumns) > 0 {
-			jRoot, err := p.AsStructured()
-			if err != nil {
-				d.log.Errorf("Failed to extract JSON maps from document: %v", err)
-				return err
-			}
-			for k, v := range d.conf.JSONMapColumns {
-				if attr, err := jsonToMap(v, jRoot); err == nil {
-					if k == "" {
-						if mv, ok := attr.(*types.AttributeValueMemberM); ok {
-							maps.Copy(items, mv.Value)
-						} else {
-							items[k] = attr
-						}
-					} else {
-						items[k] = attr
-					}
-				} else {
-					d.log.Warnf("Unable to extract JSON map path '%v' from document: %v", v, err)
-					return err
-				}
-			}
+	// A message that cannot be built into an item must not prevent the rest
+	// of the batch from being written, and must not be reported as delivered
+	// either. Build failures are therefore collected here and merged into
+	// whatever error the write phase produces, while the requests that did
+	// build are sent as usual. reqIndexes maps each write request back to the
+	// index of its message within b.
+	var buildFailures []buildFailure
+	writeReqs := make([]types.WriteRequest, 0, len(b))
+	reqIndexes := make([]int, 0, len(b))
+	for i, p := range b {
+		item, err := d.buildItem(b, i, p)
+		if err != nil {
+			buildFailures = append(buildFailures, buildFailure{index: i, err: err})
+			continue
 		}
 		writeReqs = append(writeReqs, types.WriteRequest{
 			PutRequest: &types.PutRequest{
-				Item: items,
+				Item: item,
 			},
 		})
-		return nil
-	}); err != nil {
-		return err
+		reqIndexes = append(reqIndexes, i)
+	}
+
+	// buildErr is the error to return when every request that was sent
+	// succeeded: nil when everything built, otherwise a batch error that
+	// marks only the messages that failed to build.
+	var buildErr error
+	if len(buildFailures) > 0 {
+		buildErr = newBatchError(b, buildFailures[0].err, buildFailures)
+	}
+	if len(writeReqs) == 0 {
+		return buildErr
 	}
 
 	batchResult, err := d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
@@ -405,10 +453,14 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 	if err != nil {
 		headlineErr := err
 
-		// None of the messages were successful, attempt to send individually
-	individualRequestsLoop:
-		for err != nil {
-			batchErr := service.NewBatchError(b, headlineErr)
+		// None of the messages were successful, attempt to send individually.
+		// Each round reports the messages that still failed to write, on top
+		// of those that failed to build. If the retries run out midway the
+		// error of the previous round is returned, which covers every request
+		// still pending and is therefore safe to use for acknowledgements.
+		for {
+			batchErr := newBatchError(b, headlineErr, buildFailures)
+			putFailures := 0
 			for i, req := range writeReqs {
 				if req.PutRequest == nil {
 					continue
@@ -420,25 +472,24 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 					d.log.Errorf("Put error: %v\n", iErr)
 					wait := boff.NextBackOff()
 					if wait == backoff.Stop {
-						break individualRequestsLoop
+						return err
 					}
 					select {
 					case <-time.After(wait):
 					case <-ctx.Done():
-						break individualRequestsLoop
+						return err
 					}
-					batchErr.Failed(i, iErr)
+					putFailures++
+					batchErr.Failed(reqIndexes[i], iErr)
 				} else {
 					writeReqs[i].PutRequest = nil
 				}
 			}
-			if batchErr.IndexedErrors() == 0 {
-				err = nil
-			} else {
-				err = batchErr
+			if putFailures == 0 {
+				return buildErr
 			}
+			err = batchErr
 		}
-		return err
 	}
 
 	unproc := batchResult.UnprocessedItems[*d.table]
@@ -472,7 +523,13 @@ unprocessedLoop:
 			err = errors.New("ran out of request retries")
 		}
 	}
-	return err
+	if err != nil {
+		// Some items were never written and cannot be matched back to their
+		// messages, so the whole batch is failed; this also covers the
+		// messages that failed to build.
+		return err
+	}
+	return buildErr
 }
 
 func (*dynamoDBWriter) Close(context.Context) error {

@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 // Options represents model options for Ollama
@@ -167,7 +169,7 @@ func ClientFromEnvironment() (*Client, error) {
 	if host == "" {
 		host = "http://127.0.0.1:11434"
 	}
-	u, err := url.Parse(host)
+	u, err := redact.ParseURL(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid OLLAMA_HOST: %w", err)
 	}

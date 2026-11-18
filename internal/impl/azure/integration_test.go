@@ -17,6 +17,7 @@ package azure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -35,6 +36,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -479,14 +481,73 @@ input:
 			integration.StreamTestOptVarSet("VAR2", connString),
 		)
 	})
+
+	t.Run("queue_storage_nack_redelivers", func(t *testing.T) {
+		queueName := "nack-" + strings.ToLower(uuid.Must(uuid.NewV4()).String())
+
+		serviceClient, err := azqueue.NewServiceClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		queueClient := serviceClient.NewQueueClient(queueName)
+		_, err = queueClient.Create(t.Context(), nil)
+		require.NoError(t, err)
+		_, err = queueClient.EnqueueMessage(t.Context(), "retry-me", nil)
+		require.NoError(t, err)
+
+		sb := service.NewStreamBuilder()
+		// A visibility timeout far longer than the wait below makes the reset the
+		// only way the rejected message can come back in time.
+		require.NoError(t, sb.AddInputYAML(fmt.Sprintf(`
+azure_queue_storage:
+  queue_name: %s
+  storage_connection_string: %s
+  dequeue_visibility_timeout: 5m
+`, queueName, connString)))
+		require.NoError(t, sb.SetLoggerYAML(`level: OFF`))
+
+		var deliveries atomic.Int32
+		redelivered := make(chan struct{})
+		require.NoError(t, sb.AddConsumerFunc(func(context.Context, *service.Message) error {
+			switch deliveries.Add(1) {
+			case 1:
+				// Reject the first delivery: the message must come back.
+				return errors.New("simulated processing failure")
+			case 2:
+				close(redelivered)
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		streamDone := make(chan error, 1)
+		go func() { streamDone <- stream.Run(t.Context()) }()
+
+		select {
+		case <-redelivered:
+		case <-time.After(30 * time.Second):
+			t.Fatal("rejected message was not redelivered")
+		}
+
+		// The acknowledged redelivery must have removed the message from the queue.
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			peek, err := queueClient.PeekMessage(t.Context(), nil)
+			require.NoError(c, err)
+			assert.Empty(c, peek.Messages)
+		}, 10*time.Second, 100*time.Millisecond)
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+		require.NoError(t, <-streamDone)
+		assert.Equal(t, int32(2), deliveries.Load())
+	})
 }
 
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cosmosStartupTimeout := 30 * time.Second
+	// The wait stops before the package timeout, so that the test can log why the emulator is not ready.
+	cosmosStartupTimeout := 2 * time.Minute
 	if deadline, ok := t.Deadline(); ok {
-		cosmosStartupTimeout = time.Until(deadline) - 100*time.Millisecond
+		cosmosStartupTimeout = min(cosmosStartupTimeout, time.Until(deadline)-100*time.Millisecond)
 	}
 
 	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
@@ -500,8 +561,12 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			// the container's internal Docker bridge IP (e.g. 172.17.0.x).
 			"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
 		}),
-		testcontainers.WithWaitStrategy(
+		// The emulator accepts connections and serves its certificate before all partitions are up. Requests sent
+		// before that can fail with 408 Request Timeout. A bare "Started" line follows "Started N/N partitions".
+		// WithWaitStrategy would limit the wait to 60s.
+		testcontainers.WithWaitStrategyAndDeadline(cosmosStartupTimeout,
 			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
+			wait.ForLog(`(?m)^Started\r?$`).AsRegexp().WithStartupTimeout(cosmosStartupTimeout),
 		),
 	)
 	testcontainers.CleanupContainer(t, cosmosCtr)
@@ -547,6 +612,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
 
+	// The emulator serves its certificate when it logs "Started", so this check does not need the startup timeout.
 	require.Eventually(t, func() bool {
 		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
 		if err != nil {
@@ -562,7 +628,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			return false
 		}
 		return len(body) > 0
-	}, cosmosStartupTimeout, time.Second, "Failed to start CosmosDB emulator")
+	}, 30*time.Second, time.Second, "Failed to start CosmosDB emulator")
 
 	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dummyDatabase := "Asgard"

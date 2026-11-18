@@ -281,16 +281,16 @@ func TestGRPCInput(t *testing.T) {
 
 				logger := lp.Logger("grpc-test-service")
 				record := log.Record{}
-				record.SetBody(log.StringValue("Test log message from grpc-test-service"))
+				record.SetBody(attribute.StringValue("Test log message from grpc-test-service"))
 				record.SetSeverity(log.SeverityInfo)
 				record.SetSeverityText("INFO")
 				record.AddAttributes(
-					log.String("http.method", "POST"),
-					log.String("http.url", "/api/users"),
-					log.Int("http.status_code", 200),
-					log.String("user.id", "12345"),
-					log.String("request.id", "req-abc-123"),
-					log.Float64("response.time_ms", 45.67),
+					attribute.String("http.method", "POST"),
+					attribute.String("http.url", "/api/users"),
+					attribute.Int("http.status_code", 200),
+					attribute.String("user.id", "12345"),
+					attribute.String("request.id", "req-abc-123"),
+					attribute.Float64("response.time_ms", 45.67),
 				)
 				logger.Emit(ctx, record)
 

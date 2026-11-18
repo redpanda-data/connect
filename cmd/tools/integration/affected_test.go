@@ -144,20 +144,10 @@ func TestWriteAffected(t *testing.T) {
 	}
 
 	var out, log bytes.Buffer
-	assert.NoError(t, writeAffected(&out, &log, res, 10))
-	assert.Equal(t, "affected=./internal/impl/kafka ./internal/impl/redis\n"+
-		"filters=./internal/impl/kafka ./internal/impl/redis\n"+
-		"budget_exceeded=false\n", out.String())
-
-	// ./internal/impl/kafka also selects ./internal/impl/kafka/enterprise, so
-	// these two filters select three packages.
-	out.Reset()
-	assert.NoError(t, writeAffected(&out, &log, res, 2))
-	assert.Equal(t, "affected=./internal/impl/kafka ./internal/impl/redis\n"+
-		"filters=\n"+
-		"budget_exceeded=true\n", out.String())
+	assert.NoError(t, writeAffected(&out, &log, res))
+	assert.Equal(t, "filters=./internal/impl/kafka ./internal/impl/redis\n", out.String())
 
 	out.Reset()
-	assert.NoError(t, writeAffected(&out, &log, affectedResult{}, 2))
-	assert.Equal(t, "affected=\nfilters=\nbudget_exceeded=false\n", out.String())
+	assert.NoError(t, writeAffected(&out, &log, affectedResult{}))
+	assert.Equal(t, "filters=\n", out.String())
 }

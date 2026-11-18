@@ -137,7 +137,7 @@ func TestCOWOverwriteStripsProhibitedKeys(t *testing.T) {
 	// Append does not auto-set a name mapping, mirroring a UC-created table),
 	// then wraps it in the prohibiting catalog so only the mutation under test
 	// is subject to key enforcement.
-	setup := func(t *testing.T, prohibited ...string) (*prohibitingCatalog, *writer, *lockedBuffer) {
+	setup := func(t *testing.T, maxRetries int, prohibited ...string) (*prohibitingCatalog, *writer, *lockedBuffer) {
 		ctx := t.Context()
 		seedTbl, mem := newCOWTable(t, sc)
 		_ = appendCOWRows(t, ctx, seedTbl, map[int64]string{1: "one", 2: "two", 3: "three"})
@@ -146,7 +146,7 @@ func TestCOWOverwriteStripsProhibitedKeys(t *testing.T) {
 
 		cat := &prohibitingCatalog{memCatalog: mem, prohibited: prohibited}
 		var buf lockedBuffer
-		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: 3},
+		comm, err := NewCommitter(cat.snapshot(), cat, CommitConfig{MaxRetries: maxRetries},
 			func(context.Context) (*table.Table, error) { return cat.snapshot(), nil }, capturedLogger(&buf))
 		require.NoError(t, err)
 		t.Cleanup(comm.Close)
@@ -162,7 +162,7 @@ func TestCOWOverwriteStripsProhibitedKeys(t *testing.T) {
 
 	t.Run("name mapping stripped after live UC rejection", func(t *testing.T) {
 		ctx := t.Context()
-		cat, w, buf := setup(t, "schema.name-mapping.default")
+		cat, w, buf := setup(t, 3, "schema.name-mapping.default")
 
 		require.NoError(t, w.Write(ctx, upsert()), "the overwrite must succeed once the prohibited key is stripped")
 
@@ -188,7 +188,7 @@ func TestCOWOverwriteStripsProhibitedKeys(t *testing.T) {
 	// multi-key rejection must strip every named key in one retry.
 	t.Run("multi-key rejection stripped in one retry", func(t *testing.T) {
 		ctx := t.Context()
-		cat, w, _ := setup(t, "write.delete.mode", "schema.name-mapping.default")
+		cat, w, _ := setup(t, 3, "write.delete.mode", "schema.name-mapping.default")
 
 		require.NoError(t, w.Write(ctx, upsert()))
 
@@ -200,6 +200,20 @@ func TestCOWOverwriteStripsProhibitedKeys(t *testing.T) {
 		props := cat.snapshot().Properties()
 		assert.NotContains(t, props, "schema.name-mapping.default")
 		assert.NotContains(t, props, table.WriteDeleteModeKey)
+	})
+
+	// With max_retries: 1, the stripped commit must still run, or every write
+	// to the table fails.
+	t.Run("stripped retry does not spend max_retries", func(t *testing.T) {
+		ctx := t.Context()
+		cat, w, _ := setup(t, 1, "schema.name-mapping.default")
+
+		require.NoError(t, w.Write(ctx, upsert()), "the stripped retry must run although max_retries is 1")
+
+		assert.Equal(t, 1, cat.rejections)
+		assert.Equal(t, 2, cat.commits, "one rejection, then the stripped retry lands")
+		assert.Equal(t, 1, countSnapshotsWithCommitID(cat.snapshot()), "mutation applied exactly once")
+		assert.Equal(t, want, scanRows(t, ctx, cat.snapshot()))
 	})
 }
 

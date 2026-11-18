@@ -16,8 +16,8 @@
 //
 // Usage:
 //
-//	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [filter...]
-//	git diff --name-only <base>...HEAD | go run ./cmd/tools/integration affected [--max-packages 20]
+//	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [--parallel n] [filter...]
+//	git diff --name-only <base>...HEAD | go run ./cmd/tools/integration affected
 package main
 
 import (
@@ -66,6 +66,7 @@ func printUsage() {
 	log.Println("  --race           Enable race detector (requires CGO_ENABLED=1)")
 	log.Println("  --unit           Run all tests, not just integration tests")
 	log.Println("  --cover-profile  Generate coverage profile per package (.cov files)")
+	log.Println("  --parallel       Number of packages to test at the same time (default: 1)")
 	log.Println("")
 	log.Println("Positional arguments are package filters (substring match).")
 	log.Println("Example: integration run kafka redis")

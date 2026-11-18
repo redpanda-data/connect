@@ -30,6 +30,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/oauth2"
@@ -256,7 +257,7 @@ func (o *grpcOTLPOutput) Connect(_ context.Context) error {
 	// Establish connection
 	conn, err := grpc.NewClient(o.conf.Endpoint, opts...)
 	if err != nil {
-		return fmt.Errorf("create gRPC client: %w", err)
+		return fmt.Errorf("create gRPC client: %w", redact.Error(err, redact.Conns(o.conf.Endpoint)))
 	}
 
 	o.conn = conn
@@ -264,7 +265,7 @@ func (o *grpcOTLPOutput) Connect(_ context.Context) error {
 	o.logClient = plogotlp.NewGRPCClient(conn)
 	o.metricClient = pmetricotlp.NewGRPCClient(conn)
 
-	o.log.Infof("Connected to OTLP gRPC endpoint: %s", o.conf.Endpoint)
+	o.log.Infof("Connected to OTLP gRPC endpoint: %s", redact.String(o.conf.Endpoint))
 	return nil
 }
 

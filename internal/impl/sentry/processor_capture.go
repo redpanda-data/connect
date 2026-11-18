@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -201,7 +202,7 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 
 	client, err := sentry.NewClient(*clientOptions)
 	if err != nil {
-		return nil, fmt.Errorf("creating sentry client: %w", err)
+		return nil, fmt.Errorf("creating sentry client: %w", redact.Error(err, redact.Conns(dsn)))
 	}
 
 	version := mgr.EngineVersion()
