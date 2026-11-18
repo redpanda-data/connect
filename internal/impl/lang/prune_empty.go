@@ -58,7 +58,7 @@ root.payload = this.payload.prune_empty()`,
 				`{"key":null,"payload":{"a":1,"b":null,"c":[]}}`,
 				`{"key":null,"payload":{"a":1}}`,
 			}).
-		Example("Keep the value at one path. Assign it again after the prune, which also creates the parent objects that were removed",
+		Example("Keep an empty value at one path",
 			`root = this.prune_empty()
 root.meta.flags = this.meta.flags`,
 			[2]string{
