@@ -44,9 +44,9 @@ type hostInfo struct {
 	// OS we're running on
 	GoOS string `json:"goOS"`
 
-	// CPULimit is the container CPU limit in cores (cgroup CFS quota / period),
-	// e.g. 0.3. Omitted when unlimited or not detectable.
-	CPULimit *float64 `json:"cpuLimit,omitempty"`
+	// CPULimitMillis is the container CPU limit in millicores (cgroup CFS
+	// quota * 1000 / period), e.g. 300. Omitted when unlimited or not detectable.
+	CPULimitMillis *int64 `json:"cpuLimitMillis,omitempty"`
 
 	// MemoryLimitBytes is the container memory limit from the cgroup. Omitted
 	// when unlimited or not detectable.
@@ -85,7 +85,7 @@ type payload struct {
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
 func extractPayload(id Identity, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
-	limits := detectContainerLimits()
+	limits := detectContainerLimits(logger)
 	p := payload{
 		ID:             id.InstanceID,
 		Uptime:         0,
@@ -98,7 +98,7 @@ func extractPayload(id Identity, logger *service.Logger, schema *service.ConfigS
 			GoOS:       runtime.GOOS,
 			GoArch:     runtime.GOARCH,
 
-			CPULimit:         limits.CPUCores,
+			CPULimitMillis:   limits.CPUMillis,
 			MemoryLimitBytes: limits.MemoryBytes,
 		},
 	}

@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -36,6 +38,8 @@ const (
 
 	cgroupUnlimited = "max"
 
+	millicoresPerCore = int64(1000)
+
 	// Kernel default CFS period (microseconds), used if cpu.max omits it.
 	cgroupDefaultCPUPeriodUs = int64(100000)
 
@@ -47,40 +51,51 @@ const (
 // containerLimits holds the enforced container resource limits. A nil field
 // means the limit is unlimited or could not be detected.
 type containerLimits struct {
-	// CPUCores is the CFS quota divided by the period, e.g. 0.3.
-	CPUCores *float64
+	// CPUMillis is the CFS quota in millicores (quota * 1000 / period), e.g.
+	// 300. Integer math avoids float rounding errors.
+	CPUMillis *int64
 	// MemoryBytes is the cgroup memory limit.
 	MemoryBytes *int64
 }
 
 // detectContainerLimits reads cgroup limits from the host's cgroup root. On
-// non-Linux platforms it returns empty limits.
-func detectContainerLimits() containerLimits {
+// non-Linux platforms it returns empty limits. The logger may be nil.
+func detectContainerLimits(logger *service.Logger) containerLimits {
 	if runtime.GOOS != "linux" {
 		return containerLimits{}
 	}
-	return readContainerLimits(os.DirFS(cgroupRootDir))
+	return readContainerLimits(os.DirFS(cgroupRootDir), logger)
 }
 
-// readContainerLimits parses cgroup v2 files, falling back to v1, from the
-// given filesystem rooted at the cgroup mount. Errors yield absent fields.
-func readContainerLimits(fsys fs.FS) containerLimits {
+// readContainerLimits parses cgroup v2 files, falling back to v1 only when the
+// v2 file is missing, from the given filesystem rooted at the cgroup mount.
+// Errors yield absent fields, and any error other than a missing file is logged
+// at debug level. The logger may be nil.
+func readContainerLimits(fsys fs.FS, logger *service.Logger) containerLimits {
 	var l containerLimits
 
-	if cores, err := readCPUV2(fsys); err == nil {
-		l.CPUCores = cores
-	} else if errors.Is(err, fs.ErrNotExist) {
-		if cores, err := readCPUV1(fsys); err == nil {
-			l.CPUCores = cores
+	millis, err := readCPUV2(fsys)
+	if errors.Is(err, fs.ErrNotExist) {
+		millis, err = readCPUV1(fsys)
+	}
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			logger.With("error", err).Debug("Failed to read container CPU limit")
 		}
+	} else {
+		l.CPUMillis = millis
 	}
 
-	if mem, err := readMemoryV2(fsys); err == nil {
-		l.MemoryBytes = mem
-	} else if errors.Is(err, fs.ErrNotExist) {
-		if mem, err := readMemoryV1(fsys); err == nil {
-			l.MemoryBytes = mem
+	mem, err := readMemoryV2(fsys)
+	if errors.Is(err, fs.ErrNotExist) {
+		mem, err = readMemoryV1(fsys)
+	}
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			logger.With("error", err).Debug("Failed to read container memory limit")
 		}
+	} else {
+		l.MemoryBytes = mem
 	}
 	return l
 }
@@ -93,7 +108,7 @@ func readTrimmed(fsys fs.FS, name string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
-func readCPUV2(fsys fs.FS) (*float64, error) {
+func readCPUV2(fsys fs.FS) (*int64, error) {
 	s, err := readTrimmed(fsys, cgroupV2CPUMax)
 	if err != nil {
 		return nil, err
@@ -115,10 +130,10 @@ func readCPUV2(fsys fs.FS) (*float64, error) {
 			return nil, fmt.Errorf("parsing cpu.max period: %w", err)
 		}
 	}
-	return cpuCores(quota, period)
+	return cpuMillis(quota, period)
 }
 
-func readCPUV1(fsys fs.FS) (*float64, error) {
+func readCPUV1(fsys fs.FS) (*int64, error) {
 	qs, err := readTrimmed(fsys, cgroupV1CPUQuota)
 	if err != nil {
 		return nil, err
@@ -138,15 +153,15 @@ func readCPUV1(fsys fs.FS) (*float64, error) {
 	if quota < 0 {
 		return nil, nil
 	}
-	return cpuCores(quota, period)
+	return cpuMillis(quota, period)
 }
 
-func cpuCores(quota, period int64) (*float64, error) {
+func cpuMillis(quota, period int64) (*int64, error) {
 	if quota <= 0 || period <= 0 {
 		return nil, fmt.Errorf("invalid cpu quota %d / period %d", quota, period)
 	}
-	c := float64(quota) / float64(period)
-	return &c, nil
+	m := quota * millicoresPerCore / period
+	return &m, nil
 }
 
 func readMemoryV2(fsys fs.FS) (*int64, error) {
