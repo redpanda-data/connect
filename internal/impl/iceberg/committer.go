@@ -315,7 +315,7 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 			table.WithoutDuplicateCheck(),
 		)
 	})
-	c.maintainLocked(ctx)
+	c.maintainAfterCommitLocked(ctx, err)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 		rd.AddDeletes(input.DeleteFiles...)
 		return rd.Commit(ctx)
 	})
-	c.maintainLocked(ctx)
+	c.maintainAfterCommitLocked(ctx, err)
 	if err != nil {
 		return err
 	}
@@ -499,7 +499,7 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 	}
 	// After the orphan sweep, so the sweep's reference scan runs against
 	// exactly the table the data commit produced.
-	c.maintainLocked(ctx)
+	c.maintainAfterCommitLocked(ctx, err)
 	if err != nil {
 		return err
 	}

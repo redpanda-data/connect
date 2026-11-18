@@ -16,6 +16,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -432,6 +434,62 @@ func TestTableAtCatalogCeilingRecovers(t *testing.T) {
 			require.NoError(t, err, "table with %d snapshots stays stuck at the catalog limit", len(cat.meta.Snapshots()))
 		})
 	}
+}
+
+// TestGlueSizeRejectionIsBadRequest pins the error that iceberg-go's REST
+// client gives for Glue's metadata size rejection: an HTTP 400 with an
+// InvalidInputException body. The pass after a rejected data commit runs only
+// for rest.ErrBadRequest, and ceilingCatalog builds that error directly, so a
+// change in iceberg-go's status mapping would otherwise go unnoticed.
+func TestGlueSizeRejectionIsBadRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/config" {
+			_, _ = w.Write([]byte(`{"defaults":{},"overrides":{}}`))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Prepared s3 payload size exceeds the size limit","type":"InvalidInputException","code":400}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cat, err := rest.NewCatalog(t.Context(), "glue", srv.URL)
+	require.NoError(t, err)
+	_, _, err = cat.CommitTable(t.Context(), table.Identifier{"db", "t"}, nil, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, rest.ErrBadRequest)
+	assert.Equal(t, "InvalidInputException: Prepared s3 payload size exceeds the size limit", err.Error())
+}
+
+// unavailableCatalog is a memCatalog that fails every commit with the
+// ambiguous error a REST catalog gives for a 503, and counts the attempts.
+type unavailableCatalog struct {
+	*memCatalog
+	commits atomic.Int64
+}
+
+func (c *unavailableCatalog) CommitTable(context.Context, table.Identifier, []table.Requirement, []table.Update) (table.Metadata, string, error) {
+	c.commits.Add(1)
+	return nil, "", fmt.Errorf("%w: service unavailable", rest.ErrCommitStateUnknown)
+}
+
+func (c *unavailableCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
+
+// TestUnavailableCatalogGetsNoMaintenanceCommit: when a data commit fails
+// because the catalog is unavailable, an expiry commit would most likely fail
+// the same way. The writer must not send one, even when expiry is due.
+func TestUnavailableCatalogGetsNoMaintenanceCommit(t *testing.T) {
+	ctx := t.Context()
+	tbl, mem := newTestTable(t)
+	seedTable(t, ctx, tbl, 3)
+
+	const age = 50 * time.Millisecond
+	time.Sleep(2 * age) // expiry is due for every snapshot
+
+	cat := &unavailableCatalog{memCatalog: mem}
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
+	require.Error(t, appendOne(t, ctx, c))
+	assert.Equal(t, int64(1), cat.commits.Load(), "only the data commit may reach the unavailable catalog")
 }
 
 // --- 4. maintenance commits -----------------------------------------------

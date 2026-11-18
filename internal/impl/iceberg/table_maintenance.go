@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog/rest"
 	"github.com/apache/iceberg-go/table"
 )
 
@@ -104,19 +105,32 @@ func (s *tableMaintenanceState) claimPass(now time.Time, every time.Duration) bo
 	return s.nextPassAt.CompareAndSwap(next, now.Add(every).UnixNano())
 }
 
-// maintainLocked runs the maintenance pass when one is due. Callers hold
-// c.commitMu and have just made a data commit attempt, so nothing else commits
-// through this committer meanwhile. It runs synchronously: a pass in its own
-// goroutine would race the next data commit for the same branch head and turn
-// into 409s on both sides.
+// maintainAfterCommitLocked runs the maintenance pass after a data commit
+// attempt that landed, or that the catalog rejected as a bad request.
+// Callers hold c.commitMu, and err is the data commit's result.
 //
-// It also runs after a data commit that failed. A table at a catalog's
-// metadata size limit (Glue's REST endpoint rejects metadata over 50 MiB)
-// fails every data commit, so a pass that waits for a landed commit never
-// runs. The expiry commit makes the metadata smaller, so it fits, and the
-// retried data commit then fits too. If c.table is stale after a failure, the
-// expiry commit's ref check fails with a conflict, and the pass retries it on
-// a reloaded table.
+// A table at a catalog's metadata size limit fails every data commit: Glue's
+// REST endpoint rejects a commit that would take the metadata over 50 MiB,
+// with a 400 that iceberg-go maps to rest.ErrBadRequest. A pass that waits
+// for a landed commit then never runs. The expiry commit makes the metadata
+// smaller, so it fits, and the retried data commit then fits too.
+//
+// Other failures skip the pass. After a 5xx, a timeout or an auth error the
+// expiry commit would most likely fail the same way. It would hold the commit
+// lock longer, count as a maintenance failure, and take the interval slot from
+// the pass after the next landed commit.
+func (c *committer) maintainAfterCommitLocked(ctx context.Context, err error) {
+	// If c.table is stale after a rejection, the expiry commit's ref check
+	// fails with a conflict, and the pass retries it on a reloaded table.
+	if err == nil || errors.Is(err, rest.ErrBadRequest) {
+		c.maintainLocked(ctx)
+	}
+}
+
+// maintainLocked runs the maintenance pass when one is due. Callers hold
+// c.commitMu, so nothing else commits through this committer meanwhile. It
+// runs synchronously: a pass in its own goroutine would race the next data
+// commit for the same branch head and turn into 409s on both sides.
 //
 // The merge property goes first so the data commit that follows the pass is
 // already merged. The retained-snapshot gauge is refreshed at the end of the
