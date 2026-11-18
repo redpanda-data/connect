@@ -1665,18 +1665,53 @@ func TestBatcherRunWritesHealthyShardsDuringRetry(t *testing.T) {
 	assert.Equal(t, "00002", cp.get("shard-bad"))
 }
 
+// TestBatcherPassStopsOnWriteTimeout: a write that times out ends the pass,
+// so a hung checkpoint table costs one API timeout per retry instead of one
+// per dirty shard. The shards left unwritten wait for the retry with the one
+// that timed out, and a refused (not timed-out) write still lets the pass
+// carry on.
+func TestBatcherPassStopsOnWriteTimeout(t *testing.T) {
+	cp := &failShardCheckpointer{failShard: "shard-a", failErr: fmt.Errorf("put item: %w", context.DeadlineExceeded)}
+	cp.checkpointLimit = 1
+	cp.failing.Store(true)
+	b := NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger())
+
+	for _, shardID := range []string{"shard-a", "shard-b", "shard-c"} {
+		require.NoError(t, b.AckBatch(b.AddMessages(createTestMessages(1, shardID, 1), shardID)))
+	}
+	require.ErrorIs(t, b.persist(t.Context(), false), context.DeadlineExceeded)
+	assert.Equal(t, int64(1), cp.failures.Load())
+	assert.Empty(t, cp.get("shard-b"), "the pass stops at the timed-out write")
+	assert.Empty(t, cp.get("shard-c"), "the pass stops at the timed-out write")
+	b.mu.Lock()
+	assert.Len(t, b.retrying, 3, "the unwritten shards wait for the retry with the timed-out one")
+	assert.Len(t, b.dirty, 3)
+	b.mu.Unlock()
+
+	cp.failing.Store(false)
+	persistNow(t, b)
+	for _, shardID := range []string{"shard-a", "shard-b", "shard-c"} {
+		assert.Equal(t, "00001", cp.get(shardID))
+	}
+}
+
 // failShardCheckpointer fails every Set for failShard while failing is set,
 // counting the refused writes. Other shards persist normally.
 type failShardCheckpointer struct {
 	mockCheckpointer
 	failShard string
-	failing   atomic.Bool
-	failures  atomic.Int64
+	// failErr is the error a failing Set returns; nil means a plain refusal.
+	failErr  error
+	failing  atomic.Bool
+	failures atomic.Int64
 }
 
 func (f *failShardCheckpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
 	if shardID == f.failShard && f.failing.Load() {
 		f.failures.Add(1)
+		if f.failErr != nil {
+			return f.failErr
+		}
 		return fmt.Errorf("boom")
 	}
 	return f.mockCheckpointer.Set(ctx, shardID, sequenceNumber, approxCreationTime)

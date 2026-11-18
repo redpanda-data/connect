@@ -626,6 +626,9 @@ func (b *RecordBatcher) persist(ctx context.Context, force bool) error {
 // outside b.mu, and records what landed. A shard whose write fails stays
 // dirty and waits for a retry; the pass carries on with the other shards and
 // reports the joined errors. Each write is bounded by defaultAPICallTimeout.
+// A write that times out ends the pass: the store is likely hung, so the
+// shards not yet written wait for the retry too instead of each waiting out
+// its own timeout.
 func (b *RecordBatcher) persistPass(ctx context.Context, force, skipRetrying bool) error {
 	b.writeMu.Lock()
 	defer b.writeMu.Unlock()
@@ -635,7 +638,7 @@ func (b *RecordBatcher) persistPass(ctx context.Context, force, skipRetrying boo
 		b.forgetFinishedShard(shardID)
 	}
 	var errs error
-	for _, w := range writes {
+	for i, w := range writes {
 		if err := ctx.Err(); err != nil {
 			b.requeue(w.shardID, true)
 			errs = errors.Join(errs, err)
@@ -644,6 +647,12 @@ func (b *RecordBatcher) persistPass(ctx context.Context, force, skipRetrying boo
 		if err := b.write(ctx, w, force); err != nil {
 			b.requeue(w.shardID, true)
 			errs = errors.Join(errs, err)
+			if errors.Is(err, context.DeadlineExceeded) {
+				for _, rest := range writes[i+1:] {
+					b.requeue(rest.shardID, true)
+				}
+				break
+			}
 		}
 	}
 	return errs
