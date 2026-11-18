@@ -52,15 +52,24 @@ func outputSpec() *service.ConfigSpec {
 		Version("4.30.0").
 		Categories("Services").
 		Summary(`Publishes messages to a Splunk HTTP Endpoint Collector (HEC).`).
-		Description(service.OutputPerformanceDocs(true, true)).
+		Description(`
+== Event format
+
+The output sends each message as one HEC event:
+
+- If the message is a JSON object with a top-level `+"`event`"+` key, the output sends the object as it is. The `+"`host`"+`, `+"`source`"+`, `+"`sourcetype`"+`, `+"`index`"+`, and other HEC keys of the object set the metadata of the event.
+- Otherwise, the output puts the whole message under `+"`event`"+`. A JSON object or array becomes the event data. A message that is not valid JSON becomes a string. Keys such as `+"`index`"+` in the message are then part of the event data and do not set the metadata. Splunk uses the defaults of the HEC token for the metadata and still accepts the event.
+
+The `+"`event_host`"+`, `+"`event_source`"+`, `+"`event_sourcetype`"+`, and `+"`event_index`"+` fields set the metadata after this step, so they apply in both cases.
+`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(soFieldURL).Description("Full HTTP Endpoint Collector (HEC) URL.").Example("https://foobar.splunkcloud.com/services/collector/event"),
 			service.NewStringField(soFieldToken).Description("A bot token used for authentication.").Secret(),
 			service.NewBoolField(soFieldGzip).Description("Enable gzip compression").Default(false),
-			service.NewStringField(soFieldEventHost).Description("Set the host value to assign to the event data. Overrides existing host field if present.").Default(""),
-			service.NewStringField(soFieldEventSource).Description("Set the source value to assign to the event data. Overrides existing source field if present.").Default(""),
-			service.NewStringField(soFieldEventSourceType).Description("Set the sourcetype value to assign to the event data. Overrides existing sourcetype field if present.").Default(""),
-			service.NewStringField(soFieldEventIndex).Description("Set the index value to assign to the event data. Overrides existing index field if present.").Default(""),
+			service.NewStringField(soFieldEventHost).Description("Set the host value to assign to the event data. Overrides existing host field if present. If empty, the output keeps the host value of the message.").Default(""),
+			service.NewStringField(soFieldEventSource).Description("Set the source value to assign to the event data. Overrides existing source field if present. If empty, the output keeps the source value of the message.").Default(""),
+			service.NewStringField(soFieldEventSourceType).Description("Set the sourcetype value to assign to the event data. Overrides existing sourcetype field if present. If empty, the output keeps the sourcetype value of the message.").Default(""),
+			service.NewStringField(soFieldEventIndex).Description("Set the index value to assign to the event data. Overrides existing index field if present. If empty, the output keeps the index value of the message.").Default(""),
 			service.NewTLSToggledField(soFieldTLS).Version("4.31.0"),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(soFieldBatching),
