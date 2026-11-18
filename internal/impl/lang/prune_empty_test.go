@@ -117,6 +117,13 @@ var pruneEmptyCases = []pruneEmptyCase{
 		want:       `{"v":"text"}`,
 	},
 	{
+		name:       "empty_strings option keeps a root empty string",
+		mapping:    `root.v = this.a.prune_empty(empty_strings: true)`,
+		mapMapping: `root.v = this.a.apply("prune_empty_strings_map")`,
+		input:      `{"a":""}`,
+		want:       `{"v":""}`,
+	},
+	{
 		name:       "json numbers keep their precision",
 		mapping:    `root = this.prune_empty()`,
 		mapMapping: `root = this.apply("prune_empty_map")`,
@@ -212,33 +219,37 @@ func TestPruneEmptyMatchesRecursiveMap(t *testing.T) {
 }
 
 // TestPruneEmptyNoSharedContainers mutates every container of the result. The
-// input must stay the same.
+// input must stay the same, in the two modes.
 func TestPruneEmptyNoSharedContainers(t *testing.T) {
-	var in any
-	require.NoError(t, json.Unmarshal([]byte(`{"a":{"b":[1,{"c":2,"d":null}],"e":{}},"f":[[3],[]],"g":"x"}`), &in))
-	before, err := json.Marshal(in)
-	require.NoError(t, err)
+	const input = `{"a":{"b":[1,{"c":2,"d":null,"h":""}],"e":{}},"f":[[3],[]],"g":"x"}`
 
-	var scribble func(v any)
-	scribble = func(v any) {
-		switch t := v.(type) {
-		case map[string]any:
-			for _, c := range t {
-				scribble(c)
-			}
-			t["x_scribble"] = true
-		case []any:
-			for i, c := range t {
-				scribble(c)
-				t[i] = "x_scribble"
-			}
+	for _, strs := range []bool{false, true} {
+		var in any
+		require.NoError(t, json.Unmarshal([]byte(input), &in))
+
+		scribble(pruneEmpty(in, strs))
+
+		after, err := json.Marshal(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, input, string(after), "empty_strings=%t", strs)
+	}
+}
+
+// scribble adds an entry to each object and replaces each array element, at
+// all depths of v.
+func scribble(v any) {
+	switch c := v.(type) {
+	case map[string]any:
+		for _, child := range c {
+			scribble(child)
+		}
+		c["x_scribble"] = true
+	case []any:
+		for i, child := range c {
+			scribble(child)
+			c[i] = "x_scribble"
 		}
 	}
-	scribble(pruneEmpty(in, false))
-
-	after, err := json.Marshal(in)
-	require.NoError(t, err)
-	assert.Equal(t, string(before), string(after))
 }
 
 // nestedDocument returns a JSON document shaped like a search API response.
