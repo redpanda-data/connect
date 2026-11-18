@@ -32,7 +32,7 @@ func init() {
 			"The target value itself is never removed: `null` gives `null` and a scalar gives itself. "+
 			"The target is not changed. This method is much faster than a recursive mapping that does the same.").
 		Version("4.119.0").
-		Param(bloblang.NewBoolParam("empty_strings").Description("Also remove empty strings and empty byte values.").Default(false)).
+		Param(bloblang.NewBoolParam("empty_strings").Description("Also removes empty strings and empty byte values.").Default(false)).
 		Example("Remove null values and empty containers at all depths",
 			`root = this.prune_empty()`,
 			[2]string{
