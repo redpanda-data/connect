@@ -55,12 +55,16 @@ func outputSpec() *service.ConfigSpec {
 		Description(`
 == Event format
 
-The output sends each message as one HEC event:
+Each message becomes one HEC event. If the message is a JSON object with a top-level `+"`event`"+` key, the output sends it unchanged, so its HEC metadata keys, such as `+"`host`"+` and `+"`index`"+`, apply. For the list of keys, see link:https://docs.splunk.com/Documentation/SplunkCloud/latest/Data/FormateventsforHTTPEventCollector[Format events for HTTP Event Collector^].
 
-- If the message is a JSON object with a top-level `+"`event`"+` key, the output sends the object as it is. The `+"`host`"+`, `+"`source`"+`, `+"`sourcetype`"+`, `+"`index`"+`, and other HEC keys of the object set the metadata of the event.
-- Otherwise, the output puts the whole message under `+"`event`"+`. A JSON object or array becomes the event data. A message that is not valid JSON becomes a string. Keys such as `+"`index`"+` in the message are then part of the event data and do not set the metadata. Splunk uses the defaults of the HEC token for the metadata and still accepts the event.
+The output puts any other message under `+"`event`"+`. For example, it sends the message `+"`"+`{"index":"web","msg":"hi"}`+"`"+` as:
 
-The `+"`event_host`"+`, `+"`event_source`"+`, `+"`event_sourcetype`"+`, and `+"`event_index`"+` fields set the metadata after this step, so they apply in both cases.
+`+"```json"+`
+{"event":{"index":"web","msg":"hi"}}
+`+"```"+`
+
+Here `+"`index`"+` is event data and does not set the index. To set it, put the data under `+"`event`"+` yourself, or set `+"`event_index`"+`.
+
 `+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(soFieldURL).Description("Full HTTP Endpoint Collector (HEC) URL.").Example("https://foobar.splunkcloud.com/services/collector/event"),
