@@ -15,13 +15,16 @@
 package lang
 
 // pruneEmpty returns v without null, [] and {} children, at all depths. If
-// strs is true, it also removes "" children. The root value is never removed.
+// strs is true, it also removes "" and empty []byte children. The root value
+// is never removed.
 //
 // The check runs after the children are pruned, so a container with only
-// empty children is removed too. Each object and array in the result is a new
-// value, so the caller can change the result and v stays the same. Only
-// map[string]any and []any are containers. Other values (json.Number, bytes,
-// timestamps, other map and slice types) are returned as they are.
+// empty children is removed too. Only map[string]any and []any are
+// containers. Each of them in the result is a new value, so the caller can
+// add, remove and replace their entries and v stays the same. Other values
+// (json.Number, []byte, timestamps, other map and slice types) are returned
+// as they are, so the result and v share them. A change in place to one of
+// these also changes v.
 func pruneEmpty(v any, strs bool) any {
 	switch t := v.(type) {
 	case map[string]any:
@@ -56,6 +59,10 @@ func isPrunable(v any, strs bool) bool {
 		return len(t) == 0
 	case string:
 		return strs && t == ""
+	case []byte:
+		// Bloblang compares bytes and strings as equal, and an empty bytes
+		// value serializes to "". Thus the empty_strings mode removes it too.
+		return strs && len(t) == 0
 	}
 	return false
 }
