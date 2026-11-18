@@ -1878,7 +1878,7 @@ snapshot_throttle: 10ms
 	// Wait until the writer has stopped, every key has been seen and nothing
 	// has arrived for the quiet period. Once the writer stops, the idle rule
 	// releases held pages after two empty polls plus 1s + 2 *
-	// snapshot_watermark_margin (about 5s). DynamoDB Local rounds stream
+	// incremental_snapshot.watermark_margin (about 5s). DynamoDB Local rounds stream
 	// timestamps down to the minute, which delays releases until the idle
 	// rule or the next minute, so the local quiet period is longer.
 	quiet := 5 * time.Second

@@ -62,14 +62,29 @@ snapshot_mode: `+mode+`
 	}
 }
 
+func TestIncrementalConfigBlock(t *testing.T) {
+	conf, err := parseCDCConfig(t, `
+tables: [a]
+checkpoint_table: ckpt
+snapshot_mode: incremental
+incremental_snapshot:
+  watermark_margin: 5s
+  idle_shard_grace: 2m
+`)
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, conf.snapshot.watermarkMargin)
+	assert.Equal(t, 2*time.Minute, conf.snapshot.idleShardGrace)
+}
+
 func TestIncrementalConfigNegativeMarginRejected(t *testing.T) {
 	_, err := parseCDCConfig(t, `
 tables: [a]
 checkpoint_table: ckpt
 snapshot_mode: incremental
-snapshot_watermark_margin: -1s
+incremental_snapshot:
+  watermark_margin: -1s
 `)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "incremental_snapshot.watermark_margin must not be negative")
 }
 
 // The stale-read case (a reset followed by eventually consistent reads that
@@ -154,14 +169,14 @@ snapshot_mode: incremental
 		assert.Equal(t, time.Minute, conf.snapshot.idleShardGrace)
 	})
 	t.Run("explicit", func(t *testing.T) {
-		conf, err := parseCDCConfig(t, base+"snapshot_idle_shard_grace: 30s\n")
+		conf, err := parseCDCConfig(t, base+"incremental_snapshot:\n  idle_shard_grace: 30s\n")
 		require.NoError(t, err)
 		assert.Equal(t, 30*time.Second, conf.snapshot.idleShardGrace)
 	})
 	for _, v := range []string{"0s", "-1s"} {
 		t.Run("rejects "+v, func(t *testing.T) {
-			_, err := parseCDCConfig(t, base+"snapshot_idle_shard_grace: "+v+"\n")
-			require.ErrorContains(t, err, "snapshot_idle_shard_grace must be greater than 0")
+			_, err := parseCDCConfig(t, base+"incremental_snapshot:\n  idle_shard_grace: "+v+"\n")
+			require.ErrorContains(t, err, "incremental_snapshot.idle_shard_grace must be greater than 0")
 		})
 	}
 }

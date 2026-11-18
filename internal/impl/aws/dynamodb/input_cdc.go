@@ -73,29 +73,30 @@ const (
 	metricBackfillTablesPending   = "dynamodb_cdc_snapshot_backfill_tables_pending"
 
 	// Config field names.
-	dciFieldTables                  = "tables"
-	dciFieldTableDiscoveryMode      = "table_discovery_mode"
-	dciFieldTableTagFilter          = "table_tag_filter"
-	dciFieldTableDiscoveryInterval  = "table_discovery_interval"
-	dciFieldCheckpointTable         = "checkpoint_table"
-	dciFieldCheckpointNamespace     = "checkpoint_namespace"
-	dciFieldGlobalTable             = "global_table"
-	dciFieldGlobalTableReplicas     = "global_table_replicas"
-	dciFieldBatchSize               = "batch_size"
-	dciFieldPollInterval            = "poll_interval"
-	dciFieldStartFrom               = "start_from"
-	dciFieldCheckpointLimit         = "checkpoint_limit"
-	dciFieldMaxTrackedShards        = "max_tracked_shards"
-	dciFieldThrottleBackoff         = "throttle_backoff"
-	dciFieldSnapshotMode            = "snapshot_mode"
-	dciFieldSnapshotSegments        = "snapshot_segments"
-	dciFieldSnapshotBatchSize       = "snapshot_batch_size"
-	dciFieldSnapshotThrottle        = "snapshot_throttle"
-	dciFieldSnapshotDedupe          = "snapshot_deduplicate"
-	dciFieldSnapshotBufferSize      = "snapshot_buffer_size"
-	dciFieldSnapshotWatermarkMargin = "snapshot_watermark_margin"
-	dciFieldSnapshotIdleShardGrace  = "snapshot_idle_shard_grace"
-	dciFieldSignalTable             = "signal_table_name"
+	dciFieldTables                 = "tables"
+	dciFieldTableDiscoveryMode     = "table_discovery_mode"
+	dciFieldTableTagFilter         = "table_tag_filter"
+	dciFieldTableDiscoveryInterval = "table_discovery_interval"
+	dciFieldCheckpointTable        = "checkpoint_table"
+	dciFieldCheckpointNamespace    = "checkpoint_namespace"
+	dciFieldGlobalTable            = "global_table"
+	dciFieldGlobalTableReplicas    = "global_table_replicas"
+	dciFieldBatchSize              = "batch_size"
+	dciFieldPollInterval           = "poll_interval"
+	dciFieldStartFrom              = "start_from"
+	dciFieldCheckpointLimit        = "checkpoint_limit"
+	dciFieldMaxTrackedShards       = "max_tracked_shards"
+	dciFieldThrottleBackoff        = "throttle_backoff"
+	dciFieldSnapshotMode           = "snapshot_mode"
+	dciFieldSnapshotSegments       = "snapshot_segments"
+	dciFieldSnapshotBatchSize      = "snapshot_batch_size"
+	dciFieldSnapshotThrottle       = "snapshot_throttle"
+	dciFieldSnapshotDedupe         = "snapshot_deduplicate"
+	dciFieldSnapshotBufferSize     = "snapshot_buffer_size"
+	dciFieldIncrementalSnapshot    = "incremental_snapshot"
+	dciFieldIncSnapshotMargin      = "watermark_margin"
+	dciFieldIncSnapshotIdleGrace   = "idle_shard_grace"
+	dciFieldSignalTable            = "signal_table_name"
 
 	// Snapshot states.
 	snapshotStateNotStarted int32 = 0
@@ -407,17 +408,21 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				ShortDescription("Maximum CDC events buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
-			service.NewDurationField(dciFieldSnapshotWatermarkMargin).
-				Description("Incremental snapshot only. Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. A shard read as idle counts as read up to its poll start minus this margin. So a page can wait up to twice the margin for an idle shard. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").Version("4.119.0").
-				ShortDescription("Incremental snapshot only: extra hold time for clock skew and stream delay.").
-				Default("2s").
-				LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["snapshot_watermark_margin must not be negative"] }`).
-				Advanced(),
-			service.NewDurationField(dciFieldSnapshotIdleShardGrace).
-				Description("Incremental snapshot only. How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").Version("4.119.0").
-				ShortDescription("Incremental snapshot only: how long a shard with no records holds back snapshot pages.").
-				Default("1m").
-				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_idle_shard_grace must be greater than 0"] }`).
+			service.NewObjectField(dciFieldIncrementalSnapshot,
+				service.NewDurationField(dciFieldIncSnapshotMargin).
+					Description("Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. A shard read as idle counts as read up to its poll start minus this margin. So a page can wait up to twice the margin for an idle shard. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").
+					ShortDescription("Extra hold time per snapshot page for clock skew and stream delay.").
+					Default("2s").
+					LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["watermark_margin must not be negative"] }`),
+				service.NewDurationField(dciFieldIncSnapshotIdleGrace).
+					Description("How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").
+					ShortDescription("How long a shard with no records holds back snapshot pages.").
+					Default("1m").
+					LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["idle_shard_grace must be greater than 0"] }`),
+			).
+				Description("Tuning for `snapshot_mode: incremental`. These fields have no effect in the other modes. The mode itself is set with `snapshot_mode`, and the page size, segment count and throttle come from `snapshot_batch_size`, `snapshot_segments` and `snapshot_throttle`.").
+				ShortDescription("Tuning for the incremental snapshot mode, with no effect in other modes.").
+				Version("4.119.0").
 				Advanced(),
 			service.NewStringField(dciFieldSignalTable).
 				Description(signalTableDescription).Version("4.119.0").
@@ -1053,10 +1058,10 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 		return fmt.Errorf("snapshot_mode %q is not supported with multi-table streaming; use snapshot_mode: none or incremental", conf.snapshot.mode)
 	}
 	if conf.snapshot.watermarkMargin < 0 {
-		return fmt.Errorf("snapshot_watermark_margin must not be negative, got %v", conf.snapshot.watermarkMargin)
+		return fmt.Errorf("incremental_snapshot.watermark_margin must not be negative, got %v", conf.snapshot.watermarkMargin)
 	}
 	if conf.snapshot.idleShardGrace <= 0 {
-		return fmt.Errorf("snapshot_idle_shard_grace must be greater than 0, got %v", conf.snapshot.idleShardGrace)
+		return fmt.Errorf("incremental_snapshot.idle_shard_grace must be greater than 0, got %v", conf.snapshot.idleShardGrace)
 	}
 
 	return nil
@@ -1129,10 +1134,10 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.snapshot.bufferSize, err = pConf.FieldInt(dciFieldSnapshotBufferSize); err != nil {
 		return
 	}
-	if conf.snapshot.watermarkMargin, err = pConf.FieldDuration(dciFieldSnapshotWatermarkMargin); err != nil {
+	if conf.snapshot.watermarkMargin, err = pConf.FieldDuration(dciFieldIncrementalSnapshot, dciFieldIncSnapshotMargin); err != nil {
 		return
 	}
-	if conf.snapshot.idleShardGrace, err = pConf.FieldDuration(dciFieldSnapshotIdleShardGrace); err != nil {
+	if conf.snapshot.idleShardGrace, err = pConf.FieldDuration(dciFieldIncrementalSnapshot, dciFieldIncSnapshotIdleGrace); err != nil {
 		return
 	}
 	if conf.signalTable, err = pConf.FieldString(dciFieldSignalTable); err != nil {
