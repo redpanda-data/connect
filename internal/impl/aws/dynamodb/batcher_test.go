@@ -520,9 +520,11 @@ func TestBatcherShouldThrottle(t *testing.T) {
 }
 
 // blockingCheckpointer blocks Set calls for one designated shard until
-// released, signalling entry exactly once. Other shards persist normally.
+// released, signalling entry exactly once and counting every entry in
+// entries. Other shards persist normally.
 type blockingCheckpointer struct {
 	mockCheckpointer
+	entries     atomic.Int64
 	blockShard  string
 	entered     chan struct{}
 	enteredOnce sync.Once
@@ -531,6 +533,7 @@ type blockingCheckpointer struct {
 
 func (b *blockingCheckpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
 	if shardID == b.blockShard {
+		b.entries.Add(1)
 		b.enteredOnce.Do(func() { close(b.entered) })
 		<-b.release
 	}
@@ -1590,4 +1593,91 @@ func TestBatcherAckDuringWriteIsNotLost(t *testing.T) {
 	persistNow(t, b)
 	assert.Equal(t, "00002", cp.get("shard-a"), "the ack that landed mid-write is written by the next pass")
 	assert.Equal(t, 0, b.PendingCount("shard-a"))
+}
+
+// TestBatcherFlushWaitsForRunWrite (CON-613): Flush must not write while a
+// Run write is in flight. Both would write the same shard, and the Run write
+// landing after Flush's would move the shard's checkpoint back. The race
+// detector cannot see this (b.mu guards all the state), so the test blocks a
+// Run write and checks that Flush starts no write of its own until it lands.
+func TestBatcherFlushWaitsForRunWrite(t *testing.T) {
+	cp := &blockingCheckpointer{
+		blockShard: "shard-a",
+		entered:    make(chan struct{}),
+		release:    make(chan struct{}),
+	}
+	cp.checkpointLimit = 1
+	b := NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger())
+	stop := runPersister(t, b)
+
+	first := b.AddMessages(createTestMessages(1, "shard-a", 1), "shard-a")
+	require.NoError(t, b.AckBatch(first))
+	<-cp.entered
+	second := b.AddMessages(createTestMessages(1, "shard-a", 2), "shard-a")
+	require.NoError(t, b.AckBatch(second))
+
+	flushed := make(chan error, 1)
+	go func() { flushed <- b.Flush(t.Context()) }()
+	select {
+	case err := <-flushed:
+		t.Fatalf("Flush returned while a Run write was in flight: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	assert.Equal(t, int64(1), cp.entries.Load(), "Flush must not start a write while a Run write is in flight")
+
+	close(cp.release)
+	require.NoError(t, <-flushed)
+	stop()
+	assert.Equal(t, "00002", cp.get("shard-a"), "the newest frontier must be the last write")
+}
+
+// TestBatcherRunWritesHealthyShardsDuringRetry (CON-613): while a failed
+// shard waits out its retry backoff, a wake still writes the other shards,
+// so one failing shard does not delay everyone's checkpoints by up to
+// checkpoint_retry_max_interval. The failed shard is not retried before its
+// backoff, and lands once the store accepts it.
+func TestBatcherRunWritesHealthyShardsDuringRetry(t *testing.T) {
+	cp := &failShardCheckpointer{failShard: "shard-bad"}
+	cp.checkpointLimit = 1
+	cp.failing.Store(true)
+	b := NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger())
+	b.retryInitial, b.retryMax = time.Hour, time.Hour
+	runPersister(t, b)
+
+	bad := b.AddMessages(createTestMessages(1, "shard-bad", 1), "shard-bad")
+	require.NoError(t, b.AckBatch(bad))
+	require.Eventually(t, func() bool { return cp.failures.Load() == 1 }, 5*time.Second, time.Millisecond)
+
+	good := b.AddMessages(createTestMessages(1, "shard-good", 1), "shard-good")
+	require.NoError(t, b.AckBatch(good))
+	require.Eventually(t, func() bool { return cp.get("shard-good") == "00001" }, 5*time.Second, time.Millisecond,
+		"a wake during the backoff must still write the healthy shard")
+
+	more := b.AddMessages(createTestMessages(1, "shard-bad", 2), "shard-bad")
+	require.NoError(t, b.AckBatch(more))
+	good2 := b.AddMessages(createTestMessages(1, "shard-good", 2), "shard-good")
+	require.NoError(t, b.AckBatch(good2))
+	require.Eventually(t, func() bool { return cp.get("shard-good") == "00002" }, 5*time.Second, time.Millisecond)
+	assert.Equal(t, int64(1), cp.failures.Load(), "the failed shard waits for its retry instead of being written on every wake")
+
+	cp.failing.Store(false)
+	require.NoError(t, b.Flush(t.Context()))
+	assert.Equal(t, "00002", cp.get("shard-bad"))
+}
+
+// failShardCheckpointer fails every Set for failShard while failing is set,
+// counting the refused writes. Other shards persist normally.
+type failShardCheckpointer struct {
+	mockCheckpointer
+	failShard string
+	failing   atomic.Bool
+	failures  atomic.Int64
+}
+
+func (f *failShardCheckpointer) Set(ctx context.Context, shardID, sequenceNumber, approxCreationTime string) error {
+	if shardID == f.failShard && f.failing.Load() {
+		f.failures.Add(1)
+		return fmt.Errorf("boom")
+	}
+	return f.mockCheckpointer.Set(ctx, shardID, sequenceNumber, approxCreationTime)
 }

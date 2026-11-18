@@ -9,6 +9,7 @@
 package dynamodb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -219,4 +220,89 @@ func TestConnectCDCOnlyStartsPersister(t *testing.T) {
 	}
 	require.Eventually(t, completed, 5*time.Second, time.Millisecond,
 		"acking the closed shard's final batch must persist its completion: connectCDCOnly must start the persister")
+}
+
+// TestStartTableCoordinatorStartsPersister (CON-613): the multi-table
+// counterpart of TestConnectCDCOnlyStartsPersister. startTableCoordinator is
+// where each table's coordinator starts (at Connect and from periodic table
+// discovery), so it must start that table's persister too, or the table
+// would write no checkpoints until shutdown. Acking a closed shard's final
+// batch must persist its completion with no help from the test.
+func TestStartTableCoordinatorStartsPersister(t *testing.T) {
+	transport := &coordinatorStubTransport{
+		shards: []string{"shard-001"},
+		closed: map[string]string{"shard-001": twoRecordsPage},
+	}
+	cp := lockedStoreCheckpointer(t)
+
+	d := &dynamoDBCDCInput{
+		conf: dynamoDBCDCConfig{
+			startFrom:       "trim_horizon",
+			batchSize:       10,
+			pollInterval:    2 * time.Millisecond,
+			throttleBackoff: 2 * time.Millisecond,
+		},
+		log:             service.MockResources().Logger(),
+		metrics:         newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+		streamsClient:   newStubStreamsClient(transport),
+		msgChan:         make(chan asyncMessage, 10),
+		shutSig:         shutdown.NewSignaller(),
+		refreshInterval: 3 * time.Millisecond,
+		cleanupInterval: 5 * time.Millisecond,
+	}
+	ts := &tableStream{
+		tableName:      "test",
+		streamArn:      testStreamArn,
+		checkpointer:   cp,
+		recordBatcher:  NewRecordBatcher(100, 1000, cp, nil, service.MockResources().Logger()),
+		shardReaders:   map[string]*dynamoDBShardReader{},
+		shardRefreshCh: make(chan struct{}, 1),
+	}
+
+	d.startTableCoordinator("test", ts)
+	t.Cleanup(func() {
+		d.shutSig.TriggerSoftStop()
+		assert.True(t, waitBackgroundWorkers(d, 5*time.Second),
+			"the coordinator and the persister must stop at soft stop")
+	})
+
+	var am asyncMessage
+	select {
+	case am = <-d.msgChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected the closed shard's final batch")
+	}
+	require.Len(t, am.msg, 2)
+	require.NoError(t, am.ackFn(t.Context(), nil))
+
+	completed := func() bool {
+		_, done, err := cp.getShardRow(t.Context(), "shard-001")
+		return err == nil && done
+	}
+	require.Eventually(t, completed, 5*time.Second, time.Millisecond,
+		"acking the closed shard's final batch must persist its completion: startTableCoordinator must start the persister")
+}
+
+// TestFlushCheckpointCountsTimedOutFlush (CON-613): checkpoints Close leaves
+// unwritten because its context ran out count in checkpoint_failures, as on
+// main. The batcher counts only writes the store refused, so the input
+// counts the interrupted flush once.
+func TestFlushCheckpointCountsTimedOutFlush(t *testing.T) {
+	metrics, exporter := newCountingMetrics(t)
+	d := &dynamoDBCDCInput{
+		log:     service.MockResources().Logger(),
+		metrics: newDynamoDBCDCMetrics(metrics),
+	}
+	cp := &ctxCheckpointer{mockCheckpointer{checkpointLimit: 1000}}
+	b := NewRecordBatcher(100, 1000, cp, d.metrics.checkpointFailures, service.MockResources().Logger())
+	tb := b.AddMessages(createTestMessages(2, "shard-a", 1), "shard-a")
+	require.NoError(t, b.AckBatch(tb))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	assert.True(t, d.flushCheckpoint(ctx, b, "single-table"))
+	assert.Equal(t, int64(1), exporter.counter(metricCheckpointFailures))
+
+	assert.False(t, d.flushCheckpoint(t.Context(), b, "single-table"))
+	assert.Equal(t, int64(1), exporter.counter(metricCheckpointFailures))
 }

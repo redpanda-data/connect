@@ -268,11 +268,11 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(1000).
 				Advanced(),
 			service.NewIntField(dciFieldMaxTrackedShards).
-				Description("Maximum number of shards holding acknowledgement state at once. A shard is normally forgotten once it has been read to the end and its last batch has been acknowledged, so this bounds the shards being read concurrently, not the shards seen over the pipeline's lifetime. Past this limit acknowledgements return an error.").
+				Description("Maximum number of shards holding acknowledgement state at once. A shard is normally forgotten once it has been read to the end, its last batch has been acknowledged and its final checkpoint is written. This limit therefore bounds the shards being read concurrently, not the shards seen over the pipeline's lifetime. Past this limit acknowledgements return an error.").
 				Default(10000).
 				Advanced(),
 			service.NewDurationField(dciFieldCheckpointRetryInitial).
-				Description("Time to wait before retrying a failed checkpoint write. The wait doubles after each consecutive failure, up to `checkpoint_retry_max_interval`, and resets after a successful write.").
+				Description("Time to wait before retrying a failed checkpoint write. The wait doubles after each consecutive failure, up to `checkpoint_retry_max_interval`, and resets once every failed write has landed. Shards whose writes succeed keep being checkpointed while a failed shard waits.").
 				ShortDescription("Time to wait before retrying a failed checkpoint write, doubling on each consecutive failure.").
 				Default("1s").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_initial_interval must be greater than 0"] }`).
@@ -3067,6 +3067,11 @@ func (d *dynamoDBCDCInput) flushCheckpoint(ctx context.Context, batcher *RecordB
 	d.log.Debugf("Flushing pending checkpoints for %s on close", label)
 	if err := batcher.Flush(ctx); err != nil {
 		d.log.Errorf("Failed to flush checkpoints for %s: %v", label, err)
+		if ctx.Err() != nil {
+			// The batcher counts only writes the store refused; checkpoints
+			// left unwritten because Close ran out of time count here.
+			d.metrics.checkpointFailures.Incr(1)
+		}
 		return true
 	}
 	return false

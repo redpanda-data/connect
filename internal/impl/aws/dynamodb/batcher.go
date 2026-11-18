@@ -89,7 +89,8 @@ func (c *pinClock) check(now time.Time) (since time.Duration, shouldWarn bool) {
 // the frontier's record time, whether the shard is closed and settled) next
 // to the persisted state, and the persister writes the difference: acks and
 // closes mark a shard dirty and wake it, a failed write stays dirty and is
-// retried with backoff, and Flush writes everything left at shutdown. Acks
+// retried with backoff (other shards keep being written meanwhile), and
+// Flush writes everything left at shutdown. Acks
 // therefore never wait on the store and never see a write error, and there
 // is exactly one place a failed write is owned.
 type RecordBatcher struct {
@@ -121,6 +122,10 @@ type RecordBatcher struct {
 	// awaiting its final write, or a finished shard still to be forgotten. A
 	// shard stays here until its write lands.
 	dirty map[string]struct{}
+	// retrying holds the dirty shards whose last write failed. Run leaves
+	// them to its backoff retry, so passes woken in the meantime write only
+	// the other shards and one failing shard does not hold back the rest.
+	retrying map[string]struct{}
 
 	// shards holds the per-shard ordered ack trackers. An entry is removed
 	// once its closed shard has been read to the end and every batch from it
@@ -245,6 +250,7 @@ func NewRecordBatcher(maxTrackedShards, checkpointLimit int, cp checkpointer, fa
 		wake:            make(chan struct{}, 1),
 		shards:          make(map[string]*shardAckTracker),
 		dirty:           make(map[string]struct{}),
+		retrying:        make(map[string]struct{}),
 		reservedByShard: make(map[string]int),
 	}
 }
@@ -529,10 +535,11 @@ func (b *RecordBatcher) markDirtyLocked(shardID string) {
 	}
 }
 
-// Default persister retry backoff: a failed pass is retried after
+// Default persister retry backoff: a failed write is retried after
 // persistRetryInitial, doubling up to persistRetryMax while the store keeps
-// failing. Waking acks do not cut the wait short. The input overrides both
-// from checkpoint_retry_initial_interval and checkpoint_retry_max_interval.
+// failing. Waking acks do not cut the wait short for the failed shards. The
+// input overrides both from checkpoint_retry_initial_interval and
+// checkpoint_retry_max_interval.
 const (
 	persistRetryInitial = time.Second
 	persistRetryMax     = 30 * time.Second
@@ -540,8 +547,11 @@ const (
 
 // Run is the batcher's persister: it writes the dirty shards to the
 // checkpoint store whenever an ack or close wakes it and retries failed
-// writes with backoff, until ctx is done. Run it in one goroutine per
-// batcher. Whatever is left unpersisted when it stops is written by Flush.
+// writes with backoff, until ctx is done. While a retry is pending, a wake
+// still writes the shards that have not failed; the failed ones wait for the
+// retry. The backoff resets once a pass leaves no failed write behind. Run
+// it in one goroutine per batcher. Whatever is left unpersisted when it
+// stops is written by Flush.
 func (b *RecordBatcher) Run(ctx context.Context) {
 	if b == nil {
 		return
@@ -553,25 +563,28 @@ func (b *RecordBatcher) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-b.wake:
-			if retry != nil {
-				// A failed write is waiting out its backoff; the retry pass
-				// covers whatever just became dirty as well.
-				continue
-			}
 		case <-retry:
 			retry = nil
 		}
-		if err := b.persist(ctx, false); err != nil {
-			if ctx.Err() != nil {
-				// Shutting down: Flush takes over what is left.
-				return
+		// With a retry pending, this pass skips the shards waiting for it.
+		err := b.persistPass(ctx, false, retry != nil)
+		if err != nil && ctx.Err() != nil {
+			// Shutting down: Flush takes over what is left.
+			return
+		}
+		switch {
+		case retry != nil:
+			// Shards that failed in this pass join the pending retry.
+			if err != nil {
+				b.log.Warnf("Failed to persist checkpoints, retrying with the pending retry: %v", err)
 			}
+		case err != nil:
 			b.log.Warnf("Failed to persist checkpoints, retrying in %v: %v", backoff, err)
 			retry = time.After(backoff)
 			backoff = min(backoff*2, b.retryMax)
-			continue
+		default:
+			backoff = b.retryInitial
 		}
-		backoff = b.retryInitial
 	}
 }
 
@@ -601,39 +614,47 @@ type shardWrite struct {
 	pending int
 }
 
-// persist runs one persister pass: it plans the writes for the dirty shards
-// (every shard when force is set, ignoring checkpoint_limit), performs them
-// outside b.mu, and records what landed. A shard whose write fails stays
-// dirty; the pass carries on with the other shards and reports the joined
-// errors. Each write is bounded by defaultAPICallTimeout.
+// persist runs one persister pass over every dirty shard, including those
+// whose last write failed (see persistPass).
 func (b *RecordBatcher) persist(ctx context.Context, force bool) error {
+	return b.persistPass(ctx, force, false)
+}
+
+// persistPass runs one persister pass: it plans the writes for the dirty
+// shards (every shard when force is set, ignoring checkpoint_limit; without
+// the shards waiting for a retry when skipRetrying is set), performs them
+// outside b.mu, and records what landed. A shard whose write fails stays
+// dirty and waits for a retry; the pass carries on with the other shards and
+// reports the joined errors. Each write is bounded by defaultAPICallTimeout.
+func (b *RecordBatcher) persistPass(ctx context.Context, force, skipRetrying bool) error {
 	b.writeMu.Lock()
 	defer b.writeMu.Unlock()
 
-	writes, finished := b.planWrites(force)
+	writes, finished := b.planWrites(force, skipRetrying)
 	for _, shardID := range finished {
 		b.forgetFinishedShard(shardID)
 	}
 	var errs error
 	for _, w := range writes {
 		if err := ctx.Err(); err != nil {
-			b.requeue(w.shardID)
+			b.requeue(w.shardID, true)
 			errs = errors.Join(errs, err)
 			continue
 		}
 		if err := b.write(ctx, w, force); err != nil {
-			b.requeue(w.shardID)
+			b.requeue(w.shardID, true)
 			errs = errors.Join(errs, err)
 		}
 	}
 	return errs
 }
 
-// planWrites takes the dirty shards (all shards when force is set) off the
-// dirty set and decides what each one needs: a write, forgetting (its final
-// write already landed), or nothing yet. A shard an ack dirties again while
-// its write is in flight re-enters the set and is picked up by the next pass.
-func (b *RecordBatcher) planWrites(force bool) (writes []shardWrite, finished []string) {
+// planWrites takes the dirty shards (all shards when force is set, without
+// the retrying ones when skipRetrying is set) off the dirty set and decides
+// what each one needs: a write, forgetting (its final write already landed),
+// or nothing yet. A shard an ack dirties again while its write is in flight
+// re-enters the set and is picked up by the next pass.
+func (b *RecordBatcher) planWrites(force, skipRetrying bool) (writes []shardWrite, finished []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -648,6 +669,9 @@ func (b *RecordBatcher) planWrites(force bool) (writes []shardWrite, finished []
 		}
 	} else {
 		for shardID := range b.dirty {
+			if _, waiting := b.retrying[shardID]; waiting && skipRetrying {
+				continue
+			}
 			candidates = append(candidates, shardID)
 		}
 	}
@@ -655,6 +679,7 @@ func (b *RecordBatcher) planWrites(force bool) (writes []shardWrite, finished []
 
 	for _, shardID := range candidates {
 		delete(b.dirty, shardID)
+		delete(b.retrying, shardID)
 		st := b.shards[shardID]
 		switch {
 		case st == nil:
@@ -676,12 +701,16 @@ func (b *RecordBatcher) planWrites(force bool) (writes []shardWrite, finished []
 	return writes, finished
 }
 
-// requeue puts a shard whose write did not land back on the dirty set.
-func (b *RecordBatcher) requeue(shardID string) {
+// requeue puts a shard whose write did not land back on the dirty set;
+// failed also leaves it to the persister's retry.
+func (b *RecordBatcher) requeue(shardID string, failed bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if _, exists := b.shards[shardID]; exists {
 		b.dirty[shardID] = struct{}{}
+		if failed {
+			b.retrying[shardID] = struct{}{}
+		}
 	}
 }
 
@@ -756,7 +785,7 @@ func callStore(ctx context.Context, fn func(context.Context) error) error {
 // shard is requeued so a later pass drops it.
 func (b *RecordBatcher) forgetFinishedShard(shardID string) {
 	if !b.ForgetShard(shardID) {
-		b.requeue(shardID)
+		b.requeue(shardID, false)
 	}
 }
 
@@ -786,6 +815,7 @@ func (b *RecordBatcher) forgetShard(shardID string, requirePersisted bool) bool 
 	}
 	delete(b.shards, shardID)
 	delete(b.dirty, shardID)
+	delete(b.retrying, shardID)
 	return true
 }
 
