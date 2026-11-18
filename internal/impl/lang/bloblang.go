@@ -119,45 +119,6 @@ func init() {
 		panic(err)
 	}
 
-	pruneEmptySpec := bloblang.NewPluginSpec().
-		Experimental().
-		Category("Object & Array Manipulation").
-		Description("Removes `null` values, empty arrays and empty objects from an object or array, at all depths. "+
-			"A container that becomes empty after the removal of its children is removed too. "+
-			"Array elements are removed, so the positions of the next elements shift. "+
-			"The values `0`, `false` and `\"\"` are kept, unless `empty_strings` is `true`, which also removes `\"\"` and empty byte values. "+
-			"The target value itself is never removed: `null` gives `null` and a scalar gives itself. "+
-			"The target is not changed. This method is much faster than a recursive mapping that does the same.").
-		Version("4.119.0").
-		Param(bloblang.NewBoolParam("empty_strings").Description("Also remove empty strings and empty byte values.").Default(false)).
-		Example("Remove null values and empty containers at all depths",
-			`root = this.prune_empty()`,
-			[2]string{
-				`{"id":1,"name":null,"tags":[],"meta":{"owner":{"email":null},"score":0},"lines":[null,{},{"sku":"a"}]}`,
-				`{"id":1,"lines":[{"sku":"a"}],"meta":{"score":0}}`,
-			}).
-		Example("Also remove empty strings",
-			`root = this.prune_empty(empty_strings: true)`,
-			[2]string{
-				`{"a":"","b":{"c":""},"d":"x","e":false}`,
-				`{"d":"x","e":false}`,
-			})
-
-	if err := bloblang.RegisterMethodV2(
-		"prune_empty", pruneEmptySpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			strs, err := args.GetBool("empty_strings")
-			if err != nil {
-				return nil, err
-			}
-			return func(v any) (any, error) {
-				return pruneEmpty(v, strs), nil
-			}, nil
-		},
-	); err != nil {
-		panic(err)
-	}
-
 	fakerSpec := bloblang.NewPluginSpec().
 		Category("Fake Data Generation").
 		Description("Generates realistic fake data for testing and development purposes. Supports a wide variety of data types including personal information, network addresses, dates/times, financial data, and UUIDs. "+

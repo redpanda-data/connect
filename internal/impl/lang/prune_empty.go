@@ -14,6 +14,74 @@
 
 package lang
 
+import (
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+)
+
+func init() {
+	pruneEmptySpec := bloblang.NewPluginSpec().
+		Experimental().
+		Category("Object & Array Manipulation").
+		Description("Removes `null` values, empty arrays and empty objects from an object or array, at all depths. "+
+			"A container that becomes empty after the removal of its children is removed too. "+
+			"Array elements are removed, so the positions of the next elements shift. "+
+			"Do not use this method on arrays where the position has a meaning, for example coordinates or rows that match a header. "+
+			"The values `0`, `false` and `\"\"` are kept, unless `empty_strings` is `true`, which also removes `\"\"` and empty byte values. "+
+			"This method only removes values that hold no data. "+
+			"Zeros, `false` and strings that contain only whitespace are data, and this method never removes them. "+
+			"The target value itself is never removed: `null` gives `null` and a scalar gives itself. "+
+			"The target is not changed. This method is much faster than a recursive mapping that does the same.").
+		Version("4.119.0").
+		Param(bloblang.NewBoolParam("empty_strings").Description("Also remove empty strings and empty byte values.").Default(false)).
+		Example("Remove null values and empty containers at all depths",
+			`root = this.prune_empty()`,
+			[2]string{
+				`{"id":1,"name":null,"tags":[],"meta":{"owner":{"email":null},"score":0},"lines":[null,{},{"sku":"a"}]}`,
+				`{"id":1,"lines":[{"sku":"a"}],"meta":{"score":0}}`,
+			}).
+		Example("Array elements are removed, so the positions of the next elements shift",
+			`root = this.prune_empty()`,
+			[2]string{
+				`{"items":["a",null,"b",[],{"x":null},"c"]}`,
+				`{"items":["a","b","c"]}`,
+			}).
+		Example("Also remove empty strings",
+			`root = this.prune_empty(empty_strings: true)`,
+			[2]string{
+				`{"a":"","b":{"c":""},"d":"x","e":false}`,
+				`{"d":"x","e":false}`,
+			}).
+		Example("Prune only a part of the document",
+			`root = this
+root.payload = this.payload.prune_empty()`,
+			[2]string{
+				`{"key":null,"payload":{"a":1,"b":null,"c":[]}}`,
+				`{"key":null,"payload":{"a":1}}`,
+			}).
+		Example("Keep the value at one path. Assign it again after the prune, which also creates the parent objects that were removed",
+			`root = this.prune_empty()
+root.meta.flags = this.meta.flags`,
+			[2]string{
+				`{"id":1,"note":null,"meta":{"flags":{},"owner":null}}`,
+				`{"id":1,"meta":{"flags":{}}}`,
+			})
+
+	if err := bloblang.RegisterMethodV2(
+		"prune_empty", pruneEmptySpec,
+		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			strs, err := args.GetBool("empty_strings")
+			if err != nil {
+				return nil, err
+			}
+			return func(v any) (any, error) {
+				return pruneEmpty(v, strs), nil
+			}, nil
+		},
+	); err != nil {
+		panic(err)
+	}
+}
+
 // pruneEmpty returns v without null, [] and {} children, at all depths. If
 // strs is true, it also removes "" and empty []byte children. The root value
 // is never removed.
