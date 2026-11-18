@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 
@@ -83,7 +82,7 @@ type CommitConfig struct {
 	MaxSnapshotAge time.Duration
 	MaxRetries     int
 	// MaintenanceInterval bounds how often the table-maintenance pass (snapshot
-	// expiry, see table_maintenance.go) may
+	// expiry and the manifest-merge property, see table_maintenance.go) may
 	// run for a table: at most once per interval, after a data commit. The
 	// commit.maintenance_interval field; zero or negative means
 	// defaultMaintenanceInterval.
@@ -688,14 +687,12 @@ func (c *committer) referencedCandidatePaths(ctx context.Context, candidates map
 // Callers must hold c.commitMu.
 func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
 	// props are the SNAPSHOT summary properties every stage callback passes
-	// to iceberg-go. The snapshot-retention keys do not belong here:
-	// iceberg-go resolves retention from TABLE metadata properties and never
-	// reads a snapshot summary for it, so stamping it here was inert.
-	// Retention is applied by the maintenance pass that follows a landed
-	// data commit (maintainLocked), never on the data commit itself.
-	props := iceberg.Properties{
-		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
-	}
+	// to iceberg-go. commit.manifest-merge.enabled and the snapshot-retention
+	// keys do not belong here: iceberg-go resolves both from TABLE metadata
+	// properties and never reads a snapshot summary for them, so placing them
+	// here is inert. Both are applied by the maintenance pass that follows a
+	// landed data commit (maintainLocked), never on the data commit itself.
+	props := iceberg.Properties{}
 	// Stamp the idempotency token into the snapshot props so the committed
 	// snapshot carries it. props is reused across attempts, so this holds for
 	// every stage attempt. iceberg-go copies it verbatim into Summary.Properties.
@@ -978,11 +975,29 @@ func isDefinitiveCommitRejection(err error) bool {
 // that are already being stripped or were never sent, in which case retrying
 // would loop futilely — and the caller's standard error handling applies.
 func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fatalErr error) {
+	learned, fatalErr := c.learnProhibitedKeys(err)
+	if fatalErr != nil || len(learned) == 0 {
+		return false, fatalErr
+	}
+	// One-time warning per key: learnProhibitedKeys only reports a key the
+	// first time it is learned.
+	for _, k := range learned {
+		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
+	}
+	c.logger.Warnf("Commit attempt %d rejected for prohibited table properties %v; retrying with them stripped", attempt, learned)
+	return true, nil
+}
+
+// learnProhibitedKeys is the learning half of noteProhibitedKeys, shared with
+// the maintenance pass (which does not retry, it just stops staging the
+// key, and logs its own warning). It returns the keys newly learned from
+// err, or fatalErr when the catalog named a reserved key.
+func (c *committer) learnProhibitedKeys(err error) (learned []string, fatalErr error) {
 	keys := parseProhibitedPropertyKeys(err)
 	if len(keys) == 0 {
-		return false, nil
+		return nil, nil
 	}
-	var learned, reserved []string
+	var reserved []string
 	for _, k := range keys {
 		switch {
 		case hasReservedPrefix(k):
@@ -994,20 +1009,11 @@ func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fata
 		}
 	}
 	if len(reserved) > 0 {
-		return false, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"catalog prohibits table properties %v, which this connector depends on (%s* keys pin semantics such as the table's timestamp encoding) and refuses to strip: %w",
 			reserved, reservedTablePropertyPrefix, err)
 	}
-	if len(learned) == 0 {
-		return false, nil
-	}
-	// One-time warning per key: addProhibitedKey only reports a key the first
-	// time it is learned.
-	for _, k := range learned {
-		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
-	}
-	c.logger.Warnf("Commit attempt %d rejected for prohibited table properties %v; retrying with them stripped", attempt, learned)
-	return true, nil
+	return learned, nil
 }
 
 // dropAlreadyCommitted returns the subset of files whose paths are not already

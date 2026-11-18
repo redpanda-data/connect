@@ -76,8 +76,8 @@ type icebergOutput struct {
 type opMetrics struct {
 	rowOps         *service.MetricCounter // labelled by "operation"
 	commitFailures *service.MetricCounter
-	// maintenanceFailures counts failed maintenance passes (snapshot
-	// expiry), labelled by operation. It is the
+	// maintenanceFailures counts failed maintenance passes (snapshot expiry,
+	// the manifest-merge property), labelled by operation. It is the
 	// alertable signal for retention that has silently stopped working.
 	maintenanceFailures *service.MetricCounter
 	// retainedSnapshots is each table's current snapshot count, labelled by
@@ -672,9 +672,8 @@ func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
 // parseCommitConfig parses the commit configuration.
 func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	cfg := CommitConfig{
-		ManifestMergeEnabled: true,
-		MaintenanceInterval:  defaultMaintenanceInterval,
-		MaxRetries:           3,
+		MaintenanceInterval: defaultMaintenanceInterval,
+		MaxRetries:          3,
 	}
 	if !conf.Contains(ioFieldCommit) {
 		return cfg, nil
