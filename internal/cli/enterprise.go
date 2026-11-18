@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -26,6 +26,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/pipelinestatus"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
@@ -42,6 +43,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
 
 	rpLogger := rpMgr.SlogHandler()
+	statusEP := pipelinestatus.New()
 	var fbLogger *service.Logger
 
 	cListApplied, err := ApplyConnectorsList(connectorListPath, schema)
@@ -107,10 +109,15 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			}
 			rpMgr.SetFallbackLogger(l)
 		}),
-		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
+		service.CLIOptAddTeeLogger(slog.New(pipelinestatus.NewFanoutHandler(rpLogger, statusEP.LogHandler()))),
+		service.CLIOptAddTeeMetrics(statusEP.MetricsTee()),
 		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
 			// Kick off license service, it's important we do this before chroot and telemetry
 			license.RegisterService(pConf.Resources(), licenseConfig)
+
+			if statusEP.Enabled() {
+				pConf.Resources().RegisterEndpoint(pipelinestatus.Path, pipelinestatus.Description, statusEP.Handler())
+			}
 
 			// Now we've parsed config, ensure preconfigured topic logger level matches logger.level
 			cfg := pConf.Namespace("logger")
@@ -172,6 +179,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		}),
 		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
 			rpMgr.SetStreamSummary(s)
+			statusEP.SetSummary(s)
 			return nil
 		}),
 
@@ -192,6 +200,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 						Name:  "telemetry-tenant-id",
 						Usage: "Tags telemetry payloads with an opaque tenant identifier (typically the Redpanda Cloud organization ID for cloud-managed deployments). When unset the field is omitted from the payload.",
 					},
+					&cli.BoolFlag{
+						Name:  "status-endpoint",
+						Usage: "Serve a /status endpoint on the HTTP server that reports the connection status of the running pipeline, a messages consumed counter, and the most recent error logs per component. Off by default, as the error logs are served as raw text.",
+					},
 					rpcPluginsFlag,
 				},
 				redpandaFlags(),
@@ -204,6 +216,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				disableTelemetry = c.Bool("disable-telemetry")
 				telemetryDeploymentType = c.String("telemetry-deployment-type")
 				telemetryTenantID = c.String("telemetry-tenant-id")
+				statusEP.SetEnabled(c.Bool("status-endpoint"))
 
 				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
 					return err
