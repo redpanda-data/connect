@@ -410,12 +410,12 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Advanced(),
 			service.NewObjectField(dciFieldIncrementalSnapshot,
 				service.NewDurationField(dciFieldIncSnapshotMargin).
-					Description("Extra time a snapshot page is held after every shard has streamed past its read, covering clock skew between this host and AWS plus stream publication delay. A shard read as idle counts as read up to its poll start minus this margin. So a page can wait up to twice the margin for an idle shard. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").
+					Description("Extra time a snapshot page is held after every shard has streamed past the time of its Scan. The margin covers clock skew between this host and AWS, plus stream publication delay. For an idle shard, the input treats the start of its last empty poll, minus this margin, as the point the shard has streamed to. A page can therefore wait up to twice the margin before release. This only affects the order in which snapshot items leave the input relative to older stream events. It does not affect the correctness of the final value emitted for each key.").
 					ShortDescription("Extra hold time per snapshot page for clock skew and stream delay.").
 					Default("2s").
 					LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["watermark_margin must not be negative"] }`),
 				service.NewDurationField(dciFieldIncSnapshotIdleGrace).
-					Description("How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. It only affects ordering relative to older stream events. Correctness of the final value per key does not depend on it.").
+					Description("How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. This only affects the order in which snapshot items leave the input relative to older stream events. It does not affect the correctness of the final value emitted for each key.").
 					ShortDescription("How long a shard with no records holds back snapshot pages.").
 					Default("1m").
 					LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["idle_shard_grace must be greater than 0"] }`),
