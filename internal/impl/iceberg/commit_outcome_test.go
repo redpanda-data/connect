@@ -48,10 +48,10 @@ import (
 //     serialised metadata exceeds a byte limit, modelling engine-backed
 //     catalogs (AWS Glue caps table metadata at 50 MB) so that unbounded
 //     metadata growth is reproducible without cloud credentials;
-//   - maintenance commits: snapshot expiry lands in its own commit after a
-//     data commit (table_maintenance.go), retries conflicts, waits out the
-//     pass interval after a failure, and never fails a data commit,
-//     whatever the catalog does.
+//   - maintenance commits: snapshot expiry and the manifest-merge property
+//     land in their own commits after a data commit (table_maintenance.go),
+//     retry conflicts, wait out the pass interval after a failure, and
+//     never hold up or fail a data commit, whatever the catalog does.
 
 // --- helpers ---------------------------------------------------------------
 
@@ -122,6 +122,19 @@ func orphans(tb testing.TB, ctx context.Context, tbl *table.Table) []string {
 func assertNoOrphans(tb testing.TB, ctx context.Context, tbl *table.Table, msg string) {
 	tb.Helper()
 	assert.Empty(tb, orphans(tb, ctx, tbl), msg)
+}
+
+func manifestCount(tb testing.TB, ctx context.Context, tbl *table.Table) int {
+	tb.Helper()
+	snap := tbl.CurrentSnapshot()
+	if snap == nil {
+		return 0
+	}
+	fsys, err := tbl.FS(ctx)
+	require.NoError(tb, err)
+	manifests, err := snap.Manifests(fsys)
+	require.NoError(tb, err)
+	return len(manifests)
 }
 
 func metadataBytes(tb testing.TB, meta table.Metadata) int {
@@ -275,6 +288,42 @@ func TestMaxSnapshotAgeExpiresSnapshots(t *testing.T) {
 	})
 }
 
+// TestManifestMergeBoundsManifestCount proves commit.manifest_merge_enabled
+// has its documented effect ("Merge small manifest files during commits to
+// reduce metadata overhead"): with it enabled, a table that has taken many
+// single-file appends carries fewer manifests than appends; with it disabled,
+// exactly one manifest per append. iceberg-go's merge threshold is
+// commit.manifest.min-count-to-merge (default 100), so the run goes past it.
+// Asserting on the table rather than on the chosen append strategy means a
+// setting iceberg-go never reads fails here, whatever the plumbing looks like.
+func TestManifestMergeBoundsManifestCount(t *testing.T) {
+	const appends = 110
+
+	t.Run("disabled keeps one manifest per append", func(t *testing.T) {
+		ctx := t.Context()
+		_, cat := newTestTable(t)
+		c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: false})
+		for range appends {
+			require.NoError(t, appendOne(t, ctx, c))
+		}
+		require.Len(t, cat.meta.Snapshots(), appends, "sequential appends must not coalesce")
+		assert.Equal(t, appends, manifestCount(t, ctx, cat.snapshot()))
+	})
+
+	t.Run("enabled merges manifests past the threshold", func(t *testing.T) {
+		ctx := t.Context()
+		_, cat := newTestTable(t)
+		c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true})
+		for range appends {
+			require.NoError(t, appendOne(t, ctx, c))
+		}
+		require.Len(t, cat.meta.Snapshots(), appends, "sequential appends must not coalesce")
+		got := manifestCount(t, ctx, cat.snapshot())
+		assert.Less(t, got, appends,
+			"manifest_merge_enabled: true must merge manifests once past min-count-to-merge; got %d manifests for %d appends", got, appends)
+	})
+}
+
 // --- 2. whole-prefix orphan invariant -------------------------------------
 
 // TestSuccessfulAppendsLeaveNoOrphans is the control for the invariant: a
@@ -352,9 +401,9 @@ func (c *actionRecordingCatalog) CommitTable(ctx context.Context, ident table.Id
 func (c *actionRecordingCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
 
 // TestMaintenanceRunsAsItsOwnCommit pins the design: a data commit never
-// carries the remove-snapshots update. It lands in a commit of its own after
-// the data commit, so a catalog that rejects it has no data to reject along
-// with it.
+// carries the remove-snapshots or the set-properties update. Each lands in a
+// commit of its own after the data commit, so a catalog that rejects either
+// has no data to reject along with it.
 func TestMaintenanceRunsAsItsOwnCommit(t *testing.T) {
 	ctx := t.Context()
 	_, mem := newTestTable(t)
@@ -364,12 +413,15 @@ func TestMaintenanceRunsAsItsOwnCommit(t *testing.T) {
 	time.Sleep(age + 100*time.Millisecond)
 	cat.calls = nil
 
-	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age, ManifestMergeEnabled: true})
 	require.NoError(t, appendOne(t, ctx, c))
 
-	require.Len(t, cat.calls, 2, "the data commit, then expiry")
+	require.Len(t, cat.calls, 3, "the data commit, then the property, then expiry")
+	assert.NotContains(t, cat.calls[0], string(table.UpdateSetProperties), "the data commit must not carry the property")
 	assert.NotContains(t, cat.calls[0], string(table.UpdateRemoveSnapshots), "the data commit must not carry expiry")
-	assert.Equal(t, []string{string(table.UpdateRemoveSnapshots)}, cat.calls[1])
+	assert.Equal(t, []string{string(table.UpdateSetProperties)}, cat.calls[1])
+	assert.Equal(t, []string{string(table.UpdateRemoveSnapshots)}, cat.calls[2])
+	assert.Equal(t, "true", cat.meta.Properties()[table.ManifestMergeEnabledKey])
 	assert.LessOrEqual(t, len(cat.meta.Snapshots()), 2, "the aged seed snapshot is expired")
 }
 
@@ -524,6 +576,50 @@ func TestRejectedExpiryIsRetriedOncePerInterval(t *testing.T) {
 	assert.Len(t, cat.meta.Snapshots(), 5)
 }
 
+// TestRejectedMergePropertyIsRetriedOncePerInterval: a catalog that refuses
+// the property without naming the key (so the stripper cannot learn it) sees
+// one failed set-properties commit per pass interval. Gating on "the table
+// lacks the property" alone would retry on every commit.
+func TestRejectedMergePropertyIsRetriedOncePerInterval(t *testing.T) {
+	ctx := t.Context()
+	_, mem := newTestTable(t)
+	cat := &mergePropRejectingCatalog{memCatalog: mem}
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 3, ManifestMergeEnabled: true, MaintenanceInterval: time.Hour})
+
+	for range 3 {
+		require.NoError(t, appendOne(t, ctx, c))
+	}
+	assert.Equal(t, 1, cat.rejected, "the property is attempted once per interval, not once per commit")
+	assert.NotContains(t, cat.meta.Properties(), table.ManifestMergeEnabledKey)
+	assert.Len(t, cat.meta.Snapshots(), 3, "every data commit landed")
+	assert.Equal(t, 3, manifestCount(t, ctx, cat.snapshot()), "without the property the table keeps one manifest per commit")
+
+	c.maint.releasePass()
+	require.NoError(t, appendOne(t, ctx, c))
+	assert.Equal(t, 2, cat.rejected, "the next pass tries again")
+}
+
+// TestNamedMergePropertyRejectionIsLearned: a catalog that names
+// commit.manifest-merge.enabled as prohibited (Unity Catalog) teaches the
+// stripper the key from the rejected maintenance commit. The property is
+// never sent again, on any later pass, and the data commits never saw it.
+func TestNamedMergePropertyRejectionIsLearned(t *testing.T) {
+	ctx := t.Context()
+	_, mem := newTestTable(t)
+	cat := &namedProhibitedKeyCatalog{memCatalog: mem}
+	known := newProhibitedKeySet()
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true, ProhibitedKeys: known})
+
+	for range 3 {
+		require.NoError(t, appendOne(t, ctx, c))
+	}
+	assert.Equal(t, 1, cat.rejected, "one named rejection; the key is learned and never sent again")
+	assert.True(t, known.has(table.ManifestMergeEnabledKey), "the stripper learned the key from the maintenance commit")
+	assert.NotContains(t, cat.meta.Properties(), table.ManifestMergeEnabledKey)
+	assert.Len(t, cat.meta.Snapshots(), 3, "every data commit landed")
+	assert.Equal(t, 3, manifestCount(t, ctx, cat.snapshot()), "the table keeps one manifest per commit, as documented for such catalogs")
+}
+
 // TestMaintenanceRunsAtMostOncePerInterval: between passes, data commits make
 // exactly one catalog call each, whatever is eligible to expire. The pass
 // interval is what bounds the extra round trips on a busy table.
@@ -554,7 +650,7 @@ func TestMaintenanceRunsAtMostOncePerInterval(t *testing.T) {
 
 // TestMaintenanceWithNothingToDoMakesNoCatalogCall: a pass that stages
 // nothing costs nothing. iceberg-go commits a transaction only when it
-// carries an update, so the case below never reaches the catalog.
+// carries an update, so neither case below reaches the catalog.
 func TestMaintenanceWithNothingToDoMakesNoCatalogCall(t *testing.T) {
 	t.Run("only a retained ref's head is old", func(t *testing.T) {
 		// A tag pins the only old snapshot. The head of a retained ref is
@@ -586,6 +682,22 @@ func TestMaintenanceWithNothingToDoMakesNoCatalogCall(t *testing.T) {
 		}
 		assert.True(t, tagged, "the tag and the snapshot it pins are kept")
 	})
+
+	t.Run("property already on the table and nothing aged", func(t *testing.T) {
+		ctx := t.Context()
+		tbl, mem := newTestTable(t)
+		cat := &scriptedCatalog{memCatalog: mem}
+		tx := tbl.NewTransaction()
+		require.NoError(t, tx.SetProperties(iceberg.Properties{table.ManifestMergeEnabledKey: "true"}))
+		_, err := tx.Commit(ctx)
+		require.NoError(t, err)
+
+		c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true, MaxSnapshotAge: time.Hour})
+		for range 3 {
+			require.NoError(t, appendOne(t, ctx, c))
+		}
+		assert.Equal(t, 3, cat.calls, "three data commits and no maintenance commit")
+	})
 }
 
 // expiryRejectingCatalog models a catalog that does not implement the
@@ -608,6 +720,111 @@ func (c *expiryRejectingCatalog) CommitTable(ctx context.Context, ident table.Id
 }
 
 func (c *expiryRejectingCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
+
+// mergePropRejectingCatalog models a catalog that refuses the
+// commit.manifest-merge.enabled table property with a 400 whose text does
+// NOT name the key, so the prohibited-keys stripper cannot learn it. Every
+// other commit succeeds.
+type mergePropRejectingCatalog struct {
+	*memCatalog
+	rejected int
+}
+
+func (c *mergePropRejectingCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	for _, u := range updates {
+		if u.Action() == table.UpdateSetProperties {
+			c.rejected++
+			return nil, "", fmt.Errorf("%w: table property update not allowed by this catalog", rest.ErrBadRequest)
+		}
+	}
+	return c.memCatalog.CommitTable(ctx, ident, reqs, updates)
+}
+
+func (c *mergePropRejectingCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
+
+// namedProhibitedKeyCatalog models Unity Catalog: it rejects a commit whose
+// set-properties names a forbidden key, and says which key, so the stripper
+// can learn it.
+type namedProhibitedKeyCatalog struct {
+	*memCatalog
+	rejected int
+}
+
+func (c *namedProhibitedKeyCatalog) CommitTable(ctx context.Context, ident table.Identifier, reqs []table.Requirement, updates []table.Update) (table.Metadata, string, error) {
+	for _, u := range updates {
+		if u.Action() == table.UpdateSetProperties {
+			c.rejected++
+			return nil, "", fmt.Errorf("%w: Table properties contain prohibited keys: %s", rest.ErrBadRequest, table.ManifestMergeEnabledKey)
+		}
+	}
+	return c.memCatalog.CommitTable(ctx, ident, reqs, updates)
+}
+
+func (c *namedProhibitedKeyCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
+
+// TestManifestMergePropertyStampedWhenAbsentKeptWhenPresent pins the
+// contract of commit.manifest_merge_enabled: it reaches the table as the
+// standard commit.manifest-merge.enabled property when absent (set by the
+// maintenance pass that follows the first commit), an existing
+// value on the table wins over the configured one, and it is not written
+// into snapshot summaries (where it was inert).
+func TestManifestMergePropertyStampedWhenAbsentKeptWhenPresent(t *testing.T) {
+	t.Run("absent on the table: stamped with the configured value after the first commit", func(t *testing.T) {
+		ctx := t.Context()
+		_, cat := newTestTable(t)
+		c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true})
+		require.NoError(t, appendOne(t, ctx, c))
+
+		assert.Equal(t, "true", cat.meta.Properties()[table.ManifestMergeEnabledKey])
+		snap := cat.meta.CurrentSnapshot()
+		require.NotNil(t, snap)
+		require.NotNil(t, snap.Summary)
+		assert.NotContains(t, snap.Summary.Properties, table.ManifestMergeEnabledKey, "manifest merge is a table property, not a summary entry")
+	})
+
+	t.Run("absent and configured to the library default: nothing is written", func(t *testing.T) {
+		ctx := t.Context()
+		_, cat := newTestTable(t)
+		c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: table.ManifestMergeEnabledDefault})
+		require.NoError(t, appendOne(t, ctx, c))
+		assert.NotContains(t, cat.meta.Properties(), table.ManifestMergeEnabledKey,
+			"absent already means the default; a set-properties update would change nothing")
+	})
+
+	t.Run("present on the table: the table's value is kept", func(t *testing.T) {
+		ctx := t.Context()
+		_, cat := newTestTable(t)
+		tx := cat.snapshot().NewTransaction()
+		require.NoError(t, tx.SetProperties(iceberg.Properties{table.ManifestMergeEnabledKey: "false"}))
+		_, err := tx.Commit(ctx)
+		require.NoError(t, err)
+
+		c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true})
+		require.NoError(t, appendOne(t, ctx, c))
+		assert.Equal(t, "false", cat.meta.Properties()[table.ManifestMergeEnabledKey],
+			"an operator's explicit table property must not be overridden")
+	})
+}
+
+// TestMergePropertyNotStagedOnceStripperKnowsIt: when the catalog has named
+// commit.manifest-merge.enabled as prohibited (the stripper has learned it),
+// the property must not be staged at all: the stripper would strip the only
+// update and send the catalog a commit with nothing in it.
+func TestMergePropertyNotStagedOnceStripperKnowsIt(t *testing.T) {
+	ctx := t.Context()
+	_, mem := newTestTable(t)
+	cat := &mergePropRejectingCatalog{memCatalog: mem}
+	known := newProhibitedKeySet()
+	known.add(table.ManifestMergeEnabledKey)
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true, ProhibitedKeys: known})
+
+	for range 3 {
+		require.NoError(t, appendOne(t, ctx, c))
+	}
+	assert.Zero(t, cat.rejected, "no set-properties update may reach the catalog")
+	assert.NotContains(t, cat.meta.Properties(), table.ManifestMergeEnabledKey)
+	assert.Equal(t, 3, manifestCount(t, ctx, cat.snapshot()), "without the property the table keeps one manifest per commit")
+}
 
 // TestElapsedRefAgeIsExpiredEvenWhenNoSnapshotIsOld pins the documented
 // promise that a tag whose own max-ref-age-ms has elapsed is removed, even

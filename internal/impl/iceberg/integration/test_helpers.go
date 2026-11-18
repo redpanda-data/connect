@@ -145,7 +145,7 @@ type routerOpts struct {
 }
 
 // WithCommitConfig overrides the test router's commit configuration. The
-// default mirrors the product defaults: manifest merge on, expiry off and 3
+// default mirrors the product defaults: manifest merge off, expiry off and 3
 // retries.
 func WithCommitConfig(cfg icebergimpl.CommitConfig) RouterOption {
 	return func(o *routerOpts) {
@@ -201,9 +201,8 @@ func (infra *testInfrastructure) NewRouter(
 
 	logger := service.MockResources().Logger()
 	commitCfg := icebergimpl.CommitConfig{
-		ManifestMergeEnabled: true,
-		MaxSnapshotAge:       0, // the product default: expiry is opt-in
-		MaxRetries:           3,
+		MaxSnapshotAge: 0, // the product default: expiry is opt-in
+		MaxRetries:     3,
 	}
 	if o.commitCfg != nil {
 		commitCfg = *o.commitCfg

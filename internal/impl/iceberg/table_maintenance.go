@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,16 +23,17 @@ import (
 	"github.com/apache/iceberg-go/table"
 )
 
-// Table maintenance covers the table-level updates the commit.* fields
-// imply, today snapshot expiry (commit.max_snapshot_age). They are applied
-// as their own commits, after a data commit has landed, and never on the
-// data commit itself. No rows ride on a maintenance commit, so
+// Table maintenance covers the two table-level updates the commit.* fields
+// imply: snapshot expiry (commit.max_snapshot_age) and the
+// commit.manifest-merge.enabled table property (commit.manifest_merge_enabled).
+// Both are applied as their own commits, after a data commit has landed, and
+// never on the data commit itself. No rows ride on a maintenance commit, so
 // its failure never fails a data commit, and a catalog that rejects one
 // cannot block data. The pass runs synchronously after the data commit,
 // under the commit lock, so its round trips (one, or more when a conflict
 // is retried) are added to that commit's acknowledgement, at most once per
 // interval per table. A pass that stages nothing (nothing eligible to
-// expire) makes no catalog call, since
+// expire, the property already on the table) makes no catalog call, since
 // iceberg-go only commits a transaction that carries an update.
 //
 // A pass runs at most once per commit.maintenance_interval per table,
@@ -51,7 +53,10 @@ import (
 const defaultMaintenanceInterval = 10 * time.Minute
 
 // Labels for the maintenance-failure counter, one per maintenance operation.
-const maintenanceOpExpireSnapshots = "expire_snapshots"
+const (
+	maintenanceOpExpireSnapshots = "expire_snapshots"
+	maintenanceOpMergeProperty   = "set_manifest_merge_property"
+)
 
 // slowMaintenanceStage is how long staging one maintenance update may take
 // before the pass warns about it. iceberg-go's expiry walk is quadratic in
@@ -77,10 +82,11 @@ type tableMaintenanceState struct {
 	// run. Zero means no pass has run yet, so the first data commit to a
 	// table is followed by one.
 	nextPassAt atomic.Int64
-	// tableAgeWarnOnce: a mismatch between the table's own retention property
-	// and the configured field is static for the life of the table, so it is
-	// logged once per table.
-	tableAgeWarnOnce sync.Once
+	// manifestMergeWarnOnce and tableAgeWarnOnce: a mismatch between a
+	// table's own property and the configured field is static for the life
+	// of the table, so each is logged once per table.
+	manifestMergeWarnOnce sync.Once
+	tableAgeWarnOnce      sync.Once
 }
 
 func newTableMaintenanceState() *tableMaintenanceState { return &tableMaintenanceState{} }
@@ -104,7 +110,8 @@ func (s *tableMaintenanceState) claimPass(now time.Time, every time.Duration) bo
 // synchronously: a pass in its own goroutine would race the next data commit
 // for the same branch head and turn into 409s on both sides.
 //
-// The retained-snapshot gauge is refreshed at the end of the
+// The merge property goes first so the data commit that follows the pass is
+// already merged. The retained-snapshot gauge is refreshed at the end of the
 // pass, not on every commit: reading the snapshot list clones it, which is
 // too much for the data path on a table with many snapshots.
 //
@@ -122,7 +129,8 @@ func (c *committer) maintainLocked(ctx context.Context) {
 			c.logger.Errorf("Table maintenance for %s panicked and is skipped until the next pass in %s: %v\n%s", c.tableName(), c.cfg.MaintenanceInterval, r, debug.Stack())
 		}
 	}()
-	if c.cfg.MaxSnapshotAge > 0 {
+	c.commitMaintenance(ctx, maintenanceOpMergeProperty, c.stageManifestMergeProperty)
+	if c.cfg.MaxSnapshotAge > 0 && ctx.Err() == nil {
 		c.warnTableAgeMismatch()
 		c.commitMaintenance(ctx, maintenanceOpExpireSnapshots, c.stageSnapshotExpiry)
 	}
@@ -217,7 +225,8 @@ func (c *committer) commitMaintenance(ctx context.Context, op string, stage func
 }
 
 // noteMaintenanceFailure records a failed maintenance pass: the counter, the
-// reload when the commit may have landed (see commitMaintenance), and one
+// reload when the commit may have landed (see commitMaintenance), the
+// learning of a prohibited property key when the catalog named one, and one
 // warning that says what the table is missing until the next pass. Warnings
 // are bounded by the pass interval, since a pass logs at most one.
 //
@@ -251,8 +260,26 @@ func (c *committer) noteMaintenanceFailure(ctx context.Context, op string, err e
 			c.logger.Warnf("Failed to reload %s after a failed maintenance commit (%s); the next data commit may conflict once and retry: %v", c.tableName(), op, reloadErr)
 		}
 	}
-	ageMs, _ := c.effectiveSnapshotAgeMs()
-	c.logger.Warnf("Snapshot expiry failed for %s; retrying in %s, and snapshots older than %s accumulate in the table metadata meanwhile. If this catalog does not allow clients to expire snapshots, set %s.%s to 0s and expire them with another tool: %v", c.tableName(), c.cfg.MaintenanceInterval, time.Duration(ageMs)*time.Millisecond, ioFieldCommit, ioFieldMaxSnapshotAge, err)
+	switch op {
+	case maintenanceOpMergeProperty:
+		// A catalog that names the key as prohibited (Databricks Unity
+		// Catalog) is answered the same way the data path answers it: the
+		// stripper learns the key and stageManifestMergeProperty stops
+		// staging it, so this is the last attempt. A catalog that rejects it
+		// without naming the key gets one attempt per pass.
+		learned, fatalErr := c.learnProhibitedKeys(err)
+		if len(learned) > 0 {
+			c.logger.Warnf("Catalog prohibits table property %s, so %s.%s cannot take effect on %s and the table keeps one manifest per commit. Set the field to false to stop these attempts: %v", table.ManifestMergeEnabledKey, ioFieldCommit, ioFieldManifestMergeEnabled, c.tableName(), err)
+			return
+		}
+		if fatalErr != nil {
+			err = fatalErr
+		}
+		c.logger.Warnf("Could not set table property %s on %s; retrying in %s, and the table keeps one manifest per commit meanwhile. If this catalog does not allow the property, set %s.%s to false or set the property with another tool: %v", table.ManifestMergeEnabledKey, c.tableName(), c.cfg.MaintenanceInterval, ioFieldCommit, ioFieldManifestMergeEnabled, err)
+	case maintenanceOpExpireSnapshots:
+		ageMs, _ := c.effectiveSnapshotAgeMs()
+		c.logger.Warnf("Snapshot expiry failed for %s; retrying in %s, and snapshots older than %s accumulate in the table metadata meanwhile. If this catalog does not allow clients to expire snapshots, set %s.%s to 0s and expire them with another tool: %v", c.tableName(), c.cfg.MaintenanceInterval, time.Duration(ageMs)*time.Millisecond, ioFieldCommit, ioFieldMaxSnapshotAge, err)
+	}
 }
 
 // observeRetainedSnapshots publishes the table's current snapshot count. It is
@@ -267,6 +294,65 @@ func (c *committer) observeRetainedSnapshots() {
 // tableName is the table's identifier as namespace.table, for logs and the
 // gauge label.
 func (c *committer) tableName() string { return strings.Join(c.table.Identifier(), ".") }
+
+// stageManifestMergeProperty makes commit.manifest_merge_enabled take effect.
+// iceberg-go chooses between fast-append (one new manifest per commit) and
+// merge-append (small manifests folded together once there are more than
+// commit.manifest.min-count-to-merge of them) from the TABLE property
+// commit.manifest-merge.enabled, defaulting to false. Only its append path
+// consults the property; row-delta (merge-on-read) and overwrite
+// (copy-on-write) producers always fast-append in this version. A table that
+// lacks the property is stamped with true when the field is true. false is
+// iceberg-go's default, so nothing is written for it. A table that already
+// carries the property keeps it: the property is standard Iceberg metadata
+// that other engines read and write, and silently overriding an operator's
+// explicit choice would flip their write profile behind their back. When the
+// field is true and the table's property is not, that is logged once per
+// table; a table that merges while the field is false is normal operation
+// under the default config and logs nothing.
+//
+// The property is set by the maintenance pass, in its own commit after a data
+// commit, so the first commit to a new table is not merged. That is fine:
+// merging only starts once the table has commit.manifest.min-count-to-merge
+// manifests (Iceberg default 100), and iceberg-go reads the property from the
+// table's metadata at the moment the data files are staged, so every commit
+// after the pass is.
+//
+// Once the prohibited-property stripper has learned that the catalog forbids
+// the key (it named it in a rejection), the property is not staged at all.
+// The stripper filters set-properties updates below iceberg-go's empty-commit
+// check, so staging it would send a commit with no updates to the catalog.
+// Not staging keeps the table at one manifest per commit, which is what the
+// documentation promises for such catalogs. The stripper is also why the
+// property is not set at CreateTable: a forbidden property there fails table
+// creation outright with no stripper in the path.
+//
+// The bool reports whether a set-properties update was staged on txn.
+func (c *committer) stageManifestMergeProperty(txn *table.Transaction) (bool, error) {
+	if c.stripper.strip.has(table.ManifestMergeEnabledKey) {
+		return false, nil
+	}
+	want := strconv.FormatBool(c.cfg.ManifestMergeEnabled)
+	if have, ok := c.table.Properties()[table.ManifestMergeEnabledKey]; ok {
+		// Compare as booleans: other engines may write "TRUE", which
+		// iceberg-go reads as true.
+		if haveBool, err := strconv.ParseBool(have); c.cfg.ManifestMergeEnabled && (err != nil || !haveBool) {
+			c.maint.manifestMergeWarnOnce.Do(func() {
+				c.logger.Warnf("Table property %s is %q on %s but %s.%s is true; honouring the table property, which other engines read too. Change the property on the table to enable manifest merging.", table.ManifestMergeEnabledKey, have, c.tableName(), ioFieldCommit, ioFieldManifestMergeEnabled)
+			})
+		}
+		return false, nil
+	}
+	if want == strconv.FormatBool(table.ManifestMergeEnabledDefault) {
+		// Absent already means this value to iceberg-go; a set-properties
+		// update would change nothing and could only cost a rejection.
+		return false, nil
+	}
+	if err := txn.SetProperties(iceberg.Properties{table.ManifestMergeEnabledKey: want}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
 
 // stageSnapshotExpiry makes commit.max_snapshot_age take effect by staging
 // Transaction.ExpireSnapshots on a maintenance transaction. A table that
