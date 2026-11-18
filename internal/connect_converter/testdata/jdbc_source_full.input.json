@@ -1,0 +1,13 @@
+{
+  "name": "jdbc-src-full",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "connection.url": "jdbc:postgresql://h:5432/db",
+    "table.whitelist": "orders",
+    "mode": "incrementing",
+    "incrementing.column.name": "id",
+    "poll.interval.ms": "5000",
+    "validate.non.null": "false",
+    "topic.prefix": "jdbc-"
+  }
+}

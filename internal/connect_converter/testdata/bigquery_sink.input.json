@@ -1,0 +1,1 @@
+{"name":"bq","config":{"connector.class":"com.wepay.kafka.connect.bigquery.BigQuerySinkConnector","project":"proj","defaultDataset":"ds","topics":"orders"}}

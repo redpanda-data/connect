@@ -1,0 +1,20 @@
+{
+  "name": "mm-full",
+  "config": {
+    "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
+    "source.cluster.bootstrap.servers": "src1:9092,src2:9092",
+    "target.cluster.bootstrap.servers": "dst:9093",
+    "topics": "orders,events",
+    "source.cluster.security.protocol": "SASL_SSL",
+    "source.cluster.sasl.mechanism": "SCRAM-SHA-512",
+    "source.cluster.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"u\" password=\"p\";",
+    "target.cluster.security.protocol": "SSL",
+    "replication.factor": "3",
+    "sync.topic.configs.enabled": "true",
+    "refresh.topics.enabled": "true",
+    "emit.heartbeats.enabled": "true",
+    "emit.checkpoints.enabled": "true",
+    "refresh.groups.enabled": "true",
+    "sync.group.offsets.enabled": "false"
+  }
+}
