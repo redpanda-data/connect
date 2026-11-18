@@ -105,10 +105,18 @@ func (s *tableMaintenanceState) claimPass(now time.Time, every time.Duration) bo
 }
 
 // maintainLocked runs the maintenance pass when one is due. Callers hold
-// c.commitMu and have just landed a data commit, so c.table is current and
-// nothing else commits through this committer meanwhile. It runs
-// synchronously: a pass in its own goroutine would race the next data commit
-// for the same branch head and turn into 409s on both sides.
+// c.commitMu and have just made a data commit attempt, so nothing else commits
+// through this committer meanwhile. It runs synchronously: a pass in its own
+// goroutine would race the next data commit for the same branch head and turn
+// into 409s on both sides.
+//
+// It also runs after a data commit that failed. A table at a catalog's
+// metadata size limit (Glue's REST endpoint rejects metadata over 50 MiB)
+// fails every data commit, so a pass that waits for a landed commit never
+// runs. The expiry commit makes the metadata smaller, so it fits, and the
+// retried data commit then fits too. If c.table is stale after a failure, the
+// expiry commit's ref check fails with a conflict, and the pass retries it on
+// a reloaded table.
 //
 // The merge property goes first so the data commit that follows the pass is
 // already merged. The retained-snapshot gauge is refreshed at the end of the

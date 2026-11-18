@@ -290,7 +290,7 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 	// still proves the batch landed, so the retry returns success instead of
 	// re-adding the files and duplicating rows.
 	commitID := uuid.NewString()
-	if _, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
+	_, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
 		files := allFiles
 		if reloaded {
 			// A prior attempt can land server-side yet report failure (a lost
@@ -314,10 +314,11 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 			table.WithoutAutoNameMapping(),
 			table.WithoutDuplicateCheck(),
 		)
-	}); err != nil {
+	})
+	c.maintainLocked(ctx)
+	if err != nil {
 		return nil, err
 	}
-	c.maintainLocked(ctx)
 	c.logger.Debugf("Committed %d data files", len(allFiles))
 	return make([]struct{}, len(inputs)), nil
 }
@@ -341,7 +342,7 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	// of applying the RowDelta (and its equality deletes) a second time. That is
 	// why retryOnUnknownState is safe to enable here.
 	commitID := uuid.NewString()
-	if _, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+	_, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// RowDelta derives the snapshot operation automatically
 		// (append/delete/overwrite).
 		rd := txn.NewRowDelta(props)
@@ -350,10 +351,11 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 		}
 		rd.AddDeletes(input.DeleteFiles...)
 		return rd.Commit(ctx)
-	}); err != nil {
+	})
+	c.maintainLocked(ctx)
+	if err != nil {
 		return err
 	}
-	c.maintainLocked(ctx)
 	c.logger.Debugf("Committed row delta: %d data files, %d delete files", len(input.Files), len(input.DeleteFiles))
 	return nil
 }
@@ -495,12 +497,12 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 			c.cleanupOrphanedOverwriteFiles(ctx, written, startSnapshotID)
 		}
 	}
-	if err != nil {
-		return err
-	}
 	// After the orphan sweep, so the sweep's reference scan runs against
 	// exactly the table the data commit produced.
 	c.maintainLocked(ctx)
+	if err != nil {
+		return err
+	}
 	c.logger.Debugf("Committed copy-on-write mutation (delete-only=%t)", input.NewReader == nil)
 	return nil
 }

@@ -252,7 +252,7 @@ To use with AWS Glue Data Catalog:
 * Set `+"`schema_evolution.table_location`"+` to an S3 prefix (for example, `+"`s3://my-bucket/`"+`; a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
-* Set `+"`commit.max_snapshot_age`"+` on tables this output appends to for long. Glue rejects every commit to a table whose metadata exceeds its size limit, and a table that has hit it cannot be repaired in place. If the table's snapshot retention optimizer is enabled in Glue, leave the field unset instead. Glue then expires snapshots and deletes their files; expiry by this output would remove the snapshots first and leave the files as orphans.
+* Set `+"`commit.max_snapshot_age`"+` on tables this output appends to for long. Glue's Iceberg REST endpoint rejects every commit that would take a table's metadata over 50 MiB. With the field set, this output also expires snapshots after a rejected commit, so a table just under the limit commits again. A table over the limit cannot be loaded through the REST endpoint: expire its snapshots with another engine first, for example Athena `+"`VACUUM`"+`. If the table's snapshot retention optimizer is enabled in Glue, leave the field unset instead. Glue then expires snapshots and deletes their files; expiry by this output would remove the snapshots first and leave the files as orphans.
 
 === Databricks Unity Catalog
 

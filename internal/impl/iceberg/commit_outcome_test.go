@@ -379,6 +379,61 @@ func TestRetentionKeepsMetadataUnderCatalogCeiling(t *testing.T) {
 	t.Logf("final metadata: %d snapshots, %d bytes (ceiling %d)", len(cat.meta.Snapshots()), metadataBytes(t, cat.meta), cat.ceilingBytes)
 }
 
+// TestTableAtCatalogCeilingRecovers covers a table whose metadata is just
+// under a catalog size limit, so the next data commit would cross it, with
+// every snapshot already past commit.max_snapshot_age. This is the state that
+// tables written before max_snapshot_age took effect reach. The writer must
+// get the table committing again without outside help.
+func TestTableAtCatalogCeilingRecovers(t *testing.T) {
+	tests := []struct {
+		name   string
+		commit func(t *testing.T, c *committer, cat *ceilingCatalog) error
+	}{
+		{
+			name: "append",
+			commit: func(t *testing.T, c *committer, _ *ceilingCatalog) error {
+				return appendOne(t, t.Context(), c)
+			},
+		},
+		{
+			name: "merge-on-read upsert",
+			commit: func(t *testing.T, c *committer, cat *ceilingCatalog) error {
+				return c.Commit(t.Context(), morUpsertInput(t, t.Context(), cat.snapshot(), 7))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			_, mem := newTestTable(t)
+			cat := &ceilingCatalog{memCatalog: mem, ceilingBytes: math.MaxInt}
+
+			// History written while expiry did nothing (max_snapshot_age 0).
+			per := bytesPerSnapshot(t, ctx, cat, 3)
+			old := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1})
+			for range 20 {
+				require.NoError(t, appendOne(t, ctx, old))
+			}
+			old.Close()
+
+			// The catalog limit sits half a snapshot above the current size.
+			cat.ceilingBytes = metadataBytes(t, cat.meta) + per/2
+
+			const age = 50 * time.Millisecond
+			time.Sleep(2 * age) // every snapshot is now older than age
+
+			c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
+			var err error
+			for range 3 {
+				if err = tt.commit(t, c, cat); err == nil {
+					break
+				}
+			}
+			require.NoError(t, err, "table with %d snapshots stays stuck at the catalog limit", len(cat.meta.Snapshots()))
+		})
+	}
+}
+
 // --- 4. maintenance commits -----------------------------------------------
 
 // actionRecordingCatalog keeps, per CommitTable call, the actions of the
