@@ -11,6 +11,7 @@ package pipelinestatus
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -28,20 +29,40 @@ const messagesConsumedMetric = "input_received"
 const inputPath = "root.input"
 
 // messagesConsumedTee is a metrics exporter that sums every series of the
-// consumed metric into one total and ignores everything else. While the
-// endpoint is disabled it ignores the consumed metric too, so a pipeline run
-// without the endpoint only pays for no-op calls.
+// consumed metric into one total, records when it last moved, and ignores
+// everything else. While the endpoint is disabled it ignores the consumed
+// metric too, so a pipeline run without the endpoint only pays for no-op
+// calls.
 type messagesConsumedTee struct {
 	total   *atomic.Int64
+	lastAt  *atomic.Int64
 	enabled *atomic.Bool
 }
 
 type consumedCounter struct {
-	total *atomic.Int64
+	total   *atomic.Int64
+	lastAt  *atomic.Int64
+	enabled *atomic.Bool
 }
 
+// Incr is called once per batch an input produces, with the batch size, so
+// the clock read is per batch rather than per message. An empty batch is not
+// a message and leaves the timestamp alone. The timestamp only moves forward,
+// so two inputs racing across a second boundary can't make it step back. The
+// enabled check is here rather than at construction so the order of enabling
+// and component construction doesn't matter.
 func (c consumedCounter) Incr(count int64) {
+	if count <= 0 || !c.enabled.Load() {
+		return
+	}
 	c.total.Add(count)
+	now := time.Now().Unix()
+	for {
+		cur := c.lastAt.Load()
+		if now <= cur || c.lastAt.CompareAndSwap(cur, now) {
+			return
+		}
+	}
 }
 
 type noopStat struct{}
@@ -52,7 +73,7 @@ func (noopStat) Set(int64)    {}
 
 func (m messagesConsumedTee) NewCounterCtor(name string, labelKeys ...string) service.MetricsExporterCounterCtor {
 	noop := func(...string) service.MetricsExporterCounter { return noopStat{} }
-	if name != messagesConsumedMetric || !m.enabled.Load() {
+	if name != messagesConsumedMetric {
 		return noop
 	}
 	pathIdx := -1
@@ -68,7 +89,7 @@ func (m messagesConsumedTee) NewCounterCtor(name string, labelKeys ...string) se
 		if pathIdx >= len(labelValues) || labelValues[pathIdx] != inputPath {
 			return noopStat{}
 		}
-		return consumedCounter{total: m.total}
+		return consumedCounter(m)
 	}
 }
 

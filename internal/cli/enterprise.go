@@ -202,7 +202,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 					},
 					&cli.BoolFlag{
 						Name:  "status-endpoint",
-						Usage: "Serve a /status endpoint on the HTTP server that reports the connection status of the running pipeline, a messages consumed counter, and the most recent error logs per component. Off by default, as the error logs are served as raw text.",
+						Usage: "Serve a /status endpoint on the HTTP server. " + pipelinestatus.Description + " Off by default, as the error logs are served as text.",
 					},
 					rpcPluginsFlag,
 				},
