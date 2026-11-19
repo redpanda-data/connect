@@ -768,25 +768,6 @@ func (c *namedProhibitedKeyCatalog) snapshot() *table.Table { return tableBoundT
 // maintenance pass that follows the first commit), an existing
 // value on the table wins over the configured one, and it is not written
 // into snapshot summaries (where it was inert).
-// TestStampedMergePropertyIsLogged: the property stays on shared table
-// metadata after this output stops writing, so the commit that sets it is
-// logged at info, once per table, and a table that already carries it logs
-// nothing.
-func TestStampedMergePropertyIsLogged(t *testing.T) {
-	ctx := t.Context()
-	_, cat := newTestTable(t)
-	var logs bytes.Buffer
-	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo})))
-	c := newLoggedOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true}, logger)
-	require.NoError(t, appendOne(t, ctx, c))
-	want := fmt.Sprintf("Set table property %s=true on %s", table.ManifestMergeEnabledKey, strings.Join(c.table.Identifier(), "."))
-	assert.Equal(t, 1, strings.Count(logs.String(), want), "one line for the landed stamp, got:\n%s", logs.String())
-
-	c.maint.releasePass()
-	require.NoError(t, appendOne(t, ctx, c))
-	assert.Equal(t, 1, strings.Count(logs.String(), "Set table property"), "the property is already on the table, nothing to log, got:\n%s", logs.String())
-}
-
 func TestManifestMergePropertyStampedWhenAbsentKeptWhenPresent(t *testing.T) {
 	t.Run("absent on the table: stamped with the configured value after the first commit", func(t *testing.T) {
 		ctx := t.Context()
@@ -823,6 +804,25 @@ func TestManifestMergePropertyStampedWhenAbsentKeptWhenPresent(t *testing.T) {
 		assert.Equal(t, "false", cat.meta.Properties()[table.ManifestMergeEnabledKey],
 			"an operator's explicit table property must not be overridden")
 	})
+}
+
+// TestStampedMergePropertyIsLogged: the property stays on shared table
+// metadata after this output stops writing, so the commit that sets it is
+// logged at info, once per table, and a table that already carries it logs
+// nothing.
+func TestStampedMergePropertyIsLogged(t *testing.T) {
+	ctx := t.Context()
+	_, cat := newTestTable(t)
+	var logs bytes.Buffer
+	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	c := newLoggedOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, ManifestMergeEnabled: true}, logger)
+	require.NoError(t, appendOne(t, ctx, c))
+	want := fmt.Sprintf("Set table property %s=true on %s", table.ManifestMergeEnabledKey, strings.Join(c.table.Identifier(), "."))
+	assert.Equal(t, 1, strings.Count(logs.String(), want), "one line for the landed stamp, got:\n%s", logs.String())
+
+	c.maint.releasePass()
+	require.NoError(t, appendOne(t, ctx, c))
+	assert.Equal(t, 1, strings.Count(logs.String(), "Set table property"), "the property is already on the table, nothing to log, got:\n%s", logs.String())
 }
 
 // TestMergePropertyNotStagedOnceStripperKnowsIt: when the catalog has named
