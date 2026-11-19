@@ -67,8 +67,10 @@ rely on them.
   becomes `2024-03-01 10:00:00`. So an invalid DATETIME before 1970 becomes `nil`,
   and one from 1970 on moves to a nearby valid date.
   Valid dates before 1970 keep their value in both paths.
-  The snapshot turns off the driver's `parseTime`, scans these columns as strings,
-  and parses them with the same `parseMySQLTime`, so both paths give `nil`.
+  The snapshot gives `0001-01-01` for a zero value instead, and moves a partial-zero
+  value to a nearby date (`2024-00-15` becomes `2023-12-15`), as go-sql-driver does with
+  `parseTime`. It scans these columns as strings, and `parseSnapshotTime` gives those
+  values, so the snapshot can page on the string that MySQL gave for a date primary key.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
   won't encounter.

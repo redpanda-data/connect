@@ -909,10 +909,10 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 	}
 }
 
-// The snapshot must give the same value as the stream for a zero or
-// partial-zero date: null. A stored 0001-01-01 must stay a date. A zero date
-// in a primary key must not stop the snapshot, because the next batch starts
-// after the last key that it read.
+// A zero or partial-zero date in a primary key must not stop the snapshot.
+// The next batch starts after the last key that it read, and that key must be
+// the one in the table, not the date that the snapshot gives for it. The
+// snapshot values stay the same as when the driver parsed them.
 func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 	db.Exec(`CREATE TABLE zero_dates (id INT PRIMARY KEY, d DATE, dt DATETIME, ts TIMESTAMP NULL)`)
@@ -967,12 +967,12 @@ mysql_cdc:
 	})
 
 	want := []string{
-		`{"id": 1, "d": null, "dt": null, "ts": null}`,
-		`{"id": 2, "d": null, "dt": null, "ts": null}`,
-		`{"id": 3, "d": null, "dt": null, "ts": null}`,
+		`{"id": 1, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": "0001-01-01T00:00:00Z"}`,
+		`{"id": 2, "d": "2023-12-15T00:00:00Z", "dt": "2023-12-15T10:00:00Z", "ts": "0001-01-01T00:00:00Z"}`,
+		`{"id": 3, "d": "2024-11-30T00:00:00Z", "dt": "2024-11-30T10:00:00Z", "ts": "0001-01-01T00:00:00Z"}`,
 		`{"id": 4, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": "2024-06-01T12:00:00Z"}`,
-		`{"d": null}`,
-		`{"d": null}`,
+		`{"d": "0001-01-01T00:00:00Z"}`,
+		`{"d": "2023-12-15T00:00:00Z"}`,
 		`{"d": "2024-06-01T00:00:00Z"}`,
 	}
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
