@@ -8,9 +8,9 @@
 
 // Package pipelinestatus serves the /status endpoint of a pipeline: the
 // connection status of its components, a messages consumed counter with the
-// time of the latest one, and the most recent error logs per component. It
-// depends only on the public benthos service API, and is fed through the
-// CLI's log and metrics tees.
+// time of the latest one, the backlog its inputs report, and the most recent
+// error logs per component. It depends only on the public benthos service
+// API, and is fed through the CLI's log and metrics tees.
 package pipelinestatus
 
 import (
@@ -28,7 +28,7 @@ import (
 const Path = "/status"
 
 // Description is the endpoint description shown by /endpoints.
-const Description = "Returns the connection status of the running pipeline, a messages consumed counter with the time of the latest one, and the most recent error logs per component."
+const Description = "Returns the connection status of the running pipeline, a messages consumed counter with the time of the latest one, the backlog its inputs report, and the most recent error logs per component."
 
 const (
 	connStatusOK           = "OK"
@@ -44,6 +44,10 @@ const (
 type response struct {
 	Connection       connection `json:"connection"`
 	MessagesConsumed int64      `json:"messages_consumed"`
+	// MessagesRemaining is the number of messages the inputs report remain
+	// at their sources, the sum of every `input_pending` gauge series the
+	// inputs have set, and null when none has.
+	MessagesRemaining *int64 `json:"messages_remaining"`
 	// LastMessageReceivedAt is the unix time an input last produced a
 	// message, null until the first one. It moves at the same event that
 	// MessagesConsumed counts: when the input hands the batch over, before
@@ -86,6 +90,7 @@ type Endpoint struct {
 	// lastReceivedAt is the unix time of the latest consumed message, zero
 	// before the first.
 	lastReceivedAt atomic.Int64
+	pending        pendingSeries
 	recent         *recentErrors
 }
 
@@ -134,7 +139,7 @@ func (e *Endpoint) LogHandler() slog.Handler {
 // MetricsTee returns a metrics exporter that sums the consumed metric. It must
 // be installed as a tee alongside the configured exporter.
 func (e *Endpoint) MetricsTee() service.MetricsExporter {
-	return messagesConsumedTee{total: &e.consumed, lastAt: &e.lastReceivedAt, enabled: &e.enabled}
+	return messagesConsumedTee{total: &e.consumed, lastAt: &e.lastReceivedAt, pending: &e.pending, enabled: &e.enabled}
 }
 
 // Handler returns the HTTP handler of the endpoint.
@@ -161,6 +166,9 @@ func (e *Endpoint) response() response {
 	}
 	if at := e.lastReceivedAt.Load(); at != 0 {
 		res.LastMessageReceivedAt = &at
+	}
+	if n, ok := e.pending.total(); ok {
+		res.MessagesRemaining = &n
 	}
 
 	if summary := e.summary.Load(); summary != nil {

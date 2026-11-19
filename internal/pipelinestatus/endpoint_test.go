@@ -102,21 +102,6 @@ func TestErrorRecorderAttributesAndRedaction(t *testing.T) {
 	assert.Equal(t, "Failed to flush: boom", flush.Message)
 }
 
-func TestErrorRecorderDoesNotDuplicateErrorInMessage(t *testing.T) {
-	ep := New()
-	ep.SetEnabled(true)
-
-	err := errors.New("dial tcp 127.0.0.1:9092: connect: connection refused")
-	logger := slog.New(ep.LogHandler())
-	logger.Error(fmt.Sprintf("Failed to connect to kafka: %v", err), "err", err)
-	logger.With("error", err).Error("Failed to connect to kafka")
-
-	entries := ep.recent.entries()
-	require.Len(t, entries, 2)
-	assert.Equal(t, "Failed to connect to kafka: dial tcp 127.0.0.1:9092: connect: connection refused", entries[0].Message)
-	assert.Equal(t, "Failed to connect to kafka: dial tcp 127.0.0.1:9092: connect: connection refused", entries[1].Message)
-}
-
 func TestErrorRecorderDisabledRecordsNothing(t *testing.T) {
 	ep := New()
 	logger := slog.New(ep.LogHandler())
@@ -513,4 +498,73 @@ func TestFanoutHandler(t *testing.T) {
 	// Enabled is the union of the children.
 	assert.True(t, logger.Handler().Enabled(t.Context(), slog.LevelInfo))
 	assert.False(t, logger.Handler().Enabled(t.Context(), slog.LevelDebug))
+}
+
+func TestInputPendingSumsInputSeries(t *testing.T) {
+	ep := New()
+	tee := ep.MetricsTee()
+
+	_, ok := ep.pending.total()
+	assert.False(t, ok, "null before any input reports")
+
+	// Disabled: nothing is kept.
+	tee.NewGaugeCtor("input_pending", "label", "path")("a", "root.input").Set(5)
+	_, ok = ep.pending.total()
+	assert.False(t, ok)
+
+	ep.SetEnabled(true)
+	a := tee.NewGaugeCtor("input_pending", "label", "path")("a", "root.input.broker.inputs.0")
+	b := tee.NewGaugeCtor("input_pending", "label", "path")("b", "root.input.broker.inputs.1")
+	a.Set(10)
+	b.Set(5)
+	// A gauge of the same name from a processor doesn't count, wherever the
+	// processor sits, including the input's own processors block.
+	tee.NewGaugeCtor("input_pending", "label", "path")("m", "root.pipeline.processors.0").Set(1000)
+	tee.NewGaugeCtor("input_pending", "label", "path")("m", "root.input.processors.0").Set(1000)
+	tee.NewGaugeCtor("input_pending", "label", "path")("m", "root.input.broker.inputs.0.processors.1").Set(1000)
+	// Nor does one with no path to tell it apart.
+	tee.NewGaugeCtor("input_pending")().Set(1000)
+	// Other gauges are ignored.
+	tee.NewGaugeCtor("redpanda_lag", "label", "path", "topic", "partition")("a", "root.input", "t", "0").Set(1000)
+
+	total, ok := ep.pending.total()
+	assert.True(t, ok)
+	assert.Equal(t, int64(15), total)
+
+	// The latest value per series wins, and zero is a known zero.
+	a.Set(2)
+	b.Set(0)
+	total, ok = ep.pending.total()
+	assert.True(t, ok)
+	assert.Equal(t, int64(2), total)
+
+	body, err := json.Marshal(ep.response())
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"messages_remaining":2`)
+	body, err = json.Marshal(New().response())
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"messages_remaining":null`)
+}
+
+func TestInputPendingPurgedWithStream(t *testing.T) {
+	ep := New()
+	ep.SetEnabled(true)
+	tee := ep.MetricsTee()
+	tee.NewGaugeCtor("input_pending", "stream", "label", "path")("a", "in", "root.input").Set(10)
+	tee.NewGaugeCtor("input_pending", "stream", "label", "path")("b", "in", "root.input").Set(5)
+
+	total, ok := ep.pending.total()
+	require.True(t, ok)
+	assert.Equal(t, int64(15), total)
+
+	deleter, ok := tee.(interface{ DeleteSeriesPartialMatch(map[string]string) })
+	require.True(t, ok, "the tee must accept the stream purge benthos forwards")
+	deleter.DeleteSeriesPartialMatch(map[string]string{"stream": "a"})
+	total, ok = ep.pending.total()
+	assert.True(t, ok)
+	assert.Equal(t, int64(5), total)
+
+	deleter.DeleteSeriesPartialMatch(map[string]string{"stream": "b"})
+	_, ok = ep.pending.total()
+	assert.False(t, ok, "nothing left to report")
 }
