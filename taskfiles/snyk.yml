@@ -97,7 +97,7 @@ tasks:
         jq -r '.summary[] | "  \(.package)  \(.from) -> \(.to // "NO FIX")  \((.fixedCves + .unfixedCves) | join(","))"' '{{.SNYK_REPORT}}'
 
   fix:
-    desc: Apply the upgrades in target/snyk/report.json with go get for the projects in SNYK_FILES then lint and test (DRY_RUN=true to print the plan, VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
+    desc: Apply the upgrades in target/snyk/report.json with go get for the projects in SNYK_FILES then lint and test (UPGRADE=fix for the minimum fixed version instead of the latest compatible one, DRY_RUN=true to print the plan, VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
     silent: true
     preconditions:
       - sh: test -f '{{.SNYK_REPORT}}'
@@ -106,6 +106,9 @@ tasks:
       DRY_RUN: '{{.DRY_RUN | default "false"}}'
       # Run `task lint` and `task test` after a real run that updated something.
       VERIFY: '{{.VERIFY | default "true"}}'
+      # latest: newest release in the fix's major line (patch line for v0), never below the fix.
+      # fix: exactly the minimum version Snyk says fixes the CVE.
+      UPGRADE: '{{.UPGRADE | default "latest"}}'
       # Projects to fix: FILES if given, otherwise SNYK_FILES. Report entries outside this are ignored.
       FILES: '{{if .FILES}}{{.FILES}}{{else if kindIs "string" .SNYK_FILES}}{{.SNYK_FILES}}{{else}}{{join " " .SNYK_FILES}}{{end}}'
     env:
@@ -117,10 +120,24 @@ tasks:
         results="$root/{{.SNYK_DIR}}/fix/results.jsonl"
         : > "$results"
 
-        record() { # project module from to status message
+        record() { # project module from to status message [required]
           jq -nc --arg project "$1" --arg module "$2" --arg from "$3" --arg to "$4" \
-            --arg status "$5" --arg message "$6" \
-            '{project: $project, module: $module, from: $from, to: $to, status: $status, message: $message}' >> "$results"
+            --arg status "$5" --arg message "$6" --arg required "${7:-$4}" \
+            '{project: $project, module: $module, from: $from, to: $to, required: $required, status: $status, message: $message}' >> "$results"
+        }
+
+        # Newest non-prerelease, non-retracted version of $1 in the same major line as $2 (same
+        # 0.minor line for v0, where minor bumps are breaking), and never below $2. Echoes $2 if
+        # the version list can't be fetched.
+        latest_compatible() { # module required-version
+          v=$( (cd "$dir" && go list -m -versions -json "$1" 2>/dev/null) | jq -r --arg req "$2" '
+            def vkey: ltrimstr("v") | split("+")[0] | split("-") as $p
+              | ($p[0] | split(".") | map(tonumber? // 0)) + [if ($p | length) > 1 then 0 else 1 end];
+            def line: ltrimstr("v") | split("+")[0] | split(".") | if .[0] == "0" then .[0:2] else .[0:1] end;
+            [.Versions[]? | select(contains("-") | not)
+              | select(line == ($req | line)) | select(vkey >= ($req | vkey))]
+            | sort_by(vkey) | last // $req' 2>/dev/null)
+          echo "${v:-$2}"
         }
 
         for i in $(jq -r '.projects | keys[]' '{{.SNYK_REPORT}}'); do
@@ -151,9 +168,23 @@ tasks:
           jq -n --slurpfile mods "$plan.mods" --argjson proj "$(jq ".projects[$i]" '{{.SNYK_REPORT}}')" -f /dev/stdin > "$plan" <<'JQ'
         def vkey: ltrimstr("v") | split("+")[0] | split("-") as $p
           | ($p[0] | split(".") | map(tonumber? // 0)) + [if ($p | length) > 1 then 0 else 1 end];
-        # Major version implied by a module path (/vN or gopkg.in .vN); v0 and v1 share a path.
-        def pathmajor: ((capture("/v(?<n>[0-9]+)$") // capture("[.]v(?<n>[0-9]+)$")).n | tonumber) // 1;
+        # Major version implied by a module path (/vN or gopkg.in .vN); null when the path has no suffix.
+        def pathmajor: ((capture("/v(?<n>[0-9]+)$") // capture("[.]v(?<n>[0-9]+)$")).n | tonumber) // null;
+        # Major version of a version string; v0 and v1 share a path, so both count as 1.
         def vermajor: ltrimstr("v") | split(".")[0] | (tonumber? // 0) | if . < 2 then 1 else . end;
+        # Why the target can't be reached with a plain go get, or null if it can.
+        #  - /vN path: the target must be vN, otherwise the fix lives under a different import path.
+        #  - +incompatible (v2+ without /vN): Go accepts any major on the same path, but only same-major
+        #    upgrades are applied unattended.
+        #  - otherwise: the path is the v0/v1 path, so a v2+ target needs the /vN path.
+        def majorskip:
+          (.module | pathmajor) as $pm | (.target | vermajor) as $tm | (.current | vermajor) as $cm
+          | if $pm != null then
+              (if $pm != $tm then "fix is in major version \($tm), needs a manual migration to the /v\($tm) module path" else null end)
+            elif (.current | endswith("+incompatible")) then
+              (if $cm != $tm then "fix is a major version bump (v\($cm) -> v\($tm)) of a +incompatible module, review API changes and upgrade manually" else null end)
+            elif $tm != 1 then "fix is in major version \($tm), needs a manual migration to the /v\($tm) module path"
+            else null end;
 
         [$proj.upgrades[] | select(.to != null) | . as $u
           | ([$mods[] | select(.Main | not) | .Path as $p
@@ -161,16 +192,23 @@ tasks:
              | sort_by(.Path | length) | last) as $m
           | {package: $u.package, module: $m.Path, current: $m.Version, replaced: ($m.Replace != null),
              target: ("v" + ($u.to | ltrimstr("v"))), cves: $u.fixedCves}]
+        # One entry per module: go get the highest target that needs no manual major migration, and
+        # list any targets that do need one as separate skipped entries so their CVEs aren't lost.
         | group_by(.module)
-        | map((sort_by(.target | vkey) | last) as $best
-            | {module: $best.module, current: $best.current, target: $best.target, replaced: $best.replaced,
-               packages: (map(.package) | unique), cves: ([.[].cves[]] | unique)})
-        | map(. + {skip: (
-            if .module == null then "package not found in the module graph"
-            elif .replaced then "module is replaced in go.mod"
-            elif (.module | pathmajor) != (.target | vermajor) then "fix is in major version \(.target | vermajor), needs a manual migration"
-            elif (.current | vkey) >= (.target | vkey) then "already at \(.current)"
-            else null end)})
+        | map(
+            (.[0] | {module, current, replaced}) as $base
+            | def entry: $base + {target: (map(.target) | sort_by(vkey) | last),
+                                  packages: (map(.package) | unique), cves: ([.[].cves[]] | unique)};
+            if $base.module == null then [entry + {skip: "package not found in the module graph"}]
+            elif $base.replaced then [entry + {skip: "module is replaced in go.mod"}]
+            else
+              map(. + {mskip: ($base + {target} | majorskip)})
+              | (map(select(.mskip == null)) | if length > 0 then [entry] else [] end
+                 | map(. + {skip: (if (.current | vkey) >= (.target | vkey) then "already at \(.current)" else null end)}))
+                + (map(select(.mskip != null)) | group_by(.mskip) | map(entry + {skip: .[0].mskip}))
+            end)
+        | flatten
+        | sort_by(.module, (.skip != null))
         JQ
 
           # Record and print skips.
@@ -181,20 +219,23 @@ tasks:
             done
 
           changed=0
-          while IFS=$'\t' read -r mod cur tgt cves; do
+          while IFS=$'\t' read -r mod cur req cves; do
+            tgt="$req"
+            [ "{{.UPGRADE}}" = "latest" ] && tgt=$(latest_compatible "$mod" "$req")
+            note="$cves"; [ "$tgt" != "$req" ] && note="$cves; fix needs >= $req"
             if [ "{{.DRY_RUN}}" = "true" ]; then
-              echo "    plan  go get $mod@$tgt  (from $cur; $cves)"
-              record "$file" "$mod" "$cur" "$tgt" "planned" "$cves"
+              echo "    plan  go get $mod@$tgt  (from $cur; $note)"
+              record "$file" "$mod" "$cur" "$tgt" "planned" "$cves" "$req"
               continue
             fi
-            echo "    get   $mod $cur -> $tgt  ($cves)"
+            echo "    get   $mod $cur -> $tgt  ($note)"
             if (cd "$dir" && go get "$mod@$tgt") > "$plan.get.log" 2>&1; then
-              record "$file" "$mod" "$cur" "$tgt" "updated" "$cves"
+              record "$file" "$mod" "$cur" "$tgt" "updated" "$cves" "$req"
               changed=1
             else
               msg=$(grep -v '^go: downloading' "$plan.get.log" | tail -1)
               echo "          failed: $msg"
-              record "$file" "$mod" "$cur" "$tgt" "failed" "$msg"
+              record "$file" "$mod" "$cur" "$tgt" "failed" "$msg" "$req"
             fi
           done < <(jq -r '.[] | select(.skip == null) | [.module, .current, .target, (.cves | join(","))] | @tsv' "$plan")
 
