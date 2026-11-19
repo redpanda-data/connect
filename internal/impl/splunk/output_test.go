@@ -20,31 +20,55 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// TestOutputEventFieldsOmitted checks that a config without the optional event_* fields starts, and that the output
-// then sends the event fields of the message unchanged.
-func TestOutputEventFieldsOmitted(t *testing.T) {
-	bodies := make(chan string, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		bodies <- string(b)
-	}))
-	t.Cleanup(srv.Close)
+// TestOutputEventFormat checks that a config without the optional event_* fields starts, and that the output sends
+// each message in the shape the "Event format" section of the spec describes.
+func TestOutputEventFormat(t *testing.T) {
+	tests := []struct {
+		name  string
+		extra string
+		msg   string
+		want  string
+	}{
+		{
+			name: "top-level event key is sent unchanged",
+			msg:  `{"event":"e","host":"h","source":"s","sourcetype":"st","index":"i"}`,
+			want: `{"event":"e","host":"h","source":"s","sourcetype":"st","index":"i"}`,
+		},
+		{
+			name: "other message is wrapped under event",
+			msg:  `{"index":"web","msg":"hi"}`,
+			want: `{"event":{"index":"web","msg":"hi"}}`,
+		},
+		{
+			name:  "event_index sets the index of a wrapped message",
+			extra: "event_index: main\n",
+			msg:   `{"index":"web","msg":"hi"}`,
+			want:  `{"event":{"index":"web","msg":"hi"},"index":"main"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bodies := make(chan string, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				b, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				bodies <- string(b)
+			}))
+			t.Cleanup(srv.Close)
 
-	pConf, err := outputSpec().ParseYAML(`
-url: "`+srv.URL+`"
-token: tok
-`, nil)
-	require.NoError(t, err)
+			pConf, err := outputSpec().ParseYAML("url: \""+srv.URL+"\"\ntoken: tok\n"+tt.extra, nil)
+			require.NoError(t, err)
 
-	o, err := outputFromParsed(pConf, service.MockResources().Logger())
-	require.NoError(t, err)
+			o, err := outputFromParsed(pConf, service.MockResources().Logger())
+			require.NoError(t, err)
 
-	msg := service.NewMessage([]byte(`{"event":"e","host":"h","source":"s","sourcetype":"st","index":"i"}`))
-	require.NoError(t, o.WriteBatch(t.Context(), service.MessageBatch{msg}))
+			msg := service.NewMessage([]byte(tt.msg))
+			require.NoError(t, o.WriteBatch(t.Context(), service.MessageBatch{msg}))
 
-	assert.JSONEq(t, `{"event":"e","host":"h","source":"s","sourcetype":"st","index":"i"}`, <-bodies)
+			assert.JSONEq(t, tt.want, <-bodies)
+		})
+	}
 }
