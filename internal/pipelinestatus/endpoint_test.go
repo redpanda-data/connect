@@ -309,9 +309,65 @@ func TestStatusPath(t *testing.T) {
 
 func TestMessagesConsumedTeeIgnoredWhenDisabled(t *testing.T) {
 	ep := New()
-	tee := ep.MetricsTee()
-	tee.NewCounterCtor("input_received", "label", "path")("a", "root.input").Incr(3)
+	counter := ep.MetricsTee().NewCounterCtor("input_received", "label", "path")("a", "root.input")
+	counter.Incr(3)
 	assert.Zero(t, ep.consumed.Load())
+	assert.Zero(t, ep.lastReceivedAt.Load())
+
+	// Enabling after the counter was built still takes effect.
+	ep.SetEnabled(true)
+	counter.Incr(3)
+	assert.Equal(t, int64(3), ep.consumed.Load())
+	assert.NotZero(t, ep.lastReceivedAt.Load())
+}
+
+func TestLastMessageReceivedAtOnlyMovesForward(t *testing.T) {
+	ep := New()
+	ep.SetEnabled(true)
+	counter := ep.MetricsTee().NewCounterCtor("input_received", "label", "path")("a", "root.input")
+
+	counter.Incr(0)
+	assert.Zero(t, ep.lastReceivedAt.Load(), "an empty batch is not a message")
+	assert.Zero(t, ep.consumed.Load())
+
+	future := time.Now().Add(time.Hour).Unix()
+	ep.lastReceivedAt.Store(future)
+	counter.Incr(1)
+	assert.Equal(t, future, ep.lastReceivedAt.Load(), "a later timestamp is never lowered")
+	assert.Equal(t, int64(1), ep.consumed.Load())
+}
+
+func BenchmarkConsumedCounterIncr(b *testing.B) {
+	ep := New()
+	ep.SetEnabled(true)
+	counter := ep.MetricsTee().NewCounterCtor("input_received", "label", "path")("a", "root.input")
+	b.ReportAllocs()
+	for b.Loop() {
+		counter.Incr(1)
+	}
+}
+
+func TestLastMessageReceivedAt(t *testing.T) {
+	ep := New()
+	ep.SetEnabled(true)
+
+	assert.Nil(t, ep.response().LastMessageReceivedAt, "null before any message")
+
+	before := time.Now().Unix()
+	ep.MetricsTee().NewCounterCtor("input_received", "label", "path")("a", "root.input").Incr(2)
+	got := ep.response().LastMessageReceivedAt
+	require.NotNil(t, got)
+	assert.GreaterOrEqual(t, *got, before)
+	assert.LessOrEqual(t, *got, time.Now().Unix())
+
+	// Other metrics don't move it.
+	ep.lastReceivedAt.Store(1)
+	ep.MetricsTee().NewCounterCtor("output_sent", "label", "path")("c", "root.output").Incr(5)
+	assert.Equal(t, int64(1), *ep.response().LastMessageReceivedAt)
+
+	body, err := json.Marshal(New().response())
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"last_message_received_at":null`)
 }
 
 func TestMessagesConsumedTeeOnlyCountsTopLevelInput(t *testing.T) {
