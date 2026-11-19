@@ -60,7 +60,8 @@ rely on them.
   `sql.*` wrappers leak through.
 - **Date strings**: CDC delivers DATE values, zero datetimes (e.g. `"0000-00-00 00:00:00"`)
   and every DATETIME before 1970 as strings. `mapMessageColumn` parses these into
-  `time.Time`, and converts zero and partial-zero values (month or day `00`) to `nil`.
+  `time.Time`, and converts zero and partial-zero values (month or day `00`) and dates
+  that do not exist (`2024-02-30`, stored with `ALLOW_INVALID_DATES`) to `nil`.
   The snapshot gives `0001-01-01` for a zero value instead.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers

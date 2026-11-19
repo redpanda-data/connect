@@ -734,11 +734,14 @@ memory: {}
 	// The default SQL mode rejects zero dates. multiStatements keeps both
 	// statements on one connection.
 	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO old_dates VALUES (3, '0000-00-00', '0000-00-00 00:00:00', NULL)`)
+	// ALLOW_INVALID_DATES stores dates that do not exist, such as
+	// 2024-02-30.
+	db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO old_dates VALUES (4, '2024-02-30', '1965-02-30 10:00:00', NULL)`)
 
 	require.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 3
+		return len(outBatches) == 4
 	}, 30*time.Second, 100*time.Millisecond)
 
 	outBatchMut.Lock()
@@ -746,6 +749,7 @@ memory: {}
 	require.JSONEq(t, `{"id": 1, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[0])
 	require.JSONEq(t, `{"id": 2, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[1])
 	require.JSONEq(t, `{"id": 3, "d": null, "dt": null, "dt6": null}`, outBatches[2])
+	require.JSONEq(t, `{"id": 4, "d": null, "dt": null, "dt6": null}`, outBatches[3])
 }
 
 // The parseBinlogTime comment says when go-mysql gives a string for a DATE or

@@ -107,7 +107,7 @@ The stored position is a binlog file name and offset on one server, not a GTID. 
 
 Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
 
-A zero date such as `+"`0000-00-00`"+` has no timestamp form. When streamed, it becomes `+"`null`"+`. In the snapshot, it becomes `+"`0001-01-01T00:00:00Z`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+` when streamed, but the snapshot moves it to a nearby valid date.
+A zero date such as `+"`0000-00-00`"+` has no timestamp form. When streamed, it becomes `+"`null`"+`. In the snapshot, it becomes `+"`0001-01-01T00:00:00Z`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, or a date that does not exist, such as `+"`2024-02-30`"+` (stored with `+"`ALLOW_INVALID_DATES`"+`), also becomes `+"`null`"+` when streamed, but the snapshot moves it to a nearby valid date.
 
 == Metadata
 
@@ -1076,7 +1076,8 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 }
 
 // parseBinlogTime parses a DATE or DATETIME string from the binlog decoder
-// into a time.Time in UTC. It returns nil for a zero or partial-zero date.
+// into a time.Time in UTC. It returns nil for a zero, partial-zero or invalid
+// date.
 func parseBinlogTime(layout, s string) (any, error) {
 	// go-mysql gives a string for DATE, for a zero DATETIME, and for a
 	// DATETIME before 1970. The string always starts with YYYY-MM-DD.
@@ -1094,7 +1095,15 @@ func parseBinlogTime(layout, s string) (any, error) {
 	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
 		return nil, nil
 	}
-	return time.Parse(layout, s)
+	t, err := time.Parse(layout, s)
+	if err != nil {
+		// With ALLOW_INVALID_DATES in the SQL mode, MySQL stores a date
+		// such as 2024-02-30 that time.Time cannot hold. Give nil, as for a
+		// zero date: an error restarts the input at the same binlog
+		// position, so the stream would stop.
+		return nil, nil
+	}
+	return t, nil
 }
 
 func mapMessageColumn(v any, col schema.TableColumn) (any, error) {

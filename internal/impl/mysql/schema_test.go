@@ -154,6 +154,18 @@ func TestMapMessageColumn(t *testing.T) {
 			expected: nil,
 		},
 		{
+			name:     "invalid date string to nil",
+			value:    "2024-02-30",
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATE},
+			expected: nil,
+		},
+		{
+			name:     "invalid pre-1970 datetime string to nil",
+			value:    "1965-02-30 10:00:00",
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATETIME},
+			expected: nil,
+		},
+		{
 			name:     "pre-1970 datetime string to time.Time",
 			value:    "1965-03-04 10:00:00",
 			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATETIME},
