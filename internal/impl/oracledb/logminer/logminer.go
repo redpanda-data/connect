@@ -538,6 +538,22 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
+		// The docs promise empty LOB columns when LOB support is off. LogMiner
+		// can render an INSERT with inline LOB values when its session starts
+		// inside the transaction. Replace those values with the empty value
+		// that the EMPTY_CLOB() and EMPTY_BLOB() placeholders give.
+		if !lm.cfg.LOBEnabled && event.Operation == sqlredo.OpInsert && len(lm.lobColTypes) > 0 {
+			prefix := strings.ToUpper(event.Schema + "." + event.Table + ".")
+			for col, val := range event.Data {
+				if val == nil {
+					continue
+				}
+				if _, isLOB := lm.lobColTypes[prefix+strings.ToUpper(col)]; isLOB {
+					event.Data[col] = []byte{}
+				}
+			}
+		}
+
 		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
 			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
 		}

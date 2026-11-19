@@ -1365,3 +1365,159 @@ func TestReadAheadBatches(t *testing.T) {
 		})
 	}
 }
+
+// insertRedo returns an INSERT redo event for TESTDB.T in transaction txA.
+func insertRedo(scn uint64, sqlRedo string) *sqlredo.RedoEvent {
+	return &sqlredo.RedoEvent{
+		SCN:           scn,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: sqlRedo, Valid: true},
+	}
+}
+
+// TestInsertWithInlineLOBValueWhenLOBDisabled covers a full-row INSERT that
+// carries the LOB value inline. LogMiner renders it so when a session starts in
+// the middle of the transaction. With lob_enabled false, the documented
+// behavior is that LOB columns are present but contain no values. The buffered
+// event must have the same empty value as an INSERT with an EMPTY_CLOB() or
+// EMPTY_BLOB() placeholder.
+func TestInsertWithInlineLOBValueWhenLOBDisabled(t *testing.T) {
+	lobColTypes := map[string]string{
+		"TESTDB.T.INLINELOB":    "CLOB",
+		"TESTDB.T.OUTOFLINELOB": "CLOB",
+		"TESTDB.T.NLOB":         "NCLOB",
+		"TESTDB.T.BIN":          "BLOB",
+	}
+	tests := []struct {
+		name       string
+		lobEnabled bool
+		lobTypes   map[string]string
+		sqlRedo    string
+		want       map[string]any
+	}{
+		{
+			name:       "CLOB with inline value is emptied",
+			lobEnabled: false,
+			lobTypes:   lobColTypes,
+			sqlRedo:    `insert into "TESTDB"."T"("ID","VARCHARCOL","INLINELOB") values ('261','streaming','AAAAAAAAAA');`,
+			want: map[string]any{
+				"ID":         "261",
+				"VARCHARCOL": "streaming",
+				"INLINELOB":  []byte{},
+			},
+		},
+		{
+			name:       "NCLOB with inline value is emptied",
+			lobEnabled: false,
+			lobTypes:   lobColTypes,
+			sqlRedo:    `insert into "TESTDB"."T"("ID","NLOB") values ('1','nchar text');`,
+			want: map[string]any{
+				"ID":   "1",
+				"NLOB": []byte{},
+			},
+		},
+		{
+			name:       "BLOB with inline value is emptied",
+			lobEnabled: false,
+			lobTypes:   lobColTypes,
+			sqlRedo:    `insert into "TESTDB"."T"("ID","BIN") values ('1',HEXTORAW('DEADBEEF'));`,
+			want: map[string]any{
+				"ID":  "1",
+				"BIN": []byte{},
+			},
+		},
+		{
+			name:       "two LOB columns, one inline and one placeholder",
+			lobEnabled: false,
+			lobTypes:   lobColTypes,
+			sqlRedo:    `insert into "TESTDB"."T"("ID","VARCHARCOL","INLINELOB","OUTOFLINELOB") values ('261','streaming','AAAAAAAAAA',EMPTY_CLOB());`,
+			want: map[string]any{
+				"ID":           "261",
+				"VARCHARCOL":   "streaming",
+				"INLINELOB":    []byte{},
+				"OUTOFLINELOB": []byte{},
+			},
+		},
+		{
+			name:       "NULL LOB column stays NULL",
+			lobEnabled: false,
+			lobTypes:   lobColTypes,
+			sqlRedo:    `insert into "TESTDB"."T"("ID","INLINELOB","BIN") values ('1',NULL,NULL);`,
+			want: map[string]any{
+				"ID":        "1",
+				"INLINELOB": nil,
+				"BIN":       nil,
+			},
+		},
+		{
+			name:       "table without LOB columns is unchanged",
+			lobEnabled: false,
+			lobTypes:   map[string]string{},
+			sqlRedo:    `insert into "TESTDB"."T"("ID","VARCHARCOL") values ('7','plain');`,
+			want: map[string]any{
+				"ID":         "7",
+				"VARCHARCOL": "plain",
+			},
+		},
+		{
+			name:       "LOB enabled keeps the inline value",
+			lobEnabled: true,
+			lobTypes:   lobColTypes,
+			sqlRedo:    `insert into "TESTDB"."T"("ID","INLINELOB") values ('261','AAAAAAAAAA');`,
+			want: map[string]any{
+				"ID":        "261",
+				"INLINELOB": "AAAAAAAAAA",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+			lm := newLogMiner(&publisherStub{}, cache)
+			lm.cfg.LOBEnabled = test.lobEnabled
+			lm.lobColTypes = test.lobTypes
+
+			require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+				SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+			}))
+			require.NoError(t, lm.processRedoEvent(t.Context(), insertRedo(101, test.sqlRedo)))
+
+			txn, err := cache.GetTransaction(t.Context(), "txA")
+			require.NoError(t, err)
+			require.NotNil(t, txn)
+			require.Len(t, txn.Events, 1)
+			assert.Equal(t, test.want, txn.Events[0].Data)
+		})
+	}
+}
+
+// TestInsertWithInlineLOBValueIsPublishedEmptyWhenLOBDisabled covers the same
+// INSERT as above, but through COMMIT. With lob_enabled false, the published
+// event must have an empty LOB column and keep the other columns.
+func TestInsertWithInlineLOBValueIsPublishedEmptyWhenLOBDisabled(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = false
+	lm.lobColTypes = map[string]string{"TESTDB.T.INLINELOB": "CLOB"}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), insertRedo(101,
+		`insert into "TESTDB"."T"("ID","VARCHARCOL","INLINELOB") values ('261','streaming','AAAAAAAAAA');`)))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	assert.Equal(t, map[string]any{
+		"ID":         "261",
+		"VARCHARCOL": "streaming",
+		"INLINELOB":  []byte{},
+	}, pub.messages[0].Data)
+}
