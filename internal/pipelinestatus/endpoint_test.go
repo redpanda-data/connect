@@ -102,11 +102,26 @@ func TestErrorRecorderAttributesAndRedaction(t *testing.T) {
 	assert.Equal(t, "Failed to flush: boom", flush.Message)
 }
 
+func TestErrorRecorderDoesNotDuplicateErrorInMessage(t *testing.T) {
+	ep := New()
+	ep.SetEnabled(true)
+
+	err := errors.New("dial tcp 127.0.0.1:9092: connect: connection refused")
+	logger := slog.New(ep.LogHandler())
+	logger.Error(fmt.Sprintf("Failed to connect to kafka: %v", err), "err", err)
+	logger.With("error", err).Error("Failed to connect to kafka")
+
+	entries := ep.recent.entries()
+	require.Len(t, entries, 2)
+	assert.Equal(t, "Failed to connect to kafka: dial tcp 127.0.0.1:9092: connect: connection refused", entries[0].Message)
+	assert.Equal(t, "Failed to connect to kafka: dial tcp 127.0.0.1:9092: connect: connection refused", entries[1].Message)
+}
+
 func TestErrorRecorderDisabledRecordsNothing(t *testing.T) {
 	ep := New()
 	logger := slog.New(ep.LogHandler())
 
-	assert.False(t, logger.Handler().Enabled(context.Background(), slog.LevelError))
+	assert.False(t, logger.Handler().Enabled(t.Context(), slog.LevelError))
 	logger.With("label", "a", "path", "root.input").Error("ignored")
 	assert.Empty(t, ep.recent.entries())
 
@@ -248,7 +263,7 @@ func TestErrorRecorderZeroTimeFallsBackToNow(t *testing.T) {
 
 	before := time.Now().Unix()
 	rec := slog.Record{Level: slog.LevelError, Message: "no time"}
-	require.NoError(t, h.Handle(context.Background(), rec))
+	require.NoError(t, h.Handle(t.Context(), rec))
 
 	entries := ep.recent.entries()
 	require.Len(t, entries, 1)
@@ -292,7 +307,7 @@ func TestFanoutHandlerJoinsErrors(t *testing.T) {
 	ok := recordingHandler{level: slog.LevelInfo, records: &recs, groups: &groups}
 	f := &fanoutHandler{handlers: []slog.Handler{failingHandler{errors.New("boom")}, ok, failingHandler{errors.New("bang")}}}
 
-	err := f.Handle(context.Background(), slog.Record{Level: slog.LevelInfo, Message: "x"})
+	err := f.Handle(t.Context(), slog.Record{Level: slog.LevelInfo, Message: "x"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "boom")
 	assert.Contains(t, err.Error(), "bang")
@@ -408,7 +423,7 @@ func TestMessagesConsumedTeeSumsOnlyInputReceived(t *testing.T) {
 	tee.NewGaugeCtor("input_connection_up", "label", "path")("a", "root.input").Set(1)
 
 	assert.Equal(t, int64(8), ep.consumed.Load())
-	require.NoError(t, tee.Close(context.Background()))
+	require.NoError(t, tee.Close(t.Context()))
 }
 
 func TestStatusEndpointResponseBeforeStreamStart(t *testing.T) {
@@ -496,6 +511,6 @@ func TestFanoutHandler(t *testing.T) {
 	assert.Equal(t, []string{"g", "g"}, groups)
 
 	// Enabled is the union of the children.
-	assert.True(t, logger.Handler().Enabled(context.Background(), slog.LevelInfo))
-	assert.False(t, logger.Handler().Enabled(context.Background(), slog.LevelDebug))
+	assert.True(t, logger.Handler().Enabled(t.Context(), slog.LevelInfo))
+	assert.False(t, logger.Handler().Enabled(t.Context(), slog.LevelDebug))
 }

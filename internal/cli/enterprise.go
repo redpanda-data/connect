@@ -38,13 +38,14 @@ const connectorListPath = "/etc/redpanda/connector_list.yaml"
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
 func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, extraOpts ...service.CLIOptFunc) {
-	instanceID := xid.New().String()
+	var (
+		fbLogger *service.Logger
 
-	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
-
-	rpLogger := rpMgr.SlogHandler()
-	statusEP := pipelinestatus.New()
-	var fbLogger *service.Logger
+		instanceID = xid.New().String()
+		rpMgr      = enterprise.NewGlobalRedpandaManager(instanceID)
+		rpLogger   = rpMgr.SlogHandler()
+		statusEP   = pipelinestatus.New()
+	)
 
 	cListApplied, err := ApplyConnectorsList(connectorListPath, schema)
 	if err != nil {
@@ -202,7 +203,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 					},
 					&cli.BoolFlag{
 						Name:  "status-endpoint",
-						Usage: "Serve a /status endpoint on the HTTP server. " + pipelinestatus.Description + " Off by default, as the error logs are served as text.",
+						Usage: "Serve a /status endpoint with the pipeline's connection status, consumption progress, and recent error logs",
 					},
 					rpcPluginsFlag,
 				},
