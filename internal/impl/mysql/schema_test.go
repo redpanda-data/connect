@@ -14,7 +14,6 @@ import (
 	"time"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
-	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -668,8 +667,8 @@ func TestMysqlColumnToCommonDecimalCarriesLogical(t *testing.T) {
 }
 
 // TestParseSnapshotTime checks that the snapshot gives the same DATE,
-// DATETIME and TIMESTAMP values as go-sql-driver with parseTime, also for
-// zero and partial-zero dates that the driver does not keep.
+// DATETIME and TIMESTAMP values as the stream, so a row has the same value
+// whether the snapshot or the stream delivered it.
 func TestParseSnapshotTime(t *testing.T) {
 	berlin, err := time.LoadLocation("Europe/Berlin")
 	require.NoError(t, err)
@@ -678,7 +677,7 @@ func TestParseSnapshotTime(t *testing.T) {
 		name  string
 		value string
 		loc   *time.Location
-		want  time.Time
+		want  any
 	}{
 		{
 			name:  "date",
@@ -708,13 +707,13 @@ func TestParseSnapshotTime(t *testing.T) {
 			name:  "zero date",
 			value: "0000-00-00",
 			loc:   time.UTC,
-			want:  time.Time{},
+			want:  nil,
 		},
 		{
 			name:  "zero datetime with fraction in loc",
 			value: "0000-00-00 00:00:00.000000",
 			loc:   berlin,
-			want:  time.Time{},
+			want:  nil,
 		},
 		{
 			name:  "zero year",
@@ -726,13 +725,31 @@ func TestParseSnapshotTime(t *testing.T) {
 			name:  "zero month",
 			value: "2024-00-15",
 			loc:   time.UTC,
-			want:  time.Date(2023, time.December, 15, 0, 0, 0, 0, time.UTC),
+			want:  nil,
 		},
 		{
 			name:  "zero day",
 			value: "2024-12-00 10:00:00",
 			loc:   time.UTC,
-			want:  time.Date(2024, time.November, 30, 10, 0, 0, 0, time.UTC),
+			want:  nil,
+		},
+		{
+			name:  "invalid date",
+			value: "2024-02-30",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "invalid datetime before 1970",
+			value: "1965-02-30 10:00:00",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "invalid datetime from 1970 on",
+			value: "2024-02-30 10:00:00",
+			loc:   time.UTC,
+			want:  time.Date(2024, time.March, 1, 10, 0, 0, 0, time.UTC),
 		},
 		{
 			name:  "stored 0001-01-01 in loc",
@@ -746,14 +763,6 @@ func TestParseSnapshotTime(t *testing.T) {
 			got, err := parseSnapshotTime(test.value, test.loc)
 			require.NoError(t, err)
 			assert.Equal(t, test.want, got)
-
-			// The driver parses in UTC here, so compare only UTC cases.
-			if test.loc != time.UTC {
-				return
-			}
-			var driver mysql.NullTime //nolint:staticcheck // the only exported path to the driver's parseDateTime
-			require.NoError(t, driver.Scan(test.value))
-			assert.Equal(t, driver.Time, got)
 		})
 	}
 }

@@ -923,13 +923,19 @@ func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
 			db.Exec(`CREATE TABLE zero_dates (id INT PRIMARY KEY, d DATE, dt DATETIME, ts TIMESTAMP NULL)`)
 			db.Exec(`CREATE TABLE zero_date_keys (d DATE PRIMARY KEY)`)
 			db.Exec(`CREATE TABLE fraction_keys (tenant INT, created_at DATETIME(6), PRIMARY KEY (tenant, created_at))`)
-			// The default SQL mode rejects zero dates. multiStatements
-			// keeps both statements on one connection.
-			db.Exec(`SET SESSION sql_mode = ''; INSERT INTO zero_dates VALUES
+			// The default SQL mode rejects zero and invalid dates.
+			// multiStatements keeps both statements on one connection.
+			// ts is NULL for valid dates, because the stream gives a
+			// TIMESTAMP in the local time zone of the process, which this
+			// test does not set.
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates VALUES
         (1, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00'),
         (2, '2024-00-15', '2024-00-15 10:00:00', '2024-00-15 10:00:00'),
         (3, '2024-12-00', '2024-12-00 10:00:00', '2024-12-00 10:00:00'),
-        (4, '0001-01-01', '0001-01-01 00:00:00', '2024-06-01 12:00:00')`)
+        (4, '0001-01-01', '0001-01-01 00:00:00', NULL),
+        (5, '2024-02-30', '2024-02-30 10:00:00', NULL),
+        (6, '1965-02-30', '1965-02-30 10:00:00', NULL),
+        (7, '1965-03-04', '1965-03-04 10:00:00', NULL)`)
 			db.Exec(`SET SESSION sql_mode = ''; INSERT INTO zero_date_keys VALUES ('0000-00-00'), ('2024-00-15'), ('2024-06-01')`)
 			db.Exec(`INSERT INTO fraction_keys VALUES
         (1, '2024-06-01 12:00:00.000001'),
@@ -981,12 +987,15 @@ mysql_cdc:
 			})
 
 			snapshot := []string{
-				`{"id": 1, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": "0001-01-01T00:00:00Z"}`,
-				`{"id": 2, "d": "2023-12-15T00:00:00Z", "dt": "2023-12-15T10:00:00Z", "ts": "0001-01-01T00:00:00Z"}`,
-				`{"id": 3, "d": "2024-11-30T00:00:00Z", "dt": "2024-11-30T10:00:00Z", "ts": "0001-01-01T00:00:00Z"}`,
-				`{"id": 4, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": "2024-06-01T12:00:00Z"}`,
-				`{"d": "0001-01-01T00:00:00Z"}`,
-				`{"d": "2023-12-15T00:00:00Z"}`,
+				`{"id": 1, "d": null, "dt": null, "ts": null}`,
+				`{"id": 2, "d": null, "dt": null, "ts": null}`,
+				`{"id": 3, "d": null, "dt": null, "ts": null}`,
+				`{"id": 4, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": null}`,
+				`{"id": 5, "d": null, "dt": "2024-03-01T10:00:00Z", "ts": null}`,
+				`{"id": 6, "d": null, "dt": null, "ts": null}`,
+				`{"id": 7, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
+				`{"d": null}`,
+				`{"d": null}`,
 				`{"d": "2024-06-01T00:00:00Z"}`,
 				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000001Z"}`,
 				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000002Z"}`,
@@ -1015,15 +1024,22 @@ mysql_cdc:
 				checkOutput(c, snapshot)
 			}, 30*time.Second, 100*time.Millisecond)
 
-			// The input streams only after the snapshot ends. So a row that
-			// is inserted now arrives only if the snapshot ended, and it must
-			// be the only message after the snapshot rows.
-			// ts is NULL because the stream gives a TIMESTAMP in the local
-			// time zone of the process, which this test does not set.
-			db.Exec(`INSERT INTO zero_dates VALUES (5, '2024-06-01', '2024-06-01 12:00:00', NULL)`)
-			streamed := `{"id": 5, "d": "2024-06-01T00:00:00Z", "dt": "2024-06-01T12:00:00Z", "ts": null}`
+			// The input streams only after the snapshot ends. So rows that
+			// are inserted now arrive only if the snapshot ended. The copied
+			// rows have the same stored values, so the stream must give the
+			// same values as the snapshot.
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates SELECT id + 10, d, dt, ts FROM zero_dates`)
+			streamed := []string{
+				`{"id": 11, "d": null, "dt": null, "ts": null}`,
+				`{"id": 12, "d": null, "dt": null, "ts": null}`,
+				`{"id": 13, "d": null, "dt": null, "ts": null}`,
+				`{"id": 14, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": null}`,
+				`{"id": 15, "d": null, "dt": "2024-03-01T10:00:00Z", "ts": null}`,
+				`{"id": 16, "d": null, "dt": null, "ts": null}`,
+				`{"id": 17, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
+			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
-				checkOutput(c, append(slices.Clone(snapshot), streamed))
+				checkOutput(c, append(slices.Clone(snapshot), streamed...))
 			}, 30*time.Second, 100*time.Millisecond)
 		})
 	}
