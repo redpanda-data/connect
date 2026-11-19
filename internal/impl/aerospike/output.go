@@ -44,12 +44,6 @@ const (
 	aoFieldFencingTombstoneBin  = "tombstone_bin"
 	aoFieldFencingTombstoneTTL  = "tombstone_ttl"
 	aoFieldBatching             = "batching"
-
-	// defaultBatchCount and defaultBatchPeriod are applied when no batching
-	// policy is configured. An unbatched database sink round-trips per message,
-	// which is the most common cause of a slow pipeline.
-	defaultBatchCount  = 256
-	defaultBatchPeriod = "1s"
 )
 
 // retryableIgnoreLint rejects ignore_error_codes entries that a retry could
@@ -100,7 +94,8 @@ not rely on the data being queryable as a join.
 
 ### Batching and hot keys
 
-Writes are dispatched with a single batch command per output batch. Aerospike enforces
+Writes are dispatched with a single batch command per output batch. Configure ` + "`batching`" + `,
+otherwise every message is its own command. Aerospike enforces
 concurrency limits per record, so multiple messages for the same key inside one batch are
 coalesced into one write by default (see ` + "`coalesce_batch_keys`" + `). Disable it only if
 you need strict one-message-one-write semantics (including per-message
@@ -267,9 +262,8 @@ A connection failure of the batch is still a failure. So is any mapping error ot
 				Description("Bin holding the fence value. Counts toward the 15 character bin name limit. Readers of these records should ignore it, since it is bookkeeping rather than data.").
 				Default(defaultFenceBin),
 			service.NewInterpolatedStringField(aoFieldFencingValue).
-				Description("An integer that increases monotonically for a given record key. The Kafka offset satisfies this when keys map to partitions consistently, which is the default partitioner's behaviour.").
+				Description("An integer that strictly increases with every update of a given record key, so no two updates of a key share a value. A write whose value is not greater than the stored one is filtered out and acknowledged, so a second update carrying the same value is dropped. The Kafka offset satisfies this when keys map to partitions consistently, which is the default partitioner's behaviour. A timestamp does not, because two updates can share one.").
 				Default(`${! meta("kafka_offset") }`).
-				Example(`${! meta("kafka_timestamp_ms") }`).
 				Example(`${! json("version") }`),
 			service.NewStringField(aoFieldFencingTombstoneBin).
 				Description("Bin written on a fenced delete to mark the record as a tombstone. Readers should treat a record carrying this bin as missing. Counts toward the 15 character bin name limit.").
@@ -291,7 +285,7 @@ as not found. `+"`create_only`"+` after a fenced delete fails because the tombst
 			Advanced(),
 
 		service.NewBatchPolicyField(aoFieldBatching).
-			Description(fmt.Sprintf("Allows you to configure a batching policy. When this object is omitted, the output applies a default of %d messages or %s, whichever comes first, because an unbatched database sink round-trips per message. The field reference below shows `count: 0`, which is how the framework renders an unset policy — the default above is what actually runs, and the output logs it on startup. Set `count: 1` to write one message per command.", defaultBatchCount, defaultBatchPeriod)),
+			Description("Allows you to configure a batching policy. Without one, every message is written by its own command, one network round trip per message. A good starting point is `count: 256` and `period: 1s`."),
 
 		service.NewOutputMaxInFlightField().
 			Description("Maximum number of batches to have in flight concurrently. Note that key coalescing only deduplicates within a batch, so a value above `1` allows two concurrent batches to write the same record key, reordering them relative to each other. Set this to `1` when writes to a key must land in stream order."),
@@ -332,6 +326,9 @@ output:
     digest: '${! json("digest") }'
     bins: 'root = this.without("digest")'
     operation: replace
+    batching:
+      count: 256
+      period: 1s
 `,
 		).
 		Example(
@@ -350,6 +347,9 @@ output:
       enabled: true
       bin: _off
       value: '${! meta("kafka_offset") }'
+    batching:
+      count: 256
+      period: 1s
 `,
 		).
 		Example(
@@ -375,6 +375,9 @@ output:
                 key: '${! json("id") }'
                 bins: 'root = this.without("id", "namespace_name", "set_name")'
                 operation: replace
+                batching:
+                  count: 256
+                  period: 1s
             - redpanda:
                 seed_brokers: [ "localhost:19092" ]
                 topic: aerospike-rejects
@@ -388,6 +391,9 @@ output:
                 key: '${! meta("kafka_key") }'
                 bins: 'root = this'
                 operation: replace
+                batching:
+                  count: 256
+                  period: 1s
             - redpanda:
                 seed_brokers: [ "localhost:19092" ]
                 topic: aerospike-rejects

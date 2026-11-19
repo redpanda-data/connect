@@ -48,6 +48,9 @@ output:
                 key: '${! json("id") }'
                 bins: 'root = this.without("id", "namespace_name", "set_name")'
                 operation: replace
+                batching:
+                  count: 256
+                  period: 1s
             - redpanda:
                 seed_brokers: ["127.0.0.1:19092"]
                 topic: aerospike-rejects
@@ -61,6 +64,9 @@ output:
                 key: '${! meta("kafka_key") }'
                 bins: 'root = this'
                 operation: replace
+                batching:
+                  count: 256
+                  period: 1s
             - redpanda:
                 seed_brokers: ["127.0.0.1:19092"]
                 topic: aerospike-rejects

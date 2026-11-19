@@ -43,28 +43,6 @@ output:
         output:
           aerospike:
             hosts: ["127.0.0.1:3000"]
-            # ciphers is the TLS 1.2 allow-list. Empty leaves the tls default.
-            # It applies only when tls.enabled is true. TLS 1.3 suites stay on
-            # unless protocols is TLSv1.2. ciphers with protocols: [TLSv1.3]
-            # fails startup.
-            # ciphers:
-            #   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-            #   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-            # protocols is the version allow-list. Empty offers TLS 1.2 and TLS 1.3.
-            # protocols:
-            #   - TLSv1.2
-            # revoke_certificates rejects a listed serial. Use a decimal integer,
-            # or hex with a 0x prefix. openssl x509 -noout -serial prints hex.
-            # A serial is unique only for its issuing CA. With skip_cert_verify,
-            # only certificates the server sends are checked.
-            # revoke_certificates:
-            #   - "123123"
-            #   - "0x1E0F3"
-            # password_file is the first line of a file, read once at startup.
-            # An empty first line fails startup. A rotated file is read on restart.
-            # credentials:
-            #   username: rpcn
-            #   password_file: /var/secrets/aerospike-password
             cluster_name: redpanda-demo
             namespace: test
             set: users
@@ -123,6 +101,9 @@ output:
             set: users
             key: '${! json("user_id") }'
             operation: delete
+            batching:
+              count: 256
+              period: 1s
 logger:
   level: INFO
   format: logfmt

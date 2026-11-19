@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync/atomic"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -36,19 +35,6 @@ func newAerospikeOutput(conf *service.ParsedConfig, mgr *service.Resources) (ser
 	if err != nil {
 		return nil, batchPolicy, 0, err
 	}
-	// An unbatched database sink round-trips per message. If the user has not
-	// expressed a preference, batch by default rather than shipping a pipeline
-	// that is an order of magnitude slower than it should be. The framework
-	// renders an unset policy as `count: 0` in the config reference, so say out
-	// loud what actually got applied.
-	if batchPolicy.IsNoop() {
-		batchPolicy.Count = defaultBatchCount
-		batchPolicy.Period = defaultBatchPeriod
-		mgr.Logger().Infof(
-			"No batching policy set, defaulting to %d messages or %s; set batching.count to 1 to write one message per command",
-			defaultBatchCount, defaultBatchPeriod)
-	}
-
 	maxInFlight, err := conf.FieldMaxInFlight()
 	if err != nil {
 		return nil, batchPolicy, 0, err
@@ -59,9 +45,6 @@ func newAerospikeOutput(conf *service.ParsedConfig, mgr *service.Resources) (ser
 		return nil, batchPolicy, 0, err
 	}
 	parsed.client.sizePoolForConcurrency(maxInFlight)
-	if names := parsed.client.insecureCiphers; len(names) > 0 {
-		mgr.Logger().Warnf("field '%s' includes insecure cipher suites: %s", aoFieldCiphers, strings.Join(names, ", "))
-	}
 
 	return &aerospikeWriter{
 		conf:        parsed,
@@ -139,11 +122,20 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		}
 
 		batchErr := operate(policy, records)
-		if batchErr != nil && isConnectionError(batchErr) {
-			if w.log != nil {
-				w.log.Errorf("Aerospike batch command failed: %v", batchErr)
+		// A connection error can end a batch after some nodes have answered.
+		// Those records are applied and must not be written again, so the batch
+		// is only treated as unsent when no record got a response.
+		connErr := batchErr != nil && isConnectionError(batchErr)
+		if connErr {
+			if !anyResponse(records) {
+				if w.log != nil {
+					w.log.Errorf("Aerospike batch command failed: %v", batchErr)
+				}
+				return service.ErrNotConnected
 			}
-			return service.ErrNotConnected
+			if w.log != nil {
+				w.log.Warnf("Aerospike batch command failed after some records were written, failing the rest: %v", batchErr)
+			}
 		}
 
 		// A one-record rejection comes back as the command error and as the
@@ -163,7 +155,7 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 			}
 		}
 
-		if batchErr != nil && len(failures) == 0 && !commandListed {
+		if batchErr != nil && len(failures) == 0 && !commandListed && !connErr {
 			return fmt.Errorf("aerospike batch command failed: %w", batchErr)
 		}
 	}
@@ -172,12 +164,30 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		return nil
 	}
 
-	err := service.NewBatchError(batch, fmt.Errorf(
-		"%v of %v messages did not write to aerospike", len(failures), len(batch)))
+	summary := fmt.Errorf("%v of %v messages did not write to aerospike", len(failures), len(batch))
+	// A batch of one is reported by its summary alone, for example in the
+	// fallback_error metadata, so the summary has to carry the cause.
+	if len(failures) == 1 {
+		for _, msgErr := range failures {
+			summary = fmt.Errorf("%w: %w", summary, msgErr)
+		}
+	}
+	err := service.NewBatchError(batch, summary)
 	for idx, msgErr := range failures {
 		err = err.Failed(idx, msgErr)
 	}
 	return err
+}
+
+// anyResponse reports whether a server answered for at least one record. The
+// client leaves a record it never heard back about at NO_RESPONSE.
+func anyResponse(records []as.BatchRecordIfc) bool {
+	for _, r := range records {
+		if r.BatchRec().ResultCode != types.NO_RESPONSE {
+			return true
+		}
+	}
+	return false
 }
 
 // planBatch maps every message to a pending write and, unless disabled,

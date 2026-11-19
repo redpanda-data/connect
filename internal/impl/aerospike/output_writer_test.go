@@ -430,7 +430,38 @@ func TestWriteBatchConnectionErrorIgnoresListedCodes(t *testing.T) {
 	err := w.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"id":"u1","v":1}`)),
 	})
-	require.ErrorIs(t, err, service.ErrNotConnected)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), w.ignoredTotal.Load())
+}
+
+func TestWriteBatchConnectionErrorFailsOnlyUnansweredRecords(t *testing.T) {
+	w := newTestWriter(t, baseConfig)
+	w.operate = func(_ *as.BatchPolicy, recs []as.BatchRecordIfc) error {
+		require.Len(t, recs, 2)
+		recs[0].BatchRec().ResultCode = types.OK
+		recs[1].BatchRec().ResultCode = types.NO_RESPONSE
+		return &as.AerospikeError{ResultCode: types.NETWORK_ERROR}
+	}
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"written","v":1}`)),
+		service.NewMessage([]byte(`{"id":"unanswered","v":1}`)),
+	}
+	indexer := batch.Index()
+	err := w.WriteBatch(t.Context(), batch)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, service.ErrNotConnected)
+
+	var berr *service.BatchError
+	require.ErrorAs(t, err, &berr)
+	var failed []int
+	berr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, msgErr error) bool {
+		if msgErr != nil {
+			failed = append(failed, i)
+		}
+		return true
+	})
+	assert.Equal(t, []int{1}, failed)
 }
 
 func indexedMessageError(t *testing.T, indexer *service.Indexer, err error) string {

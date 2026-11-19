@@ -31,24 +31,20 @@ import (
 
 // Configuration field names shared by every Aerospike component.
 const (
-	aoFieldHosts                   = "hosts"
-	aoFieldClusterName             = "cluster_name"
-	aoFieldUseServicesAlternate    = "use_services_alternate"
-	aoFieldConnectTimeout          = "connect_timeout"
-	aoFieldMaxConnsPerNode         = "max_connections_per_node"
-	aoFieldMinConnsPerNode         = "min_connections_per_node"
-	aoFieldWarmUp                  = "warm_up"
-	aoFieldMaxErrorRate            = "max_error_rate"
-	aoFieldErrorRateWindow         = "error_rate_window"
-	aoFieldCredentials             = "credentials"
-	aoFieldCredentialsUsername     = "username"
-	aoFieldCredentialsPassword     = "password"
-	aoFieldCredentialsPasswordFile = "password_file"
-	aoFieldTLS                     = "tls"
-	aoFieldCiphers                 = "ciphers"
-	aoFieldProtocols               = "protocols"
-	aoFieldRevokeCertificates      = "revoke_certificates"
-	aoFieldAuthMode                = "auth_mode"
+	aoFieldHosts                = "hosts"
+	aoFieldClusterName          = "cluster_name"
+	aoFieldUseServicesAlternate = "use_services_alternate"
+	aoFieldConnectTimeout       = "connect_timeout"
+	aoFieldMaxConnsPerNode      = "max_connections_per_node"
+	aoFieldMinConnsPerNode      = "min_connections_per_node"
+	aoFieldWarmUp               = "warm_up"
+	aoFieldMaxErrorRate         = "max_error_rate"
+	aoFieldErrorRateWindow      = "error_rate_window"
+	aoFieldCredentials          = "credentials"
+	aoFieldCredentialsUsername  = "username"
+	aoFieldCredentialsPassword  = "password"
+	aoFieldTLS                  = "tls"
+	aoFieldAuthMode             = "auth_mode"
 
 	// defaultServicePort is the Aerospike client service port.
 	defaultServicePort = 3000
@@ -113,14 +109,9 @@ func clientFields() []*service.ConfigField {
 				Description("Username for Aerospike access control.").
 				Default(""),
 			service.NewStringField(aoFieldCredentialsPassword).
-				Description("Password for Aerospike access control. Set this or `password_file`, not both.").
+				Description("Password for Aerospike access control.").
 				Default("").
 				Secret(),
-			service.NewStringField(aoFieldCredentialsPasswordFile).
-				Description("File whose first line is the Aerospike password. The file is read once at startup, so a rotated password is picked up on the next restart. A trailing newline is not part of the password. Trailing spaces on the first line are kept. An empty first line fails startup. Set this or `password`, not both. A username with neither also fails startup. `pki` ignores this field. A missing or unreadable file fails startup. The file contents are not logged.").
-				Default("").
-				Example("/var/secrets/aerospike-password").
-				Advanced(),
 		).Description("Credentials for clusters with access control enabled. Aerospike Community Edition has no authentication; leave empty there.").
 			Optional().
 			Advanced(),
@@ -135,34 +126,14 @@ func clientFields() []*service.ConfigField {
 			Advanced(),
 
 		service.NewTLSToggledField(aoFieldTLS),
-
-		service.NewStringListField(aoFieldCiphers).
-			Description("TLS 1.2 cipher suites to offer, as IANA names such as `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`. Empty leaves the suites selected by `tls`. Names are matched case-insensitively, and a name Go does not implement is rejected at startup. A suite Go marks insecure is accepted when it is named, so the list can match a server that still requires it, and startup logs a warning for each one. TLS 1.3 suites cannot be named here. They stay offered unless `protocols` is `TLSv1.2`. Naming `ciphers` when `protocols` offers TLS 1.3 only fails startup. Requires `tls.enabled`.").
-			Default([]string{}).
-			Example([]string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"}).
-			Advanced(),
-
-		service.NewStringListField(aoFieldProtocols).
-			Description("TLS versions to offer. `TLSv1.2` does not offer TLS 1.3. `TLSv1.3` does not offer TLS 1.2. Empty, or both names, leaves the versions selected by `tls`: TLS 1.2 and TLS 1.3. Names are matched case-insensitively. `ciphers` fails startup when this list offers TLS 1.3 only. Requires `tls.enabled`.").
-			Default([]string{}).
-			Example([]string{"TLSv1.2"}).
-			Advanced(),
-
-		service.NewStringListField(aoFieldRevokeCertificates).
-			Description("Certificate serial numbers to reject. A value is a decimal integer, or a hex integer with a `0x` prefix. `openssl x509 -noout -serial` prints hex, so convert that to decimal or add the `0x` prefix. A hex value without the prefix is read as decimal when it contains only digits. A serial is unique only for its issuing CA, and the same number on any other certificate in the verified chain, including a root or intermediate, is also rejected. With `tls.skip_cert_verify`, only certificates the server sends are checked, so a root the server does not send is not seen. An empty list leaves the CA check as the only certificate check. A serial may be larger than a 64-bit integer. Requires `tls.enabled`.").
-			Default([]string{}).
-			Example([]string{"123123", "0x1E0F3"}).
-			Advanced(),
 	}
 }
 
 // clientConfig is the parsed connection configuration.
 type clientConfig struct {
-	Hosts               []*as.Host
-	Policy              *as.ClientPolicy
-	WarmUp              bool
-	insecureCiphers     []string
-	ignoredPasswordFile bool
+	Hosts  []*as.Host
+	Policy *as.ClientPolicy
+	WarmUp bool
 }
 
 // sizePoolForConcurrency gives the connection pool a floor matching the number
@@ -244,7 +215,6 @@ func parseClientConfig(conf *service.ParsedConfig) (*clientConfig, error) {
 		return nil, fmt.Errorf("field '%v' must not be negative", aoFieldErrorRateWindow)
 	}
 
-	var passwordFile string
 	if conf.Contains(aoFieldCredentials) {
 		cc := conf.Namespace(aoFieldCredentials)
 		if c.Policy.User, err = cc.FieldString(aoFieldCredentialsUsername); err != nil {
@@ -253,10 +223,6 @@ func parseClientConfig(conf *service.ParsedConfig) (*clientConfig, error) {
 		if c.Policy.Password, err = cc.FieldString(aoFieldCredentialsPassword); err != nil {
 			return nil, err
 		}
-		if passwordFile, err = cc.FieldString(aoFieldCredentialsPasswordFile); err != nil {
-			return nil, err
-		}
-		passwordFile = strings.TrimSpace(passwordFile)
 	}
 
 	mode, err := conf.FieldString(aoFieldAuthMode)
@@ -273,56 +239,12 @@ func parseClientConfig(conf *service.ParsedConfig) (*clientConfig, error) {
 	default:
 		return nil, fmt.Errorf("field '%v': unknown auth mode %q", aoFieldAuthMode, mode)
 	}
-	ignoredPasswordFile, err := applyPasswordFile(c.Policy, passwordFile)
-	if err != nil {
-		return nil, err
-	}
-	c.ignoredPasswordFile = ignoredPasswordFile
-
 	var tlsConf *tls.Config
 	var tlsEnabled bool
 	if tlsConf, tlsEnabled, err = conf.FieldTLSToggled(aoFieldTLS); err != nil {
 		return nil, err
 	}
-	cipherNames, err := conf.FieldStringList(aoFieldCiphers)
-	if err != nil {
-		return nil, err
-	}
-	if len(cipherNames) > 0 && !tlsEnabled {
-		return nil, fmt.Errorf("field '%s' requires '%s.enabled'", aoFieldCiphers, aoFieldTLS)
-	}
-	protocolNames, err := conf.FieldStringList(aoFieldProtocols)
-	if err != nil {
-		return nil, err
-	}
-	if len(protocolNames) > 0 && !tlsEnabled {
-		return nil, fmt.Errorf("field '%s' requires '%s.enabled'", aoFieldProtocols, aoFieldTLS)
-	}
-	revokedNames, err := conf.FieldStringList(aoFieldRevokeCertificates)
-	if err != nil {
-		return nil, err
-	}
-	if len(revokedNames) > 0 && !tlsEnabled {
-		return nil, fmt.Errorf("field '%s' requires '%s.enabled'", aoFieldRevokeCertificates, aoFieldTLS)
-	}
 	if tlsEnabled {
-		if err := applyTLSProtocols(tlsConf, protocolNames); err != nil {
-			return nil, err
-		}
-		if len(cipherNames) > 0 && tlsConf.MinVersion >= tls.VersionTLS13 {
-			return nil, fmt.Errorf("field '%s': TLS 1.2 cipher suites have no effect when '%s' offers TLS 1.3 only", aoFieldCiphers, aoFieldProtocols)
-		}
-		suites, err := cipherSuiteIDs(cipherNames)
-		if err != nil {
-			return nil, err
-		}
-		if len(suites) > 0 {
-			tlsConf.CipherSuites = suites
-			c.insecureCiphers = insecureCipherNames(suites)
-		}
-		if err := applyRevokedCertificates(tlsConf, revokedNames); err != nil {
-			return nil, err
-		}
 		c.Policy.TlsConfig = tlsConf
 	}
 
@@ -466,8 +388,6 @@ type connection struct {
 
 	mu     sync.RWMutex
 	client *as.Client
-
-	warnedIgnoredPassword bool
 }
 
 // newConnection returns an unconnected handle. Call connect before issuing commands.
@@ -491,11 +411,6 @@ func (c *connection) connect(ctx context.Context) error {
 		c.client.Close()
 		c.client = nil
 	}
-	if c.conf.ignoredPasswordFile && c.log != nil && !c.warnedIgnoredPassword {
-		c.log.Warnf("field '%s.%s' is ignored when '%s' is pki", aoFieldCredentials, aoFieldCredentialsPasswordFile, aoFieldAuthMode)
-		c.warnedIgnoredPassword = true
-	}
-
 	policy := c.conf.Policy
 	if policy == nil {
 		policy = as.NewClientPolicy()
