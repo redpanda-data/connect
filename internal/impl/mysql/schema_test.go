@@ -717,6 +717,12 @@ func TestParseSnapshotTime(t *testing.T) {
 			want:  time.Time{},
 		},
 		{
+			name:  "zero year",
+			value: "0000-05-15",
+			loc:   time.UTC,
+			want:  time.Date(0, time.May, 15, 0, 0, 0, 0, time.UTC),
+		},
+		{
 			name:  "zero month",
 			value: "2024-00-15",
 			loc:   time.UTC,
