@@ -576,58 +576,296 @@ func TestLOBReplayCarriedOverEndedTxns(t *testing.T) {
 	})
 }
 
-func TestPlanLOBReplayLOBDisabled(t *testing.T) {
-	ctx := t.Context()
-	insertEv := func(scn uint64, txn sqlredo.TransactionID, table, redo string) *sqlredo.RedoEvent {
-		return &sqlredo.RedoEvent{
-			SCN:           scn,
-			TransactionID: txn,
-			Operation:     sqlredo.OpInsert,
-			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
-			TableName:     sql.NullString{String: table, Valid: true},
-			SQLRedo:       sql.NullString{String: redo, Valid: true},
-		}
+// insertEv builds an INSERT row for TESTDB.table. table P has no LOB column.
+func insertEv(scn uint64, txn sqlredo.TransactionID, table, redo string) *sqlredo.RedoEvent {
+	return &sqlredo.RedoEvent{
+		SCN:           scn,
+		TransactionID: txn,
+		Operation:     sqlredo.OpInsert,
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: table, Valid: true},
+		SQLRedo:       sql.NullString{String: redo, Valid: true},
+	}
+}
+
+func txnEv(scn uint64, txn sqlredo.TransactionID, op sqlredo.Operation) *sqlredo.RedoEvent {
+	return &sqlredo.RedoEvent{SCN: scn, TransactionID: txn, Operation: op}
+}
+
+const (
+	lobInsertRedo   = `insert into "TESTDB"."T"("ID","DOC") values ('42',EMPTY_CLOB());`
+	noLOBColumnRedo = `insert into "TESTDB"."T"("ID") values ('42');`
+	plainInsertRedo = `insert into "TESTDB"."P"("ID") values ('1');`
+	lobUpdateRedo   = `update "TESTDB"."T" set "ID" = '43' where "ID" = '42';`
+	lobDeleteRedo   = `delete from "TESTDB"."T" where "ID" = '42';`
+)
+
+// TestLOBInsertTxnTracking checks which open transactions the connector
+// remembers when LOB columns are disabled. Oracle writes an INSERT into a table
+// with LOB columns as two redo changes. A mining window can end between them.
+// The connector must know the transaction is open and where it started.
+func TestLOBInsertTxnTracking(t *testing.T) {
+	tests := []struct {
+		name string
+		evs  []*sqlredo.RedoEvent
+		want map[sqlredo.TransactionID]uint64
+	}{
+		{
+			name: "insert into LOB table with START",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				insertEv(31, "a", "T", lobInsertRedo),
+			},
+			want: map[sqlredo.TransactionID]uint64{"a": 30},
+		},
+		{
+			name: "insert that omits the LOB column",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				insertEv(31, "a", "T", noLOBColumnRedo),
+			},
+			want: map[sqlredo.TransactionID]uint64{"a": 30},
+		},
+		{
+			name: "START not processed uses the INSERT SCN",
+			evs: []*sqlredo.RedoEvent{
+				insertEv(31, "a", "T", lobInsertRedo),
+			},
+			want: map[sqlredo.TransactionID]uint64{"a": 31},
+		},
+		{
+			name: "table without LOB column",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				insertEv(31, "a", "P", plainInsertRedo),
+			},
+			want: map[sqlredo.TransactionID]uint64{},
+		},
+		{
+			name: "update of LOB table",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				lobEv(31, "a", sqlredo.OpUpdate, lobUpdateRedo),
+			},
+			want: map[sqlredo.TransactionID]uint64{},
+		},
+		{
+			name: "delete from LOB table",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				lobEv(31, "a", sqlredo.OpDelete, lobDeleteRedo),
+			},
+			want: map[sqlredo.TransactionID]uint64{},
+		},
+		{
+			name: "commit ends the record",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				insertEv(31, "a", "T", lobInsertRedo),
+				txnEv(32, "a", sqlredo.OpCommit),
+			},
+			want: map[sqlredo.TransactionID]uint64{},
+		},
+		{
+			name: "rollback ends the record",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				insertEv(31, "a", "T", lobInsertRedo),
+				txnEv(32, "a", sqlredo.OpRollback),
+			},
+			want: map[sqlredo.TransactionID]uint64{},
+		},
+		{
+			name: "only the ended transaction leaves",
+			evs: []*sqlredo.RedoEvent{
+				txnEv(30, "a", sqlredo.OpStart),
+				insertEv(31, "a", "T", lobInsertRedo),
+				txnEv(40, "b", sqlredo.OpStart),
+				insertEv(41, "b", "T", lobInsertRedo),
+				txnEv(42, "a", sqlredo.OpCommit),
+			},
+			want: map[sqlredo.TransactionID]uint64{"b": 40},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lm, _, _ := newLOBReplayMiner(t)
+			lm.cfg.LOBEnabled = false
+			for _, ev := range test.evs {
+				require.NoError(t, lm.processRedoEvent(t.Context(), ev))
+			}
+			assert.Equal(t, test.want, lm.lobInsertTxns)
+		})
 	}
 
-	t.Run("selects open transactions that insert into a LOB table", func(t *testing.T) {
+	t.Run("LOB enabled records nothing", func(t *testing.T) {
+		lm, _, _ := newLOBReplayMiner(t)
+		require.NoError(t, lm.processRedoEvent(t.Context(), txnEv(30, "a", sqlredo.OpStart)))
+		require.NoError(t, lm.processRedoEvent(t.Context(), insertEv(31, "a", "T", lobInsertRedo)))
+		assert.Empty(t, lm.lobInsertTxns)
+	})
+}
+
+func TestLOBPinSCN(t *testing.T) {
+	tests := []struct {
+		name   string
+		txns   map[sqlredo.TransactionID]uint64
+		want   uint64
+		wantOK bool
+	}{
+		{name: "none"},
+		{
+			name:   "one",
+			txns:   map[sqlredo.TransactionID]uint64{"a": 30},
+			want:   30,
+			wantOK: true,
+		},
+		{
+			name:   "lowest wins",
+			txns:   map[sqlredo.TransactionID]uint64{"a": 30, "b": 20, "c": 40},
+			want:   20,
+			wantOK: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lm, _, _ := newLOBReplayMiner(t)
+			lm.lobInsertTxns = test.txns
+			got, ok := lm.lobPinSCN()
+			assert.Equal(t, test.wantOK, ok)
+			assert.Equal(t, test.want, got)
+		})
+	}
+}
+
+// TestMiningCycleLOBDisabledPinnedSessionStart covers an open transaction that
+// inserted a row into a table with LOB columns. Oracle writes the LOB value as a
+// second redo change. If a window ends between the two changes, the next window
+// must not publish the row twice. The session starts at the start of the open
+// transaction. Rows already read are not read again, and the buffered events stay.
+func TestMiningCycleLOBDisabledPinnedSessionStart(t *testing.T) {
+	ctx := t.Context()
+	files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+
+	// run feeds evs as the previous window, then runs one mining cycle.
+	run := func(t *testing.T, evs ...*sqlredo.RedoEvent) (*LogMiner, *fakeConn, TransactionCache) {
+		t.Helper()
+		conn, fc := newFakeSQLConn(t, files)
 		lm, _, cache := newLOBReplayMiner(t)
 		lm.cfg.LOBEnabled = false
-		lm.currentSCN = 100
-		for id, scn := range map[sqlredo.TransactionID]uint64{"lobInsert": 30, "plainInsert": 20} {
-			require.NoError(t, cache.StartTransaction(ctx, id, scn))
+		lm.logCollector = NewLogFileCollector()
+		lm.sessionMgr = NewSessionManager(lm.cfg, lm.log)
+		lm.windowSize = lm.cfg.SCNWindowSize
+		lm.redoVolume = newRedoVolumeStrategy(lm.cfg.RedoVolumeMin, lm.cfg.RedoVolumeGrowthMax)
+		lm.tables = []replication.UserTable{{Schema: "TESTDB", Name: "T"}}
+		lm.logMinerQuery = "SELECT SCN FROM V$LOGMNR_CONTENTS" + logMinerRangeClause
+		t.Cleanup(func() { _ = lm.Close() })
+		for _, ev := range evs {
+			require.NoError(t, lm.processRedoEvent(ctx, ev))
 		}
-		require.NoError(t, lm.processRedoEvent(ctx, insertEv(31, "lobInsert", "T", `insert into "TESTDB"."T"("ID","DOC") values ('42',EMPTY_CLOB());`)))
-		require.NoError(t, lm.processRedoEvent(ctx, insertEv(21, "plainInsert", "P", `insert into "TESTDB"."P"("ID") values ('1');`)))
-
-		replay, err := lm.planLOBReplay(ctx)
-		require.NoError(t, err)
-		require.NotNil(t, replay)
-		assert.Equal(t, map[sqlredo.TransactionID]struct{}{"lobInsert": {}}, replay.txns)
-		assert.Equal(t, uint64(30), replay.fromSCN)
-		assert.Empty(t, lm.lobInsertTxns)
-
-		txn, err := cache.GetTransaction(ctx, "lobInsert")
-		require.NoError(t, err)
-		assert.Nil(t, txn, "the replayed transaction is reset")
-		txn, err = cache.GetTransaction(ctx, "plainInsert")
-		require.NoError(t, err)
-		assert.NotNil(t, txn, "a transaction without LOB columns must be untouched")
-	})
-
-	t.Run("commit ends the tracking", func(t *testing.T) {
-		lm, _, cache := newLOBReplayMiner(t)
-		lm.cfg.LOBEnabled = false
 		lm.currentSCN = 100
-		require.NoError(t, cache.StartTransaction(ctx, "lobInsert", 30))
-		require.NoError(t, lm.processRedoEvent(ctx, insertEv(31, "lobInsert", "T", `insert into "TESTDB"."T"("ID","DOC") values ('42',EMPTY_CLOB());`)))
-		require.Contains(t, lm.lobInsertTxns, sqlredo.TransactionID("lobInsert"))
-		require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{SCN: 32, TransactionID: "lobInsert", Operation: sqlredo.OpCommit}))
-		assert.Empty(t, lm.lobInsertTxns)
-
-		replay, err := lm.planLOBReplay(ctx)
+		fc.currentSCN = 100 + uint64(lm.windowSize) + uint64(lm.cfg.MinSCNWindowSize) + 1
+		_, err := lm.miningCycle(ctx, conn)
 		require.NoError(t, err)
-		assert.Nil(t, replay)
+		return lm, fc, cache
+	}
+
+	t.Run("session starts before the open transaction", func(t *testing.T) {
+		lm, fc, cache := run(t,
+			txnEv(30, "a", sqlredo.OpStart),
+			insertEv(31, "a", "T", lobInsertRedo),
+		)
+
+		require.Len(t, fc.startArgs, 1)
+		assert.Equal(t, int64(29), asInt64(t, fc.startArgs[0][0]), "STARTSCN is one below the start of the transaction")
+
+		require.Len(t, fc.logRangeArgs, 1)
+		assert.Equal(t, int64(29), asInt64(t, fc.logRangeArgs[0][0]), "log files are collected from the pinned SCN")
+
+		require.Len(t, fc.contentCalls, 1)
+		assert.Equal(t, int64(100), asInt64(t, fc.contentCalls[0].args[0]), "contents query still reads only rows above the current SCN")
+		assert.Len(t, fc.contentCalls[0].args, 2, "no extra bind for an XID filter")
+		assert.Equal(t, lm.logMinerQuery, fc.contentCalls[0].query)
+		assert.Equal(t, 1, fc.prepareCount("V$LOGMNR_CONTENTS"))
+		assert.NotNil(t, lm.contentStmt, "the cached statement is used")
+
+		assert.Nil(t, lm.lobReplay, "no LOB replay when LOB columns are disabled")
+		txn, err := cache.GetTransaction(ctx, "a")
+		require.NoError(t, err)
+		require.NotNil(t, txn, "the buffered transaction is not reset")
+		assert.Len(t, txn.Events, 1)
 	})
+
+	t.Run("lowest start SCN wins", func(t *testing.T) {
+		_, fc, _ := run(t,
+			txnEv(50, "b", sqlredo.OpStart),
+			insertEv(51, "b", "T", lobInsertRedo),
+			txnEv(30, "a", sqlredo.OpStart),
+			insertEv(31, "a", "T", lobInsertRedo),
+		)
+		require.Len(t, fc.startArgs, 1)
+		assert.Equal(t, int64(29), asInt64(t, fc.startArgs[0][0]))
+	})
+
+	t.Run("START not processed uses the INSERT SCN", func(t *testing.T) {
+		_, fc, _ := run(t, insertEv(31, "a", "T", lobInsertRedo))
+		require.Len(t, fc.startArgs, 1)
+		assert.Equal(t, int64(30), asInt64(t, fc.startArgs[0][0]))
+	})
+
+	t.Run("table without LOB column does not pin", func(t *testing.T) {
+		lm, fc, _ := run(t,
+			txnEv(30, "a", sqlredo.OpStart),
+			insertEv(31, "a", "P", plainInsertRedo),
+		)
+		require.Len(t, fc.startArgs, 1)
+		assert.Equal(t, int64(100), asInt64(t, fc.startArgs[0][0]), "session starts at the current SCN")
+		require.Len(t, fc.logRangeArgs, 1, "only the default window strategy collects log files")
+		assert.Equal(t, int64(100), asInt64(t, fc.logRangeArgs[0][0]), "log files are collected from the current SCN")
+		assert.Nil(t, lm.lobReplay)
+	})
+
+	t.Run("committed transaction does not pin", func(t *testing.T) {
+		_, fc, _ := run(t,
+			txnEv(30, "a", sqlredo.OpStart),
+			insertEv(31, "a", "T", lobInsertRedo),
+			txnEv(32, "a", sqlredo.OpCommit),
+		)
+		require.Len(t, fc.startArgs, 1)
+		assert.Equal(t, int64(100), asInt64(t, fc.startArgs[0][0]))
+	})
+}
+
+// TestPlanLOBReplayLOBDisabled checks that an open INSERT into a table with LOB
+// columns never selects a LOB replay when LOB columns are disabled.
+func TestPlanLOBReplayLOBDisabled(t *testing.T) {
+	ctx := t.Context()
+	lm, _, cache := newLOBReplayMiner(t)
+	lm.cfg.LOBEnabled = false
+	lm.currentSCN = 100
+	require.NoError(t, lm.processRedoEvent(ctx, txnEv(30, "a", sqlredo.OpStart)))
+	require.NoError(t, lm.processRedoEvent(ctx, insertEv(31, "a", "T", lobInsertRedo)))
+
+	replay, err := lm.planLOBReplay(ctx)
+	require.NoError(t, err)
+	assert.Nil(t, replay)
+	assert.Nil(t, lm.lobReplay)
+
+	txn, err := cache.GetTransaction(ctx, "a")
+	require.NoError(t, err)
+	assert.NotNil(t, txn, "the transaction is not reset")
+}
+
+func asInt64(t *testing.T, v any) int64 {
+	t.Helper()
+	switch n := v.(type) {
+	case int64:
+		return n
+	case uint64:
+		return int64(n)
+	}
+	require.Failf(t, "unexpected bind type", "%T", v)
+	return 0
 }
 
 func TestLOBReplayEndNil(t *testing.T) {
@@ -642,6 +880,7 @@ func newLOBReplayMiner(t *testing.T) (*LogMiner, *publisherStub, TransactionCach
 	lm := newLogMiner(pub, cache)
 	lm.cfg.LOBEnabled = true
 	lm.lobColTypes = map[string]string{"TESTDB.T.DOC": "CLOB"}
+	lm.lobTables = map[string]struct{}{"TESTDB.T": {}}
 	return lm, pub, cache
 }
 

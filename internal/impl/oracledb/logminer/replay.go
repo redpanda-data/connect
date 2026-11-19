@@ -52,14 +52,11 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		replay.processedSCN = max(prev.processedSCN, lm.currentSCN)
 	}
 
-	candidates := make(map[sqlredo.TransactionID]struct{}, len(lm.lobStates)+len(lm.pendingLOBWrites)+len(lm.lobInsertTxns))
+	candidates := make(map[sqlredo.TransactionID]struct{}, len(lm.lobStates)+len(lm.pendingLOBWrites))
 	for id := range lm.lobStates {
 		candidates[id] = struct{}{}
 	}
 	for id := range lm.pendingLOBWrites {
-		candidates[id] = struct{}{}
-	}
-	for id := range lm.lobInsertTxns {
 		candidates[id] = struct{}{}
 	}
 	for id := range candidates {
@@ -91,7 +88,6 @@ func (lm *LogMiner) planLOBReplay(ctx context.Context) (*lobReplay, error) {
 		}
 		delete(lm.lobStates, id)
 		delete(lm.pendingLOBWrites, id)
-		delete(lm.lobInsertTxns, id)
 	}
 	return replay, nil
 }
