@@ -16,6 +16,7 @@ package kafka
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -129,17 +130,25 @@ func (cl *ConsumerLag) refreshWithTimeout(ctx context.Context) {
 	cl.refresh(ctx)
 }
 
-// refresh fetches the group's lag once. On failure the previous snapshot and
-// gauges are kept, so readers see the last known lag rather than nothing.
+// refresh fetches the group's lag once. On failure, or when the group reports
+// a describe or offset fetch error, the previous snapshot and gauges are kept,
+// so readers see the last known lag rather than nothing.
 func (cl *ConsumerLag) refresh(ctx context.Context) {
 	me := cl.memberID()
 	lags, err := cl.fetch(ctx)
 	if err == nil {
-		err = cl.apply(lags, me)
+		err = lags.Error()
 	}
 	if err != nil {
 		cl.logger.Debugf("Failed to fetch group lags: %s", err)
+		return
 	}
+	// A member ID that changed during the fetch means the described
+	// assignments are not ours any more.
+	if cl.memberID() != me {
+		me = ""
+	}
+	cl.apply(lags, me)
 }
 
 // groupStateStable is the state of a consumer group whose members all hold
@@ -147,42 +156,35 @@ func (cl *ConsumerLag) refresh(ctx context.Context) {
 const groupStateStable = "Stable"
 
 // apply replaces the snapshot with the given group lag and publishes each
-// partition's lag to the gauge. A describe or offset fetch error for the
-// group means nothing is known, so everything is left as it was. A partition
-// with an offset error, such as a committed offset on a deleted topic, and a
-// partition that has left the group since the last refresh are published as
-// zero and dropped from the snapshot.
+// partition's lag to the gauge. A partition with an offset error, such as a
+// committed offset on a deleted topic, is left out, and a partition that is
+// out of the snapshot after being in it is published as zero, so one rule
+// covers both it and a partition that has left the group.
 //
 // The total counts only the partitions assigned to this member, so instances
 // sharing a group each report their own share. It is unknown while the group
-// is not stable, before this client has joined, when the member ID changed
-// during the fetch, or when one of this member's partitions had an error,
-// since a confident zero in those states would read as caught up. The pending
-// gauge is set only when the total is known and so keeps its last value
-// otherwise.
-func (cl *ConsumerLag) apply(lags kadm.DescribedGroupLags, me string) error {
-	snap := &lagSnapshot{byPartition: map[partitionKey]int64{}, totalKnown: me != "" && me == cl.memberID()}
+// is not stable, while this client is not among the described members, which
+// covers the time before its join completes, or when one of this member's
+// partitions had an error, since a confident zero in those states would read
+// as caught up. The pending gauge is set only when the total is known and so
+// keeps its last value otherwise.
+func (cl *ConsumerLag) apply(lags kadm.DescribedGroupLags, me string) {
+	snap := &lagSnapshot{byPartition: map[partitionKey]int64{}, totalKnown: me != ""}
 	for _, gl := range lags {
-		if err := gl.Error(); err != nil {
-			return err
-		}
-		if gl.State != groupStateStable {
+		if gl.State != groupStateStable || !slices.ContainsFunc(gl.Members, func(m kadm.DescribedGroupMember) bool {
+			return m.MemberID == me
+		}) {
 			snap.totalKnown = false
 		}
 		for _, tl := range gl.Lag {
 			for _, pl := range tl {
 				mine := pl.Member != nil && pl.Member.MemberID == me
-				lag := max(pl.Lag, 0)
 				if pl.Err != nil {
-					if mine {
-						snap.totalKnown = false
-					}
-					lag = 0
-				}
-				cl.gauge.Set(lag, pl.Topic, strconv.Itoa(int(pl.Partition)))
-				if pl.Err != nil {
+					snap.totalKnown = snap.totalKnown && !mine
 					continue
 				}
+				lag := max(pl.Lag, 0)
+				cl.gauge.Set(lag, pl.Topic, strconv.Itoa(int(pl.Partition)))
 				snap.byPartition[partitionKey{pl.Topic, pl.Partition}] = lag
 				if mine {
 					snap.total += lag
@@ -201,11 +203,12 @@ func (cl *ConsumerLag) apply(lags kadm.DescribedGroupLags, me string) error {
 	if snap.totalKnown {
 		cl.pending.Set(snap.total)
 	}
-	return nil
 }
 
 // Start starts the lag updater. The first refresh runs straight away rather
-// than one period in, so an estimate is available soon after connecting.
+// than one period in. Start is called before the client has joined the group,
+// so that refresh publishes the per partition lag but rarely a known total;
+// the pending gauge usually gets its first value one refresh period later.
 func (cl *ConsumerLag) Start() {
 	cl.lagUpdater.Start()
 }

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -39,19 +38,33 @@ func groupLags(lags map[string]map[int32]partLag) kadm.DescribedGroupLags {
 	return groupLagsInState(groupStateStable, lags)
 }
 
+// groupLagsInState builds a described group lag whose members are every
+// member named by a partition, plus "me", since a client that has joined is
+// listed even when it holds no partitions.
 func groupLagsInState(state string, lags map[string]map[int32]partLag) kadm.DescribedGroupLags {
 	gl := kadm.GroupLag{}
+	members := map[string]struct{}{"me": {}}
 	for topic, parts := range lags {
 		gl[topic] = map[int32]kadm.GroupMemberLag{}
 		for p, pl := range parts {
 			ml := kadm.GroupMemberLag{Topic: topic, Partition: p, Lag: pl.lag, Err: pl.err}
 			if pl.member != "" {
 				ml.Member = &kadm.DescribedGroupMember{MemberID: pl.member}
+				members[pl.member] = struct{}{}
 			}
 			gl[topic][p] = ml
 		}
 	}
-	return kadm.DescribedGroupLags{"g": {Group: "g", State: state, Lag: gl}}
+	described := kadm.DescribedGroupLag{Group: "g", State: state, Lag: gl}
+	for m := range members {
+		described.Members = append(described.Members, kadm.DescribedGroupMember{MemberID: m})
+	}
+	return kadm.DescribedGroupLags{"g": described}
+}
+
+// fetching returns a fetcher that serves the given lag.
+func fetching(lags kadm.DescribedGroupLags) groupLagFetcher {
+	return func(context.Context) (kadm.DescribedGroupLags, error) { return lags, nil }
 }
 
 // gaugeRecorder records every value set on a gauge.
@@ -84,11 +97,11 @@ func TestConsumerLagSnapshot(t *testing.T) {
 	cl, pending := newTestConsumerLag(t, nil)
 	assert.Zero(t, cl.Load("a", 0))
 
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{
+	cl.apply(groupLags(map[string]map[int32]partLag{
 		"a": {0: {member: "me", lag: 5}, 1: {member: "me", lag: 7}, 2: {member: "other", lag: 100}},
 		"b": {0: {member: "me", lag: -3}}, // franz-go reports a negative lag for an unknown offset
 		"c": {0: {lag: 50}},               // a committed offset on a partition no member holds
-	}), "me"))
+	}), "me")
 	assert.Equal(t, []int64{12}, pending.values(), "the pending gauge is this member's share")
 	assert.Equal(t, int64(7), cl.Load("a", 1))
 	assert.Equal(t, int64(100), cl.Load("a", 2), "per partition lag covers the whole group")
@@ -98,26 +111,27 @@ func TestConsumerLagSnapshot(t *testing.T) {
 	// series is zeroed.
 	gauge := cl.gauge.(*gaugeRecorder)
 	before := len(gauge.values())
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 2}}}), "me"))
+	cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 2}}}), "me")
 	assert.Equal(t, []int64{12, 2}, pending.values())
 	assert.Zero(t, cl.Load("a", 1))
 	assert.Len(t, gauge.values(), before+1+4, "one set for a/0 and four zeroes for the departed partitions")
 
 	// An empty group is a known zero, not an unknown.
-	require.NoError(t, cl.apply(kadm.DescribedGroupLags{}, "me"))
+	cl.apply(kadm.DescribedGroupLags{}, "me")
 	assert.Equal(t, []int64{12, 2, 0}, pending.values())
 }
 
 func TestConsumerLagErrorsKeepLastSnapshot(t *testing.T) {
 	cl, pending := newTestConsumerLag(t, nil)
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 9}}}), "me"))
+	cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 9}}}), "me")
 
 	// A describe error on the group leaves everything alone.
 	bad := groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 0}}})
 	g := bad["g"]
 	g.DescribeErr = errors.New("coordinator loading")
 	bad["g"] = g
-	require.Error(t, cl.apply(bad, "me"))
+	cl.fetch = fetching(bad)
+	cl.refresh(t.Context())
 	assert.Equal(t, []int64{9}, pending.values())
 	assert.Equal(t, int64(9), cl.Load("a", 0))
 }
@@ -126,21 +140,20 @@ func TestConsumerLagPartitionErrors(t *testing.T) {
 	cl, pending := newTestConsumerLag(t, nil)
 
 	// An offset error on another member's partition, such as a committed
-	// offset on a deleted topic, is published as zero and doesn't affect our
-	// total.
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{
+	// offset on a deleted topic, is left out and doesn't affect our total.
+	cl.apply(groupLags(map[string]map[int32]partLag{
 		"a":    {0: {member: "me", lag: 6}},
 		"gone": {0: {member: "other", lag: -1, err: errors.New("unknown topic")}},
-	}), "me"))
+	}), "me")
 	assert.Equal(t, []int64{6}, pending.values())
 	assert.Zero(t, cl.Load("gone", 0))
 
 	// On one of our own partitions it makes the total unknown, so the pending
 	// gauge keeps its last value, while the other partitions' lag is still
 	// refreshed.
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{
+	cl.apply(groupLags(map[string]map[int32]partLag{
 		"a": {0: {member: "me", lag: 8}, 1: {member: "me", lag: -1, err: errors.New("list offsets")}},
-	}), "me"))
+	}), "me")
 	assert.Equal(t, []int64{6}, pending.values())
 	assert.Equal(t, int64(8), cl.Load("a", 0))
 }
@@ -148,20 +161,32 @@ func TestConsumerLagPartitionErrors(t *testing.T) {
 func TestConsumerLagUnknownWhileRebalancing(t *testing.T) {
 	cl, pending := newTestConsumerLag(t, nil)
 
-	require.NoError(t, cl.apply(groupLagsInState("PreparingRebalance", map[string]map[int32]partLag{
+	cl.apply(groupLagsInState("PreparingRebalance", map[string]map[int32]partLag{
 		"a": {0: {lag: 1000}},
-	}), "me"))
+	}), "me")
 	assert.Empty(t, pending.values(), "no member holds assignments during a rebalance")
 	assert.Equal(t, int64(1000), cl.Load("a", 0), "per partition lag is still published")
 
 	// Before this client has joined it has no member ID.
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "someone", lag: 5}}}), ""))
+	cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "someone", lag: 5}}}), "")
+	assert.Empty(t, pending.values())
+
+	// A member ID the broker handed out before the join completed is not
+	// among the group's members yet, so a stable group holding no partition
+	// for it is not a known zero.
+	notYetJoined := groupLags(map[string]map[int32]partLag{"a": {0: {member: "someone", lag: 5}}})
+	g := notYetJoined["g"]
+	g.Members = []kadm.DescribedGroupMember{{MemberID: "someone"}}
+	notYetJoined["g"] = g
+	cl.apply(notYetJoined, "me")
 	assert.Empty(t, pending.values())
 
 	// A member ID that changed between the fetch and the apply means the
 	// described assignments are not ours any more.
-	cl.memberID = func() string { return "me2" }
-	require.NoError(t, cl.apply(groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 5}}}), "me"))
+	ids := []string{"me", "me2"}
+	cl.memberID = func() string { id := ids[0]; ids = ids[1:]; return id }
+	cl.fetch = fetching(groupLags(map[string]map[int32]partLag{"a": {0: {member: "me", lag: 5}}}))
+	cl.refresh(t.Context())
 	assert.Empty(t, pending.values())
 }
 
