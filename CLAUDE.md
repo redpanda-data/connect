@@ -11,6 +11,7 @@ AI agent guidance for working with Redpanda Connect codebase.
 | Writing or modifying Go code | `godev` agent |
 | Writing or modifying tests | `tester` agent |
 | Code review | `/review` skill |
+| Snyk scan / CVE dependency upgrades | `/snyk` skill |
 
 ## Plugin: Redpanda Connect
 
