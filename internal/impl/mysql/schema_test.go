@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -664,4 +665,89 @@ func TestMysqlColumnToCommonDecimalCarriesLogical(t *testing.T) {
 	assert.Equal(t, int32(18), got.Logical.Decimal.Precision)
 	assert.Equal(t, int32(4), got.Logical.Decimal.Scale)
 	assert.True(t, got.Optional)
+}
+
+// TestParseSnapshotTime checks that the snapshot gives the same DATE,
+// DATETIME and TIMESTAMP values as go-sql-driver with parseTime, also for
+// zero and partial-zero dates that the driver does not keep.
+func TestParseSnapshotTime(t *testing.T) {
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		value string
+		loc   *time.Location
+		want  time.Time
+	}{
+		{
+			name:  "date",
+			value: "1965-03-04",
+			loc:   time.UTC,
+			want:  time.Date(1965, time.March, 4, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "datetime",
+			value: "1965-03-04 10:00:00",
+			loc:   time.UTC,
+			want:  time.Date(1965, time.March, 4, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "datetime with fraction",
+			value: "1969-12-31 23:59:59.123456",
+			loc:   time.UTC,
+			want:  time.Date(1969, time.December, 31, 23, 59, 59, 123456000, time.UTC),
+		},
+		{
+			name:  "datetime in loc",
+			value: "2024-06-01 12:00:00",
+			loc:   berlin,
+			want:  time.Date(2024, time.June, 1, 12, 0, 0, 0, berlin),
+		},
+		{
+			name:  "zero date",
+			value: "0000-00-00",
+			loc:   time.UTC,
+			want:  time.Time{},
+		},
+		{
+			name:  "zero datetime with fraction in loc",
+			value: "0000-00-00 00:00:00.000000",
+			loc:   berlin,
+			want:  time.Time{},
+		},
+		{
+			name:  "zero month",
+			value: "2024-00-15",
+			loc:   time.UTC,
+			want:  time.Date(2023, time.December, 15, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "zero day",
+			value: "2024-12-00 10:00:00",
+			loc:   time.UTC,
+			want:  time.Date(2024, time.November, 30, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "stored 0001-01-01 in loc",
+			value: "0001-01-01 00:00:00",
+			loc:   berlin,
+			want:  time.Date(1, time.January, 1, 0, 0, 0, 0, berlin),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseSnapshotTime(test.value, test.loc)
+			require.NoError(t, err)
+			assert.Equal(t, test.want, got)
+
+			// The driver parses in UTC here, so compare only UTC cases.
+			if test.loc != time.UTC {
+				return
+			}
+			var driver mysql.NullTime //nolint:staticcheck // the only exported path to the driver's parseDateTime
+			require.NoError(t, driver.Scan(test.value))
+			assert.Equal(t, driver.Time, got)
+		})
+	}
 }
