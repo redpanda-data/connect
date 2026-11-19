@@ -4,6 +4,8 @@ vars:
   SNYK_DIR: '{{.TARGET_DIR}}/snyk'
   SNYK_REPORT: '{{.SNYK_DIR}}/report.json'
   SNYK_FIX_REPORT: '{{.SNYK_DIR}}/fix.json'
+  # jq filter that turns an array of fields into one row for `IFS=$'\x1f' read`, with "-" for empty fields.
+  SNYK_ROW: 'map(if . == null or . == "" then "-" else tostring end) | join("\u001f")'
   # Go modules to scan. Comment out any you don't care about.
   # Override from the CLI with a space-separated string: task snyk:report SNYK_FILES="go.mod ..."
   SNYK_FILES:
@@ -48,7 +50,17 @@ tasks:
         # Loose semver sort key: numeric parts, then 0 for pre-release / 1 for release.
         def vkey: ltrimstr("v") | split("+")[0] | split("-") as $p
           | ($p[0] | split(".") | map(tonumber? // 0)) + [if ($p | length) > 1 then 0 else 1 end];
-        def vuln: {id, title, severity, fixedIn,
+        # Release line: the major version, or major.minor for v0 (where minor bumps are breaking).
+        def line: ltrimstr("v") | split("+")[0] | split("-")[0] | split(".") | if .[0] == "0" then .[0:2] else .[0:1] end;
+        # fixedIn lists one fixed version per maintained branch. Pick the fix for the branch $from is
+        # on: the lowest version >= $from on the same line, else the lowest >= $from on any line,
+        # else the highest listed.
+        def pickfix($from):
+          map(select(vkey >= ($from | vkey))) as $ge
+          | ($ge | map(select(line == ($from | line))) | sort_by(vkey) | first)
+            // ($ge | sort_by(vkey) | first)
+            // (sort_by(vkey) | last);
+        def vuln: {id, title, severity, fixedIn, fixVersion: .fix,
                    cves: (.identifiers.CVE // []), ghsa: (.identifiers.GHSA // [])};
 
         (if type == "array" then .[0] else . end) as $r
@@ -59,17 +71,26 @@ tasks:
             exitCode: $rc,
             error: (if $rc >= 2 then ($r.error // "snyk failed") else null end),
             upgrades: (
+              # One entry per package, version and release line of the fix. Advisories whose only
+              # fix is on a newer line get their own entry, so they don't drag the same-line fixes
+              # into a major bump. Advisories with no fix are attached to the first entry.
               $vs | group_by([.packageName, .version]) | map(
-                ([.[].fixedIn[]?] | unique | sort_by(vkey) | last) as $to
-                | {
-                    package: .[0].packageName,
-                    from: .[0].version,
-                    to: $to,
-                    fixedCves: ([.[] | select((.fixedIn | length) > 0) | .identifiers.CVE[]?] | unique),
-                    unfixedCves: ([.[] | select((.fixedIn | length) == 0) | .identifiers.CVE[]?] | unique),
-                    vulnerabilities: (map(vuln) | sort_by(.id))
-                  }
-              ) | sort_by(.to == null, .package)
+                .[0].packageName as $pkg | .[0].version as $from
+                | map(. + {fix: (if (.fixedIn | length) > 0 then (.fixedIn | pickfix($from)) else null end)})
+                | map(select(.fix == null)) as $unfixed
+                | (map(select(.fix != null)) | group_by(.fix | line) | sort_by(.[0].fix | vkey)) as $lines
+                | (if ($lines | length) == 0 then [[]] else $lines end)
+                | to_entries | map(
+                    (.value + (if .key == 0 then $unfixed else [] end)) as $g
+                    | {
+                        package: $pkg,
+                        from: $from,
+                        to: ([$g[] | .fix // empty] | sort_by(vkey) | last),
+                        fixedCves: ([$g[] | select(.fix != null) | .identifiers.CVE[]?] | unique),
+                        unfixedCves: ([$g[] | select(.fix == null) | .identifiers.CVE[]?] | unique),
+                        vulnerabilities: ($g | map(vuln) | sort_by(.id))
+                      })
+              ) | flatten | sort_by(.to == null, .package, (.to // "0" | vkey))
             )
           }
         JQ
@@ -199,7 +220,8 @@ tasks:
             (.[0] | {module, current, replaced}) as $base
             | def entry: $base + {target: (map(.target) | sort_by(vkey) | last),
                                   packages: (map(.package) | unique), cves: ([.[].cves[]] | unique)};
-            if $base.module == null then [entry + {skip: "package not found in the module graph"}]
+            # Unresolved packages all share module null, so keep them as one entry each.
+            if $base.module == null then map($base + {target, packages: [.package], cves, skip: "package not found in the module graph"})
             elif $base.replaced then [entry + {skip: "module is replaced in go.mod"}]
             else
               map(. + {mskip: ($base + {target} | majorskip)})
@@ -212,14 +234,18 @@ tasks:
         JQ
 
           # Record and print skips.
-          jq -r '.[] | select(.skip != null) | [(.module // .packages[0]), (.current // ""), .target, .skip] | @tsv' "$plan" |
-            while IFS=$'\t' read -r mod cur tgt why; do
+          # Rows are joined with \x1f and empty fields are written as "-". Task's shell (mvdan/sh)
+          # drops empty fields in `read` whatever IFS is, which would shift every later column.
+          jq -r '.[] | select(.skip != null) | [(.module // .packages[0]), .current, .target, .skip] | {{.SNYK_ROW}}' "$plan" |
+            while IFS=$'\x1f' read -r mod cur tgt why; do
+              [ "$cur" = - ] && cur=""
               echo "    skip  $mod $cur -> $tgt: $why"
               record "$file" "$mod" "$cur" "$tgt" "skipped" "$why"
             done
 
           changed=0
-          while IFS=$'\t' read -r mod cur req cves; do
+          while IFS=$'\x1f' read -r mod cur req cves; do
+            [ "$cur" = - ] && cur=""; [ "$cves" = - ] && cves=""
             tgt="$req"
             [ "{{.UPGRADE}}" = "latest" ] && tgt=$(latest_compatible "$mod" "$req")
             note="$cves"; [ "$tgt" != "$req" ] && note="$cves; fix needs >= $req"
@@ -237,7 +263,7 @@ tasks:
               echo "          failed: $msg"
               record "$file" "$mod" "$cur" "$tgt" "failed" "$msg" "$req"
             fi
-          done < <(jq -r '.[] | select(.skip == null) | [.module, .current, .target, (.cves | join(","))] | @tsv' "$plan")
+          done < <(jq -r '.[] | select(.skip == null) | [.module, .current, .target, (.cves | join(","))] | {{.SNYK_ROW}}' "$plan")
 
           if [ "$changed" = 1 ]; then
             echo "    go mod tidy"

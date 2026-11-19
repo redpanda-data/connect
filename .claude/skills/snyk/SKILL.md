@@ -65,6 +65,8 @@ Always rerun `snyk:report` after the dependencies change, including after a `fix
 `report.json`:
 - `summary[]` merges results across projects, with `package`, `from`, `to` (`null` when no fix exists), `fixedCves`, `unfixedCves` and `projects`.
 - `projects[]` has one entry per project, with `file`, `exitCode`, `error` and `upgrades[]`. Each upgrade has full `vulnerabilities[]` detail: `id`, `title`, `severity`, `fixedIn`, `cves` and `ghsa`.
+- **How `to` is chosen:** Snyk's `fixedIn` often lists one fixed version per maintained branch, for example `["25.0.6", "26.1.4", "27.1.1"]`. For each advisory, the report takes the lowest fixed version at or above `from` on the same line (major, or `0.minor` for v0), so a module on v26 gets `26.1.4`. Only when the branch has no fix does it move to the next line. The chosen version for each advisory is in `vulnerabilities[].fixVersion`.
+- **Split entries:** if one package's advisories are fixed on different lines, the package appears once per line. For example, docker might have one entry `-> 26.1.4` and another `-> 27.3.0` for an advisory that's only fixed on 27. `snyk:fix` applies the same-major one and skips the other as a major bump.
 - A non-null `error` means Snyk itself failed for that project (exit code 2 or 3). That isn't a vulnerability finding.
 
 `fix.json`: `results[]` has `project`, `module`, `from`, `to` (the version applied), `required` (the minimum version Snyk says fixes it), `status` and `message`:
