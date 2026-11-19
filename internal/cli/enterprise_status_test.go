@@ -9,6 +9,7 @@
 package cli_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,8 +33,62 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
-func statusTestSchema() *service.ConfigSchema {
-	return service.NewEnvironment().
+// backlogTestInput produces a fixed number of messages at a steady rate while
+// reporting a fixed backlog through the input_pending gauge, so a stream
+// using it ends on its own.
+type backlogTestInput struct {
+	pending   *service.MetricGauge
+	remaining int64
+	produce   int
+	interval  time.Duration
+}
+
+func (b *backlogTestInput) Connect(context.Context) error {
+	b.pending.Set(b.remaining)
+	return nil
+}
+
+func (b *backlogTestInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	if b.produce <= 0 {
+		return nil, nil, service.ErrEndOfInput
+	}
+	select {
+	case <-time.After(b.interval):
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	b.produce--
+	return service.MessageBatch{service.NewMessage([]byte("{}"))},
+		func(context.Context, error) error { return nil }, nil
+}
+
+// Close zeroes the gauge, as the convention asks: nothing is pending for an
+// input that has stopped consuming.
+func (b *backlogTestInput) Close(context.Context) error {
+	b.pending.Set(0)
+	return nil
+}
+
+// statusTestEnv is a plugin environment for the status tests, with a test
+// input that reports a backlog, kept out of the global environment.
+func statusTestEnv(t *testing.T) *service.Environment {
+	t.Helper()
+	env := service.NewEnvironment()
+	require.NoError(t, env.RegisterBatchInput("status_backlog_test", service.NewConfigSpec(),
+		func(_ *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			return &backlogTestInput{
+				pending:   res.Metrics().NewGauge("input_pending"),
+				remaining: 1234,
+				produce:   100,
+				interval:  50 * time.Millisecond,
+			}, nil
+		}))
+	return env
+}
+
+func statusTestSchema(t *testing.T) *service.ConfigSchema {
+	t.Helper()
+	return statusTestEnv(t).
 		FullConfigSchema("", "").
 		Field(service.NewObjectField("redpanda", enterprise.GlobalRedpandaFields()...))
 }
@@ -60,11 +115,13 @@ func httpGet(addr, path string) (int, []byte, error) {
 // runEnterpriseCLI runs InitEnterpriseCLI in the background and returns a
 // channel closed when it returns. InitEnterpriseCLI calls os.Exit on a non
 // zero exit code, so a failing run aborts the test binary.
-func runEnterpriseCLI(args ...string) <-chan struct{} {
+func runEnterpriseCLI(t *testing.T, args ...string) <-chan struct{} {
+	t.Helper()
+	schema := statusTestSchema(t)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		cli.InitEnterpriseCLI("meow", "0.0.0", "now", statusTestSchema(), service.CLIOptSetArgs(args...))
+		cli.InitEnterpriseCLI("meow", "0.0.0", "now", schema, service.CLIOptSetArgs(args...))
 	}()
 	return done
 }
@@ -110,7 +167,7 @@ func TestStatusEndpointEnabled(t *testing.T) {
 	addr := freeAddr(t)
 	confPath := writeStatusTestConfig(t, addr)
 
-	done := runEnterpriseCLI("meow", "run", "--disable-telemetry", "--status-endpoint", confPath)
+	done := runEnterpriseCLI(t, "meow", "run", "--disable-telemetry", "--status-endpoint", confPath)
 
 	type statusLogEntry struct {
 		Label     string `json:"label"`
@@ -124,6 +181,7 @@ func TestStatusEndpointEnabled(t *testing.T) {
 			Errors []map[string]any `json:"errors"`
 		} `json:"connection"`
 		MessagesConsumed      int64            `json:"messages_consumed"`
+		MessagesRemaining     *int64           `json:"messages_remaining"`
 		LastMessageReceivedAt *int64           `json:"last_message_received_at"`
 		RecentErrors          []statusLogEntry `json:"recent_errors"`
 	}
@@ -160,6 +218,7 @@ func TestStatusEndpointEnabled(t *testing.T) {
 	assert.NotNil(t, body.Connection.Errors)
 	assert.Empty(t, body.Connection.Errors)
 
+	assert.Nil(t, body.MessagesRemaining, "the generate input reports no backlog")
 	require.NotNil(t, body.LastMessageReceivedAt)
 	assert.InDelta(t, time.Now().Unix(), *body.LastMessageReceivedAt, 30)
 
@@ -209,7 +268,7 @@ output:
           drop: {}
 `, addr), 0o644))
 
-	done := runEnterpriseCLI("meow", "run", "--disable-telemetry", "--status-endpoint", confPath)
+	done := runEnterpriseCLI(t, "meow", "run", "--disable-telemetry", "--status-endpoint", confPath)
 
 	type statusBody struct {
 		Connection struct {
@@ -252,7 +311,7 @@ func TestStatusEndpointDisabledByDefault(t *testing.T) {
 	addr := freeAddr(t)
 	confPath := writeStatusTestConfig(t, addr)
 
-	done := runEnterpriseCLI("meow", "run", "--disable-telemetry", confPath)
+	done := runEnterpriseCLI(t, "meow", "run", "--disable-telemetry", confPath)
 
 	require.Eventually(t, func() bool {
 		code, _, err := httpGet(addr, "/ready")
@@ -262,6 +321,44 @@ func TestStatusEndpointDisabledByDefault(t *testing.T) {
 	code, _, err := httpGet(addr, "/status")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, code)
+
+	waitForCLI(t, done)
+}
+
+func TestStatusEndpointMessagesRemaining(t *testing.T) {
+	addr := freeAddr(t)
+	confPath := filepath.Join(t.TempDir(), "conf.yaml")
+	require.NoError(t, os.WriteFile(confPath, fmt.Appendf(nil, `
+http:
+  address: %v
+
+input:
+  label: lagging
+  status_backlog_test: {}
+
+output:
+  drop: {}
+`, addr), 0o644))
+
+	done := runEnterpriseCLI(t, "meow", "run", "--disable-telemetry", "--status-endpoint", confPath)
+
+	type statusBody struct {
+		MessagesConsumed  int64  `json:"messages_consumed"`
+		MessagesRemaining *int64 `json:"messages_remaining"`
+	}
+	var body statusBody
+	require.Eventually(t, func() bool {
+		code, raw, err := httpGet(addr, "/status")
+		if err != nil || code != http.StatusOK {
+			return false
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return false
+		}
+		return body.MessagesConsumed > 0 && body.MessagesRemaining != nil
+	}, time.Second*10, time.Millisecond*50, "last body: %+v", body)
+
+	assert.Equal(t, int64(1234), *body.MessagesRemaining)
 
 	waitForCLI(t, done)
 }
