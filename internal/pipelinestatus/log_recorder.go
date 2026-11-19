@@ -186,8 +186,11 @@ func (h *errorRecorder) Handle(ctx context.Context, r slog.Record) error {
 
 	// Older printf-style log calls in benthos end their message with a
 	// newline, which has no place in a JSON field.
+	// Components often log both the formatted error in the message and the
+	// error as an attribute, so the attribute is only appended when the
+	// message doesn't already carry it.
 	msg := strings.TrimSpace(r.Message)
-	if errStr = strings.TrimSpace(errStr); errStr != "" {
+	if errStr = strings.TrimSpace(errStr); errStr != "" && !strings.Contains(msg, errStr) {
 		msg += ": " + errStr
 	}
 
