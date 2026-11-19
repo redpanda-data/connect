@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,11 +27,23 @@ import (
 // NOTE: It's expected that Start and Stop are called on the same
 // goroutine or be externally synchronized as to not race.
 type Periodic struct {
-	duration time.Duration
-	work     func(context.Context)
+	duration   time.Duration
+	work       func(context.Context)
+	runOnStart bool
 
 	cancel context.CancelFunc
 	done   chan any
+}
+
+// NewPeriodicRunOnStart is NewPeriodicWithContext whose Start also runs the
+// work once straight away, on the background goroutine, before waiting for
+// the first period. That run is covered by Stop like every other.
+func NewPeriodicRunOnStart(duration time.Duration, work func(context.Context)) *Periodic {
+	return &Periodic{
+		duration:   duration,
+		work:       work,
+		runOnStart: true,
+	}
 }
 
 // NewPeriodic creates new background work that runs every `duration` and performs `work`.
@@ -61,17 +73,20 @@ func (p *Periodic) Start() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan any)
-	go runBackgroundLoop(ctx, p.duration, done, p.work)
+	go runBackgroundLoop(ctx, p.duration, p.runOnStart, done, p.work)
 	p.cancel = cancel
 	p.done = done
 }
 
-func runBackgroundLoop(ctx context.Context, d time.Duration, done chan any, work func(context.Context)) {
+func runBackgroundLoop(ctx context.Context, d time.Duration, runOnStart bool, done chan any, work func(context.Context)) {
 	refreshTimer := time.NewTicker(d)
 	defer func() {
 		refreshTimer.Stop()
 		close(done)
 	}()
+	if runOnStart {
+		work(ctx)
+	}
 	for ctx.Err() == nil {
 		select {
 		case <-refreshTimer.C:
