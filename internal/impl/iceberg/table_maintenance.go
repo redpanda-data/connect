@@ -200,6 +200,11 @@ func (c *committer) commitMaintenance(ctx context.Context, op string, stage func
 			// transaction with no updates locally and hands back the same
 			// table.
 			c.table = tbl
+			if op == maintenanceOpMergeProperty {
+				// The property outlives this output on shared table metadata,
+				// so the one commit per table that sets it is logged.
+				c.logger.Infof("Set table property %s=%s on %s", table.ManifestMergeEnabledKey, strconv.FormatBool(c.cfg.ManifestMergeEnabled), c.tableName())
+			}
 			if before >= 0 {
 				if after := len(tbl.Metadata().Snapshots()); after < before {
 					c.logger.Infof("Expired %d snapshots from %s, %d retained", before-after, c.tableName(), after)
