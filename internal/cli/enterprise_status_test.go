@@ -123,8 +123,9 @@ func TestStatusEndpointEnabled(t *testing.T) {
 			Status string           `json:"status"`
 			Errors []map[string]any `json:"errors"`
 		} `json:"connection"`
-		MessagesConsumed int64            `json:"messages_consumed"`
-		RecentErrors     []statusLogEntry `json:"recent_errors"`
+		MessagesConsumed      int64            `json:"messages_consumed"`
+		LastMessageReceivedAt *int64           `json:"last_message_received_at"`
+		RecentErrors          []statusLogEntry `json:"recent_errors"`
 	}
 
 	var body statusBody
@@ -158,6 +159,9 @@ func TestStatusEndpointEnabled(t *testing.T) {
 
 	assert.NotNil(t, body.Connection.Errors)
 	assert.Empty(t, body.Connection.Errors)
+
+	require.NotNil(t, body.LastMessageReceivedAt)
+	assert.InDelta(t, time.Now().Unix(), *body.LastMessageReceivedAt, 30)
 
 	// Other errors may be recorded too (for example a license check at
 	// startup), so find the processor's entry by its label.

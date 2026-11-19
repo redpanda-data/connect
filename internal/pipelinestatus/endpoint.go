@@ -7,9 +7,10 @@
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 // Package pipelinestatus serves the /status endpoint of a pipeline: the
-// connection status of its components, a messages consumed counter, and the
-// most recent error logs per component. It depends only on the public benthos
-// service API, and is fed through the CLI's log and metrics tees.
+// connection status of its components, a messages consumed counter with the
+// time of the latest one, and the most recent error logs per component. It
+// depends only on the public benthos service API, and is fed through the
+// CLI's log and metrics tees.
 package pipelinestatus
 
 import (
@@ -27,7 +28,7 @@ import (
 const Path = "/status"
 
 // Description is the endpoint description shown by /endpoints.
-const Description = "Returns the connection status of the running pipeline, a messages consumed counter, and the most recent error logs per component."
+const Description = "Returns the connection status of the running pipeline, a messages consumed counter with the time of the latest one, and the most recent error logs per component."
 
 const (
 	connStatusOK           = "OK"
@@ -43,7 +44,12 @@ const (
 type response struct {
 	Connection       connection `json:"connection"`
 	MessagesConsumed int64      `json:"messages_consumed"`
-	RecentErrors     []logEntry `json:"recent_errors"`
+	// LastMessageReceivedAt is the unix time an input last produced a
+	// message, null until the first one. It moves at the same event that
+	// MessagesConsumed counts: when the input hands the batch over, before
+	// anything downstream acknowledges it.
+	LastMessageReceivedAt *int64     `json:"last_message_received_at"`
+	RecentErrors          []logEntry `json:"recent_errors"`
 }
 
 type connection struct {
@@ -77,7 +83,10 @@ type Endpoint struct {
 	enabled  atomic.Bool
 	summary  atomic.Pointer[service.RunningStreamSummary]
 	consumed atomic.Int64
-	recent   *recentErrors
+	// lastReceivedAt is the unix time of the latest consumed message, zero
+	// before the first.
+	lastReceivedAt atomic.Int64
+	recent         *recentErrors
 }
 
 // New returns an Endpoint with recording disabled.
@@ -120,7 +129,7 @@ func (e *Endpoint) LogHandler() slog.Handler {
 // MetricsTee returns a metrics exporter that sums the consumed metric. It must
 // be installed as a tee alongside the configured exporter.
 func (e *Endpoint) MetricsTee() service.MetricsExporter {
-	return messagesConsumedTee{total: &e.consumed, enabled: &e.enabled}
+	return messagesConsumedTee{total: &e.consumed, lastAt: &e.lastReceivedAt, enabled: &e.enabled}
 }
 
 // Handler returns the HTTP handler of the endpoint.
@@ -144,6 +153,9 @@ func (e *Endpoint) response() response {
 		},
 		MessagesConsumed: e.consumed.Load(),
 		RecentErrors:     e.recent.entries(),
+	}
+	if at := e.lastReceivedAt.Load(); at != 0 {
+		res.LastMessageReceivedAt = &at
 	}
 
 	if summary := e.summary.Load(); summary != nil {
