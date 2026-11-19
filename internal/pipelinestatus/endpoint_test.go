@@ -314,15 +314,38 @@ func TestMessagesConsumedTeeIgnoredWhenDisabled(t *testing.T) {
 	assert.Zero(t, ep.consumed.Load())
 }
 
+func TestMessagesConsumedTeeOnlyCountsTopLevelInput(t *testing.T) {
+	ep := New()
+	ep.SetEnabled(true)
+	tee := ep.MetricsTee()
+
+	// A `metric` processor can emit a counter of the same name.
+	tee.NewCounterCtor("input_received", "label", "path")("m", "root.pipeline.processors.0").Incr(3)
+	// Without a path there is no way to tell, so it doesn't count either.
+	tee.NewCounterCtor("input_received")().Incr(3)
+	// A wrapping input's children are not counted: the wrapper itself counts
+	// every batch they produce.
+	tee.NewCounterCtor("input_received", "label", "path")("b", "root.input.broker.inputs.1").Incr(2)
+	assert.Zero(t, ep.consumed.Load())
+
+	tee.NewCounterCtor("input_received", "label", "path")("a", "root.input").Incr(1)
+	tee.NewCounterCtor("input_received", "stream", "label", "path")("s", "c", "root.input").Incr(4)
+	assert.Equal(t, int64(5), ep.consumed.Load())
+}
+
 func TestMessagesConsumedTeeSumsOnlyInputReceived(t *testing.T) {
 	ep := New()
 	ep.SetEnabled(true)
 	tee := ep.MetricsTee()
 
-	received := tee.NewCounterCtor("input_received", "label", "path")
-	received("a", "root.input.broker.inputs.0").Incr(3)
-	received("b", "root.input.broker.inputs.1").Incr(4)
-	received("a", "root.input.broker.inputs.0").Incr(1)
+	// The top-level input counts, under whichever label values it carries;
+	// the children of a wrapping input don't, since the wrapper counts their
+	// batches already.
+	received := tee.NewCounterCtor("input_received", "stream", "label", "path")
+	received("", "a", "root.input").Incr(3)
+	received("s", "b", "root.input").Incr(4)
+	received("", "a", "root.input").Incr(1)
+	received("", "c", "root.input.broker.inputs.0").Incr(100)
 
 	tee.NewCounterCtor("output_sent", "label", "path")("c", "root.output").Incr(100)
 	tee.NewTimerCtor("input_latency_ns", "label", "path")("a", "root.input").Timing(50)

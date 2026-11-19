@@ -19,6 +19,14 @@ import (
 // increments by the number of messages in each batch an input produces.
 const messagesConsumedMetric = "input_received"
 
+// inputPath is the path label of the pipeline's input component. Only that
+// series counts. Every input, wrapper or not, is registered as a plugin and so
+// reports every batch it produces there; a wrapping input such as `broker`
+// counts the batches its children already counted under deeper paths, and a
+// `metric` processor can emit a counter of the same name from anywhere else
+// in the config.
+const inputPath = "root.input"
+
 // messagesConsumedTee is a metrics exporter that sums every series of the
 // consumed metric into one total and ignores everything else. While the
 // endpoint is disabled it ignores the consumed metric too, so a pipeline run
@@ -42,11 +50,26 @@ func (noopStat) Incr(int64)   {}
 func (noopStat) Timing(int64) {}
 func (noopStat) Set(int64)    {}
 
-func (m messagesConsumedTee) NewCounterCtor(name string, _ ...string) service.MetricsExporterCounterCtor {
+func (m messagesConsumedTee) NewCounterCtor(name string, labelKeys ...string) service.MetricsExporterCounterCtor {
+	noop := func(...string) service.MetricsExporterCounter { return noopStat{} }
 	if name != messagesConsumedMetric || !m.enabled.Load() {
-		return func(...string) service.MetricsExporterCounter { return noopStat{} }
+		return noop
 	}
-	return func(...string) service.MetricsExporterCounter { return consumedCounter{total: m.total} }
+	pathIdx := -1
+	for i, k := range labelKeys {
+		if k == "path" {
+			pathIdx = i
+		}
+	}
+	if pathIdx < 0 {
+		return noop
+	}
+	return func(labelValues ...string) service.MetricsExporterCounter {
+		if pathIdx >= len(labelValues) || labelValues[pathIdx] != inputPath {
+			return noopStat{}
+		}
+		return consumedCounter{total: m.total}
+	}
 }
 
 func (messagesConsumedTee) NewTimerCtor(string, ...string) service.MetricsExporterTimerCtor {
