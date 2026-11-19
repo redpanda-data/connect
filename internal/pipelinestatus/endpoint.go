@@ -116,6 +116,11 @@ func (e *Endpoint) Enabled() bool {
 // every stream, and the benthos API attaches no stream ID to a connection, so
 // an entry under connection.errors names its component path only. Entries
 // under recent_errors do carry their stream.
+//
+// Reading the summary takes the same locks benthos holds while it swaps a
+// stream on a config reload, creates a stream in streams mode, or shuts down,
+// so a request to the endpoint can stall for the length of those operations,
+// as /ready does today.
 func (e *Endpoint) SetSummary(summary *service.RunningStreamSummary) {
 	e.summary.Store(summary)
 }
