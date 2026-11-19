@@ -26,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
 	"github.com/apache/iceberg-go/table"
@@ -403,6 +406,20 @@ func TestTableAtCatalogCeilingRecovers(t *testing.T) {
 				return c.Commit(t.Context(), morUpsertInput(t, t.Context(), cat.snapshot(), 7))
 			},
 		},
+		{
+			// The filter matches no file, so the overwrite only adds one. The
+			// seeded files have no column stats, and any other filter would
+			// make iceberg-go read them.
+			name: "copy-on-write overwrite",
+			commit: func(t *testing.T, c *committer, cat *ceilingCatalog) error {
+				sc := cat.snapshot().Schema()
+				return c.commitOverwrite(t.Context(), OverwriteInput{
+					Filter:    iceberg.AlwaysFalse{},
+					NewReader: func() (array.RecordReader, error) { return idRecordReader(t, sc, 7), nil },
+					SchemaID:  sc.ID,
+				})
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -425,15 +442,26 @@ func TestTableAtCatalogCeilingRecovers(t *testing.T) {
 			time.Sleep(2 * age) // every snapshot is now older than age
 
 			c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
-			var err error
-			for range 3 {
-				if err = tt.commit(t, c, cat); err == nil {
-					break
-				}
-			}
-			require.NoError(t, err, "table with %d snapshots stays stuck at the catalog limit", len(cat.meta.Snapshots()))
+			// The first commit crosses the limit and is rejected. The pass after
+			// it expires the old snapshots, so the retry fits.
+			require.ErrorIs(t, tt.commit(t, c, cat), rest.ErrBadRequest, "the first commit crosses the catalog limit")
+			require.NoError(t, tt.commit(t, c, cat), "table with %d snapshots stays stuck at the catalog limit", len(cat.meta.Snapshots()))
 		})
 	}
+}
+
+// idRecordReader returns a reader over one row of the single-column test
+// table schema sc.
+func idRecordReader(t *testing.T, sc *iceberg.Schema, id int64) array.RecordReader {
+	t.Helper()
+	arrowSc, err := table.SchemaToArrowSchema(sc, nil, false, false)
+	require.NoError(t, err)
+	rec, _, err := array.RecordFromJSON(memory.DefaultAllocator, arrowSc, strings.NewReader(fmt.Sprintf(`[{"id":%d}]`, id)))
+	require.NoError(t, err)
+	defer rec.Release()
+	rdr, err := array.NewRecordReader(arrowSc, []arrow.RecordBatch{rec})
+	require.NoError(t, err)
+	return rdr
 }
 
 // TestGlueSizeRejectionIsBadRequest pins the error that iceberg-go's REST
