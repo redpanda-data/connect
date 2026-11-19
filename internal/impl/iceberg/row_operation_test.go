@@ -244,11 +244,11 @@ func TestJSONLeafValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "123.45", v)
 
-	// time.Time into a timestamp column becomes RFC3339.
+	// time.Time into a timestamp column stores its instant in microseconds.
+	// Timestamps are checked after the Arrow round trip, as stored values:
+	// the intermediate text is not stored.
 	tm := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
-	v, err = leaf(iceberg.PrimitiveTypes.Timestamp, tm)
-	require.NoError(t, err)
-	assert.Equal(t, "2026-06-24T12:00:00Z", v)
+	assert.Equal(t, tm.UnixMicro(), mutationLeafViaArrow(t, iceberg.PrimitiveTypes.Timestamp, tm))
 
 	// strings pass through unchanged.
 	v, err = leaf(iceberg.PrimitiveTypes.String, "abc")
@@ -283,14 +283,11 @@ func TestJSONLeafValue(t *testing.T) {
 	// default) instead of being rejected. This pin intentionally replaces the
 	// old blanket rejection: both sides of a key comparison now share one
 	// interpretation, so the encoding still cannot silently mismatch storage.
-	v, err = leaf(iceberg.PrimitiveTypes.Timestamp, int64(1700000000))
-	require.NoError(t, err)
-	assert.Equal(t, "2023-11-14T22:13:20Z", v)
+	wantEpoch := time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC)
+	assert.Equal(t, wantEpoch.UnixMicro(), mutationLeafViaArrow(t, iceberg.PrimitiveTypes.Timestamp, int64(1700000000)))
 
-	// timestamptz formats identically to timestamp, normalised to UTC.
-	v, err = leaf(iceberg.PrimitiveTypes.TimestampTz, tm)
-	require.NoError(t, err)
-	assert.Equal(t, "2026-06-24T12:00:00Z", v)
+	// timestamptz stores the same instant as timestamp.
+	assert.Equal(t, tm.UnixMicro(), mutationLeafViaArrow(t, iceberg.PrimitiveTypes.TimestampTz, tm))
 
 	// a date column keeps only the calendar date (UTC), dropping any time-of-day.
 	v, err = leaf(iceberg.PrimitiveTypes.Date, time.Date(2026, 6, 24, 18, 30, 0, 0, time.UTC))

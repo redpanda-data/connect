@@ -921,6 +921,35 @@ func TestTableRetentionPropertyWinsOverConfiguredAge(t *testing.T) {
 	})
 }
 
+// TestGCDisabledTableKeepsSnapshotsAndCommits: on a table with
+// gc.enabled=false, iceberg-go refuses to expire snapshots, as Iceberg Java
+// does. Each pass must fail with one warning and no catalog call, and data
+// commits must continue to land.
+func TestGCDisabledTableKeepsSnapshotsAndCommits(t *testing.T) {
+	ctx := t.Context()
+	_, mem := newTestTable(t)
+	cat := &scriptedCatalog{memCatalog: mem}
+	const age = 100 * time.Millisecond
+	seedTable(t, ctx, cat.snapshot(), 3)
+	meta, err := table.UpdateTableMetadata(cat.meta,
+		[]table.Update{table.NewSetPropertiesUpdate(iceberg.Properties{table.GCEnabledKey: "false"})}, "")
+	require.NoError(t, err)
+	cat.meta = meta
+	time.Sleep(age + 100*time.Millisecond)
+
+	var logs bytes.Buffer
+	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	c := newLoggedOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age}, logger)
+	seedCalls := cat.calls
+	require.NoError(t, appendOne(t, ctx, c))
+	c.maint.releasePass()
+	require.NoError(t, appendOne(t, ctx, c))
+
+	assert.Len(t, cat.meta.Snapshots(), 5, "no snapshot is expired")
+	assert.Equal(t, 2, cat.calls-seedCalls, "two data commits and no maintenance commit")
+	assert.Equal(t, 2, strings.Count(logs.String(), "cannot expire snapshots: GC is disabled"), "one warning per pass, got:\n%s", logs.String())
+}
+
 // cancellingCatalog models the caller's context ending mid-pass: on call
 // number `at` it applies the commit, then cancels the context and reports
 // the cancellation, as a catalog client would when the context dies with
