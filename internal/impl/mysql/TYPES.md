@@ -62,6 +62,9 @@ rely on them.
   and every DATETIME before 1970 as strings. `mapMessageColumn` parses these into
   `time.Time`, and converts zero and partial-zero values (month or day `00`) and dates
   that do not exist (`2024-02-30`, stored with `ALLOW_INVALID_DATES`) to `nil`.
+  A DATETIME from 1970 on that does not exist never reaches `mapMessageColumn` as a
+  string: go-mysql builds a `time.Time` with `time.Date`, so `2024-02-30 10:00:00`
+  becomes `2024-03-01 10:00:00`.
   The snapshot gives `0001-01-01` for a zero value instead.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
