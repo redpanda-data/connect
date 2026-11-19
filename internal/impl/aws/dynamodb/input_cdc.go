@@ -224,6 +224,8 @@ This input supports three table discovery modes:
 
 When the input streams from more than one table, it reads from all matching tables simultaneously. Each table maintains its own checkpoint state. In `+"`tag`"+` or `+"`includelist`"+` mode, use `+"`table_discovery_interval`"+` to periodically rescan for new tables (useful for dynamically tagged tables).
 
+In `+"`tag`"+` mode, the input calls `+"`dynamodb:ListTables`"+`, then `+"`dynamodb:DescribeTable`"+` and `+"`dynamodb:ListTagsOfResource`"+` on every table it lists. Grant those two actions on every table in the region, not only on the tables that match the filter. A table the input cannot describe or read tags from is skipped with a warning.
+
 == Prerequisites
 
 The source DynamoDB table(s) must have https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html[DynamoDB Streams^] enabled. You can enable streams with one of these view types:
@@ -241,7 +243,7 @@ When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+`, `+"`snapshot_and_cdc
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
-The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table. `+"`incremental`"+` also works in multi-table mode, including with `+"`signal_table_name`"+` set.
+The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table. With `+"`table_discovery_mode: tag`"+`, either mode fails at startup, even when the filter matches only one table. An `+"`includelist`"+` with exactly one table supports them. `+"`incremental`"+` also works in multi-table mode, including with `+"`signal_table_name`"+` set.
 
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `+"`snapshot_segments`"+` and `+"`snapshot_throttle`"+` to control RCU consumption.
 
@@ -253,19 +255,27 @@ When `+"`snapshot_mode`"+` is `+"`incremental`"+`, each table is backfilled page
 
 Checkpoints are stored in a separate DynamoDB table (configured with `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses. With `+"`snapshot_mode: incremental`"+`, or when `+"`signal_table_name`"+` is set, it also needs `+"`dynamodb:DeleteItem`"+` on the checkpoint table, because resetting stale snapshot progress and clearing a handled snapshot request both delete rows.
 
-A closed shard that has been read to the end is marked completed in the checkpoint table and is skipped after a restart. A child shard is read only after its parent has been read to the end, so changes to an item are emitted in order across shard splits. There are three exceptions, where a child shard is read without waiting and an older change to an item can be emitted after a newer one:
-
-- The first discovery under `+"`start_from: latest`"+`, where every shard starts at its latest position.
-- A parent shard that fails to prepare on 5 consecutive shard refresh cycles (a warning is logged).
-- A parent shard the stream reports as not found.
-
-A child shard that keeps waiting for its parent is reported with a warning every 20 shard refresh cycles. If a stored checkpoint points at stream data that has already been trimmed (older than the 24 hour retention), the shard resumes from `+"`TRIM_HORIZON`"+` and a warning is logged.
-
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
 Multiple independent pipelines can share a single checkpoint table by giving each one a distinct `+"`checkpoint_namespace`"+` (for example one namespace per developer or environment). Namespaces isolate checkpoints from each other: a pipeline only sees checkpoints written under its own namespace, so changing (or removing) the namespace causes the pipeline to restart from `+"`start_from`"+`. Namespaces do not coordinate consumers: two pipelines sharing the _same_ namespace still overwrite each other's checkpoints.
 
 The namespace is prefixed to the checkpoint key. When a pipeline restarts under a namespace that has no checkpoints yet, it starts from `+"`start_from`"+`. With `+"`start_from: trim_horizon`"+`, this replays all records still available in the stream's 24-hour retention window. Switching back to a previously used namespace resumes from that namespace's last checkpoints.
+
+=== Ordering across shard splits
+
+DynamoDB Streams splits shards over time. The input reads a child shard only after its parent shard is read to the end, so the changes to an item keep their order. In these cases the input reads a child shard without waiting, and an older change to an item can arrive after a newer one:
+
+- The first start with `+"`start_from: latest`"+`. Every shard starts at its latest position.
+- A parent shard that the input cannot open for several refresh cycles. A warning is logged.
+- A parent shard that the stream reports as not found.
+
+=== Downtime longer than the stream retention
+
+DynamoDB Streams keeps records for 24 hours. If the pipeline stops for longer, a stored checkpoint can point at records that are gone, and the changes between the checkpoint and the oldest kept record are lost. A warning is logged.
+
+- With `+"`snapshot_mode: none`"+`, the shard resumes from `+"`TRIM_HORIZON`"+`.
+- With `+"`snapshot_mode: snapshot_and_cdc`"+` and a completed snapshot, the input runs the full snapshot again, so every item gets its current state. The CDC readers also resume from `+"`TRIM_HORIZON`"+`, so expect duplicates. The intermediate changes are still lost.
+- With `+"`snapshot_mode: incremental`"+` and a completed backfill, the input resets the backfill and runs it again while the table streams. The CDC readers also resume from `+"`TRIM_HORIZON`"+`. The intermediate changes are still lost.
 
 == Alternative
 
@@ -281,11 +291,12 @@ Attribute values are converted from DynamoDB's typed format, such as `+"`{\"S\":
 
 This input adds the following metadata fields to each message:
 
-- `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (empty for snapshot records)
-- `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (empty for snapshot records)
-- `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
+- `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (not set on snapshot records)
+- `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (not set on snapshot records)
+- `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (not set on snapshot records)
 - `+"`dynamodb_event_name`"+` - The type of change: `+"`INSERT`"+`, `+"`MODIFY`"+`, `+"`REMOVE`"+`, or `+"`READ`"+` (for snapshot records)
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
+- `+"`dynamodb_snapshot_segment`"+` - The scan segment that read the record (set only on snapshot records)
 
 == Metrics
 
@@ -378,7 +389,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc", "incremental").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too). It never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. `incremental` requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, and reads with strongly consistent Scans (twice the RCU of the other modes). It backfills a table once, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset deletes snapshot progress rows.").Version("4.82.0").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `snapshot_only` and `snapshot_and_cdc` require a single table. They fail at startup with `table_discovery_mode: tag` or with more than one table in `tables`. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too). It never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. `incremental` requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, and reads with strongly consistent Scans (twice the RCU of the other modes). It backfills a table once, even if that table was previously only streamed. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset deletes snapshot progress rows.").Version("4.82.0").
 				ShortDescription("Snapshot behaviour: none, snapshot_only, snapshot_and_cdc, or incremental (backfill while streaming, multi-table capable).").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).

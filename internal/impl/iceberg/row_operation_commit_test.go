@@ -22,7 +22,6 @@ import (
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
-	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -290,10 +289,7 @@ func (f *flakyCatalog) CommitTable(ctx context.Context, ident table.Identifier, 
 	return f.memCatalog.CommitTable(ctx, ident, reqs, updates)
 }
 
-func (f *flakyCatalog) snapshot() *table.Table {
-	return table.New(f.ident, f.meta, f.metadataLocation,
-		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil }, f)
-}
+func (f *flakyCatalog) snapshot() *table.Table { return tableBoundTo(f.memCatalog, f) }
 
 func (f *flakyCatalog) calls() int {
 	f.mu.Lock()
