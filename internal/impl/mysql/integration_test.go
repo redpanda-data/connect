@@ -755,7 +755,7 @@ memory: {}
 	require.JSONEq(t, `{"id": 4, "d": null, "dt": null, "dt6": null}`, outBatches[3])
 }
 
-// The parseMySQLTime comment says when go-mysql gives a string for a DATE or
+// The parseBinlogTime comment says when go-mysql gives a string for a DATE or
 // DATETIME value. This test reads the binlog with go-mysql directly, so it
 // fails if that rule is wrong or if a go-mysql upgrade changes it. It then
 // gives each raw value to mapMessageColumn, as the input does.
