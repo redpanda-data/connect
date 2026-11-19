@@ -98,6 +98,16 @@ func TestYAMLStringifyQuotesYAMLv3NonStrings(t *testing.T) {
 			want: "a: \"yes\"\nb: \"Off\"\n",
 		},
 		{
+			name: "YAML 1.1 base-60 numbers",
+			json: `{"a":"1:30","b":"-12:30:00","c":"1:30.5"}`,
+			want: "a: \"1:30\"\nb: \"-12:30:00\"\nc: \"1:30.5\"\n",
+		},
+		{
+			name: "base-60 lookalikes",
+			json: `{"a":"10:60","b":"80:80","c":"localhost:9092"}`,
+			want: "a: 10:60\nb: 80:80\nc: localhost:9092\n",
+		},
+		{
 			name: "list items",
 			json: `["-0x1F","0b1010"]`,
 			want: "- \"-0x1F\"\n- \"0b1010\"\n",
