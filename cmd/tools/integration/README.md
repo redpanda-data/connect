@@ -22,6 +22,7 @@ task test:integration
 | `--race` | Enable race detector (sets `CGO_ENABLED=1`) |
 | `--unit` | Run all tests, not just integration tests |
 | `--cover-profile` | Generate coverage profile per package (`.cov` files) |
+| `--parallel` | Number of packages to test at the same time (default: 1) |
 
 `--output-dir` and `--clean` are mutually exclusive.
 
@@ -44,6 +45,8 @@ go run ./cmd/tools/integration run kafka redis
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
 
 - **Docker Cleanup** -- Ryuk, the testcontainers reaper, is on by default. It removes the containers, networks, and volumes of each package about 10 seconds after its test binary exits, also when the run is interrupted or crashes. If you disable it (`TESTCONTAINERS_RYUK_DISABLED=true`), containers will not be cleaned up and will accumulate.
+
+- **Parallel Packages** -- `--parallel N` tests up to N packages at the same time. The runner starts them in the order of [`packages.json`](packages.json). With N above 1, each package writes its output as one block when it is done, so the packages show in the order they finish. With the default of 1, a package writes its lines as they happen. Keep the default of 1 on a small Docker VM: packages that run at the same time share its CPU and memory.
 
 - **Race Detection** -- The `--race` flag enables Go's race detector with `CGO_ENABLED=1` set automatically.
 
@@ -74,4 +77,4 @@ The `affected` subcommand reads changed file paths on stdin and prints the packa
 git diff --name-only origin/main...HEAD | go run ./cmd/tools/integration affected
 ```
 
-A change to a Go package selects every package whose test binary (`go list -test -deps`) includes it. A `_test.go` file or a file under `testdata/` selects only its own package. When the run would select more than `--max-packages` packages (default 20), `filters` is empty and `budget_exceeded=true`.
+A change to a Go package selects every package whose test binary (`go list -test -deps`) includes it. A `_test.go` file or a file under `testdata/` selects only its own package.

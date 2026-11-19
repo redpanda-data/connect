@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 )
 
 const (
@@ -131,7 +132,6 @@ type influxDBMetrics struct {
 	tags         map[string]string
 	interval     time.Duration
 	pingInterval time.Duration
-	timeout      time.Duration
 
 	ctx    context.Context //nolint:containedctx // lifecycle context for background flush loop
 	cancel func()
@@ -177,10 +177,6 @@ func fromParsed(conf *service.ParsedConfig, logger *service.Logger) (i *influxDB
 	if i.pingInterval, err = conf.FieldDuration(imFieldPingInterval); err != nil {
 		return
 	}
-	if i.timeout, err = conf.FieldDuration(imFieldTimeout); err != nil {
-		return
-	}
-
 	if i.clientConf, err = clientConfFromParsed(conf); err != nil {
 		return nil, err
 	}
@@ -213,6 +209,8 @@ type clientConf struct {
 	tlsConf  *tls.Config
 	username string
 	password string
+	// timeout limits each HTTP request, ping and write. UDP ignores it.
+	timeout time.Duration
 }
 
 func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) {
@@ -222,6 +220,9 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 	c.username, _ = conf.FieldString(imFieldUsername)
 	c.password, _ = conf.FieldString(imFieldPassword)
 	if c.tlsConf, err = conf.FieldTLS(imFieldTLS); err != nil {
+		return
+	}
+	if c.timeout, err = conf.FieldDuration(imFieldTimeout); err != nil {
 		return
 	}
 	return
@@ -235,12 +236,14 @@ func (conf clientConf) build() (c client.Client, err error) {
 			TLSConfig: conf.tlsConf,
 			Username:  conf.username,
 			Password:  conf.password,
+			Timeout:   conf.timeout,
 		})
 	case "http":
 		c, err = client.NewHTTPClient(client.HTTPConfig{
 			Addr:     conf.u.String(),
 			Username: conf.username,
 			Password: conf.password,
+			Timeout:  conf.timeout,
 		})
 	case "udp":
 		c, err = client.NewUDPClient(client.UDPConfig{
@@ -249,7 +252,7 @@ func (conf clientConf) build() (c client.Client, err error) {
 	default:
 		return nil, fmt.Errorf("protocol needs to be http, https or udp and is %s", conf.u.Scheme)
 	}
-	return c, err
+	return c, redact.Error(err, redact.Conns(conf.u.String()))
 }
 
 func (i *influxDBMetrics) loop() {
@@ -264,12 +267,12 @@ func (i *influxDBMetrics) loop() {
 			return
 		case <-ticker.C:
 			if err := i.publishRegistry(); err != nil {
-				i.log.Errorf("failed to send metrics data: %s", err)
+				i.log.Errorf("failed to send metrics data: %s", redact.Error(err, redact.Conns(i.clientConf.u.String())))
 			}
 		case <-pingTicker.C:
-			_, _, err := i.client.Ping(i.timeout)
+			_, _, err := i.client.Ping(i.clientConf.timeout)
 			if err != nil {
-				i.log.Warnf("unable to ping influx endpoint: %s", err)
+				i.log.Warnf("unable to ping influx endpoint: %s", redact.Error(err, redact.Conns(i.clientConf.u.String())))
 				if tmpClient, err := i.clientConf.build(); err != nil {
 					i.log.Errorf("unable to recreate client: %s", err)
 				} else {
@@ -413,7 +416,7 @@ func (i *influxDBMetrics) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	if err := i.publishRegistry(); err != nil {
-		i.log.Errorf("failed to send metrics data: %s", err)
+		i.log.Errorf("failed to send metrics data: %s", redact.Error(err, redact.Conns(i.clientConf.u.String())))
 	}
 	i.client.Close()
 	return nil

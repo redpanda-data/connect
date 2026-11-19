@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 
@@ -75,8 +74,19 @@ type OverwriteInput struct {
 // CommitConfig holds configuration for the committer.
 type CommitConfig struct {
 	ManifestMergeEnabled bool
-	MaxSnapshotAge       time.Duration
-	MaxRetries           int
+	// MaxSnapshotAge is commit.max_snapshot_age. Zero, the default, disables
+	// expiry: the field was inert before 4.119.0, so a non-zero default would
+	// start removing history from every table on upgrade, and would run
+	// iceberg-go's expiry walk (quadratic in the retained snapshot count) under
+	// the commit lock on tables whose operators never asked for it.
+	MaxSnapshotAge time.Duration
+	MaxRetries     int
+	// MaintenanceInterval bounds how often the table-maintenance pass (snapshot
+	// expiry and the manifest-merge property, see table_maintenance.go) may
+	// run for a table: at most once per interval, after a data commit. The
+	// commit.maintenance_interval field; zero or negative means
+	// defaultMaintenanceInterval.
+	MaintenanceInterval time.Duration
 	// SkipFormatUpgrade leaves the table at its existing format version instead
 	// of upgrading to v2. Set for copy-on-write, which only ever writes plain
 	// data files (no v2 delete files) and so works on a v1 table — avoiding an
@@ -101,7 +111,20 @@ type CommitConfig struct {
 	// writer on every failure) instead of costing a rejected commit per
 	// generation. Nil gets a fresh, private set.
 	ProhibitedKeys *prohibitedKeySet
+	// Maintenance, when non-nil, is the per-table maintenance record shared
+	// across committer generations (see tableMaintenanceState). Owned by the
+	// router per tableEntry for the same reason as ProhibitedKeys: the pass
+	// interval and the once-per-table warnings must outlive writer
+	// recreation. Nil gets a fresh, private record.
+	Maintenance *tableMaintenanceState
 }
+
+// minSnapshotAge is the floor for a non-zero commit.max_snapshot_age, held by
+// the field's lint rule and by parseCommitConfig. Below it, another writer's
+// expiry can remove a snapshot this output has not yet confirmed landed (an
+// ambiguous commit is confirmed by finding its token on reload), and the rows
+// would be written again.
+const minSnapshotAge = time.Minute
 
 // StaleSchemaError is returned when data was written with a schema
 // that no longer matches the table's current schema.
@@ -143,8 +166,12 @@ type committer struct {
 	// doCommit and the direct commitRowDelta path both take it.
 	commitMu        sync.Mutex
 	upgradeWarnOnce sync.Once
-	metrics         *opMetrics
-	logger          *service.Logger
+	// maint is the per-table maintenance record (pass interval, once-per-table
+	// warnings), shared across committer generations via
+	// CommitConfig.Maintenance.
+	maint   *tableMaintenanceState
+	metrics *opMetrics
+	logger  *service.Logger
 }
 
 // NewCommitter creates a new committer for a specific table. cat must be the
@@ -165,21 +192,32 @@ func NewCommitter(tbl *table.Table, cat table.CatalogIO, cfg CommitConfig, reloa
 	if reloadTable == nil {
 		return nil, errors.New("creating committer: reloadTable must not be nil")
 	}
-	// Defensively clamp MaxRetries to at least 1: commitLocked's retry loop is
-	// `for range cfg.MaxRetries`, so a zero or negative value would never run a
+	// Defensively clamp MaxRetries to at least 1: commitLocked makes at most
+	// cfg.MaxRetries attempts, so a zero or negative value would never run a
 	// single attempt and return a "committing transaction after 0 attempts"
 	// error wrapping a nil cause. Config lint rejects it at startup (config.go),
 	// but callers constructing a committer directly get the same safety here.
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
 	}
+	// Callers that build a CommitConfig directly (parseCommitConfig fills the
+	// field from the config) may leave MaintenanceInterval zero, which means
+	// the default.
+	if cfg.MaintenanceInterval <= 0 {
+		cfg.MaintenanceInterval = defaultMaintenanceInterval
+	}
 	stripper := newPropertyStrippingCatalog(cat, cfg.ProhibitedKeys)
 	writes := newWriteRecorder()
+	maint := cfg.Maintenance
+	if maint == nil {
+		maint = newTableMaintenanceState()
+	}
 	c := &committer{
 		table:    rebindTableRecording(tbl, stripper, writes),
 		cfg:      cfg,
 		stripper: stripper,
 		writes:   writes,
+		maint:    maint,
 		logger:   logger,
 	}
 	// Single choke point for reloaded tables: every table handle the
@@ -252,7 +290,7 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 	// still proves the batch landed, so the retry returns success instead of
 	// re-adding the files and duplicating rows.
 	commitID := uuid.NewString()
-	if _, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
+	_, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error {
 		files := allFiles
 		if reloaded {
 			// A prior attempt can land server-side yet report failure (a lost
@@ -276,7 +314,9 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 			table.WithoutAutoNameMapping(),
 			table.WithoutDuplicateCheck(),
 		)
-	}); err != nil {
+	})
+	c.maintainAfterCommitLocked(ctx, err)
+	if err != nil {
 		return nil, err
 	}
 	c.logger.Debugf("Committed %d data files", len(allFiles))
@@ -302,7 +342,7 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	// of applying the RowDelta (and its equality deletes) a second time. That is
 	// why retryOnUnknownState is safe to enable here.
 	commitID := uuid.NewString()
-	if _, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
+	_, err := c.commitLocked(ctx, commitID, true, func(txn *table.Transaction, props iceberg.Properties, _ bool) error {
 		// RowDelta derives the snapshot operation automatically
 		// (append/delete/overwrite).
 		rd := txn.NewRowDelta(props)
@@ -311,7 +351,9 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 		}
 		rd.AddDeletes(input.DeleteFiles...)
 		return rd.Commit(ctx)
-	}); err != nil {
+	})
+	c.maintainAfterCommitLocked(ctx, err)
+	if err != nil {
 		return err
 	}
 	c.logger.Debugf("Committed row delta: %d data files, %d delete files", len(input.Files), len(input.DeleteFiles))
@@ -455,6 +497,9 @@ func (c *committer) commitOverwrite(ctx context.Context, input OverwriteInput) e
 			c.cleanupOrphanedOverwriteFiles(ctx, written, startSnapshotID)
 		}
 	}
+	// After the orphan sweep, so the sweep's reference scan runs against
+	// exactly the table the data commit produced.
+	c.maintainAfterCommitLocked(ctx, err)
 	if err != nil {
 		return err
 	}
@@ -643,12 +688,13 @@ func (c *committer) referencedCandidatePaths(ctx context.Context, candidates map
 //
 // Callers must hold c.commitMu.
 func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUnknownState bool, stage func(txn *table.Transaction, props iceberg.Properties, reloaded bool) error) (bool, error) {
-	props := iceberg.Properties{
-		table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
-	}
-	if c.cfg.MaxSnapshotAge > 0 {
-		props[table.MaxSnapshotAgeMsKey] = strconv.FormatInt(c.cfg.MaxSnapshotAge.Milliseconds(), 10)
-	}
+	// props are the SNAPSHOT summary properties every stage callback passes
+	// to iceberg-go. commit.manifest-merge.enabled and the snapshot-retention
+	// keys do not belong here: iceberg-go resolves both from TABLE metadata
+	// properties and never reads a snapshot summary for them, so placing them
+	// here is inert. Both are applied by the maintenance pass that follows a
+	// landed data commit (maintainLocked), never on the data commit itself.
+	props := iceberg.Properties{}
 	// Stamp the idempotency token into the snapshot props so the committed
 	// snapshot carries it. props is reused across attempts, so this holds for
 	// every stage attempt. iceberg-go copies it verbatim into Summary.Properties.
@@ -679,9 +725,12 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 	// errors.Is(err, rest.ErrCommitStateUnknown) checks stay true even when a
 	// later attempt's differently-classed error terminates the loop.
 	var unresolvedUnknown error
+	// budget is the number of attempts this call may make: cfg.MaxRetries plus
+	// one per learn-and-strip retry.
+	budget := c.cfg.MaxRetries
 	attempt := 0
 	reloaded := false
-	for range c.cfg.MaxRetries {
+	for attempt < budget {
 		attempt++
 		txn := c.table.NewTransaction()
 		if !c.cfg.SkipFormatUpgrade && c.table.Metadata().Version() < CurrentIcebergVersion {
@@ -747,7 +796,20 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 				c.incrCommitFailure()
 				return attempt > 1, joinUnresolvedUnknown(fatalErr, unresolvedUnknown)
 			} else if retry {
+				// This learn-and-strip retry exists for one catalog behaviour:
+				// the Databricks Unity Catalog rejects a commit whose table
+				// properties carry a key it prohibits and names that key in
+				// the 400 (prohibitedKeysRe). No other supported catalog does
+				// this. A catalog that never names a key never reaches this
+				// branch, so the retry is inert everywhere else.
+				//
+				// With max_retries: 1 the stripped commit would otherwise never
+				// run, and a catalog that names a key as prohibited would wedge
+				// the table. It cannot loop: noteProhibitedKeys asks for a retry
+				// only when it learns a key the commit sent, and the commit
+				// sends a finite set of keys.
 				commitErr = err
+				budget++
 				continue
 			}
 		}
@@ -765,7 +827,7 @@ func (c *committer) commitLocked(ctx context.Context, commitID string, retryOnUn
 		if errors.Is(err, table.ErrCommitFailed) ||
 			(retryOnUnknownState && ambiguous) {
 			commitErr = err
-			c.logger.Warnf("Commit attempt %d/%d failed: %v", attempt, c.cfg.MaxRetries, err)
+			c.logger.Warnf("Commit attempt %d failed: %v", attempt, err)
 			if reloadedTbl, reloadErr := c.reloadTable(ctx); reloadErr == nil {
 				c.table = reloadedTbl
 				reloaded = true
@@ -901,10 +963,10 @@ func isDefinitiveCommitRejection(err error) bool {
 // noteProhibitedKeys inspects a failed commit's error for a catalog
 // prohibited-table-property rejection and updates the stripper accordingly.
 // It returns retry=true when at least one new (non-reserved) key was learned —
-// the caller should count the attempt and re-stage, letting the stripper
-// filter the keys on the next commit. Only keys the failed commit actually
-// sent (in its set-properties updates, tracked by the stripper) can be
-// learned: a named key we never sent cannot be the cause of THIS rejection,
+// the caller should re-stage, letting the stripper filter the keys on the next
+// commit. Only keys the failed commit actually sent (in its set-properties
+// updates, tracked by the stripper) can be learned: a named key we never sent
+// cannot be the cause of THIS rejection,
 // so learning it would let arbitrary error text poison the strip set — it is
 // logged at debug and skipped instead. It returns a non-nil fatalErr when the
 // catalog named a key under reservedTablePropertyPrefix (matched
@@ -915,11 +977,29 @@ func isDefinitiveCommitRejection(err error) bool {
 // that are already being stripped or were never sent, in which case retrying
 // would loop futilely — and the caller's standard error handling applies.
 func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fatalErr error) {
+	learned, fatalErr := c.learnProhibitedKeys(err)
+	if fatalErr != nil || len(learned) == 0 {
+		return false, fatalErr
+	}
+	// One-time warning per key: learnProhibitedKeys only reports a key the
+	// first time it is learned.
+	for _, k := range learned {
+		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
+	}
+	c.logger.Warnf("Commit attempt %d rejected for prohibited table properties %v; retrying with them stripped", attempt, learned)
+	return true, nil
+}
+
+// learnProhibitedKeys is the learning half of noteProhibitedKeys, shared with
+// the maintenance pass (which does not retry, it just stops staging the
+// key, and logs its own warning). It returns the keys newly learned from
+// err, or fatalErr when the catalog named a reserved key.
+func (c *committer) learnProhibitedKeys(err error) (learned []string, fatalErr error) {
 	keys := parseProhibitedPropertyKeys(err)
 	if len(keys) == 0 {
-		return false, nil
+		return nil, nil
 	}
-	var learned, reserved []string
+	var reserved []string
 	for _, k := range keys {
 		switch {
 		case hasReservedPrefix(k):
@@ -931,20 +1011,11 @@ func (c *committer) noteProhibitedKeys(attempt int, err error) (retry bool, fata
 		}
 	}
 	if len(reserved) > 0 {
-		return false, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"catalog prohibits table properties %v, which this connector depends on (%s* keys pin semantics such as the table's timestamp encoding) and refuses to strip: %w",
 			reserved, reservedTablePropertyPrefix, err)
 	}
-	if len(learned) == 0 {
-		return false, nil
-	}
-	// One-time warning per key: addProhibitedKey only reports a key the first
-	// time it is learned.
-	for _, k := range learned {
-		c.logger.Warnf("Catalog prohibits table property %q; stripping it from commits — safe because our data files carry Iceberg field IDs, so the property only duplicates optional metadata (e.g. the name-mapping fallback for ID-less files) that readers of this table never need", k)
-	}
-	c.logger.Warnf("Commit attempt %d/%d rejected for prohibited table properties %v; retrying with them stripped", attempt, c.cfg.MaxRetries, learned)
-	return true, nil
+	return learned, nil
 }
 
 // dropAlreadyCommitted returns the subset of files whose paths are not already
@@ -1020,8 +1091,10 @@ func (c *committer) dropAlreadyCommitted(ctx context.Context, files []iceberg.Da
 // we walk it in reverse) because a just-landed commit is the most recent. The
 // scan stops once it reaches stopAtSnapshotID — the snapshot that was current
 // when the commit began — since any snapshot our attempt created is strictly
-// newer than that. commitIDs are unique per call, so only a snapshot our own
-// attempt produced can match.
+// newer than that. Snapshot expiry (ours or another writer's) may have removed
+// that marker meanwhile; the scan then runs to the oldest snapshot, which only
+// costs time. commitIDs are unique per call, so only a snapshot our own attempt
+// produced can match.
 func (c *committer) committedSnapshotHasID(commitID string, stopAtSnapshotID int64) bool {
 	snaps := c.table.Metadata().Snapshots()
 	for _, s := range slices.Backward(snaps) {

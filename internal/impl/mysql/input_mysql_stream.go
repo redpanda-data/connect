@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -32,10 +32,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	awsconfig "github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	cdcreplication "github.com/redpanda-data/connect/v4/internal/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlredact"
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
@@ -81,6 +83,10 @@ This input reads the MySQL https://dev.mysql.com/doc/refman/8.4/en/binary-log.ht
 
 This input is built on the https://github.com/go-mysql-org/go-mysql?tab=readme-ov-file#replication[`+"`go-mysql` canal library"+`^] but uses a custom approach for streaming historical data.
 
+== Required privileges
+
+To stream changes, the MySQL user needs the `+"`REPLICATION SLAVE`"+` and `+"`REPLICATION CLIENT`"+` privileges, and `+"`SELECT`"+` on the tables in `+"`tables`"+`. To take a snapshot, the user also needs `+"`LOCK TABLES`"+` and either `+"`RELOAD`"+` or `+"`FLUSH_TABLES`"+`.
+
 == Snapshot and streaming modes
 
 When `+"`stream_snapshot`"+` is `+"`true`"+` and `+"`checkpoint_cache`"+` holds no binlog position, this input takes a snapshot before it streams changes:
@@ -94,6 +100,8 @@ When `+"`stream_snapshot`"+` is `+"`true`"+` and `+"`checkpoint_cache`"+` holds 
 The binlog position is stored in `+"`checkpoint_cache`"+` only after the snapshot is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start.
 
 When `+"`stream_snapshot`"+` is `+"`false`"+` and no position is stored, this input starts streaming from the current binlog position. In both modes, a restart resumes streaming from the binlog position stored in `+"`checkpoint_cache`"+`.
+
+The stored position is a binlog file name and offset on one server, not a GTID. After a failover to another server, the stored position is no longer valid. If the server purges the binlog file that the stored position names, the input logs an error and reconnects repeatedly. It does not take a snapshot or skip to the current position. In either case, delete the stored position from `+"`checkpoint_cache`"+` to start again.
 
 == Data types
 
@@ -119,7 +127,7 @@ This input adds the following metadata fields to each message:
 			Description("The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`.").
 			Example("user:password@tcp(localhost:3306)/database"),
 		service.NewStringListField(fieldMySQLTables).
-			Description("A list of the database table names to stream changes from. Specify each table name as a separate item.").
+			Description("A list of the database table names to stream changes from. Specify each table name as a separate item, without a database prefix. A name can be up to 64 characters long. It must start with an ASCII letter, `_`, or a character from U+0080 to U+FFFF, and can also contain digits and `$` after that. Names with other characters, such as `-`, are not supported. The input checks these rules when it starts, not during linting.").
 			Example([]string{"table1", "table2"}).
 			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 		service.NewStringField(fieldCheckpointCache).
@@ -241,7 +249,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 	i.mysqlConfig, err = mysql.ParseDSN(i.dsn)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
+		return nil, fmt.Errorf("error parsing mysql DSN: %w", redact.Error(err, redact.Conns(i.dsn)))
 	}
 	// We require this configuration option is enabled.
 	i.mysqlConfig.ParseTime = true
@@ -368,7 +376,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
-		db, err := sql.Open("mysql", i.mysqlConfig.FormatDSN())
+		db, err := sqlredact.Open("mysql", i.mysqlConfig.FormatDSN())
 		if err != nil {
 			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}

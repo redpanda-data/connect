@@ -11,8 +11,6 @@ package iceberg
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"time"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
@@ -20,6 +18,7 @@ import (
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
@@ -67,7 +66,8 @@ type icebergOutput struct {
 	logger *service.Logger
 }
 
-// opMetrics holds counters for row-level operations and commit health. Row
+// opMetrics holds counters for row-level operations, commit health and table
+// maintenance. Row
 // operations share a single counter labelled by operation (insert/upsert/
 // delete), following the Prometheus convention of one metric with a label
 // rather than one metric per verb, so they aggregate cleanly. The holder is nil
@@ -76,12 +76,24 @@ type icebergOutput struct {
 type opMetrics struct {
 	rowOps         *service.MetricCounter // labelled by "operation"
 	commitFailures *service.MetricCounter
+	// maintenanceFailures counts failed maintenance passes (snapshot expiry,
+	// the manifest-merge property), labelled by operation. It is the
+	// alertable signal for retention that has silently stopped working.
+	maintenanceFailures *service.MetricCounter
+	// retainedSnapshots is each table's current snapshot count, labelled by
+	// table (namespace.table). One series per table this output writes, so
+	// an output routing to many tables emits many series; the count is
+	// what climbs towards a catalog's metadata ceiling when expiry fails,
+	// and it is meaningless aggregated across tables.
+	retainedSnapshots *service.MetricGauge
 }
 
 func newOpMetrics(m *service.Metrics) *opMetrics {
 	return &opMetrics{
-		rowOps:         m.NewCounter("iceberg_row_operations_total", "operation"),
-		commitFailures: m.NewCounter("iceberg_commit_failures_total"),
+		rowOps:              m.NewCounter("iceberg_row_operations_total", "operation"),
+		commitFailures:      m.NewCounter("iceberg_commit_failures_total"),
+		maintenanceFailures: m.NewCounter("iceberg_table_maintenance_failures_total", "operation"),
+		retainedSnapshots:   m.NewGauge("iceberg_retained_snapshots", "table"),
 	}
 }
 
@@ -97,6 +109,18 @@ func newOpMetrics(m *service.Metrics) *opMetrics {
 // values that feed rowOps are pinned by TestSplitByOperationCOWCountsFeedMetrics
 // on the writer side; the incr* label wiring is covered by the incr* methods'
 // own trivial mapping. Revisit if benthos exposes a public readable metrics mock.
+
+func (m *opMetrics) incrMaintenanceFailure(operation string) {
+	if m != nil {
+		m.maintenanceFailures.Incr(1, operation)
+	}
+}
+
+func (m *opMetrics) setRetainedSnapshots(table string, n int64) {
+	if m != nil {
+		m.retainedSnapshots.Set(n, table)
+	}
+}
 
 func (m *opMetrics) incrInserted(n int64) {
 	if m != nil && n > 0 {
@@ -190,7 +214,7 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 	// anything. Say so once at startup so the resulting object growth is not a
 	// mystery later — the per-commit skips are logged at debug only.
 	if commitCfg.DisableCleanupOnFailure {
-		mgr.Logger().Infof("%s.%s is disabled: failed commits will leave their written files orphaned in storage on every write path. Run Iceberg table maintenance (snapshot expiry plus orphan-file removal) to reclaim them.", ioFieldCommit, ioFieldCleanupOnFailure)
+		mgr.Logger().Infof("%s.%s is disabled: failed commits will leave their written files orphaned in storage on every write path. Run Iceberg orphan-file removal to reclaim them.", ioFieldCommit, ioFieldCleanupOnFailure)
 	}
 
 	// Parse parquet config
@@ -290,7 +314,7 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 		}
 		serverURI, _ := conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthOAuth2, ioFieldOAuth2ServerURI)
 		if serverURI != "" {
-			cfg.OAuth2ServerURI, err = url.Parse(serverURI)
+			cfg.OAuth2ServerURI, err = redact.ParseURL(serverURI)
 			if err != nil {
 				return cfg, fmt.Errorf("parsing oauth2 server URI: %w", err)
 			}
@@ -648,9 +672,8 @@ func parseRowOpConfig(conf *service.ParsedConfig) (RowOpConfig, error) {
 // parseCommitConfig parses the commit configuration.
 func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	cfg := CommitConfig{
-		ManifestMergeEnabled: true,
-		MaxSnapshotAge:       24 * time.Hour,
-		MaxRetries:           3,
+		MaintenanceInterval: defaultMaintenanceInterval,
+		MaxRetries:          3,
 	}
 	if !conf.Contains(ioFieldCommit) {
 		return cfg, nil
@@ -663,6 +686,19 @@ func parseCommitConfig(conf *service.ParsedConfig) (CommitConfig, error) {
 	cfg.MaxSnapshotAge, err = conf.FieldDuration(ioFieldCommit, ioFieldMaxSnapshotAge)
 	if err != nil {
 		return cfg, err
+	}
+	// The lint rules in config.go enforce the same bounds, but lint can be
+	// skipped (--chilled), and a sub-minute age is the multi-writer rewrite
+	// case the field's description warns about, so they hold here too.
+	if cfg.MaxSnapshotAge != 0 && cfg.MaxSnapshotAge < minSnapshotAge {
+		return cfg, fmt.Errorf("%s.%s must be zero or at least %s, got %s", ioFieldCommit, ioFieldMaxSnapshotAge, minSnapshotAge, cfg.MaxSnapshotAge)
+	}
+	cfg.MaintenanceInterval, err = conf.FieldDuration(ioFieldCommit, ioFieldMaintenanceInterval)
+	if err != nil {
+		return cfg, err
+	}
+	if cfg.MaintenanceInterval <= 0 {
+		return cfg, fmt.Errorf("%s.%s must be a positive duration, got %s", ioFieldCommit, ioFieldMaintenanceInterval, cfg.MaintenanceInterval)
 	}
 	cfg.MaxRetries, err = conf.FieldInt(ioFieldCommit, ioFieldMaxCommitRetries)
 	if err != nil {

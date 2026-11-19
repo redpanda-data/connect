@@ -174,3 +174,4 @@ Component registration, config specs, license headers, and certification standar
 - **External dependencies:** Components requiring C libraries (like ZMQ) are excluded by default. Use `TAGS=x_benthos_extra task build:all`.
 - **Template tests are slow:** They build and run actual binaries. Run only changed tests during development.
 - **License headers matter:** CI fails if headers don't match the component's distribution classification. See `godev` skill/agent for header formats.
+- **Action lockfile:** `.github/workflows/actions.lock` pins every action, including transitive ones. After you change a workflow's `uses:` line, run `gh actions-lock` and commit the lockfile. See CONTRIBUTING.md §3.3.4.

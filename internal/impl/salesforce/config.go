@@ -184,7 +184,7 @@ func grpcFieldSpec() *service.ConfigField {
 			Description("Timeout for graceful gRPC client shutdown.").
 			Default("10s"),
 		service.NewIntField(sfFieldGRPCBufferSize).
-			Description("Size of the internal gRPC event receive buffer.").
+			Description("Size of the internal gRPC event receive buffer, in events, per topic. A full buffer applies backpressure instead of dropping events. The input stops requesting events from Salesforce until the pipeline drains the buffer.").
 			Default(1000),
 	).Description("gRPC transport tuning for the Pub/Sub API connection.").Advanced()
 }

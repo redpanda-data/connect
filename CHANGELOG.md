@@ -18,7 +18,6 @@ All notable changes to this project will be documented in this file.
 - influxdb: InfluxDB metrics exporter now properly stops its flush loop on close, preventing goroutine leaks and duplicate metric writes. ([@Leward](https://github.com/Leward), [#5130](https://github.com/redpanda-data/connect/pull/5130))
 - kafka: Sarama Kafka output now supports idempotent writes by properly configuring RequiredAcks and MaxOpenRequests when idempotent_write is enabled. ([@Leward](https://github.com/Leward), [#5167](https://github.com/redpanda-data/connect/pull/5167))
 - mongodb: MongoDB CDC input now ensures the incremental snapshot waits for the majority snapshot to reach the stream start, preventing data loss from concurrent writes. ([@Leward](https://github.com/Leward), [#5132](https://github.com/redpanda-data/connect/pull/5132))
-- mssqlserver: SQL Server CDC input now correctly captures streaming changes by clearing snapshot messages before streaming inserts. ([@Leward](https://github.com/Leward), [#5122](https://github.com/redpanda-data/connect/pull/5122))
 - postgres: PostgreSQL CDC input now prevents parallel snapshot chunks from moving each other's bounds during processing. ([@josephwoodward](https://github.com/josephwoodward), [#5204](https://github.com/redpanda-data/connect/pull/5204))
 - sftp: SFTP input now correctly counts minimum_age from whole-second modification times, preventing premature reads of files with incomplete data. ([@Leward](https://github.com/Leward), [#5125](https://github.com/redpanda-data/connect/pull/5125))
 

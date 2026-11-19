@@ -13,7 +13,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	neturl "net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/redact"
 
 	v2 "github.com/redpanda-data/connect/v4/internal/impl/snowflake/streamingv2"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -475,7 +475,7 @@ func newSnowflakeStreamerPipe(
 		if err != nil {
 			return nil, err
 		}
-		if _, err := neturl.Parse(baseURL); err != nil {
+		if _, err := redact.ParseURL(baseURL); err != nil {
 			return nil, fmt.Errorf("invalid url: %w", err)
 		}
 	}

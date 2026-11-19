@@ -93,7 +93,7 @@ jobs:
           echo "scenario=${SCENARIO}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR merge ref
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@v6.1.0
         with:
           ref: refs/pull/${{ github.event.issue.number }}/merge
           fetch-depth: 0
@@ -109,7 +109,7 @@ jobs:
           fi
 
       - name: Install Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: 'go.mod'
           # This job executes PR-controlled code; a cache save would land in
@@ -157,26 +157,26 @@ jobs:
         # Sticky: the action finds the bot's own comment with this header and
         # updates it, or creates one. It is fetched by the runner, not read
         # from the workspace, so it is also safe in the always() step below.
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
           header: rpcn-soak-comparison
           number: ${{ github.event.issue.number }}
           path: ${{ runner.temp }}/comment.md
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@v6.2.4
         with:
           role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
           aws-region: us-east-2
           role-duration-seconds: 14400
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_wrapper: false
 
       - name: Install Task
-        uses: ./.github/actions/setup-task
+        uses: $/.github/actions/setup-task
 
       - name: Run A/B soak
         working-directory: benchmarking/aws
@@ -226,7 +226,7 @@ jobs:
       - name: Post comparison comment
         # Same gate as above. Overwrites the early "Soak running" comment.
         if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
           header: rpcn-soak-comparison
           number: ${{ github.event.issue.number }}
@@ -251,7 +251,7 @@ jobs:
 
       - name: Upload run log
         if: always() && steps.gate.outcome == 'success' && steps.headpin.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: soak-pr-log
           path: ${{ runner.temp }}/soak-pr.log

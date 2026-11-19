@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,11 +67,24 @@ func runCommand(capture bool, arg ...string) (string, string, error) {
 	stderr := stderrBuf.String()
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to run the command: %s, error: %v\nstdout:\n%s\nstderr:\n%s",
-			cmd.String(), err, stdout, stderr)
+			commandName(bin, arg), err, stdout, stderr)
 		return stdout, stderr, errors.New(errMsg)
 	}
 
 	return stdout, stderr, nil
+}
+
+// commandName describes a command by its binary and subcommand only, as its
+// remaining arguments can hold credentials such as an enrollment ticket.
+func commandName(bin string, args []string) string {
+	parts := []string{bin}
+	for _, a := range args {
+		if len(parts) == 3 || strings.HasPrefix(a, "-") {
+			break
+		}
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
 }
 
 // Returns the path to the Ockam Command binary.
