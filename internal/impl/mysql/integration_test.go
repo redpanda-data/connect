@@ -972,7 +972,9 @@ mysql_cdc:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				_ = streamOut.Run(t.Context())
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 			t.Cleanup(func() {
 				require.NoError(t, streamOut.StopWithin(10*time.Second))
