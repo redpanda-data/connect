@@ -247,3 +247,20 @@ func clickhouseNeedsContainerNormalization(target reflect.Type) bool {
 		return false
 	}
 }
+
+// lazySQL defers rendering of a query builder until a log line is actually
+// formatted, so that no work is done when trace logging is disabled. It never
+// includes argument values.
+type lazySQL struct {
+	builder interface {
+		ToSql() (string, []any, error)
+	}
+}
+
+func (l lazySQL) String() string {
+	sqlStr, _, err := l.builder.ToSql()
+	if err != nil {
+		return fmt.Sprintf("<failed to build query: %v>", err)
+	}
+	return sqlStr
+}
