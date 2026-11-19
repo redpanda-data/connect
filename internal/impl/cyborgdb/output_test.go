@@ -28,6 +28,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // Mock client implementation for testing
@@ -236,7 +238,7 @@ func TestOutputWriter_UpsertBatch(t *testing.T) {
 	var vectorMapping *bloblang.Executor
 	var metadataMapping *bloblang.Executor
 
-	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
+	idField := servicetest.NewInterpolatedString(t, "${! json(\"id\") }")
 
 	w := &outputWriter{
 		client:          mockClient,
@@ -306,7 +308,7 @@ func TestOutputWriter_DeleteBatch(t *testing.T) {
 	mockClient.indexes["test-index"] = mockIndex
 
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
-	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
+	idField := servicetest.NewInterpolatedString(t, "${! json(\"id\") }")
 
 	w := &outputWriter{
 		client:    mockClient,
@@ -345,7 +347,7 @@ func TestOutputWriter_VectorTypeConversion(t *testing.T) {
 
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
 	var vectorMapping *bloblang.Executor
-	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
+	idField := servicetest.NewInterpolatedString(t, "${! json(\"id\") }")
 
 	w := &outputWriter{
 		client:        mockClient,
@@ -391,7 +393,7 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
 	var vectorMapping *bloblang.Executor
-	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
+	idField := servicetest.NewInterpolatedString(t, "${! json(\"id\") }")
 
 	w := &outputWriter{
 		client:        mockClient,

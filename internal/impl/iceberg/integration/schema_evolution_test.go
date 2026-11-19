@@ -20,6 +20,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestSchemaEvolutionIntegration(t *testing.T) {
@@ -94,8 +96,7 @@ func TestSchemaEvolutionIntegration(t *testing.T) {
 	t.Run("AutoCreateTable_WithPartitionSpec", func(t *testing.T) {
 		infra.CreateNamespace(t, "partition_spec_ns")
 
-		partitionSpecStr, err := service.NewInterpolatedString("(bucket(16, value))")
-		require.NoError(t, err)
+		partitionSpecStr := servicetest.NewInterpolatedString(t, "(bucket(16, value))")
 
 		router := infra.NewRouter(t, "partition_spec_ns", "partition_spec_table",
 			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{
@@ -300,8 +301,7 @@ func TestSchemaEvolutionIntegration(t *testing.T) {
 
 		// Partition spec references VALUE in upper case; the table schema
 		// will be inferred from the message whose key is lowercase value.
-		partitionSpecStr, err := service.NewInterpolatedString("(bucket(16, VALUE))")
-		require.NoError(t, err)
+		partitionSpecStr := servicetest.NewInterpolatedString(t, "(bucket(16, VALUE))")
 
 		router := infra.NewRouter(t, ns, tblName,
 			WithCaseSensitive(false),

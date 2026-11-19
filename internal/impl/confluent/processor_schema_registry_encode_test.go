@@ -39,6 +39,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 var noopReqSign = func(fs.FS, *http.Request) error { return nil }
@@ -143,8 +145,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo/bar")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo/bar")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -224,8 +225,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -305,8 +305,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -387,8 +386,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -541,8 +539,7 @@ func runAvroSchemaRegistry(t *testing.T, schemaSpec string) string {
 func newTestAvroEncoder(t *testing.T, urlStr string, rawJSON bool) *schemaRegistryEncoder {
 	t.Helper()
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, rawJSON, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -1163,8 +1160,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -1224,8 +1220,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -1326,8 +1321,7 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -1418,8 +1412,7 @@ func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
 		return nil, errors.New("nope")
 	})
 
-	subj, err := service.NewInterpolatedString("foo")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "foo")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Millisecond, time.Millisecond*10, service.MockResources())
 	require.NoError(t, err)
