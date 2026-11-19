@@ -108,7 +108,7 @@ The stored position is a binlog file name and offset on one server, not a GTID. 
 
 Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers. `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers. `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps. Binary and `+"`BLOB`"+` columns become byte arrays. `+"`SET`"+` columns become arrays of strings. `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
 
-A zero date such as `+"`0000-00-00`"+` has no timestamp form. When streamed, it becomes `+"`null`"+`. In the snapshot, it becomes `+"`0001-01-01T00:00:00Z`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+` when streamed. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. When streamed, an invalid `+"`DATE`"+` becomes `+"`null`"+`. An invalid `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. An invalid `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. The snapshot moves partial-zero and invalid dates to a nearby valid date: `+"`2024-00-15`"+` becomes `+"`2023-12-15`"+`. Valid dates before 1970 keep their value in the stream and in the snapshot.
+The snapshot and the stream give the same value for a date. A zero date such as `+"`0000-00-00`"+` has no timestamp form, so it becomes `+"`null`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+`. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. Such a `+"`DATE`"+` becomes `+"`null`"+`. Such a `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. Such a `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. Valid dates before 1970 keep their value.
 
 == Metadata
 
@@ -257,7 +257,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	// The snapshot scans DATE, DATETIME and TIMESTAMP columns as strings,
 	// because it needs the string that MySQL gave to page through a table
 	// with a date primary key. parseSnapshotTime then gives the values
-	// that the driver gives with parseTime.
+	// that the stream gives.
 	i.mysqlConfig.ParseTime = false
 
 	// Configure TLS if specified
@@ -618,9 +618,10 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 				if _, ok := lastSeenPksValues[columns[idx]]; ok {
 					// The next batch starts after this key. Use the string
 					// that MySQL gave where there is one: the mapped value
-					// of a partial-zero date such as 2024-00-15 is
-					// 2023-12-15, which sorts before the key, so the next
-					// batch would read the same row again.
+					// of a partial-zero date such as 2024-00-15 is nil, and
+					// a moved date such as 2024-03-01 for 2024-02-30 sorts
+					// after other keys, so the next batch would skip or
+					// repeat rows.
 					if s, ok := value.(*sql.NullString); ok && s.Valid {
 						lastSeenPksValues[columns[idx]] = s.String
 					} else {
@@ -671,21 +672,9 @@ func snapshotValueMapper[T any](v any) (any, error) {
 }
 
 // parseSnapshotTime parses a DATE, DATETIME or TIMESTAMP string from the
-// snapshot into the time.Time that go-sql-driver gives with parseTime.
+// snapshot into the value that the stream gives for the same stored value:
+// a time.Time in loc, or nil for a zero, partial-zero or invalid date.
 func parseSnapshotTime(s string, loc *time.Location) (any, error) {
-	// This copies parseDateTime in go-sql-driver v1.10.1 (utils.go), so the
-	// snapshot values stay the same as when the driver parsed them:
-	//
-	//   - A zero value (0000-00-00, with or without a time) gives the zero
-	//     time.Time, 0001-01-01 00:00:00 UTC, whatever loc is.
-	//   - time.Date normalizes a zero month or day: 2024-00-15 becomes
-	//     2023-12-15, and 2024-12-00 becomes 2024-11-30.
-	//
-	// These values are not in the database, and the stream gives nil for
-	// them. We keep them because pipelines use them today.
-	if strings.Trim(s, "0-: .") == "" {
-		return time.Time{}, nil
-	}
 	if len(s) < len("2006-01-02") || s[4] != '-' || s[7] != '-' {
 		return nil, fmt.Errorf("invalid date value %q", s)
 	}
@@ -695,12 +684,28 @@ func parseSnapshotTime(s string, loc *time.Location) (any, error) {
 	if err := errors.Join(errY, errM, errD); err != nil {
 		return nil, fmt.Errorf("invalid date value %q: %w", s, err)
 	}
+	// A zero (0000-00-00) or partial-zero (2024-00-15) date has no
+	// time.Time form. The stream gives nil for it (see parseBinlogTime).
+	if month == 0 || day == 0 {
+		return nil, nil
+	}
 	var clock time.Time
 	if len(s) > len("2006-01-02") {
 		// The layout accepts an optional fraction (DATETIME(6)).
 		var err error
 		if clock, err = time.Parse(" 15:04:05.999999999", s[10:]); err != nil {
 			return nil, fmt.Errorf("invalid datetime value %q: %w", s, err)
+		}
+	}
+	// With ALLOW_INVALID_DATES, MySQL stores a date that does not exist,
+	// such as 2024-02-30. The stream gives nil for such a DATE and for such
+	// a DATETIME before 1970, because go-mysql gives these as strings. From
+	// 1970 on, go-mysql gives a DATETIME as a time.Time from time.Date,
+	// which moves 2024-02-30 to 2024-03-01. Do the same here.
+	if d := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC); d.Month() != time.Month(month) || d.Day() != day {
+		isDate := len(s) == len("2006-01-02")
+		if isDate || year < 1970 {
+			return nil, nil
 		}
 	}
 	return time.Date(year, time.Month(month), day, clock.Hour(), clock.Minute(), clock.Second(), clock.Nanosecond(), loc), nil
@@ -1121,10 +1126,8 @@ func parseBinlogTime(layout, s string) (any, error) {
 	// part of a partial-zero date. We accept that, because the schema type
 	// is a timestamp, and a string does not match it.
 	//
-	// The snapshot gives different values for the same rows: the SQL driver
-	// gives 0001-01-01 for a zero date, and moves 2024-00-15 to 2023-12-15.
-	// Do not copy that here, because it makes a date that is not in the
-	// database.
+	// parseSnapshotTime gives the same values for the snapshot, so a row
+	// has the same value whichever path delivered it. Keep the two in step.
 	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
 		return nil, nil
 	}
