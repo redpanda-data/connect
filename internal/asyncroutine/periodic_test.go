@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
@@ -59,4 +61,20 @@ func TestWorksWithContext(t *testing.T) {
 	require.Eventually(t, active.Load, time.Second, 5*time.Millisecond)
 	p.Stop()
 	require.False(t, active.Load())
+}
+
+func TestPeriodicRunOnStart(t *testing.T) {
+	var runs atomic.Int32
+	p := NewPeriodicRunOnStart(time.Hour, func(context.Context) { runs.Add(1) })
+	p.Start()
+	require.Eventually(t, func() bool { return runs.Load() == 1 }, time.Second, time.Millisecond)
+	p.Stop()
+	assert.Equal(t, int32(1), runs.Load(), "Stop waits for the start run and no period has passed")
+
+	var late atomic.Int32
+	q := NewPeriodicWithContext(time.Hour, func(context.Context) { late.Add(1) })
+	q.Start()
+	time.Sleep(20 * time.Millisecond)
+	q.Stop()
+	assert.Zero(t, late.Load(), "NewPeriodicWithContext runs nothing before the first period")
 }
