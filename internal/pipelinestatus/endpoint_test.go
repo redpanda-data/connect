@@ -102,6 +102,21 @@ func TestErrorRecorderAttributesAndRedaction(t *testing.T) {
 	assert.Equal(t, "Failed to flush: boom", flush.Message)
 }
 
+func TestErrorRecorderDoesNotDuplicateErrorInMessage(t *testing.T) {
+	ep := New()
+	ep.SetEnabled(true)
+
+	err := errors.New("dial tcp 127.0.0.1:9092: connect: connection refused")
+	logger := slog.New(ep.LogHandler())
+	logger.Error(fmt.Sprintf("Failed to connect to kafka: %v", err), "err", err)
+	logger.With("error", err).Error("Failed to connect to kafka")
+
+	entries := ep.recent.entries()
+	require.Len(t, entries, 2)
+	assert.Equal(t, "Failed to connect to kafka: dial tcp 127.0.0.1:9092: connect: connection refused", entries[0].Message)
+	assert.Equal(t, "Failed to connect to kafka: dial tcp 127.0.0.1:9092: connect: connection refused", entries[1].Message)
+}
+
 func TestErrorRecorderDisabledRecordsNothing(t *testing.T) {
 	ep := New()
 	logger := slog.New(ep.LogHandler())
