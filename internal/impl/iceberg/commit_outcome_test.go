@@ -16,6 +16,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
 	"github.com/apache/iceberg-go/table"
@@ -377,6 +382,142 @@ func TestRetentionKeepsMetadataUnderCatalogCeiling(t *testing.T) {
 		time.Sleep(interval)
 	}
 	t.Logf("final metadata: %d snapshots, %d bytes (ceiling %d)", len(cat.meta.Snapshots()), metadataBytes(t, cat.meta), cat.ceilingBytes)
+}
+
+// TestTableAtCatalogCeilingRecovers covers a table whose metadata is just
+// under a catalog size limit, so the next data commit would cross it, with
+// every snapshot already past commit.max_snapshot_age. This is the state that
+// tables written before max_snapshot_age took effect reach. The writer must
+// get the table committing again without outside help.
+func TestTableAtCatalogCeilingRecovers(t *testing.T) {
+	tests := []struct {
+		name   string
+		commit func(t *testing.T, c *committer, cat *ceilingCatalog) error
+	}{
+		{
+			name: "append",
+			commit: func(t *testing.T, c *committer, _ *ceilingCatalog) error {
+				return appendOne(t, t.Context(), c)
+			},
+		},
+		{
+			name: "merge-on-read upsert",
+			commit: func(t *testing.T, c *committer, cat *ceilingCatalog) error {
+				return c.Commit(t.Context(), morUpsertInput(t, t.Context(), cat.snapshot(), 7))
+			},
+		},
+		{
+			// The filter matches no file, so the overwrite only adds one. The
+			// seeded files have no column stats, and any other filter would
+			// make iceberg-go read them.
+			name: "copy-on-write overwrite",
+			commit: func(t *testing.T, c *committer, cat *ceilingCatalog) error {
+				sc := cat.snapshot().Schema()
+				return c.commitOverwrite(t.Context(), OverwriteInput{
+					Filter:    iceberg.AlwaysFalse{},
+					NewReader: func() (array.RecordReader, error) { return idRecordReader(t, sc, 7), nil },
+					SchemaID:  sc.ID,
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			_, mem := newTestTable(t)
+			cat := &ceilingCatalog{memCatalog: mem, ceilingBytes: math.MaxInt}
+
+			// History written while expiry did nothing (max_snapshot_age 0).
+			per := bytesPerSnapshot(t, ctx, cat, 3)
+			old := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1})
+			for range 20 {
+				require.NoError(t, appendOne(t, ctx, old))
+			}
+			old.Close()
+
+			// The catalog limit sits half a snapshot above the current size.
+			cat.ceilingBytes = metadataBytes(t, cat.meta) + per/2
+
+			const age = 50 * time.Millisecond
+			time.Sleep(2 * age) // every snapshot is now older than age
+
+			c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
+			// The first commit crosses the limit and is rejected. The pass after
+			// it expires the old snapshots, so the retry fits.
+			require.ErrorIs(t, tt.commit(t, c, cat), rest.ErrBadRequest, "the first commit crosses the catalog limit")
+			require.NoError(t, tt.commit(t, c, cat), "table with %d snapshots stays stuck at the catalog limit", len(cat.meta.Snapshots()))
+		})
+	}
+}
+
+// idRecordReader returns a reader over one row of the single-column test
+// table schema sc.
+func idRecordReader(t *testing.T, sc *iceberg.Schema, id int64) array.RecordReader {
+	t.Helper()
+	arrowSc, err := table.SchemaToArrowSchema(sc, nil, false, false)
+	require.NoError(t, err)
+	rec, _, err := array.RecordFromJSON(memory.DefaultAllocator, arrowSc, strings.NewReader(fmt.Sprintf(`[{"id":%d}]`, id)))
+	require.NoError(t, err)
+	defer rec.Release()
+	rdr, err := array.NewRecordReader(arrowSc, []arrow.RecordBatch{rec})
+	require.NoError(t, err)
+	return rdr
+}
+
+// TestGlueSizeRejectionIsBadRequest pins the error that iceberg-go's REST
+// client gives for Glue's metadata size rejection: an HTTP 400 with an
+// InvalidInputException body. The pass after a rejected data commit runs only
+// for rest.ErrBadRequest, and ceilingCatalog builds that error directly, so a
+// change in iceberg-go's status mapping would otherwise go unnoticed.
+func TestGlueSizeRejectionIsBadRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/config" {
+			_, _ = w.Write([]byte(`{"defaults":{},"overrides":{}}`))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Prepared s3 payload size exceeds the size limit","type":"InvalidInputException","code":400}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cat, err := rest.NewCatalog(t.Context(), "glue", srv.URL)
+	require.NoError(t, err)
+	_, _, err = cat.CommitTable(t.Context(), table.Identifier{"db", "t"}, nil, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, rest.ErrBadRequest)
+	assert.Equal(t, "InvalidInputException: Prepared s3 payload size exceeds the size limit", err.Error())
+}
+
+// unavailableCatalog is a memCatalog that fails every commit with the
+// ambiguous error a REST catalog gives for a 503, and counts the attempts.
+type unavailableCatalog struct {
+	*memCatalog
+	commits atomic.Int64
+}
+
+func (c *unavailableCatalog) CommitTable(context.Context, table.Identifier, []table.Requirement, []table.Update) (table.Metadata, string, error) {
+	c.commits.Add(1)
+	return nil, "", fmt.Errorf("%w: service unavailable", rest.ErrCommitStateUnknown)
+}
+
+func (c *unavailableCatalog) snapshot() *table.Table { return tableBoundTo(c.memCatalog, c) }
+
+// TestUnavailableCatalogGetsNoMaintenanceCommit: when a data commit fails
+// because the catalog is unavailable, an expiry commit would most likely fail
+// the same way. The writer must not send one, even when expiry is due.
+func TestUnavailableCatalogGetsNoMaintenanceCommit(t *testing.T) {
+	ctx := t.Context()
+	tbl, mem := newTestTable(t)
+	seedTable(t, ctx, tbl, 3)
+
+	const age = 50 * time.Millisecond
+	time.Sleep(2 * age) // expiry is due for every snapshot
+
+	cat := &unavailableCatalog{memCatalog: mem}
+	c := newOutcomeCommitter(t, cat, cat.snapshot, CommitConfig{MaxRetries: 1, MaxSnapshotAge: age})
+	require.Error(t, appendOne(t, ctx, c))
+	assert.Equal(t, int64(1), cat.commits.Load(), "only the data commit may reach the unavailable catalog")
 }
 
 // --- 4. maintenance commits -----------------------------------------------
