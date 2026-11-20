@@ -145,9 +145,9 @@ var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
 // renderBloblangSpec renders the reference partial for one function or
 // method. kind is "function" or "method".
-func renderBloblangSpec(spec bloblangSpec, kind string) string {
+func renderBloblangSpec(spec bloblangSpec, kind, source string) string {
 	var b strings.Builder
-	b.WriteString(generatedBanner + "\n\n= " + htmlEscaper.Replace(spec.Name) + "\n")
+	b.WriteString(generatedBannerFor(source) + "\n\n= " + htmlEscaper.Replace(spec.Name) + "\n")
 	if notice := statusNotice(spec.Status, kind); notice != "" {
 		b.WriteString("\n" + notice)
 	}
