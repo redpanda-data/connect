@@ -108,6 +108,8 @@ This input adds the following metadata fields to each message:
 
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "`rpcn`" + ` schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 
+At start up, the input also checks that the Connect user can write checkpoints with a ` + "`MERGE`" + ` statement, in a transaction that it rolls back. A future version writes checkpoints with ` + "`MERGE`" + ` instead of the stored procedure, and then needs the ` + "`INSERT`" + ` and ` + "`UPDATE`" + ` privileges on the checkpoint table. The gauge ` + "`oracledb_cdc_checkpoint_merge_allowed`" + ` is 1 when the check passes and 0 when the user does not have these privileges, and a warning is logged. The counter ` + "`oracledb_cdc_checkpoint_write_errors_total`" + ` counts the checkpoint writes that failed, for any checkpoint cache. Writes that fail because the pipeline stops are not counted.
+
 When ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is greater than 1, tables with an enabled and validated primary key and no ` + "`" + ociFieldSnapshotFilters + "`" + ` entry are considered for splitting into parallel chunks. Planning and reading those chunks uses flashback queries (` + "`AS OF SCN`" + `) pinned to the SCN captured at the start of the snapshot. For tables it does not own, the Connect user then requires the ` + "`FLASHBACK`" + ` object privilege on each table (` + "`GRANT FLASHBACK ON <schema>.<table> TO <user>`" + `) or ` + "`GRANT FLASHBACK ANY TABLE TO <user>`" + `, in addition to ` + "`SELECT`" + `. A table the user can't read with flashback queries isn't split: a warning is logged and a single reader reads it with a full scan, as when ` + "`" + ociFieldMaxParallelSnapshotTables + "`" + ` is 1. Because every chunk reads as of that one SCN, the database's undo retention must also cover the full duration of the snapshot, otherwise reads fail with ORA-01555 (snapshot too old).
 
 == Performance
@@ -346,6 +348,13 @@ type oracleDBCDCInput struct {
 	// resume position.
 	persistMu        sync.Mutex
 	lastPersistedSCN replication.SCN
+
+	// checkpointWriteErrors counts the checkpoint writes that cacheSCN could
+	// not persist, except writes with a cancelled context. A failed write only
+	// fails the ack and the pipeline continues, so this counter is the signal
+	// to alert on: the checkpoint stops moving and a restart replays from the
+	// last persisted SCN. Nil in most unit tests, where Incr does nothing.
+	checkpointWriteErrors *service.MetricCounter
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -508,6 +517,8 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		cpCache:         cpCache,
 		batching:        policy,
 		checkpointLimit: checkpointLimit,
+
+		checkpointWriteErrors: newCheckpointWriteErrorsCounter(resources.Metrics()),
 	}
 
 	pub := newBatchPublisher(batcher, cp, logger)
@@ -608,7 +619,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.log)
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.metrics, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
@@ -852,6 +863,16 @@ func (o *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	return scn, nil
 }
 
+// newCheckpointWriteErrorsCounter returns the counter for
+// oracleDBCDCInput.checkpointWriteErrors, already exported at 0.
+func newCheckpointWriteErrorsCounter(metrics *service.Metrics) *service.MetricCounter {
+	c := metrics.NewCounter("oracledb_cdc_checkpoint_write_errors_total")
+	// A series only exists after its first Incr. rate() and increase() do not
+	// see the jump of a series that starts at 1, so export it at 0 now.
+	c.Incr(0)
+	return c
+}
+
 func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) error {
 	if scn == replication.InvalidSCN {
 		return errors.New("SCN for caching is empty")
@@ -881,6 +902,12 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	}
 
 	if cErr != nil {
+		// A cancelled context means that the pipeline stops or the publisher is
+		// rebuilt. That is not a failed write, and counting it would trigger
+		// the alert on each restart.
+		if ctx.Err() == nil {
+			o.checkpointWriteErrors.Incr(1)
+		}
 		return fmt.Errorf("persisting checkpoint to cache: %w", cErr)
 	}
 	o.lastPersistedSCN = scn
