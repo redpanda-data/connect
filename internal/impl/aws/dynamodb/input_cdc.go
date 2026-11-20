@@ -391,14 +391,14 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default("1s").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_initial_interval must be greater than 0"] }`).
 				Advanced().
-				Version("4.119.0"),
+				Version("4.120.0"),
 			service.NewDurationField(dciFieldCheckpointRetryMax).
 				Description("Maximum time to wait between retries of a failed checkpoint write. While the checkpoint table keeps failing, acknowledged positions and closed shards' completion markers stay unpersisted for up to this long between attempts.").
 				ShortDescription("Maximum time to wait between retries of a failed checkpoint write.").
 				Default("30s").
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["checkpoint_retry_max_interval must be greater than 0"] }`).
 				Advanced().
-				Version("4.119.0"),
+				Version("4.120.0"),
 			service.NewAutoRetryNacksToggleField().Version("4.106.0"),
 			service.NewDurationField(dciFieldThrottleBackoff).
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
@@ -449,10 +449,10 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 			).
 				Description("Tuning for `snapshot_mode: incremental`. These fields have no effect in the other modes. The mode itself is set with `snapshot_mode`, and the page size, segment count and throttle come from `snapshot_batch_size`, `snapshot_segments` and `snapshot_throttle`.").
 				ShortDescription("Tuning for the incremental snapshot mode, with no effect in other modes.").
-				Version("4.119.0").
+				Version("4.120.0").
 				Advanced(),
 			service.NewStringField(dciFieldSignalTable).
-				Description(signalTableDescription).Version("4.119.0").
+				Description(signalTableDescription).Version("4.120.0").
 				ShortDescription("A DynamoDB table whose stream carries control signals, such as snapshot-execute requests.").
 				Example("rpcn_signals").
 				Default("").
