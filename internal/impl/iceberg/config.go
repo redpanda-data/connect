@@ -252,7 +252,7 @@ To use with AWS Glue Data Catalog:
 * Set `+"`catalog.warehouse`"+` to your AWS account ID (the Glue catalog identifier).
 * Set `+"`schema_evolution.table_location`"+` to an S3 prefix (for example, `+"`s3://my-bucket/`"+`; a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
-* Configure `+"`storage.aws_s3`"+` with the same bucket and region.
+* Configure `+"`storage.aws_s3`"+` with the same region.
 
 When the Glue snapshot retention optimizer is enabled on a table, let it own snapshot expiry and leave `+"`commit.max_snapshot_age`"+` unset. The optimizer deletes the files of the snapshots it expires. Expiry from this output would remove the snapshots first and leave their files as orphans.
 
@@ -397,9 +397,14 @@ See the Row-level operations section above for the full constraints, including t
 			service.NewObjectField(ioFieldStorage,
 				// S3 storage configuration
 				service.NewObjectField(ioFieldStorageS3,
+					// The table location (from the catalog warehouse or
+					// schema_evolution.table_location) decides where files
+					// go, so this field has no effect. It stays as a
+					// deprecated field so that old configs still parse.
 					service.NewStringField(ioFieldS3Bucket).
-						Description("The S3 bucket name.").
-						Example("my-iceberg-data"),
+						Description("This field has no effect. The table location decides where data files are written.").
+						Optional().
+						Deprecated(),
 					service.NewStringField(ioFieldS3Region).
 						Description("The AWS region.").
 						Optional().
@@ -430,9 +435,11 @@ See the Row-level operations section above for the full constraints, including t
 
 				// GCS storage configuration
 				service.NewObjectField(ioFieldStorageGCS,
+					// No effect, see the aws_s3 bucket field.
 					service.NewStringField(ioFieldGCSBucket).
-						Description("The GCS bucket name.").
-						Example("my-iceberg-data"),
+						Description("This field has no effect. The table location decides where data files are written.").
+						Optional().
+						Deprecated(),
 					service.NewStringField(ioFieldGCSEndpoint).
 						Description("Custom endpoint for GCS-compatible storage.").
 						Optional().
@@ -623,7 +630,6 @@ output:
     max_in_flight: 1
     storage:
       aws_s3:
-        bucket: my-iceberg-data
         region: us-east-1
 `,
 		).
@@ -666,7 +672,6 @@ output:
       period: 30s
     storage:
       aws_s3:
-        bucket: my-iceberg-data
         region: us-east-1
 `,
 		)

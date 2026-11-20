@@ -440,7 +440,7 @@ iceberg:
   table: t
   storage:
     aws_s3:
-      bucket: b
+      region: us-east-1
 ` + extra
 	}
 	cases := []struct {
@@ -565,7 +565,7 @@ iceberg:
   table: t
   storage:
     aws_s3:
-      bucket: b
+      region: us-east-1
 ` + extra
 	}
 	cases := []struct {
@@ -612,7 +612,7 @@ iceberg:
   table: t
   storage:
     aws_s3:
-      bucket: b
+      region: us-east-1
 ` + extra
 	}
 	cases := []struct {

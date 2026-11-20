@@ -39,7 +39,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+extra, nil)
 	require.NoError(t, err)
 
@@ -118,7 +118,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -178,7 +178,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -219,7 +219,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -269,7 +269,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -290,7 +290,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `, nil)
 	require.NoError(t, err)
 
@@ -379,6 +379,61 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"amplification info firing mismatch; captured log:\n%s", out)
 			assert.Equal(t, tc.wantCleanupOff, cleanupDisabledInformed(out),
 				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
+		})
+	}
+}
+
+// TestStorageBucketIsOptional checks that a storage config is valid with and
+// without a bucket. The table location decides where data files go, so the
+// bucket has no effect and must not be required.
+func TestStorageBucketIsOptional(t *testing.T) {
+	tests := []struct {
+		name    string
+		storage string
+	}{
+		{
+			name: "aws_s3",
+			storage: `
+  aws_s3:
+    region: us-east-1
+`,
+		},
+		{
+			name: "gcp_cloud_storage",
+			storage: `
+  gcp_cloud_storage:
+    credentials_type: service_account
+`,
+		},
+		{
+			// The bucket fields are deprecated. Old configs that set them
+			// must still parse.
+			name: "aws_s3 with deprecated bucket",
+			storage: `
+  aws_s3:
+    bucket: my-bucket
+`,
+		},
+		{
+			name: "gcp_cloud_storage with deprecated bucket",
+			storage: `
+  gcp_cloud_storage:
+    bucket: my-bucket
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:`+tt.storage, nil)
+			require.NoError(t, err)
+
+			_, err = parseStorageProps(conf)
+			require.NoError(t, err)
 		})
 	}
 }

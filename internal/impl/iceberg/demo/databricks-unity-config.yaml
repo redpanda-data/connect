@@ -38,7 +38,6 @@ output:
     table: events
     storage:
       aws_s3:
-        bucket: rockwood-iceberg-e2e-test
         region: us-east-1
     schema_evolution:
       enabled: false
