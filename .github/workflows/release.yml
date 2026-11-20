@@ -396,7 +396,6 @@ jobs:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
         run: |
           gh api repos/redpanda-data/docs-ui/dispatches -f event_type=update-go-mod
-          gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
           # Regenerate the rpk connect plugin docs in redpanda-data/docs. The
           # docs workflow (update-rpk-plugin-docs.yml) installs this version
@@ -579,10 +578,40 @@ jobs:
             -f event_type=connect-release \
             -f "client_payload[tag]=$GITHUB_REF_NAME"
 
+  # Regenerate the Connect reference docs in redpanda-data/rp-connect-docs.
+  # Its update-docs workflow reads connect-<version>.json from the
+  # redpanda-connect-docs.tar.gz asset, so this waits for docs-asset like
+  # update-cloud-docs: a dispatch sent before the asset exists makes it
+  # compare the binaries instead (v4.119.0 missed the asset by 80 seconds).
+  # !cancelled(): once goreleaser has published the release, it still runs
+  # when docs-asset fails or is skipped, as it did before, and
+  # rp-connect-docs then compares the binaries.
+  update-connect-docs:
+    runs-on: ubuntu-latest
+    needs: [goreleaser, docs-asset]
+    if: ${{ !cancelled() && needs.goreleaser.result == 'success' && github.event_name == 'push' && !contains(github.ref_name, '-') }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v3.0.2
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - name: Trigger the reference docs update in redpanda-data/rp-connect-docs
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
+
   notify-slack:
     runs-on: ubuntu-latest
-    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream, update-cloud-docs]
-    # always() is required because update-bundles/update-downstream/update-cloud-docs may be skipped
+    needs: [goreleaser, docs-generate, docs-check, docs-asset, update-bundles, update-downstream, update-cloud-docs, update-connect-docs]
+    # always() is required because update-bundles/update-downstream/update-cloud-docs/update-connect-docs may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
     if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
     permissions:
@@ -602,6 +631,7 @@ jobs:
           BUNDLES_RESULT: ${{ needs.update-bundles.result }}
           DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
           CLOUD_DOCS_RESULT: ${{ needs.update-cloud-docs.result }}
+          CONNECT_DOCS_RESULT: ${{ needs.update-connect-docs.result }}
         run: |
           # Build follow-up PR links and failure notices
           LINKS=""
@@ -632,6 +662,9 @@ jobs:
           fi
           if [ "$CLOUD_DOCS_RESULT" = "failure" ]; then
             FAILURES="${FAILURES}:red_circle: update-cloud-docs failed, so cloud-docs did not sync its Connect stubs  "
+          fi
+          if [ "$CONNECT_DOCS_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-connect-docs failed, so rp-connect-docs did not regenerate its reference docs  "
           fi
 
           HEADER_ICON=":green_alert:"
