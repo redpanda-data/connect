@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -127,15 +128,6 @@ type DatasetSpec struct {
 	Tables            []string `yaml:"tables"`
 	Seeder            string   `yaml:"seeder"`
 	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
-	// PreloadMessages is the number of messages preloaded into the bench
-	// Redpanda topic for an e2e scenario with stack: none (no source stack),
-	// sized so the sweep never drains it. Required when stack is none.
-	PreloadMessages int64 `yaml:"preload_messages,omitempty"`
-	// PreloadWarmup and PreloadDuration give the per-point warmup and
-	// duration of a workload-less (preloaded) scenario, which has no
-	// workload block to carry them. Zero keeps the bounded-dataset default.
-	PreloadWarmup   time.Duration `yaml:"preload_warmup,omitempty"`
-	PreloadDuration time.Duration `yaml:"preload_duration,omitempty"`
 }
 
 // SinkSpec names the bench sink of an e2e scenario.
@@ -330,8 +322,14 @@ func (s *Scenario) Validate() error {
 	}
 	if s.Direction == DirectionE2E {
 		// topologyFor does not support e2e yet; skip it until e2eTopology lands.
-		if s.Sink == nil || s.Sink.Kind == "" {
-			return errors.New("direction e2e requires sink.kind")
+		if err := s.validateSink(); err != nil {
+			return err
+		}
+		// Stack-backed sources still need an engine; stack none has no source.
+		if s.Stack != stackNone {
+			if _, ok := engineSpecFor(s.Connector); !ok {
+				return fmt.Errorf("connector %q has no engineSpec entry; add one to engineSpecs in scenario.go", s.Connector)
+			}
 		}
 	} else {
 		topo, err := topologyFor(s.Direction)
@@ -349,8 +347,8 @@ func (s *Scenario) Validate() error {
 		if s.Direction != DirectionE2E {
 			return fmt.Errorf("stack %q is only allowed for direction %q", stackNone, DirectionE2E)
 		}
-		if s.Dataset.PreloadMessages <= 0 {
-			return fmt.Errorf("stack %q requires dataset.preload_messages > 0", stackNone)
+		if s.Workload == nil || s.Workload.WriteRatePerSec <= 0 {
+			return fmt.Errorf("stack %q requires workload.write_rate_per_sec > 0", stackNone)
 		}
 	}
 	if len(s.Matrix.CPUPoints) == 0 {
@@ -474,17 +472,8 @@ func (s *Scenario) Validate() error {
 		if s.Workload.Duration < minDuration {
 			return fmt.Errorf("workload.duration %s is below minimum %s", s.Workload.Duration, minDuration)
 		}
-	} else if s.Direction == DirectionE2E && s.Dataset.PreloadMessages > 0 {
-		// Preloaded e2e scenario: the preload is sized to outlast the sweep,
-		// and warmup/duration default to the minimums when unset.
-		if s.Dataset.PreloadWarmup != 0 && s.Dataset.PreloadWarmup < minWarmup {
-			return fmt.Errorf("dataset.preload_warmup %s is below minimum %s", s.Dataset.PreloadWarmup, minWarmup)
-		}
-		if s.Dataset.PreloadDuration != 0 && s.Dataset.PreloadDuration < minDuration {
-			return fmt.Errorf("dataset.preload_duration %s is below minimum %s", s.Dataset.PreloadDuration, minDuration)
-		}
 	} else if s.Direction == DirectionE2E {
-		return errors.New("direction e2e requires a workload or dataset.preload_messages")
+		return errors.New("direction e2e requires a workload")
 	} else {
 		// Bounded-dataset scenario: require the size hint and verify wall-clock estimate.
 		if s.Dataset.ExpectedPeakMBSec == 0 {
@@ -497,6 +486,33 @@ func (s *Scenario) Validate() error {
 			return fmt.Errorf("bounded-dataset run would complete in %ds at %d MB/s — below minimum %s; increase dataset",
 				estSeconds, s.Dataset.ExpectedPeakMBSec, minDuration)
 		}
+	}
+	return nil
+}
+
+// sinkKinds is the set of bench sinks an e2e scenario may name.
+var sinkKinds = []string{"redpanda", "s3", "iceberg", "snowflake", "bigquery", "drop"}
+
+// snowflakeSizes is the set of warehouse sizes a snowflake sink may use.
+var snowflakeSizes = []string{"XSMALL", "SMALL", "MEDIUM", "LARGE", "XLARGE"}
+
+// validateSink checks an e2e scenario's sink, defaulting a snowflake size.
+func (s *Scenario) validateSink() error {
+	if s.Sink == nil || s.Sink.Kind == "" {
+		return errors.New("direction e2e requires sink.kind")
+	}
+	if !slices.Contains(sinkKinds, s.Sink.Kind) {
+		return fmt.Errorf("sink.kind %q is invalid; must be one of %v", s.Sink.Kind, sinkKinds)
+	}
+	if s.Sink.Kind == "snowflake" {
+		if s.Sink.Size == "" {
+			s.Sink.Size = "XSMALL"
+		}
+		if !slices.Contains(snowflakeSizes, s.Sink.Size) {
+			return fmt.Errorf("sink.size %q is invalid for snowflake; must be one of %v", s.Sink.Size, snowflakeSizes)
+		}
+	} else if s.Sink.Size != "" {
+		return fmt.Errorf("sink.size is only valid for snowflake, not %q", s.Sink.Kind)
 	}
 	return nil
 }

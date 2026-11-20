@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -73,11 +72,30 @@ func TestRenderMySQLUsesMySQLBase(t *testing.T) {
 	require.Contains(t, s, "instance_type: c8g.4xlarge")
 }
 
-func TestPreloadMessages(t *testing.T) {
-	// 300 MB/s * 1020s * 1.5 / 1000 B = 459,000,000
-	require.Equal(t, int64(459_000_000), PreloadMessages(1000, 2*time.Minute, 15*time.Minute, 300))
-	// peak defaults to 300 when <= 0
-	require.Equal(t, int64(459_000_000), PreloadMessages(1000, 2*time.Minute, 15*time.Minute, 0))
-	// rounds up: 1 MB/s * 60s * 1.5 / 7 B = 12857142.86
-	require.Equal(t, int64(12_857_143), PreloadMessages(7, time.Minute, 0, 1))
+func TestProducerRatePerSec(t *testing.T) {
+	// 300 MB/s * 1.5 / 1000 B = 450,000 msg/s
+	require.Equal(t, 450_000, ProducerRatePerSec(1000, 300))
+	require.Equal(t, 450_000, ProducerRatePerSec(1000, 0), "peak defaults to 300")
+	require.Equal(t, 439_454, ProducerRatePerSec(1024, 0), "size 0 defaults to 1024 elsewhere; ceil here")
+	require.Equal(t, 439_454, ProducerRatePerSec(0, 0))
+}
+
+func TestRenderMySQLToRedpandaGolden(t *testing.T) {
+	cfg := map[string]any{
+		"input": map[string]any{"mysql_cdc": map[string]any{
+			"dsn":    "user:pw@tcp(db.customer.internal:3306)/prod",
+			"tables": []any{"customers"},
+		}},
+		"output": map[string]any{"kafka_franz": map[string]any{
+			"seed_brokers": []any{"broker.customer.internal:9092"}, "topic": "out",
+		}},
+	}
+	p := build(t, cfg)
+	p.ID = "cccccccccccc"
+	require.Equal(t, SourceMySQL, p.Source)
+	out, err := Render(p)
+	require.NoError(t, err)
+	require.Contains(t, string(out), "bench_cache")
+	require.Contains(t, string(out), "checkpoint_limit: 10000")
+	checkGolden(t, "bot-cccccccccccc.yaml", out)
 }

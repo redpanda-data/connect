@@ -8,9 +8,10 @@ infra:
     memory_per_vcpu_bytes: 4000000000
 dataset:
     row_size_bytes: 1000 # from the plan workload
-    preload_messages: 459000000
-    preload_warmup: 2m
-    preload_duration: 15m
+workload:
+    write_rate_per_sec: 450000
+    duration: 15m
+    warmup: 2m
 pipeline:
     input:
         http_server: {}

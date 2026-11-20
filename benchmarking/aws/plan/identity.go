@@ -113,9 +113,11 @@ var topLevelKeys = []string{"input", "pipeline", "output", "buffer"}
 
 // Template is what the bench sets on a swapped component: Fields are written
 // into the component's own config, Top into the top level of the pipeline.
+// Defaults are written only where the customer's config has no value.
 type Template struct {
-	Fields map[string]any
-	Top    map[string]any
+	Fields   map[string]any
+	Defaults map[string]any
+	Top      map[string]any
 }
 
 // SourceTemplates sets the bench's own values on the customer input, per
@@ -137,6 +139,9 @@ var SourceTemplates = map[SourceKind]func(component string) Template{
 			"tables":           []any{"orders"},
 			"checkpoint_cache": BenchCache,
 			"checkpoint_key":   "mysql_bench",
+		}, Defaults: map[string]any{
+			// The default (1024) serialises the pipeline to one batch in flight.
+			"checkpoint_limit": 10000,
 		}}
 	},
 	// Note: setting consumer_group on a franz/redpanda input that had none
@@ -373,6 +378,11 @@ func applyTemplate(root, holder map[string]any, name string, t Template) error {
 	}
 	for k, v := range t.Fields {
 		cfg[k] = deepCopy(v)
+	}
+	for k, v := range t.Defaults {
+		if _, set := cfg[k]; !set {
+			cfg[k] = deepCopy(v)
+		}
 	}
 	for k, v := range t.Top {
 		root[k] = deepCopy(v)

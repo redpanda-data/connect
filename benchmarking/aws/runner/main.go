@@ -943,14 +943,7 @@ func totalDuration(s *Scenario, points int) time.Duration {
 // (execTimeout, totalDuration) uses the same fallback.
 func sweepWarmupDuration(s *Scenario) (warmup, duration time.Duration) {
 	if s.Workload == nil {
-		warmup, duration = 0, minDuration
-		if s.Dataset.PreloadWarmup > 0 {
-			warmup = s.Dataset.PreloadWarmup
-		}
-		if s.Dataset.PreloadDuration > 0 {
-			duration = s.Dataset.PreloadDuration
-		}
-		return warmup, duration
+		return 0, minDuration
 	}
 	return s.Workload.Warmup, s.Workload.Duration
 }

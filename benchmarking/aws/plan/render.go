@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,31 +22,24 @@ const (
 	// when none is known.
 	DefaultPeakMBps = 300.0
 
-	// preloadHeadroom oversizes the preload so the sweep never drains it.
-	preloadHeadroom = 1.5
-
-	// BenchWarmup and BenchDuration are the per-point warmup and duration a
-	// preloaded (stack: none) scenario runs with.
-	BenchWarmup   = 2 * time.Minute
-	BenchDuration = 15 * time.Minute
+	// producerHeadroom oversizes the producer so it outpaces the pipeline.
+	producerHeadroom = 1.5
 
 	// memoryPerVCPUBytes is one vCPU's worth of CU memory (catalog sizing).
 	memoryPerVCPUBytes = 4_000_000_000
 )
 
-// PreloadMessages returns how many messages to preload into the bench topic
-// so a sweep of warmup+duration at up to peakMBps never drains it, with 50%
-// headroom. peakMBps <= 0 means DefaultPeakMBps; sizeBytes <= 0 means
-// DefaultMessageSizeBytes.
-func PreloadMessages(sizeBytes int, warmup, duration time.Duration, peakMBps float64) int64 {
+// ProducerRatePerSec returns the messages per second a stack-none scenario's
+// producer sustains: peakMBps (default DefaultPeakMBps when <= 0) with 50%
+// headroom, divided by the message size (default DefaultMessageSizeBytes).
+func ProducerRatePerSec(sizeBytes int, peakMBps float64) int {
 	if peakMBps <= 0 {
 		peakMBps = DefaultPeakMBps
 	}
 	if sizeBytes <= 0 {
 		sizeBytes = DefaultMessageSizeBytes
 	}
-	bytes := peakMBps * 1e6 * (warmup + duration).Seconds() * preloadHeadroom
-	return int64(math.Ceil(bytes / float64(sizeBytes)))
+	return int(math.Ceil(peakMBps * 1e6 * producerHeadroom / float64(sizeBytes)))
 }
 
 type renderScenario struct {
@@ -75,13 +67,10 @@ type renderRunner struct {
 }
 
 type renderDataset struct {
-	InitialRows     *int64   `yaml:"initial_rows,omitempty"`
-	RowSizeBytes    int      `yaml:"row_size_bytes"`
-	Tables          []string `yaml:"tables,omitempty"`
-	Seeder          string   `yaml:"seeder,omitempty"`
-	PreloadMessages int64    `yaml:"preload_messages,omitempty"`
-	PreloadWarmup   string   `yaml:"preload_warmup,omitempty"`
-	PreloadDuration string   `yaml:"preload_duration,omitempty"`
+	InitialRows  *int64   `yaml:"initial_rows,omitempty"`
+	RowSizeBytes int      `yaml:"row_size_bytes"`
+	Tables       []string `yaml:"tables,omitempty"`
+	Seeder       string   `yaml:"seeder,omitempty"`
 }
 
 type renderLoad struct {
@@ -189,10 +178,10 @@ func Render(p Plan) ([]byte, error) {
 		// rate is no bound on consumption: size for the default peak.
 		sc.Stack = "none"
 		sc.Infra.Runner.InstanceType = "c8g.4xlarge"
-		sc.Dataset = renderDataset{
-			PreloadMessages: PreloadMessages(size, BenchWarmup, BenchDuration, 0),
-			PreloadWarmup:   "2m",
-			PreloadDuration: "15m",
+		sc.Workload = &renderLoad{
+			WriteRatePerSec: ProducerRatePerSec(size, 0),
+			Duration:        "15m",
+			Warmup:          "2m",
 		}
 	}
 	sc.Dataset.RowSizeBytes = size

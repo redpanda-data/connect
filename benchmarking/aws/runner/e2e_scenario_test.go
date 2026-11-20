@@ -8,6 +8,7 @@
 package main
 
 import (
+	"io/fs"
 	"path/filepath"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestLoadE2EScenarioGolden(t *testing.T) {
-	for _, name := range []string{"bot-aaaaaaaaaaaa.yaml", "bot-bbbbbbbbbbbb.yaml"} {
+	for _, name := range []string{"bot-aaaaaaaaaaaa.yaml", "bot-bbbbbbbbbbbb.yaml", "bot-cccccccccccc.yaml"} {
 		t.Run(name, func(t *testing.T) {
 			s, err := LoadScenario(filepath.Join("..", "plan", "testdata", name))
 			require.NoError(t, err)
@@ -28,24 +29,30 @@ func TestLoadE2EScenarioGolden(t *testing.T) {
 	}
 }
 
-func TestE2EScenarioNoneStackWarmupDuration(t *testing.T) {
+func TestE2EScenarioNoneStackWorkload(t *testing.T) {
 	s, err := LoadScenario(filepath.Join("..", "plan", "testdata", "bot-bbbbbbbbbbbb.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, stackNone, s.Stack)
-	require.Nil(t, s.Workload)
+	require.NotNil(t, s.Workload)
+	require.Equal(t, 450_000, s.Workload.WriteRatePerSec)
 	w, d := sweepWarmupDuration(s)
 	require.Equal(t, 2*time.Minute, w)
 	require.Equal(t, 15*time.Minute, d)
+}
+
+func TestE2ETopologyNotImplemented(t *testing.T) {
+	_, err := topologyFor(DirectionE2E)
+	require.ErrorContains(t, err, "e2e topology not implemented yet")
 }
 
 func TestE2EScenarioValidation(t *testing.T) {
 	base := func() Scenario {
 		return Scenario{
 			Name: "bot-x", Connector: "http_server", Direction: DirectionE2E, Stack: stackNone,
-			Infra:   InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
-			Dataset: DatasetSpec{PreloadMessages: 1000},
-			Sink:    &SinkSpec{Kind: "drop"},
-			Matrix:  MatrixSpec{CPUPoints: []int{1, 2, 4, 8}},
+			Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+			Workload: &WorkloadSpec{WriteRatePerSec: 1000, Warmup: minWarmup, Duration: minDuration},
+			Sink:     &SinkSpec{Kind: "drop"},
+			Matrix:   MatrixSpec{CPUPoints: []int{1, 2, 4, 8}},
 		}
 	}
 	good := base()
@@ -55,21 +62,43 @@ func TestE2EScenarioValidation(t *testing.T) {
 		mut  func(*Scenario)
 		want string
 	}{
-		"e2e without sink":             {func(s *Scenario) { s.Sink = nil }, "requires sink"},
-		"none stack on source":         {func(s *Scenario) { s.Direction, s.Connector = DirectionSource, "postgres_cdc" }, "only allowed for direction"},
-		"none stack without preload":   {func(s *Scenario) { s.Dataset.PreloadMessages = 0 }, "preload_messages"},
-		"short preload warmup":         {func(s *Scenario) { s.Dataset.PreloadWarmup = time.Minute }, "preload_warmup"},
-		"e2e topology not implemented": {func(s *Scenario) {}, ""},
+		"e2e without sink":           {func(s *Scenario) { s.Sink = nil }, "requires sink"},
+		"unknown sink kind":          {func(s *Scenario) { s.Sink.Kind = "kafka" }, "sink.kind"},
+		"size on non-snowflake":      {func(s *Scenario) { s.Sink.Size = "SMALL" }, "only valid for snowflake"},
+		"bad snowflake size":         {func(s *Scenario) { s.Sink = &SinkSpec{Kind: "snowflake", Size: "HUGE"} }, "sink.size"},
+		"none stack on source":       {func(s *Scenario) { s.Direction, s.Connector = DirectionSource, "postgres_cdc" }, "only allowed for direction"},
+		"none stack without load":    {func(s *Scenario) { s.Workload = nil }, "write_rate_per_sec"},
+		"none stack zero rate":       {func(s *Scenario) { s.Workload.WriteRatePerSec = 0 }, "write_rate_per_sec"},
+		"postgres e2e unknown conn.": {func(s *Scenario) { s.Stack, s.Connector = "postgres", "oracledb_cdc" }, "no engineSpec"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.want == "" {
-				_, err := topologyFor(DirectionE2E)
-				require.ErrorContains(t, err, "e2e topology not implemented yet")
-				return
-			}
 			s := base()
 			tc.mut(&s)
 			require.ErrorContains(t, s.Validate(), tc.want)
 		})
 	}
+
+	t.Run("snowflake size defaults to XSMALL", func(t *testing.T) {
+		s := base()
+		s.Sink = &SinkSpec{Kind: "snowflake"}
+		require.NoError(t, s.Validate())
+		require.Equal(t, "XSMALL", s.Sink.Size)
+	})
+}
+
+func TestAllCheckedInScenariosLoad(t *testing.T) {
+	root := filepath.Join("..", "scenarios")
+	n := 0
+	require.NoError(t, filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
+			return err
+		}
+		n++
+		t.Run(path, func(t *testing.T) {
+			_, err := LoadScenario(path)
+			require.NoError(t, err)
+		})
+		return nil
+	}))
+	require.NotZero(t, n)
 }
