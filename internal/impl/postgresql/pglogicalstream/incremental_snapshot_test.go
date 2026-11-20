@@ -136,8 +136,7 @@ func TestCanonicalizePKValueDedupsAcrossDecodePaths(t *testing.T) {
 func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, replURL := createDockerInstance(t)
-	defer cleanup()
+	replURL := createDockerInstance(t)
 
 	// createDockerInstance hands back a replication DSN; plain queries need
 	// one without it. Use the driver the snapshot connection uses.
@@ -657,8 +656,7 @@ func (r *fakeQueryRows) Next(dest []driver.Value) error {
 func TestIntegrationIncrementalSnapshotKeyTypes(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, replURL := createDockerInstance(t)
-	defer cleanup()
+	replURL := createDockerInstance(t)
 
 	queryDSN := strings.ReplaceAll(replURL, " replication=database", "")
 	pcfg, err := pgxpool.ParseConfig(queryDSN)
