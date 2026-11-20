@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.119.0 - 2026-11-19
+## 4.119.0 - 2026-11-20
 
 ### Added
 
