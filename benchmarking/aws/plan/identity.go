@@ -244,14 +244,16 @@ var SinkTemplates = map[SinkKind]func(component string) Template{
 			},
 		}, MergeCaveats: map[string]string{"schema_evolution.enabled": CaveatSchemaEvoForced}}
 	},
+	// The key is never a config value: the runner host writes it to the
+	// file private_key_file names (see runner/sink_snowflake.go).
 	SinkSnowflake: func(component string) Template {
 		f := map[string]any{
-			"account":     "${BENCH_SNOWFLAKE_ACCOUNT}",
-			"user":        "${BENCH_SNOWFLAKE_USER}",
-			"role":        "${BENCH_SNOWFLAKE_ROLE}",
-			"database":    "${BENCH_SNOWFLAKE_DATABASE}",
-			"schema":      "${BENCH_SNOWFLAKE_SCHEMA}",
-			"private_key": "${BENCH_SNOWFLAKE_PRIVATE_KEY}",
+			"account":          "${BENCH_SNOWFLAKE_ACCOUNT}",
+			"user":             "${BENCH_SNOWFLAKE_USER}",
+			"role":             "${BENCH_SNOWFLAKE_ROLE}",
+			"database":         "${BENCH_SNOWFLAKE_DATABASE}",
+			"schema":           "${BENCH_SNOWFLAKE_SCHEMA}",
+			"private_key_file": "${BENCH_SNOWFLAKE_PRIVATE_KEY_FILE}",
 		}
 		if component == "snowflake_put" {
 			f["warehouse"] = "${BENCH_SNOWFLAKE_WAREHOUSE}"

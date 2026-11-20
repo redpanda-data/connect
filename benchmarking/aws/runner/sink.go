@@ -49,6 +49,14 @@ type SinkDeps struct {
 	RPK       RPKRunner
 	// Glue is the orchestrator's Glue client, for the iceberg sink.
 	Glue GlueAPI
+	// Snowflake is the orchestrator's connection to the bench Snowflake
+	// account and SnowflakeTarget its non-secret identity, for the
+	// snowflake sink.
+	Snowflake       SnowflakeExec
+	SnowflakeTarget SnowflakeTarget
+	// Output is the scenario's output config, for sinks whose scratch
+	// depends on it (the snowflake sink reads schema_evolution).
+	Output any
 }
 
 // RPKRunner runs rpk against the brokers and returns its combined output
@@ -93,7 +101,9 @@ func sinkFor(spec SinkSpec, deps SinkDeps) (Sink, error) {
 		return dropSink{}, nil
 	case "iceberg":
 		return newIcebergSink(deps)
-	case "snowflake", "bigquery":
+	case "snowflake":
+		return newSnowflakeSink(spec, deps)
+	case "bigquery":
 		return nil, fmt.Errorf("sink %s not implemented yet", spec.Kind)
 	default:
 		return nil, fmt.Errorf("unknown sink kind %q", spec.Kind)
@@ -109,6 +119,7 @@ func sinkForScenario(s *Scenario, deps SinkDeps) (Sink, error) {
 	if s.Sink == nil {
 		return nil, errors.New("direction e2e requires sink.kind")
 	}
+	deps.Output = s.Pipeline["output"]
 	return sinkFor(*s.Sink, deps)
 }
 

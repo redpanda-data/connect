@@ -804,7 +804,7 @@ func TestSweep_MixedFreshAndStale(t *testing.T) {
 		IAMRoles:  map[string]time.Time{"rpcn-bench-host-old": old},
 	}
 
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"i-old"}, api.Terminated)
 	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
@@ -824,7 +824,7 @@ func TestSweep_NothingStaleNoPublish(t *testing.T) {
 		},
 		EC2Instances: map[string]ec2types.Instance{"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young}},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Empty(t, api.Terminated)
 	require.Empty(t, api.SNSMessages, "no publish on no-op runs")
@@ -849,7 +849,7 @@ func TestSweep_GetResourcesPagination(t *testing.T) {
 			"page2-db": {DBInstanceIdentifier: aws.String("page2-db"), InstanceCreateTime: &old},
 		},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"i-page1"}, api.Terminated, "second page must be fetched via PaginationToken")
 	require.Equal(t, []string{"page2-db"}, api.DeletedDBs, "second page must be fetched via PaginationToken")
@@ -875,7 +875,7 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 		},
 		FailOn: map[string]error{"TerminateInstances:i-old": errAssertion("boom")},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, report.DestroyedCount)
 	require.Empty(t, report.Destroyed)
@@ -904,7 +904,7 @@ func TestSweep_PublishUsesPerProtocolEnvelope(t *testing.T) {
 			"i-old": {InstanceId: aws.String("i-old"), LaunchTime: &old},
 		},
 	}
-	_, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	_, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Len(t, api.SNSMessages, 1)
 	require.Equal(t, []string{"json"}, api.SNSStructures)
@@ -948,7 +948,7 @@ func TestSweep_StaleTagIndexEntryIsSilent(t *testing.T) {
 			"DescribeDBInstances:vanished-db": &smithy.GenericAPIError{Code: "DBInstanceNotFound", Message: "not found"},
 		},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, report.Errors)
 	require.Empty(t, report.Failed)
@@ -964,7 +964,7 @@ func TestSweep_ThreadsCallerContext(t *testing.T) {
 	api := &FakeAWS{}
 	ctx := context.WithValue(t.Context(), ctxKey{}, "marker")
 
-	_, err := Sweep(ctx, api, now, 3*time.Hour, "arn:sns:topic")
+	_, err := Sweep(ctx, api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.NotNil(t, api.SeenCtx)
 	require.NotEqual(t, context.Background(), api.SeenCtx, "Sweep must thread the caller's ctx through, not substitute context.Background()")
@@ -1014,7 +1014,7 @@ func TestSweep_FullStrandedStack(t *testing.T) {
 		},
 	}
 
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, report.Errors)
 
@@ -1077,7 +1077,7 @@ func TestSweepGlue_SelectsBenchPrefixOlderThanTTL(t *testing.T) {
 			"benchmark_old":       {Created: old}, // shares letters, not the bench_ prefix
 		},
 	}
-	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{
 		"DeleteDatabase:bench_old_empty",
@@ -1099,7 +1099,7 @@ func TestSweepGlue_FailedTableKeepsDatabaseAndReports(t *testing.T) {
 		GlueDatabases: map[string]FakeGlueDB{"bench_x": {Created: now.Add(-5 * time.Hour), Tables: []string{"t1"}}},
 		FailOn:        map[string]error{"DeleteTable:bench_x.t1": errors.New("denied")},
 	}
-	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
 	require.Zero(t, report.DestroyedCount)
@@ -1110,7 +1110,7 @@ func TestSweepGlue_FailedTableKeepsDatabaseAndReports(t *testing.T) {
 func TestSweepGlue_ListFailureIsReportedNotFatal(t *testing.T) {
 	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
 	api := &FakeAWS{FailOn: map[string]error{"GetDatabases:": errors.New("AccessDenied")}}
-	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
 	require.Contains(t, report.Failed[0], "glue-databases")

@@ -1,6 +1,8 @@
 # Orphan-cleanup Lambda — runs every 15 minutes, destroys any
 # Project=redpanda-connect-bench resource older than var.orphan_ttl_hours,
-# plus Glue databases named bench_* (the iceberg sink's per-run scratch).
+# plus Glue databases named bench_* (the iceberg sink's per-run scratch) and
+# Snowflake schemas named BENCH_* in the bench Snowflake account (the
+# snowflake sink's per-run scratch).
 #
 # Lives in persistent/ (NOT shared/) as of 2026-08-17: when it lived inside
 # the session stack, an interrupted `terraform destroy` deleted the
@@ -17,6 +19,14 @@ resource "aws_sns_topic" "orphan_cleanup" {
 }
 
 data "aws_caller_identity" "current" {}
+
+# The bench Snowflake credentials secret, created by the operator (not by
+# Terraform: its value is a private key). The partial ARN (no random suffix)
+# lets the Lambda name it before it exists; until it does, the Lambda skips
+# its Snowflake sweep.
+locals {
+  snowflake_secret_arn = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/snowflake"
+}
 
 resource "aws_iam_role" "orphan_cleanup" {
   name = "redpanda-connect-bench-orphan-cleanup"
@@ -122,6 +132,13 @@ resource "aws_iam_role_policy" "orphan_cleanup" {
         ]
       },
       {
+        # The snowflake sweep logs in to the bench account with this key.
+        Sid      = "SnowflakeSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "${local.snowflake_secret_arn}-??????"
+      },
+      {
         Sid      = "Alert"
         Effect   = "Allow"
         Action   = ["sns:Publish"]
@@ -145,6 +162,7 @@ resource "aws_lambda_function" "orphan_cleanup" {
     variables = {
       BENCH_ORPHAN_TTL_HOURS     = tostring(var.orphan_ttl_hours)
       BENCH_ORPHAN_SNS_TOPIC_ARN = aws_sns_topic.orphan_cleanup.arn
+      BENCH_SNOWFLAKE_SECRET_ARN = local.snowflake_secret_arn
     }
   }
 }

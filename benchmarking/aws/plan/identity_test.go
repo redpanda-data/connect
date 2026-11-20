@@ -88,6 +88,28 @@ func TestSwapIdentityIcebergForcesSchemaEvolutionOn(t *testing.T) {
 	require.Contains(t, caveats, CaveatSchemaEvoForced)
 }
 
+// The snowflake outputs read the key from the host-side file the bench
+// script writes; the key itself is never a config value.
+func TestSwapIdentitySnowflakeUsesPrivateKeyFile(t *testing.T) {
+	for _, component := range []string{"snowflake_streaming", "snowflake_put"} {
+		cfg := map[string]any{
+			"input": map[string]any{"redpanda": map[string]any{}},
+			"output": map[string]any{component: map[string]any{
+				"account": "CUST", "user": "u", "role": "r", "database": "d", "schema": "s",
+				"private_key": "-----BEGIN PRIVATE KEY-----MIIE-----END PRIVATE KEY-----", "private_key_pass": "pw",
+			}},
+		}
+		out, _, err := SwapIdentity(cfg, SourceRedpanda, SinkSnowflake)
+		require.NoError(t, err)
+		sf := out["output"].(map[string]any)[component].(map[string]any)
+		require.Equal(t, "${BENCH_SNOWFLAKE_PRIVATE_KEY_FILE}", sf["private_key_file"], component)
+		require.NotContains(t, sf, "private_key", component)
+		require.NotContains(t, sf, "private_key_pass", component)
+		require.Equal(t, "${BENCH_SNOWFLAKE_ACCOUNT}", sf["account"], component)
+		require.Equal(t, "${BENCH_SNOWFLAKE_SCHEMA}", sf["schema"], component)
+	}
+}
+
 func TestSwapIdentityMySQL(t *testing.T) {
 	cfg := map[string]any{
 		"input":  map[string]any{"mysql_cdc": map[string]any{"dsn": "u:p@tcp(h)/d", "tables": []any{"x"}, "checkpoint_cache": "redis_cache", "stream_snapshot": true}},

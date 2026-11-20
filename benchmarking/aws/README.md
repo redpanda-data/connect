@@ -103,6 +103,39 @@ database (tables first) at teardown, even when the sweep fails.
   host role also needs Lake Formation grants on `bench_*`. The operator must
   check this on the first run in an account.
 
+## End-to-end sinks: Snowflake
+
+An e2e run with a Snowflake sink writes to a scratch schema,
+`BENCH_<SESSION>`, in the bench Snowflake account. The runner resizes the
+bench warehouse to the scenario's `sink.size` (default `XSMALL`) for the run.
+At teardown, even when the sweep fails, it drops the schema with `CASCADE` and
+sets the warehouse back to `XSMALL`.
+
+- Credentials are in the Secrets Manager secret
+  `redpanda-connect-bench/snowflake`, as JSON
+  `{account, user, private_key, database, warehouse, role}`. The operator
+  creates it by hand; Terraform does not. Until it exists, the reaper skips its
+  Snowflake sweep.
+- The orchestrator reads the secret with its own credentials for its SQL
+  (provision, count, teardown). Connect gets the key on the runner host only.
+  Each point's bench script fetches the secret, writes `private_key` to
+  `/opt/bench/secrets/snowflake_key.p8` (mode 0600), and removes the file on
+  exit. The output reads the file with `private_key_file`. The key is never in
+  a placeholder, a rendered config, an SSM command or a log line. The runner
+  host role may read exactly this one secret.
+- If the output has no `schema_evolution.enabled: true`, the runner creates
+  `BENCH_<SESSION>.T (RECORD VARIANT)` for the output to write to. Otherwise
+  the output creates `T` itself.
+- The count check reads `SELECT COUNT(*)` before and after each point. Snowpipe
+  Streaming rows become visible with a delay, so each count is re-read every
+  10 s until two reads agree, for at most 90 s. `snowflake_put` loads no rows
+  (the customer's Snowpipe is not kept), so its count check is skipped.
+- The reaper drops any `BENCH_*` schema whose `created_on` is older than
+  `orphan_ttl_hours` (4 h).
+- **Single lane until part 3.** Concurrent runs share the one bench warehouse,
+  so one run's resize (and its teardown reset to `XSMALL`) changes the other's
+  reference size. Run one Snowflake e2e scenario at a time.
+
 ## Results catalogue
 
 Every completed bench sweep writes one entry to the results catalogue in the

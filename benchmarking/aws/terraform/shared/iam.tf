@@ -21,13 +21,13 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 # Scoped to the session results bucket ONLY. This role is what an approved
 # /soak PR binary runs under, so its reach defines the blast radius of
 # untrusted-but-authorized code: it must not be able to touch the persistent
-# soak archive (forged baselines), tfstate, or secrets. The license reaches
-# the host via the staged S3 object, not Secrets Manager (the orchestrator
-# fetches the secret). dynamodb:* returns, scoped, with the stack that needs
-# it (dynamodb benches — not in this tree). The Glue grant below is the
-# iceberg sink's: Connect on this host reaches the Glue Iceberg REST catalog
-# as this role, fenced to the bench_* scratch databases the orchestrator
-# creates per run.
+# soak archive (forged baselines), tfstate, or secrets other than the bench
+# Snowflake key below. The license reaches the host via the staged S3 object,
+# not Secrets Manager (the orchestrator fetches the secret). dynamodb:*
+# returns, scoped, with the stack that needs it (dynamodb benches — not in
+# this tree). The Glue grant below is the iceberg sink's: Connect on this host
+# reaches the Glue Iceberg REST catalog as this role, fenced to the bench_*
+# scratch databases the orchestrator creates per run.
 resource "aws_iam_role_policy" "bench_host_extra" {
   role = aws_iam_role.bench_host.name
   policy = jsonencode({
@@ -73,6 +73,27 @@ resource "aws_iam_role_policy" "bench_host_glue" {
           "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/bench_*",
           "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:table/bench_*/*",
         ]
+      },
+    ]
+  })
+}
+
+# The snowflake sink's key. The bench script fetches it on the host and
+# writes it to a 0600 file for Connect's private_key_file, so the key never
+# passes through the orchestrator or an SSM parameter. Exactly one secret is
+# readable: the -?????? matches the random suffix Secrets Manager appends to
+# the name. Its value is a dedicated bench-account key: an approved PR binary
+# running under this role can read it, and that account holds only bench
+# scratch.
+resource "aws_iam_role_policy" "bench_host_snowflake_secret" {
+  role = aws_iam_role.bench_host.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/snowflake-??????"]
       },
     ]
   })

@@ -42,7 +42,7 @@ pipeline:
         snowflake_streaming:
             account: ${BENCH_SNOWFLAKE_ACCOUNT}
             database: ${BENCH_SNOWFLAKE_DATABASE}
-            private_key: ${BENCH_SNOWFLAKE_PRIVATE_KEY}
+            private_key_file: ${BENCH_SNOWFLAKE_PRIVATE_KEY_FILE}
             role: ${BENCH_SNOWFLAKE_ROLE}
             schema: ${BENCH_SNOWFLAKE_SCHEMA}
             table: ${BENCH_SNOWFLAKE_TABLE}

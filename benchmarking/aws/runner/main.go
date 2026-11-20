@@ -451,6 +451,18 @@ func runBench(opts benchOpts) (errOut error) {
 			return err
 		}
 	}
+	if s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "snowflake" {
+		sm, err := NewSecretsManagerClient(ctx, opts.region)
+		if err != nil {
+			return fmt.Errorf("build secrets manager client for the snowflake sink: %w", err)
+		}
+		if deps.Snowflake, deps.SnowflakeTarget, err = loadSnowflake(ctx, sm, openGoSnowflake); err != nil {
+			return err
+		}
+		if c, ok := deps.Snowflake.(io.Closer); ok {
+			defer c.Close()
+		}
+	}
 	sink, err := sinkForScenario(s, deps)
 	if err != nil {
 		return err
@@ -532,6 +544,7 @@ func runBench(opts benchOpts) (errOut error) {
 			ExpectedRecordsPerSec:    expectedRecordsPerSec,
 			SourceProbe:              sourceProbeFor(s, sharedOuts, names),
 			Sink:                     countableSink(sink, s, plan),
+			HostSetup:                hostSetupFor(sink),
 		}
 		// A soak run publishes per-minute CloudWatch metrics as it goes, so an
 		// operator (or an alarm) can watch a run that may still have 23 hours

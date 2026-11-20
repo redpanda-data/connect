@@ -112,6 +112,9 @@ type MatrixRunner struct {
 	// each point; the delta is checked against the point's output samples
 	// (see sinkCountAnomaly). A sink that cannot count is skipped.
 	Sink Sink
+	// HostSetup is a sink's bench-script prologue (see hostSetupFor),
+	// run before Connect launches at every point. Empty for most sinks.
+	HostSetup string
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -293,6 +296,7 @@ func (m *MatrixRunner) Run(
 			PromScrapeSec:            m.PromScrapeSec,
 			CheckpointSec:            m.CheckpointSec,
 			SourceProbe:              probe,
+			HostSetup:                m.HostSetup,
 		})
 
 		// pointStart is this point's wall-clock launch — the base every
@@ -835,6 +839,9 @@ type benchScriptArgs struct {
 	// probe: warmup, start probe, duration, end probe, then SIGTERM. Nil
 	// keeps the single warmup+duration sleep.
 	SourceProbe *SourceProbeArgs
+	// HostSetup, when set, runs right after set -euo pipefail, before
+	// anything else (see MatrixRunner.HostSetup).
+	HostSetup string
 }
 
 // artifactKey names this point's log and metric files: the bare vCPU count for
@@ -907,8 +914,11 @@ func renderBenchScript(a benchScriptArgs) string {
 	totalSec := a.WarmupSec + a.DurationSec
 	logKey := fmt.Sprintf("s3://%s/runs/%s/sweep-%s.log", a.Bucket, a.SessionID, key)
 	promKey := fmt.Sprintf("s3://%s/runs/%s/prom-%s.txt", a.Bucket, a.SessionID, key)
-	lines := []string{
-		`set -euo pipefail`,
+	lines := []string{`set -euo pipefail`}
+	if a.HostSetup != "" {
+		lines = append(lines, a.HostSetup)
+	}
+	lines = append(lines,
 		fmt.Sprintf(`echo "starting bench: %d vCPU, GOMAXPROCS %d, %d streams, %d GiB, warmup %ds, window %ds"`,
 			a.VCPU, a.gomaxprocs(), max(a.Streams, 1), a.MemLimitGiB, a.WarmupSec, a.DurationSec),
 		fmt.Sprintf(`LOG=/tmp/bench-%s.log`, key),
@@ -961,7 +971,7 @@ func renderBenchScript(a benchScriptArgs) string {
   done
 ) &`, a.promScrapeSec()),
 		`PROM_SCRAPER=$!`,
-	}
+	)
 	// Checkpoint: for a long soak run, the end-of-script upload alone means a
 	// crash anywhere before the final `aws s3 cp` loses the ENTIRE window's
 	// data. When CheckpointSec > 0, periodically re-upload $LOG and $PROM to

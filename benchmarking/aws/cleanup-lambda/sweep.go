@@ -617,7 +617,9 @@ func (r *SweepReport) record(kind, id string, destroyed bool, err error) {
 // SNS is published when anything was destroyed OR any delete failed — a
 // sweep that only fails must page too, since the stranded resource keeps
 // accruing cost and CloudWatch Logs (the only other trace) has no alarm.
-func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration, snsTopicARN string) (SweepReport, error) {
+// sf opens the bench Snowflake account for the BENCH_ schema sweep; nil
+// skips it.
+func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration, snsTopicARN string, sf snowflakeOpener) (SweepReport, error) {
 	var mappings []rgtatypes.ResourceTagMapping
 	var pageToken *string
 	for {
@@ -741,6 +743,7 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 	}
 
 	sweepGlueDatabases(ctx, api, now, ttl, &report)
+	sweepSnowflakeSchemas(ctx, sf, now, ttl, &report)
 
 	if report.DestroyedCount > 0 || report.Errors > 0 {
 		msg := fmt.Sprintf("orphan-cleanup at %s: destroyed %d resources, %d failed deletions",

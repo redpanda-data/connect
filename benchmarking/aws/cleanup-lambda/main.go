@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
@@ -37,6 +38,7 @@ type awsCleanup struct {
 	iam  *iam.Client
 	glue *glue.Client
 	sns  *sns.Client
+	sm   *secretsmanager.Client
 }
 
 func newAWSCleanup(ctx context.Context) (*awsCleanup, error) {
@@ -52,6 +54,7 @@ func newAWSCleanup(ctx context.Context) (*awsCleanup, error) {
 		iam:  iam.NewFromConfig(cfg),
 		glue: glue.NewFromConfig(cfg),
 		sns:  sns.NewFromConfig(cfg),
+		sm:   secretsmanager.NewFromConfig(cfg),
 	}, nil
 }
 
@@ -241,8 +244,14 @@ func handleRequest(ctx context.Context, _ struct{}) (SweepReport, error) {
 	if err != nil {
 		return SweepReport{}, err
 	}
+	// BENCH_SNOWFLAKE_SECRET_ARN names the bench Snowflake credentials
+	// secret (persistent/cleanup.tf). Unset skips the Snowflake sweep.
+	var sf snowflakeOpener
+	if arn := os.Getenv("BENCH_SNOWFLAKE_SECRET_ARN"); arn != "" {
+		sf = newSnowflakeOpener(api.sm, arn, connectGoSnowflake)
+	}
 	slog.Info("starting sweep", "ttl", ttl)
-	return Sweep(ctx, api, time.Now(), ttl, topicARN)
+	return Sweep(ctx, api, time.Now(), ttl, topicARN, sf)
 }
 
 func main() {
