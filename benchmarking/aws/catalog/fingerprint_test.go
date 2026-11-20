@@ -22,6 +22,7 @@ func cdcPipeline() map[string]any {
 				"dsn":             "postgres://a",
 				"tables":          []any{"t1"},
 				"slot_name":       "slot_a",
+				"consumer_group":  "group_a",
 				"stream_snapshot": true,
 				"tls":             map[string]any{"skip_cert_verify": true},
 				"batching":        map[string]any{"count": 5000},
@@ -31,7 +32,7 @@ func cdcPipeline() map[string]any {
 			"processors": []any{map[string]any{"mapping": "root = this"}},
 		},
 		"output": map[string]any{
-			"redpanda": map[string]any{"topic": "out_a"},
+			"redpanda": map[string]any{"topic": "out_a", "compression": "lz4"},
 		},
 	}
 }
@@ -44,6 +45,7 @@ func TestFingerprintIgnoresIdentity(t *testing.T) {
 	in["tables"] = []any{"t2", "t3"}
 	in["slot_name"] = "slot_b"
 	in["tls"] = map[string]any{"skip_cert_verify": false}
+	in["consumer_group"] = "group_b"
 	b["output"].(map[string]any)["redpanda"].(map[string]any)["topic"] = "out_b"
 
 	fa, err := Fingerprint(a)
@@ -67,6 +69,17 @@ func TestFingerprintSeesPerformanceKnobs(t *testing.T) {
 		},
 		"stream_snapshot": func(p map[string]any) {
 			p["input"].(map[string]any)["postgres_cdc"].(map[string]any)["stream_snapshot"] = false
+		},
+		"mutation body": func(p map[string]any) {
+			p["pipeline"].(map[string]any)["processors"] = []any{map[string]any{"mutation": "root.a = 1"}}
+		},
+		"branch request_map": func(p map[string]any) {
+			p["pipeline"].(map[string]any)["processors"] = []any{
+				map[string]any{"branch": map[string]any{"request_map": "root = this.a"}},
+			}
+		},
+		"compression": func(p map[string]any) {
+			p["output"].(map[string]any)["redpanda"].(map[string]any)["compression"] = "zstd"
 		},
 		"added processor": func(p map[string]any) {
 			procs := p["pipeline"].(map[string]any)["processors"].([]any)

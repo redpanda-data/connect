@@ -33,7 +33,12 @@ var KeepStringKeys = []string{
 	"checkpoint_limit",    // Concurrency knob.
 	"stream_snapshot",     // Snapshot vs streaming is a different workload.
 	"snapshot_batch_size", // Snapshot read size changes throughput.
-	"consumer_group",      // Group semantics change consumption behaviour.
+	"mutation",            // Bloblang mutation text changes processing cost.
+	"bloblang",            // Bloblang processor text changes processing cost.
+	"request_map",         // branch request_map Bloblang changes processing cost.
+	"result_map",          // branch result_map Bloblang changes processing cost.
+	"query",               // jq query text changes processing cost.
+	"code",                // javascript processor code changes processing cost.
 }
 
 // ignoredKeys are dropped entirely when fingerprinting: they identify a
@@ -156,7 +161,8 @@ func processorName(p any) (string, error) {
 }
 
 // Fingerprint is the hex sha256 of the canonical JSON of the normalised
-// pipeline.
+// pipeline. Callers must pass values decoded from JSON/YAML into
+// map[string]any / []any, since typed maps and slices are not normalised.
 func Fingerprint(pipeline map[string]any) (string, error) {
 	b, err := json.Marshal(normalise("", pipeline))
 	if err != nil {
