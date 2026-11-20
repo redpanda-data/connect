@@ -150,6 +150,8 @@ Component availability controlled by:
 
 `cmd/` - Binary entry points for each distribution.
 
+`docs/specs/` - Database-independent behaviour specs for cross-connector features (e.g. range-chunked snapshots).
+
 ### Benthos Integration
 
 Redpanda Connect imports benthos's public service API: `github.com/redpanda-data/benthos/v4/public/service`.

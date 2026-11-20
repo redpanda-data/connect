@@ -132,7 +132,7 @@ every change after P, and rows a worker already saw arrive again as duplicates.
 
 ### Configuration and documentation
 
-- **R20.** Reuse the shared `MaxParallelSnapshotTablesField(extra)` helper in this package, passing
+- **R20.** Reuse the shared `MaxParallelSnapshotTablesField(extra)` helper in `internal/replication`, passing
   connector-specific text as `extra`.
 - **R21.** The field docs MUST say:
   - when a table isn't split, and the minimum row count;
