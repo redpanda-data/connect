@@ -90,18 +90,19 @@ func (m *mongoCDC) resolveStreamStart(
 		return start, nil
 	}
 
-	if !m.readsSnapshot() && hasTS {
-		// Nothing to checkpoint before the first event: open at the oplog time.
+	if m.snapshotParallelism == 0 && hasTS {
+		// No blocking snapshot runs, so nothing is checkpointed before the
+		// first event, and the oplog time is enough to open the stream. This
+		// includes the incremental snapshot: a majority chunk read sees every
+		// write up to the oplog time, and the stream returns every write after
+		// it. A captured token can be ahead of the oplog time, and the stream
+		// would then skip writes that a majority read does not see yet.
 		return start, nil
 	}
 
-	// Capture a token. Three cases get here:
+	// Capture a token. Two cases get here:
 	//   - A blocking snapshot runs. The checkpoint cache stores only tokens, so
 	//     the end of the snapshot needs a token to checkpoint.
-	//   - An incremental snapshot runs. Its token is not stored: it only sets
-	//     where the stream opens. A captured token can be ahead of the majority
-	//     committed oplog time, so Prepare waits until a majority read sees
-	//     every write before it.
 	//   - hello has no oplog time (mongos). A token is the only start position.
 	token, err := captureToken(ctx)
 	switch {
