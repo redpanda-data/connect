@@ -42,7 +42,9 @@ var semver = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
 // TestNewSpecsHaveVersions fails when a component, field, Bloblang function,
 // or Bloblang method has a version that isn't a release it could have shipped
 // in, or when one that isn't in the previous release has no version. The
-// version is published as "Introduced in version ..." in the reference docs.
+// version is published in the reference docs: as the page-introduced-in
+// attribute for components, as "Requires version ..." for fields, and as
+// "Introduced in version ..." for Bloblang functions and methods.
 //
 // The previous release is the highest vX.Y.Z tag reachable from HEAD. Every
 // version must be a plain x.y.z release number with a major version of at
