@@ -40,6 +40,7 @@ rely on them.
 | TIMESTAMPTZ | Timestamp | time.Time | time.Time |
 | UUID | String | string | string |
 | JSON / JSONB | Any | (native) | (native) |
+| DATE[], TIMESTAMP[], TIMESTAMPTZ[] | Any | []any of time.Time | []any of time.Time |
 
 ### Notes
 
@@ -59,9 +60,12 @@ rely on them.
   fallback, and the snapshot path resolves the numeric OID via `resolveTypeName`.
 - **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. The special
   values `infinity` and `-infinity` are handled as for DATE.
-- **Infinite values in arrays and ranges**: Known gap. The CDC path decodes an
-  infinite element of a DATE, TIMESTAMP or TIMESTAMPTZ array, or an infinite
-  bound of a TSTZRANGE or DATERANGE, to `pgtype.InfinityModifier`, which
+- **DATE[], TIMESTAMP[], TIMESTAMPTZ[]**: Both paths decode the array text with
+  the pgx codec and return `[]any`. A NULL element is `nil`, and an infinite
+  element is `pglogicalstream.InfiniteTime`, which `infinite_timestamps` maps
+  as for a scalar column. The snapshot path used to return the array text.
+- **Infinite bounds in ranges**: Known gap. The CDC path decodes an infinite
+  bound of a TSTZRANGE or DATERANGE to `pgtype.InfinityModifier`, which
   marshals to the number `1` (`-1` for `-infinity`). The snapshot path returns
   the raw PostgreSQL text. TSRANGE is not affected, because the CDC path also
   returns its raw text.
