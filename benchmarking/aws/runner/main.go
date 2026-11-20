@@ -435,12 +435,11 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
-	// An e2e run writes to the customer's real sink: provision this run's
-	// scratch in it now, so its ${BENCH_*} values are in sharedOuts before
-	// any config renders. It runs after the build so the runner host has had
-	// that long to boot; ssmRPK also waits for its rpk install. The scratch
-	// is torn down before terraform destroy (defers run last-in first-out),
-	// even when the sweep fails.
+	// An e2e run writes to the customer's real sink: withSink below
+	// provisions this run's scratch in it, so its ${BENCH_*} values are in
+	// sharedOuts before any config renders, and removes it before the
+	// terraform destroy defer runs. It runs after the build so the runner
+	// host has had that long to boot; ssmRPK also waits for its rpk install.
 	sink, err := sinkForScenario(s, SinkDeps{
 		Region:    opts.region,
 		Outs:      sharedOuts,
@@ -450,111 +449,114 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
-	teardownSink, err := provisionSink(ctx, sink, sessionID, sharedOuts)
-	if err != nil {
-		return err
-	}
-	defer teardownSink(&errOut)
-
-	plan := buildSweepPlan(s)
-	// legacy scenarios (no matrix.arms) share one config across every point,
-	// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
-	// path, so the six existing scenarios are byte-for-byte unchanged. Stack
-	// none renders per point too: each point has its own consumer group.
-	legacy := !perPointConfigs(s)
-	var sets []renderedPointConfigs
-	if legacy {
-		set, err := renderPointConfigs(s, sharedOuts, topo, names, plan[0])
-		if err != nil {
-			return fmt.Errorf("render pipeline config: %w", err)
-		}
-		sets = []renderedPointConfigs{set}
-	} else {
-		for _, p := range plan {
-			set, err := renderPointConfigs(s, sharedOuts, topo, names, p)
+	// render, stage, seed and the sweep all run inside the sink's
+	// lifecycle: withSink tears the scratch down whether they succeed, fail
+	// or are cancelled.
+	var points []SweepPoint
+	var logFetcher LogFetcher
+	if err := withSink(ctx, sink, sessionID, func(placeholders map[string]string) error {
+		maps.Copy(sharedOuts, placeholders)
+		var err error
+		plan := buildSweepPlan(s)
+		// legacy scenarios (no matrix.arms) share one config across every point,
+		// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
+		// path, so the six existing scenarios are byte-for-byte unchanged. Stack
+		// none renders per point too: each point has its own consumer group.
+		legacy := !perPointConfigs(s)
+		var sets []renderedPointConfigs
+		if legacy {
+			set, err := renderPointConfigs(s, sharedOuts, topo, names, plan[0])
 			if err != nil {
-				return fmt.Errorf("render pipeline config for %s: %w", p.Key(), err)
+				return fmt.Errorf("render pipeline config: %w", err)
 			}
-			sets = append(sets, set)
+			sets = []renderedPointConfigs{set}
+		} else {
+			for _, p := range plan {
+				set, err := renderPointConfigs(s, sharedOuts, topo, names, p)
+				if err != nil {
+					return fmt.Errorf("render pipeline config for %s: %w", p.Key(), err)
+				}
+				sets = append(sets, set)
+			}
 		}
-	}
-	if s.Direction == DirectionE2E {
-		if err := checkPlaceholdersResolved(sets); err != nil {
+		if s.Direction == DirectionE2E {
+			if err := checkPlaceholdersResolved(sets); err != nil {
+				return err
+			}
+		}
+		if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
+			return fmt.Errorf("stage artefacts: %w", err)
+		}
+		fmt.Println("[4/7] staged binary + config on runner")
+
+		if err := runSeeder(ctx, opts, s, sharedOuts, topo, names, execTimeout); err != nil {
+			return fmt.Errorf("seed: %w", err)
+		}
+		fmt.Println("[5/7] seed complete")
+
+		logFetcher, err = NewS3LogFetcher(ctx, opts.region)
+		if err != nil {
 			return err
 		}
-	}
-	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
-		return fmt.Errorf("stage artefacts: %w", err)
-	}
-	fmt.Println("[4/7] staged binary + config on runner")
 
-	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names, execTimeout); err != nil {
-		return fmt.Errorf("seed: %w", err)
-	}
-	fmt.Println("[5/7] seed complete")
-
-	logFetcher, err := NewS3LogFetcher(ctx, opts.region)
-	if err != nil {
-		return err
-	}
-
-	mr := &MatrixRunner{
-		SSM:             ssmExec,
-		LogFetcher:      logFetcher,
-		RunnerInstance:  sharedOuts["runner_instance_id"],
-		LoadGenInstance: workloadInstance(s, sharedOuts),
-		ConfigPath:      "/opt/bench/config.yaml",
-		ConfigPaths: func() map[string]pointConfigPaths {
-			if legacy {
-				return nil // every point uses ConfigPath
-			}
-			return runnerConfigPaths(sets)
-		}(),
-		BinaryPath:               "/opt/bench/redpanda-connect",
-		MemoryPerVCPUBytes:       s.Infra.MemoryPerVCPUBytes,
-		Bucket:                   sharedOuts["results_bucket"],
-		SessionID:                sessionID,
-		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
-		RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
-		Topology:                 topo,
-		Names:                    names,
-		Outs:                     sharedOuts,
-		HeartbeatSec:             heartbeatSec,
-		PromScrapeSec:            promScrapeSec,
-		CheckpointSec:            checkpointSec,
-		ExpectedRecordsPerSec:    expectedRecordsPerSec,
-		SourceProbe:              sourceProbeFor(s, sharedOuts, names),
-		Sink:                     sink,
-	}
-	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
-	// operator (or an alarm) can watch a run that may still have 23 hours
-	// left, instead of only finding out something went wrong when the
-	// result JSON lands at the end. Deliberately orchestrator-side (see
-	// MatrixRunner.Emitter): the runner EC2 instance role is never given
-	// cloudwatch:PutMetricData, so a future PR-mode binary running under
-	// that role cannot spoof the metrics that judge it.
-	if s.Soak {
-		emitter, err := NewCloudWatchEmitter(ctx, opts.region, CloudWatchNamespace, s.Connector, s.Name)
-		if err != nil {
-			return fmt.Errorf("build CloudWatch emitter: %w", err)
+		mr := &MatrixRunner{
+			SSM:             ssmExec,
+			LogFetcher:      logFetcher,
+			RunnerInstance:  sharedOuts["runner_instance_id"],
+			LoadGenInstance: workloadInstance(s, sharedOuts),
+			ConfigPath:      "/opt/bench/config.yaml",
+			ConfigPaths: func() map[string]pointConfigPaths {
+				if legacy {
+					return nil // every point uses ConfigPath
+				}
+				return runnerConfigPaths(sets)
+			}(),
+			BinaryPath:               "/opt/bench/redpanda-connect",
+			MemoryPerVCPUBytes:       s.Infra.MemoryPerVCPUBytes,
+			Bucket:                   sharedOuts["results_bucket"],
+			SessionID:                sessionID,
+			RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
+			RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
+			Topology:                 topo,
+			Names:                    names,
+			Outs:                     sharedOuts,
+			HeartbeatSec:             heartbeatSec,
+			PromScrapeSec:            promScrapeSec,
+			CheckpointSec:            checkpointSec,
+			ExpectedRecordsPerSec:    expectedRecordsPerSec,
+			SourceProbe:              sourceProbeFor(s, sharedOuts, names),
+			Sink:                     countableSink(sink, s, plan),
 		}
-		mr.Emitter = emitter
-		fmt.Printf("soak profile: publishing metrics to CloudWatch namespace %q, dimensions Connector=%q Scenario=%q\n",
-			CloudWatchNamespace, s.Connector, s.Name)
-	}
-	// Reset must cover the union of every arm's tables (planMaxStreams), not
-	// just this scenario's own Streams, so one precomputed reset script serves
-	// every point in the plan regardless of its stream count.
-	reset, err := topo.ResetScript(s, sharedOuts, names.WithStreams(planMaxStreams(plan)))
-	if err != nil {
+		// A soak run publishes per-minute CloudWatch metrics as it goes, so an
+		// operator (or an alarm) can watch a run that may still have 23 hours
+		// left, instead of only finding out something went wrong when the
+		// result JSON lands at the end. Deliberately orchestrator-side (see
+		// MatrixRunner.Emitter): the runner EC2 instance role is never given
+		// cloudwatch:PutMetricData, so a future PR-mode binary running under
+		// that role cannot spoof the metrics that judge it.
+		if s.Soak {
+			emitter, err := NewCloudWatchEmitter(ctx, opts.region, CloudWatchNamespace, s.Connector, s.Name)
+			if err != nil {
+				return fmt.Errorf("build CloudWatch emitter: %w", err)
+			}
+			mr.Emitter = emitter
+			fmt.Printf("soak profile: publishing metrics to CloudWatch namespace %q, dimensions Connector=%q Scenario=%q\n",
+				CloudWatchNamespace, s.Connector, s.Name)
+		}
+		// Reset must cover the union of every arm's tables (planMaxStreams), not
+		// just this scenario's own Streams, so one precomputed reset script serves
+		// every point in the plan regardless of its stream count.
+		reset, err := topo.ResetScript(s, sharedOuts, names.WithStreams(planMaxStreams(plan)))
+		if err != nil {
+			return err
+		}
+		workload, err := topo.WorkloadScript(s, sharedOuts, names)
+		if err != nil {
+			return err
+		}
+		points, err = mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
 		return err
-	}
-	workload, err := topo.WorkloadScript(s, sharedOuts, names)
-	if err != nil {
-		return err
-	}
-	points, err := mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	fmt.Println("[6/7] sweep complete")

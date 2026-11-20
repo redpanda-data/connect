@@ -108,63 +108,130 @@ func sinkForScenario(s *Scenario, deps SinkDeps) (Sink, error) {
 	return sinkFor(*s.Sink, deps)
 }
 
-// provisionSink provisions sink and merges its placeholders into outs. The
-// returned teardown is for a defer over the run's named error: it removes
-// the scratch, logs a teardown failure, and only reports that failure when
-// nothing else failed. A failed Provision is torn down before returning,
-// since it may have created part of the scratch. A nil sink is a no-op.
-func provisionSink(ctx context.Context, sink Sink, session string, outs map[string]string) (teardown func(errOut *error), err error) {
+// ErrNothingProvisioned marks a Provision error after which no scratch
+// exists (it failed before creating anything), so there is nothing to tear
+// down. Any other Provision error is treated as a partial provision.
+var ErrNothingProvisioned = errors.New("nothing provisioned")
+
+// withSink runs fn inside sink's scratch lifecycle: it provisions, hands fn
+// the placeholders, and always tears down once anything may have been
+// created, including after fn fails or the run's context is cancelled
+// (teardown runs on context.WithoutCancel, so a Ctrl-C still removes the
+// scratch). fn's error comes first; a teardown error is returned only when
+// fn succeeded, and is logged either way. A nil sink just calls fn.
+func withSink(ctx context.Context, sink Sink, session string, fn func(placeholders map[string]string) error) error {
 	if sink == nil {
-		return func(*error) {}, nil
+		return fn(nil)
 	}
-	teardown = func(errOut *error) {
-		// The run's context may be cancelled already (Ctrl-C); scratch
-		// must still go.
+	teardown := func() error {
 		terr := sink.Teardown(context.WithoutCancel(ctx), session)
-		if terr == nil {
-			return
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "sink teardown FAILED, scratch may remain until the reaper sweeps it: %v\n", terr)
+			return fmt.Errorf("sink teardown: %w", terr)
 		}
-		fmt.Fprintf(os.Stderr, "sink teardown FAILED, scratch may remain until the reaper sweeps it: %v\n", terr)
-		if *errOut == nil {
-			*errOut = fmt.Errorf("sink teardown: %w", terr)
-		}
+		return nil
 	}
 	ph, err := sink.Provision(ctx, session)
 	if err != nil {
-		perr := fmt.Errorf("sink provision: %w", err)
-		teardown(&perr)
-		return nil, perr
+		if !errors.Is(err, ErrNothingProvisioned) {
+			_ = teardown() // a partial provision; teardown logs its own failure
+		}
+		return fmt.Errorf("sink provision: %w", err)
 	}
-	for k, v := range ph {
-		outs[k] = v
+	ferr := fn(ph)
+	terr := teardown()
+	if ferr != nil {
+		return ferr
 	}
-	return teardown, nil
+	return terr
+}
+
+// uncountedSink hides a sink's Count, so the ground-truth check is skipped
+// while provisioning and teardown still run.
+type uncountedSink struct{ Sink }
+
+func (uncountedSink) Count(context.Context, string) (int64, error) { return 0, ErrCountUnsupported }
+
+// countableSink returns sink, or sink with Count hidden when any point's
+// output declares batching processors. Those run on the batch just before
+// the write, and an archive collapses a batch into one record while a
+// split or unarchive fans one message out into many, so the sink's record
+// count stops tracking the message count the benchmark processor (which
+// runs before batching) measures. The check would then fail for a correct
+// run, so it is skipped as for a sink that cannot count.
+func countableSink(sink Sink, s *Scenario, plan []sweepPoint) Sink {
+	if sink == nil {
+		return nil
+	}
+	fanOut := outputBatchesWithProcessors(s.Pipeline["output"])
+	for _, pt := range plan {
+		if pt.Pipeline != nil && outputBatchesWithProcessors(pt.Pipeline["output"]) {
+			fanOut = true
+		}
+	}
+	if fanOut {
+		return uncountedSink{sink}
+	}
+	return sink
+}
+
+// outputBatchesWithProcessors reports whether any batching block anywhere in
+// an output config (including outputs nested in a broker, switch or
+// fallback) carries a processors key.
+func outputBatchesWithProcessors(output any) bool {
+	switch v := output.(type) {
+	case map[string]any:
+		for k, c := range v {
+			if k == "batching" {
+				if b, ok := c.(map[string]any); ok {
+					if _, has := b["processors"]; has {
+						return true
+					}
+				}
+			}
+			if outputBatchesWithProcessors(c) {
+				return true
+			}
+		}
+	case []any:
+		for _, c := range v {
+			if outputBatchesWithProcessors(c) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 const (
 	anomalySinkCountMismatch = "sink_count_mismatch"
-	// sinkCountTolerance is the largest relative disagreement between the
-	// sink's count and the output-side samples that still passes.
+	// The sink's count and the output-side samples may disagree by up to
+	// max(sinkCountTolerance of the samples' sum, sinkCountFloorSec of the
+	// point's median rate). The floor covers the edges a short point cannot
+	// amortise: the partial rolling-stats interval lost at SIGTERM and the
+	// interval in flight at launch.
 	sinkCountTolerance = 0.02
+	sinkCountFloorSec  = 3
 )
 
 // sinkCountAnomaly compares what the sink gained over a point with the sum
 // of the point's per-second msg/sec samples. samples must be every sample
 // of the point, warmup included, because the sink delta spans the whole
-// point.
-func sinkCountAnomaly(written int64, samples []Sample) (Anomaly, bool) {
+// point. medianMsgPerSec is the point's steady-state median, for the floor.
+func sinkCountAnomaly(written int64, samples []Sample, medianMsgPerSec float64) (Anomaly, bool) {
 	var measured float64
 	for _, s := range samples {
 		measured += s.MsgPerSec // each sample covers one second
 	}
 	diff := math.Abs(float64(written) - measured)
-	if diff == 0 || (measured > 0 && diff/measured <= sinkCountTolerance) {
+	tolerance := max(sinkCountTolerance*measured, sinkCountFloorSec*medianMsgPerSec)
+	if diff == 0 || diff <= tolerance {
 		return Anomaly{}, false
 	}
 	return Anomaly{
 		Kind: anomalySinkCountMismatch,
-		Note: fmt.Sprintf("%s: the sink gained %d records over the point but the output samples sum to %.0f messages; they disagree by more than %.0f%%",
-			anomalySinkCountMismatch, written, measured, sinkCountTolerance*100),
+		Note: fmt.Sprintf("%s: the sink gained %d records over the point but the output samples sum to %.0f messages; they differ by %.0f, over the %.0f tolerance (the larger of %.0f%% and %ds of the median rate)",
+			anomalySinkCountMismatch, written, measured, diff, tolerance, sinkCountTolerance*100, sinkCountFloorSec),
 	}, true
 }
 

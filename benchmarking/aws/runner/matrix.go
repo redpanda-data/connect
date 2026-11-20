@@ -448,7 +448,7 @@ func (m *MatrixRunner) Run(
 		if sinkCounted {
 			all, _ := ParseRollingStatsStream(bytes.NewReader(raw))
 			var a Anomaly
-			if a, sinkFail = sinkCountAnomaly(sinkWritten, all); sinkFail {
+			if a, sinkFail = sinkCountAnomaly(sinkWritten, all, summary.MedianMsgPerSec); sinkFail {
 				anomalies = append(anomalies, a)
 			}
 		}
