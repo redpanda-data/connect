@@ -1,0 +1,166 @@
+version: '3'
+
+vars:
+  SNYK_DIR: '{{.TARGET_DIR}}/snyk'
+  SNYK_REPORT: '{{.SNYK_DIR}}/report.json'
+  SNYK_FIX_REPORT: '{{.SNYK_DIR}}/fix.json'
+  # jq programs used by the tasks, and the "semver" module they include.
+  SNYK_JQ: '{{.TASKFILE_DIR}}/snyk'
+  # Go modules to scan. Comment out any you don't care about.
+  # Override from the CLI with a space-separated string: task snyk:report SNYK_FILES="go.mod ..."
+  SNYK_FILES:
+    - go.mod
+    # - public/bundle/enterprise/go.mod
+    # - public/bundle/free/go.mod
+    # - benchmarking/aws/go.mod
+    # - benchmarking/aws/cleanup-lambda/go.mod
+    # - internal/impl/redpanda/testdata/uppercase/go.mod
+    # - internal/rpcplugin/testdata/catshout/go.mod
+
+tasks:
+  report:
+    desc: Run snyk test per project and write upgrade paths and the CVEs they fix to target/snyk/report.json
+    silent: true
+    preconditions:
+      - sh: command -v snyk
+        msg: snyk CLI not found (brew install snyk-cli && snyk auth)
+      - sh: command -v jq
+        msg: jq not found
+    env:
+      # Ignore stale local vendor/ directories when snyk runs `go list`.
+      GOFLAGS: -mod=mod
+    cmds:
+      - rm -rf '{{.SNYK_DIR}}' && mkdir -p '{{.SNYK_DIR}}/raw' '{{.SNYK_DIR}}/projects'
+      - |
+        for f in {{if kindIs "string" .SNYK_FILES}}{{.SNYK_FILES}}{{else}}{{join " " .SNYK_FILES}}{{end}}; do
+          name=$(echo "$f" | tr '/' '_')
+          echo "==> snyk test --file=$f"
+          # Exit codes: 0 = clean, 1 = vulns found, 2 = failure, 3 = no supported project.
+          # With -mod=mod, the `go list` snyk runs can write to go.mod/go.sum; restore them afterwards.
+          d=$(dirname "$f")
+          cp "$d/go.mod" "{{.SNYK_DIR}}/raw/$name.go.mod.bak"
+          [ -f "$d/go.sum" ] && cp "$d/go.sum" "{{.SNYK_DIR}}/raw/$name.go.sum.bak"
+          rc=0
+          snyk test --file="$f" --json {{.CLI_ARGS}} > "{{.SNYK_DIR}}/raw/$name.json" || rc=$?
+          cp "{{.SNYK_DIR}}/raw/$name.go.mod.bak" "$d/go.mod"
+          [ -f "{{.SNYK_DIR}}/raw/$name.go.sum.bak" ] && cp "{{.SNYK_DIR}}/raw/$name.go.sum.bak" "$d/go.sum"
+          if [ "$rc" -ge 2 ]; then echo "    snyk exited $rc for $f (recorded in report)"; fi
+          jq -R -s -L '{{.SNYK_JQ}}' --arg file "$f" --argjson rc "$rc" -f '{{.SNYK_JQ}}/project.jq' \
+            "{{.SNYK_DIR}}/raw/$name.json" > "{{.SNYK_DIR}}/projects/$name.json"
+        done
+      - jq -s -f '{{.SNYK_JQ}}/summary.jq' {{.SNYK_DIR}}/projects/*.json > '{{.SNYK_REPORT}}'
+      - |
+        echo "Wrote {{.SNYK_REPORT}}"
+        jq -r '.summary[] | "  \(.package)  \(.from) -> \(.to // "NO FIX")  \((.fixedCves + .unfixedCves) | join(","))"' '{{.SNYK_REPORT}}'
+        # A failed scan must not pass for a clean one.
+        failed=$(jq -r '.projects[] | select(.error != null) | "  \(.file) (exit \(.exitCode)): \(.error)"' '{{.SNYK_REPORT}}')
+        if [ -n "$failed" ]; then
+          echo "snyk test failed for:"
+          echo "$failed"
+          exit 1
+        fi
+
+  fix:
+    desc: Upgrade the modules in target/snyk/report.json to their minimum fixed versions with go get for the projects in SNYK_FILES, then lint and test (VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
+    silent: true
+    preconditions:
+      - sh: test -f '{{.SNYK_REPORT}}'
+        msg: '{{.SNYK_REPORT}} not found, run `task snyk:report` first'
+    vars:
+      # Run `task lint` and `task test` after a real run that updated something.
+      VERIFY: '{{.VERIFY | default "true"}}'
+      # Projects to fix: FILES if given, otherwise SNYK_FILES. Report entries outside this are ignored.
+      FILES: '{{if .FILES}}{{.FILES}}{{else if kindIs "string" .SNYK_FILES}}{{.SNYK_FILES}}{{else}}{{join " " .SNYK_FILES}}{{end}}'
+    env:
+      GOFLAGS: -mod=mod
+    cmds:
+      - rm -rf '{{.SNYK_DIR}}/fix' && mkdir -p '{{.SNYK_DIR}}/fix'
+      - |
+        root=$(pwd)
+        results="$root/{{.SNYK_DIR}}/fix/results.jsonl"
+        : > "$results"
+
+        project_error() { # message
+          jq -nc --arg project "$file" --arg message "$1" \
+            '{project: $project, module: "", from: "", to: "", status: "error", message: $message}' >> "$results"
+        }
+
+        for file in {{.FILES}}; do
+          proj=$(jq -c --arg f "$file" '.projects[] | select(.file == $f)' '{{.SNYK_REPORT}}')
+          if [ -z "$proj" ]; then
+            echo "==> $file: not in {{.SNYK_REPORT}}, skipping"
+            continue
+          fi
+          [ "$(jq '[.upgrades[] | select(.to != null)] | length' <<< "$proj")" = 0 ] && continue
+          echo "==> $file"
+          dir=$(dirname "$file")
+          plan="$root/{{.SNYK_DIR}}/fix/$(echo "$file" | tr '/' '_').plan"
+
+          # go list can write go.sum under -mod=mod; keep the tree untouched until go get runs.
+          cp "$dir/go.mod" "$plan.go.mod.bak"; [ -f "$dir/go.sum" ] && cp "$dir/go.sum" "$plan.go.sum.bak"
+          lrc=0; (cd "$dir" && go list -m -json all) > "$plan.mods" 2> "$plan.err" || lrc=$?
+          cp "$plan.go.mod.bak" "$dir/go.mod"; [ -f "$plan.go.sum.bak" ] && cp "$plan.go.sum.bak" "$dir/go.sum"
+          if [ "$lrc" != 0 ]; then
+            project_error "go list -m all failed: $(tail -1 "$plan.err")"
+            echo "    go list -m all failed, skipping project"
+            continue
+          fi
+
+          # One fix.json result row per module, "skipped" or "pending".
+          jq -c -n -L '{{.SNYK_JQ}}' --arg project "$file" --slurpfile mods "$plan.mods" --argjson proj "$proj" \
+            -f '{{.SNYK_JQ}}/plan.jq' > "$plan.jsonl"
+          jq -c 'select(.status == "skipped")' "$plan.jsonl" | tee -a "$results" |
+            jq -r '"    skip  \(.module) \(.from) -> \(.to): \(.message)"'
+
+          changed=0
+          while read -r r; do
+            mod=$(jq -r .module <<< "$r"); tgt=$(jq -r .to <<< "$r")
+            jq -r '"    get   \(.module) \(.from) -> \(.to)  (\(.message))"' <<< "$r"
+            if (cd "$dir" && go get "$mod@$tgt") > "$plan.get.log" 2>&1; then
+              jq -c '.status = "updated"' <<< "$r" >> "$results"
+              changed=1
+            else
+              msg=$(grep -v '^go: downloading' "$plan.get.log" | tail -1)
+              echo "          failed: $msg"
+              jq -c --arg msg "$msg" '.status = "failed" | .message = $msg' <<< "$r" >> "$results"
+            fi
+          done < <(jq -c 'select(.status == "pending")' "$plan.jsonl")
+
+          if [ "$changed" = 1 ]; then
+            echo "    go mod tidy"
+            if ! (cd "$dir" && GOFLAGS= go mod tidy) > "$plan.tidy.log" 2>&1; then
+              msg=$(tail -1 "$plan.tidy.log")
+              echo "          failed: $msg"
+              project_error "go mod tidy failed: $msg"
+            fi
+          fi
+        done
+
+        jq -s '{generatedAt: (now | todate), results: .}' "$results" > '{{.SNYK_FIX_REPORT}}'
+        echo "Wrote {{.SNYK_FIX_REPORT}}"
+        jq -r '.results | group_by(.status)[] | "  \(.[0].status): \(length)"' '{{.SNYK_FIX_REPORT}}'
+      - |
+        count() { jq "[.results[] | select(.status == \"$1\")] | length" '{{.SNYK_FIX_REPORT}}'; }
+        rc=0
+        if [ "{{.VERIFY}}" != "true" ]; then
+          :
+        elif [ "$(count error)" != 0 ]; then
+          # A failed go list or go mod tidy leaves a tree not worth linting or testing.
+          echo "Project errors, skipping lint and test"
+        elif [ "$(count updated)" = 0 ]; then
+          echo "Nothing updated, skipping lint and test"
+        else
+          # Run both so one failure doesn't hide the other.
+          echo "==> task lint"
+          '{{.TASK_EXE}}' lint || rc=1
+          echo "==> task test"
+          '{{.TASK_EXE}}' test || rc=1
+        fi
+        failures=$(jq -r '.results[] | select(.status == "failed" or .status == "error")
+          | "  \(.status) \(.project)\(if .module != "" then " " + .module else "" end): \(.message)"' '{{.SNYK_FIX_REPORT}}')
+        if [ -n "$failures" ]; then
+          echo "Failures:"
+          echo "$failures"
+          rc=1
+        fi
+        exit $rc
