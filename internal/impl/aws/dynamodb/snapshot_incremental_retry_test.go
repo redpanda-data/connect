@@ -271,8 +271,9 @@ func newQueueTableStream(t *testing.T, d *dynamoDBCDCInput, name string) *tableS
 	}
 }
 
-// waitBackgroundWorkers waits for every background worker of d, delayed
-// retries included, to return.
+// requireBackgroundWorkersStopped waits for every background worker of d,
+// delayed retries included, to return, and fails the test if they do not
+// within 5s.
 func requireBackgroundWorkersStopped(t *testing.T, d *dynamoDBCDCInput) {
 	t.Helper()
 	done := make(chan struct{})
