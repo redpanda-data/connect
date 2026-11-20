@@ -9,7 +9,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -182,6 +181,10 @@ type Topology interface {
 	// framing samples under "###timestamp=<unix>" into $RP) and ends by setting
 	// RP_SCRAPER=$!. Upload copies $RP to S3 after the bench process exits.
 	MetricSidecar(args MetricSidecarArgs) MetricSidecar
+	// SummaryFromSamples reports whether a point's Summary is computed from
+	// the Connect log's rolling-stats samples (measured at the output) rather
+	// than from broker-side series.
+	SummaryFromSamples() bool
 }
 
 // topologyFor selects the implementation for a scenario's direction. An empty
@@ -199,7 +202,7 @@ func topologyFor(d Direction) (Topology, error) {
 	case DirectionSink:
 		return nil, fmt.Errorf("direction %q is not supported in this build: sink scenarios return with the iceberg-sink stack PR", d)
 	case DirectionE2E:
-		return nil, errors.New("e2e topology not implemented yet")
+		return e2eTopology{}, nil
 	default:
 		return nil, fmt.Errorf("unknown direction %q", d)
 	}

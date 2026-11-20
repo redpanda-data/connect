@@ -110,3 +110,6 @@ RP_SCRAPER=$!%s`, artifact, endpoints, args.scrapeIntervalSec(), checkpointSetup
 		checkpointUploadPrefix, args.Bucket, args.SessionID, artifact)
 	return MetricSidecar{Setup: setup, Upload: upload}
 }
+
+// SummaryFromSamples is false: the source path measures at the broker.
+func (sourceTopology) SummaryFromSamples() bool { return false }

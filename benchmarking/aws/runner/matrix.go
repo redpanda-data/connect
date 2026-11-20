@@ -314,7 +314,13 @@ func (m *MatrixRunner) Run(
 
 		// Broker-side: the bench script scrapes /public_metrics during its
 		// window and uploads it to this point's artifact.
-		brokerSeries := m.fetchBrokerSeries(ctx, key)
+		// An e2e topology measures at the output from the Connect log, so
+		// there is no broker series to fetch.
+		fromSamples := m.Topology != nil && m.Topology.SummaryFromSamples()
+		var brokerSeries []TopicPoint
+		if !fromSamples {
+			brokerSeries = m.fetchBrokerSeries(ctx, key)
+		}
 
 		// A soak (ExpectedRecordsPerSec > 0) must never record an
 		// unmeasured point as a measured zero: Summary below is
@@ -330,7 +336,7 @@ func (m *MatrixRunner) Run(
 		// the non-fatal behavior: they archive nothing persistent, and a
 		// missing artifact only degrades the report.
 		if m.ExpectedRecordsPerSec > 0 {
-			if len(brokerSeries) == 0 {
+			if !fromSamples && len(brokerSeries) == 0 {
 				return nil, fmt.Errorf("soak point at %d vCPU: broker metrics artifact missing or empty — refusing to record an unmeasured point as median 0.00 MB/s", n)
 			}
 			if len(promPts) == 0 {
@@ -347,7 +353,12 @@ func (m *MatrixRunner) Run(
 		// Connect's log is NOT discarded: Samples below still carries every
 		// rolling-stats line, so the log-derived view can be recomputed
 		// from any result file.
-		summary := SummariseTopicPoints(brokerSeries)
+		var summary Summary
+		if fromSamples {
+			summary = Summarise(samples)
+		} else {
+			summary = SummariseTopicPoints(brokerSeries)
+		}
 
 		// Anomaly detection deliberately keeps using the LOG-derived median.
 		// It judges the Connect log's internal consistency — how far
@@ -359,7 +370,10 @@ func (m *MatrixRunner) Run(
 		// T=0 is point launch (see offsetSampleT) — without it the prom
 		// annotations describe a moment warmup seconds before the anomaly.
 		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts, int(warmup.Seconds()))
-		backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+		var backlog []BacklogPoint
+		if !fromSamples {
+			backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+		}
 
 		// Final emit: whatever tail minutes the mid-run loop above never
 		// got to (it may never have ticked at all, e.g. a point shorter
@@ -640,8 +654,12 @@ func (m *MatrixRunner) emitSoakCycle(ctx context.Context, key string, pointStart
 		samples = parseAndTrim(raw, warmup)
 	}
 	promPts := m.fetchProm(ctx, key)
-	brokerSeries := m.fetchBrokerSeries(ctx, key)
-	backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+	var brokerSeries []TopicPoint
+	var backlog []BacklogPoint
+	if m.Topology == nil || !m.Topology.SummaryFromSamples() {
+		brokerSeries = m.fetchBrokerSeries(ctx, key)
+		backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+	}
 	m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hw)
 }
 

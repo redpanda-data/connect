@@ -40,9 +40,10 @@ func TestE2EScenarioNoneStackWorkload(t *testing.T) {
 	require.Equal(t, 15*time.Minute, d)
 }
 
-func TestE2ETopologyNotImplemented(t *testing.T) {
-	_, err := topologyFor(DirectionE2E)
-	require.ErrorContains(t, err, "e2e topology not implemented yet")
+func TestE2ETopologyFor(t *testing.T) {
+	topo, err := topologyFor(DirectionE2E)
+	require.NoError(t, err)
+	require.IsType(t, e2eTopology{}, topo)
 }
 
 func TestE2EScenarioValidation(t *testing.T) {

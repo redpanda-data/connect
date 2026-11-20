@@ -320,25 +320,12 @@ func (s *Scenario) Validate() error {
 	default:
 		return fmt.Errorf("direction %q is invalid; must be %q, %q or %q", s.Direction, DirectionSource, DirectionSink, DirectionE2E)
 	}
-	if s.Direction == DirectionE2E {
-		// topologyFor does not support e2e yet; skip it until e2eTopology lands.
-		if err := s.validateSink(); err != nil {
-			return err
-		}
-		// Stack-backed sources still need an engine; stack none has no source.
-		if s.Stack != stackNone {
-			if _, ok := engineSpecFor(s.Connector); !ok {
-				return fmt.Errorf("connector %q has no engineSpec entry; add one to engineSpecs in scenario.go", s.Connector)
-			}
-		}
-	} else {
-		topo, err := topologyFor(s.Direction)
-		if err != nil {
-			return err
-		}
-		if err := topo.Validate(s); err != nil {
-			return err
-		}
+	topo, err := topologyFor(s.Direction)
+	if err != nil {
+		return err
+	}
+	if err := topo.Validate(s); err != nil {
+		return err
 	}
 	if s.Stack == "" {
 		return errors.New("stack is required")

@@ -1200,6 +1200,13 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	cfg := rootSections(s)
 	cfg["input"] = input
 	cfg["output"] = output
+	// An e2e scenario carries the customer's own processors under
+	// pipeline.processors; the topology only rewrites input/output.
+	if s.Direction == DirectionE2E {
+		if pl, ok := s.Pipeline["pipeline"]; ok {
+			cfg["pipeline"] = pl
+		}
+	}
 	// A scenario may declare a top-level buffer (e.g. memory) to decouple a
 	// fast input from a commit-latency-bound output like the iceberg sink.
 	if buf, ok := s.Pipeline["buffer"]; ok {
@@ -1252,6 +1259,11 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
 		}
 		cfg := map[string]any{"input": input, "output": output}
+		if armScenario.Direction == DirectionE2E {
+			if pl, ok := armScenario.Pipeline["pipeline"]; ok {
+				cfg["pipeline"] = pl
+			}
+		}
 		if buf, ok := armScenario.Pipeline["buffer"]; ok {
 			cfg["buffer"] = buf
 		}
