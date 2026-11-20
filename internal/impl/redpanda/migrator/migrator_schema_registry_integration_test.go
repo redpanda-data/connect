@@ -31,9 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/sr"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func startSchemaRegistrySourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (*sr.Client, *sr.Client) {
@@ -252,8 +252,7 @@ func TestIntegrationSchemaRegistryMigratorSyncNameResolver(t *testing.T) {
 	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
 	require.NoError(t, modeRes[0].Err)
 
-	nr, err := service.NewInterpolatedString("dst_${! @schema_registry_subject }")
-	require.NoError(t, err)
+	nr := servicetest.NewInterpolatedString(t, "dst_${! @schema_registry_subject }")
 
 	t.Log("And: migrator is configured with name resolver")
 	conf := migrator.SchemaRegistryMigratorConfig{

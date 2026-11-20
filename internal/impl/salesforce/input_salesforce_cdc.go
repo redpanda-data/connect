@@ -84,7 +84,7 @@ Use a different Salesforce input instead if:
 
 == Metadata
 
-Every emitted message has:
+Every streamed event has:
 
 - ` + "`topic`" + `: The full Pub/Sub topic path (for example, "/event/Order__e").
 - ` + "`replay_id`" + `: The Pub/Sub replay ID in hex (streaming events only).
@@ -98,6 +98,8 @@ CDC events also carry:
 Platform Events also carry:
 
 - ` + "`event_uuid`" + `: The Salesforce ` + "`EventUuid`" + ` extracted from the payload (the canonical dedup key), when present.
+
+Snapshot rows carry only ` + "`sobject`" + ` and ` + "`operation`" + ` (` + "`read`" + `). They have no ` + "`topic`" + ` or ` + "`replay_id`" + `.
 
 == Authentication
 
@@ -117,7 +119,7 @@ Each ` + "`/data/...`" + ` topic requires Change Data Capture to be enabled for 
 			Example([]string{"Account", "/event/Order__e"}).
 			Example([]string{"Opportunity", "MyCustom__c", "/event/Sync_Requested__e"})).
 		Field(service.NewBoolField(sfciFieldStreamSnapshot).
-			Description("When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped; they have no REST equivalent.").
+			Description("When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped; they have no REST equivalent. When `topics` includes the CDC firehose (`/data/ChangeEvents`), the snapshot reads every queryable sObject in the org, not only the CDC-enabled ones. A built-in list of sObjects is always skipped.").
 			ShortDescription("Paginate a full REST snapshot of every CDC sObject in topics before opening a streaming subscription.").
 			Default(true)).
 		Field(service.NewStringEnumField(sfciFieldReplayPreset, sfciReplayLatest, sfciReplayEarliest).

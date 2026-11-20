@@ -23,6 +23,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestCOWFormatVersion1Integration creates a format-version-1 table through the
@@ -61,8 +63,7 @@ func TestCOWFormatVersion1Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, created.Metadata().Version(), "table must be created at format version 1")
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,

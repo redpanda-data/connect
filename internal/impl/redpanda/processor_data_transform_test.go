@@ -28,6 +28,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func defaultConfig() dataTransformConfig {
@@ -113,8 +115,7 @@ func testDataTransformProcessorOutOfMemory(t *testing.T, wasm []byte) {
 func testDataTransformProcessorKeys(t *testing.T, wasm []byte) {
 	cfg := defaultConfig()
 	var err error
-	cfg.inputKey, err = service.NewInterpolatedString(`${! metadata("example_input_key") }`)
-	require.NoError(t, err)
+	cfg.inputKey = servicetest.NewInterpolatedString(t, `${! metadata("example_input_key") }`)
 	outputKeyField := "example_output_key"
 	cfg.outputKeyField = &outputKeyField
 	proc, err := newDataTransformProcessor(wasm, cfg, service.MockResources())

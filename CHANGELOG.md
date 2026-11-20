@@ -3,6 +3,31 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.119.0 - 2026-11-20
+
+### Added
+
+- bloblang: Added native prune_empty method to remove null values, empty arrays, and empty objects from documents, with 16x performance improvement over recursive map implementations. ([@Leward](https://github.com/Leward), [#5238](https://github.com/redpanda-data/connect/pull/5238))
+- iceberg: Iceberg now automatically expires old snapshots based on commit.max_snapshot_age to prevent metadata file bloat and catalog size limit breaches. ([@Jeffail](https://github.com/Jeffail), [#5218](https://github.com/redpanda-data/connect/pull/5218))
+- iceberg: Iceberg now enables manifest merging on tables when commit.manifest_merge_enabled is configured, reducing metadata overhead. ([@Jeffail](https://github.com/Jeffail), [#5219](https://github.com/redpanda-data/connect/pull/5219))
+- kafka: Kafka output now warns and counts when the broker rejects messages, with configurable warning intervals. ([@squiidz](https://github.com/squiidz), [#5186](https://github.com/redpanda-data/connect/pull/5186))
+- telemetry: Telemetry now reports container CPU and memory limits in millicores and bytes, enabling accurate compute unit tracking for cloud deployments. ([@prakhargarg105](https://github.com/prakhargarg105), [#5244](https://github.com/redpanda-data/connect/pull/5244))
+
+### Fixed
+
+- aws_dynamodb: DynamoDB output now continues writing the rest of the batch when individual messages fail to build. ([@squiidz](https://github.com/squiidz), [#5189](https://github.com/redpanda-data/connect/pull/5189))
+- aws_kinesis: Kinesis shard discovery now properly follows ListShards pagination to discover all shards. ([@squiidz](https://github.com/squiidz), [#5190](https://github.com/redpanda-data/connect/pull/5190))
+- general: Credentials in connection strings, URLs, and configuration are now redacted from error messages and logs across all connectors and components. ([@Jeffail](https://github.com/Jeffail), [#4975](https://github.com/redpanda-data/connect/pull/4975))
+- iceberg: Iceberg prohibited-key retry now runs correctly when max_retries is 1 instead of never executing. ([@Jeffail](https://github.com/Jeffail), [#5217](https://github.com/redpanda-data/connect/pull/5217))
+- influxdb: InfluxDB metrics output now properly applies the timeout field to write operations, preventing indefinite hangs. ([@Leward](https://github.com/Leward), [#5210](https://github.com/redpanda-data/connect/pull/5210))
+- kafka: Kafka output now correctly sends empty or null output keys as null instead of serialized values. ([@squiidz](https://github.com/squiidz), [#5191](https://github.com/redpanda-data/connect/pull/5191))
+- oracledb_cdc: Concurrent pipeline starts on the same table no longer fail when both attempt to create the checkpoint cache table simultaneously. ([@Leward](https://github.com/Leward), [#4887](https://github.com/redpanda-data/connect/pull/4887))
+
+### Changed
+
+- azure_queue_storage: Rejected messages are now redelivered instead of deleted, with a configurable visibility timeout reset option. ([@squiidz](https://github.com/squiidz), [#5188](https://github.com/redpanda-data/connect/pull/5188))
+- cli: CLI dry-run help text now better explains what it does and which files it reads. ([@JakeSCahill](https://github.com/JakeSCahill), [#5194](https://github.com/redpanda-data/connect/pull/5194))
+
 ## 4.118.0 - 2026-11-13
 
 ### Added

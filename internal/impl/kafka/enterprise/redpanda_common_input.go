@@ -81,7 +81,7 @@ func init() {
 				return nil, err
 			}
 
-			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+			if rdr, err = kafka.WrapBatchInputNackWarnings(conf, mgr, kafka.NackMetricNameRedpanda, rdr); err != nil {
 				return nil, err
 			}
 

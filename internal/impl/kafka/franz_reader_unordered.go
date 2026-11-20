@@ -577,7 +577,8 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 		var consumerLag *ConsumerLag
 		if f.consumerGroup != "" {
 			topicLagGauge := f.res.Metrics().NewGauge(f.lagMetricName, "topic", "partition")
-			consumerLag = NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
+			pendingGauge := f.res.Metrics().NewGauge(InputPendingMetricName)
+			consumerLag = NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, pendingGauge, f.topicLagRefreshPeriod)
 			consumerLag.Start()
 			defer consumerLag.Stop()
 		}

@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 type mockChatClient struct {
@@ -60,8 +62,7 @@ func TestChat(t *testing.T) {
 }
 
 func TestChatInterpolationError(t *testing.T) {
-	text, err := service.NewInterpolatedString(`${!throw("kaboom!")}`)
-	assert.NoError(t, err)
+	text := servicetest.NewInterpolatedString(t, `${!throw("kaboom!")}`)
 	p := chatProcessor{
 		baseProcessor: &baseProcessor{
 			client: &mockChatClient{},
@@ -70,6 +71,6 @@ func TestChatInterpolationError(t *testing.T) {
 		userPrompt: text,
 	}
 	input := service.NewMessage([]byte(faker.Paragraph()))
-	_, err = p.Process(t.Context(), input)
+	_, err := p.Process(t.Context(), input)
 	assert.Error(t, err)
 }

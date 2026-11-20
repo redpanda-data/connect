@@ -23,6 +23,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // assertCOWSnapshot loads the committed table through the REST catalog and
@@ -171,8 +173,7 @@ func TestCOWRowOperationKeyTypesIntegration(t *testing.T) {
 			))
 			require.NoError(t, err)
 
-			operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-			require.NoError(t, err)
+			operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 			router := infra.NewRouter(t, ns, tc.tbl,
 				WithRowOperation(icebergimpl.RowOpConfig{
 					Operation:        operation,
