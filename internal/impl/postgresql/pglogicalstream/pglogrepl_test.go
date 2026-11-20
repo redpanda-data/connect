@@ -602,6 +602,7 @@ func TestIntegrationValidatePublication(t *testing.T) {
 	// External mode supports PostgreSQL 12 or later. 12 cannot publish a
 	// partitioned table, 13 adds publish_via_partition_root and 15 adds row
 	// filters and column lists, which the queries read as NULL before then.
+	// TestIntegrationValidatePublicationAllTablesExcept covers 19.
 	for _, version := range []int{12, 14, 17} {
 		t.Run(strconv.Itoa(version), func(t *testing.T) {
 			testValidatePublication(t, version)
@@ -679,6 +680,10 @@ func testValidatePublication(t *testing.T, version int) {
 
 	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
 	require.NoError(t, validate("pub_all", []TableFQN{orders, users, events}))
+	// FOR ALL TABLES does not stream a table that does not exist, so it fails
+	// like any other publication.
+	err = validate("pub_all", []TableFQN{{schema, `"no_such_table"`}})
+	require.ErrorContains(t, err, `FOR ALL TABLES publication pub_all does not stream table(s) "public"."no_such_table"`)
 
 	// A publication that leaves out updates or deletes would silently drop
 	// them, so it fails, naming the option.
@@ -722,6 +727,96 @@ func testValidatePublication(t *testing.T, version int) {
 	filtered, err = ValidatePublication(ctx, conn, "pub_all_columns", []TableFQN{orders})
 	require.NoError(t, err)
 	assert.Empty(t, filtered, "a column list naming every column filters nothing")
+}
+
+// TestIntegrationValidatePublicationAllTablesExcept checks that
+// ValidatePublication rejects a configured table that a FOR ALL TABLES
+// publication excludes with EXCEPT.
+//
+// Context:
+//   - PostgreSQL 19 adds FOR ALL TABLES EXCEPT (TABLE ...). puballtables is
+//     still true, but the excluded tables do not stream.
+//
+// Expected behavior:
+//   - A table that the publication does not exclude is accepted.
+//   - An excluded table is rejected, so the input fails to start instead of
+//     silently not streaming the table.
+//   - The error does not suggest ALTER PUBLICATION ... ADD TABLE, because
+//     PostgreSQL rejects it on a FOR ALL TABLES publication.
+//
+// The test runs on PostgreSQL 19 only, since older versions have no EXCEPT.
+func TestIntegrationValidatePublicationAllTablesExcept(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstanceVersion(t, 19)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	for _, sql := range []string{
+		"CREATE TABLE orders (id serial PRIMARY KEY);",
+		"CREATE TABLE users (id serial PRIMARY KEY);",
+		"CREATE PUBLICATION pub_except FOR ALL TABLES EXCEPT (TABLE users);",
+	} {
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"orders"`}})
+	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"users"`}})
+	require.ErrorContains(t, err, `"public"."users"`)
+	assert.ErrorContains(t, err, "SET ALL TABLES EXCEPT")
+}
+
+// TestIntegrationValidatePublicationForeignPartition checks that a foreign
+// table partition does not stop a partitioned table from counting as covered.
+//
+// Context:
+//   - A write to a foreign table goes to the remote server, so it never reaches
+//     this server's WAL and no publication can stream it.
+//   - FOR TABLE of a partitioned table lists its foreign partitions in
+//     pg_publication_tables. FOR ALL TABLES leaves them out.
+//
+// Expected behavior: the partitioned table is covered with both kinds of
+// publication, since every partition that can stream is published.
+func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	for _, sql := range []string{
+		"CREATE EXTENSION postgres_fdw;",
+		"CREATE SERVER archive FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'dbname');",
+		"CREATE TABLE events (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE FOREIGN TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') SERVER archive;",
+		"CREATE PUBLICATION pub_all FOR ALL TABLES;",
+		"CREATE PUBLICATION pub_events FOR TABLE events;",
+	} {
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+
+	events := []TableFQN{{`"public"`, `"events"`}}
+	_, err = ValidatePublication(ctx, conn, "pub_all", events)
+	require.NoError(t, err)
+	_, err = ValidatePublication(ctx, conn, "pub_events", events)
+	require.NoError(t, err)
 }
 
 // TestIntegrationBackfillRequiresTablePublishedAsItself checks the
