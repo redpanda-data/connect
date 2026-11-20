@@ -16,14 +16,7 @@ Two tasks in `taskfiles/snyk.yml`:
 
 ## Which version `fix` upgrades to
 
-By default (`UPGRADE=latest`), each module goes to the **newest release that isn't a breaking change**, as long as it still includes the version Snyk requires:
-
-- **v1 and above:** the newest release with the same major version as the fix. For example, grpc needing `>= v1.83.2` goes to the newest `v1.x.y`.
-- **v0:** the newest patch on the fix's `0.minor` line. Semver treats v0 minor bumps as breaking, so `golang.org/x/net` needing `v0.53.0` goes to the newest `v0.53.x`, not `v0.54.0`.
-- **Not considered:** pre-releases (`-rc`, `-dev`, etc.) and retracted versions.
-- **Fallback:** if `go list -m -versions` fails, for example because the module is private or you're offline, the version Snyk requires is used.
-
-`UPGRADE=fix` goes to exactly the minimum version Snyk says fixes the CVE instead. The plan prints `fix needs >= vX` whenever the chosen version is higher than the one Snyk requires.
+Each module goes to exactly the **minimum version Snyk says fixes the CVE**. This keeps security bumps small, easy to review and backport, and avoids pulling in unrelated dependency bumps or a newer `go` directive. If the user wants a newer version than that, bump it by hand with `go get` after the fix.
 
 `target/` is gitignored. Raw Snyk output for each project is in `target/snyk/raw/`, and the per-project `fix` plans and `go get` logs are in `target/snyk/fix/`.
 
@@ -43,7 +36,7 @@ task snyk:report SNYK_FILES="go.mod public/bundle/free/go.mod"
 task snyk:fix FILES="public/bundle/free/go.mod"   # narrows fix further; must be in the report
 ```
 
-`snyk:fix` only touches projects that are both in `report.json` and in `SNYK_FILES` (or `FILES`). Any other project still in an old report is printed as `not in SNYK_FILES/FILES, skipping`.
+`snyk:fix` only touches projects that are both in `report.json` and in `SNYK_FILES` (or `FILES`). Other projects in an old report are ignored. A listed project that isn't in the report is printed as `not in target/snyk/report.json, skipping`; rerun `snyk:report` to include it.
 
 If someone adds a new `go.mod` to the repo, it won't be scanned until it's added to `SNYK_FILES`. This finds every module:
 
@@ -55,7 +48,7 @@ find . -name go.mod -not -path '*/vendor/*' | sed 's|^\./||' | sort
 
 1. **Scan**: `task snyk:report`. This takes about 1–2 minutes for every module, most of it on `go.mod` and the bundles. It ends by printing a summary in the form `package  from -> to  CVEs`, where `NO FIX` means Snyk knows of no fixed version.
 2. **Plan**: `task snyk:fix DRY_RUN=true`. This prints a `plan go get ...` or `skip ...: <reason>` line for each module and changes nothing. Show the plan to the user before applying it.
-3. **Apply**: `task snyk:fix` (or `task snyk:fix UPGRADE=fix` for the minimum versions only). This runs `go get` for each module and `go mod tidy` for each project, then runs `task lint` and `task test` if anything was updated. Use `VERIFY=false` to skip lint and test, for example to batch several runs and test once at the end.
+3. **Apply**: `task snyk:fix`. This runs `go get` for each module and `go mod tidy` for each project, then runs `task lint` and `task test` if anything was updated. Use `VERIFY=false` to skip lint and test, for example to batch several runs and test once at the end.
 4. **Review**: run `git status` and `git diff -- '*go.mod'`, and check `fix.json` for anything `failed` or `skipped`.
 
 Always rerun `snyk:report` after the dependencies change, including after a `fix` or a branch switch. `fix` works from whatever is in `report.json`, but it never downgrades: a module already at or above the target is skipped as `already at vX`.
@@ -67,17 +60,19 @@ Always rerun `snyk:report` after the dependencies change, including after a `fix
 - `projects[]` has one entry per project, with `file`, `exitCode`, `error` and `upgrades[]`. Each upgrade has full `vulnerabilities[]` detail: `id`, `title`, `severity`, `fixedIn`, `cves` and `ghsa`.
 - **How `to` is chosen:** Snyk's `fixedIn` often lists one fixed version per maintained branch, for example `["25.0.6", "26.1.4", "27.1.1"]`. For each advisory, the report takes the lowest fixed version at or above `from` on the same line (major, or `0.minor` for v0), so a module on v26 gets `26.1.4`. Only when the branch has no fix does it move to the next line. The chosen version for each advisory is in `vulnerabilities[].fixVersion`.
 - **Split entries:** if one package's advisories are fixed on different lines, the package appears once per line. For example, docker might have one entry `-> 26.1.4` and another `-> 27.3.0` for an advisory that's only fixed on 27. `snyk:fix` applies the same-major one and skips the other as a major bump.
-- A non-null `error` means Snyk itself failed for that project (exit code 2 or 3). That isn't a vulnerability finding.
+- A non-null `error` means Snyk itself failed for that project (exit code 2 or 3, or output that isn't valid JSON). That isn't a vulnerability finding. The project still gets an entry, but `snyk:report` exits non-zero and lists the failed projects, so a failed scan can't pass for a clean one.
 
-`fix.json`: `results[]` has `project`, `module`, `from`, `to` (the version applied), `required` (the minimum version Snyk says fixes it), `status` and `message`:
+`fix.json`: `results[]` has `project`, `module`, `from`, `to` (the version applied, which is the minimum version Snyk says fixes it), `status` and `message`:
 
 | status | meaning |
 |---|---|
 | `updated` | `go get` succeeded; `message` lists the CVEs fixed |
 | `planned` | dry run only |
 | `skipped` | not attempted; `message` has the reason |
-| `failed` | `go get` failed; `message` is the last line of its output, and the full log is at `target/snyk/fix/<project path with / as _>.plan.json.get.log` |
+| `failed` | `go get` failed; `message` is the last line of its output, and the full log is at `target/snyk/fix/<project path with / as _>.plan.get.log` |
 | `error` | `go list -m all` or `go mod tidy` failed for the whole project |
+
+`snyk:fix` exits non-zero if any result is `failed` or `error`, and prints each one. A `failed` `go get` still lets lint and test run on the modules that did update. An `error` skips lint and test, because the tree may not be tidy.
 
 Quick queries:
 
@@ -101,3 +96,17 @@ jq -c '.results[] | select(.status == "failed" or .status == "skipped")' target/
 - **Vendor directories:** `fix` doesn't regenerate `vendor/` in the bundles. Run `go mod vendor` in a bundle only if the user needs vendored builds.
 - **Lint and test scope:** both run from the repo root, so they check the root module's code. They don't build the bundle or `testdata` modules separately. For those, run `go build ./...` in the module directory.
 - **Extra Snyk arguments:** anything after `--` is passed to `snyk test`, for example `task snyk:report -- --severity-threshold=high`.
+
+## Changing the tasks
+
+The version and upgrade logic is in jq programs under `taskfiles/snyk/`. The taskfile only runs them:
+- `semver.jq`: shared helpers, loaded with `-L taskfiles/snyk` and `include "semver";`. These are the version sort key, release lines, picking the fix for a branch and major-version skips.
+- `project.jq`: turns one project's raw Snyk output into a `report.json` project entry. It is run with `-R -s` so that output that isn't JSON still becomes an entry with `error` set.
+- `summary.jq`: merges the project entries into `report.json`.
+- `plan.jq`: resolves packages to modules and decides what `fix` applies or skips. It emits `fix.json` result rows, `skipped` or `pending`; the task records the skips as they are and turns `pending` into `planned`, `updated` or `failed`.
+
+You can try a helper on its own, for example:
+
+```bash
+jq -n -L taskfiles/snyk 'include "semver"; ["27.1.1","28.5.3","29.0.1"] | pickfix("28.5.2+incompatible")'
+```

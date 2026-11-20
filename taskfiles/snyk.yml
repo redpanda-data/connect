@@ -4,8 +4,8 @@ vars:
   SNYK_DIR: '{{.TARGET_DIR}}/snyk'
   SNYK_REPORT: '{{.SNYK_DIR}}/report.json'
   SNYK_FIX_REPORT: '{{.SNYK_DIR}}/fix.json'
-  # jq filter that turns an array of fields into one row for `IFS=$'\x1f' read`, with "-" for empty fields.
-  SNYK_ROW: 'map(if . == null or . == "" then "-" else tostring end) | join("\u001f")'
+  # jq programs used by the tasks, and the "semver" module they include.
+  SNYK_JQ: '{{.TASKFILE_DIR}}/snyk'
   # Go modules to scan. Comment out any you don't care about.
   # Override from the CLI with a space-separated string: task snyk:report SNYK_FILES="go.mod ..."
   SNYK_FILES:
@@ -45,80 +45,23 @@ tasks:
           cp "{{.SNYK_DIR}}/raw/$name.go.mod.bak" "$d/go.mod"
           [ -f "{{.SNYK_DIR}}/raw/$name.go.sum.bak" ] && cp "{{.SNYK_DIR}}/raw/$name.go.sum.bak" "$d/go.sum"
           if [ "$rc" -ge 2 ]; then echo "    snyk exited $rc for $f (recorded in report)"; fi
-          jq --arg file "$f" --argjson rc "$rc" -f /dev/stdin "{{.SNYK_DIR}}/raw/$name.json" \
-            > "{{.SNYK_DIR}}/projects/$name.json" <<'JQ'
-        # Loose semver sort key: numeric parts, then 0 for pre-release / 1 for release.
-        def vkey: ltrimstr("v") | split("+")[0] | split("-") as $p
-          | ($p[0] | split(".") | map(tonumber? // 0)) + [if ($p | length) > 1 then 0 else 1 end];
-        # Release line: the major version, or major.minor for v0 (where minor bumps are breaking).
-        def line: ltrimstr("v") | split("+")[0] | split("-")[0] | split(".") | if .[0] == "0" then .[0:2] else .[0:1] end;
-        # fixedIn lists one fixed version per maintained branch. Pick the fix for the branch $from is
-        # on: the lowest version >= $from on the same line, else the lowest >= $from on any line,
-        # else the highest listed.
-        def pickfix($from):
-          map(select(vkey >= ($from | vkey))) as $ge
-          | ($ge | map(select(line == ($from | line))) | sort_by(vkey) | first)
-            // ($ge | sort_by(vkey) | first)
-            // (sort_by(vkey) | last);
-        def vuln: {id, title, severity, fixedIn, fixVersion: .fix,
-                   cves: (.identifiers.CVE // []), ghsa: (.identifiers.GHSA // [])};
-
-        (if type == "array" then .[0] else . end) as $r
-        | ([$r.vulnerabilities[]?] | unique_by([.id, .packageName, .version])) as $vs
-        | {
-            file: $file,
-            packageManager: $r.packageManager,
-            exitCode: $rc,
-            error: (if $rc >= 2 then ($r.error // "snyk failed") else null end),
-            upgrades: (
-              # One entry per package, version and release line of the fix. Advisories whose only
-              # fix is on a newer line get their own entry, so they don't drag the same-line fixes
-              # into a major bump. Advisories with no fix are attached to the first entry.
-              $vs | group_by([.packageName, .version]) | map(
-                .[0].packageName as $pkg | .[0].version as $from
-                | map(. + {fix: (if (.fixedIn | length) > 0 then (.fixedIn | pickfix($from)) else null end)})
-                | map(select(.fix == null)) as $unfixed
-                | (map(select(.fix != null)) | group_by(.fix | line) | sort_by(.[0].fix | vkey)) as $lines
-                | (if ($lines | length) == 0 then [[]] else $lines end)
-                | to_entries | map(
-                    (.value + (if .key == 0 then $unfixed else [] end)) as $g
-                    | {
-                        package: $pkg,
-                        from: $from,
-                        to: ([$g[] | .fix // empty] | sort_by(vkey) | last),
-                        fixedCves: ([$g[] | select(.fix != null) | .identifiers.CVE[]?] | unique),
-                        unfixedCves: ([$g[] | select(.fix == null) | .identifiers.CVE[]?] | unique),
-                        vulnerabilities: ($g | map(vuln) | sort_by(.id))
-                      })
-              ) | flatten | sort_by(.to == null, .package, (.to // "0" | vkey))
-            )
-          }
-        JQ
+          jq -R -s -L '{{.SNYK_JQ}}' --arg file "$f" --argjson rc "$rc" -f '{{.SNYK_JQ}}/project.jq' \
+            "{{.SNYK_DIR}}/raw/$name.json" > "{{.SNYK_DIR}}/projects/$name.json"
         done
-      - |
-        jq -s '{
-          generatedAt: (now | todate),
-          projects: .,
-          summary: (
-            [.[] | .file as $f | .upgrades[] | . + {project: $f}]
-            | group_by([.package, .from, .to])
-            | map({
-                package: .[0].package,
-                from: .[0].from,
-                to: .[0].to,
-                fixedCves: ([.[].fixedCves[]] | unique),
-                unfixedCves: ([.[].unfixedCves[]] | unique),
-                projects: (map(.project) | unique)
-              })
-            | sort_by(.to == null, .package)
-          )
-        }' {{.SNYK_DIR}}/projects/*.json > '{{.SNYK_REPORT}}'
+      - jq -s -f '{{.SNYK_JQ}}/summary.jq' {{.SNYK_DIR}}/projects/*.json > '{{.SNYK_REPORT}}'
       - |
         echo "Wrote {{.SNYK_REPORT}}"
         jq -r '.summary[] | "  \(.package)  \(.from) -> \(.to // "NO FIX")  \((.fixedCves + .unfixedCves) | join(","))"' '{{.SNYK_REPORT}}'
+        # A failed scan must not pass for a clean one.
+        failed=$(jq -r '.projects[] | select(.error != null) | "  \(.file) (exit \(.exitCode)): \(.error)"' '{{.SNYK_REPORT}}')
+        if [ -n "$failed" ]; then
+          echo "snyk test failed for:"
+          echo "$failed"
+          exit 1
+        fi
 
   fix:
-    desc: Apply the upgrades in target/snyk/report.json with go get for the projects in SNYK_FILES then lint and test (UPGRADE=fix for the minimum fixed version instead of the latest compatible one, DRY_RUN=true to print the plan, VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
+    desc: Upgrade the modules in target/snyk/report.json to their minimum fixed versions with go get for the projects in SNYK_FILES, then lint and test (DRY_RUN=true to print the plan, VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
     silent: true
     preconditions:
       - sh: test -f '{{.SNYK_REPORT}}'
@@ -127,9 +70,6 @@ tasks:
       DRY_RUN: '{{.DRY_RUN | default "false"}}'
       # Run `task lint` and `task test` after a real run that updated something.
       VERIFY: '{{.VERIFY | default "true"}}'
-      # latest: newest release in the fix's major line (patch line for v0), never below the fix.
-      # fix: exactly the minimum version Snyk says fixes the CVE.
-      UPGRADE: '{{.UPGRADE | default "latest"}}'
       # Projects to fix: FILES if given, otherwise SNYK_FILES. Report entries outside this are ignored.
       FILES: '{{if .FILES}}{{.FILES}}{{else if kindIs "string" .SNYK_FILES}}{{.SNYK_FILES}}{{else}}{{join " " .SNYK_FILES}}{{end}}'
     env:
@@ -141,136 +81,63 @@ tasks:
         results="$root/{{.SNYK_DIR}}/fix/results.jsonl"
         : > "$results"
 
-        record() { # project module from to status message [required]
-          jq -nc --arg project "$1" --arg module "$2" --arg from "$3" --arg to "$4" \
-            --arg status "$5" --arg message "$6" --arg required "${7:-$4}" \
-            '{project: $project, module: $module, from: $from, to: $to, required: $required, status: $status, message: $message}' >> "$results"
+        project_error() { # message
+          jq -nc --arg project "$file" --arg message "$1" \
+            '{project: $project, module: "", from: "", to: "", status: "error", message: $message}' >> "$results"
         }
 
-        # Newest non-prerelease, non-retracted version of $1 in the same major line as $2 (same
-        # 0.minor line for v0, where minor bumps are breaking), and never below $2. Echoes $2 if
-        # the version list can't be fetched.
-        latest_compatible() { # module required-version
-          v=$( (cd "$dir" && go list -m -versions -json "$1" 2>/dev/null) | jq -r --arg req "$2" '
-            def vkey: ltrimstr("v") | split("+")[0] | split("-") as $p
-              | ($p[0] | split(".") | map(tonumber? // 0)) + [if ($p | length) > 1 then 0 else 1 end];
-            def line: ltrimstr("v") | split("+")[0] | split(".") | if .[0] == "0" then .[0:2] else .[0:1] end;
-            [.Versions[]? | select(contains("-") | not)
-              | select(line == ($req | line)) | select(vkey >= ($req | vkey))]
-            | sort_by(vkey) | last // $req' 2>/dev/null)
-          echo "${v:-$2}"
-        }
-
-        for i in $(jq -r '.projects | keys[]' '{{.SNYK_REPORT}}'); do
-          file=$(jq -r ".projects[$i].file" '{{.SNYK_REPORT}}')
-          dir=$(dirname "$file")
-          name=$(echo "$file" | tr '/' '_')
-          plan="$root/{{.SNYK_DIR}}/fix/$name.plan.json"
-
-          if ! echo " {{.FILES}} " | grep -q " $file "; then
-            echo "==> $file: not in SNYK_FILES/FILES, skipping"
+        for file in {{.FILES}}; do
+          proj=$(jq -c --arg f "$file" '.projects[] | select(.file == $f)' '{{.SNYK_REPORT}}')
+          if [ -z "$proj" ]; then
+            echo "==> $file: not in {{.SNYK_REPORT}}, skipping"
             continue
           fi
-
-          [ "$(jq ".projects[$i].upgrades | map(select(.to != null)) | length" '{{.SNYK_REPORT}}')" = 0 ] && continue
+          [ "$(jq '[.upgrades[] | select(.to != null)] | length' <<< "$proj")" = 0 ] && continue
           echo "==> $file"
+          dir=$(dirname "$file")
+          plan="$root/{{.SNYK_DIR}}/fix/$(echo "$file" | tr '/' '_').plan"
 
-          # Snyk reports Go package paths; resolve each to its module via the module graph.
           # go list can write go.sum under -mod=mod; keep the tree untouched until go get runs.
           cp "$dir/go.mod" "$plan.go.mod.bak"; [ -f "$dir/go.sum" ] && cp "$dir/go.sum" "$plan.go.sum.bak"
           lrc=0; (cd "$dir" && go list -m -json all) > "$plan.mods" 2> "$plan.err" || lrc=$?
           cp "$plan.go.mod.bak" "$dir/go.mod"; [ -f "$plan.go.sum.bak" ] && cp "$plan.go.sum.bak" "$dir/go.sum"
           if [ "$lrc" != 0 ]; then
-            record "$file" "" "" "" "error" "go list -m all failed: $(tail -1 "$plan.err")"
+            project_error "go list -m all failed: $(tail -1 "$plan.err")"
             echo "    go list -m all failed, skipping project"
             continue
           fi
 
-          jq -n --slurpfile mods "$plan.mods" --argjson proj "$(jq ".projects[$i]" '{{.SNYK_REPORT}}')" -f /dev/stdin > "$plan" <<'JQ'
-        def vkey: ltrimstr("v") | split("+")[0] | split("-") as $p
-          | ($p[0] | split(".") | map(tonumber? // 0)) + [if ($p | length) > 1 then 0 else 1 end];
-        # Major version implied by a module path (/vN or gopkg.in .vN); null when the path has no suffix.
-        def pathmajor: ((capture("/v(?<n>[0-9]+)$") // capture("[.]v(?<n>[0-9]+)$")).n | tonumber) // null;
-        # Major version of a version string; v0 and v1 share a path, so both count as 1.
-        def vermajor: ltrimstr("v") | split(".")[0] | (tonumber? // 0) | if . < 2 then 1 else . end;
-        # Why the target can't be reached with a plain go get, or null if it can.
-        #  - /vN path: the target must be vN, otherwise the fix lives under a different import path.
-        #  - +incompatible (v2+ without /vN): Go accepts any major on the same path, but only same-major
-        #    upgrades are applied unattended.
-        #  - otherwise: the path is the v0/v1 path, so a v2+ target needs the /vN path.
-        def majorskip:
-          (.module | pathmajor) as $pm | (.target | vermajor) as $tm | (.current | vermajor) as $cm
-          | if $pm != null then
-              (if $pm != $tm then "fix is in major version \($tm), needs a manual migration to the /v\($tm) module path" else null end)
-            elif (.current | endswith("+incompatible")) then
-              (if $cm != $tm then "fix is a major version bump (v\($cm) -> v\($tm)) of a +incompatible module, review API changes and upgrade manually" else null end)
-            elif $tm != 1 then "fix is in major version \($tm), needs a manual migration to the /v\($tm) module path"
-            else null end;
-
-        [$proj.upgrades[] | select(.to != null) | . as $u
-          | ([$mods[] | select(.Main | not) | .Path as $p
-              | select($u.package == $p or ($u.package | startswith($p + "/")))]
-             | sort_by(.Path | length) | last) as $m
-          | {package: $u.package, module: $m.Path, current: $m.Version, replaced: ($m.Replace != null),
-             target: ("v" + ($u.to | ltrimstr("v"))), cves: $u.fixedCves}]
-        # One entry per module: go get the highest target that needs no manual major migration, and
-        # list any targets that do need one as separate skipped entries so their CVEs aren't lost.
-        | group_by(.module)
-        | map(
-            (.[0] | {module, current, replaced}) as $base
-            | def entry: $base + {target: (map(.target) | sort_by(vkey) | last),
-                                  packages: (map(.package) | unique), cves: ([.[].cves[]] | unique)};
-            # Unresolved packages all share module null, so keep them as one entry each.
-            if $base.module == null then map($base + {target, packages: [.package], cves, skip: "package not found in the module graph"})
-            elif $base.replaced then [entry + {skip: "module is replaced in go.mod"}]
-            else
-              map(. + {mskip: ($base + {target} | majorskip)})
-              | (map(select(.mskip == null)) | if length > 0 then [entry] else [] end
-                 | map(. + {skip: (if (.current | vkey) >= (.target | vkey) then "already at \(.current)" else null end)}))
-                + (map(select(.mskip != null)) | group_by(.mskip) | map(entry + {skip: .[0].mskip}))
-            end)
-        | flatten
-        | sort_by(.module, (.skip != null))
-        JQ
-
-          # Record and print skips.
-          # Rows are joined with \x1f and empty fields are written as "-". Task's shell (mvdan/sh)
-          # drops empty fields in `read` whatever IFS is, which would shift every later column.
-          jq -r '.[] | select(.skip != null) | [(.module // .packages[0]), .current, .target, .skip] | {{.SNYK_ROW}}' "$plan" |
-            while IFS=$'\x1f' read -r mod cur tgt why; do
-              [ "$cur" = - ] && cur=""
-              echo "    skip  $mod $cur -> $tgt: $why"
-              record "$file" "$mod" "$cur" "$tgt" "skipped" "$why"
-            done
+          # One fix.json result row per module, "skipped" or "pending".
+          jq -c -n -L '{{.SNYK_JQ}}' --arg project "$file" --slurpfile mods "$plan.mods" --argjson proj "$proj" \
+            -f '{{.SNYK_JQ}}/plan.jq' > "$plan.jsonl"
+          jq -c 'select(.status == "skipped")' "$plan.jsonl" | tee -a "$results" |
+            jq -r '"    skip  \(.module) \(.from) -> \(.to): \(.message)"'
+          if [ "{{.DRY_RUN}}" = "true" ]; then
+            jq -c 'select(.status == "pending") | .status = "planned"' "$plan.jsonl" | tee -a "$results" |
+              jq -r '"    plan  go get \(.module)@\(.to)  (from \(.from); \(.message))"'
+            continue
+          fi
 
           changed=0
-          while IFS=$'\x1f' read -r mod cur req cves; do
-            [ "$cur" = - ] && cur=""; [ "$cves" = - ] && cves=""
-            tgt="$req"
-            [ "{{.UPGRADE}}" = "latest" ] && tgt=$(latest_compatible "$mod" "$req")
-            note="$cves"; [ "$tgt" != "$req" ] && note="$cves; fix needs >= $req"
-            if [ "{{.DRY_RUN}}" = "true" ]; then
-              echo "    plan  go get $mod@$tgt  (from $cur; $note)"
-              record "$file" "$mod" "$cur" "$tgt" "planned" "$cves" "$req"
-              continue
-            fi
-            echo "    get   $mod $cur -> $tgt  ($note)"
+          while read -r r; do
+            mod=$(jq -r .module <<< "$r"); tgt=$(jq -r .to <<< "$r")
+            jq -r '"    get   \(.module) \(.from) -> \(.to)  (\(.message))"' <<< "$r"
             if (cd "$dir" && go get "$mod@$tgt") > "$plan.get.log" 2>&1; then
-              record "$file" "$mod" "$cur" "$tgt" "updated" "$cves" "$req"
+              jq -c '.status = "updated"' <<< "$r" >> "$results"
               changed=1
             else
               msg=$(grep -v '^go: downloading' "$plan.get.log" | tail -1)
               echo "          failed: $msg"
-              record "$file" "$mod" "$cur" "$tgt" "failed" "$msg" "$req"
+              jq -c --arg msg "$msg" '.status = "failed" | .message = $msg' <<< "$r" >> "$results"
             fi
-          done < <(jq -r '.[] | select(.skip == null) | [.module, .current, .target, (.cves | join(","))] | {{.SNYK_ROW}}' "$plan")
+          done < <(jq -c 'select(.status == "pending")' "$plan.jsonl")
 
           if [ "$changed" = 1 ]; then
             echo "    go mod tidy"
             if ! (cd "$dir" && GOFLAGS= go mod tidy) > "$plan.tidy.log" 2>&1; then
               msg=$(tail -1 "$plan.tidy.log")
               echo "          failed: $msg"
-              record "$file" "" "" "" "error" "go mod tidy failed: $msg"
+              project_error "go mod tidy failed: $msg"
             fi
           fi
         done
@@ -279,12 +146,27 @@ tasks:
         echo "Wrote {{.SNYK_FIX_REPORT}}"
         jq -r '.results | group_by(.status)[] | "  \(.[0].status): \(length)"' '{{.SNYK_FIX_REPORT}}'
       - |
-        if [ "{{.DRY_RUN}}" = "true" ] || [ "{{.VERIFY}}" != "true" ]; then exit 0; fi
-        if [ "$(jq '[.results[] | select(.status == "updated")] | length' '{{.SNYK_FIX_REPORT}}')" = 0 ]; then
+        count() { jq "[.results[] | select(.status == \"$1\")] | length" '{{.SNYK_FIX_REPORT}}'; }
+        rc=0
+        if [ "{{.DRY_RUN}}" = "true" ] || [ "{{.VERIFY}}" != "true" ]; then
+          :
+        elif [ "$(count error)" != 0 ]; then
+          # A failed go list or go mod tidy leaves a tree not worth linting or testing.
+          echo "Project errors, skipping lint and test"
+        elif [ "$(count updated)" = 0 ]; then
           echo "Nothing updated, skipping lint and test"
-          exit 0
+        else
+          # Run both so one failure doesn't hide the other.
+          echo "==> task lint"
+          '{{.TASK_EXE}}' lint || rc=1
+          echo "==> task test"
+          '{{.TASK_EXE}}' test || rc=1
         fi
-        echo "==> task lint"
-        '{{.TASK_EXE}}' lint
-        echo "==> task test"
-        '{{.TASK_EXE}}' test
+        failures=$(jq -r '.results[] | select(.status == "failed" or .status == "error")
+          | "  \(.status) \(.project)\(if .module != "" then " " + .module else "" end): \(.message)"' '{{.SNYK_FIX_REPORT}}')
+        if [ -n "$failures" ]; then
+          echo "Failures:"
+          echo "$failures"
+          rc=1
+        fi
+        exit $rc
