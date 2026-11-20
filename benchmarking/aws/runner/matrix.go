@@ -46,8 +46,11 @@ type MatrixRunner struct {
 	// /opt/bench/config.yaml staging path.
 	ConfigPaths map[string]pointConfigPaths
 	BinaryPath  string // path on the runner host to redpanda-connect
-	Bucket      string // S3 bucket where per-point Connect logs are uploaded
-	SessionID   string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
+	// MemoryPerVCPUBytes, when > 0, caps each point's Connect process at this
+	// many bytes per vCPU via a systemd scope. Zero leaves memory uncapped.
+	MemoryPerVCPUBytes int64
+	Bucket             string // S3 bucket where per-point Connect logs are uploaded
+	SessionID          string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
 	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
 	// per-point scraper curls every 10s. Empty disables the scraper, so callers
 	// without a Redpanda cluster (e.g. an early-stack bring-up) won't fail.
@@ -234,6 +237,7 @@ func (m *MatrixRunner) Run(
 			Streams:                  pt.Streams,
 			Key:                      key,
 			MemLimitGiB:              memLimitPerVCPU * n,
+			MemoryMaxBytes:           m.MemoryPerVCPUBytes * int64(n),
 			WarmupSec:                int(warmup.Seconds()),
 			DurationSec:              int(duration.Seconds()),
 			ConfigPath:               cfg.Single,
@@ -669,12 +673,15 @@ func (m *MatrixRunner) emitAggregated(ctx context.Context, samples []Sample, pro
 type benchScriptArgs struct {
 	VCPU        int
 	MemLimitGiB int
-	WarmupSec   int
-	DurationSec int
-	ConfigPath  string
-	BinaryPath  string
-	Bucket      string
-	SessionID   string
+	// MemoryMaxBytes, when > 0, wraps the launch in a systemd scope with a
+	// hard MemoryMax and no swap. Zero renders the historical script.
+	MemoryMaxBytes int64
+	WarmupSec      int
+	DurationSec    int
+	ConfigPath     string
+	BinaryPath     string
+	Bucket         string
+	SessionID      string
 	// RedpandaMetricsEndpoint is the legacy single-broker scrape target.
 	//
 	// Deprecated: prefer RedpandaMetricsEndpoints. Kept for back-compat with
@@ -803,8 +810,8 @@ func renderBenchScript(a benchScriptArgs) string {
 		// The core pin follows VCPU while GOMAXPROCS is independent: an arm can
 		// oversubscribe the runtime on a fixed core allocation. GOMEMLIMIT is
 		// vCPU-derived by the caller, so it is constant across an A/B's arms.
-		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
-			cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.launchCmd()),
+		fmt.Sprintf(`%staskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%s REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
+			a.memoryScopePrefix(), cpusetHi, a.gomaxprocs(), a.goMemLimit(), a.launchCmd()),
 		`PID=$!`,
 		// Heartbeat: every heartbeatSec(), echo the latest rolling-stats line
 		// so the operator can see throughput live. At the sweep default
@@ -890,4 +897,23 @@ func renderBenchScript(a benchScriptArgs) string {
 	}
 	lines = append(lines, `echo "log uploaded"`)
 	return strings.Join(lines, "\n")
+}
+
+// memoryScopePrefix returns the systemd-run wrapper that enforces
+// MemoryMaxBytes, or "" when no cap is configured.
+func (a benchScriptArgs) memoryScopePrefix() string {
+	if a.MemoryMaxBytes <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("systemd-run --scope --quiet -p MemoryMax=%d -p MemorySwapMax=0 ", a.MemoryMaxBytes)
+}
+
+// goMemLimit is the GOMEMLIMIT value. Under a hard cap it is 90% of
+// MemoryMaxBytes in plain bytes, so the GC works to stay under the cgroup
+// limit; otherwise the historical vCPU-derived GiB value.
+func (a benchScriptArgs) goMemLimit() string {
+	if a.MemoryMaxBytes > 0 {
+		return strconv.FormatInt(a.MemoryMaxBytes/10*9, 10)
+	}
+	return fmt.Sprintf("%dGiB", a.MemLimitGiB)
 }

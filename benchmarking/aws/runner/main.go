@@ -99,6 +99,9 @@ type benchOpts struct {
 	// raw artifacts are copied to — see uploadSoakResult. Unlike the
 	// session results bucket, this one is NOT force_destroy'd at teardown.
 	soakArchiveBucket string
+	// catalogBucket is the persistent bucket a completed bench sweep's
+	// catalogue entry is written to.
+	catalogBucket string
 	// preflightOn gates the concurrent-bench-session guard (see
 	// preflightCheck). Defaults to true; --preflight=off is the emergency
 	// escape hatch for an operator who is certain no other session is live.
@@ -134,6 +137,8 @@ func benchCmd(args []string) error {
 		"S3 bucket a soak run's result.json + raw artifacts are archived to, since the session results "+
 			"bucket is force_destroy'd at teardown. Created by the persistent terraform stack "+
 			"(`task aws:persistent`).")
+	catalogBucket := fs.String("catalog-bucket", defaultCatalogBucket,
+		"S3 bucket a completed bench sweep's results-catalogue entry is written to.")
 	preflight := &preflightFlag{on: true}
 	fs.Var(preflight, "preflight",
 		`"on" (default) or "off": guard against a concurrent bench session already holding the shared `+
@@ -162,6 +167,7 @@ func benchCmd(args []string) error {
 		licenseFile:       *licenseFile,
 		licenseSecret:     *licenseSecret,
 		soakArchiveBucket: *soakArchiveBucket,
+		catalogBucket:     *catalogBucket,
 		preflightOn:       preflight.on,
 		binaries:          binaries.m,
 	}
@@ -481,6 +487,7 @@ func runBench(opts benchOpts) (errOut error) {
 			return runnerConfigPaths(sets)
 		}(),
 		BinaryPath:               "/opt/bench/redpanda-connect",
+		MemoryPerVCPUBytes:       s.Infra.MemoryPerVCPUBytes,
 		Bucket:                   sharedOuts["results_bucket"],
 		SessionID:                sessionID,
 		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
@@ -527,11 +534,12 @@ func runBench(opts benchOpts) (errOut error) {
 	fmt.Println("[6/7] sweep complete")
 
 	result := &Result{
-		Scenario:     fmt.Sprintf("%s/%s", s.Stack, strings.TrimPrefix(s.Name, s.Stack+"-")),
-		ScenarioHash: hashScenario(s),
-		GitSHA:       gitSHA(opts.repoRoot),
-		StartedAt:    time.Now().Add(-totalDuration(s, len(points))).UTC(),
-		FinishedAt:   time.Now().UTC(),
+		Scenario:       fmt.Sprintf("%s/%s", s.Stack, strings.TrimPrefix(s.Name, s.Stack+"-")),
+		ScenarioHash:   hashScenario(s),
+		GitSHA:         gitSHA(opts.repoRoot),
+		ConnectVersion: gitDescribe(opts.repoRoot),
+		StartedAt:      time.Now().Add(-totalDuration(s, len(points))).UTC(),
+		FinishedAt:     time.Now().UTC(),
 		Infra: ResultInfra{
 			RunnerInstanceType:  s.Infra.Runner.InstanceType,
 			SourceInstanceClass: asString(s.Infra.Source["instance_class"]),
@@ -564,6 +572,13 @@ func runBench(opts benchOpts) (errOut error) {
 	jsonPath, err := WriteResultJSON(resultsDir, result)
 	if err != nil {
 		return err
+	}
+	if shouldCatalogue(s, result) {
+		// Non-fatal, like the soak archive upload below: a valid local result
+		// must not fail the run because the catalogue is unreachable.
+		if err := catalogueSweep(ctx, opts, s, result, sessionID, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: catalogue entry: %v\n", err)
+		}
 	}
 	mdPath := filepath.Join(opts.repoRoot, "docs/benchmark-results", s.Stack+".md")
 	if err := AppendMarkdown(mdPath, result, strings.TrimSpace(s.Description)); err != nil {

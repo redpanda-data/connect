@@ -1,0 +1,7 @@
+name: postgres-orders-sink
+connector: postgres_cdc
+direction: sink
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}

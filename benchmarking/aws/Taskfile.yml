@@ -83,3 +83,21 @@ tasks:
       - find terraform -type d -name '.terraform' -exec rm -rf {} +
       - find terraform -type f -name '.terraform.lock.hcl' -delete
       - echo "terraform caches cleaned; next aws:bench will re-init"
+
+  catalog:query:
+    desc: "Query the benchmark results catalogue (task catalog:query -- --input postgres_cdc --output redpanda --message-size 1200)"
+    dir: '.'
+    cmds:
+      - go run ./cmd/catalog query {{.CLI_ARGS}}
+
+  catalog:recommend:
+    desc: "Recommend CUs for a catalogue entry (task catalog:recommend -- --entry-id ID --target-mb-s 40)"
+    dir: '.'
+    cmds:
+      - go run ./cmd/catalog recommend {{.CLI_ARGS}}
+
+  catalog:import:
+    desc: "Import historical bench results into the catalogue (task catalog:import -- --results-root DIR --scenarios-root DIR --repo ../..)"
+    dir: '.'
+    cmds:
+      - go run ./cmd/catalog import {{.CLI_ARGS}}

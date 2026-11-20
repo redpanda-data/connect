@@ -100,5 +100,35 @@ resource "aws_s3_bucket_lifecycle_configuration" "soak_archive" {
   }
 }
 
+# Benchmark results catalogue — one JSON entry per bench session under
+# catalog/v1/<input>/<id>.json. Persistent and versioned: it is the long-term
+# record the Bench Bot answers capacity questions from, so it must survive
+# every session stack and any accidental overwrite. Deliberately no
+# force_destroy: deleting it should be a conscious, manual act.
+#
+# Access: the provisioner role (AdministratorAccess) and the orchestrator
+# already reach it. The bench host role is intentionally NOT granted — it runs
+# approved-PR binaries and is scoped to the session results bucket only (see
+# shared/iam.tf), exactly as for the soak archive.
+resource "aws_s3_bucket" "bench_catalog" {
+  bucket = "redpanda-connect-bench-catalog"
+}
+
+resource "aws_s3_bucket_versioning" "bench_catalog" {
+  bucket = aws_s3_bucket.bench_catalog.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "bench_catalog" {
+  bucket                  = aws_s3_bucket.bench_catalog.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 output "gha_provisioner_role_arn" { value = aws_iam_role.gha_provisioner.arn }
 output "soak_archive_bucket" { value = aws_s3_bucket.soak_archive.bucket }
+output "bench_catalog_bucket" { value = aws_s3_bucket.bench_catalog.bucket }

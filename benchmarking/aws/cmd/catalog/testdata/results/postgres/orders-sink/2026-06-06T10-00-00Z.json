@@ -1,0 +1,6 @@
+{"scenario":"postgres/orders-sink","git_sha":"@SHA@","started_at":"2026-06-01T10:00:00Z","finished_at":"2026-06-01T11:00:00Z",
+ "infra":{"runner_instance_type":"c8g.4xlarge","region":"us-east-2"},
+ "dataset":{"row_size_bytes":1200},
+ "points":[
+  {"vcpu":1,"engine":"connect","summary":{"median_mb_s":18,"median_msg_s":15000},"prom":[{"rss_bytes":1000},{"rss_bytes":1500}]},
+  {"vcpu":2,"engine":"connect","summary":{"median_mb_s":35,"median_msg_s":29000},"prom":[{"rss_bytes":3000}]}]}

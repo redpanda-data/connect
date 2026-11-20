@@ -85,6 +85,37 @@ lifecycle with what it guards. A legitimate >4h run needs the rule disabled
 first (`aws events disable-rule --name redpanda-connect-bench-orphan-cleanup`),
 and re-enabled after.
 
+## Results catalogue
+
+Every completed bench sweep writes one entry to the results catalogue in the
+`redpanda-connect-bench-catalog` bucket, at
+`catalog/v1/<input>/<entry_id>.json`. Only bench sweeps are catalogued: soak
+runs and arm and binary A/B runs are not, and the runner does not write
+entries for builds from a dirty working tree (`catalog import` cannot detect a
+dirty build, so check that before importing).
+Each entry records the connector identity, the workload, the Connect version
+and build SHA, and the measured capacity at each vCPU point. The sizing
+constants (headroom, CUs per vCPU, bytes per CU) live in
+`catalog/sizing.json`.
+
+The `catalog` CLI (`go run ./cmd/catalog`) reads and fills it. It prints JSON.
+
+```sh
+# find entries matching a workload (or pass --config <pipeline.yaml>)
+go run ./cmd/catalog query --repo ../.. --input postgres_cdc --output redpanda --message-size 1200
+
+# size CUs for a target throughput from one entry
+go run ./cmd/catalog recommend --repo ../.. --entry-id <entry_id> --target-mb-s 40
+
+# backfill entries from historical result JSON
+go run ./cmd/catalog import --repo ../.. --results-root <dir laid out as connector/scenario/*.json>
+```
+
+`--repo` must be a full clone of this repo with tags fetched
+(`git fetch --tags`). Staleness compares each entry's build SHA against the
+latest release tag, and `import` reads scenarios and describes build SHAs
+from it, so a shallow or tagless clone gives wrong or `unknown` answers.
+
 ## Layout
 
 | Path | Role |
@@ -95,6 +126,7 @@ and re-enabled after.
 | `terraform/shared/` | per-session VPC, hosts, brokers, results bucket |
 | `terraform/stacks/<engine>/` | per-session RDS Postgres / RDS MySQL |
 | `terraform/persistent/` | applied once: dashboards, alarms, OIDC, reaper, archive |
+| `catalog/`, `cmd/catalog/` | results catalogue and its query/recommend/import CLI |
 | `cleanup-lambda/` | the orphan reaper (own Go module) |
 | `SOAK.md` | soak operations runbook |
 

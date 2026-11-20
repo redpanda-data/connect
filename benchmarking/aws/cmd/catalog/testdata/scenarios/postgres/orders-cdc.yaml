@@ -1,0 +1,18 @@
+name: postgres-orders-cdc
+connector: postgres_cdc
+stack: postgres
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+dataset:
+  row_size_bytes: 1200
+workload:
+  write_rate_per_sec: 150000
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      schema: public
+      tables: [orders]
+matrix:
+  cpu_points: [1, 2]
