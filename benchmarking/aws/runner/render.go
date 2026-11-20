@@ -24,14 +24,16 @@ import (
 // Result is the canonical per-run artefact, written as JSON and rendered to
 // markdown.
 type Result struct {
-	Scenario     string        `json:"scenario"`
-	ScenarioHash string        `json:"scenario_hash"`
-	GitSHA       string        `json:"git_sha"`
-	StartedAt    time.Time     `json:"started_at"`
-	FinishedAt   time.Time     `json:"finished_at"`
-	Infra        ResultInfra   `json:"infra"`
-	Dataset      ResultDataset `json:"dataset"`
-	Points       []PointResult `json:"points"`
+	Scenario     string `json:"scenario"`
+	ScenarioHash string `json:"scenario_hash"`
+	GitSHA       string `json:"git_sha"`
+	// ConnectVersion is the git-describe string of the build under test.
+	ConnectVersion string        `json:"connect_version,omitempty"`
+	StartedAt      time.Time     `json:"started_at"`
+	FinishedAt     time.Time     `json:"finished_at"`
+	Infra          ResultInfra   `json:"infra"`
+	Dataset        ResultDataset `json:"dataset"`
+	Points         []PointResult `json:"points"`
 }
 
 type ResultInfra struct {
