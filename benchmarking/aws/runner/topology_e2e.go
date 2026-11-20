@@ -13,8 +13,15 @@ import (
 )
 
 // e2eTopology runs the customer's whole pipeline and measures throughput at
-// the output, after sink backpressure, via the benchmark processor's rolling
-// stats in the Connect log rather than broker-side topic metrics.
+// the output via the benchmark processor's rolling stats in the Connect log
+// rather than broker-side topic metrics.
+//
+// Measurement point: the benchmark processor is the last entry of
+// output.processors, so it counts messages handed to the output, before the
+// output's own batching and before sink acks. Transaction channels are
+// unbuffered and backpressured, so in steady state its rate tracks the sink's
+// acceptance rate. The overstatement is bounded by one pending batch plus
+// max_in_flight batches, which is negligible over a 15-minute window.
 type e2eTopology struct{}
 
 func (e2eTopology) Validate(s *Scenario) error {
@@ -85,9 +92,8 @@ func (e2eTopology) ResetScript(s *Scenario, outs map[string]string, _ BenchNames
 // EngineSeries is nil: e2e has no broker-side series.
 func (e2eTopology) EngineSeries(MetricInputs) ([]TopicPoint, error) { return nil, nil }
 
-func (e2eTopology) MetricArtifact(key string) string {
-	return fmt.Sprintf("redpanda-%s-connect.txt", key)
-}
+// MetricArtifact is "": e2e uploads no broker metrics dump.
+func (e2eTopology) MetricArtifact(string) string { return "" }
 
 func (e2eTopology) MetricSidecar(MetricSidecarArgs) MetricSidecar { return MetricSidecar{} }
 

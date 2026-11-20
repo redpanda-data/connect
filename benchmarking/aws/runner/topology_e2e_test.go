@@ -119,3 +119,40 @@ func TestMatrixSummaryFromSamplesForE2E(t *testing.T) {
 	require.Empty(t, p.BrokerSeries)
 	require.Empty(t, p.Backlog)
 }
+
+func TestE2EMetricArtifactEmpty(t *testing.T) {
+	require.Empty(t, e2eTopology{}.MetricArtifact("2"))
+	plan := buildSoakArchivePlan("sess", "scn", "2", e2eTopology{}.MetricArtifact("2"))
+	for _, k := range plan.RawKeys {
+		require.NotContains(t, k, "redpanda-")
+	}
+}
+
+func TestMatrixE2ESoakGuards(t *testing.T) {
+	const sessionID = "bench-e2e-soak"
+	prom := "###timestamp=1000\nprocess_resident_memory_bytes 2e+08\n###timestamp=1010\nprocess_resident_memory_bytes 2.1e+08\n"
+	run := func(withProm bool) error {
+		contents := map[string]string{fmt.Sprintf("runs/%s/sweep-1.log", sessionID): makeLog(180, 7)}
+		if withProm {
+			contents[fmt.Sprintf("runs/%s/prom-1.txt", sessionID)] = prom
+		}
+		prev := stdout
+		stdout = &bytes.Buffer{}
+		defer func() { stdout = prev }()
+		mr := &MatrixRunner{
+			SSM:        &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}},
+			LogFetcher: &FakeLogFetcher{Contents: contents}, RunnerInstance: "i-runner", Bucket: "b",
+			SessionID: sessionID, Topology: e2eTopology{}, Names: newBenchNames(sessionID, "http_server"),
+			ExpectedRecordsPerSec: 1000,
+		}
+		pts, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
+		if err == nil {
+			require.InDelta(t, 7, pts[0].Summary.MedianMBPerSec, 1e-9)
+			require.Empty(t, pts[0].BrokerSeries)
+		}
+		return err
+	}
+	require.NoError(t, run(true), "missing broker artifact must not fail an e2e soak")
+	err := run(false)
+	require.ErrorContains(t, err, "prom artifact missing or empty")
+}
