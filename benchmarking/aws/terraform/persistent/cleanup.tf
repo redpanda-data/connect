@@ -1,5 +1,6 @@
 # Orphan-cleanup Lambda — runs every 15 minutes, destroys any
-# Project=redpanda-connect-bench resource older than var.orphan_ttl_hours.
+# Project=redpanda-connect-bench resource older than var.orphan_ttl_hours,
+# plus Glue databases named bench_* (the iceberg sink's per-run scratch).
 #
 # Lives in persistent/ (NOT shared/) as of 2026-08-17: when it lived inside
 # the session stack, an interrupted `terraform destroy` deleted the
@@ -14,6 +15,8 @@
 resource "aws_sns_topic" "orphan_cleanup" {
   name = "redpanda-connect-bench-orphans"
 }
+
+data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "orphan_cleanup" {
   name = "redpanda-connect-bench-orphan-cleanup"
@@ -95,6 +98,28 @@ resource "aws_iam_role_policy" "orphan_cleanup" {
           "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile"
         ]
         Resource = "*"
+      },
+      {
+        # Glue databases are not in the tagging index, so the reaper lists
+        # them and selects bench_* by name. Listing needs the catalog and
+        # database scope; every destructive call is fenced to bench_* names.
+        Sid    = "GlueList"
+        Effect = "Allow"
+        Action = ["glue:GetDatabases", "glue:GetDatabase"]
+        Resource = [
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/*",
+        ]
+      },
+      {
+        Sid    = "GlueDestroyBench"
+        Effect = "Allow"
+        Action = ["glue:GetTables", "glue:DeleteTable", "glue:DeleteDatabase"]
+        Resource = [
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/bench_*",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:table/bench_*/*",
+        ]
       },
       {
         Sid      = "Alert"

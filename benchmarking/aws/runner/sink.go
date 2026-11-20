@@ -47,6 +47,8 @@ type SinkDeps struct {
 	Outs      map[string]string // terraform outputs
 	SessionID string
 	RPK       RPKRunner
+	// Glue is the orchestrator's Glue client, for the iceberg sink.
+	Glue GlueAPI
 }
 
 // RPKRunner runs rpk against the brokers and returns its combined output
@@ -89,7 +91,9 @@ func sinkFor(spec SinkSpec, deps SinkDeps) (Sink, error) {
 		return newS3Sink(deps)
 	case "drop":
 		return dropSink{}, nil
-	case "iceberg", "snowflake", "bigquery":
+	case "iceberg":
+		return newIcebergSink(deps)
+	case "snowflake", "bigquery":
 		return nil, fmt.Errorf("sink %s not implemented yet", spec.Kind)
 	default:
 		return nil, fmt.Errorf("unknown sink kind %q", spec.Kind)

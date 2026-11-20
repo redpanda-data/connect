@@ -199,6 +199,13 @@ var SinkTemplates = map[SinkKind]func(component string) Template{
 			},
 			"namespace": "${BENCH_ICEBERG_NAMESPACE}",
 			"table":     "${BENCH_ICEBERG_TABLE}",
+			// Glue assigns no table location, and the run's database starts
+			// empty, so the output creates its table under the provisioned
+			// prefix. This replaces any schema_evolution the customer set.
+			"schema_evolution": map[string]any{
+				"enabled":        true,
+				"table_location": "${BENCH_ICEBERG_TABLE_LOCATION}",
+			},
 			"storage": map[string]any{"aws_s3": map[string]any{
 				"bucket": "${BENCH_ICEBERG_BUCKET}",
 				"region": "${BENCH_AWS_REGION}",

@@ -50,6 +50,12 @@ func TestSwapIdentityIcebergTemplate(t *testing.T) {
 	require.Equal(t, "${BENCH_ICEBERG_WAREHOUSE}", cat["warehouse"])
 	require.Equal(t, map[string]any{"aws_sigv4": map[string]any{"region": "${BENCH_AWS_REGION}", "service": "glue"}}, cat["auth"])
 	require.Equal(t, "${BENCH_ICEBERG_NAMESPACE}", ice["namespace"])
+	// Glue assigns no table location and the bench database starts empty,
+	// so the output must create the table, under the provisioned prefix.
+	require.Equal(t, map[string]any{
+		"enabled":        true,
+		"table_location": "${BENCH_ICEBERG_TABLE_LOCATION}",
+	}, ice["schema_evolution"])
 }
 
 func TestSwapIdentityMySQL(t *testing.T) {

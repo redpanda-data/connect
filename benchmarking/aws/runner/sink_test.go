@@ -71,7 +71,7 @@ func TestSinkForKinds(t *testing.T) {
 		require.NoError(t, err, kind)
 		require.IsType(t, want, got, kind)
 	}
-	for _, kind := range []string{"iceberg", "snowflake", "bigquery"} {
+	for _, kind := range []string{"snowflake", "bigquery"} {
 		_, err := sinkFor(SinkSpec{Kind: kind}, deps)
 		require.ErrorContains(t, err, "sink "+kind+" not implemented yet")
 	}

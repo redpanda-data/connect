@@ -20,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/glue"
+	gluetypes "github.com/aws/aws-sdk-go-v2/service/glue/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
@@ -79,6 +81,7 @@ func isGone(err error) bool {
 	return strings.HasSuffix(code, ".NotFound") || // EC2: InvalidInstanceID.NotFound, InvalidSubnetID.NotFound, ...
 		code == "NoSuchBucket" || // S3
 		code == "NoSuchEntity" || // IAM
+		code == "EntityNotFoundException" || // Glue
 		strings.HasPrefix(code, "DBInstanceNotFound") || // RDS fault codes vary in
 		strings.HasPrefix(code, "DBSubnetGroupNotFound") || // the "Fault" suffix across
 		strings.HasPrefix(code, "DBParameterGroupNotFound") // SDK/API versions
@@ -129,6 +132,13 @@ type cleanupAPI interface {
 	RemoveRoleFromInstanceProfile(ctx context.Context, in *iam.RemoveRoleFromInstanceProfileInput) (*iam.RemoveRoleFromInstanceProfileOutput, error)
 	DeleteInstanceProfile(ctx context.Context, in *iam.DeleteInstanceProfileInput) (*iam.DeleteInstanceProfileOutput, error)
 	DeleteRole(ctx context.Context, in *iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error)
+
+	// Glue: databases are not in the tagging index, so they are found by
+	// listing and selected by name prefix and CreateTime.
+	GetDatabases(ctx context.Context, in *glue.GetDatabasesInput, opts ...func(*glue.Options)) (*glue.GetDatabasesOutput, error)
+	GetTables(ctx context.Context, in *glue.GetTablesInput, opts ...func(*glue.Options)) (*glue.GetTablesOutput, error)
+	DeleteTable(ctx context.Context, in *glue.DeleteTableInput, opts ...func(*glue.Options)) (*glue.DeleteTableOutput, error)
+	DeleteDatabase(ctx context.Context, in *glue.DeleteDatabaseInput, opts ...func(*glue.Options)) (*glue.DeleteDatabaseOutput, error)
 
 	// SNS
 	Publish(ctx context.Context, in *sns.PublishInput) (*sns.PublishOutput, error)
@@ -507,6 +517,70 @@ func processRDSParameterGroup(ctx context.Context, api cleanupAPI, name string, 
 	return true, nil
 }
 
+// glueScratchPrefix is the name prefix of the runner's per-run Glue
+// databases (bench_<session>), the only Glue databases the reaper may touch.
+const glueScratchPrefix = "bench_"
+
+// processGlueDatabase deletes a bench_ Glue database older than ttl: every
+// table first (they are the Iceberg catalog entries), then the database.
+func processGlueDatabase(ctx context.Context, api cleanupAPI, name string, createdAt, now time.Time, ttl time.Duration) (destroyed bool, err error) {
+	if !strings.HasPrefix(name, glueScratchPrefix) || !olderThanTTL(createdAt, now, ttl) {
+		return false, nil
+	}
+	var tables []string
+	var token *string
+	for {
+		out, err := api.GetTables(ctx, &glue.GetTablesInput{DatabaseName: aws.String(name), NextToken: token})
+		if err != nil {
+			return false, err
+		}
+		for _, t := range out.TableList {
+			tables = append(tables, aws.ToString(t.Name))
+		}
+		if out.NextToken == nil || *out.NextToken == "" {
+			break
+		}
+		token = out.NextToken
+	}
+	for _, t := range tables {
+		if _, err := api.DeleteTable(ctx, &glue.DeleteTableInput{DatabaseName: aws.String(name), Name: aws.String(t)}); err != nil && !isGone(err) {
+			return false, err
+		}
+	}
+	if _, err := api.DeleteDatabase(ctx, &glue.DeleteDatabaseInput{Name: aws.String(name)}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// sweepGlueDatabases lists every Glue database and processes the stale
+// bench_ ones into report. A listing failure is recorded, not fatal: the
+// other kinds were already swept and the next run retries.
+func sweepGlueDatabases(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration, report *SweepReport) {
+	var dbs []gluetypes.Database
+	var token *string
+	for {
+		out, err := api.GetDatabases(ctx, &glue.GetDatabasesInput{NextToken: token})
+		if err != nil {
+			report.record("glue-databases", "list", false, err)
+			return
+		}
+		dbs = append(dbs, out.DatabaseList...)
+		if out.NextToken == nil || *out.NextToken == "" {
+			break
+		}
+		token = out.NextToken
+	}
+	for _, db := range dbs {
+		name := aws.ToString(db.Name)
+		if db.CreateTime == nil || !strings.HasPrefix(name, glueScratchPrefix) {
+			continue
+		}
+		destroyed, err := processGlueDatabase(ctx, api, name, *db.CreateTime, now, ttl)
+		report.record("glue-database", name, destroyed, err)
+	}
+}
+
 // SweepReport summarises one execution of the Lambda. Destroyed/
 // DestroyedCount reflect only resources the processing pass actually
 // deleted; a resource whose delete call errored is counted in Errors (and
@@ -665,6 +739,8 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 		destroyed, err := processVPC(ctx, api, id, ts, now, ttl)
 		report.record("vpc", id, destroyed, err)
 	}
+
+	sweepGlueDatabases(ctx, api, now, ttl, &report)
 
 	if report.DestroyedCount > 0 || report.Errors > 0 {
 		msg := fmt.Sprintf("orphan-cleanup at %s: destroyed %d resources, %d failed deletions",

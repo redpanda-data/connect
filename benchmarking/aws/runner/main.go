@@ -440,12 +440,18 @@ func runBench(opts benchOpts) (errOut error) {
 	// sharedOuts before any config renders, and removes it before the
 	// terraform destroy defer runs. It runs after the build so the runner
 	// host has had that long to boot; ssmRPK also waits for its rpk install.
-	sink, err := sinkForScenario(s, SinkDeps{
+	deps := SinkDeps{
 		Region:    opts.region,
 		Outs:      sharedOuts,
 		SessionID: sessionID,
 		RPK:       ssmRPK{SSM: ssmExec, Instance: sharedOuts["runner_instance_id"]},
-	})
+	}
+	if s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "iceberg" {
+		if deps.Glue, err = newGlueClient(ctx, opts.region); err != nil {
+			return err
+		}
+	}
+	sink, err := sinkForScenario(s, deps)
 	if err != nil {
 		return err
 	}
