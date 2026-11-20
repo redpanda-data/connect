@@ -180,45 +180,6 @@ func TestPerPointConfigsOnlyForStackNoneOrArms(t *testing.T) {
 	require.True(t, perPointConfigs(s))
 }
 
-func TestProducerBoundAnomaly(t *testing.T) {
-	const rate = 450_000.0
-	a, ok := producerBoundAnomaly(Summary{MedianMsgPerSec: 0.96 * rate}, rate)
-	require.True(t, ok)
-	require.True(t, strings.HasPrefix(a.Note, "producer_bound"), a.Note)
-
-	_, ok = producerBoundAnomaly(Summary{MedianMsgPerSec: 0.90 * rate}, rate)
-	require.False(t, ok)
-	_, ok = producerBoundAnomaly(Summary{MedianMsgPerSec: 0.96 * rate}, 0)
-	require.False(t, ok, "no producer rate, no verdict")
-}
-
-func TestMatrixAddsProducerBoundAnomaly(t *testing.T) {
-	const sessionID = "bench-e2e-pb"
-	run := func(rate float64) []Anomaly {
-		prev := stdout
-		stdout = &strings.Builder{}
-		defer func() { stdout = prev }()
-		mr := &MatrixRunner{
-			SSM: &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}},
-			LogFetcher: &FakeLogFetcher{Contents: map[string]string{
-				"runs/" + sessionID + "/sweep-1.log": makeLog(180, 7),
-			}},
-			RunnerInstance: "i-runner", Bucket: "b", SessionID: sessionID,
-			Topology: e2eTopology{}, Names: newBenchNames(sessionID, "http_server"),
-			ProducerRatePerSec: rate,
-		}
-		pts, err := mr.Run(t.Context(), []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}}, 1, 60*time.Second, 120*time.Second, "", "")
-		require.NoError(t, err)
-		return pts[0].Anomalies
-	}
-	// makeLog logs a flat 1000 msg/s, so that is the measured median.
-	const median = 1000.0
-	got := run(median / 0.96)
-	require.Len(t, got, 1)
-	require.True(t, strings.HasPrefix(got[0].Note, "producer_bound"))
-	require.Empty(t, run(median/0.90))
-}
-
 func TestWorkloadInstanceStackNoneIsRunner(t *testing.T) {
 	outs := map[string]string{"runner_instance_id": "i-runner", "load_gen_instance_id": "i-load"}
 	s := stackNoneScenario()

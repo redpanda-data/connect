@@ -258,3 +258,42 @@ func TestRecommendCaveatsSerialiseAsEmptyArray(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(b), `"caveats":[]`)
 }
+
+func TestRecommendSourceRateLimited(t *testing.T) {
+	limited := func(vcpus ...float64) Entry {
+		e := fixtureEntry()
+		for i := range e.Points {
+			for _, v := range vcpus {
+				if e.Points[i].VCPU == v {
+					e.Points[i].LimitedBy = "producer"
+				}
+			}
+		}
+		return e
+	}
+	for name, tc := range map[string]struct {
+		e      Entry
+		target float64
+		want   bool
+	}{
+		"interpolated, upper point limited":    {limited(4), 40, true},
+		"interpolated, lower point limited":    {limited(2), 40, true},
+		"interpolated, other point limited":    {limited(8), 40, false},
+		"exact point limited":                  {limited(4), 49, true},
+		"exact point, lower neighbour limited": {limited(2), 49, false},
+		"below floor, floor limited":           {limited(1), 10, true},
+		"exceeds ceiling, ceiling limited":     {limited(8), 100, true},
+		"nothing limited":                      {fixtureEntry(), 40, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := Recommend(tc.e, tc.target, sizingCfg())
+			require.NoError(t, err)
+			if tc.want {
+				require.Contains(t, r.Caveats, CaveatSourceRateLimited)
+			} else {
+				require.NotContains(t, r.Caveats, CaveatSourceRateLimited)
+			}
+		})
+	}
+	require.Equal(t, "source_rate_limited", CaveatSourceRateLimited)
+}

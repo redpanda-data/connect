@@ -32,7 +32,10 @@ const (
 	// under test, which takes cores 2..(1+VCPU) and so at most 2-9 on the
 	// 16-core c8g.4xlarge. The load-gen host is a c8g.large (2 vCPU, under
 	// 1 Gbps baseline network) and could not sustain the producer rate.
-	producerCores      = "10-15"
+	producerCores = "10-15"
+	// maxStackNoneVCPU is the largest sweep point that stays clear of
+	// producerCores: Connect takes cores 2..(1+VCPU).
+	maxStackNoneVCPU   = 8
 	producerGOMAXPROCS = 6
 	producerBinary     = "/opt/bench/redpanda-connect"
 	producerHeredoc    = "BENCH_PRODUCER_EOF"
@@ -43,11 +46,6 @@ const (
 	// row_size_bytes minus it. Spaces, not zeros: a leading zero is not
 	// valid JSON.
 	producerFrameBytes = len(`{"id":`) + 12 + len(`,"pad":"`) + len(`"}`)
-
-	// producerBoundRatio is the fraction of the producer rate at which a
-	// point's measured median is taken to be the producer's ceiling, not
-	// the pipeline's.
-	producerBoundRatio = 0.95
 )
 
 // ProducerArgs is the render context for renderProducerScript.
@@ -193,20 +191,6 @@ func workloadInstance(s *Scenario, outs map[string]string) string {
 		return outs["runner_instance_id"]
 	}
 	return outs["load_gen_instance_id"]
-}
-
-// producerBoundAnomaly flags a point whose measured median reached
-// producerBoundRatio of the producer rate: the producer, not the pipeline,
-// was the ceiling, so the point understates what the pipeline can do.
-func producerBoundAnomaly(sum Summary, ratePerSec float64) (Anomaly, bool) {
-	if ratePerSec <= 0 || sum.MedianMsgPerSec < producerBoundRatio*ratePerSec {
-		return Anomaly{}, false
-	}
-	return Anomaly{
-		MinRatio: sum.MedianMsgPerSec / ratePerSec,
-		Note: fmt.Sprintf("producer_bound: median %.0f msg/s is at least %.0f%% of the producer's %.0f msg/s; the producer, not the pipeline, was the ceiling",
-			sum.MedianMsgPerSec, producerBoundRatio*100, ratePerSec),
-	}, true
 }
 
 // stackTF is the part of Terraform runBench and downCmd use on the

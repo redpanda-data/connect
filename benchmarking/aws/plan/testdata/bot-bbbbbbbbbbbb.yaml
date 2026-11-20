@@ -18,6 +18,7 @@ pipeline:
             consumer_group: ${BENCH_CONSUMER_GROUP}
             seed_brokers:
                 - ${BENCH_REDPANDA_BROKERS}
+            start_offset: earliest
             topics:
                 - ${BENCH_TOPIC}
     output:

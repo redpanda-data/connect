@@ -118,6 +118,8 @@ type Template struct {
 	Fields   map[string]any
 	Defaults map[string]any
 	Top      map[string]any
+	// Remove are keys deleted from the component's config.
+	Remove []string
 }
 
 // SourceTemplates sets the bench's own values on the customer input, per
@@ -153,7 +155,20 @@ var SourceTemplates = map[SourceKind]func(component string) Template{
 			"topics":         []any{"${BENCH_TOPIC}"},
 			"consumer_group": "${BENCH_CONSUMER_GROUP}",
 		}
-		return brokerTemplate(component, brokers, f)
+		t := brokerTemplate(component, brokers, f)
+		// Every point reads its fresh group from the oldest retained offset,
+		// whatever the customer set. The sarama kafka input has only
+		// start_from_oldest; the franz inputs (redpanda, redpanda_common,
+		// kafka_franz) take start_offset, and reject the deprecated
+		// start_from_oldest: false alongside start_offset: earliest.
+		if component == "kafka" {
+			f["start_from_oldest"] = true
+			t.Remove = []string{"start_offset"}
+		} else {
+			f["start_offset"] = "earliest"
+			t.Remove = []string{"start_from_oldest"}
+		}
+		return t
 	},
 }
 
@@ -375,6 +390,9 @@ func applyTemplate(root, holder map[string]any, name string, t Template) error {
 		}
 		cfg = map[string]any{}
 		holder[name] = cfg
+	}
+	for _, k := range t.Remove {
+		delete(cfg, k)
 	}
 	for k, v := range t.Fields {
 		cfg[k] = deepCopy(v)

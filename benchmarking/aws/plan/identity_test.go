@@ -80,3 +80,33 @@ func TestSwapIdentityRedpandaCommonAndKafka(t *testing.T) {
 	rc := out["output"].(map[string]any)["redpanda_common"].(map[string]any)
 	require.Equal(t, "${BENCH_DST_TOPIC}", rc["topic"])
 }
+
+func TestSwapIdentityForcesEarliestReads(t *testing.T) {
+	for _, tc := range []struct {
+		component string
+		customer  map[string]any
+		want      map[string]any
+		gone      []string
+	}{
+		{"redpanda", map[string]any{"start_offset": "latest", "start_from_oldest": false}, map[string]any{"start_offset": "earliest"}, []string{"start_from_oldest"}},
+		{"redpanda_common", map[string]any{"start_offset": "committed"}, map[string]any{"start_offset": "earliest"}, []string{"start_from_oldest"}},
+		{"kafka_franz", map[string]any{"start_offset": "latest", "start_from_oldest": false}, map[string]any{"start_offset": "earliest"}, []string{"start_from_oldest"}},
+		{"kafka", map[string]any{"start_from_oldest": false}, map[string]any{"start_from_oldest": true}, []string{"start_offset"}},
+	} {
+		t.Run(tc.component, func(t *testing.T) {
+			cfg := map[string]any{
+				"input":  map[string]any{tc.component: tc.customer},
+				"output": map[string]any{"drop": map[string]any{}},
+			}
+			out, _, err := SwapIdentity(cfg, SourceRedpanda, SinkDrop)
+			require.NoError(t, err)
+			in := out["input"].(map[string]any)[tc.component].(map[string]any)
+			for k, v := range tc.want {
+				require.Equal(t, v, in[k], k)
+			}
+			for _, k := range tc.gone {
+				require.NotContains(t, in, k)
+			}
+		})
+	}
+}

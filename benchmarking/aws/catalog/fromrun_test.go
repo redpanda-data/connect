@@ -10,6 +10,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,4 +110,17 @@ func TestBenchSourcePipeline(t *testing.T) {
 	pp := map[string]any{"processors": []any{map[string]any{"mapping": "root = this"}}}
 	require.Equal(t, map[string]any{"input": in, "pipeline": pp, "output": BenchSourceOutput()},
 		BenchSourcePipeline(map[string]any{"input": in, "pipeline": pp}))
+}
+
+func TestEntryFromRunCopiesLimitedBy(t *testing.T) {
+	in := validRunInput()
+	in.Points[1].LimitedBy = "producer"
+	e, err := EntryFromRun(in)
+	require.NoError(t, err)
+	require.Empty(t, e.Points[0].LimitedBy)
+	require.Equal(t, "producer", e.Points[1].LimitedBy)
+
+	raw, err := json.Marshal(e.Points)
+	require.NoError(t, err)
+	require.Equal(t, 1, strings.Count(string(raw), `"limited_by":"producer"`), "omitted when empty")
 }

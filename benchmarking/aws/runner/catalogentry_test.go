@@ -169,3 +169,14 @@ func TestRunURLFromEnv(t *testing.T) {
 	t.Setenv("GITHUB_RUN_ID", "")
 	require.Empty(t, runURLFromEnv())
 }
+
+func TestCatalogEntryLimitedByProducer(t *testing.T) {
+	s, r := catalogFixture(t)
+	r.Points[3].Anomalies = []Anomaly{{Kind: anomalyProducerBound, Note: "producer_bound: x"}}
+	r.Points[2].Anomalies = []Anomaly{{StartT: 1, DurationSec: 90, MinRatio: 0.5}}
+	e, err := catalogEntryFromResult(s, r, catalogMeta{SessionID: "bench-1"})
+	require.NoError(t, err)
+	for i, want := range []string{"", "", "", "producer"} {
+		require.Equal(t, want, e.Points[i].LimitedBy, "point %d", i)
+	}
+}

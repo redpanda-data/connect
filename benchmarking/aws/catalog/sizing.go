@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"sort"
 )
 
@@ -58,6 +59,11 @@ func parseSizingConfig(b []byte) (SizingConfig, error) {
 	}
 	return cfg, nil
 }
+
+// CaveatSourceRateLimited marks a recommendation that rests on a point the
+// bench producer, not the pipeline, capped (Point.LimitedBy): the measured
+// capacity there is a lower bound.
+const CaveatSourceRateLimited = "source_rate_limited"
 
 // Recommendation is the CU sizing for a target throughput.
 type Recommendation struct {
@@ -133,13 +139,18 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 			rec.BelowFloor = true
 		}
 		rec.setVCPU(cfg)
+		rec.addLimitedCaveat(pts[0])
 		rec.addEntryCaveats(e)
 		return rec, nil
 	}
 
 	j := -1
 	ceiling := 0.0
+	ceilingPt := pts[0]
 	for i, p := range pts {
+		if p.CapacityMBps > ceiling {
+			ceilingPt = p
+		}
 		ceiling = math.Max(ceiling, p.CapacityMBps)
 		if j < 0 && (p.CapacityMBps >= need || approxEq(p.CapacityMBps, need)) {
 			j = i
@@ -148,6 +159,7 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 	if j < 0 {
 		rec.ExceedsCeiling = true
 		rec.CeilingMBps = ceiling
+		rec.addLimitedCaveat(ceilingPt)
 		rec.addEntryCaveats(e)
 		return rec, nil
 	}
@@ -158,7 +170,9 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 	if !approxEq(need, hi.CapacityMBps) {
 		vcpu = lo.VCPU + (need-lo.CapacityMBps)/(hi.CapacityMBps-lo.CapacityMBps)*(hi.VCPU-lo.VCPU)
 		rec.Estimated = true
+		rec.addLimitedCaveat(lo)
 	}
+	rec.addLimitedCaveat(hi)
 	rec.InterpolatedVCPU = vcpu
 	// The epsilon stops float noise such as 20.000000000000004 adding a CU step.
 	cpuCUs := roundUp10(math.Ceil(vcpu*float64(cfg.CUsPerVCPU) - relTol))
@@ -176,6 +190,14 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 // setVCPU derives VCPU from the final CU count so the two always agree.
 func (r *Recommendation) setVCPU(cfg SizingConfig) {
 	r.VCPU = float64(r.CUs) / float64(cfg.CUsPerVCPU)
+}
+
+// addLimitedCaveat adds CaveatSourceRateLimited, once, when the
+// recommendation rests on p and p was producer-limited.
+func (r *Recommendation) addLimitedCaveat(p Point) {
+	if p.LimitedBy != "" && !slices.Contains(r.Caveats, CaveatSourceRateLimited) {
+		r.Caveats = append(r.Caveats, CaveatSourceRateLimited)
+	}
 }
 
 func (r *Recommendation) addEntryCaveats(e Entry) {

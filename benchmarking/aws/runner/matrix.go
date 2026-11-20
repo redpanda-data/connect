@@ -96,10 +96,11 @@ type MatrixRunner struct {
 	// point's broker-side series, tracking whether the engine is keeping
 	// pace with the source over the run. 0 disables backlog computation.
 	ExpectedRecordsPerSec float64
-	// ProducerRatePerSec, when > 0, is a stack-none scenario's producer
-	// rate. A point whose measured median msg/s reaches 95% of it gets a
-	// producer_bound anomaly (see producerBoundAnomaly).
-	ProducerRatePerSec float64
+	// SourceProbe, when non-nil, makes each point's bench script describe
+	// the stack-none source topic and the point's consumer group at the
+	// start and end of the window (see sourceprobe.go). Group is filled per
+	// point from Names.ConsumerGroup.
+	SourceProbe *SourceProbeArgs
 	// Emitter, when non-nil, makes Run publish per-minute CloudWatch metrics
 	// for a soak point: a mid-run goroutine re-fetches the checkpointed log
 	// and Prometheus/broker artifacts every CheckpointSec (see
@@ -148,6 +149,13 @@ type SweepPoint struct {
 	// finding the ceiling, not tracking whether a fixed source rate is
 	// being kept up with).
 	Backlog []BacklogPoint
+
+	// ProducerRateMsgPerSec and ConsumerLagEnd are a stack-none point's
+	// source-side evidence (see sourceprobe.go): the producer's achieved
+	// rate over the window and the point's consumer group lag at its end.
+	// Zero and nil for every other scenario.
+	ProducerRateMsgPerSec float64
+	ConsumerLagEnd        *int64
 }
 
 // Run executes the full sweep. resetScript runs on the runner host between
@@ -237,6 +245,12 @@ func (m *MatrixRunner) Run(
 		}
 
 		cfg := m.configPathsFor(key)
+		var probe *SourceProbeArgs
+		if m.SourceProbe != nil {
+			p := *m.SourceProbe
+			p.Group = m.Names.ConsumerGroup(key)
+			probe = &p
+		}
 		script := renderBenchScript(benchScriptArgs{
 			VCPU:                     n,
 			GOMAXPROCS:               pt.GOMAXPROCS,
@@ -259,6 +273,7 @@ func (m *MatrixRunner) Run(
 			HeartbeatSec:             m.HeartbeatSec,
 			PromScrapeSec:            m.PromScrapeSec,
 			CheckpointSec:            m.CheckpointSec,
+			SourceProbe:              probe,
 		})
 
 		// pointStart is this point's wall-clock launch — the base every
@@ -277,7 +292,15 @@ func (m *MatrixRunner) Run(
 		// per-minute heartbeat (well under the ~24KB SSM content cap), so
 		// streaming every line is safe. Run against benchCtx, not ctx
 		// directly, so the workload goroutine above can cut this short.
-		if err := m.SSM.Run(benchCtx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
+		var probeLines []string
+		benchOut := streamingOnLine(stdout, "bench")
+		onBenchLine := func(line string) {
+			if strings.HasPrefix(line, sourceProbePrefix) {
+				probeLines = append(probeLines, line)
+			}
+			benchOut(line)
+		}
+		if err := m.SSM.Run(benchCtx, m.RunnerInstance, script, onBenchLine); err != nil {
 			stopEmit()
 			cancelWorkload()
 			cancelBench()
@@ -376,8 +399,21 @@ func (m *MatrixRunner) Run(
 		// T=0 is point launch (see offsetSampleT) — without it the prom
 		// annotations describe a moment warmup seconds before the anomaly.
 		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts, int(warmup.Seconds()))
-		if a, ok := producerBoundAnomaly(summary, m.ProducerRatePerSec); ok {
-			anomalies = append(anomalies, a)
+		// Stack none: judge the producer from the source side (sourceprobe.go).
+		var producerRate float64
+		var lagEnd *int64
+		var probeFail bool
+		if probe != nil {
+			sm, err := parseSourceProbe(probeLines, probe.Topic)
+			if err != nil {
+				return nil, fmt.Errorf("source probe at %d vCPU: %w", n, err)
+			}
+			producerRate = sm.ProducerRate()
+			lag := sm.LagEnd
+			lagEnd = &lag
+			var extra []Anomaly
+			extra, probeFail = sourceAnomalies(sm)
+			anomalies = append(anomalies, extra...)
 		}
 		var backlog []BacklogPoint
 		if !fromSamples {
@@ -405,7 +441,13 @@ func (m *MatrixRunner) Run(
 			Prom:         promPts,
 			BrokerSeries: brokerSeries,
 			Backlog:      backlog,
+
+			ProducerRateMsgPerSec: producerRate,
+			ConsumerLagEnd:        lagEnd,
 		})
+		if probeFail {
+			return out, fmt.Errorf("%s at %d vCPU: the source topic gained no records during the window", anomalyProducerUnreachable, n)
+		}
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
 
@@ -749,6 +791,10 @@ type benchScriptArgs struct {
 	// rendered at all, keeping the script byte-identical to before this
 	// field existed.
 	CheckpointSec int
+	// SourceProbe, when non-nil, splits the window sleep around the source
+	// probe: warmup, start probe, duration, end probe, then SIGTERM. Nil
+	// keeps the single warmup+duration sleep.
+	SourceProbe *SourceProbeArgs
 }
 
 // artifactKey names this point's log and metric files: the bare vCPU count for
@@ -901,8 +947,19 @@ func renderBenchScript(a benchScriptArgs) string {
 	if a.ScrapeSetup != "" {
 		lines = append(lines, a.ScrapeSetup)
 	}
+	if a.SourceProbe != nil {
+		// The end probe runs before SIGTERM, so the group lag is read while
+		// Connect is still consuming.
+		lines = append(lines,
+			fmt.Sprintf(`sleep %d`, a.WarmupSec),
+			renderSourceProbe(*a.SourceProbe, "start"),
+			fmt.Sprintf(`sleep %d`, a.DurationSec),
+			renderSourceProbe(*a.SourceProbe, "end"),
+		)
+	} else {
+		lines = append(lines, fmt.Sprintf(`sleep %d`, totalSec))
+	}
 	lines = append(lines,
-		fmt.Sprintf(`sleep %d`, totalSec),
 		`kill -TERM "$PID" 2>/dev/null || true`,
 		`wait "$PID" 2>/dev/null || true`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,

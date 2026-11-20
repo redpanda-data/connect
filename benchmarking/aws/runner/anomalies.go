@@ -13,8 +13,12 @@ const (
 	anomalyThreshold  = 0.8 // MB/sec below this fraction of the reference median is a dip
 )
 
-// Anomaly is a contiguous span where MB/sec dropped below the threshold.
+// Anomaly is a contiguous span where MB/sec dropped below the threshold, or,
+// when Kind is set, a point-level finding that is not a dip
+// (anomalyProducerBound, anomalyProducerUnreachable).
 type Anomaly struct {
+	// Kind is "" for a dip.
+	Kind        string  `json:"kind,omitempty"`
 	StartT      int     `json:"start_t"`
 	DurationSec int     `json:"duration_s"`
 	MinRatio    float64 `json:"min_ratio"`

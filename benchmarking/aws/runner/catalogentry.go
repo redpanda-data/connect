@@ -95,6 +95,11 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 			MedianMBps:  p.Summary.MedianMBPerSec,
 			MedianMsgps: p.Summary.MedianMsgPerSec,
 		}
+		for _, a := range p.Anomalies {
+			if a.Kind == anomalyProducerBound {
+				rp.LimitedBy = "producer"
+			}
+		}
 		for _, pp := range p.Prom {
 			rp.RSSBytes = append(rp.RSSBytes, pp.RSSBytes)
 		}

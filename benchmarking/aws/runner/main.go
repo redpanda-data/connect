@@ -497,7 +497,7 @@ func runBench(opts benchOpts) (errOut error) {
 		PromScrapeSec:            promScrapeSec,
 		CheckpointSec:            checkpointSec,
 		ExpectedRecordsPerSec:    expectedRecordsPerSec,
-		ProducerRatePerSec:       producerRatePerSec(s),
+		SourceProbe:              sourceProbeFor(s, sharedOuts, names),
 	}
 	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
 	// operator (or an alarm) can watch a run that may still have 23 hours
@@ -565,6 +565,9 @@ func runBench(opts benchOpts) (errOut error) {
 			GOMAXPROCS:   p.GOMAXPROCS,
 			Streams:      p.Streams,
 			Backlog:      p.Backlog,
+
+			ProducerRateMsgPerSec: p.ProducerRateMsgPerSec,
+			ConsumerLagEnd:        p.ConsumerLagEnd,
 		})
 	}
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")
@@ -1588,10 +1591,10 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	return ssmExec.Run(ctx, workloadInstance(s, outs), script, streamingOnLine(os.Stdout, "seed"))
 }
 
-// producerRatePerSec is a stack-none scenario's producer rate, or 0.
-func producerRatePerSec(s *Scenario) float64 {
-	if s.Stack != stackNone || s.Workload == nil {
-		return 0
+// sourceProbeFor is a stack-none scenario's source probe, or nil.
+func sourceProbeFor(s *Scenario, outs map[string]string, n BenchNames) *SourceProbeArgs {
+	if s.Stack != stackNone {
+		return nil
 	}
-	return float64(s.Workload.WriteRatePerSec)
+	return &SourceProbeArgs{Brokers: outs["redpanda_broker_endpoints"], Topic: n.SourceTopic()}
 }

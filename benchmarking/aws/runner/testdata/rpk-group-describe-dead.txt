@@ -1,0 +1,7 @@
+GROUP                  zz_no_such_group
+COORDINATOR-NODE       0
+COORDINATOR-PARTITION  __consumer_offsets/2
+STATE                  Dead
+BALANCER               
+MEMBERS                0
+TOTAL-LAG              0

@@ -70,6 +70,7 @@ func TestE2EScenarioValidation(t *testing.T) {
 		"none stack on source":       {func(s *Scenario) { s.Direction, s.Connector = DirectionSource, "postgres_cdc" }, "only allowed for direction"},
 		"none stack without load":    {func(s *Scenario) { s.Workload = nil }, "write_rate_per_sec"},
 		"none stack zero rate":       {func(s *Scenario) { s.Workload.WriteRatePerSec = 0 }, "write_rate_per_sec"},
+		"none stack above 8 vCPU":    {func(s *Scenario) { s.Matrix.CPUPoints = []int{1, 2, 4, 8, 12} }, "cores 10-15"},
 		"postgres e2e unknown conn.": {func(s *Scenario) { s.Stack, s.Connector = "postgres", "oracledb_cdc" }, "no engineSpec"},
 	} {
 		t.Run(name, func(t *testing.T) {

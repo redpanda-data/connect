@@ -337,6 +337,11 @@ func (s *Scenario) Validate() error {
 		if s.Workload == nil || s.Workload.WriteRatePerSec <= 0 {
 			return fmt.Errorf("stack %q requires workload.write_rate_per_sec > 0", stackNone)
 		}
+		for _, c := range s.Matrix.CPUPoints {
+			if c > maxStackNoneVCPU {
+				return fmt.Errorf("stack %q: matrix.cpu_points value %d exceeds %d: cores %s are reserved for the producer", stackNone, c, maxStackNoneVCPU, producerCores)
+			}
+		}
 	}
 	if len(s.Matrix.CPUPoints) == 0 {
 		return errors.New("matrix.cpu_points must contain at least one value")

@@ -63,6 +63,10 @@ type Point struct {
 	CapacityMBps  float64 `json:"capacity_mb_s"`
 	CapacityMsgps float64 `json:"capacity_msg_s"`
 	PeakRSSBytes  uint64  `json:"peak_rss_bytes"` // 0 = not measured
+	// LimitedBy names what capped this point other than the pipeline: ""
+	// or "producer" (a stack-none point whose consumer caught up with the
+	// bench producer, so capacity is a lower bound).
+	LimitedBy string `json:"limited_by,omitempty"`
 }
 
 // Validate reports the first schema violation in the entry, naming the field.

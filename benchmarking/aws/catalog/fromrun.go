@@ -20,6 +20,7 @@ type RunPoint struct {
 	Engine, Arm, Binary     string
 	MedianMBps, MedianMsgps float64
 	RSSBytes                []uint64 // process RSS samples; the peak is kept
+	LimitedBy               string   // see Point.LimitedBy
 }
 
 // BenchSourceOutput is the catalogued identity of a source-direction bench's
@@ -97,6 +98,7 @@ func EntryFromRun(r RunInput) (Entry, error) {
 			CapacityMBps:  p.MedianMBps,
 			CapacityMsgps: p.MedianMsgps,
 			PeakRSSBytes:  peak,
+			LimitedBy:     p.LimitedBy,
 		})
 	}
 	input, processors, output, err := Components(r.Pipeline)

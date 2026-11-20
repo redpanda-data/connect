@@ -126,6 +126,7 @@ func TestRenderApproximatedInputReadsBenchTopic(t *testing.T) {
 		"seed_brokers":   []any{"${BENCH_REDPANDA_BROKERS}"},
 		"topics":         []any{"${BENCH_TOPIC}"},
 		"consumer_group": "${BENCH_CONSUMER_GROUP}",
+		"start_offset":   "earliest",
 	}, in["redpanda"])
 	require.Equal(t, []any{map[string]any{"mapping": "root = this"}}, in["processors"],
 		"input-level processors are pipeline logic and stay")

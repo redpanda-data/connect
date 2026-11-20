@@ -202,3 +202,19 @@ func TestAppendMarkdown_ArmlessRowsKeepBlankArm(t *testing.T) {
 	require.Contains(t, out, "| connect", "arm-less row still renders under the blank arm column")
 	require.Contains(t, out, "10,000", "median msg/s formats with a thousands separator")
 }
+
+func TestAppendMarkdown_NonDipAnomalyPrintsNote(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "none.md")
+	r := sampleResult()
+	r.Points[0].Anomalies = []Anomaly{
+		{StartT: 30, DurationSec: 90, MinRatio: 0.5, Note: "MB/sec dropped below threshold — investigate before publishing"},
+		{Kind: anomalyProducerBound, Note: "producer_bound: the consumer group ended 10 records behind"},
+	}
+	require.NoError(t, AppendMarkdown(target, r, "desc"))
+	raw, err := os.ReadFile(target)
+	require.NoError(t, err)
+	s := string(raw)
+	require.Contains(t, s, "At 1 vCPU: 90s dip to 0.50× median MB/sec from t=30s")
+	require.Contains(t, s, "At 1 vCPU: producer_bound: the consumer group ended 10 records behind")
+	require.Equal(t, 1, strings.Count(s, "dip to"), "the producer_bound anomaly must not render as a dip:\n"+s)
+}
