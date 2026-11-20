@@ -29,39 +29,45 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
+// parquetEncodeFields returns the config fields of the parquet_encode
+// processor, shared with processors that embed it.
+func parquetEncodeFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		parquetSchemaConfig().Optional(),
+		service.NewStringField("schema_metadata").
+			Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").Version("4.62.0").
+			ShortDescription("A metadata field containing a schema definition to encode with, instead of a static schema.").
+			Default(""),
+		service.NewStringEnumField("default_compression",
+			"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
+		).
+			Description("The default compression type to use for fields.").
+			Default("uncompressed"),
+		service.NewStringEnumField("default_encoding",
+			"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
+		).
+			Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY`.").
+			ShortDescription("The default encoding type for fields. Best left unset unless readers lack DELTA_LENGTH_BYTE_ARRAY.").
+			Default("DELTA_LENGTH_BYTE_ARRAY").
+			Advanced().
+			Version("4.11.0"),
+		service.NewStringEnumField("default_timestamp_unit",
+			"NANOSECOND", "MICROSECOND", "MILLISECOND",
+		).
+			Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
+			ShortDescription("Precision used when encoding TIMESTAMP logical types. NANOSECOND is not readable by all engines.").
+			Default("NANOSECOND").
+			Advanced().
+			Version("4.89.0"),
+	}
+}
+
 func parquetEncodeProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Parsing").
 		Summary("Encodes https://parquet.apache.org/docs/[Parquet files^] from a batch of structured messages.").
-		Fields(
-			parquetSchemaConfig().Optional(),
-			service.NewStringField("schema_metadata").
-				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").Version("4.62.0").
-				ShortDescription("A metadata field containing a schema definition to encode with, instead of a static schema.").
-				Default(""),
-			service.NewStringEnumField("default_compression",
-				"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
-			).
-				Description("The default compression type to use for fields.").
-				Default("uncompressed"),
-			service.NewStringEnumField("default_encoding",
-				"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
-			).
-				Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY`.").
-				ShortDescription("The default encoding type for fields. Best left unset unless readers lack DELTA_LENGTH_BYTE_ARRAY.").
-				Default("DELTA_LENGTH_BYTE_ARRAY").
-				Advanced().
-				Version("4.11.0"),
-			service.NewStringEnumField("default_timestamp_unit",
-				"NANOSECOND", "MICROSECOND", "MILLISECOND",
-			).
-				Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
-				ShortDescription("Precision used when encoding TIMESTAMP logical types. NANOSECOND is not readable by all engines.").
-				Default("NANOSECOND").
-				Advanced().
-				Version("4.89.0"),
-		).
+		Fields(parquetEncodeFields()...).
 		Description(experimentalLibraryDescription).
 		Version("4.4.0").
 		// TODO: Add an example that demonstrates error handling
