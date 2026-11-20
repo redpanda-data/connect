@@ -719,11 +719,12 @@ func missingFromPublicationError(publicationName string, allTables bool, missing
 // rather than the table itself unless the publication sets
 // publish_via_partition_root, so a table is covered when the publication
 // lists something in its partition tree or above it, and every leaf partition
-// is listed itself or through one of its ancestors. A publication listing
-// only some partitions does not cover the parent. The table itself is matched
-// directly, since pg_partition_tree and pg_partition_ancestors return no rows
-// for a table that is neither partitioned nor a partition. A table that does
-// not exist is not covered. pg_partition_tree and pg_partition_ancestors need
+// is listed itself or through one of its ancestors. Foreign table partitions
+// are left out of that check. A publication listing only some partitions does
+// not cover the parent. The table itself is matched directly, since
+// pg_partition_tree and pg_partition_ancestors return no rows for a table that
+// is neither partitioned nor a partition. A table that does not exist is not
+// covered. pg_partition_tree and pg_partition_ancestors need
 // PostgreSQL 12 or later.
 func publicationCoversTableQuery(publication, table string) (string, error) {
 	return sanitize.SQLQuery(`
@@ -748,6 +749,10 @@ func publicationCoversTableQuery(publication, table string) (string, error) {
                    SELECT 1
                    FROM   pg_partition_tree(to_regclass($2)) leaf
                    WHERE  leaf.isleaf
+                   -- A foreign table partition never streams, since its
+                   -- writes go to the remote server and not to this WAL.
+                   -- FOR ALL TABLES does not list it, so it is not required.
+                   AND    (SELECT relkind FROM pg_class WHERE oid = leaf.relid) <> 'f'
                    AND    NOT EXISTS (
                               SELECT 1 FROM published
                               WHERE  oid IN (SELECT relid FROM pg_partition_ancestors(leaf.relid))

@@ -775,6 +775,50 @@ func TestIntegrationValidatePublicationAllTablesExcept(t *testing.T) {
 	assert.ErrorContains(t, err, "SET ALL TABLES EXCEPT")
 }
 
+// TestIntegrationValidatePublicationForeignPartition checks that a foreign
+// table partition does not stop a partitioned table from counting as covered.
+//
+// Context:
+//   - A write to a foreign table goes to the remote server, so it never reaches
+//     this server's WAL and no publication can stream it.
+//   - FOR TABLE of a partitioned table lists its foreign partitions in
+//     pg_publication_tables. FOR ALL TABLES leaves them out.
+//
+// Expected behavior: the partitioned table is covered with both kinds of
+// publication, since every partition that can stream is published.
+func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	for _, sql := range []string{
+		"CREATE EXTENSION postgres_fdw;",
+		"CREATE SERVER archive FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'dbname');",
+		"CREATE TABLE events (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE FOREIGN TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') SERVER archive;",
+		"CREATE PUBLICATION pub_all FOR ALL TABLES;",
+		"CREATE PUBLICATION pub_events FOR TABLE events;",
+	} {
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+
+	events := []TableFQN{{`"public"`, `"events"`}}
+	_, err = ValidatePublication(ctx, conn, "pub_all", events)
+	require.NoError(t, err)
+	_, err = ValidatePublication(ctx, conn, "pub_events", events)
+	require.NoError(t, err)
+}
+
 // TestIntegrationBackfillRequiresTablePublishedAsItself checks the
 // incremental snapshot only accepts a table whose changes stream under its
 // own name, unfiltered, against the publication layouts a DBA can build.
