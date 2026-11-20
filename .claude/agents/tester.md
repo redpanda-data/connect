@@ -334,6 +334,8 @@ assert.ErrorIs(t, err, service.ErrEndOfInput)
 
 # Integration Test Patterns
 
+For CDC snapshot work, cover the test list and fingerprint check in the matching `docs/specs/` spec.
+
 ## `service.NewStreamBuilder` for Integration Tests
 
 All new integration tests use `service.NewStreamBuilder` for pipeline construction.

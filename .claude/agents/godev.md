@@ -381,6 +381,7 @@ The `support` column in info.csv (`community`/`certified`/`enterprise`) determin
 - Add appropriate license headers (CI enforces this)
 - Use testcontainers-go for new integration tests
 - Follow certification standards below
+- Before changing CDC snapshot or streaming behaviour, read the matching spec in `docs/specs/` and follow its MUST requirements
 
 ## Certification Standards
 

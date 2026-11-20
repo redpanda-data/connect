@@ -156,7 +156,7 @@ The rule throughout is **conformance to the existing fleet**: mirror the shape t
 
 - **5.5.1** `schema` metadata derived from the system catalog, including primary keys and per-column nullability, with addition-only drift detection. Reference: `oracledb_cdc`, `postgres_cdc`.
 - **5.5.2** Snapshot + streaming with a gap-free handoff: capture the stream position before the snapshot read and resume streaming from it.
-- **5.5.3** Parallel snapshotting (`max_parallel_snapshot_tables`).
+- **5.5.3** Parallel snapshotting (`max_parallel_snapshot_tables`). Splitting one table into key ranges read in parallel follows `docs/specs/range-chunked-snapshotting.md`.
 - **5.5.4** Incremental, signal-driven snapshotting.
 - **5.5.5** Snapshot query filtering.
 - **5.5.6** Idle keepalive that advances the read position/watermark during idle (`heartbeat_interval`). Reference: `postgres_cdc`.
