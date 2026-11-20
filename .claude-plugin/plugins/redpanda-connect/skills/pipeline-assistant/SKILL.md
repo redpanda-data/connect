@@ -25,6 +25,7 @@ This skill focuses ONLY on pipeline configuration orchestration and validation.
 NEVER directly use component-search or bloblang-authoring tools.
 - **Component Discovery** - ALWAYS delegate to `component-search` skill when it is unclear which components to use OR when you need component configuration details
 - **Bloblang Development** - ALWAYS delegate to `bloblang-authoring` skill when creating or fixing Bloblang transformations and NEVER write Bloblang yourself
+- **CDC Operations** - Follow the `cdc-operations` skill before starting, backfilling, or changing the checkpoint of a CDC input (`postgres_cdc`, `mysql_cdc`, `oracledb_cdc`, `microsoft_sql_server_cdc`, `salesforce_cdc`)
 
 ## Setup
 
@@ -295,6 +296,7 @@ Each recipe includes:
    - Run `rpk connect lint` to identify errors
    - Review user-provided context about symptoms
    - Find root causes (typos, deprecations, type mismatches)
+   - If a component type "was not recognised" on one host but the same config runs elsewhere, read `/etc/redpanda/connector_list.yaml` on that host before you blame the version, the build, or the package. An `allow` list that omits the component, or a `deny` list that names it, removes it from that instance. The list is an administrator's restriction: do not edit or remove it yourself, and do not reinstall Connect. Tell the user that whoever manages the list has to allow the component, or ask before changing it.
 
 2. **Explain issues**
    - Translate validation errors to plain language
@@ -322,6 +324,12 @@ Each recipe includes:
 - `.env` - Contains actual secret values, used at runtime with `--env-file .env`, NEVER commit to git
 - `.env.example` - Documents required variables with placeholder values, safe to commit
 - Always remind user to add `.env` to `.gitignore`
+
+**Secure the HTTP server before you turn on the streams API:**
+- `--bind-http` on `rpk connect streams` registers endpoints that accept pipeline configuration and run it, and it adds no authentication of its own
+- Before enabling it, read the `http` section of the root config (the `-o` file)
+- If the server listens beyond localhost with no `basic_auth`, add `http.basic_auth`, or an `http.address` or network restriction that admits only the callers that need the API, in the same change
+- If you can't do that, stop and ask the user how to secure it. Never enable the API first and warn afterwards
 
 **When encountering sensitive fields** (from `<secret_fields>` in component schema):
 1. Ask user for environment variable name (e.g., `KAFKA_PASSWORD`)
