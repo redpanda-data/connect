@@ -61,13 +61,12 @@ tasks:
         fi
 
   fix:
-    desc: Upgrade the modules in target/snyk/report.json to their minimum fixed versions with go get for the projects in SNYK_FILES, then lint and test (DRY_RUN=true to print the plan, VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
+    desc: Upgrade the modules in target/snyk/report.json to their minimum fixed versions with go get for the projects in SNYK_FILES, then lint and test (VERIFY=false to skip lint/test, FILES="go.mod ..." to override)
     silent: true
     preconditions:
       - sh: test -f '{{.SNYK_REPORT}}'
         msg: '{{.SNYK_REPORT}} not found, run `task snyk:report` first'
     vars:
-      DRY_RUN: '{{.DRY_RUN | default "false"}}'
       # Run `task lint` and `task test` after a real run that updated something.
       VERIFY: '{{.VERIFY | default "true"}}'
       # Projects to fix: FILES if given, otherwise SNYK_FILES. Report entries outside this are ignored.
@@ -112,11 +111,6 @@ tasks:
             -f '{{.SNYK_JQ}}/plan.jq' > "$plan.jsonl"
           jq -c 'select(.status == "skipped")' "$plan.jsonl" | tee -a "$results" |
             jq -r '"    skip  \(.module) \(.from) -> \(.to): \(.message)"'
-          if [ "{{.DRY_RUN}}" = "true" ]; then
-            jq -c 'select(.status == "pending") | .status = "planned"' "$plan.jsonl" | tee -a "$results" |
-              jq -r '"    plan  go get \(.module)@\(.to)  (from \(.from); \(.message))"'
-            continue
-          fi
 
           changed=0
           while read -r r; do
@@ -142,13 +136,13 @@ tasks:
           fi
         done
 
-        jq -s '{generatedAt: (now | todate), dryRun: {{.DRY_RUN}}, results: .}' "$results" > '{{.SNYK_FIX_REPORT}}'
+        jq -s '{generatedAt: (now | todate), results: .}' "$results" > '{{.SNYK_FIX_REPORT}}'
         echo "Wrote {{.SNYK_FIX_REPORT}}"
         jq -r '.results | group_by(.status)[] | "  \(.[0].status): \(length)"' '{{.SNYK_FIX_REPORT}}'
       - |
         count() { jq "[.results[] | select(.status == \"$1\")] | length" '{{.SNYK_FIX_REPORT}}'; }
         rc=0
-        if [ "{{.DRY_RUN}}" = "true" ] || [ "{{.VERIFY}}" != "true" ]; then
+        if [ "{{.VERIFY}}" != "true" ]; then
           :
         elif [ "$(count error)" != 0 ]; then
           # A failed go list or go mod tidy leaves a tree not worth linting or testing.
