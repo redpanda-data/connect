@@ -524,6 +524,9 @@ type fakeQueryDriver struct {
 	// notInPublication answers the publication coverage query. The zero
 	// value reports the table as covered.
 	notInPublication bool
+	// allTables answers the queries that read pg_publication.puballtables.
+	// The zero value describes a FOR TABLE publication.
+	allTables bool
 }
 
 func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
@@ -561,6 +564,18 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	}
 	// The publication queries all name pg_publication, so they are told apart
 	// by what else they read, before the generic match below.
+	if strings.Contains(s.query, "relispartition") {
+		return &fakeQueryRows{
+			columns: []string{"partitioned", "partition", "viaroot", "puballtables"},
+			rows:    [][]driver.Value{{false, false, false, s.conn.driver.allTables}},
+		}, nil
+	}
+	if strings.Contains(s.query, "puballtables") {
+		return &fakeQueryRows{
+			columns: []string{"puballtables"},
+			rows:    [][]driver.Value{{s.conn.driver.allTables}},
+		}, nil
+	}
 	if strings.Contains(s.query, "pg_partition_tree") {
 		return &fakeQueryRows{
 			columns: []string{"exists"},
