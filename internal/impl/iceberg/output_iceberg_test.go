@@ -382,3 +382,42 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 		})
 	}
 }
+
+// TestStorageBucketIsOptional checks that a storage config without a bucket is
+// valid. The table location decides where data files go, so the bucket has no
+// effect and must not be required.
+func TestStorageBucketIsOptional(t *testing.T) {
+	tests := []struct {
+		name    string
+		storage string
+	}{
+		{
+			name: "aws_s3",
+			storage: `
+  aws_s3:
+    region: us-east-1
+`,
+		},
+		{
+			name: "gcp_cloud_storage",
+			storage: `
+  gcp_cloud_storage:
+    credentials_type: service_account
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:`+tt.storage, nil)
+			require.NoError(t, err)
+
+			_, err = parseStorageProps(conf)
+			require.NoError(t, err)
+		})
+	}
+}
