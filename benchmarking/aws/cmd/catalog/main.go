@@ -161,8 +161,10 @@ func runQuery(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 
 	q := catalog.Query{Input: *input, Output: *output, MessageSizeBytes: *size, Mode: *mode}
-	if *procs != "" {
-		q.Processors = strings.Split(*procs, ",")
+	for _, p := range strings.Split(*procs, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			q.Processors = append(q.Processors, p)
+		}
 	}
 	if *cfgPath != "" {
 		raw, err := os.ReadFile(*cfgPath)
@@ -222,6 +224,7 @@ func runRecommend(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	store := fs.String("store", defaultStore, "catalogue store: s3://<bucket> or dir:<path>")
 	repo := fs.String("repo", ".", "git checkout used for staleness")
 	id := fs.String("entry-id", "", "catalogue entry ID")
+	input := fs.String("input", "", "input component of the entry (optional; narrows the listing)")
 	target := fs.Float64("target-mb-s", 0, "target throughput in MB/s")
 	sizing := fs.String("sizing", "", "sizing config JSON (default: built-in)")
 	if err := parseFlags(fs, args); err != nil {
@@ -245,7 +248,7 @@ func runRecommend(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if err != nil {
 		return err
 	}
-	entries, err := st.List(ctx, "")
+	entries, err := st.List(ctx, *input)
 	if err != nil {
 		return fmt.Errorf("listing catalogue: %w", err)
 	}

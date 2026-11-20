@@ -52,8 +52,8 @@ func checkPut(e Entry) ([]byte, error) {
 		return nil, fmt.Errorf("invalid catalog entry: %w", err)
 	}
 	for name, v := range map[string]string{"input": e.Input, "id": e.ID} {
-		if strings.ContainsAny(v, `/\`) || v == "." || v == ".." {
-			return nil, fmt.Errorf("invalid catalog entry: %s %q must not contain path separators", name, v)
+		if err := checkSegment(name, v); err != nil {
+			return nil, fmt.Errorf("invalid catalog entry: %w", err)
 		}
 	}
 	body, err := json.MarshalIndent(e, "", "  ")
@@ -61,6 +61,22 @@ func checkPut(e Entry) ([]byte, error) {
 		return nil, fmt.Errorf("encoding catalog entry %s: %w", e.ID, err)
 	}
 	return body, nil
+}
+
+// checkSegment refuses a key segment that would escape its prefix.
+func checkSegment(name, v string) error {
+	if strings.ContainsAny(v, `/\`) || v == "." || v == ".." {
+		return fmt.Errorf("%s %q must not contain path separators or be . or ..", name, v)
+	}
+	return nil
+}
+
+// checkListInput validates List's input filter ("" = all inputs).
+func checkListInput(input string) error {
+	if input == "" {
+		return nil
+	}
+	return checkSegment("input", input)
 }
 
 // decodeEntry decodes one stored object. It returns ok=false (and no error)
@@ -113,6 +129,9 @@ func (d *dirStore) Put(_ context.Context, e Entry) error {
 }
 
 func (d *dirStore) List(ctx context.Context, input string) ([]Entry, error) {
+	if err := checkListInput(input); err != nil {
+		return nil, err
+	}
 	base := filepath.Join(d.root, filepath.FromSlash(listPrefix(input)))
 	var out []Entry
 	err := filepath.WalkDir(base, func(path string, de fs.DirEntry, err error) error {

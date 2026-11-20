@@ -33,6 +33,8 @@ type fakeS3 struct {
 	objs     map[string][]byte
 	pageSize int
 	puts     int
+	// dropToken drops NextContinuationToken from truncated pages.
+	dropToken bool
 }
 
 func newFakeS3(pageSize int) *fakeS3 {
@@ -80,7 +82,9 @@ func (f *fakeS3) ListObjectsV2(_ context.Context, in *s3.ListObjectsV2Input, _ .
 	if f.pageSize > 0 && start+f.pageSize < end {
 		end = start + f.pageSize
 		out.IsTruncated = aws.Bool(true)
-		out.NextContinuationToken = aws.String(strconv.Itoa(end))
+		if !f.dropToken {
+			out.NextContinuationToken = aws.String(strconv.Itoa(end))
+		}
 	}
 	for _, k := range keys[start:end] {
 		out.Contents = append(out.Contents, s3types.Object{Key: aws.String(k)})
@@ -235,4 +239,28 @@ func TestStoreListPaginates(t *testing.T) {
 	got, err := st.List(ctx, "postgres_cdc")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a", "b", "c", "d", "e"}, ids(got))
+}
+
+func TestStoreListTruncatedWithoutTokenIsError(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeS3(2)
+	st := NewS3Store(f, "bkt")
+	for _, id := range []string{"a", "b", "c"} {
+		require.NoError(t, st.Put(ctx, entryWith(id, "postgres_cdc")))
+	}
+	f.dropToken = true
+	_, err := st.List(ctx, "postgres_cdc")
+	require.ErrorContains(t, err, "continuation token")
+}
+
+func TestStoreListRejectsBadInput(t *testing.T) {
+	for _, fx := range storeFixtures() {
+		t.Run(fx.name, func(t *testing.T) {
+			st, _, _ := fx.make(t)
+			for _, in := range []string{".", "..", "a/b", `a\b`, "../postgres_cdc"} {
+				_, err := st.List(context.Background(), in)
+				require.ErrorContains(t, err, "input", in)
+			}
+		})
+	}
 }

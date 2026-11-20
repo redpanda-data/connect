@@ -56,6 +56,9 @@ func (s *s3Store) Put(ctx context.Context, e Entry) error {
 }
 
 func (s *s3Store) List(ctx context.Context, input string) ([]Entry, error) {
+	if err := checkListInput(input); err != nil {
+		return nil, err
+	}
 	var out []Entry
 	var token *string
 	for {
@@ -80,8 +83,12 @@ func (s *s3Store) List(ctx context.Context, input string) ([]Entry, error) {
 				out = append(out, e)
 			}
 		}
-		if !aws.ToBool(page.IsTruncated) || page.NextContinuationToken == nil {
+		if !aws.ToBool(page.IsTruncated) {
 			return out, nil
+		}
+		if page.NextContinuationToken == nil {
+			// Returning here would silently drop the remaining entries.
+			return nil, fmt.Errorf("listing s3://%s: truncated page without a continuation token", s.bucket)
 		}
 		token = page.NextContinuationToken
 	}

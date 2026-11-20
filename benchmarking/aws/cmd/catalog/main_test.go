@@ -98,6 +98,18 @@ func TestQueryJSON(t *testing.T) {
 	require.NotEmpty(t, got.Matches[0].Staleness.Reasons)
 }
 
+func TestQueryTrimsProcessorNames(t *testing.T) {
+	e := testEntry(t, "procs-1", "redpanda", 1200)
+	e.Processors = []string{"mapping", "branch"}
+	code, stdout, stderr := runCLI(t, "query", "--store", seedStore(t, e), "--repo", t.TempDir(),
+		"--input", "postgres_cdc", "--output", "redpanda", "--processors", " mapping , branch ", "--message-size", "1200")
+	require.Equal(t, 0, code, stderr)
+	var got queryOut
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+	require.Len(t, got.Matches, 1)
+	require.Equal(t, "exact", got.Matches[0].Kind, got.Matches[0].Differences)
+}
+
 func TestQueryNoMatchesIsEmptyArray(t *testing.T) {
 	code, stdout, stderr := runCLI(t, "query", "--store", seedStore(t), "--repo", t.TempDir(), "--input", "x", "--output", "y")
 	require.Equal(t, 0, code, stderr)
@@ -176,6 +188,16 @@ func TestRecommendSizingFile(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Equal(t, 20, got.Recommendation.CUs)
+}
+
+func TestRecommendInputNarrowsList(t *testing.T) {
+	store := seedStore(t, testEntry(t, "exact-1", "redpanda", 1200))
+	code, _, stderr := runCLI(t, "recommend", "--store", store, "--repo", t.TempDir(), "--input", "postgres_cdc", "--entry-id", "exact-1", "--target-mb-s", "40")
+	require.Equal(t, 0, code, stderr)
+
+	code, stdout, _ := runCLI(t, "recommend", "--store", store, "--repo", t.TempDir(), "--input", "mysql_cdc", "--entry-id", "exact-1", "--target-mb-s", "40")
+	require.Equal(t, 1, code)
+	require.JSONEq(t, `{"error":"entry not found"}`, stdout)
 }
 
 func TestRecommendEntryNotFound(t *testing.T) {
