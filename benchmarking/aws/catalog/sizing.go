@@ -61,17 +61,22 @@ func parseSizingConfig(b []byte) (SizingConfig, error) {
 
 // Recommendation is the CU sizing for a target throughput.
 type Recommendation struct {
-	CUs            int      `json:"cus"`       // 0 when below_floor or exceeds_ceiling
-	FloorCUs       int      `json:"floor_cus"` // CUs of the lowest measured point
-	VCPU           float64  `json:"vcpu"`
-	BoundBy        string   `json:"bound_by"`  // "throughput" | "memory"
-	Estimated      bool     `json:"estimated"` // interpolated between points
-	BelowFloor     bool     `json:"below_floor"`
-	ExceedsCeiling bool     `json:"exceeds_ceiling"`
-	CeilingMBps    float64  `json:"ceiling_mb_s"`
-	MemoryBound    string   `json:"memory_bound"` // "<n> CUs" | "not_measured"
-	Headroom       float64  `json:"headroom"`
-	Caveats        []string `json:"caveats"`
+	CUs      int `json:"cus"`       // 0 when below_floor or exceeds_ceiling
+	FloorCUs int `json:"floor_cus"` // CUs of the lowest measured point
+	// VCPU is CUs expressed in vCPUs (CUs / cus_per_vcpu); 0 when CUs is 0.
+	VCPU float64 `json:"vcpu"`
+	// InterpolatedVCPU is the vCPU at which measured throughput meets the
+	// target, before rounding up to whole CU steps; 0 when the target is
+	// under the lowest point or over the ceiling.
+	InterpolatedVCPU float64  `json:"interpolated_vcpu"`
+	BoundBy          string   `json:"bound_by"`  // "throughput" | "memory"
+	Estimated        bool     `json:"estimated"` // interpolated between points
+	BelowFloor       bool     `json:"below_floor"`
+	ExceedsCeiling   bool     `json:"exceeds_ceiling"`
+	CeilingMBps      float64  `json:"ceiling_mb_s"`
+	MemoryBound      string   `json:"memory_bound"` // "<n> CUs" | "not_measured"
+	Headroom         float64  `json:"headroom"`
+	Caveats          []string `json:"caveats"`
 }
 
 // relTol absorbs floating-point noise from dividing by the headroom, so a
@@ -119,8 +124,15 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 	}
 
 	if need <= pts[0].CapacityMBps || approxEq(need, pts[0].CapacityMBps) {
-		rec.BelowFloor = true
-		memory(pts[0])
+		// Throughput fits under the lowest point, but memory can still need
+		// more than that point's CUs.
+		if memCUs := memory(pts[0]); memCUs > rec.FloorCUs {
+			rec.CUs = memCUs
+			rec.BoundBy = "memory"
+		} else {
+			rec.BelowFloor = true
+		}
+		rec.setVCPU(cfg)
 		rec.addEntryCaveats(e)
 		return rec, nil
 	}
@@ -147,7 +159,7 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 		vcpu = lo.VCPU + (need-lo.CapacityMBps)/(hi.CapacityMBps-lo.CapacityMBps)*(hi.VCPU-lo.VCPU)
 		rec.Estimated = true
 	}
-	rec.VCPU = vcpu
+	rec.InterpolatedVCPU = vcpu
 	// The epsilon stops float noise such as 20.000000000000004 adding a CU step.
 	cpuCUs := roundUp10(math.Ceil(vcpu*float64(cfg.CUsPerVCPU) - relTol))
 	rec.CUs = cpuCUs
@@ -156,8 +168,14 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 		rec.CUs = memCUs
 		rec.BoundBy = "memory"
 	}
+	rec.setVCPU(cfg)
 	rec.addEntryCaveats(e)
 	return rec, nil
+}
+
+// setVCPU derives VCPU from the final CU count so the two always agree.
+func (r *Recommendation) setVCPU(cfg SizingConfig) {
+	r.VCPU = float64(r.CUs) / float64(cfg.CUsPerVCPU)
 }
 
 func (r *Recommendation) addEntryCaveats(e Entry) {

@@ -40,7 +40,8 @@ func TestRecommendExactPoint(t *testing.T) {
 	r, err := Recommend(fixtureEntry(), 40, sizingCfg())
 	require.NoError(t, err)
 	require.Equal(t, 40, r.CUs)
-	require.InDelta(t, 3.265, r.VCPU, 0.01)
+	require.InDelta(t, 4, r.VCPU, 1e-9)
+	require.InDelta(t, 3.265, r.InterpolatedVCPU, 0.01)
 	require.True(t, r.Estimated)
 	require.Equal(t, "throughput", r.BoundBy)
 	require.Equal(t, "20 CUs", r.MemoryBound)
@@ -52,7 +53,8 @@ func TestRecommendInterpolatesToThirty(t *testing.T) {
 	r, err := Recommend(fixtureEntry(), 30, sizingCfg())
 	require.NoError(t, err)
 	require.Equal(t, 30, r.CUs)
-	require.InDelta(t, 2.449, r.VCPU, 0.01)
+	require.InDelta(t, 3, r.VCPU, 1e-9)
+	require.InDelta(t, 2.449, r.InterpolatedVCPU, 0.01)
 }
 
 func TestRecommendBelowFloor(t *testing.T) {
@@ -60,6 +62,19 @@ func TestRecommendBelowFloor(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, r.BelowFloor)
 	require.Zero(t, r.CUs)
+	require.Zero(t, r.VCPU)
+}
+
+func TestRecommendBelowFloorMemoryAboveFloor(t *testing.T) {
+	e := fixtureEntry()
+	e.Points[0].PeakRSSBytes = 7_000_000_000 // 17.5 CUs -> 20, above the 10 CU floor
+	r, err := Recommend(e, 10, sizingCfg())
+	require.NoError(t, err)
+	require.False(t, r.BelowFloor)
+	require.Equal(t, 20, r.CUs)
+	require.Equal(t, "memory", r.BoundBy)
+	require.InDelta(t, 2, r.VCPU, 1e-9)
+	require.Equal(t, "20 CUs", r.MemoryBound)
 }
 
 func TestRecommendExceedsCeiling(t *testing.T) {
