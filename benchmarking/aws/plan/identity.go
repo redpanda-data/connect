@@ -11,14 +11,16 @@ package plan
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
 
-// DeletedKeys are removed at any depth of a customer pipeline: they carry
-// identity (endpoints, credentials, names) rather than performance.
+// DeletedKeys are removed at any depth of the input, output and buffer
+// subtrees (never inside processors): they carry identity (endpoints,
+// credentials, names) rather than performance.
 var DeletedKeys = []string{
 	"dsn", "url", "urls", "addresses", "seed_brokers", "tls", "sasl", "auth",
 	"credentials", "credentials_json", "password", "user", "username",
@@ -27,25 +29,51 @@ var DeletedKeys = []string{
 	"bucket", "path", "project", "dataset", "namespace", "catalog",
 }
 
-// ExtraDeletedKeys are further identity or secret-bearing keys that component
-// specs accept, dropped on top of DeletedKeys so nothing outside the
-// documented list can leak a hostname, account or token.
+// ExtraDeletedKeys are further identity keys that component specs accept,
+// dropped on top of DeletedKeys.
 var ExtraDeletedKeys = []string{
-	"consumer_group", "client_id", "endpoint", "region", "token", "secret",
-	"client_secret", "access_key", "secret_key", "api_key", "bearer", "headers",
+	"consumer_group", "client_id", "endpoint", "region", "headers",
 	"host", "hosts", "brokers", "job_project", "table_location", "warehouse",
 	"stage", "snowpipe", "cloud", "init_statement", "channel_prefix",
-	"channel_name", "checkpoint_cache", "checkpoint_key",
+	"channel_name", "checkpoint_key", "checkpoint_cache_key",
 }
 
-// externalProcessors call systems the bench does not provide, so they are
-// replaced with a no-op mapping.
-var externalProcessors = []string{
-	"http", "sql_raw", "sql_select", "sql_insert", "cache", "redis", "aws_lambda", "workflow",
+// DeletedObjects are whole config objects removed from input, output and
+// buffer subtrees, whatever they contain. Removing "aws" also switches off
+// IAM auth, which the bench replaces with a plain DSN.
+var DeletedObjects = []string{
+	"aws", "oauth", "oauth2", "basic_auth", "jwt", "sasl", "tls", "credentials",
 }
+
+// secretKey matches any key that plausibly holds a credential or identity, in
+// the input, output and buffer subtrees. It is the structural backstop behind
+// the explicit lists, so a component this package has never seen cannot leak.
+var secretKey = regexp.MustCompile(
+	"(?i)(secret|token|passw|credential|private|cert|auth|api_?key|access_?key|connection_string|account_key)")
+
+// PureProcessors is the allowlist of processors that make no external calls.
+// They are kept verbatim; every other processor (including any a new release
+// adds) is replaced with a no-op mapping. Containers (branch, switch, try,
+// workflow, ...) are recursed and keep their structure.
+var PureProcessors = []string{
+	"mapping", "mutation", "bloblang", "jq", "jmespath", "javascript", "awk",
+	"branch", "switch", "try", "catch", "while", "for_each", "parallel",
+	"processors", "workflow", "group_by", "group_by_value", "split", "archive",
+	"unarchive", "compress", "decompress", "json_schema", "parquet_encode",
+	"parquet_decode", "avro", "protobuf", "msgpack", "xml", "grok", "log",
+	"metric", "sleep", "bounds_check", "select_parts", "insert_part", "noop",
+	"dedupe", "benchmark", "parse_log", "sync_response",
+}
+
+// BenchCache is the label of the in-memory cache resource that replaces every
+// customer cache reference (CDC checkpoints, dedupe).
+const BenchCache = "bench_cache"
 
 // listProcessors hold their processor list directly as the component value.
-var listProcessors = []string{"try", "catch", "for_each", "parallel"}
+var listProcessors = []string{"try", "catch", "for_each", "parallel", "processors"}
+
+// wrapperInputs combine child inputs; the plan is classified by the children.
+var wrapperInputs = []string{"broker", "sequence", "read_until"}
 
 // topLevelKeys are the only top-level config sections that survive: resources,
 // http, logger and the like can all carry customer identity.
@@ -71,19 +99,17 @@ var SourceTemplates = map[SourceKind]func(component string) Template{
 		}}
 	},
 	SourceMySQL: func(string) Template {
-		return Template{
-			Fields: map[string]any{
-				"dsn":              "${MYSQL_DSN}",
-				"tls":              map[string]any{"skip_cert_verify": true},
-				"tables":           []any{"orders"},
-				"checkpoint_cache": "bench_checkpoint",
-				"checkpoint_key":   "mysql_bench",
-			},
-			Top: map[string]any{"cache_resources": []any{
-				map[string]any{"label": "bench_checkpoint", "memory": map[string]any{}},
-			}},
-		}
+		return Template{Fields: map[string]any{
+			"dsn":              "${MYSQL_DSN}",
+			"tls":              map[string]any{"skip_cert_verify": true},
+			"tables":           []any{"orders"},
+			"checkpoint_cache": BenchCache,
+			"checkpoint_key":   "mysql_bench",
+		}}
 	},
+	// Note: setting consumer_group on a franz/redpanda input that had none
+	// changes its semantics (group-managed offsets instead of direct
+	// consumption), so the bench always runs in a group, as the soak does.
 	SourceRedpanda: func(component string) Template {
 		brokers := []any{"${BENCH_REDPANDA_BROKERS}"}
 		f := map[string]any{
@@ -170,8 +196,8 @@ func brokerTemplate(component string, brokers []any, fields map[string]any) Temp
 }
 
 // SwapIdentity returns a copy of a customer pipeline with identity replaced by
-// bench placeholders, external-call processors stubbed and snapshots turned
-// off, plus the caveats that those changes imply. The input is not modified.
+// bench placeholders, non-pure processors stubbed and snapshots turned off,
+// plus the caveats that those changes imply. The input is not modified.
 func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[string]any, []string, error) {
 	out := map[string]any{}
 	for _, k := range topLevelKeys {
@@ -179,7 +205,7 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 			out[k] = deepCopy(v)
 		}
 	}
-	inMap, inName, err := component(out, "input")
+	inMap, _, err := component(out, "input")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -189,26 +215,36 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 	}
 
 	var caveats []string
-	if stubProcessors(out) {
+	st := &swapState{}
+	if stubProcessors(out, st) {
 		caveats = append(caveats, CaveatExternalStubbed)
 	}
 	if src == SourceApproximated {
-		inMap[inName] = stripStrings(inMap[inName])
+		stripStrings(inMap)
 	}
-	deleteKeys(out)
-
-	if strings.HasSuffix(inName, "_cdc") {
-		if cfg, ok := inMap[inName].(map[string]any); ok && cfg["stream_snapshot"] == true {
-			cfg["stream_snapshot"] = false
-			caveats = append(caveats, CaveatSnapshotNotMeasure)
+	for _, k := range topLevelKeys {
+		if k != "pipeline" && out[k] != nil {
+			scrub(out[k])
 		}
 	}
 
-	if tf, ok := SourceTemplates[src]; ok {
-		if err := applyTemplate(out, inMap, inName, tf(inName)); err != nil {
-			return nil, nil, err
+	err = inputLeaves(inMap, func(h map[string]any, name string) error {
+		if strings.HasSuffix(name, "_cdc") {
+			if cfg, ok := h[name].(map[string]any); ok && cfg["stream_snapshot"] == true {
+				cfg["stream_snapshot"] = false
+				caveats = append(caveats, CaveatSnapshotNotMeasure)
+			}
 		}
+		kind, real := RealSources[name]
+		if !real || src == SourceApproximated {
+			return nil
+		}
+		return applyTemplate(out, h, name, SourceTemplates[kind](name))
+	})
+	if err != nil {
+		return nil, nil, err
 	}
+
 	if sink == SinkDrop {
 		delete(outMap, outName)
 		outMap["drop"] = map[string]any{}
@@ -217,7 +253,80 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 			return nil, nil, err
 		}
 	}
+
+	if swapCheckpointCaches(inMap) || st.benchCache {
+		out["cache_resources"] = []any{map[string]any{"label": BenchCache, "memory": map[string]any{}}}
+	}
 	return out, caveats, nil
+}
+
+type swapState struct{ benchCache bool }
+
+// inputLeaves calls fn for every non-wrapper input under holder, recursing
+// through broker, sequence and read_until.
+func inputLeaves(holder map[string]any, fn func(h map[string]any, name string) error) error {
+	name := ""
+	for k := range holder {
+		if k != "processors" && k != "label" {
+			name = k
+			break
+		}
+	}
+	if name == "" {
+		return errors.New("input has no component")
+	}
+	if !slices.Contains(wrapperInputs, name) {
+		return fn(holder, name)
+	}
+	cfg, ok := holder[name].(map[string]any)
+	if !ok {
+		return nil
+	}
+	var children []any
+	if l, ok := cfg["inputs"].([]any); ok {
+		children = l
+	} else if c, ok := cfg["input"].(map[string]any); ok {
+		children = []any{c}
+	}
+	for _, c := range children {
+		cm, ok := c.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s child input must be a map", name)
+		}
+		if err := inputLeaves(cm, fn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// swapCheckpointCaches points every checkpoint_cache reference at the bench
+// in-memory cache and reports whether it found any.
+func swapCheckpointCaches(v any) bool {
+	found := false
+	switch t := v.(type) {
+	case map[string]any:
+		for k, child := range t {
+			if k == "processors" {
+				continue
+			}
+			if _, isStr := child.(string); isStr && k == "checkpoint_cache" {
+				t[k] = BenchCache
+				found = true
+				continue
+			}
+			if swapCheckpointCaches(child) {
+				found = true
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if swapCheckpointCaches(child) {
+				found = true
+			}
+		}
+	}
+	return found
 }
 
 func applyTemplate(root, holder map[string]any, name string, t Template) error {
@@ -252,27 +361,27 @@ func component(root map[string]any, section string) (map[string]any, string, err
 	return nil, "", errors.New("pipeline " + section + " has no component")
 }
 
-// stubProcessors walks v and replaces every external processor found in a
-// processor list with a no-op mapping, keeping the surrounding structure. It
-// reports whether any were replaced.
-func stubProcessors(v any) bool {
+// stubProcessors walks v and replaces every processor not on PureProcessors
+// found in a processor list with a no-op mapping, keeping the surrounding
+// structure. It reports whether any were replaced.
+func stubProcessors(v any, st *swapState) bool {
 	stubbed := false
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
 			if list, ok := child.([]any); ok && k == "processors" {
-				if stubList(list) {
+				if stubList(list, st) {
 					stubbed = true
 				}
 				continue
 			}
-			if stubProcessors(child) {
+			if stubProcessors(child, st) {
 				stubbed = true
 			}
 		}
 	case []any:
 		for _, child := range t {
-			if stubProcessors(child) {
+			if stubProcessors(child, st) {
 				stubbed = true
 			}
 		}
@@ -280,7 +389,7 @@ func stubProcessors(v any) bool {
 	return stubbed
 }
 
-func stubList(list []any) bool {
+func stubList(list []any, st *swapState) bool {
 	stubbed := false
 	for i, item := range list {
 		m, ok := item.(map[string]any)
@@ -288,17 +397,27 @@ func stubList(list []any) bool {
 			continue
 		}
 		name := processorName(m)
-		if slices.Contains(externalProcessors, name) {
+		if name == "" {
+			continue
+		}
+		if !slices.Contains(PureProcessors, name) {
 			list[i] = map[string]any{"mapping": "root = this"}
 			stubbed = true
 			continue
 		}
-		if sub, ok := m[name].([]any); ok && slices.Contains(listProcessors, name) {
-			if stubList(sub) {
-				stubbed = true
+		if name == "dedupe" {
+			if cfg, ok := m[name].(map[string]any); ok {
+				cfg["cache"] = BenchCache
+				st.benchCache = true
 			}
 		}
-		if stubProcessors(m) {
+		if sub, ok := m[name].([]any); ok && slices.Contains(listProcessors, name) {
+			if stubList(sub, st) {
+				stubbed = true
+			}
+			continue
+		}
+		if stubProcessors(m, st) {
 			stubbed = true
 		}
 	}
@@ -314,19 +433,25 @@ func processorName(m map[string]any) string {
 	return ""
 }
 
-func deleteKeys(v any) {
+// scrub removes identity and secrets from an input, output or buffer subtree.
+// Processor lists are skipped: pure processors are kept verbatim.
+func scrub(v any) {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
-			if slices.Contains(DeletedKeys, k) || slices.Contains(ExtraDeletedKeys, k) {
+			if k == "processors" {
+				continue
+			}
+			if slices.Contains(DeletedObjects, k) || slices.Contains(DeletedKeys, k) ||
+				slices.Contains(ExtraDeletedKeys, k) || secretKey.MatchString(k) {
 				delete(t, k)
 				continue
 			}
-			deleteKeys(child)
+			scrub(child)
 		}
 	case []any:
 		for _, child := range t {
-			deleteKeys(child)
+			scrub(child)
 		}
 	}
 }

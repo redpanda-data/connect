@@ -39,21 +39,26 @@ type SlackRef struct {
 
 // Plan is a runnable (or explicitly not runnable) bench plan.
 type Plan struct {
-	ID              string         `json:"plan_id"`
-	CreatedAt       time.Time      `json:"created_at"`
-	Runnable        bool           `json:"runnable"`
-	Reason          string         `json:"reason,omitempty"`
-	Input           string         `json:"input"`
-	Processors      []string       `json:"processors"`
-	Output          string         `json:"output"`
-	Source          SourceKind     `json:"source"`
-	Sink            SinkKind       `json:"sink"`
-	SinkSize        string         `json:"sink_size,omitempty"`
-	Pipeline        map[string]any `json:"pipeline"`
-	Workload        Workload       `json:"workload"`
-	Caveats         []string       `json:"caveats"`
-	Slack           SlackRef       `json:"slack"`
-	DispatchedRunID int64          `json:"dispatched_run_id,omitempty"`
+	ID         string         `json:"plan_id"`
+	CreatedAt  time.Time      `json:"created_at"`
+	Runnable   bool           `json:"runnable"`
+	Reason     string         `json:"reason,omitempty"`
+	Input      string         `json:"input"`
+	Processors []string       `json:"processors"`
+	Output     string         `json:"output"`
+	Source     SourceKind     `json:"source"`
+	Sink       SinkKind       `json:"sink"`
+	SinkSize   string         `json:"sink_size,omitempty"`
+	Pipeline   map[string]any `json:"pipeline"`
+	// Fingerprint is catalog.Fingerprint of the customer's ORIGINAL config
+	// (input, pipeline, output), taken before any identity swap. It is a hash
+	// only. Catalogue identity must use this, never Fingerprint(Plan.Pipeline),
+	// which can never equal it.
+	Fingerprint     string   `json:"fingerprint"`
+	Workload        Workload `json:"workload"`
+	Caveats         []string `json:"caveats"`
+	Slack           SlackRef `json:"slack"`
+	DispatchedRunID int64    `json:"dispatched_run_id,omitempty"`
 }
 
 // Build classifies a customer pipeline config and produces a Plan. A config
@@ -63,6 +68,16 @@ func Build(config map[string]any, w Workload, slack SlackRef, now time.Time) (Pl
 	input, processors, output, err := catalog.Components(config)
 	if err != nil {
 		return Plan{}, fmt.Errorf("reading pipeline components: %w", err)
+	}
+	orig := map[string]any{}
+	for _, k := range []string{"input", "pipeline", "output"} {
+		if v, ok := config[k]; ok {
+			orig[k] = v
+		}
+	}
+	fp, err := catalog.Fingerprint(orig)
+	if err != nil {
+		return Plan{}, fmt.Errorf("fingerprinting pipeline: %w", err)
 	}
 	id, err := newID()
 	if err != nil {
@@ -75,18 +90,23 @@ func Build(config map[string]any, w Workload, slack SlackRef, now time.Time) (Pl
 		w.Mode = catalog.ModeFor(input)
 	}
 	p := Plan{
-		ID:         id,
-		CreatedAt:  now,
-		Input:      input,
-		Processors: processors,
-		Output:     output,
-		Workload:   w,
-		Caveats:    []string{},
-		Slack:      slack,
-		Pipeline:   map[string]any{},
+		ID:          id,
+		CreatedAt:   now,
+		Input:       input,
+		Processors:  processors,
+		Output:      output,
+		Workload:    w,
+		Caveats:     []string{},
+		Slack:       slack,
+		Pipeline:    map[string]any{},
+		Fingerprint: fp,
 	}
 
-	src, reason, ok := classifySource(input)
+	inMap, _ := config["input"].(map[string]any)
+	src, reason, ok, err := classifySource(inMap)
+	if err != nil {
+		return Plan{}, fmt.Errorf("classifying input: %w", err)
+	}
 	if !ok {
 		p.Reason = reason
 		return p, nil

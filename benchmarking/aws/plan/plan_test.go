@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
 
 var testNow = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
@@ -195,58 +197,202 @@ func TestBuildCaveatsSortedAndDeduped(t *testing.T) {
 }
 
 func TestBuildNeverLeaksSecrets(t *testing.T) {
-	secrets := []string{
-		"s3cretpw", "customer-corp", "MIIEvQ", "svc_loader", "CUSTORG-ACCT",
-		"cust_slot", "customers", "SASLPASS", "saslusername", "bq-private-key", "kafka-prod-1",
-		"AKIAFAKEKEY", "hunter2", "my-secret-bucket", "SELECT secretcol", "tok_abc123",
+	withInput := func(in map[string]any) map[string]any {
+		cfg := pgToSnowflake()
+		cfg["input"] = in
+		return cfg
 	}
-	cfg := pgToSnowflake()
-	cfg["input"] = map[string]any{
-		"kafka_franz": map[string]any{
-			"seed_brokers":   []any{"kafka-prod-1.customer-corp.internal:9092"},
-			"topics":         []any{"customers"},
-			"consumer_group": "cust-group",
-			"client_id":      "cust-client",
-			"sasl":           []any{map[string]any{"mechanism": "PLAIN", "username": "saslusername", "password": "SASLPASS"}},
-			"tls":            map[string]any{"enabled": true, "root_cas": "-----cust-----"},
-			"batching":       map[string]any{"count": 100},
+	withOutput := func(out map[string]any) map[string]any {
+		cfg := pgToSnowflake()
+		cfg["output"] = out
+		return cfg
+	}
+	withProcs := func(procs ...any) map[string]any {
+		cfg := pgToSnowflake()
+		cfg["pipeline"] = map[string]any{"processors": procs}
+		return cfg
+	}
+	cases := []struct {
+		name    string
+		cfg     map[string]any
+		secrets []string
+	}{
+		{"dsn password", pgToSnowflake(), []string{"s3cretpw", "customer-corp", "cust_slot", "customers"}},
+		{"snowflake key user account", pgToSnowflake(), []string{"MIIEvQ", "svc_loader", "CUSTORG-ACCT", "LOADER"}},
+		{"bigquery credentials", withOutput(map[string]any{"gcp_bigquery": map[string]any{
+			"project": "cust-proj", "dataset": "cust-ds", "table": "cust-tbl",
+			"credentials_json": "{\"private_key\":\"bq-private-key\"}",
+		}}), []string{"bq-private-key", "cust-proj", "cust-ds", "cust-tbl"}},
+		{"sasl", withInput(map[string]any{"kafka_franz": map[string]any{
+			"seed_brokers": []any{"kafka-prod-1.customer-corp.internal:9092"},
+			"topics":       []any{"customers"},
+			"sasl":         []any{map[string]any{"mechanism": "PLAIN", "username": "saslusername", "password": "SASLPASS"}},
+		}}), []string{"saslusername", "SASLPASS", "kafka-prod-1", "customer-corp"}},
+		{"postgres aws block", withInput(map[string]any{"postgres_cdc": map[string]any{
+			"dsn": "postgres://u@h/db",
+			"aws": map[string]any{
+				"enabled": true, "region": "eu-west-9", "endpoint": "https://rds-endpoint-xyz",
+				"id": "AKIAFAKEKEY", "secret": "awssecret123",
+				"roles": []any{map[string]any{"role": "arn:aws:iam::999:role/x", "role_external_id": "extid-777"}},
+			},
+		}}), []string{"AKIAFAKEKEY", "awssecret123", "extid-777", "rds-endpoint-xyz", "arn:aws:iam::999"}},
+		{"schema registry oauth", withProcs(map[string]any{"schema_registry_decode": map[string]any{
+			"url": "https://sr.customer-corp.io",
+			"oauth": map[string]any{
+				"enabled": true, "consumer_key": "ckey-1", "consumer_secret": "csecret-2",
+				"access_token": "atok-3", "access_token_secret": "atoksecret-4",
+			},
+			"oauth2": map[string]any{"client_key": "clientkey-5", "token_url": "https://tok.customer-corp.io"},
+		}}), []string{"csecret-2", "atok-3", "atoksecret-4", "clientkey-5", "tok.customer-corp", "ckey-1", "sr.customer-corp"}},
+		{"http bearer", withProcs(map[string]any{"http": map[string]any{
+			"url": "https://api.customer-corp.com", "headers": map[string]any{"Authorization": "Bearer tok_abc123"},
+		}}), []string{"tok_abc123", "customer-corp"}},
+		{"cosmosdb connection string", withProcs(map[string]any{"azure_cosmosdb": map[string]any{
+			"connection_string": "AccountEndpoint=https://cosmos-acct.documents.azure.com;AccountKey=cosmoskey==",
+			"account_key":       "acctkey-9", "endpoint": "https://cosmos-acct.documents.azure.com",
+		}}), []string{"cosmoskey", "acctkey-9", "cosmos-acct"}},
+		{
+			"ollama server", withProcs(map[string]any{"ollama_chat": map[string]any{"server_address": "http://ollama.customer-corp:11434"}}),
+			[]string{"ollama.customer-corp"},
 		},
-	}
-	cfg["output"] = map[string]any{
-		"gcp_bigquery": map[string]any{
-			"project":          "customer-corp-proj",
-			"dataset":          "customers",
-			"table":            "customers",
-			"credentials_json": "{\"private_key\":\"bq-private-key\",\"client_email\":\"x@customer-corp.iam\"}",
-			"max_in_flight":    8,
+		{"resources section", func() map[string]any {
+			cfg := pgToSnowflake()
+			cfg["resources"] = map[string]any{"caches": []any{map[string]any{"redis": map[string]any{"url": "redis://res-host", "password": "respw"}}}}
+			cfg["cache_resources"] = []any{map[string]any{"redis": map[string]any{"url": "redis://cr-host", "password": "crpw"}}}
+			return cfg
+		}(), []string{"res-host", "respw", "cr-host", "crpw"}},
+		{
+			"unknown output", withOutput(map[string]any{"mystery_sink": map[string]any{"api_key": "apikey-xyz", "password": "mystpw", "host": "mystery-host"}}),
+			[]string{"apikey-xyz", "mystpw", "mystery-host"},
 		},
+		{
+			"unknown input", withInput(map[string]any{"mystery_src": map[string]any{"api_key": "apikey-abc", "queue_url": "https://q.customer-corp", "max": 5}}),
+			[]string{"apikey-abc", "customer-corp"},
+		},
+		{"real output unknown secret-ish keys", withOutput(map[string]any{"aws_s3": map[string]any{
+			"bucket": "my-secret-bucket", "path": "x", "client_secret": "cs-1", "session_token": "st-2", "custom_cert": "cc-3",
+			"force_path_style_urls": true,
+		}}), []string{"my-secret-bucket", "cs-1", "st-2", "cc-3"}},
 	}
-	cfg["pipeline"] = map[string]any{"processors": []any{
-		map[string]any{"http": map[string]any{"url": "https://customer-corp.example", "headers": map[string]any{"Authorization": "Bearer tok_abc123"}}},
-		map[string]any{"sql_select": map[string]any{"dsn": "mysql://root:hunter2@h/db", "query": "SELECT secretcol FROM t"}},
-	}}
-	cfg["cache_resources"] = []any{map[string]any{"redis": map[string]any{"url": "redis://customer-corp:6379"}}}
-	cfg["http"] = map[string]any{"address": "0.0.0.0:4195"}
-	p := build(t, cfg)
-	b, err := json.Marshal(p)
-	require.NoError(t, err)
-	for _, s := range secrets {
-		require.NotContains(t, string(b), s)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := build(t, tc.cfg)
+			b, err := json.Marshal(p)
+			require.NoError(t, err)
+			for _, s := range tc.secrets {
+				require.NotContains(t, string(b), s)
+			}
+		})
 	}
-	require.NotContains(t, p.Pipeline, "cache_resources")
-	// Performance knobs survive.
-	in := p.Pipeline["input"].(map[string]any)["kafka_franz"].(map[string]any)
-	require.Equal(t, 100, in["batching"].(map[string]any)["count"])
-	out := p.Pipeline["output"].(map[string]any)["gcp_bigquery"].(map[string]any)
-	require.Equal(t, 8, out["max_in_flight"])
-	require.Equal(t, "${BENCH_BQ_PROJECT}", out["project"])
+}
 
-	// Same for an approximated source and a fallback sink.
-	cfg2 := pgToSnowflake()
-	cfg2["input"] = map[string]any{"aws_sqs": map[string]any{"url": "https://sqs.customer-corp", "queue_url": "https://sqs/customer-corp", "max_number_of_messages": 10}}
-	b2, _ := json.Marshal(build(t, cfg2))
-	require.NotContains(t, string(b2), "customer-corp")
-	require.Contains(t, string(b2), "max_number_of_messages")
+func TestBuildAWSBlockNotLeftEnabled(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["input"].(map[string]any)["postgres_cdc"].(map[string]any)["aws"] = map[string]any{"enabled": true, "region": "eu-west-9"}
+	p := build(t, cfg)
+	in := p.Pipeline["input"].(map[string]any)["postgres_cdc"].(map[string]any)
+	require.NotContains(t, in, "aws")
+}
+
+func TestBuildKeepsPureProcessorsVerbatim(t *testing.T) {
+	cfg := pgToSnowflake()
+	procs := []any{
+		map[string]any{"json_schema": map[string]any{"schema": "{\"type\":\"object\"}"}},
+		map[string]any{"parquet_encode": map[string]any{"schema": []any{map[string]any{"name": "id", "type": "INT64"}}, "default_compression": "zstd"}},
+		map[string]any{"mapping": "root = this"},
+	}
+	cfg["pipeline"] = map[string]any{"processors": procs}
+	p := build(t, cfg)
+	require.Empty(t, p.Caveats)
+	require.Equal(t, procs, p.Pipeline["pipeline"].(map[string]any)["processors"])
+}
+
+func TestBuildStubsUnknownProcessors(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["pipeline"] = map[string]any{"processors": []any{map[string]any{"some_new_ai_thing": map[string]any{"x": 1}}}}
+	p := build(t, cfg)
+	require.Equal(t, []string{"external_calls_stubbed"}, p.Caveats)
+	require.Equal(t, []any{map[string]any{"mapping": "root = this"}}, p.Pipeline["pipeline"].(map[string]any)["processors"])
+}
+
+func TestBuildWorkflowRecursed(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["pipeline"] = map[string]any{"processors": []any{map[string]any{"workflow": map[string]any{
+		"order": []any{[]any{"a"}},
+		"branches": map[string]any{"a": map[string]any{
+			"request_map": "root = this",
+			"processors":  []any{map[string]any{"http": map[string]any{"url": "https://x"}}},
+		}},
+	}}}}
+	p := build(t, cfg)
+	require.Equal(t, []string{"external_calls_stubbed"}, p.Caveats)
+	wf := p.Pipeline["pipeline"].(map[string]any)["processors"].([]any)[0].(map[string]any)["workflow"].(map[string]any)
+	br := wf["branches"].(map[string]any)["a"].(map[string]any)
+	require.Equal(t, []any{map[string]any{"mapping": "root = this"}}, br["processors"])
+}
+
+func TestBuildIncrementalSnapshotCacheSwapped(t *testing.T) {
+	cfg := pgToSnowflake()
+	pg := cfg["input"].(map[string]any)["postgres_cdc"].(map[string]any)
+	pg["incremental_snapshot"] = map[string]any{"enabled": true, "checkpoint_cache": "my_redis", "chunk_size": 1000}
+	p := build(t, cfg)
+	in := p.Pipeline["input"].(map[string]any)["postgres_cdc"].(map[string]any)
+	inc := in["incremental_snapshot"].(map[string]any)
+	require.Equal(t, "bench_cache", inc["checkpoint_cache"])
+	require.Equal(t, 1000, inc["chunk_size"])
+	require.Equal(t, []any{map[string]any{"label": "bench_cache", "memory": map[string]any{}}}, p.Pipeline["cache_resources"])
+}
+
+func TestBuildDedupeUsesBenchCache(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["pipeline"] = map[string]any{"processors": []any{map[string]any{"dedupe": map[string]any{"cache": "cust_redis", "key": "${!id}"}}}}
+	p := build(t, cfg)
+	require.Empty(t, p.Caveats)
+	d := p.Pipeline["pipeline"].(map[string]any)["processors"].([]any)[0].(map[string]any)["dedupe"].(map[string]any)
+	require.Equal(t, "bench_cache", d["cache"])
+	require.Contains(t, p.Pipeline, "cache_resources")
+}
+
+func TestBuildFingerprintOfOriginal(t *testing.T) {
+	cfg := pgToSnowflake()
+	want, err := catalog.Fingerprint(cfg)
+	require.NoError(t, err)
+	p := build(t, cfg)
+	require.Equal(t, want, p.Fingerprint)
+
+	other := pgToSnowflake()
+	other["input"].(map[string]any)["postgres_cdc"].(map[string]any)["dsn"] = "postgres://other:pw@elsewhere/db"
+	other["output"].(map[string]any)["snowflake_streaming"].(map[string]any)["private_key"] = "different"
+	require.Equal(t, want, build(t, other).Fingerprint)
+}
+
+func TestBuildWrapperInputs(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["input"] = map[string]any{"broker": map[string]any{"inputs": []any{
+		map[string]any{"oracledb_cdc": map[string]any{"connection_string": "oracle-secret"}},
+	}}}
+	p := build(t, cfg)
+	require.False(t, p.Runnable)
+	require.Equal(t, "no bench stack for oracledb_cdc yet", p.Reason)
+	b, _ := json.Marshal(p)
+	require.NotContains(t, string(b), "oracle-secret")
+
+	cfg["input"] = map[string]any{"read_until": map[string]any{"check": "false", "input": map[string]any{
+		"mysql_cdc": map[string]any{"dsn": "u:pw@tcp(h)/d", "tables": []any{"x"}},
+	}}}
+	p = build(t, cfg)
+	require.True(t, p.Runnable)
+	require.Equal(t, SourceMySQL, p.Source)
+	ru := p.Pipeline["input"].(map[string]any)["read_until"].(map[string]any)
+	require.Equal(t, "${MYSQL_DSN}", ru["input"].(map[string]any)["mysql_cdc"].(map[string]any)["dsn"])
+
+	cfg["input"] = map[string]any{"sequence": map[string]any{"inputs": []any{
+		map[string]any{"kafka_franz": map[string]any{}},
+		map[string]any{"http_server": map[string]any{}},
+	}}}
+	p = build(t, cfg)
+	require.True(t, p.Runnable)
+	require.Equal(t, SourceApproximated, p.Source)
 }
 
 func TestBuildIDUnique(t *testing.T) {

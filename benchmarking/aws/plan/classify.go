@@ -10,6 +10,7 @@ package plan
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
@@ -73,17 +74,37 @@ var RealSinks = map[string]SinkKind{
 	"gcp_bigquery":        SinkBigQuery,
 }
 
-// classifySource returns the source kind for an input component. A CDC input
-// without a bench stack is not runnable, in which case ok is false and reason
-// is set.
-func classifySource(input string) (kind SourceKind, reason string, ok bool) {
-	if k, found := RealSources[input]; found {
-		return k, "", true
+// classifySource returns the source kind for an input. Wrapper inputs
+// (broker, sequence, read_until) are classified by their children: any CDC
+// child without a bench stack makes the plan not runnable, children of one
+// real kind give that kind, and a mix gives approximated. When not runnable,
+// ok is false and reason is set.
+func classifySource(in map[string]any) (kind SourceKind, reason string, ok bool, err error) {
+	var kinds []SourceKind
+	err = inputLeaves(in, func(_ map[string]any, name string) error {
+		if k, found := RealSources[name]; found {
+			kinds = append(kinds, k)
+			return nil
+		}
+		if catalog.ModeFor(name) == "cdc" {
+			if reason == "" {
+				reason = fmt.Sprintf("no bench stack for %s yet", name)
+			}
+			return nil
+		}
+		kinds = append(kinds, SourceApproximated)
+		return nil
+	})
+	if err != nil {
+		return "", "", false, err
 	}
-	if catalog.ModeFor(input) == "cdc" {
-		return "", fmt.Sprintf("no bench stack for %s yet", input), false
+	if reason != "" {
+		return "", reason, false, nil
 	}
-	return SourceApproximated, "", true
+	if len(kinds) == 0 || slices.Contains(kinds, SourceApproximated) || slices.ContainsFunc(kinds, func(k SourceKind) bool { return k != kinds[0] }) {
+		return SourceApproximated, "", true, nil
+	}
+	return kinds[0], "", true, nil
 }
 
 func classifySink(output string) SinkKind {

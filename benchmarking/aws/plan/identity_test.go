@@ -62,9 +62,9 @@ func TestSwapIdentityMySQL(t *testing.T) {
 	require.Equal(t, []string{"snapshot_not_measured"}, caveats)
 	in := out["input"].(map[string]any)["mysql_cdc"].(map[string]any)
 	require.Equal(t, "${MYSQL_DSN}", in["dsn"])
-	require.Equal(t, "bench_checkpoint", in["checkpoint_cache"])
+	require.Equal(t, "bench_cache", in["checkpoint_cache"])
 	require.Equal(t, false, in["stream_snapshot"])
-	require.Equal(t, []any{map[string]any{"label": "bench_checkpoint", "memory": map[string]any{}}}, out["cache_resources"])
+	require.Equal(t, []any{map[string]any{"label": "bench_cache", "memory": map[string]any{}}}, out["cache_resources"])
 }
 
 func TestSwapIdentityRedpandaCommonAndKafka(t *testing.T) {
