@@ -21,6 +21,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
 // Report is a structure that contains the current state of the Monitor
@@ -284,13 +285,38 @@ func (m *Monitor) checkPublication(ctx context.Context) {
 	if current == m.lastMissingFromPublication {
 		return
 	}
-	m.lastMissingFromPublication = current
 	if current == "" {
+		m.lastMissingFromPublication = current
 		m.logger.Infof("Publication %s includes every configured table again; changes made while a table was missing from it were not captured, so request an incremental snapshot of that table to backfill them", m.publication)
 		return
 	}
-	m.logger.Errorf("Publication %s no longer includes table(s) %s, so PostgreSQL is not capturing their changes and they are lost: add them back with ALTER PUBLICATION %s ADD TABLE and request an incremental snapshot of them to backfill the missed changes, or remove them from the input's tables",
-		m.publication, current, m.publication)
+
+	// puballtables is read here and not once in WatchPublication, because a
+	// DBA can change a FOR TABLE publication to FOR ALL TABLES while the
+	// stream runs, and PostgreSQL rejects ADD TABLE on a FOR ALL TABLES
+	// publication. It is read only when the missing tables change, so this
+	// is one query per change, not one per tick.
+	q, err := sanitize.SQLQuery("SELECT puballtables FROM pg_publication WHERE pubname = $1;", m.publication)
+	if err != nil {
+		m.logger.Warnf("Unable to build the publication query for publication %s: %s", m.publication, err)
+		return
+	}
+	var allTables bool
+	// No row means the publication was dropped. Then every table is
+	// missing, and the FOR TABLE hint applies.
+	if err := m.dbConn.QueryRowContext(ctx, q).Scan(&allTables); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// The change is not logged yet, so the next tick tries again.
+		m.logger.Warnf("Unable to read whether publication %s is FOR ALL TABLES: %s", m.publication, err)
+		return
+	}
+	m.lastMissingFromPublication = current
+
+	fix := fmt.Sprintf("add them back with ALTER PUBLICATION %s ADD TABLE", m.publication)
+	if allTables {
+		fix = fmt.Sprintf("check that they exist and are not unlogged, remove them from the EXCEPT list of the FOR ALL TABLES publication with ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) (PostgreSQL 19+),", m.publication)
+	}
+	m.logger.Errorf("Publication %s no longer includes table(s) %s, so PostgreSQL is not capturing their changes and they are lost: %s and request an incremental snapshot of them to backfill the missed changes, or remove them from the input's tables",
+		m.publication, current, fix)
 }
 
 // Report returns a snapshot of the monitor's state.
