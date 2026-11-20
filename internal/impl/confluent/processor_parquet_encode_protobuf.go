@@ -46,7 +46,7 @@ func parquetEncodeProtobufConfig() *service.ConfigSpec {
 	return schemaRegistryDecoderConfig().
 		Beta().
 		Categories("Parsing", "Integration").
-		Version("4.119.0").
+		Version("4.120.0").
 		Summary("Decodes a batch of schema registry framed messages and encodes them as a single Parquet file.").
 		Description(`
 This processor is the combination of a `+"xref:components:processors/schema_registry_decode.adoc[`schema_registry_decode`]"+` processor followed by a `+"xref:components:processors/parquet_encode.adoc[`parquet_encode`]"+` processor. It accepts the fields of both, behaves like both run one after the other, and produces the same Parquet file.
