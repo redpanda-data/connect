@@ -1214,3 +1214,33 @@ func TestMatrixRunner_StartSoakEmitLoop_TicksAndStopsCleanly(t *testing.T) {
 	require.Equal(t, callsAtStop, emitter.CallCount(),
 		"stop() must block until the goroutine has actually exited — no more emits after it returns")
 }
+
+func TestRenderBenchScript_MemoryMaxWhenSet(t *testing.T) {
+	got := renderBenchScript(benchScriptArgs{
+		VCPU: 4, MemLimitGiB: 4, MemoryMaxBytes: 16_000_000_000, WarmupSec: 60, DurationSec: 300,
+		ConfigPath: "/opt/bench/config.yaml", BinaryPath: "/opt/bench/redpanda-connect",
+	})
+	require.Contains(t, got, "systemd-run --scope --quiet -p MemoryMax=16000000000 -p MemorySwapMax=0 taskset -c 2-5")
+}
+
+func TestRenderBenchScript_NoMemoryMaxByDefault(t *testing.T) {
+	got := renderBenchScript(benchScriptArgs{
+		VCPU: 4, MemLimitGiB: 4, WarmupSec: 60, DurationSec: 300,
+		ConfigPath: "/opt/bench/config.yaml", BinaryPath: "/opt/bench/redpanda-connect",
+	})
+	require.NotContains(t, got, "systemd-run")
+	require.Contains(t, got, "taskset -c 2-5 env GOMAXPROCS=")
+}
+
+func TestMatrixRunner_MemoryMaxScalesWithVCPU(t *testing.T) {
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+	mr := &MatrixRunner{
+		SSM: ssm, LogFetcher: &FakeLogFetcher{}, RunnerInstance: "i-runner", Bucket: "b", SessionID: "s",
+		MemoryPerVCPUBytes: 4_000_000_000,
+	}
+	_, _ = mr.Run(t.Context(), []sweepPoint{{VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 0, 30*time.Second, "", "")
+	require.Contains(t, strings.Join(ssm.Scripts, "\n"), "MemoryMax=8000000000")
+}

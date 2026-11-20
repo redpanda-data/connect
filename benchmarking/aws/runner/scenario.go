@@ -97,6 +97,10 @@ type Scenario struct {
 type InfraSpec struct {
 	Source map[string]any `yaml:"source"`
 	Runner RunnerSpec     `yaml:"runner"`
+	// MemoryPerVCPUBytes, when > 0, runs Connect at each sweep point under a
+	// hard cgroup memory cap of MemoryPerVCPUBytes x vCPU (systemd scope,
+	// swap disabled). Zero (default) leaves memory uncapped.
+	MemoryPerVCPUBytes int64 `yaml:"memory_per_vcpu_bytes,omitempty"`
 }
 
 type RunnerSpec struct {
@@ -262,9 +266,17 @@ func (s *Scenario) applyDirectionDefault() {
 	}
 }
 
+// MemoryLimited reports whether sweep points run under a hard memory cap.
+func (s *Scenario) MemoryLimited() bool {
+	return s.Infra.MemoryPerVCPUBytes > 0
+}
+
 func (s *Scenario) Validate() error {
 	if s.Name == "" {
 		return errors.New("name is required")
+	}
+	if s.Infra.MemoryPerVCPUBytes < 0 {
+		return fmt.Errorf("infra.memory_per_vcpu_bytes must be >= 0, got %d", s.Infra.MemoryPerVCPUBytes)
 	}
 	if s.Connector == "" {
 		return errors.New("connector is required")

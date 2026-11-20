@@ -481,6 +481,7 @@ func runBench(opts benchOpts) (errOut error) {
 			return runnerConfigPaths(sets)
 		}(),
 		BinaryPath:               "/opt/bench/redpanda-connect",
+		MemoryPerVCPUBytes:       s.Infra.MemoryPerVCPUBytes,
 		Bucket:                   sharedOuts["results_bucket"],
 		SessionID:                sessionID,
 		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],

@@ -576,3 +576,18 @@ func TestIsBinaryArmScenario(t *testing.T) {
 	require.False(t, (&Scenario{Matrix: MatrixSpec{Arms: []Arm{{ID: "a0", Binary: "base"}, {ID: "a1"}}}}).IsBinaryArmScenario(), "mixed")
 	require.True(t, (&Scenario{Matrix: MatrixSpec{Arms: []Arm{{ID: "a0", Binary: "base"}, {ID: "a1", Binary: "pr"}}}}).IsBinaryArmScenario())
 }
+
+func TestScenarioMemoryPerVCPUValidate(t *testing.T) {
+	s := &Scenario{
+		Name: "m", Connector: "kafka_franz", Stack: "kafka",
+		Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}, MemoryPerVCPUBytes: -1},
+		Matrix:   MatrixSpec{CPUPoints: []int{1, 2}},
+		Workload: &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute, WriteRatePerSec: 1000},
+	}
+	err := s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "memory_per_vcpu_bytes")
+	require.False(t, s.MemoryLimited())
+	s.Infra.MemoryPerVCPUBytes = 4_000_000_000
+	require.True(t, s.MemoryLimited())
+}
