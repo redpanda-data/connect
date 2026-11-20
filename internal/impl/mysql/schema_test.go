@@ -665,3 +665,104 @@ func TestMysqlColumnToCommonDecimalCarriesLogical(t *testing.T) {
 	assert.Equal(t, int32(4), got.Logical.Decimal.Scale)
 	assert.True(t, got.Optional)
 }
+
+// TestParseSnapshotTime checks the DATE, DATETIME and TIMESTAMP values that
+// the snapshot gives. For zero, partial-zero and invalid dates, they must be
+// the same values as the stream gives.
+func TestParseSnapshotTime(t *testing.T) {
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		value string
+		loc   *time.Location
+		want  any
+	}{
+		{
+			name:  "date",
+			value: "1965-03-04",
+			loc:   time.UTC,
+			want:  time.Date(1965, time.March, 4, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "datetime",
+			value: "1965-03-04 10:00:00",
+			loc:   time.UTC,
+			want:  time.Date(1965, time.March, 4, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "datetime with fraction",
+			value: "1969-12-31 23:59:59.123456",
+			loc:   time.UTC,
+			want:  time.Date(1969, time.December, 31, 23, 59, 59, 123456000, time.UTC),
+		},
+		{
+			name:  "datetime in loc",
+			value: "2024-06-01 12:00:00",
+			loc:   berlin,
+			want:  time.Date(2024, time.June, 1, 12, 0, 0, 0, berlin),
+		},
+		{
+			name:  "zero date",
+			value: "0000-00-00",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "zero datetime with fraction in loc",
+			value: "0000-00-00 00:00:00.000000",
+			loc:   berlin,
+			want:  nil,
+		},
+		{
+			name:  "zero year",
+			value: "0000-05-15",
+			loc:   time.UTC,
+			want:  time.Date(0, time.May, 15, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "zero month",
+			value: "2024-00-15",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "zero day",
+			value: "2024-12-00 10:00:00",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "invalid date",
+			value: "2024-02-30",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "invalid datetime before 1970",
+			value: "1965-02-30 10:00:00",
+			loc:   time.UTC,
+			want:  nil,
+		},
+		{
+			name:  "invalid datetime from 1970 on",
+			value: "2024-02-30 10:00:00",
+			loc:   time.UTC,
+			want:  time.Date(2024, time.March, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			name:  "stored 0001-01-01 in loc",
+			value: "0001-01-01 00:00:00",
+			loc:   berlin,
+			want:  time.Date(1, time.January, 1, 0, 0, 0, 0, berlin),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseSnapshotTime(test.value, test.loc)
+			require.NoError(t, err)
+			assert.Equal(t, test.want, got)
+		})
+	}
+}
