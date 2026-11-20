@@ -9,6 +9,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -197,6 +198,8 @@ func topologyFor(d Direction) (Topology, error) {
 		return sourceTopology{}, nil
 	case DirectionSink:
 		return nil, fmt.Errorf("direction %q is not supported in this build: sink scenarios return with the iceberg-sink stack PR", d)
+	case DirectionE2E:
+		return nil, errors.New("e2e topology not implemented yet")
 	default:
 		return nil, fmt.Errorf("unknown direction %q", d)
 	}

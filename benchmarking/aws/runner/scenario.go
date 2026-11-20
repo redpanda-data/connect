@@ -66,6 +66,10 @@ var instanceTypeVCPU = map[string]int{
 	"c8g.16xlarge": 64,
 }
 
+// stackNone is the stack of an e2e scenario with no source stack: the input
+// reads from a preloaded Redpanda topic.
+const stackNone = "none"
+
 // Direction is the role the connector-under-test plays in the pipeline.
 // Source connectors read an external system and write into Redpanda (CDC);
 // sink connectors read from Redpanda and write into an external system.
@@ -74,20 +78,26 @@ type Direction string
 const (
 	DirectionSource Direction = "source"
 	DirectionSink   Direction = "sink"
+	// DirectionE2E runs a whole customer pipeline (source stack or preloaded
+	// topic, into a bench sink) rather than one connector in isolation.
+	DirectionE2E Direction = "e2e"
 )
 
 type Scenario struct {
-	Name        string         `yaml:"name"`
-	Description string         `yaml:"description"`
-	Connector   string         `yaml:"connector"`
-	Direction   Direction      `yaml:"direction,omitempty"`
-	Stack       string         `yaml:"stack"`
-	Infra       InfraSpec      `yaml:"infra"`
-	Dataset     DatasetSpec    `yaml:"dataset"`
-	Workload    *WorkloadSpec  `yaml:"workload,omitempty"`
-	Pipeline    map[string]any `yaml:"pipeline"`
-	Matrix      MatrixSpec     `yaml:"matrix"`
-	Reset       []ResetStep    `yaml:"reset"`
+	Name        string        `yaml:"name"`
+	Description string        `yaml:"description"`
+	Connector   string        `yaml:"connector"`
+	Direction   Direction     `yaml:"direction,omitempty"`
+	Stack       string        `yaml:"stack"`
+	Infra       InfraSpec     `yaml:"infra"`
+	Dataset     DatasetSpec   `yaml:"dataset"`
+	Workload    *WorkloadSpec `yaml:"workload,omitempty"`
+	// Sink is the bench sink an e2e scenario writes to. Required for
+	// direction: e2e.
+	Sink     *SinkSpec      `yaml:"sink,omitempty"`
+	Pipeline map[string]any `yaml:"pipeline"`
+	Matrix   MatrixSpec     `yaml:"matrix"`
+	Reset    []ResetStep    `yaml:"reset"`
 	// Soak marks this scenario as a long, single-CPU-point, sustained-moderate-
 	// load run whose purpose is catching leaks/stalls/rotation bugs over wall
 	// clock — unlike the short max-load sweeps matrix.cpu_points/arms are for.
@@ -117,6 +127,21 @@ type DatasetSpec struct {
 	Tables            []string `yaml:"tables"`
 	Seeder            string   `yaml:"seeder"`
 	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
+	// PreloadMessages is the number of messages preloaded into the bench
+	// Redpanda topic for an e2e scenario with stack: none (no source stack),
+	// sized so the sweep never drains it. Required when stack is none.
+	PreloadMessages int64 `yaml:"preload_messages,omitempty"`
+	// PreloadWarmup and PreloadDuration give the per-point warmup and
+	// duration of a workload-less (preloaded) scenario, which has no
+	// workload block to carry them. Zero keeps the bounded-dataset default.
+	PreloadWarmup   time.Duration `yaml:"preload_warmup,omitempty"`
+	PreloadDuration time.Duration `yaml:"preload_duration,omitempty"`
+}
+
+// SinkSpec names the bench sink of an e2e scenario.
+type SinkSpec struct {
+	Kind string `yaml:"kind"`
+	Size string `yaml:"size,omitempty"`
 }
 
 type WorkloadSpec struct {
@@ -297,21 +322,36 @@ func (s *Scenario) Validate() error {
 		return errors.New("connector is required")
 	}
 	switch s.Direction {
-	case DirectionSource, DirectionSink, "":
+	case DirectionSource, DirectionSink, DirectionE2E, "":
 		// "" is tolerated for direct struct construction in tests; LoadScenario
 		// normalizes it via applyDirectionDefault.
 	default:
-		return fmt.Errorf("direction %q is invalid; must be %q or %q", s.Direction, DirectionSource, DirectionSink)
+		return fmt.Errorf("direction %q is invalid; must be %q, %q or %q", s.Direction, DirectionSource, DirectionSink, DirectionE2E)
 	}
-	topo, err := topologyFor(s.Direction)
-	if err != nil {
-		return err
-	}
-	if err := topo.Validate(s); err != nil {
-		return err
+	if s.Direction == DirectionE2E {
+		// topologyFor does not support e2e yet; skip it until e2eTopology lands.
+		if s.Sink == nil || s.Sink.Kind == "" {
+			return errors.New("direction e2e requires sink.kind")
+		}
+	} else {
+		topo, err := topologyFor(s.Direction)
+		if err != nil {
+			return err
+		}
+		if err := topo.Validate(s); err != nil {
+			return err
+		}
 	}
 	if s.Stack == "" {
 		return errors.New("stack is required")
+	}
+	if s.Stack == stackNone {
+		if s.Direction != DirectionE2E {
+			return fmt.Errorf("stack %q is only allowed for direction %q", stackNone, DirectionE2E)
+		}
+		if s.Dataset.PreloadMessages <= 0 {
+			return fmt.Errorf("stack %q requires dataset.preload_messages > 0", stackNone)
+		}
 	}
 	if len(s.Matrix.CPUPoints) == 0 {
 		return errors.New("matrix.cpu_points must contain at least one value")
@@ -434,6 +474,17 @@ func (s *Scenario) Validate() error {
 		if s.Workload.Duration < minDuration {
 			return fmt.Errorf("workload.duration %s is below minimum %s", s.Workload.Duration, minDuration)
 		}
+	} else if s.Direction == DirectionE2E && s.Dataset.PreloadMessages > 0 {
+		// Preloaded e2e scenario: the preload is sized to outlast the sweep,
+		// and warmup/duration default to the minimums when unset.
+		if s.Dataset.PreloadWarmup != 0 && s.Dataset.PreloadWarmup < minWarmup {
+			return fmt.Errorf("dataset.preload_warmup %s is below minimum %s", s.Dataset.PreloadWarmup, minWarmup)
+		}
+		if s.Dataset.PreloadDuration != 0 && s.Dataset.PreloadDuration < minDuration {
+			return fmt.Errorf("dataset.preload_duration %s is below minimum %s", s.Dataset.PreloadDuration, minDuration)
+		}
+	} else if s.Direction == DirectionE2E {
+		return errors.New("direction e2e requires a workload or dataset.preload_messages")
 	} else {
 		// Bounded-dataset scenario: require the size hint and verify wall-clock estimate.
 		if s.Dataset.ExpectedPeakMBSec == 0 {

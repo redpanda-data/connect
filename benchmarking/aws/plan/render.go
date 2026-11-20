@@ -1,0 +1,240 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+package plan
+
+import (
+	"errors"
+	"fmt"
+	"math"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	// DefaultMessageSizeBytes is used when a plan's workload gives no size.
+	DefaultMessageSizeBytes = 1024
+	// DefaultPeakMBps is the assumed peak throughput a preload must outlast
+	// when none is known.
+	DefaultPeakMBps = 300.0
+
+	// preloadHeadroom oversizes the preload so the sweep never drains it.
+	preloadHeadroom = 1.5
+
+	// BenchWarmup and BenchDuration are the per-point warmup and duration a
+	// preloaded (stack: none) scenario runs with.
+	BenchWarmup   = 2 * time.Minute
+	BenchDuration = 15 * time.Minute
+
+	// memoryPerVCPUBytes is one vCPU's worth of CU memory (catalog sizing).
+	memoryPerVCPUBytes = 4_000_000_000
+)
+
+// PreloadMessages returns how many messages to preload into the bench topic
+// so a sweep of warmup+duration at up to peakMBps never drains it, with 50%
+// headroom. peakMBps <= 0 means DefaultPeakMBps; sizeBytes <= 0 means
+// DefaultMessageSizeBytes.
+func PreloadMessages(sizeBytes int, warmup, duration time.Duration, peakMBps float64) int64 {
+	if peakMBps <= 0 {
+		peakMBps = DefaultPeakMBps
+	}
+	if sizeBytes <= 0 {
+		sizeBytes = DefaultMessageSizeBytes
+	}
+	bytes := peakMBps * 1e6 * (warmup + duration).Seconds() * preloadHeadroom
+	return int64(math.Ceil(bytes / float64(sizeBytes)))
+}
+
+type renderScenario struct {
+	Name      string         `yaml:"name"`
+	Direction string         `yaml:"direction"`
+	Connector string         `yaml:"connector"`
+	Stack     string         `yaml:"stack"`
+	Infra     renderInfra    `yaml:"infra"`
+	Dataset   renderDataset  `yaml:"dataset"`
+	Workload  *renderLoad    `yaml:"workload,omitempty"`
+	Pipeline  map[string]any `yaml:"pipeline"`
+	Sink      renderSink     `yaml:"sink"`
+	Matrix    renderMatrix   `yaml:"matrix"`
+	Reset     []renderReset  `yaml:"reset,omitempty"`
+}
+
+type renderInfra struct {
+	Source             map[string]any `yaml:"source,omitempty"`
+	Runner             renderRunner   `yaml:"runner"`
+	MemoryPerVCPUBytes int64          `yaml:"memory_per_vcpu_bytes"`
+}
+
+type renderRunner struct {
+	InstanceType string `yaml:"instance_type"`
+}
+
+type renderDataset struct {
+	InitialRows     *int64   `yaml:"initial_rows,omitempty"`
+	RowSizeBytes    int      `yaml:"row_size_bytes"`
+	Tables          []string `yaml:"tables,omitempty"`
+	Seeder          string   `yaml:"seeder,omitempty"`
+	PreloadMessages int64    `yaml:"preload_messages,omitempty"`
+	PreloadWarmup   string   `yaml:"preload_warmup,omitempty"`
+	PreloadDuration string   `yaml:"preload_duration,omitempty"`
+}
+
+type renderLoad struct {
+	WriteRatePerSec int    `yaml:"write_rate_per_sec"`
+	Duration        string `yaml:"duration"`
+	Warmup          string `yaml:"warmup"`
+}
+
+type renderSink struct {
+	Kind string `yaml:"kind"`
+	Size string `yaml:"size,omitempty"`
+}
+
+type renderMatrix struct {
+	CPUPoints []int `yaml:"cpu_points"`
+}
+
+type renderReset struct {
+	SQL string `yaml:"sql"`
+}
+
+// Base settings per stack. These are Go literals, deliberately not read from
+// the repo's scenario files at runtime; they mirror
+// scenarios/postgres/orders-cdc.yaml and scenarios/mysql/orders-soak.yaml.
+
+func postgresBase() (infraSource map[string]any, runner string, ds renderDataset, load *renderLoad, reset []renderReset) {
+	zero := int64(0)
+	return map[string]any{
+			"instance_class":     "db.r6g.4xlarge",
+			"storage_gb":         800,
+			"iops":               24000,
+			"storage_throughput": 1000,
+			"parameters": map[string]any{
+				"rds.logical_replication": "1",
+				"max_wal_senders":         "20",
+			},
+		}, "c8g.4xlarge",
+		renderDataset{InitialRows: &zero, Tables: []string{"orders"}, Seeder: "cdc-rows-postgres"},
+		&renderLoad{WriteRatePerSec: 150000, Duration: "15m", Warmup: "2m"},
+		[]renderReset{
+			{SQL: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"},
+			{SQL: "TRUNCATE TABLE orders"},
+		}
+}
+
+func mysqlBase() (infraSource map[string]any, runner string, ds renderDataset, load *renderLoad, reset []renderReset) {
+	zero := int64(0)
+	return map[string]any{
+			"instance_class":     "db.r6g.xlarge",
+			"storage_gb":         400,
+			"iops":               12000,
+			"storage_throughput": 500,
+			"parameters": map[string]any{
+				"binlog_format":    "ROW",
+				"binlog_row_image": "FULL",
+				"binlog_checksum":  "NONE",
+			},
+		},
+		// The soak's c8g.xlarge (4 vCPU) cannot host the 1,2,4,8 sweep, which
+		// needs 8 + 2 reserved vCPU.
+		"c8g.4xlarge",
+		renderDataset{InitialRows: &zero, Tables: []string{"orders"}, Seeder: "cdc-rows-mysql"},
+		&renderLoad{WriteRatePerSec: 150000, Duration: "15m", Warmup: "2m"},
+		[]renderReset{
+			{SQL: "CALL mysql.rds_set_configuration('binlog retention hours', 24)"},
+			{SQL: "TRUNCATE TABLE orders"},
+		}
+}
+
+// Render turns a runnable Plan into a runner scenario YAML (direction: e2e).
+func Render(p Plan) ([]byte, error) {
+	if !p.Runnable {
+		reason := p.Reason
+		if reason == "" {
+			reason = "plan is not runnable"
+		}
+		return nil, errors.New(reason)
+	}
+	size := p.Workload.MessageSizeBytes
+	sizeComment := "from the plan workload"
+	if size <= 0 {
+		size, sizeComment = DefaultMessageSizeBytes, "default; the plan gave no message size"
+	}
+
+	sc := renderScenario{
+		Name:      "bot-" + p.ID,
+		Direction: "e2e",
+		Connector: p.Input,
+		Pipeline:  p.Pipeline,
+		Sink:      renderSink{Kind: string(p.Sink), Size: p.SinkSize},
+		Matrix:    renderMatrix{CPUPoints: []int{1, 2, 4, 8}},
+	}
+	sc.Infra.MemoryPerVCPUBytes = memoryPerVCPUBytes
+	var startingValue bool
+	switch p.Source {
+	case SourcePostgres:
+		sc.Stack = "postgres"
+		sc.Infra.Source, sc.Infra.Runner.InstanceType, sc.Dataset, sc.Workload, sc.Reset = postgresBase()
+	case SourceMySQL:
+		sc.Stack = "mysql"
+		sc.Infra.Source, sc.Infra.Runner.InstanceType, sc.Dataset, sc.Workload, sc.Reset = mysqlBase()
+		startingValue = true
+	default:
+		// The sweep consumes as fast as the pipeline allows, so the target
+		// rate is no bound on consumption: size for the default peak.
+		sc.Stack = "none"
+		sc.Infra.Runner.InstanceType = "c8g.4xlarge"
+		sc.Dataset = renderDataset{
+			PreloadMessages: PreloadMessages(size, BenchWarmup, BenchDuration, 0),
+			PreloadWarmup:   "2m",
+			PreloadDuration: "15m",
+		}
+	}
+	sc.Dataset.RowSizeBytes = size
+
+	var root yaml.Node
+	if err := root.Encode(sc); err != nil {
+		return nil, fmt.Errorf("encoding scenario: %w", err)
+	}
+	comment(&root, "row_size_bytes", sizeComment, "dataset")
+	if startingValue {
+		comment(&root, "write_rate_per_sec", "starting value, copied from the postgres bench; not tuned for mysql", "workload")
+	}
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling scenario: %w", err)
+	}
+	return out, nil
+}
+
+// comment sets a line comment on the value of key found inside the mapping
+// named parent (a top-level key).
+func comment(root *yaml.Node, key, text, parent string) {
+	m := root
+	if m.Kind == yaml.DocumentNode && len(m.Content) > 0 {
+		m = m.Content[0]
+	}
+	child := mapValue(m, parent)
+	if child == nil {
+		return
+	}
+	for i := 0; i+1 < len(child.Content); i += 2 {
+		if child.Content[i].Value == key {
+			child.Content[i+1].LineComment = text
+		}
+	}
+}
+
+func mapValue(m *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return m.Content[i+1]
+		}
+	}
+	return nil
+}

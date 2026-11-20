@@ -1,0 +1,26 @@
+name: bot-bbbbbbbbbbbb
+direction: e2e
+connector: http_server
+stack: none
+infra:
+    runner:
+        instance_type: c8g.4xlarge
+    memory_per_vcpu_bytes: 4000000000
+dataset:
+    row_size_bytes: 1000 # from the plan workload
+    preload_messages: 459000000
+    preload_warmup: 2m
+    preload_duration: 15m
+pipeline:
+    input:
+        http_server: {}
+    output:
+        drop: {}
+sink:
+    kind: drop
+matrix:
+    cpu_points:
+        - 1
+        - 2
+        - 4
+        - 8
