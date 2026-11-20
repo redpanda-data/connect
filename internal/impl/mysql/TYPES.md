@@ -69,8 +69,11 @@ rely on them.
   Valid dates before 1970 keep their value in both paths.
   The snapshot scans these columns as strings. For zero, partial-zero and invalid dates,
   `parseSnapshotTime` gives the same values as the stream: `nil`, or the moved date for an
-  invalid DATETIME from 1970 on. Valid values can still differ in time zone: the snapshot
-  parses DATETIME in the DSN `loc`, the stream in UTC. The snapshot pages on the string that MySQL
+  invalid DATETIME from 1970 on.
+  Both paths give every value in UTC. The stream gets a DATE or DATETIME wall clock in UTC from
+  go-mysql, and a TIMESTAMP in the process time zone, which `mapMessageColumn` converts to UTC.
+  The snapshot sets the session `time_zone` to `+00:00`, so MySQL formats a TIMESTAMP in UTC, and
+  `parseSnapshotTime` parses all strings in UTC. The DSN `loc` has no effect. The snapshot pages on the string that MySQL
   gave for a date primary key, because the mapped value can be `nil` or a moved date.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
