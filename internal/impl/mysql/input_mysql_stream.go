@@ -108,7 +108,7 @@ The stored position is a binlog file name and offset on one server, not a GTID. 
 
 Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers. `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers. `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps. Binary and `+"`BLOB`"+` columns become byte arrays. `+"`SET`"+` columns become arrays of strings. `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
 
-The snapshot and the stream give the same value for a date. A zero date such as `+"`0000-00-00`"+` has no timestamp form, so it becomes `+"`null`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+`. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. Such a `+"`DATE`"+` becomes `+"`null`"+`. Such a `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. Such a `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. Valid dates before 1970 keep their value.
+For zero, partial-zero and invalid dates, the snapshot and the stream give the same value. A zero date such as `+"`0000-00-00`"+` has no timestamp form, so it becomes `+"`null`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+`. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. Such a `+"`DATE`"+` becomes `+"`null`"+`. Such a `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. Such a `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. Valid dates before 1970 keep their value.
 
 == Metadata
 
@@ -672,8 +672,9 @@ func snapshotValueMapper[T any](v any) (any, error) {
 }
 
 // parseSnapshotTime parses a DATE, DATETIME or TIMESTAMP string from the
-// snapshot into the value that the stream gives for the same stored value:
-// a time.Time in loc, or nil for a zero, partial-zero or invalid date.
+// snapshot into a time.Time in loc. For a zero, partial-zero or invalid date,
+// it gives the same value as the stream: nil, or the moved date for an invalid
+// DATETIME from 1970 on.
 func parseSnapshotTime(s string, loc *time.Location) (any, error) {
 	if len(s) < len("2006-01-02") || s[4] != '-' || s[7] != '-' {
 		return nil, fmt.Errorf("invalid date value %q", s)
@@ -1126,8 +1127,8 @@ func parseBinlogTime(layout, s string) (any, error) {
 	// part of a partial-zero date. We accept that, because the schema type
 	// is a timestamp, and a string does not match it.
 	//
-	// parseSnapshotTime gives the same values for the snapshot, so a row
-	// has the same value whichever path delivered it. Keep the two in step.
+	// parseSnapshotTime gives the same values for these dates in the
+	// snapshot. Keep the two in step.
 	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
 		return nil, nil
 	}

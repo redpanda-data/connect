@@ -67,9 +67,10 @@ rely on them.
   becomes `2024-03-01 10:00:00`. So an invalid DATETIME before 1970 becomes `nil`,
   and one from 1970 on moves to a nearby valid date.
   Valid dates before 1970 keep their value in both paths.
-  The snapshot scans these columns as strings, and `parseSnapshotTime` gives the same
-  values as the stream, also `nil` for zero, partial-zero and invalid dates. So a row has
-  the same value whichever path delivered it. The snapshot pages on the string that MySQL
+  The snapshot scans these columns as strings. For zero, partial-zero and invalid dates,
+  `parseSnapshotTime` gives the same values as the stream: `nil`, or the moved date for an
+  invalid DATETIME from 1970 on. Valid values can still differ in time zone: the snapshot
+  parses DATETIME in the DSN `loc`, the stream in UTC. The snapshot pages on the string that MySQL
   gave for a date primary key, because the mapped value can be `nil` or a moved date.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
