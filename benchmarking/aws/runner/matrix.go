@@ -810,8 +810,8 @@ func renderBenchScript(a benchScriptArgs) string {
 		// The core pin follows VCPU while GOMAXPROCS is independent: an arm can
 		// oversubscribe the runtime on a fixed core allocation. GOMEMLIMIT is
 		// vCPU-derived by the caller, so it is constant across an A/B's arms.
-		fmt.Sprintf(`%staskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
-			a.memoryScopePrefix(), cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.launchCmd()),
+		fmt.Sprintf(`%staskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%s REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
+			a.memoryScopePrefix(), cpusetHi, a.gomaxprocs(), a.goMemLimit(), a.launchCmd()),
 		`PID=$!`,
 		// Heartbeat: every heartbeatSec(), echo the latest rolling-stats line
 		// so the operator can see throughput live. At the sweep default
@@ -906,4 +906,14 @@ func (a benchScriptArgs) memoryScopePrefix() string {
 		return ""
 	}
 	return fmt.Sprintf("systemd-run --scope --quiet -p MemoryMax=%d -p MemorySwapMax=0 ", a.MemoryMaxBytes)
+}
+
+// goMemLimit is the GOMEMLIMIT value. Under a hard cap it is 90% of
+// MemoryMaxBytes in plain bytes, so the GC works to stay under the cgroup
+// limit; otherwise the historical vCPU-derived GiB value.
+func (a benchScriptArgs) goMemLimit() string {
+	if a.MemoryMaxBytes > 0 {
+		return strconv.FormatInt(a.MemoryMaxBytes/10*9, 10)
+	}
+	return fmt.Sprintf("%dGiB", a.MemLimitGiB)
 }

@@ -590,4 +590,14 @@ func TestScenarioMemoryPerVCPUValidate(t *testing.T) {
 	require.False(t, s.MemoryLimited())
 	s.Infra.MemoryPerVCPUBytes = 4_000_000_000
 	require.True(t, s.MemoryLimited())
+	// The fixture fails later validation (no engine spec); only the memory
+	// check matters here.
+	require.NotContains(t, s.Validate().Error(), "memory_per_vcpu_bytes")
+
+	// The cap must be the CU memory size, or memory-bound CUs are wrong.
+	s.Infra.MemoryPerVCPUBytes = 4294967296
+	err = s.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "memory_per_vcpu_bytes")
+	require.Contains(t, err.Error(), "4000000000")
 }

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
 
 const (
@@ -99,7 +101,9 @@ type InfraSpec struct {
 	Runner RunnerSpec     `yaml:"runner"`
 	// MemoryPerVCPUBytes, when > 0, runs Connect at each sweep point under a
 	// hard cgroup memory cap of MemoryPerVCPUBytes x vCPU (systemd scope,
-	// swap disabled). Zero (default) leaves memory uncapped.
+	// swap disabled). Zero (default) leaves memory uncapped. When set it must
+	// be 4000000000 (one vCPU's CUs of memory per catalog/sizing.json), and
+	// GOMEMLIMIT becomes 90% of the cap.
 	MemoryPerVCPUBytes int64 `yaml:"memory_per_vcpu_bytes,omitempty"`
 }
 
@@ -277,6 +281,17 @@ func (s *Scenario) Validate() error {
 	}
 	if s.Infra.MemoryPerVCPUBytes < 0 {
 		return fmt.Errorf("infra.memory_per_vcpu_bytes must be >= 0, got %d", s.Infra.MemoryPerVCPUBytes)
+	}
+	if s.Infra.MemoryPerVCPUBytes > 0 {
+		// The catalogue converts measured memory to CUs with the sizing
+		// config, so the cap must be exactly one vCPU's worth of CU memory.
+		cfg, err := catalog.DefaultSizingConfig()
+		if err != nil {
+			return fmt.Errorf("sizing config: %w", err)
+		}
+		if want := cfg.BytesPerCU * int64(cfg.CUsPerVCPU); s.Infra.MemoryPerVCPUBytes != want {
+			return fmt.Errorf("infra.memory_per_vcpu_bytes must be %d (bytes_per_cu x cus_per_vcpu), got %d", want, s.Infra.MemoryPerVCPUBytes)
+		}
 	}
 	if s.Connector == "" {
 		return errors.New("connector is required")

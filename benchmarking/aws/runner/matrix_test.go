@@ -1242,5 +1242,9 @@ func TestMatrixRunner_MemoryMaxScalesWithVCPU(t *testing.T) {
 		MemoryPerVCPUBytes: 4_000_000_000,
 	}
 	_, _ = mr.Run(t.Context(), []sweepPoint{{VCPU: 2, GOMAXPROCS: 2, Streams: 1}}, 1, 0, 30*time.Second, "", "")
-	require.Contains(t, strings.Join(ssm.Scripts, "\n"), "MemoryMax=8000000000")
+	got := strings.Join(ssm.Scripts, "\n")
+	require.Contains(t, got, "MemoryMax=8000000000")
+	// GOMEMLIMIT tracks the hard cap (90%, in bytes), not the GiB default.
+	require.Contains(t, got, "GOMEMLIMIT=7200000000 ")
+	require.NotContains(t, got, "GOMEMLIMIT=8GiB")
 }
