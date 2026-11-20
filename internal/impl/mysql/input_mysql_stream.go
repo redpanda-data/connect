@@ -108,7 +108,9 @@ The stored position is a binlog file name and offset on one server, not a GTID. 
 
 Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers. `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers. `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps. Binary and `+"`BLOB`"+` columns become byte arrays. `+"`SET`"+` columns become arrays of strings. `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
 
-For zero, partial-zero and invalid dates, the snapshot and the stream give the same value. A zero date such as `+"`0000-00-00`"+` has no timestamp form, so it becomes `+"`null`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+`. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. Such a `+"`DATE`"+` becomes `+"`null`"+`. Such a `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. Such a `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. Valid dates before 1970 keep their value.
+The snapshot and the stream give the same value for the same stored date. Both give timestamps in UTC. A `+"`DATE`"+` or `+"`DATETIME`"+` value is a wall clock without a time zone, so its wall clock becomes a UTC timestamp: `+"`2024-06-01 10:00:00`"+` becomes `+"`2024-06-01T10:00:00Z`"+`. A `+"`TIMESTAMP`"+` value is an instant, so it becomes that instant in UTC, whatever the server time zone. The `+"`loc`"+` DSN option has no effect on these values.
+
+For zero, partial-zero and invalid dates, the snapshot and the stream also give the same value. A zero date such as `+"`0000-00-00`"+` has no timestamp form, so it becomes `+"`null`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+`. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. Such a `+"`DATE`"+` becomes `+"`null`"+`. Such a `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. Such a `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. Valid dates before 1970 keep their value.
 
 == Metadata
 
@@ -382,7 +384,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
-		db, err := sqlredact.Open("mysql", i.mysqlConfig.FormatDSN())
+		db, err := sqlredact.Open("mysql", snapshotConfig(i.mysqlConfig).FormatDSN())
 		if err != nil {
 			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}
@@ -590,7 +592,7 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 			return fmt.Errorf("fetching column types: %s", err)
 		}
 
-		values, mappers := prepSnapshotScannerAndMappers(colTypes, i.mysqlConfig.Loc)
+		values, mappers := prepSnapshotScannerAndMappers(colTypes)
 		columns, err := batchRows.Columns()
 		if err != nil {
 			_ = batchRows.Close()
@@ -671,11 +673,32 @@ func snapshotValueMapper[T any](v any) (any, error) {
 	return s.V, nil
 }
 
+// snapshotConfig gives a copy of cfg for the snapshot connections, with the
+// session time zone set to UTC. MySQL formats a TIMESTAMP in the session time
+// zone, and parseSnapshotTime parses all date strings in UTC.
+func snapshotConfig(cfg *mysql.Config) *mysql.Config {
+	c := cfg.Clone()
+	if c.Params == nil {
+		c.Params = map[string]string{}
+	}
+	// The driver sets each param with SET on each new connection, in map
+	// order. MySQL variable names are case-insensitive, so a DSN key such as
+	// TIME_ZONE could win over the UTC zone on some connections.
+	for k := range c.Params {
+		if strings.EqualFold(k, "time_zone") {
+			delete(c.Params, k)
+		}
+	}
+	c.Params["time_zone"] = "'+00:00'"
+	return c
+}
+
 // parseSnapshotTime parses a DATE, DATETIME or TIMESTAMP string from the
-// snapshot into a time.Time in loc. For a zero, partial-zero or invalid date,
-// it gives the same value as the stream: nil, or the moved date for an invalid
-// DATETIME from 1970 on.
-func parseSnapshotTime(s string, loc *time.Location) (any, error) {
+// snapshot into a time.Time in UTC, as the stream gives. The snapshot session
+// uses UTC, so a TIMESTAMP string is a UTC wall clock. For a zero, partial-zero
+// or invalid date, it gives the same value as the stream: nil, or the moved
+// date for an invalid DATETIME from 1970 on.
+func parseSnapshotTime(s string) (any, error) {
 	if len(s) < len("2006-01-02") || s[4] != '-' || s[7] != '-' {
 		return nil, fmt.Errorf("invalid date value %q", s)
 	}
@@ -709,13 +732,12 @@ func parseSnapshotTime(s string, loc *time.Location) (any, error) {
 			return nil, nil
 		}
 	}
-	return time.Date(year, time.Month(month), day, clock.Hour(), clock.Minute(), clock.Second(), clock.Nanosecond(), loc), nil
+	return time.Date(year, time.Month(month), day, clock.Hour(), clock.Minute(), clock.Second(), clock.Nanosecond(), time.UTC), nil
 }
 
 // prepSnapshotScannerAndMappers gives a scan destination and a mapper for each
-// snapshot column. loc is the time zone of DATE, DATETIME and TIMESTAMP
-// values, from the loc DSN option.
-func prepSnapshotScannerAndMappers(cols []*sql.ColumnType, loc *time.Location) (values []any, mappers []func(any) (any, error)) {
+// snapshot column.
+func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
 	stringMapping := func(mapper func(s string) (any, error)) func(any) (any, error) {
 		return func(v any) (any, error) {
 			s, ok := v.(*sql.NullString)
@@ -737,9 +759,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType, loc *time.Location) (
 			mapper = snapshotValueMapper[[]byte]
 		case "DATETIME", "TIMESTAMP", "DATE":
 			val = new(sql.NullString)
-			mapper = stringMapping(func(s string) (any, error) {
-				return parseSnapshotTime(s, loc)
-			})
+			mapper = stringMapping(parseSnapshotTime)
 		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "YEAR",
 			"UNSIGNED TINYINT", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT":
 			val = new(sql.NullInt32)
@@ -1226,6 +1246,11 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		if s, ok := v.(string); ok {
 			// time.Parse accepts the optional fraction (DATETIME(6)).
 			return parseBinlogTime("2006-01-02 15:04:05", s)
+		}
+		// go-mysql gives a TIMESTAMP in the local time zone of the
+		// process. Give it in UTC, as a DATETIME and the snapshot.
+		if t, ok := v.(time.Time); ok {
+			return t.UTC(), nil
 		}
 		return v, nil
 	case schema.TYPE_ENUM:
