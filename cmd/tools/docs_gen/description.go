@@ -520,13 +520,14 @@ type componentPlatform struct {
 func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
 
 // renderDescriptionPartial renders the description partial of a component. The
-// meta tag sets page attributes for the page header, such as page-beta, which
-// makes the docs UI show its beta badge. The body tag renders the status notice
-// of deprecated and experimental components, then the summary, version note,
-// and description. The footnotes tag renders the spec footnotes. Every tag is
-// always present, so a page that includes one keeps building when the spec
-// drops that content. excluded is as in cloudGuardXrefs, and is used only for
-// components that Redpanda Cloud includes.
+// meta tag sets page attributes for the page header: page-beta, which makes the
+// docs UI show its beta badge, and page-introduced-in, which the docs UI shows
+// as a badge in the page's sticky header on self-managed pages. The body tag
+// renders the status notice of deprecated and experimental components, then the
+// summary and description. The footnotes tag renders the spec footnotes. Every
+// tag is always present, so a page that includes one keeps building when the
+// spec drops that content. excluded is as in cloudGuardXrefs, and is used only
+// for components that Redpanda Cloud includes.
 func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool) string {
 	guard := func(body string) string {
 		if !plat.inCloud() || excluded == nil {
@@ -551,6 +552,9 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 	if plat.CgoOnly {
 		b.WriteString(":page-cgo-only: true\n")
 	}
+	if c.Version != "" {
+		b.WriteString("ifndef::env-cloud[]\n:page-introduced-in: " + c.Version + "\nendif::[]\n")
+	}
 	b.WriteString("// end::meta[]\n\n// tag::body[]\n")
 	if c.Status != "beta" {
 		if notice := statusNotice(c.Status, "component"); notice != "" {
@@ -559,9 +563,6 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 	}
 	if summary != "" {
 		b.WriteString(guard(summary) + "\n\n")
-	}
-	if c.Version != "" {
-		b.WriteString("ifndef::env-cloud[]\nIntroduced in version " + htmlEscaper.Replace(c.Version) + ".\nendif::[]\n\n")
 	}
 	b.WriteString(guard(renderDescriptionBody(c.Description, typeDir, c.Name)) + "\n// end::body[]\n\n")
 	b.WriteString("// tag::footnotes[]\n")
