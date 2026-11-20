@@ -431,6 +431,31 @@ func runBench(opts benchOpts) (errOut error) {
 		fmt.Printf("[3/7] skipping default build: staging provided --binary mappings %v\n", sortedBinaryNames(opts.binaries))
 	}
 
+	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
+	if err != nil {
+		return err
+	}
+	// An e2e run writes to the customer's real sink: provision this run's
+	// scratch in it now, so its ${BENCH_*} values are in sharedOuts before
+	// any config renders. It runs after the build so the runner host has had
+	// that long to boot; ssmRPK also waits for its rpk install. The scratch
+	// is torn down before terraform destroy (defers run last-in first-out),
+	// even when the sweep fails.
+	sink, err := sinkForScenario(s, SinkDeps{
+		Region:    opts.region,
+		Outs:      sharedOuts,
+		SessionID: sessionID,
+		RPK:       ssmRPK{SSM: ssmExec, Instance: sharedOuts["runner_instance_id"]},
+	})
+	if err != nil {
+		return err
+	}
+	teardownSink, err := provisionSink(ctx, sink, sessionID, sharedOuts)
+	if err != nil {
+		return err
+	}
+	defer teardownSink(&errOut)
+
 	plan := buildSweepPlan(s)
 	// legacy scenarios (no matrix.arms) share one config across every point,
 	// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
@@ -453,6 +478,11 @@ func runBench(opts benchOpts) (errOut error) {
 			sets = append(sets, set)
 		}
 	}
+	if s.Direction == DirectionE2E {
+		if err := checkPlaceholdersResolved(sets); err != nil {
+			return err
+		}
+	}
 	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
 	}
@@ -463,10 +493,6 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Println("[5/7] seed complete")
 
-	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
-	if err != nil {
-		return err
-	}
 	logFetcher, err := NewS3LogFetcher(ctx, opts.region)
 	if err != nil {
 		return err
@@ -498,6 +524,7 @@ func runBench(opts benchOpts) (errOut error) {
 		CheckpointSec:            checkpointSec,
 		ExpectedRecordsPerSec:    expectedRecordsPerSec,
 		SourceProbe:              sourceProbeFor(s, sharedOuts, names),
+		Sink:                     sink,
 	}
 	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
 	// operator (or an alarm) can watch a run that may still have 23 hours

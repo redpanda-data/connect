@@ -108,6 +108,10 @@ type MatrixRunner struct {
 	// emit covers whatever tail minutes the loop never got to. nil is the
 	// sweep default — a short sweep point has no need for a live dashboard.
 	Emitter MetricsEmitter
+	// Sink, when non-nil (e2e only), is counted immediately before and after
+	// each point; the delta is checked against the point's output samples
+	// (see sinkCountAnomaly). A sink that cannot count is skipped.
+	Sink Sink
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -200,6 +204,21 @@ func (m *MatrixRunner) Run(
 		if resetScript != "" {
 			if err := m.SSM.Run(ctx, m.RunnerInstance, resetScript, streamingOnLine(stdout, "reset")); err != nil {
 				return nil, fmt.Errorf("reset at %d vCPU: %w", n, err)
+			}
+		}
+
+		// Count the sink as close to the point's start as possible: after
+		// the reset, before the workload or Connect launch.
+		var sinkBefore int64
+		sinkCounted := false
+		if m.Sink != nil {
+			c, err := m.Sink.Count(ctx, key)
+			switch {
+			case errors.Is(err, ErrCountUnsupported):
+			case err != nil:
+				return nil, fmt.Errorf("count sink before %d vCPU: %w", n, err)
+			default:
+				sinkBefore, sinkCounted = c, true
 			}
 		}
 
@@ -332,6 +351,14 @@ func (m *MatrixRunner) Run(
 			// rolling soak baseline.
 			return nil, fmt.Errorf("workload script failed during bench at %d vCPU: %w", n, werr)
 		}
+		var sinkWritten int64
+		if sinkCounted {
+			c, err := m.Sink.Count(ctx, key)
+			if err != nil {
+				return nil, fmt.Errorf("count sink after %d vCPU: %w", n, err)
+			}
+			sinkWritten = c - sinkBefore
+		}
 
 		raw, err := m.fetchLog(ctx, key)
 		if err != nil {
@@ -415,6 +442,16 @@ func (m *MatrixRunner) Run(
 			extra, probeFail = sourceAnomalies(sm)
 			anomalies = append(anomalies, extra...)
 		}
+		// Ground truth: the sink delta spans the whole point, so it is
+		// compared with every sample, warmup included, not the trimmed set.
+		var sinkFail bool
+		if sinkCounted {
+			all, _ := ParseRollingStatsStream(bytes.NewReader(raw))
+			var a Anomaly
+			if a, sinkFail = sinkCountAnomaly(sinkWritten, all); sinkFail {
+				anomalies = append(anomalies, a)
+			}
+		}
 		var backlog []BacklogPoint
 		if !fromSamples {
 			backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
@@ -447,6 +484,9 @@ func (m *MatrixRunner) Run(
 		})
 		if probeFail {
 			return out, fmt.Errorf("%s at %d vCPU: the source topic gained no records during the window", anomalyProducerUnreachable, n)
+		}
+		if sinkFail {
+			return out, fmt.Errorf("point at %d vCPU failed: %s", n, anomalies[len(anomalies)-1].Note)
 		}
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
