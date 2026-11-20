@@ -38,6 +38,7 @@ import (
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // testInfrastructure holds containers and connection info for integration tests.
@@ -141,6 +142,16 @@ type routerOpts struct {
 	caseSensitive bool
 	schemaEvoCfg  icebergimpl.SchemaEvolutionConfig
 	rowOpCfg      icebergimpl.RowOpConfig
+	commitCfg     *icebergimpl.CommitConfig
+}
+
+// WithCommitConfig overrides the test router's commit configuration. The
+// default mirrors the product defaults: manifest merge off, expiry off and 3
+// retries.
+func WithCommitConfig(cfg icebergimpl.CommitConfig) RouterOption {
+	return func(o *routerOpts) {
+		o.commitCfg = &cfg
+	}
 }
 
 // WithSchemaEvolution enables schema evolution on the test router.
@@ -184,16 +195,16 @@ func (infra *testInfrastructure) NewRouter(
 		opt(&o)
 	}
 
-	namespaceStr, err := service.NewInterpolatedString(namespace)
-	require.NoError(t, err)
-	tableStr, err := service.NewInterpolatedString(table)
-	require.NoError(t, err)
+	namespaceStr := servicetest.NewInterpolatedString(t, namespace)
+	tableStr := servicetest.NewInterpolatedString(t, table)
 
 	logger := service.MockResources().Logger()
 	commitCfg := icebergimpl.CommitConfig{
-		ManifestMergeEnabled: true,
-		MaxSnapshotAge:       24 * time.Hour,
-		MaxRetries:           3,
+		MaxSnapshotAge: 0, // the product default: expiry is opt-in
+		MaxRetries:     3,
+	}
+	if o.commitCfg != nil {
+		commitCfg = *o.commitCfg
 	}
 	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, o.rowOpCfg, nil, logger)
 	t.Cleanup(func() { router.Close() })

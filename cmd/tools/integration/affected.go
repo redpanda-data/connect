@@ -18,7 +18,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -32,26 +31,20 @@ import (
 
 // cmdAffected reads changed file paths (one per line, relative to the module
 // root) from stdin and prints the integration test packages whose tests
-// depend on them, as GITHUB_OUTPUT lines:
+// depend on them, as a GITHUB_OUTPUT line:
 //
-//	affected=<package paths>  every registered package whose tests depend on a change
-//	filters=<package paths>   the same list, or empty when it exceeds the budget
-//	budget_exceeded=true|false
+//	filters=<package paths>
 //
-// The budget is a number of packages, counted the way the run command
-// selects them. The run command runs packages one after another, and in the
-// nightly run on 2026-11-05 the 20 slowest packages took 24 minutes, so 20
-// packages fit the 30-minute timeout of the filtered run.
+// There is no limit on the number of packages: the run command tests them in
+// parallel, so the full suite fits the 30-minute timeout of the filtered run.
 //
 // A change to a non-test Go package triggers every registered package whose
 // test binary (go list -test -deps) includes it. A _test.go file or a file
 // under testdata/ only triggers the package it belongs to. A file that is not
 // in a Go package (workflows, docs) triggers nothing.
 func cmdAffected(args []string) error {
-	fset := flag.NewFlagSet("affected", flag.ContinueOnError)
-	maxPackages := fset.Int("max-packages", 20, "maximum number of packages a filtered run may select")
-	if err := fset.Parse(args); err != nil {
-		return err
+	if len(args) > 0 {
+		return fmt.Errorf("affected takes no arguments, got %q", args)
 	}
 
 	changed, err := readChangedFiles(os.Stdin)
@@ -70,7 +63,7 @@ func cmdAffected(args []string) error {
 	}
 
 	res := affectedPackages(pkgs, deps, modPath, changed, isGoPackageDir)
-	return writeAffected(os.Stdout, os.Stderr, res, *maxPackages)
+	return writeAffected(os.Stdout, os.Stderr, res)
 }
 
 // affectedResult is the outcome of mapping changed files to packages.
@@ -146,28 +139,11 @@ func affectedPackages(pkgs []TestPackage, deps map[string]map[string]bool, modPa
 	return res
 }
 
-func writeAffected(out, log io.Writer, res affectedResult, maxPackages int) error {
+func writeAffected(out, log io.Writer, res affectedResult) error {
 	for _, p := range res.Packages {
 		fmt.Fprintf(log, "%s <- %s\n", p, strings.Join(res.Reasons[p], ", "))
 	}
-	// The run command matches filters as substrings, so a filter can select
-	// more packages than it names: ./internal/impl/kafka also selects
-	// ./internal/impl/kafka/enterprise. Count what the run would select.
-	var selected []TestPackage
-	if len(res.Packages) > 0 {
-		selected = filterPackages(allPackages, res.Packages)
-	}
-	exceeded := len(selected) > maxPackages
-	fmt.Fprintf(log, "%d packages selected, budget %d\n", len(selected), maxPackages)
-
-	list := strings.Join(res.Packages, " ")
-	filters := list
-	if exceeded {
-		filters = ""
-	}
-	fmt.Fprintf(out, "affected=%s\n", list)
-	fmt.Fprintf(out, "filters=%s\n", filters)
-	fmt.Fprintf(out, "budget_exceeded=%t\n", exceeded)
+	fmt.Fprintf(out, "filters=%s\n", strings.Join(res.Packages, " "))
 	return nil
 }
 

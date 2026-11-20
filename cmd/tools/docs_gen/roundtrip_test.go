@@ -107,16 +107,87 @@ func TestListExamplesKeepQuotes(t *testing.T) {
 	assert.Equal(t, []string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`, "'single'"}, got["tables"])
 }
 
-func TestListExamplesQuoteHex(t *testing.T) {
-	f := fieldSpec{Name: "ciphers", Kind: "array", Type: "string", Examples: []json.RawMessage{
-		json.RawMessage(`["0x1E0F3", "TLS_AES_128_GCM_SHA256"]`),
+// Some strings look like a number, a bool, or null, for example 0x1F or ~.
+// A string item of a list example must read back as a string when YAML
+// decodes it without a type, as for a field of any type.
+//
+// The test decodes into any, not string. When the target is a string, yaml.v3
+// keeps the text as written. An unquoted 0x1F then comes back as "0x1F", and
+// the test cannot see a missing quote. A connect string field reads it the
+// same way, so this test checks the YAML, not a connect read.
+//
+// The emitter asks the yaml.v3 resolver which strings to quote, and this test
+// decodes with yaml.v3. For the yaml.v3-only forms (signed hex, underscores,
+// 0b), the test checks that list examples use the emitter, not the rule.
+// TestYAMLStringifyQuotesYAMLv3NonStrings pins the rule.
+func TestListExamplesReadBackAsStrings(t *testing.T) {
+	tests := []struct {
+		name    string
+		example string
+		want    []any
+	}{
+		{
+			name:    "hex",
+			example: `["0x1E0F3", "TLS_AES_128_GCM_SHA256"]`,
+			want:    []any{"0x1E0F3", "TLS_AES_128_GCM_SHA256"},
+		},
+		{
+			name:    "hex with uppercase prefix",
+			example: `["0X1F"]`,
+			want:    []any{"0X1F"},
+		},
+		{
+			name:    "signed hex",
+			example: `["-0x1F", "+0x1F"]`,
+			want:    []any{"-0x1F", "+0x1F"},
+		},
+		{
+			name:    "hex with underscore",
+			example: `["0x1E_0F"]`,
+			want:    []any{"0x1E_0F"},
+		},
+		{
+			name:    "binary and octal",
+			example: `["0b1010", "0o17"]`,
+			want:    []any{"0b1010", "0o17"},
+		},
+		{
+			name:    "null and infinity",
+			example: `["~", ".inf"]`,
+			want:    []any{"~", ".inf"},
+		},
+		{
+			name:    "strings in a list with objects",
+			example: `["0x1E0F3", "true", "12", "", {"name": "a"}]`,
+			want:    []any{"0x1E0F3", "true", "12", "", map[string]any{"name": "a"}},
+		},
+		{
+			name:    "bool and number in a list with objects",
+			example: `[true, 12, {"name": "a"}]`,
+			want:    []any{true, 12, map[string]any{"name": "a"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := fieldSpec{Name: "items", Kind: "array", Type: "string", Examples: []json.RawMessage{
+				json.RawMessage(tt.example),
+			}}
+			body := strings.TrimSuffix(strings.SplitN(renderFieldExamples(f), "# Examples:\n", 2)[1], "----\n\n")
+			var got map[string]any
+			require.NoError(t, yaml.Unmarshal([]byte(body), &got), body)
+			assert.Equal(t, tt.want, got["items"], body)
+		})
+	}
+}
+
+// yaml.v3 reads yes, no, on and off as strings, so a round trip through it
+// cannot see a missing quote. YAML 1.1 parsers read them as bools, so the test
+// checks the text.
+func TestListExamplesQuoteYAML11Bools(t *testing.T) {
+	f := fieldSpec{Name: "items", Kind: "array", Type: "string", Examples: []json.RawMessage{
+		json.RawMessage(`["yes", "no", "on", "off"]`),
 	}}
-	out := renderFieldExamples(f)
-	assert.Contains(t, out, `  - "0x1E0F3"`)
-	body := strings.TrimSuffix(strings.SplitN(out, "# Examples:\n", 2)[1], "----\n\n")
-	var got map[string][]string
-	require.NoError(t, yaml.Unmarshal([]byte(body), &got), body)
-	assert.Equal(t, []string{"0x1E0F3", "TLS_AES_128_GCM_SHA256"}, got["ciphers"])
+	assert.Contains(t, renderFieldExamples(f), "items:\n  - \"yes\"\n  - \"no\"\n  - \"on\"\n  - \"off\"\n")
 }
 
 var fieldHeading = regexp.MustCompile("(?m)^=== `")

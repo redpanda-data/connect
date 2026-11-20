@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestCOWAmplificationWarning pins item 3.4: the one-time startup guidance about
@@ -30,27 +32,27 @@ func TestCOWAmplificationWarning(t *testing.T) {
 	}{
 		{
 			name:     "cow static upsert warns",
-			cfg:      RowOpConfig{Operation: mustInterp(t, "upsert"), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyCOW},
+			cfg:      RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "upsert"), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyCOW},
 			wantWarn: true,
 		},
 		{
 			name:     "cow static delete warns",
-			cfg:      RowOpConfig{Operation: mustInterp(t, "delete"), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyCOW},
+			cfg:      RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "delete"), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyCOW},
 			wantWarn: true,
 		},
 		{
 			name:     "cow dynamic operation warns",
-			cfg:      RowOpConfig{Operation: mustInterp(t, `${! metadata("op") }`), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyCOW},
+			cfg:      RowOpConfig{Operation: servicetest.NewInterpolatedString(t, `${! metadata("op") }`), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyCOW},
 			wantWarn: true,
 		},
 		{
 			name:     "cow static insert stays silent",
-			cfg:      RowOpConfig{Operation: mustInterp(t, "insert"), MergeStrategy: mergeStrategyCOW},
+			cfg:      RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "insert"), MergeStrategy: mergeStrategyCOW},
 			wantWarn: false,
 		},
 		{
 			name:     "merge-on-read mutating stays silent",
-			cfg:      RowOpConfig{Operation: mustInterp(t, "upsert"), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyMOR},
+			cfg:      RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "upsert"), IdentifierFields: []string{"id"}, MergeStrategy: mergeStrategyMOR},
 			wantWarn: false,
 		},
 		{

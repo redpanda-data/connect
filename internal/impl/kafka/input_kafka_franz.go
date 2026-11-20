@@ -33,6 +33,10 @@ When a consumer group is specified this input consumes one or more topics where 
 
 This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
 
+== Rejected records
+
+` + nackWarningsDescription(NackMetricNameKafka) + `
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -86,7 +90,7 @@ func init() {
 				return nil, err
 			}
 
-			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+			if rdr, err = WrapBatchInputNackWarnings(conf, mgr, NackMetricNameKafka, rdr); err != nil {
 				return nil, err
 			}
 

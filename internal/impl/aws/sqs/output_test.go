@@ -30,6 +30,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestSQSHeaderCheck(t *testing.T) {
@@ -146,8 +148,7 @@ func TestSQSRetries(t *testing.T) {
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 	)
 	require.NoError(t, err)
-	url, err := service.NewInterpolatedString("http://foo.example.com")
-	require.NoError(t, err)
+	url := servicetest.NewInterpolatedString(t, "http://foo.example.com")
 	w, err := newSQSWriter(sqsoConfig{
 		URL: url,
 		backoffCtor: func() backoff.BackOff {
@@ -220,8 +221,7 @@ func TestSQSSendLimit(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	url, err := service.NewInterpolatedString("http://foo.example.com")
-	require.NoError(t, err)
+	url := servicetest.NewInterpolatedString(t, "http://foo.example.com")
 	w, err := newSQSWriter(sqsoConfig{
 		URL: url,
 		backoffCtor: func() backoff.BackOff {
@@ -295,8 +295,7 @@ func TestSQSMultipleQueues(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	url, err := service.NewInterpolatedString("http://${!counter()%2}.example.com")
-	require.NoError(t, err)
+	url := servicetest.NewInterpolatedString(t, "http://${!counter()%2}.example.com")
 	w, err := newSQSWriter(sqsoConfig{
 		URL: url,
 		backoffCtor: func() backoff.BackOff {

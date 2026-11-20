@@ -81,16 +81,15 @@ func scanKeyPayload(t testing.TB, ctx context.Context, tbl *table.Table) map[str
 		kArr := rec.Column(rec.Schema().FieldIndices("k")[0])
 		pArr := rec.Column(rec.Schema().FieldIndices("payload")[0]).(*array.String)
 		for r := 0; r < int(rec.NumRows()); r++ {
-			b, err := json.Marshal(kArr.GetOneForMarshal(r))
-			require.NoError(t, err)
+			key := storedCellJSON(t, kArr, r)
 			pay := ""
 			if pArr.IsValid(r) {
 				pay = pArr.Value(r)
 			}
-			prev, dup := out[string(b)]
+			prev, dup := out[key]
 			require.False(t, dup,
-				"scan returned merge key %s twice (payloads %q and %q): the mutation left both row versions behind", string(b), prev, pay)
-			out[string(b)] = pay
+				"scan returned merge key %s twice (payloads %q and %q): the mutation left both row versions behind", key, prev, pay)
+			out[key] = pay
 		}
 	}
 	return out

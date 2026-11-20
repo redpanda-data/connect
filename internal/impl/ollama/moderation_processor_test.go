@@ -26,16 +26,16 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func createModerationProcessorForTest(t *testing.T, model, addr, prompt, response string) *ollamaModerationProcessor {
 	t.Helper()
 	url, err := url.Parse(addr)
 	require.NoError(t, err)
-	p, err := service.NewInterpolatedString(prompt)
-	require.NoError(t, err)
-	r, err := service.NewInterpolatedString(response)
-	require.NoError(t, err)
+	p := servicetest.NewInterpolatedString(t, prompt)
+	r := servicetest.NewInterpolatedString(t, response)
 	return &ollamaModerationProcessor{
 		baseOllamaProcessor: &baseOllamaProcessor{
 			model:  model,

@@ -26,6 +26,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestDatabricksThroughput characterizes the "small-commit
@@ -96,10 +98,8 @@ func (b *syncBuffer) String() string {
 // unknown-state, prohibited-key stripping — are collectable evidence.
 func newCapturingRouter(t *testing.T, namespace, tableName string, rowOp icebergimpl.RowOpConfig) (*icebergimpl.Router, *syncBuffer) {
 	t.Helper()
-	namespaceStr, err := service.NewInterpolatedString(namespace)
-	require.NoError(t, err)
-	tableStr, err := service.NewInterpolatedString(tableName)
-	require.NoError(t, err)
+	namespaceStr := servicetest.NewInterpolatedString(t, namespace)
+	tableStr := servicetest.NewInterpolatedString(t, tableName)
 
 	sb := new(syncBuffer)
 	logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(sb, &slog.HandlerOptions{

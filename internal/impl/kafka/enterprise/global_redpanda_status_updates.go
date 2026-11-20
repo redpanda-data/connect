@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -9,9 +9,7 @@
 package enterprise
 
 import (
-	"bytes"
 	"context"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +18,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/pipelinestatus"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 )
 
@@ -101,20 +100,6 @@ func (s *statusEmitter) sendStatusEvent(e *protoconnect.StatusEvent) {
 	}) // TODO: Log errors (occasionally)
 }
 
-// Convert a slice to a dot path following https://docs.redpanda.com/connect/configuration/field_paths/
-func sliceToDotPath(path []string) string {
-	var b bytes.Buffer
-	for i, s := range path {
-		s = strings.ReplaceAll(s, "~", "~0")
-		s = strings.ReplaceAll(s, ".", "~1")
-		b.WriteString(s)
-		if i < len(path)-1 {
-			b.WriteRune('.')
-		}
-	}
-	return b.String()
-}
-
 func (s *statusEmitter) Close(ctx context.Context) error {
 	s.shutSig.TriggerHardStop()
 	select {
@@ -160,21 +145,19 @@ func (s *statusEmitter) InitWithOutput(pipelineID, topic string, fallbackLogger 
 				Type:       protoconnect.StatusEvent_TYPE_CONNECTION_HEALTHY,
 			}
 
-			conns := status.ConnectionStatuses()
-			for _, c := range conns {
-				if !c.Active() {
-					e.Type = protoconnect.StatusEvent_TYPE_CONNECTION_ERROR
-					cErr := &protoconnect.ConnectionError{
-						Path: sliceToDotPath(c.Path()),
-					}
-					if l := c.Label(); l != "" {
-						cErr.Label = &l
-					}
-					if err := c.Err(); err != nil {
-						cErr.Message = err.Error()
-					}
-					e.ConnectionErrors = append(e.ConnectionErrors, cErr)
+			for _, c := range pipelinestatus.InactiveConnections(status) {
+				e.Type = protoconnect.StatusEvent_TYPE_CONNECTION_ERROR
+				cErr := &protoconnect.ConnectionError{
+					Path: c.Path,
 				}
+				if c.Label != "" {
+					l := c.Label
+					cErr.Label = &l
+				}
+				if c.Err != nil {
+					cErr.Message = c.Err.Error()
+				}
+				e.ConnectionErrors = append(e.ConnectionErrors, cErr)
 			}
 
 			s.sendStatusEvent(e)

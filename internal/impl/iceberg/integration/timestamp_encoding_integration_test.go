@@ -28,6 +28,7 @@ import (
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // tsAnnotationsPerDataFile opens every current-snapshot data file's parquet
@@ -164,8 +165,7 @@ func TestTimestampEncodingLegacyTableIntegration(t *testing.T) {
 		"the footer-probe bootstrap must stamp the resolved encoding onto the table")
 
 	// --- An insert-only copy-on-write batch is fine on a legacy table. ---
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	cowRouter := infra.NewRouter(t, ns, tblName,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,

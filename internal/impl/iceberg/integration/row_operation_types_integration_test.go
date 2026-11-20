@@ -23,6 +23,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // opStructMsg builds a message with a structured body and an `op` metadata value
@@ -51,8 +53,7 @@ func keyRoundTrip(t *testing.T, infra *testInfrastructure, ns, tbl string, keyTy
 	))
 	require.NoError(t, err)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,
@@ -134,8 +135,7 @@ func TestRowOperationCompositeKeyIntegration(t *testing.T) {
 	))
 	require.NoError(t, err)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,
@@ -191,8 +191,7 @@ func TestRowOperationPartitionedIntegration(t *testing.T) {
 	_, err := client.CreateTable(ctx, tbl, sc, catalog.WithPartitionSpec(&spec))
 	require.NoError(t, err)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,
@@ -240,8 +239,7 @@ func TestRowOperationBatchCollapseIntegration(t *testing.T) {
 	))
 	require.NoError(t, err)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,
