@@ -9,6 +9,7 @@ workflows:
         - 'anthropics/claude-code-action@v1.0.273'
     '.github/workflows/doc-strings-review.yml': []
     '.github/workflows/integration_test.yml':
+        - 'actions/cache@v6.1.0'
         - 'actions/checkout@v6.1.0'
         - 'actions/setup-go@v6.5.0'
         - 'actions/upload-artifact@v7.0.2'
