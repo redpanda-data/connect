@@ -28,8 +28,17 @@ const sourceProbePrefix = "###src:"
 
 // producerBoundLagSec: a group that ends the window less than this many
 // seconds of production behind has caught up with the producer, so the
-// producer, not the pipeline, was the ceiling.
-const producerBoundLagSec = 5
+// producer, not the pipeline, was the ceiling. Committed offsets trail real
+// consumption by the input's commit interval, so a caught-up group can show
+// up to that much lag. The defaults are commit_period 5s for the franz
+// readers (redpanda, redpanda_common, kafka_franz: franz_reader_ordered.go
+// and franz_reader_unordered.go in internal/impl/kafka) and 1s for sarama
+// kafka (input_sarama_kafka.go). The threshold is max(15s, 3 x 5s) = 15s.
+const producerBoundLagSec = max(15, 3*franzDefaultCommitPeriodSec)
+
+// franzDefaultCommitPeriodSec is the franz readers' default commit_period,
+// the longest default commit interval among the redpanda-kind inputs.
+const franzDefaultCommitPeriodSec = 5
 
 const (
 	anomalyProducerBound       = "producer_bound"

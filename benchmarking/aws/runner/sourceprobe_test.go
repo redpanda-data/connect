@@ -145,7 +145,8 @@ func TestParseSourceProbeMissingSection(t *testing.T) {
 }
 
 func TestSourceAnomalies(t *testing.T) {
-	// Caught up: lag under 5 s of production.
+	require.Equal(t, 15, producerBoundLagSec)
+	// Caught up: lag under the threshold.
 	a, fail := sourceAnomalies(SourceMeasurement{WindowSec: 900, HWMEnd: 900_000, LagEnd: 4_000})
 	require.False(t, fail)
 	require.Len(t, a, 1)
@@ -153,8 +154,15 @@ func TestSourceAnomalies(t *testing.T) {
 	require.True(t, strings.HasPrefix(a[0].Note, "producer_bound"))
 	require.Zero(t, a[0].MinRatio)
 
-	// Lagging: the pipeline is the ceiling.
+	// Caught up, but committed offsets trail consumption by commit
+	// intervals: 6 s of production behind is still producer_bound.
 	a, fail = sourceAnomalies(SourceMeasurement{WindowSec: 900, HWMEnd: 900_000, LagEnd: 6_000})
+	require.False(t, fail)
+	require.Len(t, a, 1)
+	require.Equal(t, anomalyProducerBound, a[0].Kind)
+
+	// Lagging: the pipeline is the ceiling.
+	a, fail = sourceAnomalies(SourceMeasurement{WindowSec: 900, HWMEnd: 900_000, LagEnd: 16_000})
 	require.False(t, fail)
 	require.Empty(t, a)
 
