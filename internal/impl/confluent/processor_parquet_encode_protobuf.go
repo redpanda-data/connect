@@ -36,6 +36,10 @@ import (
 const (
 	metricParquetProtobufDirect   = "parquet_encode_protobuf_direct_batches"
 	metricParquetProtobufFallback = "parquet_encode_protobuf_fallback_batches"
+
+	// directSchemaFetchTimeout bounds a schema lookup of the direct path. It
+	// matches the lookup timeout of the schema_registry_decode processor.
+	directSchemaFetchTimeout = 5 * time.Second
 )
 
 func parquetEncodeProtobufConfig() *service.ConfigSpec {
@@ -137,6 +141,9 @@ type parquetEncodeProtobufProcessor struct {
 
 	plansMut sync.RWMutex
 	plans    map[directPlanKey]*directPlanEntry
+	// buildMut serialises schema lookups, so that batches whose plans are
+	// already cached never wait on the registry.
+	buildMut sync.Mutex
 
 	loggedFallback atomic.Bool
 }
@@ -168,10 +175,13 @@ func (p *parquetEncodeProtobufProcessor) processBatch(ctx context.Context, batch
 		return nil, false, nil
 	}
 	if p.disabled == "" {
-		out, err := p.direct(batch)
+		out, err := p.direct(ctx, batch)
 		if err == nil {
 			p.mDirect.Incr(1)
 			return []service.MessageBatch{{out}}, true, nil
+		}
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
 		}
 		if p.loggedFallback.CompareAndSwap(false, true) {
 			p.logger.Warnf("A batch could not be encoded directly from protobuf to parquet and was decoded and encoded the regular way instead, further occurrences are counted by the %v metric: %v", metricParquetProtobufFallback, err)
@@ -186,7 +196,7 @@ func (p *parquetEncodeProtobufProcessor) processBatch(ctx context.Context, batch
 
 // direct encodes the batch straight from the protobuf wire format. It never
 // modifies the batch, and any error means the regular path must be taken.
-func (p *parquetEncodeProtobufProcessor) direct(batch service.MessageBatch) (*service.Message, error) {
+func (p *parquetEncodeProtobufProcessor) direct(ctx context.Context, batch service.MessageBatch) (*service.Message, error) {
 	plans := make([]*parquet.ProtobufPlan, len(batch))
 	data := make([][]byte, len(batch))
 
@@ -218,7 +228,7 @@ func (p *parquetEncodeProtobufProcessor) direct(batch service.MessageBatch) (*se
 			rest = rest[n:]
 		}
 		if lastPlan == nil || key != lastKey {
-			if lastPlan, err = p.plan(key); err != nil {
+			if lastPlan, err = p.plan(ctx, key); err != nil {
 				return nil, err
 			}
 			lastKey = key
@@ -257,27 +267,13 @@ func messageIndexesKey(indexes []int) string {
 	return sb.String()
 }
 
-func (p *parquetEncodeProtobufProcessor) plan(key directPlanKey) (*parquet.ProtobufPlan, error) {
-	p.plansMut.RLock()
-	entry, ok := p.plans[key]
-	p.plansMut.RUnlock()
+func (p *parquetEncodeProtobufProcessor) plan(ctx context.Context, key directPlanKey) (*parquet.ProtobufPlan, error) {
+	entry, ok := p.cachedPlan(key)
 	if !ok {
-		p.plansMut.Lock()
-		if entry, ok = p.plans[key]; !ok {
-			plan, reason, err := p.buildPlan(key)
-			if err != nil {
-				// Not cached: the registry may simply be unreachable, in
-				// which case the regular path reports the failure.
-				p.plansMut.Unlock()
-				return nil, err
-			}
-			if plan == nil {
-				p.logger.Warnf("Messages of schema ID %d are not encoded directly from protobuf to parquet and are decoded and encoded the regular way instead: %v", key.id, reason)
-			}
-			entry = &directPlanEntry{plan: plan}
-			p.plans[key] = entry
+		var err error
+		if entry, err = p.buildAndCachePlan(ctx, key); err != nil {
+			return nil, err
 		}
-		p.plansMut.Unlock()
 	}
 	if entry.plan == nil {
 		return nil, fmt.Errorf("schema ID %d does not qualify", key.id)
@@ -285,10 +281,42 @@ func (p *parquetEncodeProtobufProcessor) plan(key directPlanKey) (*parquet.Proto
 	return entry.plan, nil
 }
 
+func (p *parquetEncodeProtobufProcessor) cachedPlan(key directPlanKey) (*directPlanEntry, bool) {
+	p.plansMut.RLock()
+	defer p.plansMut.RUnlock()
+	entry, ok := p.plans[key]
+	return entry, ok
+}
+
+func (p *parquetEncodeProtobufProcessor) buildAndCachePlan(ctx context.Context, key directPlanKey) (*directPlanEntry, error) {
+	p.buildMut.Lock()
+	defer p.buildMut.Unlock()
+
+	// Another batch may have built the plan while this one waited.
+	if entry, ok := p.cachedPlan(key); ok {
+		return entry, nil
+	}
+
+	plan, reason, err := p.buildPlan(ctx, key)
+	if err != nil {
+		// Not cached: the registry may simply be unreachable, in which case
+		// the regular path reports the failure.
+		return nil, err
+	}
+	if plan == nil {
+		p.logger.Warnf("Messages of schema ID %d are not encoded directly from protobuf to parquet and are decoded and encoded the regular way instead: %v", key.id, reason)
+	}
+	entry := &directPlanEntry{plan: plan}
+	p.plansMut.Lock()
+	p.plans[key] = entry
+	p.plansMut.Unlock()
+	return entry, nil
+}
+
 // buildPlan returns the plan for a message type, or the reason it has none.
 // An error is returned for failures that may not repeat.
-func (p *parquetEncodeProtobufProcessor) buildPlan(key directPlanKey) (plan *parquet.ProtobufPlan, reason string, err error) {
-	ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+func (p *parquetEncodeProtobufProcessor) buildPlan(ctx context.Context, key directPlanKey) (plan *parquet.ProtobufPlan, reason string, err error) {
+	ctx, done := context.WithTimeout(ctx, directSchemaFetchTimeout)
 	defer done()
 
 	schema, err := p.decoder.client.GetSchemaByID(ctx, key.id, false)
