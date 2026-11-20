@@ -74,7 +74,7 @@ func descBannerFor(source string) string {
 	return bannerFor(source) + " The summary and description come from the component spec." + changeHint + "\n" +
 		"//\n" +
 		"// Pages consume this partial in two places so both stay fresh:\n" +
-		"//   header: include::...[tag=meta]  (sets :description: for search snippets and meta tags)\n" +
+		"//   header: include::...[tag=meta]  (sets :description: for search snippets and meta tags, and :page-introduced-in: for the version badge)\n" +
 		"//   body:   include::...[tag=body]   (renders the status notice, summary, and description)\n" +
 		"// Pages with reference sections also include [tag=footnotes] where those sections belong."
 }
