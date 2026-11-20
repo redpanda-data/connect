@@ -51,13 +51,13 @@ func parquetEncodeProtobufConfig() *service.ConfigSpec {
 		Description(`
 This processor is the combination of a `+"xref:components:processors/schema_registry_decode.adoc[`schema_registry_decode`]"+` processor followed by a `+"xref:components:processors/parquet_encode.adoc[`parquet_encode`]"+` processor. It accepts the fields of both, behaves like both run one after the other, and produces the same Parquet file.
 
-The difference is how the work is done. When the messages of a batch are Protobuf and their schema maps onto the Parquet schema in a simple way, the Protobuf wire format is written straight into Parquet columns without building an intermediate document for each message, which uses considerably less CPU and memory.
+The difference is how the work is done. When the messages of a batch are Protobuf and their schema maps onto the Parquet schema in a simple way, the Protobuf wire format is written straight into Parquet columns. This skips building an intermediate document for each message, which uses considerably less CPU and memory.
 
-A batch takes this direct path only when all of the following hold, otherwise the batch is decoded and encoded exactly as the two separate processors would:
+A batch takes this direct path only when all of the following hold. Otherwise, the batch is decoded and encoded exactly as the two separate processors would do it.
 
 - `+"`protobuf.serialize_to_json`"+` is `+"`false`"+` and the Parquet schema is set with the `+"`schema`"+` field.
 - Every Parquet column is a top level `+"`BOOLEAN`, `INT32`, `INT64`, `FLOAT`, `DOUBLE`, `BYTE_ARRAY`, `UTF8` or `ENUM`"+` column, optionally repeated.
-- The Protobuf message only has scalar, enum and repeated scalar fields, without required fields, oneofs, maps or nested messages, and each field that has a column is of a type matching that column.
+- The Protobuf message only has scalar, enum and repeated scalar fields, with no required fields, oneofs, maps or nested messages. Each field that has a column is of a type matching that column.
 - Every message of the batch is plain canonical Protobuf: no unknown fields, no field written twice, no explicitly written default values and valid UTF-8 strings.
 
 The first time a schema or a batch is found not to qualify, the reason is logged. The metrics `+"`"+metricParquetProtobufDirect+"`"+` and `+"`"+metricParquetProtobufFallback+"`"+` count the batches that took each path.

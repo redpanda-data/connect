@@ -54,7 +54,7 @@ func parquetEncodeFields() []*service.ConfigField {
 		service.NewStringEnumField("default_timestamp_unit",
 			"NANOSECOND", "MICROSECOND", "MILLISECOND",
 		).
-			Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
+			Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB. Set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
 			ShortDescription("Precision used when encoding TIMESTAMP logical types. NANOSECOND is not readable by all engines.").
 			Default("NANOSECOND").
 			Advanced().
