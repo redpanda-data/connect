@@ -170,7 +170,8 @@ This brings the parent spec's end-to-end topology (Design §4) forward from part
 |---|---|---|
 | `postgres_cdc`, `mysql_cdc` | Existing RDS stacks with the sustained write workload | none |
 | `kafka_franz`, `kafka`, `redpanda`, `redpanda_common` | The bench Redpanda cluster, pre-loaded with synthetic messages of the customer's size (enough for the whole sweep) | none |
-| anything else (sqlserver/oracle/mongodb/dynamodb CDC, http, S3, etc.) | **Approximated:** a Redpanda topic with synthetic messages of the customer's size and shape, read with `redpanda` | `source_approximated` in the headline |
+| other CDC inputs (`oracledb_cdc`, `aws_dynamodb_cdc`, `microsoft_sql_server_cdc`, `mongodb_cdc`, …) | **Not runnable** *(decided 2026-11-20)*: the CDC reader is usually the bottleneck, so an approximation would mislead. The bot answers from the catalogue only (including backfilled fork results), and offers §8 | n/a |
+| any other non-CDC input (http, S3, etc.) | **Approximated:** a Redpanda topic with synthetic messages of the customer's size and shape, read with `redpanda` | `source_approximated` in the headline |
 
 **Outputs** (accounts that exist today: Snowflake, BigQuery, AWS):
 
@@ -198,6 +199,20 @@ This brings the parent spec's end-to-end topology (Design §4) forward from part
 - **2b:** the agent, the `bench-catalog` app, the relay and the policies, in internal-agents.
 
 2a comes first, because 2b's fresh-run path depends on it. 2b's catalogue-answer path can be tested in Slack before 2a lands.
+
+### 8. Adding a new input or output with owner approval (plan 2d)
+
+*(Decided 2026-11-20.)* Some requests can't run as written: an unsupported sink falls back to `drop`, and a CDC input has no bench stack. If Redpanda Connect has the component, the bot can offer to add bench support for it. The work only starts with the **owner's** approval.
+
+- **Offer.** `bench_plan` reports `extendable: true` when the component is registered in Connect (from the catalogue app's component list, the same registration lookup as staleness). The bot answers as usual, with the fallback caveat or "not runnable", and adds: "I can add bench support for `<component>`. Needs approval from <owner>."
+- **Approval.** Only the configured owner's Slack user ID counts. The relay turns an owner 👍 on that message into `EXTEND APPROVAL by <owner> plan <plan_id> component <c>`. Anyone else's reaction is ignored. The owner is the Connect PM at first, set in the relay config.
+- **Work.** The `bench-catalog` app dispatches `bench_bot_extend.yml` (connect repo) with `plan_id` and the component. That workflow runs a coding agent (Claude Code GitHub Action), scoped to `benchmarking/aws/` and the workflows. The agent's brief:
+  - add the source stack (Terraform, seeder, reset) or the sink adapter (provision/count/teardown, reaper sweep);
+  - follow the existing patterns, and add the component to the plan classification tables;
+  - include unit tests with fakes, and open a **draft PR**.
+- **Gate.** Nothing merges without human review. The bot posts the PR link in the thread. The original plan is re-offered as a fresh run once the PR is merged and deployed; the watchdog notices merged extension PRs.
+- **Limits.** The agent cannot create SaaS accounts or credentials. For sinks that need an external account (Elasticsearch Cloud, ClickHouse Cloud, etc.), the PR lists the Secrets Manager entry a human must create, and the sink stays fallback until it exists. AWS-native resources are created by the PR's Terraform. RDS Oracle needs a licence decision first, so the PR stops at a note.
+- **Order.** Plan 2d comes after 2a (end-to-end runs), 2b (agent and relay) and 2c (porting the fork's CDC stacks: Oracle, DynamoDB, SQL Server, MongoDB, ordered by demand).
 
 ### 6. Grants and secrets (who creates what)
 
