@@ -70,14 +70,6 @@ func TestFingerprintSeesPerformanceKnobs(t *testing.T) {
 		"stream_snapshot": func(p map[string]any) {
 			p["input"].(map[string]any)["postgres_cdc"].(map[string]any)["stream_snapshot"] = false
 		},
-		"mutation body": func(p map[string]any) {
-			p["pipeline"].(map[string]any)["processors"] = []any{map[string]any{"mutation": "root.a = 1"}}
-		},
-		"branch request_map": func(p map[string]any) {
-			p["pipeline"].(map[string]any)["processors"] = []any{
-				map[string]any{"branch": map[string]any{"request_map": "root = this.a"}},
-			}
-		},
 		"compression": func(p map[string]any) {
 			p["output"].(map[string]any)["redpanda"].(map[string]any)["compression"] = "zstd"
 		},
@@ -145,6 +137,31 @@ func TestComponentsErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, _, _, err := Components(p)
 			require.Error(t, err)
+		})
+	}
+}
+
+func TestFingerprintKeepsProcessorLogic(t *testing.T) {
+	tests := map[string]struct{ a, b map[string]any }{
+		"mutation":    {map[string]any{"mutation": "root.a = 1"}, map[string]any{"mutation": "root.a = 2"}},
+		"bloblang":    {map[string]any{"bloblang": "root.a = 1"}, map[string]any{"bloblang": "root.a = 2"}},
+		"request_map": {map[string]any{"branch": map[string]any{"request_map": "root = this.a"}}, map[string]any{"branch": map[string]any{"request_map": "root = this.b"}}},
+		"result_map":  {map[string]any{"branch": map[string]any{"result_map": "root.x = this.a"}}, map[string]any{"branch": map[string]any{"result_map": "root.x = this.b"}}},
+		"jq query":    {map[string]any{"jq": map[string]any{"query": ".a"}}, map[string]any{"jq": map[string]any{"query": ".b"}}},
+		"javascript":  {map[string]any{"javascript": map[string]any{"code": "a"}}, map[string]any{"javascript": map[string]any{"code": "b"}}},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			build := func(proc map[string]any) map[string]any {
+				p := cdcPipeline()
+				p["pipeline"] = map[string]any{"processors": []any{proc}}
+				return p
+			}
+			fa, err := Fingerprint(build(tc.a))
+			require.NoError(t, err)
+			fb, err := Fingerprint(build(tc.b))
+			require.NoError(t, err)
+			assert.NotEqual(t, fa, fb)
 		})
 	}
 }
