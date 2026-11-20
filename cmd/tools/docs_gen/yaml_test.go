@@ -63,3 +63,59 @@ func TestYAMLStringifyMatchesNPMYAML(t *testing.T) {
 		})
 	}
 }
+
+// yaml.v3 and YAML 1.1 parsers read more plain scalars as non-strings than the
+// YAML 1.2 core schema does. The emitter quotes these strings too.
+func TestYAMLStringifyQuotesYAMLv3NonStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want string
+	}{
+		{
+			name: "uppercase hex prefix",
+			json: `{"a":"0X1F"}`,
+			want: "a: \"0X1F\"\n",
+		},
+		{
+			name: "signed hex",
+			json: `{"a":"-0x1F","b":"+0x1F"}`,
+			want: "a: \"-0x1F\"\nb: \"+0x1F\"\n",
+		},
+		{
+			name: "hex with underscore",
+			json: `{"a":"0x1E_0F"}`,
+			want: "a: \"0x1E_0F\"\n",
+		},
+		{
+			name: "binary",
+			json: `{"a":"0b1010"}`,
+			want: "a: \"0b1010\"\n",
+		},
+		{
+			name: "YAML 1.1 bools",
+			json: `{"a":"yes","b":"Off"}`,
+			want: "a: \"yes\"\nb: \"Off\"\n",
+		},
+		{
+			name: "YAML 1.1 base-60 numbers",
+			json: `{"a":"1:30","b":"-12:30:00","c":"1:30.5"}`,
+			want: "a: \"1:30\"\nb: \"-12:30:00\"\nc: \"1:30.5\"\n",
+		},
+		{
+			name: "base-60 lookalikes",
+			json: `{"a":"10:60","b":"80:80","c":"localhost:9092"}`,
+			want: "a: 10:60\nb: 80:80\nc: localhost:9092\n",
+		},
+		{
+			name: "list items",
+			json: `["-0x1F","0b1010"]`,
+			want: "- \"-0x1F\"\n- \"0b1010\"\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, yamlStringify(decodeValue(json.RawMessage(test.json)), yamlPlain))
+		})
+	}
+}

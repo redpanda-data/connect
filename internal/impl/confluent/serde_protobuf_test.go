@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestProtobufEncodeMultipleMessages(t *testing.T) {
@@ -59,8 +61,7 @@ message bar {
 		return nil, nil
 	})
 
-	subj, err := service.NewInterpolatedString("${! @subject }")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "${! @subject }")
 
 	tests := []struct {
 		name        string
@@ -200,8 +201,7 @@ message bar {
 		return nil, nil
 	})
 
-	subj, err := service.NewInterpolatedString("things")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "things")
 
 	tests := []struct {
 		name        string
@@ -279,8 +279,7 @@ func runEncoderAgainstInputsMultiple(t testing.TB, urlStr, subject string, input
 	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
-	subj, err := service.NewInterpolatedString(subject)
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, subject)
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)

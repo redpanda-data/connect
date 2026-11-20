@@ -142,38 +142,10 @@ func init() {
 			}
 
 			if connDetails.IsConfigured() {
-				var client *kgo.Client
-				var clientMut sync.Mutex
-
 				if output, err = NewFranzWriterFromConfig(
 					conf,
-					NewFranzWriterHooks(
-						func(ctx context.Context, fn FranzSharedClientUseFn) error {
-							clientMut.Lock()
-							defer clientMut.Unlock()
-
-							if client == nil {
-								var err error
-								if client, err = NewFranzClient(ctx, append(connDetails.FranzOpts(), producerOpts...)...); err != nil {
-									return err
-								}
-							}
-							return fn(&FranzSharedClientInfo{
-								Client:      client,
-								ConnDetails: connDetails,
-							})
-						}).WithYieldClientFn(
-						func(context.Context) error {
-							clientMut.Lock()
-							defer clientMut.Unlock()
-
-							if client == nil {
-								return nil
-							}
-							client.Close()
-							client = nil
-							return nil
-						})); err != nil {
+					newRedpandaOutputClient(connDetails, producerOpts).hooks(),
+				); err != nil {
 					mgr.Logger().Errorf("Failed creating writer from config: %v", err)
 					return
 				}
@@ -202,4 +174,82 @@ func init() {
 
 			return
 		})
+}
+
+// redpandaOutputClient is the client of a redpanda output with its own
+// connection fields, created on first use. Writes hold the read lock for as
+// long as they use the client, including the wait for their acks, so that up
+// to max_in_flight batches are produced concurrently. Creating and closing the
+// client take the write lock, so the client is never closed under a write that
+// is still waiting on its acks.
+type redpandaOutputClient struct {
+	connDetails  *FranzConnectionDetails
+	producerOpts []kgo.Opt
+
+	mu     sync.RWMutex
+	client *kgo.Client
+}
+
+func newRedpandaOutputClient(connDetails *FranzConnectionDetails, producerOpts []kgo.Opt) *redpandaOutputClient {
+	return &redpandaOutputClient{
+		connDetails:  connDetails,
+		producerOpts: producerOpts,
+	}
+}
+
+func (c *redpandaOutputClient) hooks() franzWriterHooks {
+	return NewFranzWriterHooks(c.use).WithYieldClientFn(c.close)
+}
+
+// use calls fn with the client, creating the client first if there is none.
+func (c *redpandaOutputClient) use(ctx context.Context, fn FranzSharedClientUseFn) error {
+	c.mu.RLock()
+	if c.client == nil {
+		// A read lock cannot be upgraded, so the client is created under the
+		// write lock and the read lock is taken again afterwards.
+		c.mu.RUnlock()
+		if err := c.connect(ctx); err != nil {
+			return err
+		}
+		c.mu.RLock()
+	}
+	defer c.mu.RUnlock()
+
+	// Benthos closes the output only after every write has returned, so the
+	// client is nil here only if close ran between connect and RLock above.
+	// ErrNotConnected sends benthos into its reconnect path.
+	if c.client == nil {
+		return service.ErrNotConnected
+	}
+	return fn(&FranzSharedClientInfo{
+		Client:      c.client,
+		ConnDetails: c.connDetails,
+	})
+}
+
+func (c *redpandaOutputClient) connect(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.client != nil {
+		return nil
+	}
+	client, err := NewFranzClient(ctx, append(c.connDetails.FranzOpts(), c.producerOpts...)...)
+	if err != nil {
+		return err
+	}
+	c.client = client
+	return nil
+}
+
+func (c *redpandaOutputClient) close(context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.client == nil {
+		return nil
+	}
+	c.client.Close()
+	c.client = nil
+	return nil
 }

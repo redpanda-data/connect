@@ -66,11 +66,12 @@ func TestTableCoordinatorRetriesInitialRefresh(t *testing.T) {
 		msgChan:         make(chan asyncMessage, 10),
 		refreshInterval: 10 * time.Millisecond,
 	}
+	cp := newTestCheckpointer(t)
 	ts := &tableStream{
 		tableName:      "test",
 		streamArn:      testStreamArn,
-		checkpointer:   newTestCheckpointer(t),
-		recordBatcher:  NewRecordBatcher(100, 100, service.MockResources().Logger()),
+		checkpointer:   cp,
+		recordBatcher:  NewRecordBatcher(100, 100, cp, nil, service.MockResources().Logger()),
 		shardReaders:   map[string]*dynamoDBShardReader{},
 		shardRefreshCh: make(chan struct{}, 1),
 	}
