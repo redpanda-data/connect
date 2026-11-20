@@ -38,7 +38,25 @@ const (
 	// checkpoint (DescribeStream keeps listing closed shards for the stream's
 	// 24h retention window). Distinct from the snapshot rows' "Complete".
 	checkpointShardCompletedAttr = "ShardCompleted"
+
+	// checkpointStartMarkerKey is the range key of the start marker row (see
+	// PrepareStart). The "#" keeps it apart from shard IDs, as with the
+	// snapshot rows.
+	checkpointStartMarkerKey = "start#latest"
+	// checkpointStartedAtAttr holds the start time (RFC3339Nano) in the
+	// start marker row.
+	checkpointStartedAtAttr = "StartedAt"
 )
+
+// startMarkerMargin moves the start cutoff to before the saved start time.
+// The start time comes from the host clock. AWS gives each record an
+// ApproximateCreationDateTime, rounded down to the second
+// (https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_streams_StreamRecord.html).
+// If the host clock is ahead of AWS, a record written just after the start
+// can have an earlier time than the saved start. The margin covers the
+// rounding and this clock skew. The cost: a restart can deliver again the
+// records from this margin before the first start.
+const startMarkerMargin = 5 * time.Minute
 
 // checkpointDynamoAPI is the subset of the DynamoDB client the Checkpointer
 // uses. *dynamodb.Client satisfies it; tests provide a fake.
@@ -86,6 +104,13 @@ type Checkpointer struct {
 	ownCompleted   map[string]struct{}
 	hasForeignRows bool
 	cutoff         time.Time
+
+	// startCutoff is set by PrepareStart when a start_from: latest pipeline
+	// restarts and finds its start marker. It is the first start time less
+	// startMarkerMargin. ResolveResume returns it with resumeDefault, so a
+	// shard without a checkpoint skips the records from before it. Zero means
+	// no skip. It does not change after PrepareStart.
+	startCutoff time.Time
 }
 
 // NewCheckpointer creates a new [Checkpointer] for DynamoDB CDC.
@@ -466,10 +491,114 @@ func (c *Checkpointer) HasAnyState(ctx context.Context) (bool, error) {
 	return len(result.Items) > 0, nil
 }
 
+// PrepareStart runs when a stream connects. It reports whether the pipeline
+// is new (no checkpoint state), so that start_from applies to its first
+// shards.
+//
+// A LATEST iterator has no sequence number to save. So with start_from:
+// latest, a restart before the first checkpoint row looks like a new pipeline
+// and takes LATEST again. It skips the records that were in flight and the
+// records written while the pipeline was down (CON-597). To prevent this:
+//   - A new pipeline saves a start marker row before discovery gets its
+//     LATEST iterators. The row also makes HasAnyState true from then on.
+//   - A restart reads the marker into startCutoff. A shard without a
+//     checkpoint then starts at TRIM_HORIZON and skips only the records from
+//     before the first start.
+//
+// The skip is safe. A shard without a checkpoint row either started at LATEST
+// in the first run, so nobody asked for its older records, or it is a child
+// shard created after the start, so it has no older records.
+func (c *Checkpointer) PrepareStart(ctx context.Context, startFrom string) (fresh bool, err error) {
+	hasState, err := c.HasAnyState(ctx)
+	if err != nil {
+		return false, err
+	}
+	if startFrom != "latest" {
+		return !hasState, nil
+	}
+	if !hasState {
+		if err := c.markStarted(ctx, time.Now()); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	startedAt, err := c.startedAt(ctx)
+	if err != nil {
+		return false, err
+	}
+	// A pipeline that an older version started has state but no marker. It
+	// keeps the old behavior: no cutoff.
+	if !startedAt.IsZero() {
+		c.startCutoff = startedAt.Add(-startMarkerMargin)
+	}
+	return false, nil
+}
+
+// markStarted saves the start marker row with the start time at. The write
+// keeps an existing marker, so the row always holds the first start time. In
+// global mode the row carries the stream ARN, so that another region can tell
+// that the marker is not its own (see startedAt).
+func (c *Checkpointer) markStarted(ctx context.Context, at time.Time) error {
+	item := c.checkpointKey(checkpointStartMarkerKey)
+	item[checkpointStartedAtAttr] = &types.AttributeValueMemberS{Value: at.UTC().Format(time.RFC3339Nano)}
+	if c.globalTable {
+		item["StreamArn"] = &types.AttributeValueMemberS{Value: c.streamArn}
+	}
+	_, err := c.svc.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName:                aws.String(c.tableName),
+		Item:                     item,
+		ConditionExpression:      aws.String("attribute_not_exists(#sk)"),
+		ExpressionAttributeNames: map[string]string{"#sk": checkpointRangeKey},
+	})
+	if err != nil {
+		if _, exists := errors.AsType[*types.ConditionalCheckFailedException](err); exists {
+			return nil
+		}
+		return fmt.Errorf("saving start marker for table=%s key=%s: %w", c.tableName, c.hashKeyValue(), err)
+	}
+	return nil
+}
+
+// startedAt returns the start time that markStarted saved, or the zero time
+// when there is no marker. In global mode, a marker that another region's
+// stream saved also gives the zero time: that start time is not a position in
+// this stream.
+func (c *Checkpointer) startedAt(ctx context.Context) (time.Time, error) {
+	result, err := c.svc.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(c.tableName),
+		Key:       c.checkpointKey(checkpointStartMarkerKey),
+		// Like the HasAnyState probe, this read decides whether a restart
+		// can skip records, so it must see a marker written just before a
+		// crash.
+		ConsistentRead: aws.Bool(true),
+	})
+	if err != nil {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("reading start marker for table=%s key=%s: %w", c.tableName, c.hashKeyValue(), err)
+	}
+	if c.globalTable {
+		if streamAttr, ok := result.Item["StreamArn"].(*types.AttributeValueMemberS); !ok || streamAttr.Value != c.streamArn {
+			return time.Time{}, nil
+		}
+	}
+	attr, ok := result.Item[checkpointStartedAtAttr].(*types.AttributeValueMemberS)
+	if !ok {
+		return time.Time{}, nil
+	}
+	at, err := time.Parse(time.RFC3339Nano, attr.Value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parsing start marker %q for table=%s key=%s: %w", attr.Value, c.tableName, c.hashKeyValue(), err)
+	}
+	return at, nil
+}
+
 type resumeMode int
 
 const (
-	// resumeDefault: no usable checkpoint; caller applies start_from.
+	// resumeDefault: no usable checkpoint; caller applies start_from. Cutoff
+	// is the start cutoff (see Checkpointer.startCutoff).
 	resumeDefault resumeMode = iota
 	// resumeExact: resume via AfterSequenceNumber (in-region restart).
 	resumeExact
@@ -484,7 +613,7 @@ const (
 type ResumeDecision struct {
 	Mode           resumeMode
 	SequenceNumber string    // set when Mode == resumeExact
-	Cutoff         time.Time // set when Mode == resumeFailover (zero => no skip)
+	Cutoff         time.Time // set when Mode == resumeFailover or resumeDefault (zero => no skip)
 }
 
 // ResolveResume decides how to resume the given shard. In the default
@@ -508,7 +637,7 @@ func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (Resum
 		if seq != "" {
 			return ResumeDecision{Mode: resumeExact, SequenceNumber: seq}, nil
 		}
-		return ResumeDecision{Mode: resumeDefault}, nil
+		return ResumeDecision{Mode: resumeDefault, Cutoff: c.startCutoff}, nil
 	}
 
 	c.resumeOnce.Do(func() { c.resumeErr = c.prepareResume(ctx) })
@@ -536,12 +665,12 @@ func (c *Checkpointer) ResolveResume(ctx context.Context, shardID string) (Resum
 		if seq, ok := c.ownSeqs[shardID]; ok {
 			return ResumeDecision{Mode: resumeExact, SequenceNumber: seq}, nil
 		}
-		return ResumeDecision{Mode: resumeDefault}, nil
+		return ResumeDecision{Mode: resumeDefault, Cutoff: c.startCutoff}, nil
 	}
 	if c.hasForeignRows {
 		return ResumeDecision{Mode: resumeFailover, Cutoff: c.cutoff}, nil
 	}
-	return ResumeDecision{Mode: resumeDefault}, nil
+	return ResumeDecision{Mode: resumeDefault, Cutoff: c.startCutoff}, nil
 }
 
 // prepareResume queries the whole table-name partition once and classifies rows
