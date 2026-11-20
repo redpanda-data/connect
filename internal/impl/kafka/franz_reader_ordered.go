@@ -64,7 +64,7 @@ Consumer groups are not supported when you specify explicit partitions to consum
 // field shared by the ordered and unordered franz-go readers.
 func franzTopicLagRefreshPeriodField(name string) *service.ConfigField {
 	return service.NewDurationField(name).
-		Description("The interval between consumer lag refreshes. During each cycle, this input asks the brokers for the consumer group's committed offsets and the partition end offsets, and records the difference (the number of unread messages) for each topic partition in the consumer lag metric and the `kafka_lag` metadata field. Lag is only refreshed when `consumer_group` is set. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
+		Description("The interval between consumer lag refreshes. During each cycle, this input asks the brokers for the consumer group's committed offsets and the partition end offsets. It records the difference (the number of unread messages) for each topic partition in the consumer lag metric and the `kafka_lag` metadata field. The total for the partitions assigned to this input is also set as the `input_pending` gauge. Lag is only refreshed when `consumer_group` is set. This field accepts Go duration format strings such as `100ms`, `1s`, or `5s`.").
 		Default("5s").
 		Advanced()
 }
@@ -565,7 +565,8 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		var consumerLag *ConsumerLag
 		if f.consumerGroup != "" {
 			topicLagGauge := f.res.Metrics().NewGauge(f.lagMetricName, "topic", "partition")
-			consumerLag = NewConsumerLag(f.Client, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
+			pendingGauge := f.res.Metrics().NewGauge(InputPendingMetricName)
+			consumerLag = NewConsumerLag(f.Client, f.consumerGroup, f.res.Logger(), topicLagGauge, pendingGauge, f.topicLagRefreshPeriod)
 			consumerLag.Start()
 			defer consumerLag.Stop()
 		}

@@ -313,7 +313,7 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 			// on more than six fractional digits — an untruncated
 			// nanosecond-precision value would fail every mutating batch
 			// carrying it.
-			return tm.Truncate(time.Microsecond).UTC().Format(time.RFC3339Nano), nil
+			return tm.Truncate(time.Microsecond).UTC().Format(arrowTimestampLayout(t)), nil
 		}
 		return nil, fmt.Errorf("timestamp column requires a time or numeric value, got %T", v)
 	case iceberg.Float32Type, iceberg.Float64Type:
@@ -340,4 +340,24 @@ func jsonLeafValue(t iceberg.Type, v any, common *schema.Common, requireSchemaMe
 		// surfaced loudly rather than passed through to be mis-stored.
 		return nil, fmt.Errorf("unsupported column type %s for the JSON mutation path", t)
 	}
+}
+
+// arrowTimestampLayout returns the text layout that jsonLeafValue formats a
+// UTC value of the timestamp type t with, and that cowKeyLiteral parses it
+// back with. The text goes only to Arrow's JSON reader, never to storage:
+// Parquet stores the value as int64 microseconds.
+//
+// iceberg-go maps timestamptz to an Arrow timestamp with zone UTC, and
+// timestamp to an Arrow timestamp with no zone:
+// https://github.com/apache/iceberg-go/blob/v0.7.0/table/arrow_utils.go#L704-L710
+//
+// Since arrow-go v18.8.0 (apache/arrow-go@0b03215bc702), the JSON reader
+// requires a zone in the text exactly when the column has one:
+// https://github.com/apache/arrow-go/blob/v18.8.0/arrow/array/timestamp.go#L415
+// Before, it accepted a "Z" for both, so both used RFC 3339.
+func arrowTimestampLayout(t iceberg.Type) string {
+	if _, ok := t.(iceberg.TimestampTzType); ok {
+		return time.RFC3339Nano
+	}
+	return "2006-01-02T15:04:05.999999"
 }

@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 type mockSNSClient struct {
@@ -37,8 +39,7 @@ func (m *mockSNSClient) Publish(_ context.Context, input *sns.PublishInput, _ ..
 }
 
 func TestSNSWriter_SubjectBackwardCompatible(t *testing.T) {
-	topic, err := service.NewInterpolatedString("arn:aws:sns:us-east-1:123456789012:MyTopic")
-	require.NoError(t, err)
+	topic := servicetest.NewInterpolatedString(t, "arn:aws:sns:us-east-1:123456789012:MyTopic")
 	conf := snsoConfig{
 		TopicArn: topic,
 		Timeout:  1 * time.Second,
@@ -54,10 +55,8 @@ func TestSNSWriter_SubjectBackwardCompatible(t *testing.T) {
 }
 
 func TestSNSWriter_SubjectSet(t *testing.T) {
-	topic, err := service.NewInterpolatedString("arn:aws:sns:us-east-1:123456789012:MyTopic")
-	require.NoError(t, err)
-	subj, err := service.NewInterpolatedString("TestSubject")
-	require.NoError(t, err)
+	topic := servicetest.NewInterpolatedString(t, "arn:aws:sns:us-east-1:123456789012:MyTopic")
+	subj := servicetest.NewInterpolatedString(t, "TestSubject")
 	conf := snsoConfig{
 		TopicArn: topic,
 		Timeout:  1 * time.Second,
@@ -76,10 +75,8 @@ func TestSNSWriter_SubjectSet(t *testing.T) {
 }
 
 func TestSNSWriter_SubjectEmpty(t *testing.T) {
-	topic, err := service.NewInterpolatedString("arn:aws:sns:us-east-1:123456789012:MyTopic")
-	require.NoError(t, err)
-	subj, err := service.NewInterpolatedString("")
-	require.NoError(t, err)
+	topic := servicetest.NewInterpolatedString(t, "arn:aws:sns:us-east-1:123456789012:MyTopic")
+	subj := servicetest.NewInterpolatedString(t, "")
 	conf := snsoConfig{
 		TopicArn: topic,
 		Timeout:  1 * time.Second,

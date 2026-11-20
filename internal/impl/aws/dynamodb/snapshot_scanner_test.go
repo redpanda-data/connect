@@ -19,8 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -165,13 +163,6 @@ func (s *scanStubTransport) scannedTables() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.scanTables...)
-}
-
-func newStubDynamoClient(t aws.HTTPClient) *dynamodb.Client {
-	return dynamodb.NewFromConfig(aws.Config{Region: "us-east-1", Credentials: aws.AnonymousCredentials{}}, func(o *dynamodb.Options) {
-		o.HTTPClient = t
-		o.Retryer = aws.NopRetryer{}
-	})
 }
 
 func TestSnapshotScannerConsistentReadAndBeforeRequest(t *testing.T) {

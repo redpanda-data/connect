@@ -248,7 +248,7 @@ func TestRunBackfillQueueNoRequeueAfterShutdown(t *testing.T) {
 		t.Fatal("runner did not return on shutdown")
 	}
 
-	waitBackgroundWorkers(t, d)
+	requireBackgroundWorkersStopped(t, d)
 	time.Sleep(3 * retryWait)
 	assert.Equal(t, 0, d.backfills.Len(), "nothing is pushed after shutdown")
 	tr.mu.Lock()
@@ -273,7 +273,7 @@ func newQueueTableStream(t *testing.T, d *dynamoDBCDCInput, name string) *tableS
 
 // waitBackgroundWorkers waits for every background worker of d, delayed
 // retries included, to return.
-func waitBackgroundWorkers(t *testing.T, d *dynamoDBCDCInput) {
+func requireBackgroundWorkersStopped(t *testing.T, d *dynamoDBCDCInput) {
 	t.Helper()
 	done := make(chan struct{})
 	go func() {
@@ -403,7 +403,7 @@ func TestPrepareRetryStopsWithInput(t *testing.T) {
 		t.Fatal("the failed prepare did not schedule a retry")
 	}
 	d.shutSig.TriggerSoftStop()
-	waitBackgroundWorkers(t, d)
+	requireBackgroundWorkersStopped(t, d)
 
 	time.Sleep(3 * retryWait)
 	assert.Equal(t, 0, d.backfills.Len(), "nothing is pushed after shutdown")
@@ -427,7 +427,7 @@ func TestPrepareRetryOutlivesCancelledConnect(t *testing.T) {
 	assert.Eventually(t, func() bool { return d.backfills.Len() == 1 }, 5*time.Second, 5*time.Millisecond,
 		"the retry runs on retryCtx and queues the table")
 	d.shutSig.TriggerSoftStop()
-	waitBackgroundWorkers(t, d)
+	requireBackgroundWorkersStopped(t, d)
 }
 
 // TestPrepareNoRetryWhenNoBackfillNeeded: a table whose completed snapshot is

@@ -16,6 +16,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestCompareOffsetTokens(t *testing.T) {
@@ -71,8 +72,7 @@ func batchContents(t *testing.T, batch service.MessageBatch) []string {
 // sorts before "9") once the channel's latest committed offset token is "9",
 // so the row is silently dropped instead of being inserted.
 func TestFilterAlreadyCommittedDigitBoundary(t *testing.T) {
-	mapping, err := service.NewInterpolatedString("${! content() }")
-	require.NoError(t, err)
+	mapping := servicetest.NewInterpolatedString(t, "${! content() }")
 
 	latest := streaming.OffsetToken("9")
 	batch := tokenBatch("10")
@@ -89,8 +89,7 @@ func TestFilterAlreadyCommittedDigitBoundary(t *testing.T) {
 // redelivered after a restart are still correctly filtered out, including
 // across a digit-count boundary.
 func TestFilterAlreadyCommittedDropsRedelivered(t *testing.T) {
-	mapping, err := service.NewInterpolatedString("${! content() }")
-	require.NoError(t, err)
+	mapping := servicetest.NewInterpolatedString(t, "${! content() }")
 
 	latest := streaming.OffsetToken("10")
 	batch := tokenBatch("9")
@@ -104,8 +103,7 @@ func TestFilterAlreadyCommittedDropsRedelivered(t *testing.T) {
 // TestFilterAlreadyCommittedMixedBatch checks a batch straddling the digit
 // boundary: some rows already committed, some new.
 func TestFilterAlreadyCommittedMixedBatch(t *testing.T) {
-	mapping, err := service.NewInterpolatedString("${! content() }")
-	require.NoError(t, err)
+	mapping := servicetest.NewInterpolatedString(t, "${! content() }")
 
 	latest := streaming.OffsetToken("9")
 	batch := tokenBatch("8", "9", "10", "11")
@@ -121,8 +119,7 @@ func TestFilterAlreadyCommittedMixedBatch(t *testing.T) {
 // TestFilterAlreadyCommittedNoPriorOffset ensures the fast path (no offset
 // committed yet on the channel) still works as before.
 func TestFilterAlreadyCommittedNoPriorOffset(t *testing.T) {
-	mapping, err := service.NewInterpolatedString("${! content() }")
-	require.NoError(t, err)
+	mapping := servicetest.NewInterpolatedString(t, "${! content() }")
 
 	batch := tokenBatch("1", "2", "3")
 

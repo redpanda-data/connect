@@ -39,6 +39,8 @@ import (
 
 	benthosschema "github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // --- merge_strategy config parsing --------------------------------------------
@@ -230,7 +232,7 @@ func cowWriter(t testing.TB, tbl *table.Table, idFields ...string) *writer {
 		rowOpCfg: RowOpConfig{
 			// Drive the operation from metadata, as a real change-data-capture
 			// mapping does, so the routing field never leaks into the row body.
-			Operation:        mustInterp(t, `${! metadata("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! metadata("op") }`),
 			IdentifierFields: idFields,
 			MergeStrategy:    mergeStrategyCOW,
 		},

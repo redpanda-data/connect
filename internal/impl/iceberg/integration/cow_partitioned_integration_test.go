@@ -23,6 +23,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestCOWPartitionedRowOperationsIntegration drives an insert -> upsert/delete
@@ -68,8 +70,7 @@ func TestCOWPartitionedRowOperationsIntegration(t *testing.T) {
 	_, err := client.CreateTable(ctx, tbl, sc, catalog.WithPartitionSpec(&spec))
 	require.NoError(t, err)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{

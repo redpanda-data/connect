@@ -39,6 +39,8 @@ import (
 
 	// Bring in memory cache.
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 var (
@@ -270,8 +272,7 @@ codec: all-bytes
 	}, time.Second*10, time.Millisecond*100)
 
 	// The underlying SSH connection must still be healthy.
-	writer.path, err = service.NewInterpolatedString("/upload/ok.txt")
-	require.NoError(t, err)
+	writer.path = servicetest.NewInterpolatedString(t, "/upload/ok.txt")
 	require.NoError(t, writer.Write(t.Context(), service.NewMessage([]byte("payload"))))
 }
 

@@ -37,7 +37,7 @@ func newIncSingleInput(t *testing.T, scan *scanStubTransport, streams *incStream
 	d.streamArn = aws.String(testStreamArn)
 	d.keySchema = []dynamodbtypes.KeySchemaElement{{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash}}
 	d.checkpointer = memCheckpointer(t, api, "t", testStreamArn)
-	d.recordBatcher = newInputRecordBatcher(d.conf, d.log)
+	d.recordBatcher = newInputRecordBatcher(d.conf, d.checkpointer, nil, d.log)
 	d.shardReaders = map[string]*dynamoDBShardReader{}
 	d.shardRefreshCh = make(chan struct{}, 1)
 	d.incremental = incsnapshot.NewState(0, time.Minute)

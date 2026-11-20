@@ -140,7 +140,7 @@ func newIncTableStream(d *dynamoDBCDCInput, name, streamArn string, cp *Checkpoi
 		streamArn:       streamArn,
 		keySchema:       []dynamodbtypes.KeySchemaElement{{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash}},
 		checkpointer:    cp,
-		recordBatcher:   newInputRecordBatcher(d.conf, d.log),
+		recordBatcher:   newInputRecordBatcher(d.conf, cp, nil, d.log),
 		shardReaders:    map[string]*dynamoDBShardReader{},
 		shardRefreshCh:  make(chan struct{}, 1),
 		streamSpec:      &dynamodbtypes.StreamSpecification{StreamEnabled: aws.Bool(true), StreamViewType: dynamodbtypes.StreamViewTypeNewImage},

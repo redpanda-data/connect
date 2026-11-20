@@ -32,6 +32,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
 	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // This file pins the value-encoding parity invariant between the four write
@@ -191,6 +192,12 @@ func TestJSONLeafValueMatchesInsertPath(t *testing.T) {
 		{"time from ns own-location time.Time", iceberg.PrimitiveTypes.Time, func() any { return nsWallEST }},
 		{"timestamp from ns time.Time truncates alike", iceberg.PrimitiveTypes.Timestamp, func() any { return nsInstant }},
 		{"timestamptz from ns time.Time truncates alike", iceberg.PrimitiveTypes.TimestampTz, func() any { return nsInstant }},
+		{"timestamp from non-UTC time.Time", iceberg.PrimitiveTypes.Timestamp, func() any { return nsWallEST }},
+		{"timestamptz from non-UTC time.Time", iceberg.PrimitiveTypes.TimestampTz, func() any { return nsWallEST }},
+		{"timestamp from RFC 3339 string with offset", iceberg.PrimitiveTypes.Timestamp, func() any { return "2026-03-04T14:30:59.987654-05:00" }},
+		{"timestamptz from RFC 3339 string with offset", iceberg.PrimitiveTypes.TimestampTz, func() any { return "2026-03-04T14:30:59.987654-05:00" }},
+		{"timestamp from epoch seconds", iceberg.PrimitiveTypes.Timestamp, func() any { return int64(1700000000) }},
+		{"timestamptz from epoch seconds", iceberg.PrimitiveTypes.TimestampTz, func() any { return int64(1700000000) }},
 		{"decimal float tie rounds away from zero", dec10p2, func() any { return 0.125 }},
 		{"decimal negative float tie", dec10p2, func() any { return -0.125 }},
 		{"decimal scale-0 float tie", iceberg.DecimalTypeOf(10, 0), func() any { return 8.5 }},
@@ -223,7 +230,7 @@ func newMORWriter(t testing.TB, tbl *table.Table, idFields ...string) *writer {
 		table:         tbl,
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation:        mustInterp(t, `${! metadata("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! metadata("op") }`),
 			IdentifierFields: idFields,
 			MergeStrategy:    mergeStrategyMOR,
 		},

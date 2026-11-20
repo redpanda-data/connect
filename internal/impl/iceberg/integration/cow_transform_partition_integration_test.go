@@ -24,6 +24,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestCOWPartitionTransformExtrasIntegration exercises copy-on-write upsert/
@@ -58,8 +60,7 @@ func TestCOWPartitionTransformExtrasIntegration(t *testing.T) {
 	month := func(m int) time.Time { return time.Date(2024, time.Month(m), 10, 12, 0, 0, 0, time.UTC) }
 
 	newRouter := func(t *testing.T, ns, tbl string) *icebergimpl.Router {
-		operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-		require.NoError(t, err)
+		operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 		return infra.NewRouter(t, ns, tbl, WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,
 			IdentifierFields: []string{"id"},
