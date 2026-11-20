@@ -15,11 +15,43 @@
 package s3
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type failingS3Scanner struct {
+	err    error
+	closed bool
+}
+
+func (s *failingS3Scanner) NextBatch(context.Context) (service.MessageBatch, service.AckFunc, error) {
+	return nil, nil, s.err
+}
+
+func (s *failingS3Scanner) Close(context.Context) error {
+	s.closed = true
+	return nil
+}
+
+func TestReadBatchClosesScannerOnError(t *testing.T) {
+	wantErr := errors.New("scanner failed")
+	scanner := &failingS3Scanner{err: wantErr}
+	reader := &awsS3Reader{
+		s3:     new(s3.Client),
+		object: &s3PendingObject{scanner: scanner},
+	}
+
+	_, _, err := reader.ReadBatch(t.Context())
+	require.ErrorIs(t, err, wantErr)
+	assert.True(t, scanner.closed)
+	assert.Nil(t, reader.object)
+}
 
 func TestParseObjectPathsSNSEnvelope(t *testing.T) {
 	tests := []struct {
