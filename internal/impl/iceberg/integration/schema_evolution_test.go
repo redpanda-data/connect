@@ -355,9 +355,20 @@ func TestSchemaEvolutionIntegration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "s3://warehouse/fab1/"+ns+"/"+tblName, tbl.Location())
 
+		// The router checks the location only when it creates a table. A
+		// prefix that would be unsafe for a new table does not stop writes to
+		// an existing table.
+		produceMessages(t, ctx, router, service.MessageBatch{
+			createMessageWithMeta(t, map[string]any{"id": 3, "value": "test"}, "fab", "ACME Corp"),
+		})
+
+		tbl, err = client.LoadTable(ctx, tblName)
+		require.NoError(t, err)
+		assert.Equal(t, "s3://warehouse/fab1/"+ns+"/"+tblName, tbl.Location())
+
 		rows := querySQL[countResult](t, ctx, infra,
 			`SELECT COUNT(*) as count FROM iceberg_cat."`+ns+`"."`+tblName+`";`)
-		require.Equal(t, 2, rows[0].Count)
+		require.Equal(t, 3, rows[0].Count)
 	})
 
 	// A location that the writer would change when it builds data file paths
