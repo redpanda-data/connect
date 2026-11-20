@@ -13,8 +13,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,8 +31,12 @@ type Git interface {
 	// LatestRelease returns the highest vX.Y.Z tag.
 	LatestRelease(ctx context.Context) (string, error)
 	// ComponentPaths returns the repo-relative directories under internal/impl
-	// whose non-test Go files register the component.
+	// whose non-test Go files register the component. Empty means the
+	// component is not registered in this repo (it is benthos-hosted).
 	ComponentPaths(ctx context.Context, component string) ([]string, error)
+	// BenthosVersion returns the github.com/redpanda-data/benthos/v4 version
+	// required by the repo-root go.mod at ref.
+	BenthosVersion(ctx context.Context, ref string) (string, error)
 	// ChangedPaths returns the commits in fromSHA..toRef touching paths.
 	ChangedPaths(ctx context.Context, fromSHA, toRef string, paths []string) ([]string, error)
 	// ChangelogMentions returns CHANGELOG.md lines added in fromSHA..toRef
@@ -94,22 +100,27 @@ func (g *gitCLI) grepFiles(ctx context.Context, args ...string) ([]string, error
 	return lines(out), nil
 }
 
-// ComponentPaths finds non-test files under internal/impl containing the
-// quoted component name and a Register call. The name is matched anywhere in
-// the file because gofmt often puts it on the line after the Register call.
+// ComponentPaths finds non-test files under internal/impl that register the
+// component: a Register* call whose first argument is the quoted name,
+// whitespace (including gofmt line breaks) allowed between them. git grep -F
+// prefilters on the quoted name; the registration regex runs on the file
+// contents.
 func (g *gitCLI) ComponentPaths(ctx context.Context, component string) ([]string, error) {
 	named, err := g.grepFiles(ctx, "-F", "-e", `"`+component+`"`, "--", "internal/impl", ":!*_test.go")
 	if err != nil || len(named) == 0 {
 		return nil, err
 	}
-	files, err := g.grepFiles(ctx, append([]string{"-E", `Register[A-Za-z]*\(`, "--"}, named...)...)
-	if err != nil {
-		return nil, err
-	}
 	seen := map[string]bool{}
 	var dirs []string
-	for _, f := range files {
+	for _, f := range named {
 		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(g.root, filepath.FromSlash(f)))
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", f, err)
+		}
+		if !registers(body, component) {
 			continue
 		}
 		if d := path.Dir(f); !seen[d] {
@@ -119,6 +130,36 @@ func (g *gitCLI) ComponentPaths(ctx context.Context, component string) ([]string
 	}
 	sort.Strings(dirs)
 	return dirs, nil
+}
+
+// registers reports whether src registers component by its literal name.
+func registers(src []byte, component string) bool {
+	re := regexp.MustCompile(`Register[A-Za-z]*\(\s*"` + regexp.QuoteMeta(component) + `"`)
+	return re.Match(src)
+}
+
+const benthosModule = "github.com/redpanda-data/benthos/v4"
+
+func (g *gitCLI) BenthosVersion(ctx context.Context, ref string) (string, error) {
+	if err := g.checkSHA(ctx, ref); err != nil {
+		return "", err
+	}
+	out, err := g.run(ctx, "show", ref+":go.mod")
+	if err != nil {
+		return "", err
+	}
+	return benthosRequire(out)
+}
+
+// benthosRequire returns the benthos version a go.mod requires.
+func benthosRequire(gomod string) (string, error) {
+	for _, l := range strings.Split(gomod, "\n") {
+		f := strings.Fields(strings.TrimPrefix(strings.TrimSpace(l), "require "))
+		if len(f) >= 2 && f[0] == benthosModule {
+			return f[1], nil
+		}
+	}
+	return "", fmt.Errorf("go.mod does not require %s", benthosModule)
 }
 
 func (g *gitCLI) checkSHA(ctx context.Context, sha string) error {
@@ -191,6 +232,9 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 	components = append(components, e.Output)
 	seen := map[string]bool{}
 	stale := false
+	// Benthos versions at the build and at latest, read on first need.
+	var benthosFrom, benthosTo string
+	benthosRead := false
 	for _, c := range components {
 		if c == "" || seen[c] {
 			continue
@@ -202,7 +246,29 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 			return Staleness{}, err
 		}
 		if len(paths) == 0 {
-			s.Reasons = append(s.Reasons, "no source path for "+c)
+			// Not registered in this repo, so benthos hosts it: it changes
+			// when the benthos dependency does.
+			if !benthosRead {
+				benthosRead = true
+				benthosFrom, err = g.BenthosVersion(ctx, e.BuildSHA)
+				if err == nil {
+					benthosTo, err = g.BenthosVersion(ctx, latest)
+				}
+				if errors.Is(err, ErrSHANotInRepo) {
+					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{"build sha not in repo"}}, nil
+				}
+				if err != nil {
+					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{
+						fmt.Sprintf("benthos version unknown (hosts %s): %v", c, err),
+					}}, nil
+				}
+			}
+			if benthosFrom != benthosTo {
+				stale = true
+				s.Reasons = append(s.Reasons, fmt.Sprintf("benthos bumped %s → %s (hosts %s)", benthosFrom, benthosTo, c))
+			} else {
+				s.Reasons = append(s.Reasons, c+" is benthos-hosted; benthos unchanged")
+			}
 		} else {
 			commits, err := g.ChangedPaths(ctx, e.BuildSHA, latest, paths)
 			if errors.Is(err, ErrSHANotInRepo) {

@@ -18,11 +18,20 @@ import (
 )
 
 type fakeGit struct {
-	release   string
-	paths     map[string][]string
-	changed   map[string][]string // keyed by joined paths
-	changelog map[string][]string
-	changeErr error
+	release    string
+	paths      map[string][]string
+	changed    map[string][]string // keyed by joined paths
+	changelog  map[string][]string
+	changeErr  error
+	benthos    map[string]string // keyed by ref
+	benthosErr error
+}
+
+func (f *fakeGit) BenthosVersion(_ context.Context, ref string) (string, error) {
+	if f.benthosErr != nil {
+		return "", f.benthosErr
+	}
+	return f.benthos[ref], nil
 }
 
 func (f *fakeGit) LatestRelease(context.Context) (string, error) { return f.release, nil }
@@ -55,14 +64,16 @@ func stalenessEntry() Entry {
 	}
 }
 
+// stalenessFake resolves the entry's input and output to source paths;
+// mapping has none, so it is benthos-hosted.
 func stalenessFake() *fakeGit {
 	return &fakeGit{
 		release: "v4.99.0",
 		paths: map[string][]string{
 			"postgres_cdc":        {"internal/impl/postgresql"},
-			"mapping":             {"internal/impl/pure"},
 			"snowflake_streaming": {"internal/impl/snowflake"},
 		},
+		benthos: map[string]string{"abcdef1234567": "v4.80.0", "v4.99.0": "v4.80.0"},
 	}
 }
 
@@ -71,7 +82,7 @@ func TestStalenessCurrent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "current", s.State)
 	require.Equal(t, "v4.99.0", s.LatestRelease)
-	require.Empty(t, s.Reasons)
+	require.Equal(t, []string{"mapping is benthos-hosted; benthos unchanged"}, s.Reasons)
 }
 
 func TestStalenessStaleViaPath(t *testing.T) {
@@ -80,7 +91,10 @@ func TestStalenessStaleViaPath(t *testing.T) {
 	s, err := CheckStaleness(t.Context(), g, stalenessEntry())
 	require.NoError(t, err)
 	require.Equal(t, "stale", s.State)
-	require.Equal(t, []string{"3 commits to internal/impl/postgresql since abcdef1"}, s.Reasons)
+	require.Equal(t, []string{
+		"3 commits to internal/impl/postgresql since abcdef1",
+		"mapping is benthos-hosted; benthos unchanged",
+	}, s.Reasons)
 }
 
 func TestStalenessStaleViaChangelog(t *testing.T) {
@@ -89,7 +103,10 @@ func TestStalenessStaleViaChangelog(t *testing.T) {
 	s, err := CheckStaleness(t.Context(), g, stalenessEntry())
 	require.NoError(t, err)
 	require.Equal(t, "stale", s.State)
-	require.Equal(t, []string{"CHANGELOG: - postgres_cdc: fixed a thing"}, s.Reasons)
+	require.Equal(t, []string{
+		"CHANGELOG: - postgres_cdc: fixed a thing",
+		"mapping is benthos-hosted; benthos unchanged",
+	}, s.Reasons)
 }
 
 func TestStalenessUnknownSHA(t *testing.T) {
@@ -119,13 +136,67 @@ func TestStalenessOtherGitErrorPropagates(t *testing.T) {
 	require.ErrorContains(t, err, "boom")
 }
 
-func TestStalenessUnresolvableComponent(t *testing.T) {
+func TestStalenessBenthosBumped(t *testing.T) {
 	g := stalenessFake()
-	delete(g.paths, "mapping")
+	g.benthos["v4.99.0"] = "v4.85.0"
 	s, err := CheckStaleness(t.Context(), g, stalenessEntry())
 	require.NoError(t, err)
+	require.Equal(t, "stale", s.State)
+	require.Equal(t, []string{"benthos bumped v4.80.0 → v4.85.0 (hosts mapping)"}, s.Reasons)
+}
+
+func TestStalenessBenthosUnreadable(t *testing.T) {
+	g := stalenessFake()
+	g.benthosErr = errors.New("no go.mod")
+	s, err := CheckStaleness(t.Context(), g, stalenessEntry())
+	require.NoError(t, err)
+	require.Equal(t, "unknown", s.State)
+	require.Len(t, s.Reasons, 1)
+	require.Contains(t, s.Reasons[0], "no go.mod")
+	require.Contains(t, s.Reasons[0], "mapping")
+}
+
+func TestStalenessBenthosNotCheckedWhenAllComponentsResolve(t *testing.T) {
+	g := stalenessFake()
+	g.benthosErr = errors.New("must not be called")
+	e := stalenessEntry()
+	e.Processors = nil
+	s, err := CheckStaleness(t.Context(), g, e)
+	require.NoError(t, err)
 	require.Equal(t, "current", s.State)
-	require.Equal(t, []string{"no source path for mapping"}, s.Reasons)
+	require.Empty(t, s.Reasons)
+}
+
+func TestRegistersComponent(t *testing.T) {
+	for name, tc := range map[string]struct {
+		src  string
+		want bool
+	}{
+		"same line":     {`service.MustRegisterBatchInput("postgres_cdc", spec, ctor)`, true},
+		"gofmt wrapped": {"service.MustRegisterBatchOutput(\n\t\t\"postgres_cdc\",\n\t\tspec)", true},
+		"other name":    {`service.MustRegisterBatchInput("postgres_cdc_legacy", spec, ctor)`, false},
+		"name not registered": {`service.MustRegisterBatchInput("x", spec, ctor)
+var f = "postgres_cdc"`, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.want, registers([]byte(tc.src), "postgres_cdc"))
+		})
+	}
+	// Regex metacharacters in the name are literal.
+	require.False(t, registers([]byte(`RegisterInput("aXb", s)`), "a.b"))
+}
+
+func TestBenthosRequire(t *testing.T) {
+	v, err := benthosRequire("module x\n\nrequire (\n\tgithub.com/foo/bar v1.0.0\n\tgithub.com/redpanda-data/benthos/v4 v4.85.0 // indirect\n)\n")
+	require.NoError(t, err)
+	require.Equal(t, "v4.85.0", v)
+
+	v, err = benthosRequire("module x\nrequire github.com/redpanda-data/benthos/v4 v4.1.0\n")
+	require.NoError(t, err)
+	require.Equal(t, "v4.1.0", v)
+
+	_, err = benthosRequire("module x\nrequire github.com/redpanda-data/benthos/v4/extra v1.0.0\n")
+	require.Error(t, err)
 }
 
 func TestStalenessInvalidSHA(t *testing.T) {
@@ -169,15 +240,23 @@ func TestStalenessGitCLIAgainstRepo(t *testing.T) {
 
 	paths, err := g.ComponentPaths(ctx, "postgres_cdc")
 	require.NoError(t, err)
-	require.Contains(t, paths, "internal/impl/postgresql")
-	for _, p := range paths {
-		require.NotContains(t, p, "_test.go")
-	}
+	require.Equal(t, []string{"internal/impl/postgresql"}, paths)
 
 	// Registered with the name on a separate line from the Register call.
 	snow, err := g.ComponentPaths(ctx, "snowflake_streaming")
 	require.NoError(t, err)
-	require.Contains(t, snow, "internal/impl/snowflake")
+	require.Equal(t, []string{"internal/impl/snowflake"}, snow)
+
+	// Hosted by benthos: the name appears in this repo but is not registered here.
+	mapping, err := g.ComponentPaths(ctx, "mapping")
+	require.NoError(t, err)
+	require.Empty(t, mapping)
+
+	v, err := g.BenthosVersion(ctx, tag)
+	require.NoError(t, err)
+	require.Regexp(t, regexp.MustCompile(`^v4\.\d+\.\d+`), v)
+	_, err = g.BenthosVersion(ctx, "0000000000000000000000000000000000000000")
+	require.ErrorIs(t, err, ErrSHANotInRepo)
 
 	none, err := g.ComponentPaths(ctx, "no_such_component_xyz")
 	require.NoError(t, err)
