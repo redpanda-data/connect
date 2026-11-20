@@ -191,6 +191,22 @@ func (a *awsCleanup) DeleteRole(ctx context.Context, in *iam.DeleteRoleInput) (*
 	return a.iam.DeleteRole(ctx, in)
 }
 
+func (a *awsCleanup) GetDatabases(ctx context.Context, in *glue.GetDatabasesInput, opts ...func(*glue.Options)) (*glue.GetDatabasesOutput, error) {
+	return a.glue.GetDatabases(ctx, in, opts...)
+}
+
+func (a *awsCleanup) GetTables(ctx context.Context, in *glue.GetTablesInput, opts ...func(*glue.Options)) (*glue.GetTablesOutput, error) {
+	return a.glue.GetTables(ctx, in, opts...)
+}
+
+func (a *awsCleanup) DeleteTable(ctx context.Context, in *glue.DeleteTableInput, opts ...func(*glue.Options)) (*glue.DeleteTableOutput, error) {
+	return a.glue.DeleteTable(ctx, in, opts...)
+}
+
+func (a *awsCleanup) DeleteDatabase(ctx context.Context, in *glue.DeleteDatabaseInput, opts ...func(*glue.Options)) (*glue.DeleteDatabaseOutput, error) {
+	return a.glue.DeleteDatabase(ctx, in, opts...)
+}
+
 func (a *awsCleanup) Publish(ctx context.Context, in *sns.PublishInput) (*sns.PublishOutput, error) {
 	return a.sns.Publish(ctx, in)
 }
@@ -231,20 +247,4 @@ func handleRequest(ctx context.Context, _ struct{}) (SweepReport, error) {
 
 func main() {
 	lambda.Start(handleRequest)
-}
-
-func (a *awsCleanup) GetDatabases(ctx context.Context, in *glue.GetDatabasesInput, opts ...func(*glue.Options)) (*glue.GetDatabasesOutput, error) {
-	return a.glue.GetDatabases(ctx, in, opts...)
-}
-
-func (a *awsCleanup) GetTables(ctx context.Context, in *glue.GetTablesInput, opts ...func(*glue.Options)) (*glue.GetTablesOutput, error) {
-	return a.glue.GetTables(ctx, in, opts...)
-}
-
-func (a *awsCleanup) DeleteTable(ctx context.Context, in *glue.DeleteTableInput, opts ...func(*glue.Options)) (*glue.DeleteTableOutput, error) {
-	return a.glue.DeleteTable(ctx, in, opts...)
-}
-
-func (a *awsCleanup) DeleteDatabase(ctx context.Context, in *glue.DeleteDatabaseInput, opts ...func(*glue.Options)) (*glue.DeleteDatabaseOutput, error) {
-	return a.glue.DeleteDatabase(ctx, in, opts...)
 }

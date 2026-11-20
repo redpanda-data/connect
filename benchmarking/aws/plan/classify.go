@@ -47,6 +47,7 @@ const (
 	CaveatSnapshotNotMeasure = "snapshot_not_measured"
 	CaveatUnreleasedBuild    = "unreleased_build"
 	CaveatMemoryNotLimited   = "memory_not_limited"
+	CaveatSchemaEvoForced    = "schema_evolution_forced"
 )
 
 // RealSources maps customer input components to the bench source stack that

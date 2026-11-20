@@ -85,6 +85,24 @@ lifecycle with what it guards. A legitimate >4h run needs the rule disabled
 first (`aws events disable-rule --name redpanda-connect-bench-orphan-cleanup`),
 and re-enabled after.
 
+## End-to-end sinks: Iceberg
+
+An e2e run with an Iceberg sink writes through the Glue Iceberg REST catalog
+into a scratch Glue database, `bench_<session>`, with table data under
+`iceberg/<session>/` in the session results bucket. The runner deletes the
+database (tables first) at teardown, even when the sweep fails.
+
+- The reaper deletes any `bench_*` Glue database older than
+  `orphan_ttl_hours` (4 h). E2E iceberg runs of about 2 h fit inside that;
+  a longer custom run needs the reaper rule disabled, as for soaks (see
+  Orphan cleanup).
+- The orchestrator creates and deletes the Glue database with its own
+  credentials: the GHA provisioner role (AdministratorAccess) or admin laptop
+  credentials. The runner host role gets only `bench_*`-scoped Glue grants.
+- If the account's Glue Data Catalog is governed by Lake Formation, the runner
+  host role also needs Lake Formation grants on `bench_*`. The operator must
+  check this on the first run in an account.
+
 ## Results catalogue
 
 Every completed bench sweep writes one entry to the results catalogue in the

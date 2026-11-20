@@ -50,12 +50,42 @@ func TestSwapIdentityIcebergTemplate(t *testing.T) {
 	require.Equal(t, "${BENCH_ICEBERG_WAREHOUSE}", cat["warehouse"])
 	require.Equal(t, map[string]any{"aws_sigv4": map[string]any{"region": "${BENCH_AWS_REGION}", "service": "glue"}}, cat["auth"])
 	require.Equal(t, "${BENCH_ICEBERG_NAMESPACE}", ice["namespace"])
-	// Glue assigns no table location and the bench database starts empty,
-	// so the output must create the table, under the provisioned prefix.
 	require.Equal(t, map[string]any{
 		"enabled":        true,
 		"table_location": "${BENCH_ICEBERG_TABLE_LOCATION}",
-	}, ice["schema_evolution"])
+	}, ice["schema_evolution"], "no customer block: the default is added")
+}
+
+func swapIcebergEvo(t *testing.T, evo map[string]any) (map[string]any, []string) {
+	t.Helper()
+	cfg := map[string]any{
+		"input":  map[string]any{"redpanda": map[string]any{}},
+		"output": map[string]any{"iceberg": map[string]any{"namespace": "n", "table": "t", "schema_evolution": evo}},
+	}
+	out, caveats, err := SwapIdentity(cfg, SourceRedpanda, SinkIceberg)
+	require.NoError(t, err)
+	return out["output"].(map[string]any)["iceberg"].(map[string]any)["schema_evolution"].(map[string]any), caveats
+}
+
+func TestSwapIdentityIcebergKeepsCustomerSchemaEvolution(t *testing.T) {
+	evo, caveats := swapIcebergEvo(t, map[string]any{
+		"enabled":                 true,
+		"partition_spec":          "(day(ts))",
+		"new_column_type_mapping": "root = \"string\"",
+		"table_location":          "s3://customer/",
+	})
+	require.Equal(t, "(day(ts))", evo["partition_spec"])
+	require.Equal(t, "root = \"string\"", evo["new_column_type_mapping"])
+	require.Equal(t, "${BENCH_ICEBERG_TABLE_LOCATION}", evo["table_location"])
+	require.Equal(t, true, evo["enabled"])
+	require.NotContains(t, caveats, CaveatSchemaEvoForced)
+}
+
+func TestSwapIdentityIcebergForcesSchemaEvolutionOn(t *testing.T) {
+	evo, caveats := swapIcebergEvo(t, map[string]any{"enabled": false, "partition_spec": "(day(ts))"})
+	require.Equal(t, true, evo["enabled"])
+	require.Equal(t, "(day(ts))", evo["partition_spec"])
+	require.Contains(t, caveats, CaveatSchemaEvoForced)
 }
 
 func TestSwapIdentityMySQL(t *testing.T) {

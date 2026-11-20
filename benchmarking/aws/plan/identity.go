@@ -120,6 +120,36 @@ type Template struct {
 	Top      map[string]any
 	// Remove are keys deleted from the component's config.
 	Remove []string
+	// Merge holds object-valued keys that are deep-merged into the
+	// customer's own object: the customer's other keys survive and the
+	// template's leaves win. A key the customer lacks is set whole.
+	Merge map[string]any
+	// MergeCaveats maps a dotted leaf path under Merge to the caveat added
+	// when the customer had set that leaf to a different value.
+	MergeCaveats map[string]string
+}
+
+// mergeInto deep-merges src into dst. Template leaves win; it appends the
+// caveat for every path in caveats whose customer value was overridden.
+func mergeInto(dst, src map[string]any, path string, caveats map[string]string, hit *[]string) {
+	for k, v := range src {
+		p := path + k
+		if sm, ok := v.(map[string]any); ok {
+			dm, isMap := dst[k].(map[string]any)
+			if !isMap {
+				dm = map[string]any{}
+				dst[k] = dm
+			}
+			mergeInto(dm, sm, p+".", caveats, hit)
+			continue
+		}
+		if old, set := dst[k]; set && old != v {
+			if c, ok := caveats[p]; ok {
+				*hit = append(*hit, c)
+			}
+		}
+		dst[k] = deepCopy(v)
+	}
 }
 
 // SourceTemplates sets the bench's own values on the customer input, per
@@ -199,18 +229,20 @@ var SinkTemplates = map[SinkKind]func(component string) Template{
 			},
 			"namespace": "${BENCH_ICEBERG_NAMESPACE}",
 			"table":     "${BENCH_ICEBERG_TABLE}",
-			// Glue assigns no table location, and the run's database starts
-			// empty, so the output creates its table under the provisioned
-			// prefix. This replaces any schema_evolution the customer set.
-			"schema_evolution": map[string]any{
-				"enabled":        true,
-				"table_location": "${BENCH_ICEBERG_TABLE_LOCATION}",
-			},
 			"storage": map[string]any{"aws_s3": map[string]any{
 				"bucket": "${BENCH_ICEBERG_BUCKET}",
 				"region": "${BENCH_AWS_REGION}",
 			}},
-		}}
+		}, Merge: map[string]any{
+			// Glue assigns no table location, and the run's database starts
+			// empty, so the output must create its table under the
+			// provisioned prefix. The customer's other schema_evolution
+			// settings (partition_spec, type mapping, ...) are kept.
+			"schema_evolution": map[string]any{
+				"enabled":        true,
+				"table_location": "${BENCH_ICEBERG_TABLE_LOCATION}",
+			},
+		}, MergeCaveats: map[string]string{"schema_evolution.enabled": CaveatSchemaEvoForced}}
 	},
 	SinkSnowflake: func(component string) Template {
 		f := map[string]any{
@@ -298,7 +330,9 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 		if !real || src == SourceApproximated {
 			return nil
 		}
-		return applyTemplate(out, h, name, SourceTemplates[kind](name))
+		cv, err := applyTemplate(out, h, name, SourceTemplates[kind](name))
+		caveats = append(caveats, cv...)
+		return err
 	})
 	if err != nil {
 		return nil, nil, err
@@ -308,9 +342,11 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 		delete(outMap, outName)
 		outMap["drop"] = map[string]any{}
 	} else if tf, ok := SinkTemplates[sink]; ok {
-		if err := applyTemplate(out, outMap, outName, tf(outName)); err != nil {
+		cv, err := applyTemplate(out, outMap, outName, tf(outName))
+		if err != nil {
 			return nil, nil, err
 		}
+		caveats = append(caveats, cv...)
 	}
 
 	if swapCheckpointCaches(inMap) || st.benchCache {
@@ -389,11 +425,11 @@ func swapCheckpointCaches(v any) bool {
 	return found
 }
 
-func applyTemplate(root, holder map[string]any, name string, t Template) error {
+func applyTemplate(root, holder map[string]any, name string, t Template) ([]string, error) {
 	cfg, ok := holder[name].(map[string]any)
 	if !ok {
 		if holder[name] != nil {
-			return fmt.Errorf("%s config must be a map", name)
+			return nil, fmt.Errorf("%s config must be a map", name)
 		}
 		cfg = map[string]any{}
 		holder[name] = cfg
@@ -404,6 +440,8 @@ func applyTemplate(root, holder map[string]any, name string, t Template) error {
 	for k, v := range t.Fields {
 		cfg[k] = deepCopy(v)
 	}
+	var caveats []string
+	mergeInto(cfg, t.Merge, "", t.MergeCaveats, &caveats)
 	for k, v := range t.Defaults {
 		if _, set := cfg[k]; !set {
 			cfg[k] = deepCopy(v)
@@ -412,7 +450,7 @@ func applyTemplate(root, holder map[string]any, name string, t Template) error {
 	for k, v := range t.Top {
 		root[k] = deepCopy(v)
 	}
-	return nil
+	return caveats, nil
 }
 
 // component returns the section map and the name of its single component.
