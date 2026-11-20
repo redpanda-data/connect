@@ -39,7 +39,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+extra, nil)
 	require.NoError(t, err)
 
@@ -118,7 +118,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -178,7 +178,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -219,7 +219,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -269,7 +269,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -290,7 +290,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `, nil)
 	require.NoError(t, err)
 
@@ -383,9 +383,9 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 	}
 }
 
-// TestStorageBucketIsOptional checks that a storage config without a bucket is
-// valid. The table location decides where data files go, so the bucket has no
-// effect and must not be required.
+// TestStorageBucketIsOptional checks that a storage config is valid with and
+// without a bucket. The table location decides where data files go, so the
+// bucket has no effect and must not be required.
 func TestStorageBucketIsOptional(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -403,6 +403,22 @@ func TestStorageBucketIsOptional(t *testing.T) {
 			storage: `
   gcp_cloud_storage:
     credentials_type: service_account
+`,
+		},
+		{
+			// The bucket fields are deprecated. Old configs that set them
+			// must still parse.
+			name: "aws_s3 with deprecated bucket",
+			storage: `
+  aws_s3:
+    bucket: my-bucket
+`,
+		},
+		{
+			name: "gcp_cloud_storage with deprecated bucket",
+			storage: `
+  gcp_cloud_storage:
+    bucket: my-bucket
 `,
 		},
 	}

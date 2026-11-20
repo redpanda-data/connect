@@ -6,7 +6,6 @@ vars:
   MINIO_REGION: '{{.MINIO_REGION | default "us-east-1"}}'
   CATALOG_URL: '{{.CATALOG_URL | default "http://localhost:8181"}}'
   MINIO_ENDPOINT: '{{.MINIO_ENDPOINT | default "http://localhost:9000"}}'
-  MINIO_BUCKET: '{{.MINIO_BUCKET | default "warehouse"}}'
 
 tasks:
   infra:up:
@@ -54,7 +53,6 @@ tasks:
           --set output.iceberg.batching.period=5s \
           --set output.iceberg.catalog.url={{.CATALOG_URL}} \
           --set output.iceberg.storage.aws_s3.endpoint={{.MINIO_ENDPOINT}} \
-          --set output.iceberg.storage.aws_s3.bucket={{.MINIO_BUCKET}} \
           --set output.iceberg.storage.aws_s3.credentials.id={{.MINIO_USER}} \
           --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
           ./benchmark_config.yaml
@@ -80,7 +78,6 @@ tasks:
           --set output.iceberg.max_in_flight={{.MIF}} \
           --set output.iceberg.catalog.url={{.CATALOG_URL}} \
           --set output.iceberg.storage.aws_s3.endpoint={{.MINIO_ENDPOINT}} \
-          --set output.iceberg.storage.aws_s3.bucket={{.MINIO_BUCKET}} \
           --set output.iceberg.storage.aws_s3.credentials.id={{.MINIO_USER}} \
           --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
           ./benchmark_config.yaml
@@ -140,7 +137,6 @@ tasks:
           --set output.iceberg.max_in_flight={{.MIF}} \
           --set output.iceberg.catalog.url={{.KC_CATALOG_URL}} \
           --set output.iceberg.storage.aws_s3.endpoint={{.KC_MINIO_ENDPOINT}} \
-          --set output.iceberg.storage.aws_s3.bucket={{.MINIO_BUCKET}} \
           --set output.iceberg.storage.aws_s3.credentials.id={{.MINIO_USER}} \
           --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
           ./kafka_benchmark_config.yaml
