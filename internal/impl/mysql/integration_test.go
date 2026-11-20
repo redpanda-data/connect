@@ -1046,9 +1046,10 @@ mysql_cdc:
 }
 
 // The snapshot and the stream must give the same value for the same stored
-// DATE, DATETIME or TIMESTAMP value when the loc DSN option, the server time
-// zone and the process time zone are not UTC. Otherwise the state of a target
-// depends on the path that delivered a row. Both paths give a DATE or DATETIME
+// DATE, DATETIME or TIMESTAMP value when the loc DSN option and the server time
+// zone are not UTC. Otherwise the state of a target depends on the path that
+// delivered a row. TestMapMessageColumn tests a process time zone that is not
+// UTC. Both paths give a DATE or DATETIME
 // wall clock in UTC, and a TIMESTAMP instant in UTC.
 func TestIntegrationMySQLCDCSnapshotTimeZones(t *testing.T) {
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
