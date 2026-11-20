@@ -327,9 +327,9 @@ credentials:
 				}
 			} else if !backfillDone {
 				writtenMu.Lock()
-				at, ok := writtenAt[pk+"/"+strconv.Itoa(v)]
+				at, exists := writtenAt[pk+"/"+strconv.Itoa(v)]
 				writtenMu.Unlock()
-				if ok {
+				if exists {
 					r.streamLatency = append(r.streamLatency, now.Sub(at))
 				}
 			}
@@ -372,7 +372,7 @@ credentials:
 	}
 	require.Len(b, table, c.items)
 	for pk, want := range table {
-		if got, ok := last[pk]; !ok || got != want {
+		if got, exists := last[pk]; !exists || got != want {
 			r.finalMismatches++
 		}
 	}

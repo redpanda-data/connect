@@ -172,7 +172,7 @@ func (p *ShardProgress) RefreshDone(described []string) {
 		listed[id] = struct{}{}
 	}
 	for id, m := range p.shards {
-		if _, ok := listed[id]; m.exhausted && !ok {
+		if _, exists := listed[id]; m.exhausted && !exists {
 			delete(p.shards, id)
 		}
 	}
