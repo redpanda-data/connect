@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
@@ -42,6 +44,12 @@ type ConnectCacheResource struct {
 	// and is easier to apply to all caches than making them cache specific (given users can
 	// configure in-memory cache as part of a cache_resource).
 	startSCNs map[sqlredo.TransactionID]uint64
+	// runID identifies this instance. Each metadata key stores the runID that
+	// wrote it. After a restart, a durable backend (for example Redis) still has
+	// the keys of the previous run, and the connector mines their events again.
+	// readMetadata deletes those keys, so that the commit does not publish the
+	// events two times.
+	runID string
 }
 
 // NewConnectCacheResource creates a ConnectCacheResource backed by the named
@@ -54,6 +62,7 @@ func NewConnectCacheResource(resources *service.Resources, cfg TransactionCacheC
 		maxEvents:          cfg.MaxEvents,
 		discarded:          make(map[sqlredo.TransactionID]struct{}),
 		startSCNs:          make(map[sqlredo.TransactionID]uint64),
+		runID:              uuid.NewString(),
 		log:                log,
 		transactionsMetric: metrics.NewGauge("oracledb_cdc_transactions_active"),
 		eventsMetric:       metrics.NewGauge("oracledb_cdc_transactions_events_inflight"),
@@ -80,7 +89,7 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 		return nil
 	}
 
-	metaData := &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
+	metaData := &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0, RunID: c.runID}
 	data, err := json.Marshal(metaData)
 	if err != nil {
 		return fmt.Errorf("serializing transaction metadata %s: %w", txnID, err)
@@ -119,7 +128,7 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 	if m == nil {
 		// Expected after a restart (see InMemoryCache.AddEvent).
 		c.log.Debugf("Starting transaction %s at SCN %d, its START is before the resume position", txnID, scn)
-		m = &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
+		m = &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0, RunID: c.runID}
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
 	} else {
@@ -303,7 +312,8 @@ func (c *ConnectCacheResource) toEventKey(txnID sqlredo.TransactionID, seqno int
 }
 
 // readMetadata fetches and deserializes the metadata key for txnID.
-// Returns (nil, nil) if the key does not exist.
+// Returns (nil, nil) if the key does not exist or an earlier run wrote it (see
+// runID).
 func (c *ConnectCacheResource) readMetadata(ctx context.Context, txnID sqlredo.TransactionID) (*serializedTransactionMetadata, error) {
 	var (
 		meta   *serializedTransactionMetadata
@@ -324,6 +334,13 @@ func (c *ConnectCacheResource) readMetadata(ctx context.Context, txnID sqlredo.T
 			return nil, nil
 		}
 		return nil, getErr
+	}
+	if meta.RunID != c.runID {
+		// Keys from an earlier run (see runID). Metadata from a version
+		// without RunID has "" and is also dropped.
+		c.log.Debugf("Deleting transaction %s with %d events left in the cache by an earlier run", txnID, meta.EventCount)
+		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
+		return nil, nil
 	}
 	return meta, nil
 }
@@ -468,6 +485,9 @@ type serializedTransactionMetadata struct {
 	ID         sqlredo.TransactionID `json:"id"`
 	SCN        uint64                `json:"scn"`
 	EventCount int                   `json:"count"`
+	// RunID is the ConnectCacheResource.runID of the instance that wrote the
+	// key.
+	RunID string `json:"run,omitempty"`
 }
 
 func unmarshalMetadata(data []byte) (*serializedTransactionMetadata, error) {
