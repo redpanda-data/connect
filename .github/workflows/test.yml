@@ -100,10 +100,9 @@ jobs:
             exit 1
           fi
           git checkout --quiet HEAD^1
+      # Pull requests only restore the cache, so this job uses the main cache of the docs job.
       - name: Install Go
-        uses: actions/setup-go@v6.5.0
-        with:
-          go-version-file: 'go.mod'
+        uses: $/.github/actions/setup-go
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
       - name: Generate the reference docs

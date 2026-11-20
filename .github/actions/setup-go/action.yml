@@ -1,6 +1,15 @@
 name: 'Setup Go'
 description: 'Install the Go version from go.mod and cache the Go build and module caches'
 
+inputs:
+  cache-name:
+    description: >-
+      A name for the cache key. Give a name when the job builds other packages than the jobs that share its
+      CGO_ENABLED value, so it does not share their cache. For example, the integration tests build test binaries
+      that golangci-lint (also CGO_ENABLED=0) does not build.
+    required: false
+    default: ''
+
 runs:
   using: "composite"
   steps:
@@ -11,20 +20,45 @@ runs:
         go-version-file: 'go.mod'
         cache: false
 
-    - name: Get Go cache paths
+    # CGO_ENABLED is in the key: a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    # The prefix is the key without the go.mod hash. A go.mod change then restores the last cache and compiles only
+    # the changed packages. The Go build cache removes entries that it did not use for 5 days, so it does not grow
+    # without limit. The name goes before cgo, so the prefix of an unnamed cache does not match a named one.
+    - name: Get Go cache paths and key
       id: go-env
       shell: bash
+      env:
+        NAME: ${{ inputs.cache-name && format('{0}-', inputs.cache-name) || '' }}
+        GO_MOD_HASH: ${{ hashFiles('go.mod') }}
       run: |
         gocache=$(go env GOCACHE)
         gomodcache=$(go env GOMODCACHE)
+        prefix="go-${RUNNER_OS}-${{ steps.setup-go.outputs.go-version }}-${NAME}cgo${CGO_ENABLED}-"
         echo "gocache=$gocache" >> "$GITHUB_OUTPUT"
         echo "gomodcache=$gomodcache" >> "$GITHUB_OUTPUT"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "key=${prefix}${GO_MOD_HASH}" >> "$GITHUB_OUTPUT"
 
-    # CGO_ENABLED is in the key: a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    # Only main saves the cache. The repository has 10 GB of cache, and GitHub removes the least recently used
+    # entries when it is full. A pull request cache is about 2 GB and only that pull request can use it, so pull
+    # request caches pushed the main caches out within hours. A pull request run restores the main cache instead.
+    # A PR command (/integration, issue_comment) runs on the main ref with PR code, so it must not save either.
     - name: Cache Go
+      if: github.ref == 'refs/heads/main' && github.event_name != 'issue_comment'
       uses: actions/cache@v6.1.0
       with:
         path: |
           ${{ steps.go-env.outputs.gocache }}
           ${{ steps.go-env.outputs.gomodcache }}
-        key: go-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}-cgo${{ env.CGO_ENABLED }}-${{ hashFiles('go.mod') }}
+        key: ${{ steps.go-env.outputs.key }}
+        restore-keys: ${{ steps.go-env.outputs.prefix }}
+
+    - name: Restore Go cache
+      if: github.ref != 'refs/heads/main' || github.event_name == 'issue_comment'
+      uses: actions/cache/restore@v6.1.0
+      with:
+        path: |
+          ${{ steps.go-env.outputs.gocache }}
+          ${{ steps.go-env.outputs.gomodcache }}
+        key: ${{ steps.go-env.outputs.key }}
+        restore-keys: ${{ steps.go-env.outputs.prefix }}
