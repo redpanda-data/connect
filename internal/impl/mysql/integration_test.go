@@ -812,6 +812,13 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 			want:       nil,
 		},
 		{
+			name:       "invalid datetime after 1970",
+			column:     "dt",
+			value:      "2024-02-30 10:00:00",
+			wantString: false,
+			want:       time.Date(2024, 3, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
 			name:       "date before 1970",
 			column:     "d",
 			value:      "1965-03-04",
@@ -864,8 +871,8 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 	streamer, err := syncer.StartSync(gomysql.Position{Name: file, Pos: pos})
 	require.NoError(t, err)
 
-	// The default SQL mode rejects zero dates. multiStatements keeps both
-	// statements on one connection.
+	// The default SQL mode rejects zero and invalid dates. multiStatements
+	// keeps both statements on one connection.
 	var values []string
 	for i, tt := range tests {
 		if tt.column == "dt" {
@@ -874,7 +881,7 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 			values = append(values, fmt.Sprintf("(%d, NULL, '%s')", i, tt.value))
 		}
 	}
-	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO raw_dates VALUES ` + strings.Join(values, ", "))
+	db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO raw_dates VALUES ` + strings.Join(values, ", "))
 
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
