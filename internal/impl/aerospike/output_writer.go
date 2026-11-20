@@ -47,20 +47,18 @@ func newAerospikeOutput(conf *service.ParsedConfig, mgr *service.Resources) (ser
 	parsed.client.sizePoolForConcurrency(maxInFlight)
 
 	return &aerospikeWriter{
-		conf:        parsed,
-		conn:        newConnection(parsed.client, mgr.Logger()),
-		log:         mgr.Logger(),
-		filteredOut: mgr.Metrics().NewCounter("aerospike_filtered_out"),
-		ignored:     mgr.Metrics().NewCounter("aerospike_ignored_errors"),
+		conf:    parsed,
+		conn:    newConnection(parsed.client, mgr.Logger()),
+		log:     mgr.Logger(),
+		ignored: mgr.Metrics().NewCounter("aerospike_ignored_errors"),
 	}, batchPolicy, maxInFlight, nil
 }
 
 type aerospikeWriter struct {
-	conf        *aerospikeConfig
-	conn        *connection
-	log         *service.Logger
-	filteredOut *service.MetricCounter
-	ignored     *service.MetricCounter
+	conf    *aerospikeConfig
+	conn    *connection
+	log     *service.Logger
+	ignored *service.MetricCounter
 	// ignoredTotal is the same total passed to aerospike_ignored_errors.
 	// Unit tests read it because they have no metrics registry.
 	ignoredTotal atomic.Int64
@@ -228,15 +226,7 @@ func (w *aerospikeWriter) planBatch(batch service.MessageBatch) ([]*pendingOp, m
 func dropBinlessWrites(ops []*pendingOp, failures map[int]error) []*pendingOp {
 	kept := make([]*pendingOp, 0, len(ops))
 	for _, op := range ops {
-		if op.kind == opDelete && !op.hasFence {
-			kept = append(kept, op)
-			continue
-		}
-		action := op.kind.recordExistsAction()
-		if op.kind == opDelete {
-			action = as.REPLACE
-		}
-		if len(op.putOps(action)) > 0 {
+		if op.kind == opDelete || len(op.putOps(op.kind.recordExistsAction())) > 0 {
 			kept = append(kept, op)
 			continue
 		}
@@ -256,7 +246,7 @@ func nullReplaceError(kind opKind, coalesced bool) error {
 }
 
 func (w *aerospikeWriter) buildRecord(op *pendingOp) as.BatchRecordIfc {
-	if op.kind == opDelete && !op.hasFence {
+	if op.kind == opDelete {
 		if !op.hasGeneration {
 			return as.NewBatchDelete(w.conf.deletePolicy, op.key)
 		}
@@ -266,19 +256,11 @@ func (w *aerospikeWriter) buildRecord(op *pendingOp) as.BatchRecordIfc {
 		return as.NewBatchDelete(&policy, op.key)
 	}
 
-	// Copy the shared policy so per-message expiration, fencing, and generation
-	// checks do not race across concurrent batches.
+	// Copy the shared policy so per-message expiration and generation checks
+	// do not race across concurrent batches.
 	policy := *w.conf.writePolicy
 	policy.RecordExistsAction = op.kind.recordExistsAction()
 	policy.Expiration = op.ttl
-	if op.kind == opDelete {
-		// A fenced delete is a replace that leaves the fence on the key.
-		policy.RecordExistsAction = as.REPLACE
-		policy.Expiration = w.conf.tombstoneTTL
-	}
-	if op.hasFence {
-		policy.FilterExpression = fenceExpression(w.conf.fenceBin, op.fence)
-	}
 	if op.hasGeneration {
 		policy.GenerationPolicy = as.EXPECT_GEN_EQUAL
 		policy.Generation = op.generation
@@ -289,11 +271,9 @@ func (w *aerospikeWriter) buildRecord(op *pendingOp) as.BatchRecordIfc {
 
 // putOps is the bin puts buildRecord sends. REPLACE and REPLACE_ONLY already
 // drop bins that are not named. A nil value is a bin delete, and the server
-// rejects that put as a parameter error on those two actions. update_only
-// after a fenced delete is one such write: it clears the tombstone with a nil
-// bin, then fold promotes it to replace. mapMessage rejects a replace or
-// replace_only that this leaves empty. fold turns a folded empty one into a
-// delete, and dropBinlessWrites is the backstop.
+// rejects that put as a parameter error on those two actions. mapMessage
+// rejects a replace or replace_only that this leaves empty. fold turns a
+// folded empty one into a delete, and dropBinlessWrites is the backstop.
 func (p *pendingOp) putOps(action as.RecordExistsAction) []*as.Operation {
 	fullReplace := action == as.REPLACE || action == as.REPLACE_ONLY
 	ops := make([]*as.Operation, 0, len(p.binOrder))
@@ -307,13 +287,6 @@ func (p *pendingOp) putOps(action as.RecordExistsAction) []*as.Operation {
 	return ops
 }
 
-func filteredOutCount(rec *as.BatchRecord, op *pendingOp) int {
-	if rec.ResultCode != types.FILTERED_OUT {
-		return 0
-	}
-	return ignoredMessages(op)
-}
-
 func ignoredMessages(op *pendingOp) int {
 	n := len(op.indexes)
 	if n == 0 {
@@ -323,14 +296,6 @@ func ignoredMessages(op *pendingOp) int {
 }
 
 func (w *aerospikeWriter) handleRecord(rec *as.BatchRecord, op *pendingOp) error {
-	if n := filteredOutCount(rec, op); n > 0 {
-		if w.filteredOut != nil {
-			w.filteredOut.Incr(int64(n))
-		}
-		if w.log != nil {
-			w.log.Debugf("aerospike fenced out %d message(s) for key %v", n, rec.Key)
-		}
-	}
 	err := classifyRecord(rec, op)
 	// A result that is in doubt is not ignored. The write may already have been applied.
 	if err != nil && !rec.InDoubt && w.conf.ignores(rec.ResultCode) {
@@ -352,8 +317,7 @@ func (w *aerospikeWriter) acknowledgeIgnoredMapping(err error) bool {
 	return true
 }
 
-// noteIgnored records a dropped message. The counter is separate from
-// aerospike_filtered_out, which counts fencing discards that did reach the server.
+// noteIgnored records a dropped message.
 func (w *aerospikeWriter) noteIgnored(code types.ResultCode, key *as.Key, err error, n int) {
 	w.ignoredTotal.Add(int64(n))
 	if w.ignored != nil {
@@ -371,15 +335,4 @@ func (w *aerospikeWriter) noteIgnored(code types.ResultCode, key *as.Key, err er
 	}
 	w.log.Warnf("ignoring aerospike error code %d (%s) namespace=%s set=%s key=%s: %v",
 		code, types.ResultCodeToString(code), ns, set, id, err)
-}
-
-// fenceExpression admits a write only when the record is new, or when the
-// stored fence is strictly older than this message's. Evaluated on the server,
-// so a redelivered or out-of-order message is discarded without a round trip
-// and without a transaction.
-func fenceExpression(bin string, fence int64) *as.Expression {
-	return as.ExpOr(
-		as.ExpNot(as.ExpBinExists(bin)),
-		as.ExpLess(as.ExpIntBin(bin), as.ExpIntVal(fence)),
-	)
 }

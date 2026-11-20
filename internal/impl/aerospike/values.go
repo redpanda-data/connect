@@ -26,14 +26,6 @@ import (
 // the offending field.
 const maxBinNameLen = 15
 
-// defaultTombstoneBin marks a fenced delete. The record is kept so the fence
-// survives; readers should treat a record carrying this bin as missing.
-const defaultTombstoneBin = "_deleted"
-
-// defaultFenceBin holds the monotonic fence value written alongside a record.
-// It is bookkeeping rather than data.
-const defaultFenceBin = "_fence"
-
 // validateBinName checks a bin name against the server's length limit, so the
 // error can name the field that produced it rather than surfacing as a
 // BIN_NAME_TOO_LONG result code.
