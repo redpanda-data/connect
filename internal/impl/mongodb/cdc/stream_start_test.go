@@ -138,7 +138,7 @@ func TestResolveStreamStart(t *testing.T) {
 			hello:        shardedHello,
 			captureErr:   errors.New("no post-batch resume token"),
 			wantCaptured: true,
-			wantErr:      "unable to compute stream start position: no post-batch resume token",
+			wantErr:      "unable to compute the stream start position: the hello reply has no lastWrite.majorityOpTime.ts, and capturing a resume token failed: no post-batch resume token",
 		},
 	}
 	for _, tt := range tests {
