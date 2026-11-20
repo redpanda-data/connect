@@ -914,8 +914,8 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 // The next batch starts after the last key that it read, and that key must be
 // the one in the table, not the date that the snapshot gives for it. A
 // composite key with DATETIME(6) values that differ only in the fraction must
-// page without a gap or a repeat. The snapshot values stay the same as when
-// the driver parsed them.
+// page without a gap or a repeat. The snapshot gives the same values as the
+// stream for these dates.
 func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
 	for _, version := range []string{"8.0", "8.4"} {
 		t.Run(version, func(t *testing.T) {
