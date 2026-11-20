@@ -138,7 +138,7 @@ Based on customer-adp's `ingest.yaml`:
 - **Approval:** a `reaction_added` of 👍 or ✅ on a message the bot posted with a cost prompt becomes an agent message: `APPROVAL by <user> on message <ts>`. The cost message text carries `plan <plan_id>`, which the relay copies into the approval. Reactions on other messages are dropped.
 - **Hand-off:** a 👀 reaction, then a non-blocking A2A submit. The agent replies and swaps reactions itself through the write-only Slack MCP.
 
-Hosting needs a Redpanda Cloud cluster and service account; the ADP team decides which.
+Hosting: the relay runs as a Redpanda Connect pipeline in the **ADP Production cluster**, the same place RPCN Bot's relay runs (confirmed by Joe Woodward, 2026-11-20). It needs a service account there with the Cedar grants in §6.
 
 ### 5. Agent `bench-bot` (internal-agents `agents/bench-bot/agent.yaml`)
 
