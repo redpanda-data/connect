@@ -16,15 +16,38 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
 
-// TransactionCache is responsible for buffering transactions until a commit event is received,
-// at which point we know it's safe to flush transactions to the Connect pipeline.
-// If a rollback events is received the cache will be be cleared instead of flushed.
+// TransactionCache buffers the DML events of open Oracle transactions until
+// their COMMIT or ROLLBACK. It does not hold LOB state.
+//
+// It also gives the low watermark: the start SCN of the oldest open
+// transaction. The checkpoint stays below it, so that a restart mines each
+// open transaction again from its start.
+//
+// InMemoryCache and ConnectCacheResource implement it. Implementations are not
+// safe for concurrent use.
 type TransactionCache interface {
+	// StartTransaction opens a transaction at its START SCN. It does nothing if
+	// the transaction exists, so that a START that is mined again keeps the
+	// events, or if the transaction was discarded.
 	StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64) error
+	// AddEvent appends a DML event. It opens a missing transaction at scn,
+	// because after a restart the START can be below the checkpoint. If the
+	// transaction has more events than the limit, the cache discards it, and
+	// AddEvent and StartTransaction do nothing for it until it ends.
 	AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) error
+	// GetTransaction returns the transaction with its events, or nil if it is
+	// missing or discarded.
 	GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error)
+	// CommitTransaction removes the transaction and its discarded mark.
 	CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
+	// RollbackTransaction removes the transaction and its discarded mark.
 	RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
+	// ResetTransaction drops the events of an open transaction and keeps its
+	// start SCN. LowWatermarkSCN counts the transaction until it commits or
+	// rolls back, also with no events. LOB replay uses it to rebuild a
+	// transaction from its start. It does nothing for a missing or discarded
+	// transaction.
+	ResetTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
 	// LowWatermarkSCN returns the lowest start SCN of open transactions, excluding
 	// excludeTxnID, or math.MaxUint64 if there are none. The commit checkpoint
 	// stays below it so a restart re-mines those transactions. Only transactions
@@ -166,6 +189,19 @@ func (tc *InMemoryCache) IncludeInLowWatermark(_ context.Context, txnID sqlredo.
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.holdsWatermark = true
 	}
+	return nil
+}
+
+// ResetTransaction drops the buffered events and marks the transaction to hold
+// the low watermark.
+func (tc *InMemoryCache) ResetTransaction(_ context.Context, txnID sqlredo.TransactionID) error {
+	txn, exists := tc.transactions[txnID]
+	if !exists {
+		return nil
+	}
+	tc.eventsMetric.Decr(int64(len(txn.Events)))
+	txn.Events = []*sqlredo.DMLEvent{}
+	txn.holdsWatermark = true
 	return nil
 }
 

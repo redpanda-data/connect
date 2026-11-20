@@ -80,20 +80,8 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 		return nil
 	}
 
-	metaData := &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
-	data, err := json.Marshal(metaData)
-	if err != nil {
-		return fmt.Errorf("serializing transaction metadata %s: %w", txnID, err)
-	}
-
-	var setErr error
-	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		setErr = cache.Set(ctx, c.toMetaKey(txnID), data, nil)
-	}); err != nil {
-		return fmt.Errorf("accessing cache for transaction %s: %w", txnID, err)
-	}
-	if setErr != nil {
-		return fmt.Errorf("storing transaction metadata %s: %w", txnID, setErr)
+	if err := c.writeMetadata(ctx, &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}); err != nil {
+		return fmt.Errorf("storing metadata of transaction %s: %w", txnID, err)
 	}
 	c.transactionsMetric.Incr(1)
 	return nil
@@ -155,19 +143,8 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 		return nil
 	}
 
-	metaData, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("serializing updated metadata for transaction %s: %w", txnID, err)
-	}
-
-	var updateErr error
-	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		updateErr = cache.Set(ctx, c.toMetaKey(txnID), metaData, nil)
-	}); err != nil {
-		return fmt.Errorf("accessing cache to update metadata for transaction %s: %w", txnID, err)
-	}
-	if updateErr != nil {
-		return fmt.Errorf("updating metadata for transaction %s: %w", txnID, updateErr)
+	if err := c.writeMetadata(ctx, m); err != nil {
+		return fmt.Errorf("updating metadata of transaction %s: %w", txnID, err)
 	}
 	return nil
 }
@@ -261,6 +238,39 @@ func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sq
 	return nil
 }
 
+// ResetTransaction deletes the keys of the transaction and writes its metadata
+// again with no events. An error ends the mining loop, and the next Connect
+// starts with a new cache, so the order of the writes does not matter.
+func (c *ConnectCacheResource) ResetTransaction(ctx context.Context, txnID sqlredo.TransactionID) error {
+	if _, discarded := c.discarded[txnID]; discarded {
+		return nil
+	}
+	m, err := c.readMetadata(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("reading metadata for resetting transaction %s: %w", txnID, err)
+	}
+	if m == nil {
+		return nil
+	}
+
+	// Drop the old events, so that the replay rebuilds the transaction from
+	// its start.
+	c.eventsMetric.Decr(int64(m.EventCount))
+	c.deleteTransactionKeys(ctx, txnID, m.EventCount)
+
+	// Keep the transaction open at its start SCN, so that StartTransaction
+	// keeps it when the START is mined again.
+	m.EventCount = 0
+	if err := c.writeMetadata(ctx, m); err != nil {
+		return fmt.Errorf("resetting metadata of transaction %s: %w", txnID, err)
+	}
+
+	// With no events, the transaction counts in LowWatermarkSCN only through
+	// startSCNs.
+	c.startSCNs[txnID] = m.SCN
+	return nil
+}
+
 // LowWatermarkSCN returns the lowest start SCN among all currently open
 // (uncommitted) transactions, excluding excludeTxnID. Returns math.MaxUint64
 // if no other open transactions exist.
@@ -326,6 +336,21 @@ func (c *ConnectCacheResource) readMetadata(ctx context.Context, txnID sqlredo.T
 		return nil, getErr
 	}
 	return meta, nil
+}
+
+// writeMetadata stores m at the metadata key of its transaction.
+func (c *ConnectCacheResource) writeMetadata(ctx context.Context, m *serializedTransactionMetadata) error {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("serializing metadata: %w", err)
+	}
+	var setErr error
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		setErr = cache.Set(ctx, c.toMetaKey(m.ID), data, nil)
+	}); err != nil {
+		return fmt.Errorf("accessing cache: %w", err)
+	}
+	return setErr
 }
 
 // deleteTransactionKeys deletes all event keys (0..eventCount-1) plus the
