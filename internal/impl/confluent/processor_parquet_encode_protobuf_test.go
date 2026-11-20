@@ -16,6 +16,7 @@ package confluent
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"strings"
@@ -231,7 +232,7 @@ func directTestProcessors(t *testing.T, conf string) []*service.OwnedProcessor {
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		for _, p := range procs {
-			_ = p.Close(t.Context())
+			_ = p.Close(context.Background())
 		}
 	})
 	return procs
@@ -266,7 +267,7 @@ func newDirectTestPipelines(t *testing.T, url, decodeConf, encodeConf string) di
 	encoder, err := pq.NewEncodeProcessorFromConfig(conf, nil)
 	require.NoError(t, err)
 	bare := newParquetEncodeProtobufProcessor(decoder, encoder, service.MockResources())
-	t.Cleanup(func() { _ = bare.Close(t.Context()) })
+	t.Cleanup(func() { _ = bare.Close(context.Background()) })
 
 	return directTestPipelines{
 		combined: directTestProcessors(t, "processors:\n  - parquet_encode_protobuf:\n"+indent(both, "      ")),
