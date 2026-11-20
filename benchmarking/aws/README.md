@@ -90,7 +90,9 @@ and re-enabled after.
 Every completed bench sweep writes one entry to the results catalogue in the
 `redpanda-connect-bench-catalog` bucket, at
 `catalog/v1/<input>/<entry_id>.json`. Only bench sweeps are catalogued: soak
-runs, arm and binary A/B runs, and builds from a dirty working tree are not.
+runs and arm and binary A/B runs are not, and the runner does not write
+entries for builds from a dirty working tree (`catalog import` cannot detect a
+dirty build, so check that before importing).
 Each entry records the connector identity, the workload, the Connect version
 and build SHA, and the measured capacity at each vCPU point. The sizing
 constants (headroom, CUs per vCPU, bytes per CU) live in

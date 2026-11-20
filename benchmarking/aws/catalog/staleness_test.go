@@ -265,3 +265,37 @@ func TestStalenessGitCLIAgainstRepo(t *testing.T) {
 	_, err = g.ChangedPaths(ctx, "0000000000000000000000000000000000000000", tag, paths)
 	require.ErrorIs(t, err, ErrSHANotInRepo)
 }
+
+// A --repo that is a subdirectory of the repo (such as the CLI default "."
+// run from benchmarking/aws) must still resolve against the repo top level.
+func TestGitCLIFromSubdirectory(t *testing.T) {
+	g := NewGitCLI(".") // the catalog package dir, inside benchmarking/aws
+	if _, err := g.LatestRelease(t.Context()); err != nil {
+		t.Skipf("git unavailable or not a repo: %v", err)
+	}
+	paths, err := g.ComponentPaths(t.Context(), "postgres_cdc")
+	require.NoError(t, err)
+	require.Equal(t, []string{"internal/impl/postgresql"}, paths)
+}
+
+func TestStalenessRepoRootUnresolvable(t *testing.T) {
+	g := NewGitCLI(t.TempDir()) // not inside any git repo
+	s, err := CheckStaleness(t.Context(), g, stalenessEntry())
+	require.NoError(t, err)
+	require.Equal(t, "unknown", s.State)
+	require.Len(t, s.Reasons, 1)
+	require.Contains(t, s.Reasons[0], "repo root")
+}
+
+func TestStalenessBenthosUnreadableAfterStale(t *testing.T) {
+	g := stalenessFake()
+	g.changed = map[string][]string{"internal/impl/postgresql": {"a1", "b2"}}
+	g.benthosErr = errors.New("no go.mod")
+	s, err := CheckStaleness(t.Context(), g, stalenessEntry())
+	require.NoError(t, err)
+	require.Equal(t, "stale", s.State)
+	require.Len(t, s.Reasons, 2)
+	require.Contains(t, s.Reasons[0], "2 commits to internal/impl/postgresql")
+	require.Contains(t, s.Reasons[1], "no go.mod")
+	require.Contains(t, s.Reasons[1], "mapping")
+}

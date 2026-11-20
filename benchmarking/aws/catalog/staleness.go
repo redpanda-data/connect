@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // ErrSHANotInRepo is returned by Git.ChangedPaths and Git.ChangelogMentions
@@ -44,13 +45,43 @@ type Git interface {
 	ChangelogMentions(ctx context.Context, fromSHA, toRef, component string) ([]string, error)
 }
 
-type gitCLI struct{ root string }
+// ErrRepoRoot is returned by Git methods when the repository top level cannot
+// be resolved from the configured path.
+var ErrRepoRoot = errors.New("cannot resolve repo root")
 
-// NewGitCLI returns a Git backed by the git binary, run against repoRoot.
-func NewGitCLI(repoRoot string) Git { return &gitCLI{root: repoRoot} }
+type gitCLI struct {
+	dir string // as given; may be any directory inside the repo
+
+	once    sync.Once
+	root    string // git top level of dir
+	rootErr error
+}
+
+// NewGitCLI returns a Git backed by the git binary. repoDir may be the repo
+// top level or any directory inside it; every command runs against the top
+// level, so repo-relative pathspecs and go.mod lookups agree.
+func NewGitCLI(repoDir string) Git { return &gitCLI{dir: repoDir} }
+
+func (g *gitCLI) resolveRoot(ctx context.Context) (string, error) {
+	g.once.Do(func() {
+		cmd := exec.CommandContext(ctx, "git", "-C", g.dir, "rev-parse", "--show-toplevel")
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		if err := cmd.Run(); err != nil {
+			g.rootErr = fmt.Errorf("%w from %s: %w: %s", ErrRepoRoot, g.dir, err, strings.TrimSpace(stderr.String()))
+			return
+		}
+		g.root = strings.TrimSpace(stdout.String())
+	})
+	return g.root, g.rootErr
+}
 
 func (g *gitCLI) run(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", g.root}, args...)...)
+	root, err := g.resolveRoot(ctx)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", root}, args...)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -116,7 +147,11 @@ func (g *gitCLI) ComponentPaths(ctx context.Context, component string) ([]string
 		if strings.HasSuffix(f, "_test.go") {
 			continue
 		}
-		body, err := os.ReadFile(filepath.Join(g.root, filepath.FromSlash(f)))
+		root, err := g.resolveRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", f, err)
 		}
@@ -219,6 +254,9 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 		return Staleness{State: "unknown", Reasons: []string{"build sha unknown"}}, nil
 	}
 	latest, err := g.LatestRelease(ctx)
+	if errors.Is(err, ErrRepoRoot) {
+		return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
+	}
 	if err != nil {
 		return Staleness{}, err
 	}
@@ -258,9 +296,15 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{"build sha not in repo"}}, nil
 				}
 				if err != nil {
-					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{
-						fmt.Sprintf("benthos version unknown (hosts %s): %v", c, err),
-					}}, nil
+					reason := fmt.Sprintf("benthos version unknown (hosts %s): %v", c, err)
+					if stale {
+						// Earlier components already made the entry stale;
+						// that stays true whatever benthos did.
+						s.State = "stale"
+						s.Reasons = append(s.Reasons, reason)
+						return s, nil
+					}
+					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{reason}}, nil
 				}
 			}
 			if benthosFrom != benthosTo {
