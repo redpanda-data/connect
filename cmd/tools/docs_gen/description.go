@@ -519,15 +519,15 @@ type componentPlatform struct {
 // inCloud reports whether any Redpanda Cloud pipeline can use the component.
 func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
 
-// renderDescriptionPartial renders the description partial of a component.
-// The meta tag sets page attributes for the page header, including
-// page-introduced-in, which the docs UI shows as a badge in the page's sticky
-// header on self-managed pages. The body tag renders the status notice,
-// summary, and description, and the
-// footnotes tag renders the spec footnotes. Every tag is always present, so a
-// page that includes one keeps building when the spec drops that content.
-// excluded is as in cloudGuardXrefs, and is used only for components that
-// Redpanda Cloud includes.
+// renderDescriptionPartial renders the description partial of a component. The
+// meta tag sets page attributes for the page header: page-beta, which makes the
+// docs UI show its beta badge, and page-introduced-in, which the docs UI shows
+// as a badge in the page's sticky header on self-managed pages. The body tag
+// renders the status notice of deprecated and experimental components, then the
+// summary and description. The footnotes tag renders the spec footnotes. Every
+// tag is always present, so a page that includes one keeps building when the
+// spec drops that content. excluded is as in cloudGuardXrefs, and is used only
+// for components that Redpanda Cloud includes.
 func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool, source string) string {
 	guard := func(body string) string {
 		if !plat.inCloud() || excluded == nil {
@@ -544,6 +544,11 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 	if c.Status != "" {
 		b.WriteString(":status: " + c.Status + "\n")
 	}
+	if c.Status == "beta" {
+		// The docs UI shows its beta badge in the page header for pages that
+		// set page-beta, so beta components get the badge instead of a notice.
+		b.WriteString(":page-beta: true\n")
+	}
 	if plat.CgoOnly {
 		b.WriteString(":page-cgo-only: true\n")
 	}
@@ -551,8 +556,10 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 		b.WriteString("ifndef::env-cloud[]\n:page-introduced-in: " + c.Version + "\nendif::[]\n")
 	}
 	b.WriteString("// end::meta[]\n\n// tag::body[]\n")
-	if notice := statusNotice(c.Status, "component"); notice != "" {
-		b.WriteString(notice + "\n")
+	if c.Status != "beta" {
+		if notice := statusNotice(c.Status, "component"); notice != "" {
+			b.WriteString(notice + "\n")
+		}
 	}
 	if summary != "" {
 		b.WriteString(guard(summary) + "\n\n")
