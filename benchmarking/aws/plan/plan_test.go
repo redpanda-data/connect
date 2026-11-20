@@ -269,6 +269,19 @@ func TestBuildNeverLeaksSecrets(t *testing.T) {
 			"unknown input", withInput(map[string]any{"mystery_src": map[string]any{"api_key": "apikey-abc", "queue_url": "https://q.customer-corp", "max": 5}}),
 			[]string{"apikey-abc", "customer-corp"},
 		},
+		{"protobuf bsr", withProcs(map[string]any{"protobuf": map[string]any{
+			"operator": "to_json", "message": "x.Y",
+			"bsr": []any{map[string]any{"url": "https://buf.customer-corp.io", "api_key": "BSRKEY-1", "module": "buf.build/cust/mod"}},
+		}}), []string{"BSRKEY-1", "buf.customer-corp", "buf.build/cust"}},
+		{"json_schema http schema_path", withProcs(map[string]any{"json_schema": map[string]any{
+			"schema_path": "http://u:SCHEMAPW@schemas.customer-corp.io/s.json",
+		}}), []string{"SCHEMAPW", "schemas.customer-corp"}},
+		{"bloblang literal bearer", withProcs(map[string]any{"mapping": "root.auth = \"Bearer LITERALTOK\""}), []string{"LITERALTOK"}},
+		{"bloblang literal aws key", withProcs(map[string]any{"mutation": "root.k = \"AKIAIOSFODNN7EXAMPLE\""}), []string{"AKIAIOSFODNN7EXAMPLE"}},
+		{"log message password", withProcs(map[string]any{"log": map[string]any{"message": "connecting password=hunter22 now"}}), []string{"hunter22"}},
+		{"request_map jwt", withProcs(map[string]any{"branch": map[string]any{
+			"request_map": "root.t = \"eyJhbGciOi.eyJzdWIiOi.SflKxwRJSM\"", "processors": []any{map[string]any{"mapping": "root = this"}},
+		}}), []string{"eyJhbGciOi"}},
 		{"real output unknown secret-ish keys", withOutput(map[string]any{"aws_s3": map[string]any{
 			"bucket": "my-secret-bucket", "path": "x", "client_secret": "cs-1", "session_token": "st-2", "custom_cert": "cc-3",
 			"force_path_style_urls": true,
@@ -418,4 +431,76 @@ func TestBuildJSONRoundTrip(t *testing.T) {
 	var back Plan
 	require.NoError(t, json.Unmarshal(b, &back))
 	require.Equal(t, p.ID, back.ID)
+}
+
+func TestBuildStubsExternalReferencingPureProcessors(t *testing.T) {
+	cases := map[string]any{
+		"javascript fetch":    map[string]any{"javascript": map[string]any{"code": "const r = benthos.v0_fetch('http://x');"}},
+		"javascript file":     map[string]any{"javascript": map[string]any{"file": "/etc/x.js"}},
+		"javascript folders":  map[string]any{"javascript": map[string]any{"code": "1", "global_folders": []any{"/opt"}}},
+		"awk system":          map[string]any{"awk": map[string]any{"program": "{ system(\"curl x\") }"}},
+		"awk pipe":            map[string]any{"awk": map[string]any{"program": "{ print $1 | \"sh\" }"}},
+		"awk getline":         map[string]any{"awk": map[string]any{"program": "{ getline x < \"/f\" }"}},
+		"grok pattern_paths":  map[string]any{"grok": map[string]any{"expressions": []any{"%{X}"}, "pattern_paths": []any{"/p"}}},
+		"avro schema_path":    map[string]any{"avro": map[string]any{"schema_path": "file:///s.avsc"}},
+		"protobuf import":     map[string]any{"protobuf": map[string]any{"import_paths": []any{"/proto"}}},
+		"workflow branch_res": map[string]any{"workflow": map[string]any{"branch_resources": []any{"r"}}},
+	}
+	for name, proc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := pgToSnowflake()
+			cfg["pipeline"] = map[string]any{"processors": []any{proc}}
+			p := build(t, cfg)
+			require.Equal(t, []string{"external_calls_stubbed"}, p.Caveats)
+			require.Equal(t, []any{map[string]any{"mapping": "root = this"}}, p.Pipeline["pipeline"].(map[string]any)["processors"])
+		})
+	}
+	cfg := pgToSnowflake()
+	cfg["pipeline"] = map[string]any{"processors": []any{
+		map[string]any{"javascript": map[string]any{"code": "return 1"}},
+		map[string]any{"awk": map[string]any{"program": "{ print $1 }"}},
+	}}
+	require.Empty(t, build(t, cfg).Caveats)
+}
+
+func TestBuildOffsetTokenKeptKMSRemoved(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["output"].(map[string]any)["snowflake_streaming"].(map[string]any)["offset_token"] = "${!@offset}"
+	p := build(t, cfg)
+	out := p.Pipeline["output"].(map[string]any)["snowflake_streaming"].(map[string]any)
+	require.Equal(t, "${!@offset}", out["offset_token"])
+
+	cfg = pgToSnowflake()
+	cfg["output"] = map[string]any{"aws_s3": map[string]any{"kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/x"}}
+	b, _ := json.Marshal(build(t, cfg))
+	require.NotContains(t, string(b), "123456789012")
+	require.NotContains(t, string(b), "kms_key_id")
+}
+
+func TestBuildMultipleCDCChildrenNotRunnable(t *testing.T) {
+	cfg := pgToSnowflake()
+	pg := func() any { return map[string]any{"postgres_cdc": map[string]any{"dsn": "x", "tables": []any{"a"}}} }
+	cfg["input"] = map[string]any{"broker": map[string]any{"inputs": []any{pg(), pg()}}}
+	p := build(t, cfg)
+	require.False(t, p.Runnable)
+	require.Equal(t, "multiple CDC inputs in one pipeline not supported yet", p.Reason)
+}
+
+func TestBuildRetryAndTryCatchRecursed(t *testing.T) {
+	ext := func() any { return map[string]any{"http": map[string]any{"url": "https://x"}} }
+	keep := map[string]any{"mapping": "root.a = 1"}
+	cfg := pgToSnowflake()
+	cfg["pipeline"] = map[string]any{"processors": []any{
+		map[string]any{"retry": map[string]any{"max_retries": 3, "processors": []any{ext(), keep}}},
+		map[string]any{"try_catch": map[string]any{"processors": []any{ext(), keep}, "catch": []any{ext(), keep}}},
+	}}
+	p := build(t, cfg)
+	require.Equal(t, []string{"external_calls_stubbed"}, p.Caveats)
+	procs := p.Pipeline["pipeline"].(map[string]any)["processors"].([]any)
+	stub := map[string]any{"mapping": "root = this"}
+	require.Equal(t, []any{stub, keep}, procs[0].(map[string]any)["retry"].(map[string]any)["processors"])
+	tc := procs[1].(map[string]any)["try_catch"].(map[string]any)
+	require.Equal(t, []any{stub, keep}, tc["processors"])
+	require.Equal(t, []any{stub, keep}, tc["catch"])
+	require.Equal(t, 3, procs[0].(map[string]any)["retry"].(map[string]any)["max_retries"])
 }

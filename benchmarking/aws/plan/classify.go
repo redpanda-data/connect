@@ -81,7 +81,11 @@ var RealSinks = map[string]SinkKind{
 // ok is false and reason is set.
 func classifySource(in map[string]any) (kind SourceKind, reason string, ok bool, err error) {
 	var kinds []SourceKind
+	cdc := 0
 	err = inputLeaves(in, func(_ map[string]any, name string) error {
+		if catalog.ModeFor(name) == "cdc" {
+			cdc++
+		}
 		if k, found := RealSources[name]; found {
 			kinds = append(kinds, k)
 			return nil
@@ -100,6 +104,9 @@ func classifySource(in map[string]any) (kind SourceKind, reason string, ok bool,
 	}
 	if reason != "" {
 		return "", reason, false, nil
+	}
+	if cdc > 1 {
+		return "", "multiple CDC inputs in one pipeline not supported yet", false, nil
 	}
 	if len(kinds) == 0 || slices.Contains(kinds, SourceApproximated) || slices.ContainsFunc(kinds, func(k SourceKind) bool { return k != kinds[0] }) {
 		return SourceApproximated, "", true, nil

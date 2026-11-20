@@ -26,7 +26,7 @@ var DeletedKeys = []string{
 	"credentials", "credentials_json", "password", "user", "username",
 	"private_key", "private_key_file", "private_key_pass", "account", "role",
 	"database", "schema", "tables", "table", "topics", "topic", "slot_name",
-	"bucket", "path", "project", "dataset", "namespace", "catalog",
+	"bucket", "path", "project", "dataset", "namespace", "catalog", "kms_key_id",
 }
 
 // ExtraDeletedKeys are further identity keys that component specs accept,
@@ -62,8 +62,40 @@ var PureProcessors = []string{
 	"unarchive", "compress", "decompress", "json_schema", "parquet_encode",
 	"parquet_decode", "avro", "protobuf", "msgpack", "xml", "grok", "log",
 	"metric", "sleep", "bounds_check", "select_parts", "insert_part", "noop",
-	"dedupe", "benchmark", "parse_log", "sync_response",
+	"dedupe", "benchmark", "parse_log", "sync_response", "retry", "try_catch",
 }
+
+// logicKeys hold Bloblang or schema text that is kept inside processors even
+// when the key would otherwise look sensitive.
+var logicKeys = []string{"mapping", "check", "request_map", "result_map", "code", "query", "program", "schema"}
+
+// secretKeyExempt are keys the secret regex would match but that carry no
+// secret (the snowflake_streaming offset token is an interpolation).
+var secretKeyExempt = []string{"offset_token"}
+
+// externalRefKeys make a processor reach outside the bench (remote or local
+// files, schema registries, resources): a processor setting any of them to a
+// non-empty value is stubbed.
+var externalRefKeys = []string{
+	"schema_path", "url", "urls", "file", "import_paths", "pattern_paths",
+	"global_folders", "branch_resources", "bsr",
+}
+
+// SecretPatterns are applied to every string value kept in a Plan pipeline;
+// matches are replaced with Redacted. They catch literals inside Bloblang,
+// log messages and similar logic text.
+var SecretPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._~+/=-]+`),
+	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
+	regexp.MustCompile(`xox[abprs]-[A-Za-z0-9-]+`),
+	regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`),
+	regexp.MustCompile(`-----BEGIN [A-Z ]+-----`),
+	regexp.MustCompile(`(?i)(password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*\S+`),
+	regexp.MustCompile(`[a-z]+://[^/\s:@]+:[^/\s@]+@`),
+}
+
+// Redacted replaces secret-looking text.
+const Redacted = "REDACTED"
 
 // BenchCache is the label of the in-memory cache resource that replaces every
 // customer cache reference (CDC checkpoints, dedupe).
@@ -257,6 +289,7 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 	if swapCheckpointCaches(inMap) || st.benchCache {
 		out["cache_resources"] = []any{map[string]any{"label": BenchCache, "memory": map[string]any{}}}
 	}
+	redactStrings(out)
 	return out, caveats, nil
 }
 
@@ -369,7 +402,7 @@ func stubProcessors(v any, st *swapState) bool {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
-			if list, ok := child.([]any); ok && k == "processors" {
+			if list, ok := child.([]any); ok && (k == "processors" || k == "catch") {
 				if stubList(list, st) {
 					stubbed = true
 				}
@@ -400,16 +433,10 @@ func stubList(list []any, st *swapState) bool {
 		if name == "" {
 			continue
 		}
-		if !slices.Contains(PureProcessors, name) {
+		if !slices.Contains(PureProcessors, name) || referencesExternal(name, m[name]) {
 			list[i] = map[string]any{"mapping": "root = this"}
 			stubbed = true
 			continue
-		}
-		if name == "dedupe" {
-			if cfg, ok := m[name].(map[string]any); ok {
-				cfg["cache"] = BenchCache
-				st.benchCache = true
-			}
 		}
 		if sub, ok := m[name].([]any); ok && slices.Contains(listProcessors, name) {
 			if stubList(sub, st) {
@@ -417,11 +444,134 @@ func stubList(list []any, st *swapState) bool {
 			}
 			continue
 		}
+		scrubProcessor(m[name])
+		if name == "dedupe" {
+			if cfg, ok := m[name].(map[string]any); ok {
+				cfg["cache"] = BenchCache
+				st.benchCache = true
+			}
+		}
 		if stubProcessors(m, st) {
 			stubbed = true
 		}
 	}
 	return stubbed
+}
+
+// referencesExternal reports whether an allowlisted processor reaches outside
+// the bench: files, URLs, schema registries, fetch calls or shell-outs.
+func referencesExternal(name string, cfg any) bool {
+	m, _ := cfg.(map[string]any)
+	switch name {
+	case "javascript":
+		if code, _ := m["code"].(string); strings.Contains(strings.ToLower(code), "fetch") {
+			return true
+		}
+	case "awk":
+		if prog, _ := m["program"].(string); strings.Contains(prog, "system(") ||
+			strings.Contains(prog, "getline") || strings.Contains(prog, "|") {
+			return true
+		}
+	}
+	if _, isList := cfg.([]any); isList && slices.Contains(listProcessors, name) {
+		return false // children are checked on their own
+	}
+	return hasExternalKey(cfg)
+}
+
+func hasExternalKey(v any) bool {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, child := range t {
+			if k == "processors" || k == "catch" {
+				continue
+			}
+			if slices.Contains(externalRefKeys, k) && nonEmpty(child) {
+				return true
+			}
+			if hasExternalKey(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if hasExternalKey(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func nonEmpty(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		return t != ""
+	case []any:
+		return len(t) > 0
+	case map[string]any:
+		return len(t) > 0
+	default:
+		return true
+	}
+}
+
+// scrubProcessor removes secret-bearing objects and keys from an allowlisted
+// processor's own config, at any depth. Nested processor lists are handled by
+// their own pass; logic keys are exempt (the redaction pass covers their text).
+func scrubProcessor(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, child := range t {
+			if k == "processors" || k == "catch" || slices.Contains(logicKeys, k) {
+				continue
+			}
+			if slices.Contains(DeletedObjects, k) || secretKeyMatches(k) {
+				delete(t, k)
+				continue
+			}
+			scrubProcessor(child)
+		}
+	case []any:
+		for _, child := range t {
+			scrubProcessor(child)
+		}
+	}
+}
+
+func secretKeyMatches(k string) bool {
+	return !slices.Contains(secretKeyExempt, k) && secretKey.MatchString(k)
+}
+
+// redactStrings applies SecretPatterns to every string value under v.
+func redactStrings(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, child := range t {
+			if str, ok := child.(string); ok {
+				t[k] = redact(str)
+				continue
+			}
+			redactStrings(child)
+		}
+	case []any:
+		for i, child := range t {
+			if str, ok := child.(string); ok {
+				t[i] = redact(str)
+				continue
+			}
+			redactStrings(child)
+		}
+	}
+}
+
+func redact(s string) string {
+	for _, re := range SecretPatterns {
+		s = re.ReplaceAllString(s, Redacted)
+	}
+	return s
 }
 
 func processorName(m map[string]any) string {
@@ -443,7 +593,7 @@ func scrub(v any) {
 				continue
 			}
 			if slices.Contains(DeletedObjects, k) || slices.Contains(DeletedKeys, k) ||
-				slices.Contains(ExtraDeletedKeys, k) || secretKey.MatchString(k) {
+				slices.Contains(ExtraDeletedKeys, k) || secretKeyMatches(k) {
 				delete(t, k)
 				continue
 			}
