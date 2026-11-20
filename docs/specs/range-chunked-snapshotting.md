@@ -9,9 +9,10 @@ that several readers read in parallel. All the ranges still show the database at
 time, so the hand-over to streaming stays correct.
 
 This document states the required behaviour independently of any one database, so it can be
-implemented in other CDC inputs. The Oracle implementation (`internal/impl/oracledb`, described in
-`internal/impl/oracledb/SNAPSHOT_CHUNKING.md`) is the reference. The edge cases below were found
-and measured while building it.
+implemented in other CDC inputs. The Oracle implementation in `internal/impl/oracledb/replication/`
+is currently the most feature-complete reference: `snapshot.go` plans and reads chunks,
+`snapshot_db.go` manages connections, and the `snapshot_*_test.go` files test it. The edge
+cases below were found and measured while building it.
 
 The key words MUST, SHOULD and MAY are used as in RFC 2119.
 
