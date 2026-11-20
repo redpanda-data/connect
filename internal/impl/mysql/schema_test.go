@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -182,6 +183,12 @@ func TestMapMessageColumn(t *testing.T) {
 			value:    time.Date(2024, 12, 10, 15, 30, 45, 0, time.UTC),
 			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATETIME},
 			expected: time.Date(2024, 12, 10, 15, 30, 45, 0, time.UTC),
+		},
+		{
+			name:     "timestamp in process time zone to UTC",
+			value:    time.Date(1999, 12, 31, 18, 30, 0, 0, time.FixedZone("", -5*3600)),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_TIMESTAMP},
+			expected: time.Date(1999, 12, 31, 23, 30, 0, 0, time.UTC),
 		},
 		{
 			name:     "nil passthrough",
@@ -669,6 +676,44 @@ func TestMysqlColumnToCommonDecimalCarriesLogical(t *testing.T) {
 // TestParseSnapshotTime checks the DATE, DATETIME and TIMESTAMP values that
 // the snapshot gives. For zero, partial-zero and invalid dates, they must be
 // the same values as the stream gives.
+// The snapshot session must use UTC whatever time_zone key the DSN gives.
+// MySQL variable names are case-insensitive, and the driver sets the params in
+// map order, so only one time_zone key may stay.
+func TestSnapshotConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		dsn  string
+	}{
+		{
+			name: "no params",
+			dsn:  "user:pass@tcp(localhost:3306)/db",
+		},
+		{
+			name: "time_zone key",
+			dsn:  "user:pass@tcp(localhost:3306)/db?time_zone=%27Europe%2FBerlin%27",
+		},
+		{
+			name: "upper case time_zone key",
+			dsn:  "user:pass@tcp(localhost:3306)/db?TIME_ZONE=%27Europe%2FBerlin%27&autocommit=1",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := mysql.ParseDSN(test.dsn)
+			require.NoError(t, err)
+			got := snapshotConfig(cfg)
+			var zones []string
+			for k, v := range got.Params {
+				if k == "time_zone" || k == "TIME_ZONE" {
+					zones = append(zones, k+"="+v)
+				}
+			}
+			assert.Equal(t, []string{"time_zone='+00:00'"}, zones)
+			assert.NotSame(t, cfg, got)
+		})
+	}
+}
+
 func TestParseSnapshotTime(t *testing.T) {
 	tests := []struct {
 		name  string

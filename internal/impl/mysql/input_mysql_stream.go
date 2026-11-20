@@ -384,16 +384,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
-		// MySQL formats a TIMESTAMP in the session time zone.
-		// parseSnapshotTime parses all date strings in UTC, so the
-		// snapshot sessions must use UTC. The driver sets each param with
-		// SET on each new connection.
-		snapshotConfig := i.mysqlConfig.Clone()
-		if snapshotConfig.Params == nil {
-			snapshotConfig.Params = map[string]string{}
-		}
-		snapshotConfig.Params["time_zone"] = "'+00:00'"
-		db, err := sqlredact.Open("mysql", snapshotConfig.FormatDSN())
+		db, err := sqlredact.Open("mysql", snapshotConfig(i.mysqlConfig).FormatDSN())
 		if err != nil {
 			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}
@@ -680,6 +671,26 @@ func snapshotValueMapper[T any](v any) (any, error) {
 		return nil, nil
 	}
 	return s.V, nil
+}
+
+// snapshotConfig gives a copy of cfg for the snapshot connections, with the
+// session time zone set to UTC. MySQL formats a TIMESTAMP in the session time
+// zone, and parseSnapshotTime parses all date strings in UTC.
+func snapshotConfig(cfg *mysql.Config) *mysql.Config {
+	c := cfg.Clone()
+	if c.Params == nil {
+		c.Params = map[string]string{}
+	}
+	// The driver sets each param with SET on each new connection, in map
+	// order. MySQL variable names are case-insensitive, so a DSN key such as
+	// TIME_ZONE could win over the UTC zone on some connections.
+	for k := range c.Params {
+		if strings.EqualFold(k, "time_zone") {
+			delete(c.Params, k)
+		}
+	}
+	c.Params["time_zone"] = "'+00:00'"
+	return c
 }
 
 // parseSnapshotTime parses a DATE, DATETIME or TIMESTAMP string from the
