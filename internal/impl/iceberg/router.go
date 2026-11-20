@@ -42,10 +42,13 @@ type SchemaEvolutionConfig struct {
 	// PartitionSpec is an interpolated string that produces a partition spec expression
 	// when evaluated against the first message (e.g., "(year(ts), bucket(16, id))").
 	PartitionSpec *service.InterpolatedString
-	// TableLocation is a prefix used to derive table locations when the catalog
-	// does not automatically assign them (e.g., AWS Glue). When set, new table
-	// locations are derived as {prefix}{namespace}/{table}.
-	TableLocation string
+	// TableLocation is an interpolated prefix used to derive table locations
+	// when the catalog does not automatically assign them (e.g., AWS Glue).
+	// Nil means the catalog assigns the location. createTable resolves it
+	// against the first message of the batch that creates the table, and
+	// derives the location as {prefix}/{namespace}/{table}. It is not read
+	// again for an existing table.
+	TableLocation *service.InterpolatedString
 	// SchemaMetadata is the name of a message metadata field containing a schema.Common
 	// definition for determining column types during schema evolution.
 	SchemaMetadata string
@@ -389,6 +392,73 @@ func (r *Router) createNamespace(ctx context.Context, key tableKey, entry *table
 	return nil
 }
 
+// resolveTableLocation returns the location to pass to CreateTable for a new
+// table. The result is one of:
+//   - "": the catalog assigns the location. table_location is unset, or the
+//     first message resolves it to an empty prefix.
+//   - {prefix}/{namespace}/{table}: the output sets the location.
+//   - An error: the prefix does not resolve, or the location is unsafe (see
+//     checkTableLocation).
+func (r *Router) resolveTableLocation(batch service.MessageBatch, nsParts []string, table string) (string, error) {
+	// Case: table_location is unset. The catalog assigns the location.
+	if r.schemaEvoCfg.TableLocation == nil {
+		return "", nil
+	}
+
+	// The table location is the path where the catalog, this writer and every
+	// engine that reads the table expect the data and metadata files of the
+	// table. The output sets it one time, in CreateTable, and never changes
+	// it. So the first message of the batch that creates the table sets the
+	// prefix for the life of the table, and later messages that resolve to a
+	// different prefix still go to this location. Route groups the batch by
+	// table before this call, so the first message belongs to this table.
+	prefix, err := batch.TryInterpolatedString(0, r.schemaEvoCfg.TableLocation)
+	if err != nil {
+		return "", fmt.Errorf("interpolating table location: %w", err)
+	}
+
+	// Case: the prefix is empty. The catalog assigns the location, the same as
+	// when table_location is unset. The location never changes later, so warn
+	// when interpolation gives the empty prefix: it is likely a config mistake
+	// such as `.or("")` on a missing metadata key. A static empty prefix is a
+	// choice and does not warn.
+	if prefix == "" {
+		if _, static := r.schemaEvoCfg.TableLocation.Static(); !static {
+			r.logger.Warnf("schema_evolution.table_location resolved to an empty prefix for table %s.%s, the catalog assigns the location", strings.Join(nsParts, "."), table)
+		}
+		return "", nil
+	}
+
+	// Case: the output sets the location. Check the full location, because
+	// the namespace and the table can come from message data too.
+	location := tableLocationFor(prefix, nsParts, table)
+	if err := checkTableLocation(location); err != nil {
+		return "", err
+	}
+	return location, nil
+}
+
+// checkTableLocation rejects a table location that splits the table across
+// two paths. The catalog stores the location as given, but the iceberg-go
+// location provider builds data file paths with a URL round trip. That round
+// trip escapes characters such as a space or "|" and removes empty, "." and
+// ".." segments, so the data files go to a different path than the catalog
+// location. The check asks the location provider of the writer, and not a list
+// of characters, so it agrees with the writer. createTable does not enable the
+// object storage layout, so the default provider applies and nil properties
+// select it.
+func checkTableLocation(location string) error {
+	provider, err := table.LoadLocationProvider(location, nil)
+	if err != nil {
+		return fmt.Errorf("parsing table location: %w", err)
+	}
+	// An empty file name gives the data directory itself.
+	if dataPath := provider.NewDataLocation(""); dataPath != location+"/data" {
+		return fmt.Errorf("table location %q is unsafe: the writer would put data files under %q", location, dataPath)
+	}
+	return nil
+}
+
 // createTable creates a new table with schema inferred from the first message.
 func (r *Router) createTable(ctx context.Context, key tableKey, batch service.MessageBatch, entry *tableEntry) error {
 	entry.mu.Lock()
@@ -456,8 +526,13 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 	if partitionSpec != nil {
 		createOpts = append(createOpts, catalog.WithPartitionSpec(partitionSpec))
 	}
-	if r.schemaEvoCfg.TableLocation != "" {
-		location := tableLocationFor(r.schemaEvoCfg.TableLocation, nsParts, key.table)
+	// Resolve the location after the existence check above. A batch that
+	// lost the create race must not fail on a location that is never used.
+	location, err := r.resolveTableLocation(batch, nsParts, key.table)
+	if err != nil {
+		return err
+	}
+	if location != "" {
 		createOpts = append(createOpts, catalog.WithLocation(location))
 	}
 	// Pin the timestamp encoding at birth: tables created by this connector
