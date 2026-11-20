@@ -63,7 +63,10 @@ func FindMatches(entries []Entry, q Query) []Match {
 		if a.Score != b.Score {
 			return a.Score < b.Score
 		}
-		return a.Entry.RecordedAt.After(b.Entry.RecordedAt)
+		if !a.Entry.RecordedAt.Equal(b.Entry.RecordedAt) {
+			return a.Entry.RecordedAt.After(b.Entry.RecordedAt)
+		}
+		return a.Entry.ID < b.Entry.ID
 	})
 	return out
 }

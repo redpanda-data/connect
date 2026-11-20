@@ -61,7 +61,8 @@ func parseSizingConfig(b []byte) (SizingConfig, error) {
 
 // Recommendation is the CU sizing for a target throughput.
 type Recommendation struct {
-	CUs            int      `json:"cus"` // 0 when below_floor or exceeds_ceiling
+	CUs            int      `json:"cus"`       // 0 when below_floor or exceeds_ceiling
+	FloorCUs       int      `json:"floor_cus"` // CUs of the lowest measured point
 	VCPU           float64  `json:"vcpu"`
 	BoundBy        string   `json:"bound_by"`  // "throughput" | "memory"
 	Estimated      bool     `json:"estimated"` // interpolated between points
@@ -73,10 +74,18 @@ type Recommendation struct {
 	Caveats        []string `json:"caveats"`
 }
 
+// relTol absorbs floating-point noise from dividing by the headroom, so a
+// target that is exactly headroom*capacity lands on that measured point.
+const relTol = 1e-9
+
+func approxEq(a, b float64) bool {
+	return math.Abs(a-b) <= relTol*math.Max(math.Abs(a), math.Abs(b))
+}
+
 // Recommend sizes CUs for targetMBps using the entry's measured points.
 func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, error) {
-	if targetMBps <= 0 {
-		return Recommendation{}, errors.New("target throughput must be positive")
+	if math.IsNaN(targetMBps) || math.IsInf(targetMBps, 0) || targetMBps <= 0 {
+		return Recommendation{}, fmt.Errorf("target throughput must be positive and finite, got %v", targetMBps)
 	}
 	if len(e.Points) == 0 {
 		return Recommendation{}, errors.New("entry has no points")
@@ -88,11 +97,30 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 	pts := append([]Point(nil), e.Points...)
 	sort.Slice(pts, func(i, j int) bool { return pts[i].VCPU < pts[j].VCPU })
 
-	rec := Recommendation{Headroom: cfg.Headroom, BoundBy: "throughput", MemoryBound: "not_measured"}
+	rec := Recommendation{
+		Headroom:    cfg.Headroom,
+		FloorCUs:    pts[0].CUs,
+		BoundBy:     "throughput",
+		MemoryBound: "not_measured",
+		Caveats:     []string{},
+	}
 	need := targetMBps / cfg.Headroom
 
-	if need <= pts[0].CapacityMBps {
+	// memory records the memory bound for point p and returns it in CUs
+	// (0 when memory was not measured).
+	memory := func(p Point) int {
+		if e.MemoryLimited && p.PeakRSSBytes > 0 {
+			n := roundUp10(math.Ceil(float64(p.PeakRSSBytes) / float64(cfg.BytesPerCU)))
+			rec.MemoryBound = fmt.Sprintf("%d CUs", n)
+			return n
+		}
+		rec.Caveats = append(rec.Caveats, "memory_not_limited")
+		return 0
+	}
+
+	if need <= pts[0].CapacityMBps || approxEq(need, pts[0].CapacityMBps) {
 		rec.BelowFloor = true
+		memory(pts[0])
 		rec.addEntryCaveats(e)
 		return rec, nil
 	}
@@ -101,7 +129,7 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 	ceiling := 0.0
 	for i, p := range pts {
 		ceiling = math.Max(ceiling, p.CapacityMBps)
-		if j < 0 && p.CapacityMBps >= need {
+		if j < 0 && (p.CapacityMBps >= need || approxEq(p.CapacityMBps, need)) {
 			j = i
 		}
 	}
@@ -115,23 +143,18 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 	// j > 0 because need exceeds the first point's capacity.
 	lo, hi := pts[j-1], pts[j]
 	vcpu := hi.VCPU
-	if lo.CapacityMBps < hi.CapacityMBps {
+	if !approxEq(need, hi.CapacityMBps) {
 		vcpu = lo.VCPU + (need-lo.CapacityMBps)/(hi.CapacityMBps-lo.CapacityMBps)*(hi.VCPU-lo.VCPU)
-		rec.Estimated = need != hi.CapacityMBps
+		rec.Estimated = true
 	}
 	rec.VCPU = vcpu
-	cpuCUs := roundUp10(math.Ceil(vcpu * float64(cfg.CUsPerVCPU)))
+	// The epsilon stops float noise such as 20.000000000000004 adding a CU step.
+	cpuCUs := roundUp10(math.Ceil(vcpu*float64(cfg.CUsPerVCPU) - relTol))
 	rec.CUs = cpuCUs
 
-	if e.MemoryLimited && hi.PeakRSSBytes > 0 {
-		memCUs := roundUp10(math.Ceil(float64(hi.PeakRSSBytes) / float64(cfg.BytesPerCU)))
-		rec.MemoryBound = fmt.Sprintf("%d CUs", memCUs)
-		if memCUs > cpuCUs {
-			rec.CUs = memCUs
-			rec.BoundBy = "memory"
-		}
-	} else {
-		rec.Caveats = append(rec.Caveats, "memory_not_limited")
+	if memCUs := memory(hi); memCUs > cpuCUs {
+		rec.CUs = memCUs
+		rec.BoundBy = "memory"
 	}
 	rec.addEntryCaveats(e)
 	return rec, nil
@@ -148,5 +171,5 @@ func (r *Recommendation) addEntryCaveats(e Entry) {
 
 // roundUp10 rounds a positive CU count up to the next multiple of 10.
 func roundUp10(n float64) int {
-	return int(math.Ceil(n/10)) * 10
+	return int(math.Ceil(n/10-relTol)) * 10
 }

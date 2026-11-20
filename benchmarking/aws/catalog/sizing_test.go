@@ -9,6 +9,8 @@
 package catalog
 
 import (
+	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -158,4 +160,86 @@ func TestLoadSizingConfig(t *testing.T) {
 	}
 	_, err = LoadSizingConfig(filepath.Join(t.TempDir(), "missing.json"))
 	require.Error(t, err)
+}
+
+func TestRecommendTargetOnMeasuredPoint(t *testing.T) {
+	t.Run("top point of brief fixture", func(t *testing.T) {
+		r, err := Recommend(fixtureEntry(), 84, sizingCfg())
+		require.NoError(t, err)
+		require.False(t, r.ExceedsCeiling)
+		require.Equal(t, 80, r.CUs)
+		require.InDelta(t, 8, r.VCPU, 1e-9)
+		require.False(t, r.Estimated)
+		require.Equal(t, "30 CUs", r.MemoryBound)
+	})
+
+	t.Run("middle point", func(t *testing.T) {
+		e := Entry{MemoryLimited: true, SinkMeasured: true, Points: []Point{
+			{VCPU: 1, CUs: 10, CapacityMBps: 15, PeakRSSBytes: 1_000_000_000},
+			{VCPU: 2, CUs: 20, CapacityMBps: 30, PeakRSSBytes: 2_000_000_000},
+			{VCPU: 4, CUs: 40, CapacityMBps: 60, PeakRSSBytes: 4_000_000_000},
+		}}
+		r, err := Recommend(e, 21, sizingCfg())
+		require.NoError(t, err)
+		require.Equal(t, 20, r.CUs)
+		require.InDelta(t, 2, r.VCPU, 1e-9)
+		require.False(t, r.Estimated)
+		require.Equal(t, "10 CUs", r.MemoryBound)
+	})
+
+	t.Run("fractional points", func(t *testing.T) {
+		e := Entry{MemoryLimited: true, SinkMeasured: true, Points: []Point{
+			{VCPU: 0.5, CUs: 5, CapacityMBps: 10, PeakRSSBytes: 500_000_000},
+			{VCPU: 1.5, CUs: 15, CapacityMBps: 33, PeakRSSBytes: 1_500_000_000},
+			{VCPU: 3, CUs: 30, CapacityMBps: 66, PeakRSSBytes: 3_000_000_000},
+		}}
+		r, err := Recommend(e, 30.8, sizingCfg())
+		require.NoError(t, err)
+		require.Equal(t, 20, r.CUs)
+	})
+}
+
+func TestRecommendFloorCUsAndBelowFloorMemory(t *testing.T) {
+	r, err := Recommend(fixtureEntry(), 10, sizingCfg())
+	require.NoError(t, err)
+	require.True(t, r.BelowFloor)
+	require.Equal(t, 10, r.FloorCUs)
+	require.Equal(t, "10 CUs", r.MemoryBound) // 1.5 GB -> 4 -> 10
+	require.NotContains(t, r.Caveats, "memory_not_limited")
+
+	e := fixtureEntry()
+	e.MemoryLimited = false
+	e.SinkMeasured = false
+	r, err = Recommend(e, 10, sizingCfg())
+	require.NoError(t, err)
+	require.Equal(t, "not_measured", r.MemoryBound)
+	require.Equal(t, []string{"memory_not_limited", "sink_not_measured"}, r.Caveats)
+
+	e = fixtureEntry()
+	e.Points = e.Points[1:] // first point is 2 vCPU
+	r, err = Recommend(e, 40, sizingCfg())
+	require.NoError(t, err)
+	require.Equal(t, 20, r.FloorCUs)
+}
+
+func TestRecommendRejectsNonFiniteTarget(t *testing.T) {
+	for _, target := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, err := Recommend(fixtureEntry(), target, sizingCfg())
+		require.Error(t, err)
+	}
+}
+
+func TestRecommendCaveatsSerialiseAsEmptyArray(t *testing.T) {
+	r, err := Recommend(fixtureEntry(), 40, sizingCfg())
+	require.NoError(t, err)
+	b, err := json.Marshal(r)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"caveats":[]`)
+	require.Contains(t, string(b), `"floor_cus":10`)
+
+	r, err = Recommend(fixtureEntry(), 100, sizingCfg()) // exceeds ceiling
+	require.NoError(t, err)
+	b, err = json.Marshal(r)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"caveats":[]`)
 }

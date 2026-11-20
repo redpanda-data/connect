@@ -103,3 +103,16 @@ func TestFindMatchesUnknownSize(t *testing.T) {
 	require.InDelta(t, 0, m.Score, 1e-9)
 	require.Empty(t, m.Differences)
 }
+
+func TestFindMatchesIDTieBreak(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	q := Query{Input: "postgres_cdc", Output: "kafka", Processors: []string{"mapping"}, Fingerprint: "fp1", MessageSizeBytes: 1024, Mode: "cdc"}
+	for range 5 {
+		ms := FindMatches([]Entry{
+			matchEntry("b", "kafka", 1024, "cdc", t0),
+			matchEntry("a", "kafka", 1024, "cdc", t0),
+		}, q)
+		require.Equal(t, "a", ms[0].Entry.ID)
+		require.Equal(t, "b", ms[1].Entry.ID)
+	}
+}
