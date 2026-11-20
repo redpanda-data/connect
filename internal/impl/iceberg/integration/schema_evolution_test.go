@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -318,6 +319,69 @@ func TestSchemaEvolutionIntegration(t *testing.T) {
 		spec := tbl.Spec()
 		assert.False(t, spec.IsUnpartitioned())
 		assert.Equal(t, 1, spec.NumFields())
+	})
+
+	// table_location is an interpolated field. The router must resolve it
+	// against the first message of the batch that creates the table, and must
+	// not store the template as the location.
+	t.Run("InterpolatedTableLocation", func(t *testing.T) {
+		const ns = "interp_location_ns"
+		const tblName = "interp_location_table"
+		infra.CreateNamespace(t, ns)
+
+		router := infra.NewRouter(t, ns, tblName,
+			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{
+				Enabled:       true,
+				TableLocation: servicetest.NewInterpolatedString(t, `s3://warehouse/${! meta("fab").lowercase() }/`),
+			}))
+
+		produceMessages(t, ctx, router, service.MessageBatch{
+			createMessageWithMeta(t, map[string]any{"id": 1, "value": "test"}, "fab", "FAB1"),
+		})
+
+		client := infra.NewCatalogClient(t, ns)
+		tbl, err := client.LoadTable(ctx, tblName)
+		require.NoError(t, err)
+		assert.Equal(t, "s3://warehouse/fab1/"+ns+"/"+tblName, tbl.Location())
+
+		// The first message set the location for the life of the table. A
+		// later batch that resolves to a different prefix goes to the existing
+		// table, and the location does not change.
+		produceMessages(t, ctx, router, service.MessageBatch{
+			createMessageWithMeta(t, map[string]any{"id": 2, "value": "test"}, "fab", "FAB2"),
+		})
+
+		tbl, err = client.LoadTable(ctx, tblName)
+		require.NoError(t, err)
+		assert.Equal(t, "s3://warehouse/fab1/"+ns+"/"+tblName, tbl.Location())
+
+		rows := querySQL[countResult](t, ctx, infra,
+			`SELECT COUNT(*) as count FROM iceberg_cat."`+ns+`"."`+tblName+`";`)
+		require.Equal(t, 2, rows[0].Count)
+	})
+
+	// A location that the writer would change when it builds data file paths
+	// splits the table across two paths. The router must reject it before it
+	// calls CreateTable, so no table exists afterwards.
+	t.Run("UnsafeTableLocationCreatesNoTable", func(t *testing.T) {
+		const ns = "unsafe_location_ns"
+		const tblName = "unsafe_location_table"
+		infra.CreateNamespace(t, ns)
+
+		router := infra.NewRouter(t, ns, tblName,
+			WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{
+				Enabled:       true,
+				TableLocation: servicetest.NewInterpolatedString(t, `s3://warehouse/${! meta("fab") }/`),
+			}))
+
+		err := router.Route(ctx, service.MessageBatch{
+			createMessageWithMeta(t, map[string]any{"id": 1, "value": "test"}, "fab", "ACME Corp"),
+		})
+		require.ErrorContains(t, err, "is unsafe")
+
+		client := infra.NewCatalogClient(t, ns)
+		_, err = client.LoadTable(ctx, tblName)
+		require.ErrorIs(t, err, catalog.ErrNoSuchTable)
 	})
 
 	t.Run("RowCount", func(t *testing.T) {

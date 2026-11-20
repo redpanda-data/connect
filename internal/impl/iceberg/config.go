@@ -485,7 +485,7 @@ See the Row-level operations section above for the full constraints, including t
 					Description("Enable automatic schema evolution. When enabled, new columns will be automatically added to the table.").
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
-					Description("A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an Iceberg partition spec in the same string format as the xref:streaming:manage:iceberg/iceberg-performance-tuning.adoc#use-custom-partitioning[Redpanda Streaming topic property].").
+					Description("A Bloblang expression to evaluate when a new table is created to determine the table's partition spec. It is evaluated against the first message of the batch that creates the table. The result of the mapping should be an Iceberg partition spec in the same string format as the xref:streaming:manage:iceberg/iceberg-performance-tuning.adoc#use-custom-partitioning[Redpanda Streaming topic property].").
 					ShortDescription("A Bloblang expression evaluated on table creation to determine the table's Iceberg partition spec.").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
@@ -495,10 +495,11 @@ See the Row-level operations section above for the full constraints, including t
 					Example(`(day(my_ts_col), bucket(4, nested.col))`).
 					Example("(day(my_ts_col), void(`non.nested column.with.dots`), identity(nested.column))").
 					Default("()"),
-				service.NewStringField(ioFieldSchemaEvolutionTableLoc).
-					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived by appending the namespace and table name to the prefix, in the form `<prefix><namespace>/<table>`.").
-					ShortDescription("A location prefix for new tables, for catalogs such as AWS Glue that require one explicitly.").
+				service.NewInterpolatedStringField(ioFieldSchemaEvolutionTableLoc).
+					Description("A prefix used as the location for new tables, for catalogs that do not assign one. Table locations are `<prefix>/<namespace>/<table>`, and a trailing slash on the prefix is optional. Interpolation functions are resolved one time, against the first message of the batch that creates the table. An existing table keeps its location. Make the prefix depend only on values that also set `namespace` and `table`, so that all messages of a table resolve to the same prefix. A missing metadata key resolves to `null`, so use `.not_null()` or `.or(\"default\")`. An empty prefix leaves the location to the catalog. The output does not create a table if the writer would change its location when it builds data file paths. A space or a non-ASCII character in the location causes this. Such a table would be split across two paths.").
+					ShortDescription("A location prefix for new tables, for catalogs that do not assign one.").
 					Example("s3://my-iceberg-bucket/").
+					Example(`s3://my-iceberg-bucket/${! meta("tenant").not_null() }/`).
 					Optional(),
 				service.NewStringField(ioFieldSchemaEvolutionSchemaMetadata).
 					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing; record keys are matched by case-folding and the metadata's name is what lands in the table.").Version("4.85.0").

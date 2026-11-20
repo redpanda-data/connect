@@ -588,7 +588,7 @@ func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConf
 
 	// Parse table location prefix if present
 	if conf.Contains(ioFieldSchemaEvolution, ioFieldSchemaEvolutionTableLoc) {
-		cfg.TableLocation, err = conf.FieldString(ioFieldSchemaEvolution, ioFieldSchemaEvolutionTableLoc)
+		cfg.TableLocation, err = conf.FieldInterpolatedString(ioFieldSchemaEvolution, ioFieldSchemaEvolutionTableLoc)
 		if err != nil {
 			return cfg, err
 		}

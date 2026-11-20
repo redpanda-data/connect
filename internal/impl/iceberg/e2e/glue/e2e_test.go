@@ -74,7 +74,7 @@ func newRouter(t *testing.T, namespace, table string, schemaEvo bool) *icebergim
 	}
 	schemaEvoCfg := icebergimpl.SchemaEvolutionConfig{
 		Enabled:       schemaEvo,
-		TableLocation: fmt.Sprintf("s3://%s/", *glueBucket),
+		TableLocation: servicetest.NewInterpolatedString(t, fmt.Sprintf("s3://%s/", *glueBucket)),
 	}
 	router := icebergimpl.NewRouter(catalogConfig(), namespaceStr, tableStr, true, schemaEvoCfg, commitCfg, icebergimpl.RowOpConfig{}, nil, logger)
 	t.Cleanup(func() { router.Close() })
