@@ -38,16 +38,12 @@ func (e *longBinNameError) Error() string {
 // classifyRecord converts a per-key batch result into an error, or nil when the
 // key was handled successfully.
 //
-// Two non-OK codes are successes in context:
-//
-//   - FILTERED_OUT means a fencing expression rejected the write because the
-//     record already holds newer data. That is the fence doing its job.
-//   - KEY_NOT_FOUND on a plain delete means the record was already gone, which
-//     makes deletes idempotent under redelivery. A delete folded from
-//     replace_only still fails: that operation required the record.
+// KEY_NOT_FOUND on a plain delete is a success: the record was already gone,
+// which makes deletes idempotent under redelivery. A delete folded from
+// replace_only still fails: that operation required the record.
 func classifyRecord(rec *as.BatchRecord, op *pendingOp) error {
 	switch rec.ResultCode {
-	case types.OK, types.FILTERED_OUT:
+	case types.OK:
 		return nil
 	case types.KEY_NOT_FOUND_ERROR:
 		if op.kind == opDelete && !op.deleteRequiresRecord {

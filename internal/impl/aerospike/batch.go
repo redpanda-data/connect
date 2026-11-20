@@ -36,7 +36,7 @@ const (
 func batchPolicyFieldsWithRetries(maxRetries int) []*service.ConfigField {
 	retryDesc := "Client-side retries per batch command."
 	if maxRetries == 0 {
-		retryDesc += " Defaults to 0 because some write operations (`create_only`, counters) are not idempotent. Raise this only for `replace`/`replace_only`/`write` that you have made safe to repeat, for example with fencing."
+		retryDesc += " Defaults to 0 because some write operations (`create_only`, counters) are not idempotent. Raise this only for `replace`/`replace_only`/`write` that you have made safe to repeat."
 	}
 
 	return []*service.ConfigField{

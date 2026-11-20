@@ -47,20 +47,18 @@ func newAerospikeOutput(conf *service.ParsedConfig, mgr *service.Resources) (ser
 	parsed.client.sizePoolForConcurrency(maxInFlight)
 
 	return &aerospikeWriter{
-		conf:        parsed,
-		conn:        newConnection(parsed.client, mgr.Logger()),
-		log:         mgr.Logger(),
-		filteredOut: mgr.Metrics().NewCounter("aerospike_filtered_out"),
-		ignored:     mgr.Metrics().NewCounter("aerospike_ignored_errors"),
+		conf:    parsed,
+		conn:    newConnection(parsed.client, mgr.Logger()),
+		log:     mgr.Logger(),
+		ignored: mgr.Metrics().NewCounter("aerospike_ignored_errors"),
 	}, batchPolicy, maxInFlight, nil
 }
 
 type aerospikeWriter struct {
-	conf        *aerospikeConfig
-	conn        *connection
-	log         *service.Logger
-	filteredOut *service.MetricCounter
-	ignored     *service.MetricCounter
+	conf    *aerospikeConfig
+	conn    *connection
+	log     *service.Logger
+	ignored *service.MetricCounter
 	// ignoredTotal is the same total passed to aerospike_ignored_errors.
 	// Unit tests read it because they have no metrics registry.
 	ignoredTotal atomic.Int64
@@ -109,55 +107,29 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	ops, failures := w.planBatch(batch)
-
-	if len(ops) > 0 {
-		records := make([]as.BatchRecordIfc, len(ops))
-		for i, op := range ops {
-			records[i] = w.buildRecord(op)
+	rounds := splitRounds(ops)
+	for r, round := range rounds {
+		err := w.writeRound(ctx, operate, round, failures)
+		if err == nil {
+			continue
 		}
-
-		policy, err := batchPolicyForContext(ctx, w.conf.batchPolicy)
-		if err != nil {
+		if r == 0 {
 			return err
 		}
-
-		batchErr := operate(policy, records)
-		// A connection error can end a batch after some nodes have answered.
-		// Those records are applied and must not be written again, so the batch
-		// is only treated as unsent when no record got a response.
-		connErr := batchErr != nil && isConnectionError(batchErr)
-		if connErr {
-			if !anyResponse(records) {
-				if w.log != nil {
-					w.log.Errorf("Aerospike batch command failed: %v", batchErr)
-				}
-				return service.ErrNotConnected
-			}
-			if w.log != nil {
-				w.log.Warnf("Aerospike batch command failed after some records were written, failing the rest: %v", batchErr)
-			}
+		// Earlier rounds are written. Retrying the whole batch would write
+		// them again, so only this round and the later ones fail. The error
+		// must not wrap ErrNotConnected, which retries the whole batch.
+		if errors.Is(err, service.ErrNotConnected) {
+			err = errors.New("lost the connection to aerospike after earlier commands in this batch were written")
 		}
-
-		// A one-record rejection comes back as the command error and as the
-		// record code. handleRecord counts that record. When every record was
-		// accepted or ignored, a listed command error must not fail the batch.
-		// A record still at NO_RESPONSE keeps its own result. After a write
-		// error the client marks those records in doubt, and errors.As reports
-		// only the first node error, so that code can belong to another node.
-		var asErr *as.AerospikeError
-		commandListed := batchErr != nil && errors.As(batchErr, &asErr) && !asErr.InDoubt && w.conf.ignores(asErr.ResultCode)
-		for i, op := range ops {
-			rec := records[i].BatchRec()
-			if err := w.handleRecord(rec, op); err != nil {
+		for _, later := range rounds[r:] {
+			for _, op := range later {
 				for _, idx := range op.indexes {
 					failures[idx] = err
 				}
 			}
 		}
-
-		if batchErr != nil && len(failures) == 0 && !commandListed && !connErr {
-			return fmt.Errorf("aerospike batch command failed: %w", batchErr)
-		}
+		break
 	}
 
 	if len(failures) == 0 {
@@ -179,6 +151,73 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	return err
 }
 
+// writeRound sends one batch command and records each failed message in
+// failures. It returns an error when the command failed as a whole.
+func (w *aerospikeWriter) writeRound(ctx context.Context, operate func(*as.BatchPolicy, []as.BatchRecordIfc) error, ops []*pendingOp, failures map[int]error) error {
+	records := make([]as.BatchRecordIfc, len(ops))
+	for i, op := range ops {
+		records[i] = w.buildRecord(op)
+	}
+
+	policy, err := batchPolicyForContext(ctx, w.conf.batchPolicy)
+	if err != nil {
+		return err
+	}
+
+	batchErr := operate(policy, records)
+	// A connection error can end a batch after some nodes have answered.
+	// Those records are applied and must not be written again, so the batch
+	// is only treated as unsent when no record got a response.
+	connErr := batchErr != nil && isConnectionError(batchErr)
+	if connErr {
+		if !anyResponse(records) {
+			if w.log != nil {
+				w.log.Errorf("Aerospike batch command failed: %v", batchErr)
+			}
+			return service.ErrNotConnected
+		}
+		if w.log != nil {
+			w.log.Warnf("Aerospike batch command failed after some records were written, failing the rest: %v", batchErr)
+		}
+	}
+
+	// A one-record rejection comes back as the command error and as the
+	// record code. handleRecord counts that record. When every record was
+	// accepted or ignored, a listed command error must not fail the batch.
+	// A record still at NO_RESPONSE keeps its own result. After a write
+	// error the client marks those records in doubt, and errors.As reports
+	// only the first node error, so that code can belong to another node.
+	var asErr *as.AerospikeError
+	commandListed := batchErr != nil && errors.As(batchErr, &asErr) && !asErr.InDoubt && w.conf.ignores(asErr.ResultCode)
+	failed := false
+	for i, op := range ops {
+		rec := records[i].BatchRec()
+		if err := w.handleRecord(rec, op); err != nil {
+			failed = true
+			for _, idx := range op.indexes {
+				failures[idx] = err
+			}
+		}
+	}
+
+	if batchErr != nil && !failed && !commandListed && !connErr {
+		return fmt.Errorf("aerospike batch command failed: %w", batchErr)
+	}
+	return nil
+}
+
+// splitRounds groups ops by round, keeping message order within a round.
+func splitRounds(ops []*pendingOp) [][]*pendingOp {
+	var rounds [][]*pendingOp
+	for _, op := range ops {
+		for len(rounds) <= op.round {
+			rounds = append(rounds, nil)
+		}
+		rounds[op.round] = append(rounds[op.round], op)
+	}
+	return rounds
+}
+
 // anyResponse reports whether a server answered for at least one record. The
 // client leaves a record it never heard back about at NO_RESPONSE.
 func anyResponse(records []as.BatchRecordIfc) bool {
@@ -190,15 +229,16 @@ func anyResponse(records []as.BatchRecordIfc) bool {
 	return false
 }
 
-// planBatch maps every message to a pending write and, unless disabled,
-// coalesces repeats of the same record key.
+// planBatch maps every message to a pending write, folds repeats of the same
+// record key unless coalescing is disabled, and puts the commands for one key
+// that cannot be folded into successive rounds.
 //
 // Coalescing matters more than it looks: a topic partition routinely delivers
 // several messages for one key inside a single batch, and Aerospike limits
-// concurrent commands per record. Sending them as separate batch entries
-// contends on that one record — visible as KEY_BUSY, or as latency inflation
-// with no error at all when it stays under the limit. Folding them into one
-// write also removes any question of ordering within the batch.
+// concurrent commands per record. Sending them as separate entries of one
+// batch command contends on that one record — visible as KEY_BUSY, or as
+// latency inflation with no error at all when it stays under the limit — and
+// the server does not apply them in message order. Rounds keep that order.
 func (w *aerospikeWriter) planBatch(batch service.MessageBatch) ([]*pendingOp, map[int]error) {
 	failures := map[int]error{}
 	ops := make([]*pendingOp, 0, len(batch))
@@ -216,9 +256,7 @@ func (w *aerospikeWriter) planBatch(batch service.MessageBatch) ([]*pendingOp, m
 		ops = append(ops, op)
 	}
 
-	if w.conf.coalesce {
-		ops = coalesceOps(ops)
-	}
+	ops = coalesceOps(ops, w.conf.coalesce)
 	return dropBinlessWrites(ops, failures), failures
 }
 
@@ -228,15 +266,7 @@ func (w *aerospikeWriter) planBatch(batch service.MessageBatch) ([]*pendingOp, m
 func dropBinlessWrites(ops []*pendingOp, failures map[int]error) []*pendingOp {
 	kept := make([]*pendingOp, 0, len(ops))
 	for _, op := range ops {
-		if op.kind == opDelete && !op.hasFence {
-			kept = append(kept, op)
-			continue
-		}
-		action := op.kind.recordExistsAction()
-		if op.kind == opDelete {
-			action = as.REPLACE
-		}
-		if len(op.putOps(action)) > 0 {
+		if op.kind == opDelete || len(op.putOps(op.kind.recordExistsAction())) > 0 {
 			kept = append(kept, op)
 			continue
 		}
@@ -256,7 +286,7 @@ func nullReplaceError(kind opKind, coalesced bool) error {
 }
 
 func (w *aerospikeWriter) buildRecord(op *pendingOp) as.BatchRecordIfc {
-	if op.kind == opDelete && !op.hasFence {
+	if op.kind == opDelete {
 		if !op.hasGeneration {
 			return as.NewBatchDelete(w.conf.deletePolicy, op.key)
 		}
@@ -266,19 +296,11 @@ func (w *aerospikeWriter) buildRecord(op *pendingOp) as.BatchRecordIfc {
 		return as.NewBatchDelete(&policy, op.key)
 	}
 
-	// Copy the shared policy so per-message expiration, fencing, and generation
-	// checks do not race across concurrent batches.
+	// Copy the shared policy so per-message expiration and generation checks
+	// do not race across concurrent batches.
 	policy := *w.conf.writePolicy
 	policy.RecordExistsAction = op.kind.recordExistsAction()
 	policy.Expiration = op.ttl
-	if op.kind == opDelete {
-		// A fenced delete is a replace that leaves the fence on the key.
-		policy.RecordExistsAction = as.REPLACE
-		policy.Expiration = w.conf.tombstoneTTL
-	}
-	if op.hasFence {
-		policy.FilterExpression = fenceExpression(w.conf.fenceBin, op.fence)
-	}
 	if op.hasGeneration {
 		policy.GenerationPolicy = as.EXPECT_GEN_EQUAL
 		policy.Generation = op.generation
@@ -289,11 +311,9 @@ func (w *aerospikeWriter) buildRecord(op *pendingOp) as.BatchRecordIfc {
 
 // putOps is the bin puts buildRecord sends. REPLACE and REPLACE_ONLY already
 // drop bins that are not named. A nil value is a bin delete, and the server
-// rejects that put as a parameter error on those two actions. update_only
-// after a fenced delete is one such write: it clears the tombstone with a nil
-// bin, then fold promotes it to replace. mapMessage rejects a replace or
-// replace_only that this leaves empty. fold turns a folded empty one into a
-// delete, and dropBinlessWrites is the backstop.
+// rejects that put as a parameter error on those two actions. mapMessage
+// rejects a replace or replace_only that this leaves empty. fold turns a
+// folded empty one into a delete, and dropBinlessWrites is the backstop.
 func (p *pendingOp) putOps(action as.RecordExistsAction) []*as.Operation {
 	fullReplace := action == as.REPLACE || action == as.REPLACE_ONLY
 	ops := make([]*as.Operation, 0, len(p.binOrder))
@@ -307,13 +327,6 @@ func (p *pendingOp) putOps(action as.RecordExistsAction) []*as.Operation {
 	return ops
 }
 
-func filteredOutCount(rec *as.BatchRecord, op *pendingOp) int {
-	if rec.ResultCode != types.FILTERED_OUT {
-		return 0
-	}
-	return ignoredMessages(op)
-}
-
 func ignoredMessages(op *pendingOp) int {
 	n := len(op.indexes)
 	if n == 0 {
@@ -323,14 +336,6 @@ func ignoredMessages(op *pendingOp) int {
 }
 
 func (w *aerospikeWriter) handleRecord(rec *as.BatchRecord, op *pendingOp) error {
-	if n := filteredOutCount(rec, op); n > 0 {
-		if w.filteredOut != nil {
-			w.filteredOut.Incr(int64(n))
-		}
-		if w.log != nil {
-			w.log.Debugf("aerospike fenced out %d message(s) for key %v", n, rec.Key)
-		}
-	}
 	err := classifyRecord(rec, op)
 	// A result that is in doubt is not ignored. The write may already have been applied.
 	if err != nil && !rec.InDoubt && w.conf.ignores(rec.ResultCode) {
@@ -352,8 +357,7 @@ func (w *aerospikeWriter) acknowledgeIgnoredMapping(err error) bool {
 	return true
 }
 
-// noteIgnored records a dropped message. The counter is separate from
-// aerospike_filtered_out, which counts fencing discards that did reach the server.
+// noteIgnored records a dropped message.
 func (w *aerospikeWriter) noteIgnored(code types.ResultCode, key *as.Key, err error, n int) {
 	w.ignoredTotal.Add(int64(n))
 	if w.ignored != nil {
@@ -371,15 +375,4 @@ func (w *aerospikeWriter) noteIgnored(code types.ResultCode, key *as.Key, err er
 	}
 	w.log.Warnf("ignoring aerospike error code %d (%s) namespace=%s set=%s key=%s: %v",
 		code, types.ResultCodeToString(code), ns, set, id, err)
-}
-
-// fenceExpression admits a write only when the record is new, or when the
-// stored fence is strictly older than this message's. Evaluated on the server,
-// so a redelivered or out-of-order message is discarded without a round trip
-// and without a transaction.
-func fenceExpression(bin string, fence int64) *as.Expression {
-	return as.ExpOr(
-		as.ExpNot(as.ExpBinExists(bin)),
-		as.ExpLess(as.ExpIntBin(bin), as.ExpIntVal(fence)),
-	)
 }

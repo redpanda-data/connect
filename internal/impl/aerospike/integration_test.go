@@ -568,7 +568,9 @@ func TestIntegrationBinNamesAreCaseSensitive(t *testing.T) {
 // Messages in different WriteBatch calls are not folded. A later write keeps
 // bins from the earlier batch. A later delete removes the record. The same
 // write-then-delete pair inside one batch must not leave the record, because
-// that pair is folded into a single delete.
+// that pair is folded into a single delete. Pairs that one command cannot
+// reproduce, such as two create_only messages or a ttl followed by keep, leave
+// the same record and errors in one batch as in two.
 func TestIntegrationSameKeyAcrossBatches(t *testing.T) {
 	w, client := outputSetup(t, "operation: '${! meta(\"op\") }'\n")
 
@@ -606,6 +608,63 @@ func TestIntegrationSameKeyAcrossBatches(t *testing.T) {
 			opMsg(t, "delete", `{"id":"x3"}`),
 		}))
 		assert.Nil(t, outputRead(t, client, "x3"))
+	})
+
+	t.Run("create_only twice keeps the first in one batch and in two", func(t *testing.T) {
+		require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "create_only", `{"id":"x4","a":1}`),
+		}))
+		err := w.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "create_only", `{"id":"x4","a":2}`),
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "code 5")
+
+		batch := service.MessageBatch{
+			opMsg(t, "create_only", `{"id":"x5","a":1}`),
+			opMsg(t, "create_only", `{"id":"x5","a":2}`),
+		}
+		indexer := batch.Index()
+		err = w.WriteBatch(t.Context(), batch)
+		var berr *service.BatchError
+		require.ErrorAs(t, err, &berr)
+		failed := map[int]string{}
+		berr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, msgErr error) bool {
+			if msgErr != nil {
+				failed[i] = msgErr.Error()
+			}
+			return true
+		})
+		require.Len(t, failed, 1)
+		assert.Contains(t, failed[1], "code 5")
+
+		for _, key := range []string{"x4", "x5"} {
+			rec := outputRead(t, client, key)
+			require.NotNil(t, rec, key)
+			assert.Equal(t, 1, rec.Bins["a"], key)
+		}
+	})
+
+	t.Run("a later keep leaves the earlier ttl in one batch and in two", func(t *testing.T) {
+		tw, tclient := outputSetup(t, "ttl: '${! json(\"ttl\") }'\n")
+
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"x6","a":1,"ttl":"3600"}`),
+		}))
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"x6","a":2,"ttl":"keep"}`),
+		}))
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"x7","a":1,"ttl":"3600"}`),
+			msg(t, `{"id":"x7","a":2,"ttl":"keep"}`),
+		}))
+
+		for _, key := range []string{"x6", "x7"} {
+			rec := outputRead(t, tclient, key)
+			require.NotNil(t, rec, key)
+			assert.Equal(t, 2, rec.Bins["a"], key)
+			assert.InDelta(t, 3600, rec.Expiration, 60, key)
+		}
 	})
 }
 
@@ -657,79 +716,6 @@ bins: 'root = if content().length() == 0 { {"touch": true} } else { this }'
 	require.NotNil(t, rec, "an empty payload must not delete when tombstone handling is off")
 	assert.Equal(t, 1, rec.Bins["v"])
 	assert.Equal(t, true, rec.Bins["touch"])
-}
-
-func TestIntegrationFencing(t *testing.T) {
-	w, client := outputSetup(t, `
-fencing:
-  enabled: true
-  bin: _off
-  value: '${! meta("off") }'
-`)
-
-	newer := msg(t, `{"id":"f1","v":"second"}`)
-	newer.MetaSet("off", "10")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newer}))
-	assert.Equal(t, "second", outputRead(t, client, "f1").Bins["v"])
-
-	stale := msg(t, `{"id":"f1","v":"first"}`)
-	stale.MetaSet("off", "3")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{stale}))
-
-	rec := outputRead(t, client, "f1")
-	assert.Equal(t, "second", rec.Bins["v"], "a stale replay must not overwrite newer data")
-	assert.Equal(t, 10, rec.Bins["_off"])
-
-	newest := msg(t, `{"id":"f1","v":"third"}`)
-	newest.MetaSet("off", "11")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newest}))
-	assert.Equal(t, "third", outputRead(t, client, "f1").Bins["v"])
-}
-
-func TestIntegrationFencingDeleteThenStaleWrite(t *testing.T) {
-	w, client := outputSetup(t, `
-key: '${! meta("k") }'
-bins: 'root = this'
-fencing:
-  enabled: true
-  bin: _off
-  value: '${! meta("off") }'
-`)
-
-	create := msg(t, `{"v":"live"}`)
-	create.MetaSet("k", "fd1")
-	create.MetaSet("off", "10")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
-	require.NotNil(t, outputRead(t, client, "fd1"))
-
-	tombstone := msg(t, ``)
-	tombstone.MetaSet("k", "fd1")
-	tombstone.MetaSet("off", "11")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone}))
-
-	rec := outputRead(t, client, "fd1")
-	require.NotNil(t, rec, "a fenced delete must leave a tombstone record")
-	assert.Equal(t, true, rec.Bins["_deleted"])
-	assert.Equal(t, 11, rec.Bins["_off"])
-
-	stale := msg(t, `{"v":"resurrect"}`)
-	stale.MetaSet("k", "fd1")
-	stale.MetaSet("off", "3")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{stale}))
-
-	rec = outputRead(t, client, "fd1")
-	require.NotNil(t, rec)
-	assert.Equal(t, true, rec.Bins["_deleted"], "a stale write must not resurrect a fenced delete")
-	assert.NotContains(t, rec.Bins, "v")
-
-	newer := msg(t, `{"v":"again"}`)
-	newer.MetaSet("k", "fd1")
-	newer.MetaSet("off", "12")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newer}))
-	rec = outputRead(t, client, "fd1")
-	require.NotNil(t, rec)
-	assert.Equal(t, "again", rec.Bins["v"])
-	assert.NotContains(t, rec.Bins, "_deleted")
 }
 
 func TestIntegrationTTL(t *testing.T) {
@@ -1108,117 +1094,6 @@ func TestIntegrationReplaceOnlyClearsOldBins(t *testing.T) {
 	require.NotNil(t, rec)
 	assert.Equal(t, 9, rec.Bins["a"])
 	assert.NotContains(t, rec.Bins, "b", "replace_only must drop bins not named in the write")
-}
-
-func TestIntegrationFencedDeleteThenReplaceOnly(t *testing.T) {
-	w, client := outputSetup(t, `
-key: '${! meta("k") }'
-bins: 'root = this'
-operation: '${! meta("op").or("write") }'
-fencing:
-  enabled: true
-  bin: _off
-  value: '${! meta("off") }'
-`)
-
-	create := msg(t, `{"v":"live","extra":1}`)
-	create.MetaSet("k", "fdro1")
-	create.MetaSet("op", "write")
-	create.MetaSet("off", "10")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
-
-	tombstone := msg(t, ``)
-	tombstone.MetaSet("k", "fdro1")
-	tombstone.MetaSet("off", "11")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone}))
-
-	rec := outputRead(t, client, "fdro1")
-	require.NotNil(t, rec, "a fenced delete must leave a tombstone record")
-	assert.Equal(t, true, rec.Bins["_deleted"])
-
-	repl := msg(t, `{"v":"back"}`)
-	repl.MetaSet("k", "fdro1")
-	repl.MetaSet("op", "replace_only")
-	repl.MetaSet("off", "12")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{repl}))
-
-	rec = outputRead(t, client, "fdro1")
-	require.NotNil(t, rec)
-	assert.Equal(t, "back", rec.Bins["v"])
-	assert.Equal(t, 12, rec.Bins["_off"])
-	assert.NotContains(t, rec.Bins, "_deleted", "replace_only must remove the tombstone")
-	assert.NotContains(t, rec.Bins, "extra", "replace_only must drop bins it does not name")
-}
-
-func TestIntegrationFencedDeleteThenReplaceOnlyInOneBatch(t *testing.T) {
-	w, client := outputSetup(t, `
-key: '${! meta("k") }'
-bins: 'root = this'
-operation: '${! meta("op").or("write") }'
-fencing:
-  enabled: true
-  bin: _off
-  value: '${! meta("off") }'
-`)
-
-	create := msg(t, `{"v":"live","extra":1}`)
-	create.MetaSet("k", "fdro2")
-	create.MetaSet("op", "write")
-	create.MetaSet("off", "10")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
-
-	tombstone := msg(t, ``)
-	tombstone.MetaSet("k", "fdro2")
-	tombstone.MetaSet("off", "11")
-	repl := msg(t, `{"v":"back"}`)
-	repl.MetaSet("k", "fdro2")
-	repl.MetaSet("op", "replace_only")
-	repl.MetaSet("off", "12")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone, repl}))
-
-	rec := outputRead(t, client, "fdro2")
-	require.NotNil(t, rec)
-	assert.Equal(t, "back", rec.Bins["v"], "the replace_only payload must survive coalescing with the delete")
-	assert.Equal(t, 12, rec.Bins["_off"])
-	assert.NotContains(t, rec.Bins, "_deleted")
-	assert.NotContains(t, rec.Bins, "extra")
-}
-
-func TestIntegrationFencedDeleteThenUpdateOnlyInOneBatch(t *testing.T) {
-	// update_only after a fenced delete folds to replace. The update carries a
-	// nil tombstone bin, which REPLACE rejects, so the write omits it and the
-	// replace drops the tombstone by not naming it.
-	w, client := outputSetup(t, `
-key: '${! meta("k") }'
-bins: 'root = this'
-operation: '${! meta("op").or("write") }'
-fencing:
-  enabled: true
-  bin: _off
-  value: '${! meta("off") }'
-`)
-
-	create := msg(t, `{"v":"live","extra":1}`)
-	create.MetaSet("k", "fduo1")
-	create.MetaSet("op", "write")
-	create.MetaSet("off", "10")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
-
-	tombstone := msg(t, ``)
-	tombstone.MetaSet("k", "fduo1")
-	tombstone.MetaSet("off", "11")
-	upd := msg(t, `{"v":"back"}`)
-	upd.MetaSet("k", "fduo1")
-	upd.MetaSet("op", "update_only")
-	upd.MetaSet("off", "12")
-	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone, upd}))
-
-	rec := outputRead(t, client, "fduo1")
-	require.NotNil(t, rec)
-	assert.Equal(t, "back", rec.Bins["v"], "the update_only payload must survive coalescing with the delete")
-	assert.Equal(t, 12, rec.Bins["_off"])
-	assert.NotContains(t, rec.Bins, "_deleted")
-	assert.NotContains(t, rec.Bins, "extra", "bins the delete removed must not survive the folded replace")
 }
 
 func TestIntegrationReplaceOnlyFailsWhenMissing(t *testing.T) {

@@ -37,12 +37,6 @@ const (
 	aoFieldCoalesceBatchKeys    = "coalesce_batch_keys"
 	aoFieldMaxRecordBytes       = "max_record_bytes"
 	aoFieldIgnoreErrorCodes     = "ignore_error_codes"
-	aoFieldFencing              = "fencing"
-	aoFieldFencingEnabled       = "enabled"
-	aoFieldFencingBin           = "bin"
-	aoFieldFencingValue         = "value"
-	aoFieldFencingTombstoneBin  = "tombstone_bin"
-	aoFieldFencingTombstoneTTL  = "tombstone_ttl"
 	aoFieldBatching             = "batching"
 )
 
@@ -96,27 +90,22 @@ not rely on the data being queryable as a join.
 
 Writes are dispatched with a single batch command per output batch. Configure ` + "`batching`" + `,
 otherwise every message is its own command. Aerospike enforces
-concurrency limits per record, so multiple messages for the same key inside one batch are
-coalesced into one write by default (see ` + "`coalesce_batch_keys`" + `). Disable it only if
-you need strict one-message-one-write semantics (including per-message
-` + "`create_only`" + `/` + "`update_only`" + `/` + "`replace_only`" + ` existence failures) and have confirmed keys do
-not repeat.
+concurrency limits per record and does not apply the entries of one batch command in order,
+so messages for the same key inside one batch are coalesced into one write where that gives
+the same result as writing them in order (see ` + "`coalesce_batch_keys`" + `). A message that
+cannot be folded is sent in a later batch command, after the earlier one for its key completes.
 
-Coalescing applies **within a single batch only**. With the default
-` + "`max_in_flight`" + ` of 64, batches are dispatched concurrently, so two batches in flight
-at the same time can still carry the same record key — which reorders those two writes with
-respect to each other and can produce ` + "`KEY_BUSY`" + `. If a record key must never be
-written concurrently, or writes to one key must land in stream order, set
-` + "`max_in_flight: 1`" + `. That serialises the output, so prefer larger batches to recover
+Coalescing and that ordering apply **within a single batch only**. ` + "`max_in_flight`" + `
+defaults to ` + "`1`" + `, so batches are written one at a time and writes to one key land in stream
+order. A higher value dispatches batches concurrently, so two batches in flight can carry the
+same record key, which reorders those two writes and can leave an older value in the record.
+Raise it only when keys do not repeat across batches, and prefer larger batches to recover
 throughput.
 
 ### Delivery guarantees
 
 Redpanda Connect delivers at least once, so a message may be written more than once after a
-retry. Full-record writes are naturally idempotent. If your mapping is not — or if you want
-redelivery of stale data to be rejected outright — enable ` + "`fencing`" + `, which stores a
-monotonic value alongside the record and guards each write with a filter expression
-evaluated on the server.
+retry. Full-record writes are naturally idempotent.
 
 A resolved namespace that is not declared on the cluster is rejected with code 20
 (` + "`INVALID_NAMESPACE`" + `) for that message only. The other messages in the batch are still
@@ -139,8 +128,8 @@ Aerospike has no client-side change feed.
 			Description(`The write operation to perform. One of:
 
 - `+"`write`"+` — create or update, merging these bins with any existing bins.
-- `+"`replace`"+` — create or replace, deleting existing bins not named here. A null bin is left out of the write. Without fencing, a replace whose every bin is null is rejected on that message.
-- `+"`replace_only`"+` — fail if the record does not exist, otherwise replace, deleting existing bins not named here. A null bin is left out of the write. Without fencing, a replace_only whose every bin is null is rejected on that message.
+- `+"`replace`"+` — create or replace, deleting existing bins not named here. A null bin is left out of the write. A replace whose every bin is null is rejected on that message.
+- `+"`replace_only`"+` — fail if the record does not exist, otherwise replace, deleting existing bins not named here. A null bin is left out of the write. A replace_only whose every bin is null is rejected on that message.
 - `+"`create_only`"+` — fail if the record already exists.
 - `+"`update_only`"+` — fail if the record does not exist.
 - `+"`delete`"+` — delete the record.
@@ -159,12 +148,10 @@ Interpolation allows routing per message, for example from a CDC operation field
 				"A `null` value depends on the operation:\n\n"+
 				"- `write` and `update_only` delete that bin from the record.\n"+
 				"- `replace` and `replace_only` leave that bin out of the write, because those operations already delete bins they do not name.\n"+
-				"- A `replace` or `replace_only` whose every value is null is rejected on that message while the batch is planned, before coalescing, so an earlier write of the same key still lands. That rejection does not clear on retry, and `ignore_error_codes` does not cover it, so it holds the source partition until the mapping changes.\n"+
-				"- With fencing on, that message is not rejected, because the fence bin is still written. The record is replaced by one holding only the fence bin, with no tombstone bin, so readers see an existing record with no data bins. Map a delete instead if the record should be removed.\n\n"+
+				"- A `replace` or `replace_only` whose every value is null is rejected on that message while the batch is planned, before coalescing, so an earlier write of the same key still lands. That rejection does not clear on retry, and `ignore_error_codes` does not cover it, so it holds the source partition until the mapping changes.\n\n"+
 				"When coalescing folds a later message that nulls every bin into an earlier message for the same key, the folded command is a `delete`:\n\n"+
-				"- After an unfenced `replace`, a `write` or `update_only` produces the record those messages would leave, and a missing key is already that end state.\n"+
-				"- After a `replace_only`, an `update_only` keeps the existence check, so the delete fails if the record is missing.\n"+
-				"- After a `replace_only`, a `write` has already dropped the existence check, so the delete succeeds when the key is missing.").
+				"- After a `replace`, a `write` or `update_only` produces the record those messages would leave, and a missing key is already that end state.\n"+
+				"- After a `replace_only`, an `update_only` keeps the existence check, so the delete fails if the record is missing.").
 			Default("root = this").
 			Example(`root = this.without("user_id")`).
 			Example(`root.name = this.full_name
@@ -194,7 +181,7 @@ The default is `+"`keep`"+` so a stream of updates does not reset or shorten voi
 			Example("keep"),
 
 		service.NewInterpolatedStringField(aoFieldGeneration).
-			Description("Expected record generation for a compare-and-set write. When set, the write fails if the stored generation does not match. Empty disables the check. The value is the generation the producer read the record at.\n\nA compare-and-set message is never coalesced, even with `coalesce_batch_keys` enabled: the check refers to the specific record that was read, and one command can carry only one expected generation. If several messages in a batch target the same key and any of them carries a generation, each is sent as its own command and the server arbitrates. On `GENERATION_ERROR` the correct recovery is to re-read the record and redo the change, not to retry the same write.").
+			Description("Expected record generation for a compare-and-set write. When set, the write fails if the stored generation does not match. Empty disables the check. The value is the generation the producer read the record at.\n\nA compare-and-set message is never coalesced, even with `coalesce_batch_keys` enabled: the check refers to the specific record that was read, and one command can carry only one expected generation. If several messages in a batch target the same key and any of them carries a generation, each is sent as its own command, one after another in message order. On `GENERATION_ERROR` the correct recovery is to re-read the record and redo the change, not to retry the same write.").
 			Default("").
 			Example(`${! meta("aerospike_generation") }`).
 			Advanced(),
@@ -209,17 +196,14 @@ The default is `+"`keep`"+` so a stream of updates does not reset or shorten voi
 
 		service.NewBoolField(aoFieldCoalesceBatchKeys).
 			Description("Collapse multiple messages for the same record key within a batch into a single write. Strongly recommended: sending them separately contends on one record, which surfaces as `KEY_BUSY` or as latency inflation with no error at all.\n\n"+
-				"Messages carrying a `generation` are never coalesced, and coalescing only ever applies within one batch — see `max_in_flight` for what happens across concurrent batches.\n\n"+
-				"When messages with different operations fold into one command, the existence check (`KEY_EXISTS` or `KEY_NOT_FOUND`) is kept or dropped as follows:\n\n"+
-				"- `create_only`, `update_only`, or `replace_only` mixed with `write` or `replace` drops the check, so a successful write is not nacked.\n"+
-				"- `update_only` folded with `replace_only` keeps the check, as do two `replace_only` messages that both name a bin.\n"+
-				"- A later `update_only` that nulls every bin of a `replace_only` keeps the check. The result is a delete that fails if the record is missing.\n"+
-				"- A later `write` that nulls every bin of a `replace_only` drops the check, because folding the `write` already dropped it. The delete succeeds when the key is missing.\n"+
-				"- `create_only` after `replace_only` becomes a `replace` carrying both payloads, because one command cannot fail the create when the key exists and also fail the replace when it does not. That write succeeds whether the key exists or not.\n\n"+
-				"Deletes and null bins fold as follows:\n\n"+
-				"- An unfenced `delete` followed by `update_only` or `replace_only` drops the later message: the record stays deleted and that payload is not written. With fencing on, that later message is written as a `replace`, because the tombstone record is still there.\n"+
-				"- An unfenced all-null `replace` or `replace_only` is rejected on its own message before coalescing, so it does not delete a preceding write. A fenced one still carries the fence bin and folds like any other `replace` or `replace_only`.\n"+
-				"- A later `write` or `update_only` that nulls every bin of an earlier unfenced `replace` becomes a `delete`, which is the record those messages would leave.").
+				"Two messages fold only when one command leaves the same record and fails the same messages as writing them in order, whether the key exists or not. Otherwise the later message is sent in a later batch command, after the earlier one completes. Disabling this sends every message on its own, in that order.\n\n"+
+				"- A `write`, `replace`, or `delete` folds into an earlier `write`, `replace`, or `delete`. After a `delete`, a `write` becomes a `replace`, so bins the delete removed do not come back.\n"+
+				"- An `update_only` or `replace_only` folds into an earlier `write` or `replace`, which leaves the record in place, so the existence check is dropped. It also folds into an earlier `update_only` or `replace_only`, and the folded command keeps the check.\n"+
+				"- A `create_only` folds only into an earlier `delete`, and becomes a `replace`.\n"+
+				"- Nothing folds into a `create_only`, and a `write`, `replace`, or `delete` does not fold into an `update_only` or `replace_only`, because one command cannot fail one message and apply the other.\n"+
+				"- A later `ttl` of `keep` leaves the expiration of the earlier message, as it would on its own. After a `delete`, the later `ttl` applies.\n"+
+				"- A later `write` or `update_only` that nulls every bin of an earlier `replace` becomes a `delete`, which is the record those messages would leave. After a `replace_only`, the delete keeps the existence check.\n\n"+
+				"Messages carrying a `generation` are never coalesced. Coalescing only ever applies within one batch — see `max_in_flight` for what happens across concurrent batches.").
 			Default(true).
 			Advanced(),
 
@@ -254,41 +238,12 @@ A connection failure of the batch is still a failure. So is any mapping error ot
 	)
 	spec = spec.Fields(batchPolicyFieldsWithRetries(0)...)
 	return spec.Fields(
-		service.NewObjectField(aoFieldFencing,
-			service.NewBoolField(aoFieldFencingEnabled).
-				Description("Enable fencing.").
-				Default(false),
-			service.NewStringField(aoFieldFencingBin).
-				Description("Bin holding the fence value. Counts toward the 15 character bin name limit. Readers of these records should ignore it, since it is bookkeeping rather than data.").
-				Default(defaultFenceBin),
-			service.NewInterpolatedStringField(aoFieldFencingValue).
-				Description("An integer that strictly increases with every update of a given record key, so no two updates of a key share a value. A write whose value is not greater than the stored one is filtered out and acknowledged, so a second update carrying the same value is dropped. The Kafka offset satisfies this when keys map to partitions consistently, which is the default partitioner's behaviour. A timestamp does not, because two updates can share one.").
-				Default(`${! meta("kafka_offset") }`).
-				Example(`${! json("version") }`),
-			service.NewStringField(aoFieldFencingTombstoneBin).
-				Description("Bin written on a fenced delete to mark the record as a tombstone. Readers should treat a record carrying this bin as missing. Counts toward the 15 character bin name limit.").
-				Default(defaultTombstoneBin),
-			service.NewStringField(aoFieldFencingTombstoneTTL).
-				Description(`Time-to-live for fenced tombstone records. Accepts a duration, or `+"`never`"+`. Defaults to `+"`never`"+` so the fence outlives the data TTL; if the tombstone expires, a stale replay can recreate the record.
-
-Note that `+"`never`"+` means fenced deletes accumulate without bound: the records stay small, but Aerospike does not evict records that have no void-time, so a delete-heavy workload grows the namespace monotonically. Set a duration comfortably longer than the longest replay or redelivery window you need to defend against — beyond that point a replay is no longer a realistic risk — and budget the primary index at roughly 64 bytes per record per replica in the meantime.`).
-				Default("never").
-				Example("168h"),
-		).Description(`Guards each write with a server-side filter expression so that a record is only
-overwritten by a strictly newer message. Redelivered or out-of-order messages are discarded by the
-server and acknowledged as successful, giving effectively-once writes without a transaction.
-Those discards increment the `+"`aerospike_filtered_out`"+` counter and are logged at debug.
-
-When fencing is enabled, deletes do not remove the record: they replace it with the fence plus a
-tombstone bin, so a later replay cannot resurrect stale data. Readers should treat that tombstone
-as not found. `+"`create_only`"+` after a fenced delete fails because the tombstone still exists. `+"`replace_only`"+` succeeds and removes the tombstone, because the record is still there.`).
-			Advanced(),
-
 		service.NewBatchPolicyField(aoFieldBatching).
 			Description("Allows you to configure a batching policy. Without one, every message is written by its own command, one network round trip per message. A good starting point is `count: 256` and `period: 1s`."),
 
 		service.NewOutputMaxInFlightField().
-			Description("Maximum number of batches to have in flight concurrently. Note that key coalescing only deduplicates within a batch, so a value above `1` allows two concurrent batches to write the same record key, reordering them relative to each other. Set this to `1` when writes to a key must land in stream order."),
+			Description("Maximum number of batches to have in flight concurrently. The default of `1` writes batches in order, so writes to one key land in stream order. Coalescing and ordering only apply within a batch, so a value above `1` lets two concurrent batches write the same record key out of order and can leave an older value in the record. Raise it only when keys do not repeat across batches.").
+			Default(1),
 	).
 		Example(
 			"Stream a topic into Aerospike",
@@ -326,27 +281,6 @@ output:
     digest: '${! json("digest") }'
     bins: 'root = this.without("digest")'
     operation: replace
-    batching:
-      count: 256
-      period: 1s
-`,
-		).
-		Example(
-			"Effectively-once with offset fencing",
-			"Rejects redelivered or out-of-order messages on the server, so at-least-once delivery cannot regress a record to an older state.",
-			`
-output:
-  aerospike:
-    hosts: [ "localhost:3000" ]
-    namespace: profiles
-    set: user
-    key: '${! meta("kafka_key") }'
-    operation: replace
-    bins: 'root = this'
-    fencing:
-      enabled: true
-      bin: _off
-      value: '${! meta("kafka_offset") }'
     batching:
       count: 256
       period: 1s
@@ -428,12 +362,6 @@ type aerospikeConfig struct {
 	// means every rejection fails the message.
 	ignoreCodes map[int]struct{}
 
-	fenceEnabled bool
-	fenceBin     string
-	fenceValue   *service.InterpolatedString
-	tombstoneBin string
-	tombstoneTTL uint32
-
 	batchPolicy  *as.BatchPolicy
 	writePolicy  *as.BatchWritePolicy
 	deletePolicy *as.BatchDeletePolicy
@@ -508,40 +436,6 @@ func parseOutputConfig(conf *service.ParsedConfig) (*aerospikeConfig, error) {
 					aoFieldIgnoreErrorCodes, code, types.ResultCodeToString(types.ResultCode(code)))
 			}
 			c.ignoreCodes[code] = struct{}{}
-		}
-	}
-
-	if conf.Contains(aoFieldFencing) {
-		fc := conf.Namespace(aoFieldFencing)
-		if c.fenceEnabled, err = fc.FieldBool(aoFieldFencingEnabled); err != nil {
-			return nil, err
-		}
-		if c.fenceBin, err = fc.FieldString(aoFieldFencingBin); err != nil {
-			return nil, err
-		}
-		if c.fenceValue, err = fc.FieldInterpolatedString(aoFieldFencingValue); err != nil {
-			return nil, err
-		}
-		if c.tombstoneBin, err = fc.FieldString(aoFieldFencingTombstoneBin); err != nil {
-			return nil, err
-		}
-		ttlStr, err := fc.FieldString(aoFieldFencingTombstoneTTL)
-		if err != nil {
-			return nil, err
-		}
-		if c.tombstoneTTL, err = parseTTL(ttlStr); err != nil {
-			return nil, fmt.Errorf("field '%v.%v': %w", aoFieldFencing, aoFieldFencingTombstoneTTL, err)
-		}
-	}
-	if c.fenceEnabled {
-		if err := validateBinName(c.fenceBin); err != nil {
-			return nil, fmt.Errorf("field '%v.%v': %w", aoFieldFencing, aoFieldFencingBin, err)
-		}
-		if err := validateBinName(c.tombstoneBin); err != nil {
-			return nil, fmt.Errorf("field '%v.%v': %w", aoFieldFencing, aoFieldFencingTombstoneBin, err)
-		}
-		if c.tombstoneBin == c.fenceBin {
-			return nil, fmt.Errorf("field '%v.%v' must not be the same as '%v.%v'", aoFieldFencing, aoFieldFencingTombstoneBin, aoFieldFencing, aoFieldFencingBin)
 		}
 	}
 
