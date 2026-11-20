@@ -418,8 +418,14 @@ func (r *Router) resolveTableLocation(batch service.MessageBatch, nsParts []stri
 	}
 
 	// Case: the prefix is empty. The catalog assigns the location, the same as
-	// when table_location is unset.
+	// when table_location is unset. The location never changes later, so warn
+	// when interpolation gives the empty prefix: it is likely a config mistake
+	// such as `.or("")` on a missing metadata key. A static empty prefix is a
+	// choice and does not warn.
 	if prefix == "" {
+		if _, static := r.schemaEvoCfg.TableLocation.Static(); !static {
+			r.logger.Warnf("schema_evolution.table_location resolved to an empty prefix for table %s.%s, the catalog assigns the location", strings.Join(nsParts, "."), table)
+		}
 		return "", nil
 	}
 

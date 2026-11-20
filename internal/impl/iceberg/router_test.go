@@ -9,6 +9,8 @@
 package iceberg
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -577,32 +579,44 @@ func TestTableLocationFor(t *testing.T) {
 
 // TestResolveTableLocation pins how createTable gets the location of a new
 // table from `schema_evolution.table_location`. The first message of the batch
-// sets the prefix. An empty prefix leaves the location to the catalog. A
+// sets the prefix. An empty prefix leaves the location to the catalog, with a
+// warning when interpolation gives the empty prefix, because that is likely a
+// config mistake. A static empty prefix is a choice and does not warn. A
 // location that the writer would change when it builds data file paths is an
 // error, because it splits the table across two prefixes. This applies to the
 // prefix, the namespace and the table.
 func TestResolveTableLocation(t *testing.T) {
 	cases := []struct {
 		name          string
+		unset         bool
 		tableLocation string
 		fabs          []string
 		table         string
 		want          string
 		wantErr       string
+		wantWarn      string
 	}{
 		{
-			name:          "field unset",
+			name:  "field unset",
+			unset: true,
+			fabs:  []string{"FAB1"},
+			table: "orders",
+			want:  "",
+		},
+		{
+			name:          "static empty prefix leaves the location to the catalog",
 			tableLocation: "",
 			fabs:          []string{"FAB1"},
 			table:         "orders",
 			want:          "",
 		},
 		{
-			name:          "empty prefix leaves the location to the catalog",
-			tableLocation: `${! "" }`,
+			name:          "interpolated empty prefix leaves the location to the catalog and warns",
+			tableLocation: `${! meta("missing").or("") }`,
 			fabs:          []string{"FAB1"},
 			table:         "orders",
 			want:          "",
+			wantWarn:      `schema_evolution.table_location resolved to an empty prefix for table shop.cdc.orders`,
 		},
 		{
 			name:          "first message sets the prefix",
@@ -679,10 +693,12 @@ func TestResolveTableLocation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var cfg SchemaEvolutionConfig
-			if tc.tableLocation != "" {
+			if !tc.unset {
 				cfg.TableLocation = servicetest.NewInterpolatedString(t, tc.tableLocation)
 			}
-			r := &Router{schemaEvoCfg: cfg}
+			var logs bytes.Buffer
+			logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, nil)))
+			r := &Router{schemaEvoCfg: cfg, logger: logger}
 
 			var batch service.MessageBatch
 			for _, fab := range tc.fabs {
@@ -698,6 +714,12 @@ func TestResolveTableLocation(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
+			if tc.wantWarn != "" {
+				assert.Contains(t, logs.String(), "level=WARN")
+				assert.Contains(t, logs.String(), tc.wantWarn)
+			} else {
+				assert.NotContains(t, logs.String(), "level=WARN")
+			}
 		})
 	}
 }
