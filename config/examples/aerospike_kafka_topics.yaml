@@ -73,7 +73,7 @@ output:
               period: 200ms
               # byte_size: 0
               # check: ""
-            # max_in_flight: 64 # 1 keeps writes to one key in stream order
+            # max_in_flight: 1 # above 1, writes to one key can land out of order
       # Merge bins into the payments set. The set name is the topic name. Key is id.
       # Optional fields, including ignore_error_codes, are listed on the users output.
       - check: meta("kafka_topic") == "payments"

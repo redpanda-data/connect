@@ -523,6 +523,53 @@ func TestIntegrationCoalescing(t *testing.T) {
 	assert.NotNil(t, outputRead(t, client, "c2"))
 }
 
+// TestIntegrationCoalesceKeepsSequentialOutcome sends pairs of messages for one
+// key in one batch whose result one command cannot reproduce, and checks that
+// the record and the errors match the messages written one at a time.
+func TestIntegrationCoalesceKeepsSequentialOutcome(t *testing.T) {
+	t.Run("create_only twice keeps the first and fails the second", func(t *testing.T) {
+		w, client := outputSetup(t, "operation: create_only\n")
+
+		batch := service.MessageBatch{
+			msg(t, `{"id":"co1","a":1}`),
+			msg(t, `{"id":"co1","a":2}`),
+		}
+		indexer := batch.Index()
+		err := w.WriteBatch(t.Context(), batch)
+		require.Error(t, err)
+
+		var berr *service.BatchError
+		require.ErrorAs(t, err, &berr)
+		failed := map[int]string{}
+		berr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, msgErr error) bool {
+			if msgErr != nil {
+				failed[i] = msgErr.Error()
+			}
+			return true
+		})
+		require.Len(t, failed, 1)
+		assert.Contains(t, failed[1], "code 5")
+
+		rec := outputRead(t, client, "co1")
+		require.NotNil(t, rec)
+		assert.Equal(t, 1, rec.Bins["a"])
+	})
+
+	t.Run("a later keep leaves the earlier ttl", func(t *testing.T) {
+		w, client := outputSetup(t, "ttl: '${! json(\"ttl\") }'\n")
+
+		require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"ttl-keep","a":1,"ttl":"3600"}`),
+			msg(t, `{"id":"ttl-keep","a":2,"ttl":"keep"}`),
+		}))
+
+		rec := outputRead(t, client, "ttl-keep")
+		require.NotNil(t, rec)
+		assert.Equal(t, 2, rec.Bins["a"])
+		assert.InDelta(t, 3600, rec.Expiration, 60)
+	})
+}
+
 // TestIntegrationCoalesceDisjointBins proves two messages for one key in the
 // same batch, with no bin names in common, become one record that has both
 // sets of bins.

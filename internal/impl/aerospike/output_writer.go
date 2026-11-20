@@ -107,55 +107,29 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	ops, failures := w.planBatch(batch)
-
-	if len(ops) > 0 {
-		records := make([]as.BatchRecordIfc, len(ops))
-		for i, op := range ops {
-			records[i] = w.buildRecord(op)
+	rounds := splitRounds(ops)
+	for r, round := range rounds {
+		err := w.writeRound(ctx, operate, round, failures)
+		if err == nil {
+			continue
 		}
-
-		policy, err := batchPolicyForContext(ctx, w.conf.batchPolicy)
-		if err != nil {
+		if r == 0 {
 			return err
 		}
-
-		batchErr := operate(policy, records)
-		// A connection error can end a batch after some nodes have answered.
-		// Those records are applied and must not be written again, so the batch
-		// is only treated as unsent when no record got a response.
-		connErr := batchErr != nil && isConnectionError(batchErr)
-		if connErr {
-			if !anyResponse(records) {
-				if w.log != nil {
-					w.log.Errorf("Aerospike batch command failed: %v", batchErr)
-				}
-				return service.ErrNotConnected
-			}
-			if w.log != nil {
-				w.log.Warnf("Aerospike batch command failed after some records were written, failing the rest: %v", batchErr)
-			}
+		// Earlier rounds are written. Retrying the whole batch would write
+		// them again, so only this round and the later ones fail. The error
+		// must not wrap ErrNotConnected, which retries the whole batch.
+		if errors.Is(err, service.ErrNotConnected) {
+			err = errors.New("lost the connection to aerospike after earlier commands in this batch were written")
 		}
-
-		// A one-record rejection comes back as the command error and as the
-		// record code. handleRecord counts that record. When every record was
-		// accepted or ignored, a listed command error must not fail the batch.
-		// A record still at NO_RESPONSE keeps its own result. After a write
-		// error the client marks those records in doubt, and errors.As reports
-		// only the first node error, so that code can belong to another node.
-		var asErr *as.AerospikeError
-		commandListed := batchErr != nil && errors.As(batchErr, &asErr) && !asErr.InDoubt && w.conf.ignores(asErr.ResultCode)
-		for i, op := range ops {
-			rec := records[i].BatchRec()
-			if err := w.handleRecord(rec, op); err != nil {
+		for _, later := range rounds[r:] {
+			for _, op := range later {
 				for _, idx := range op.indexes {
 					failures[idx] = err
 				}
 			}
 		}
-
-		if batchErr != nil && len(failures) == 0 && !commandListed && !connErr {
-			return fmt.Errorf("aerospike batch command failed: %w", batchErr)
-		}
+		break
 	}
 
 	if len(failures) == 0 {
@@ -177,6 +151,73 @@ func (w *aerospikeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	return err
 }
 
+// writeRound sends one batch command and records each failed message in
+// failures. It returns an error when the command failed as a whole.
+func (w *aerospikeWriter) writeRound(ctx context.Context, operate func(*as.BatchPolicy, []as.BatchRecordIfc) error, ops []*pendingOp, failures map[int]error) error {
+	records := make([]as.BatchRecordIfc, len(ops))
+	for i, op := range ops {
+		records[i] = w.buildRecord(op)
+	}
+
+	policy, err := batchPolicyForContext(ctx, w.conf.batchPolicy)
+	if err != nil {
+		return err
+	}
+
+	batchErr := operate(policy, records)
+	// A connection error can end a batch after some nodes have answered.
+	// Those records are applied and must not be written again, so the batch
+	// is only treated as unsent when no record got a response.
+	connErr := batchErr != nil && isConnectionError(batchErr)
+	if connErr {
+		if !anyResponse(records) {
+			if w.log != nil {
+				w.log.Errorf("Aerospike batch command failed: %v", batchErr)
+			}
+			return service.ErrNotConnected
+		}
+		if w.log != nil {
+			w.log.Warnf("Aerospike batch command failed after some records were written, failing the rest: %v", batchErr)
+		}
+	}
+
+	// A one-record rejection comes back as the command error and as the
+	// record code. handleRecord counts that record. When every record was
+	// accepted or ignored, a listed command error must not fail the batch.
+	// A record still at NO_RESPONSE keeps its own result. After a write
+	// error the client marks those records in doubt, and errors.As reports
+	// only the first node error, so that code can belong to another node.
+	var asErr *as.AerospikeError
+	commandListed := batchErr != nil && errors.As(batchErr, &asErr) && !asErr.InDoubt && w.conf.ignores(asErr.ResultCode)
+	failed := false
+	for i, op := range ops {
+		rec := records[i].BatchRec()
+		if err := w.handleRecord(rec, op); err != nil {
+			failed = true
+			for _, idx := range op.indexes {
+				failures[idx] = err
+			}
+		}
+	}
+
+	if batchErr != nil && !failed && !commandListed && !connErr {
+		return fmt.Errorf("aerospike batch command failed: %w", batchErr)
+	}
+	return nil
+}
+
+// splitRounds groups ops by round, keeping message order within a round.
+func splitRounds(ops []*pendingOp) [][]*pendingOp {
+	var rounds [][]*pendingOp
+	for _, op := range ops {
+		for len(rounds) <= op.round {
+			rounds = append(rounds, nil)
+		}
+		rounds[op.round] = append(rounds[op.round], op)
+	}
+	return rounds
+}
+
 // anyResponse reports whether a server answered for at least one record. The
 // client leaves a record it never heard back about at NO_RESPONSE.
 func anyResponse(records []as.BatchRecordIfc) bool {
@@ -188,15 +229,16 @@ func anyResponse(records []as.BatchRecordIfc) bool {
 	return false
 }
 
-// planBatch maps every message to a pending write and, unless disabled,
-// coalesces repeats of the same record key.
+// planBatch maps every message to a pending write, folds repeats of the same
+// record key unless coalescing is disabled, and puts the commands for one key
+// that cannot be folded into successive rounds.
 //
 // Coalescing matters more than it looks: a topic partition routinely delivers
 // several messages for one key inside a single batch, and Aerospike limits
-// concurrent commands per record. Sending them as separate batch entries
-// contends on that one record — visible as KEY_BUSY, or as latency inflation
-// with no error at all when it stays under the limit. Folding them into one
-// write also removes any question of ordering within the batch.
+// concurrent commands per record. Sending them as separate entries of one
+// batch command contends on that one record — visible as KEY_BUSY, or as
+// latency inflation with no error at all when it stays under the limit — and
+// the server does not apply them in message order. Rounds keep that order.
 func (w *aerospikeWriter) planBatch(batch service.MessageBatch) ([]*pendingOp, map[int]error) {
 	failures := map[int]error{}
 	ops := make([]*pendingOp, 0, len(batch))
@@ -214,9 +256,7 @@ func (w *aerospikeWriter) planBatch(batch service.MessageBatch) ([]*pendingOp, m
 		ops = append(ops, op)
 	}
 
-	if w.conf.coalesce {
-		ops = coalesceOps(ops)
-	}
+	ops = coalesceOps(ops, w.conf.coalesce)
 	return dropBinlessWrites(ops, failures), failures
 }
 

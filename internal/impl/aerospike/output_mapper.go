@@ -110,6 +110,10 @@ type pendingOp struct {
 	// whose bins were all nulled by a later update_only. A plain delete of a
 	// missing key succeeds. This one fails, so the existence check survives.
 	deleteRequiresRecord bool
+
+	// round orders commands for one key that cannot share a command. A batch
+	// sends round 0, then round 1 once round 0 has completed, and so on.
+	round int
 }
 
 func newPendingOp(index int, key *as.Key, kind opKind, ttl uint32) *pendingOp {
@@ -147,131 +151,77 @@ func (p *pendingOp) take(next *pendingOp) {
 	p.copyBinsFrom(next)
 }
 
-// fold merges a later operation for the same key into this one, so that a batch
-// containing several messages for one record issues a single write.
+// canFold reports whether next can be folded into this op. One command must
+// leave the same record, and fail the same messages, as the two commands run
+// in order, whether the key exists or not.
 //
-// The merge rules preserve the outcome of applying the operations in sequence
-// when a single Aerospike command can do that. Existence-conditional ops
-// (create_only / update_only / replace_only) cannot always keep their existence
-// check without nacking a preceding write that would have succeeded, so the
-// check is dropped in favour of the sequential final record:
+//   - write, replace, and delete leave a known record: the merged bins, the
+//     replaced bins, or no record. A later write, replace, or delete applies
+//     to that record without an existence check, so it folds.
+//   - update_only and replace_only require the record. After write or replace
+//     the record exists, so the check passes and is dropped. After another
+//     update_only or replace_only the folded command keeps the check, and a
+//     missing key fails every message as it would have on its own.
+//   - create_only folds only after a delete. The delete removes the record,
+//     so the create succeeds and the result is a replace.
 //
-//   - delete and replace each discard whatever was accumulated, because they
-//     define the record's full state.
-//   - replace_only also defines the full record. It keeps the "must exist"
-//     check when folded with update_only or another replace_only, since every
-//     one of those ops fails when the key is missing. After write, replace, or
-//     create_only it is promoted to replace, so the op that would have created
-//     the record is not nacked as KEY_NOT_FOUND. After a delete it is
-//     dropped, so a successful delete is not nacked as KEY_NOT_FOUND.
-//   - write merges its bins over the accumulation, and inherits the accumulated
-//     kind — so [replace{a}, write{b}] stays a replace carrying {a,b}. After
-//     replace_only it is promoted to replace: the existence check is dropped
-//     and bins already on the server must not survive.
-//   - write after delete is promoted to replace, because the intervening delete
-//     means bins already on the server must not survive.
-//   - a replace whose every remaining bin is null becomes a delete. A later
-//     write or update_only has nulled the bins an earlier replace or delete
-//     set up, and a record with no bins does not exist. An all-null replace
-//     or replace_only is rejected in mapMessage and never reaches here, so it
-//     cannot delete a preceding write.
-//   - a replace_only left with only null bins becomes a delete that still
-//     fails when the record is missing. [replace_only{a:1},
-//     update_only{a:null}] keeps the existence check. A later message then
-//     folds with the delete rules.
-//   - update_only after write/replace merges bins and keeps the write/replace,
-//     so [write{a}, update_only{b}] is not folded into a lone update_only that
-//     would KEY_NOT_FOUND and nack both messages. After replace_only it merges
-//     and stays replace_only, because both ops require the record. After a
-//     delete it is dropped.
-//   - write after create_only/update_only is promoted to write, so the write
-//     is not nacked by the preceding existence check.
-//   - create_only after write/replace is dropped: it cannot succeed against
-//     the record those ops leave, and folding into create_only would nack the
-//     write as KEY_EXISTS. After replace_only both checks are dropped and the
-//     result is a replace carrying both payloads. That is a compromise: the
-//     sequential outcomes disagree, and one command cannot fail either message.
+// Every other pair waits for a later round. For example, create_only{a:1}
+// then create_only{a:2} on a new key stores a=1 and fails the second message
+// with KEY_EXISTS, which one command cannot do. A delete that coalescing made
+// from replace_only keeps its existence check, so nothing folds into it.
+func (p *pendingOp) canFold(next *pendingOp) bool {
+	if p.kind == opDelete && p.deleteRequiresRecord {
+		return false
+	}
+	switch next.kind {
+	case opWrite, opReplace, opDelete:
+		return p.kind == opWrite || p.kind == opReplace || p.kind == opDelete
+	case opUpdateOnly, opReplaceOnly:
+		return p.kind == opWrite || p.kind == opReplace || p.kind == opUpdateOnly || p.kind == opReplaceOnly
+	case opCreateOnly:
+		return p.kind == opDelete
+	}
+	return false
+}
+
+// fold merges a later operation for the same key into this one. The caller
+// checks canFold first.
+//
+// A later ttl of keep leaves the expiration the earlier command set, so the
+// earlier ttl stays. After a delete the later ttl applies, because the record
+// is created again.
 //
 // Generation is deliberately not merged here: coalesceOps never folds an
 // operation carrying a compare-and-set check, because one command can only
 // carry one expected generation.
 func (p *pendingOp) fold(next *pendingOp) {
 	p.indexes = append(p.indexes, next.indexes...)
-
-	p.ttl = next.ttl
+	if p.kind == opDelete || next.ttl != as.TTLDontUpdate {
+		p.ttl = next.ttl
+	}
 
 	switch next.kind {
 	case opDelete, opReplace:
 		p.take(next)
 	case opReplaceOnly:
-		switch p.kind {
-		case opDelete:
-			// Keep the delete. Sequential replace_only fails after a delete,
-			// and folding it in would nack that delete as KEY_NOT_FOUND.
-		case opUpdateOnly, opReplaceOnly:
-			// Both require the record to exist, and replace_only is the full
-			// record. A missing key fails the folded command, which is what
-			// each message would have done on its own.
-			p.take(next)
-		default:
-			// write, replace, and create_only can create the record, so a
-			// folded replace_only would KEY_NOT_FOUND and nack that write.
-			// Drop the check and keep the full-record payload.
+		prior := p.kind
+		p.take(next)
+		if prior == opWrite || prior == opReplace {
+			// The record exists, so the check always passes.
 			p.kind = opReplace
-			p.resetBins()
-			p.copyBinsFrom(next)
 		}
 	case opCreateOnly:
-		switch p.kind {
-		case opWrite, opReplace:
-			// create_only cannot succeed against the record those ops leave.
-			// Absorb it so the preceding write is not nacked as KEY_EXISTS.
-		case opReplaceOnly:
-			// One command cannot keep both existence checks, and the
-			// sequential outcomes disagree: replace_only's bins if the key
-			// exists, create_only's bins if it does not. Promote to replace
-			// carrying both payloads so neither message is nacked. This does
-			// not replay either outcome.
-			p.kind = opReplace
-			p.copyBinsFrom(next)
-		case opUpdateOnly:
-			// One command cannot keep both existence checks. Promote to write
-			// so neither message is poisoned by the other's constraint.
-			p.kind = opWrite
-			p.copyBinsFrom(next)
-		case opDelete:
-			// Sequential delete then create is a full-record rewrite.
-			p.kind = opReplace
-			p.resetBins()
-			p.copyBinsFrom(next)
-		default:
-			p.take(next)
-		}
-	case opUpdateOnly:
-		switch p.kind {
-		case opDelete:
-			// Keep the delete. Sequential update_only fails after a delete,
-			// and folding it in would nack that delete as KEY_NOT_FOUND.
-		case opCreateOnly:
-			// One command cannot keep both existence checks. Promote to write
-			// so neither message is poisoned by the other's constraint.
-			p.kind = opWrite
-			p.copyBinsFrom(next)
-		default:
-			p.copyBinsFrom(next)
-		}
+		// Only after a delete, so the record is gone and the create succeeds.
+		p.take(next)
+		p.kind = opReplace
 	case opWrite:
-		switch p.kind {
-		case opDelete:
+		if p.kind == opDelete {
+			// Bins the delete removed must not survive.
 			p.kind = opReplace
 			p.resetBins()
-		case opCreateOnly, opUpdateOnly:
-			p.kind = opWrite
-		case opReplaceOnly:
-			// Drop the existence check so the write is not nacked, and stay a
-			// full-record replace so bins already on the server do not survive.
-			p.kind = opReplace
 		}
+		p.copyBinsFrom(next)
+	case opUpdateOnly:
 		p.copyBinsFrom(next)
 	}
 
@@ -297,17 +247,17 @@ func (p *pendingOp) fold(next *pendingOp) {
 	}
 }
 
-// coalesceOps folds repeated writes to one record key into a single command,
-// preserving the outcome of applying them in sequence.
+// coalesceOps orders the commands for each record key and, when fold is set,
+// folds a message into the previous command for its key where canFold allows.
+// A message that is not folded goes in the round after that command, so the
+// commands for one key run in message order and never in the same batch
+// command.
 //
-// A key touched by any compare-and-set message is exempt and keeps one command
-// per message. A generation check is a statement about the specific record the
-// caller read, and a folded command can carry only one expected generation:
-// folding would either drop the check (letting a write land on a record that
-// changed underneath it) or apply a generation the server never reached
-// (failing both messages). Neither is acceptable silently, so CAS wins over
-// coalescing and the server arbitrates.
-func coalesceOps(ops []*pendingOp) []*pendingOp {
+// A key touched by any compare-and-set message is never folded. A generation
+// check is a statement about the specific record the caller read, and every
+// write increments the generation, so folding two writes would change the
+// generation a later check expects.
+func coalesceOps(ops []*pendingOp, fold bool) []*pendingOp {
 	ids := make([]string, len(ops))
 	exempt := map[string]bool{}
 	for i, op := range ops {
@@ -318,18 +268,18 @@ func coalesceOps(ops []*pendingOp) []*pendingOp {
 	}
 
 	out := make([]*pendingOp, 0, len(ops))
-	byKey := make(map[string]*pendingOp, len(ops))
+	last := make(map[string]*pendingOp, len(ops))
 	for i, op := range ops {
 		id := ids[i]
-		if exempt[id] {
-			out = append(out, op)
-			continue
-		}
-		if prev, exists := byKey[id]; exists {
+		prev, seen := last[id]
+		if seen && fold && !exempt[id] && prev.canFold(op) {
 			prev.fold(op)
 			continue
 		}
-		byKey[id] = op
+		if seen {
+			op.round = prev.round + 1
+		}
+		last[id] = op
 		out = append(out, op)
 	}
 	return out
