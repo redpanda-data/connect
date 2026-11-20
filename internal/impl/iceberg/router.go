@@ -87,11 +87,6 @@ type tableEntry struct {
 	tsEncodingProbeErr      error
 	tsEncodingProbeSnapshot int64
 
-	// retryPropWarned dedupes the commit.retry.num-retries hazard warning to
-	// once per table per process (writer recreation would otherwise repeat it
-	// on every failure). Guarded by mu.
-	retryPropWarned bool
-
 	// prohibitedProps persists the catalog-prohibited property keys learned
 	// by this table's committers (mirroring the tsEncoding cache pattern):
 	// writeWithRetry closes the writer on every failure, so without it each
@@ -873,20 +868,6 @@ func (r *Router) createWriter(ctx context.Context, key tableKey, entry *tableEnt
 	if err != nil {
 		// Return the error directly - the retry loop will handle it
 		return nil, err
-	}
-
-	// The standard table property commit.retry.num-retries arms iceberg-go's
-	// OWN refresh-and-replay retry loop inside every commit. That replay
-	// re-submits the ORIGINAL updates with only the ref requirement rewritten
-	// — a replayed snapshot's manifest list was built against the old base, so
-	// under concurrent writers a peer's non-conflicting commit can be dropped
-	// from the table state. This committer's retry loop already re-stages
-	// safely from a reloaded snapshot, making the inner loop pure risk here.
-	// Warn (once per table per process) rather than refuse: the property is
-	// legitimately set on tables other engines also write.
-	if n := writerTbl.Properties()[table.CommitNumRetriesKey]; n != "" && n != "0" && !entry.retryPropWarned {
-		entry.retryPropWarned = true
-		r.logger.Warnf("Table %v carries %s=%s, which arms the Iceberg library's internal commit replay; this output's own commit retry already re-stages safely, and the library-level replay can drop a concurrent writer's commit — consider unsetting the property on tables this output writes to", key.table, table.CommitNumRetriesKey, n)
 	}
 
 	// reloadTable creates a fresh catalog client and reloads the table,
