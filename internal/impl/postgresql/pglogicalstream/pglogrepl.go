@@ -637,9 +637,8 @@ var errPublicationOperations = errors.New("publication does not publish every op
 
 // ValidatePublication checks, without altering anything, that an externally
 // managed publication exists, streams inserts, updates and deletes, and
-// covers every table in tables. A FOR ALL TABLES publication covers every
-// table. A partitioned table counts as covered when the publication lists it,
-// one of its partitions, or one of its ancestors.
+// covers every table in tables. A partitioned table counts as covered when the
+// publication lists it, one of its partitions, or one of its ancestors.
 //
 // It returns the tables in tables that the publication streams with a row
 // filter or a column list (PostgreSQL 15 or later). Those still stream, so
@@ -656,12 +655,9 @@ func ValidatePublication(ctx context.Context, conn *pgconn.PgConn, publicationNa
 		return nil, fmt.Errorf("%w: %s does not publish %s, so those changes would never stream: set its publish option to include insert, update and delete with ALTER PUBLICATION %s SET (publish = 'insert, update, delete')",
 			errPublicationOperations, publicationName, strings.Join(missing, ", "), publicationName)
 	}
-	if pub.allTables {
-		// A FOR ALL TABLES publication can carry neither a row filter nor a
-		// column list.
-		return nil, nil
-	}
-
+	// A FOR ALL TABLES publication is checked table by table too. It does not
+	// cover every table: PostgreSQL 19 adds EXCEPT, and no version streams an
+	// unlogged table. pg_publication_tables lists only the tables it streams.
 	var missing []TableFQN
 	for _, table := range tables {
 		q, err := publicationCoversTableQuery(publicationName, table.String())
@@ -689,7 +685,7 @@ func ValidatePublication(ctx context.Context, conn *pgconn.PgConn, publicationNa
 			filtered = append(filtered, table)
 		}
 	}
-	if err := missingFromPublicationError(publicationName, missing); err != nil {
+	if err := missingFromPublicationError(publicationName, pub.allTables, missing); err != nil {
 		return nil, err
 	}
 	return filtered, nil
@@ -700,14 +696,19 @@ func queryReturnedTrue(rows []*pgconn.Result) bool {
 }
 
 // missingFromPublicationError reports the tables a publication does not
-// cover, or nil when there are none.
-func missingFromPublicationError(publicationName string, missing []TableFQN) error {
+// cover, or nil when there are none. allTables is true for a FOR ALL TABLES
+// publication, which gets its own hint: ALTER PUBLICATION ... ADD TABLE fails
+// on it.
+func missingFromPublicationError(publicationName string, allTables bool, missing []TableFQN) error {
 	if len(missing) == 0 {
 		return nil
 	}
 	names := make([]string, len(missing))
 	for i, table := range missing {
 		names[i] = table.String()
+	}
+	if allTables {
+		return fmt.Errorf("FOR ALL TABLES publication %s does not stream table(s) %s: check that they exist and are not unlogged, remove them from its EXCEPT list with ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) (PostgreSQL 19+), or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
 	}
 	return fmt.Errorf("publication %s does not include table(s) %s: add them with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
 }
