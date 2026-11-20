@@ -59,7 +59,7 @@ pipeline:
           root = [
             this.user.id,
             this.user.name,
-            meta("kafka_topic"),
+            metadata("kafka_topic"),
           ]
 `,
 		)
