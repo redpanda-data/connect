@@ -458,15 +458,19 @@ See the Row-level operations section above for the full constraints, including t
 					service.NewStringField(ioFieldAzureStorageAccount).
 						Description("The Azure storage account name.").
 						Example("mystorageaccount"),
+					// The container comes from the table location, so this
+					// field has no effect. It stays as a deprecated field so
+					// that old configs still parse.
 					service.NewStringField(ioFieldAzureContainer).
-						Description("The Azure blob container name.").
-						Example("iceberg-data"),
+						Description("This field has no effect. The container comes from the table location.").
+						Optional().
+						Deprecated(),
 					service.NewStringField(ioFieldAzureEndpoint).
-						Description("Custom endpoint for Azure-compatible storage.").
+						Description("The storage domain for Azure-compatible storage, without the account name. For example, `blob.core.chinacloudapi.cn`.").
 						Optional().
 						Advanced(),
 					service.NewStringField(ioFieldAzureSASToken).
-						Description("SAS token for authentication. Prefix with the container name followed by a dot if container-specific.").
+						Description("SAS token for authentication. The token applies to all containers of `storage_account`.").
 						Optional().
 						Secret(),
 					service.NewStringField(ioFieldAzureConnectionString).

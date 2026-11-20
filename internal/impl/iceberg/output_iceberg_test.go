@@ -382,3 +382,59 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 		})
 	}
 }
+
+// TestParseAzureSASToken checks that the SAS token is stored under the keys
+// that iceberg-go looks up. iceberg-go reads "adls.sas-token.<host>", where
+// <host> is the host of the table location, for example
+// abfss://container@myaccount.dfs.core.windows.net/path.
+func TestParseAzureSASToken(t *testing.T) {
+	tests := []struct {
+		name    string
+		storage string
+		want    map[string]string
+	}{
+		{
+			name: "default domains",
+			storage: `
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_sas_token: sv=token
+`,
+			want: map[string]string{
+				"adls.sas-token.myaccount.dfs.core.windows.net":  "sv=token",
+				"adls.sas-token.myaccount.blob.core.windows.net": "sv=token",
+			},
+		},
+		{
+			name: "custom endpoint",
+			storage: `
+  azure_blob_storage:
+    storage_account: myaccount
+    endpoint: dfs.core.chinacloudapi.cn
+    storage_sas_token: sv=token
+`,
+			want: map[string]string{
+				"adls.endpoint": "dfs.core.chinacloudapi.cn",
+				"adls.sas-token.myaccount.dfs.core.windows.net":      "sv=token",
+				"adls.sas-token.myaccount.blob.core.windows.net":     "sv=token",
+				"adls.sas-token.myaccount.dfs.core.chinacloudapi.cn": "sv=token",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:`+tt.storage, nil)
+			require.NoError(t, err)
+
+			props, err := parseStorageProps(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, map[string]string(props))
+		})
+	}
+}
