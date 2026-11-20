@@ -1,4 +1,5 @@
 [
+  {"path":"./internal/adp/exports"},
   {"path":"./internal/impl/amqp09"},
   {"path":"./internal/impl/amqp1"},
   {"path":"./internal/impl/arc"},
