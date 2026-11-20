@@ -35,8 +35,8 @@ type Entry struct {
 	ExternalStubbed bool      `json:"external_calls_stubbed"`
 	MemoryLimited   bool      `json:"memory_limited"` // hard per-point limit applied
 	Points          []Point   `json:"points"`
-	AWSCostUSD      float64   `json:"aws_cost_usd"`
-	SaaSCostUSD     float64   `json:"saas_cost_usd"`
+	AWSCostUSD      *float64  `json:"aws_cost_usd,omitempty"`  // nil = not recorded
+	SaaSCostUSD     *float64  `json:"saas_cost_usd,omitempty"` // nil = not recorded
 	RunURL          string    `json:"run_url,omitempty"`
 	ResultKey       string    `json:"result_key,omitempty"`
 	RecordedAt      time.Time `json:"recorded_at"`

@@ -576,7 +576,7 @@ func runBench(opts benchOpts) (errOut error) {
 	if shouldCatalogue(s, result) {
 		// Non-fatal, like the soak archive upload below: a valid local result
 		// must not fail the run because the catalogue is unreachable.
-		if err := catalogueSweep(ctx, opts, s, topo, names, result, sessionID); err != nil {
+		if err := catalogueSweep(ctx, opts, s, result, sessionID, os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: catalogue entry: %v\n", err)
 		}
 	}

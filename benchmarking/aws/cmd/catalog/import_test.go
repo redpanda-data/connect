@@ -31,17 +31,42 @@ func git(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// tempRepo creates a git repo whose HEAD is tagged v4.1.0 and returns its
-// path and HEAD sha.
-func tempRepo(t *testing.T) (string, string) {
+// scenariosPath is where the importer reads scenarios by default.
+const scenariosPath = "benchmarking/aws/scenarios"
+
+// untaggedRepo creates a git repo holding testdata/scenarios at
+// scenariosPath and returns its path and HEAD sha.
+func untaggedRepo(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	git(t, dir, "init", "-q")
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o644))
-	git(t, dir, "add", "f")
+	src := filepath.Join("testdata", "scenarios")
+	require.NoError(t, filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, p)
+		out := filepath.Join(dir, scenariosPath, rel)
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(out, b, 0o644)
+	}))
+	git(t, dir, "add", ".")
 	git(t, dir, "commit", "-q", "-m", "init")
-	git(t, dir, "tag", "v4.1.0")
 	return dir, git(t, dir, "rev-parse", "HEAD")
+}
+
+// tempRepo is untaggedRepo with HEAD tagged v4.1.0.
+func tempRepo(t *testing.T) (string, string) {
+	t.Helper()
+	dir, sha := untaggedRepo(t)
+	git(t, dir, "tag", "v4.1.0")
+	return dir, sha
 }
 
 // copyFixtures copies testdata/results into a temp dir, substituting the
@@ -81,8 +106,7 @@ func TestImportSkipsAndImports(t *testing.T) {
 	root := copyFixtures(t, sha)
 	store := t.TempDir()
 
-	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+store, "--results-root", root,
-		"--repo", repo, "--scenarios-root", filepath.Join("testdata", "scenarios"))
+	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+store, "--results-root", root, "--repo", repo)
 	require.Equal(t, 0, code, stderr)
 
 	var got importOut
@@ -109,7 +133,9 @@ func TestImportSkipsAndImports(t *testing.T) {
 	require.Equal(t, sha, e.BuildSHA)
 	require.Equal(t, "postgres_cdc", e.Input)
 	require.Equal(t, "redpanda", e.Output)
-	require.Equal(t, []string{"benchmark"}, e.Processors)
+	require.Empty(t, e.Processors)
+	require.True(t, e.SinkMeasured)
+	require.Nil(t, e.AWSCostUSD)
 	require.Equal(t, "cdc", e.Workload.Mode)
 	require.Equal(t, 1200, e.Workload.MessageSizeBytes)
 	require.Equal(t, 150000, e.Workload.OfferedRatePerSec)
@@ -121,11 +147,10 @@ func TestImportSkipsAndImports(t *testing.T) {
 }
 
 func TestImportConnectVersionUnknown(t *testing.T) {
-	repo, _ := tempRepo(t)
-	// The fixture sha is not a commit in this repo, so git describe fails.
-	root := copyFixtures(t, "0123456789abcdef0123456789abcdef01234567")
-	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+t.TempDir(), "--results-root", root,
-		"--repo", repo, "--scenarios-root", filepath.Join("testdata", "scenarios"))
+	// No v4.* tag reaches the sha, so git describe fails.
+	repo, sha := untaggedRepo(t)
+	root := copyFixtures(t, sha)
+	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+t.TempDir(), "--results-root", root, "--repo", repo)
 	require.Equal(t, 0, code, stderr)
 	var got importOut
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
@@ -140,9 +165,92 @@ func TestImportConnectVersionUnknown(t *testing.T) {
 	require.True(t, found)
 }
 
+func TestImportReadsScenarioAtResultSHA(t *testing.T) {
+	repo, sha := tempRepo(t)
+	// After the measured commit, the scenario's offered rate changes and a
+	// scenario that did not exist at the measured commit appears.
+	cdc := filepath.Join(repo, scenariosPath, "postgres", "orders-cdc.yaml")
+	b, err := os.ReadFile(cdc)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(cdc, []byte(strings.Replace(string(b), "150000", "999", 1)), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, scenariosPath, "postgres", "orders-missing.yaml"), b, 0o644))
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-q", "-m", "later")
+
+	root := copyFixtures(t, sha)
+	store := t.TempDir()
+	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+store, "--results-root", root, "--repo", repo)
+	require.Equal(t, 0, code, stderr)
+	var got importOut
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+	require.Equal(t, []string{"postgres-orders-cdc-2026-06-01T10-00-00Z"}, got.Imported)
+	for _, s := range got.Skipped {
+		if filepath.Base(s.Path) == "2026-06-04T10-00-00Z.json" {
+			require.Equal(t, "scenario yaml missing", s.Reason)
+		}
+	}
+	entries, err := catalog.NewDirStore(store).List(context.Background(), "")
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.Equal(t, 150000, entries[0].Workload.OfferedRatePerSec)
+}
+
+func TestImportMalformedFileIsSkipped(t *testing.T) {
+	repo, sha := tempRepo(t)
+	root := copyFixtures(t, sha)
+	bad := filepath.Join(root, "postgres", "orders-cdc", "2026-06-00T10-00-00Z.json")
+	require.NoError(t, os.WriteFile(bad, []byte(`{"scenario":`), 0o644))
+
+	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+t.TempDir(), "--results-root", root, "--repo", repo)
+	require.Equal(t, 0, code, stderr)
+	var got importOut
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+	require.Equal(t, []string{"postgres-orders-cdc-2026-06-01T10-00-00Z"}, got.Imported)
+	require.Equal(t, bad, got.Skipped[0].Path)
+	require.Contains(t, got.Skipped[0].Reason, "decoding result")
+}
+
+func TestEntryFromResultFileSkipReasons(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, "postgres", "orders-cdc", name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
+		return p
+	}
+	describe := func(string) (string, error) { return "v4.1.0", nil }
+	var gitCalls int
+	scenarioAt := func(_, _ string) ([]byte, error) {
+		gitCalls++
+		return []byte("pipeline:\n  input:\n    postgres_cdc: {}\n"), nil
+	}
+
+	// A non-hex sha never reaches git.
+	f := write("a.json", `{"scenario":"postgres/orders-cdc","git_sha":"--output=x"}`)
+	_, reason := entryFromResultFile(f, dir, scenarioAt, describe)
+	require.Equal(t, "build sha unknown", reason)
+	require.Zero(t, gitCalls)
+
+	// An EntryFromRun error other than the known rejections is a skip too.
+	f = write("b.json", `{"scenario":"postgres/orders-cdc","git_sha":"abcdef1","infra":{"runner_instance_type":"c8g.4xlarge"}}`)
+	_, reason = entryFromResultFile(f, dir, scenarioAt, describe)
+	require.Contains(t, reason, "invalid entry")
+
+	scenarioAt = func(_, _ string) ([]byte, error) { return []byte("pipeline: [unclosed"), nil }
+	_, reason = entryFromResultFile(f, dir, scenarioAt, describe)
+	require.Contains(t, reason, "decoding scenario")
+}
+
+func TestImportScenariosRootMustBeRelative(t *testing.T) {
+	for _, root := range []string{"/abs/path", "../outside", ""} {
+		code, _, _ := runCLI(t, "import", "--store", "dir:"+t.TempDir(), "--results-root", t.TempDir(), "--scenarios-root", root)
+		require.Equal(t, 2, code, root)
+	}
+}
+
 func TestImportEmptyRoot(t *testing.T) {
 	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+t.TempDir(), "--results-root", t.TempDir(),
-		"--repo", t.TempDir(), "--scenarios-root", t.TempDir())
+		"--repo", t.TempDir())
 	require.Equal(t, 0, code, stderr)
 	require.JSONEq(t, `{"imported":[],"skipped":[]}`, stdout)
 }

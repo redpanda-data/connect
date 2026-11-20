@@ -22,6 +22,27 @@ type RunPoint struct {
 	RSSBytes                []uint64 // process RSS samples; the peak is kept
 }
 
+// BenchSourceOutput is the catalogued identity of a source-direction bench's
+// output: the component only. The harness's benchmark processor and its
+// per-session topic are measurement plumbing, not part of the workload a
+// customer runs, so they are left out of the entry's processors and
+// fingerprint.
+func BenchSourceOutput() map[string]any {
+	return map[string]any{"redpanda": map[string]any{}}
+}
+
+// BenchSourcePipeline builds the catalogued pipeline of a source-direction
+// bench scenario from its pipeline section: the scenario's input, its
+// pipeline.pipeline section (if any) and BenchSourceOutput. The runner and
+// the importer both use it so their entries share one identity.
+func BenchSourcePipeline(scenario map[string]any) map[string]any {
+	p := map[string]any{"input": scenario["input"], "output": BenchSourceOutput()}
+	if pp, ok := scenario["pipeline"]; ok {
+		p["pipeline"] = pp
+	}
+	return p
+}
+
 // RunInput is a completed bench run in the shape EntryFromRun maps to an
 // Entry. It is shared by the runner and the historical-results importer.
 type RunInput struct {
@@ -33,17 +54,24 @@ type RunInput struct {
 	OfferedRatePerSec int
 	Soak              bool
 	MemoryLimited     bool
-	AWSCostUSD        float64
-	Points            []RunPoint
-	Now               time.Time
+	// SinkMeasured is true when throughput was measured end to end, with the
+	// output writing to a real sink.
+	SinkMeasured bool
+	// AWSCostUSD is the run's AWS cost; nil when not recorded.
+	AWSCostUSD *float64
+	Points     []RunPoint
+	Now        time.Time
 }
 
 // EntryFromRun maps a completed bench sweep to a catalogue Entry. Soak runs
 // and arm/binary comparison runs are not catalogue material and are rejected,
-// as are runs whose build is not identifiable.
+// as are runs whose build or Connect version is not identifiable.
 func EntryFromRun(r RunInput) (Entry, error) {
 	if r.GitSHA == "" || r.GitSHA == "unknown" {
 		return Entry{}, errors.New("build sha unknown")
+	}
+	if r.ConnectVersion == "" || r.ConnectVersion == "unknown" {
+		return Entry{}, errors.New("connect version unknown")
 	}
 	if r.Soak {
 		return Entry{}, errors.New("soak result")
@@ -95,7 +123,7 @@ func EntryFromRun(r RunInput) (Entry, error) {
 		ConnectVersion: r.ConnectVersion,
 		BuildSHA:       r.GitSHA,
 		Infra:          Infra{RunnerInstanceType: r.InstanceType, Region: r.Region},
-		SinkMeasured:   true,
+		SinkMeasured:   r.SinkMeasured,
 		MemoryLimited:  r.MemoryLimited,
 		Points:         points,
 		AWSCostUSD:     r.AWSCostUSD,

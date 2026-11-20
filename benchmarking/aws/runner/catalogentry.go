@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -28,7 +29,6 @@ const defaultCatalogBucket = "redpanda-connect-bench-catalog"
 // catalogMeta is the per-run context a Result does not carry.
 type catalogMeta struct {
 	SessionID, RunURL, ResultKey string
-	AWSCostUSD                   float64
 	Now                          time.Time
 }
 
@@ -66,13 +66,9 @@ func shouldCatalogue(s *Scenario, r *Result) bool {
 }
 
 // catalogEntryFromResult adapts a Scenario and its Result into a
-// catalog.RunInput and maps it to an Entry. input and output are the
-// topology's pipeline maps.
-func catalogEntryFromResult(s *Scenario, input, output map[string]any, r *Result, meta catalogMeta) (catalog.Entry, error) {
-	pipeline := map[string]any{"input": input, "output": output}
-	if p, ok := s.Pipeline["pipeline"]; ok {
-		pipeline["pipeline"] = p
-	}
+// catalog.RunInput and maps it to an Entry. The pipeline is the catalogued
+// identity (catalog.BenchSourcePipeline), not the rendered harness config.
+func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.Entry, error) {
 	run := catalog.RunInput{
 		ID:                meta.SessionID,
 		Scenario:          r.Scenario,
@@ -82,12 +78,12 @@ func catalogEntryFromResult(s *Scenario, input, output map[string]any, r *Result
 		Region:            r.Infra.Region,
 		RunURL:            meta.RunURL,
 		ResultKey:         meta.ResultKey,
-		Pipeline:          pipeline,
+		Pipeline:          catalog.BenchSourcePipeline(s.Pipeline),
 		MessageSizeBytes:  r.Dataset.RowSizeBytes,
 		OfferedRatePerSec: s.Workload.WriteRatePerSec,
 		Soak:              s.Soak,
 		MemoryLimited:     s.MemoryLimited(),
-		AWSCostUSD:        meta.AWSCostUSD,
+		SinkMeasured:      true,
 		Now:               meta.Now,
 	}
 	for _, p := range r.Points {
@@ -107,10 +103,29 @@ func catalogEntryFromResult(s *Scenario, input, output map[string]any, r *Result
 	return catalog.EntryFromRun(run)
 }
 
-// uploadCatalogEntry builds the entry for a completed sweep and writes it to
-// the catalogue bucket.
-func uploadCatalogEntry(ctx context.Context, opts benchOpts, s *Scenario, input, output map[string]any, r *Result, sessionID string) error {
-	e, err := catalogEntryFromResult(s, input, output, r, catalogMeta{
+// treeDirty reports whether the checkout at repoRoot has uncommitted changes
+// to tracked files. A var so tests can substitute it.
+var treeDirty = func(repoRoot string) (bool, error) {
+	out, err := exec.Command("git", "-C", repoRoot, "status", "--porcelain", "--untracked-files=no").Output()
+	if err != nil {
+		return false, fmt.Errorf("git status: %w", err)
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
+// catalogueSweep writes a completed sweep's entry to the catalogue bucket. A
+// build from a dirty working tree is not the commit its build SHA names, so
+// it is skipped with a warning on warn.
+func catalogueSweep(ctx context.Context, opts benchOpts, s *Scenario, r *Result, sessionID string, warn io.Writer) error {
+	dirty, err := treeDirty(opts.repoRoot)
+	if err != nil {
+		return fmt.Errorf("checking working tree: %w", err)
+	}
+	if dirty {
+		fmt.Fprintln(warn, "warning: catalogue entry skipped: working tree dirty")
+		return nil
+	}
+	e, err := catalogEntryFromResult(s, r, catalogMeta{
 		SessionID: sessionID,
 		RunURL:    runURLFromEnv(),
 		Now:       time.Now().UTC(),
@@ -123,13 +138,4 @@ func uploadCatalogEntry(ctx context.Context, opts benchOpts, s *Scenario, input,
 		return fmt.Errorf("load AWS config: %w", err)
 	}
 	return catalog.NewS3Store(s3.NewFromConfig(cfg), opts.catalogBucket).Put(ctx, e)
-}
-
-// catalogueSweep resolves the topology's pipeline maps and uploads the entry.
-func catalogueSweep(ctx context.Context, opts benchOpts, s *Scenario, topo Topology, names BenchNames, r *Result, sessionID string) error {
-	input, output, err := topo.Pipeline(s, names)
-	if err != nil {
-		return fmt.Errorf("topology pipeline: %w", err)
-	}
-	return uploadCatalogEntry(ctx, opts, s, input, output, r, sessionID)
 }

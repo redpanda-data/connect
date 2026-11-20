@@ -56,6 +56,19 @@ func TestFingerprintIgnoresIdentity(t *testing.T) {
 	assert.Len(t, fa, 64)
 }
 
+func TestFingerprintIgnoresTopicPresence(t *testing.T) {
+	// A customer config names its topic; the bench's catalogued output does
+	// not. Neither may change the fingerprint.
+	a := cdcPipeline()
+	b := cdcPipeline()
+	delete(b["output"].(map[string]any)["redpanda"].(map[string]any), "topic")
+	fa, err := Fingerprint(a)
+	require.NoError(t, err)
+	fb, err := Fingerprint(b)
+	require.NoError(t, err)
+	assert.Equal(t, fa, fb)
+}
+
 func TestFingerprintSeesPerformanceKnobs(t *testing.T) {
 	base, err := Fingerprint(cdcPipeline())
 	require.NoError(t, err)

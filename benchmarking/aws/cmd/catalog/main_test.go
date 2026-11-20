@@ -22,11 +22,13 @@ import (
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
 
+// testEntry is an entry shaped like the bench catalogues one: no harness
+// processors, the fingerprint of the scenario's catalogued pipeline.
 func testEntry(t *testing.T, id, output string, size int) catalog.Entry {
 	t.Helper()
 	pipeline := map[string]any{
 		"input":  map[string]any{"postgres_cdc": map[string]any{"schema": "public"}},
-		"output": map[string]any{"processors": []any{map[string]any{"benchmark": map[string]any{}}}, output: map[string]any{}},
+		"output": map[string]any{output: map[string]any{}},
 	}
 	fp, err := catalog.Fingerprint(pipeline)
 	require.NoError(t, err)
@@ -34,7 +36,6 @@ func testEntry(t *testing.T, id, output string, size int) catalog.Entry {
 		SchemaVersion:  catalog.SchemaVersion,
 		ID:             id,
 		Input:          "postgres_cdc",
-		Processors:     []string{"benchmark"},
 		Output:         output,
 		Fingerprint:    fp,
 		Workload:       catalog.Workload{MessageSizeBytes: size, Mode: "cdc"},
@@ -84,7 +85,7 @@ type queryOut struct {
 func TestQueryJSON(t *testing.T) {
 	store := seedStore(t, testEntry(t, "exact-1", "redpanda", 1200), testEntry(t, "other-1", "kafka", 1200))
 	code, stdout, stderr := runCLI(t, "query", "--store", store, "--repo", t.TempDir(),
-		"--input", "postgres_cdc", "--output", "redpanda", "--processors", "benchmark", "--message-size", "1200", "--mode", "cdc")
+		"--input", "postgres_cdc", "--output", "redpanda", "--message-size", "1200", "--mode", "cdc")
 	require.Equal(t, 0, code, stderr)
 
 	var got queryOut
@@ -118,16 +119,17 @@ func TestQueryLimitsToFive(t *testing.T) {
 func TestQueryWithConfig(t *testing.T) {
 	store := seedStore(t, testEntry(t, "exact-1", "redpanda", 1200))
 	cfg := filepath.Join(t.TempDir(), "cfg.yaml")
-	// A different dsn must not change the fingerprint.
+	// A plain customer config: its dsn, brokers and topic are identity.
 	require.NoError(t, os.WriteFile(cfg, []byte(`
 input:
   postgres_cdc:
     dsn: postgres://other-host/db
     schema: public
+    tables: [orders]
 output:
-  processors:
-    - benchmark: {}
-  redpanda: {}
+  redpanda:
+    seed_brokers: [broker:9092]
+    topic: orders
 `), 0o644))
 	code, stdout, stderr := runCLI(t, "query", "--store", store, "--repo", t.TempDir(), "--config", cfg, "--message-size", "1200")
 	require.Equal(t, 0, code, stderr)

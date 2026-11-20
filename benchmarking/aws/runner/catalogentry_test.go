@@ -9,23 +9,28 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
 
-func catalogFixture(t *testing.T) (*Scenario, map[string]any, map[string]any, *Result) {
+func catalogFixture(t *testing.T) (*Scenario, *Result) {
 	t.Helper()
 	s, err := LoadScenario("testdata/valid-orders-cdc.yaml")
 	require.NoError(t, err)
-	input, output, err := sourceTopology{}.Pipeline(s, BenchNames{})
-	require.NoError(t, err)
 	r := &Result{
-		Scenario: "postgres/orders-cdc",
-		GitSHA:   "abc123",
-		Infra:    ResultInfra{RunnerInstanceType: "c7i.4xlarge", Region: "us-east-2"},
-		Dataset:  ResultDataset{RowSizeBytes: 1200},
+		Scenario:       "postgres/orders-cdc",
+		GitSHA:         "abc123",
+		ConnectVersion: "v4.50.0-3-gabc123",
+		Infra:          ResultInfra{RunnerInstanceType: "c7i.4xlarge", Region: "us-east-2"},
+		Dataset:        ResultDataset{RowSizeBytes: 1200},
 	}
 	for i, v := range []int{1, 2, 4, 8} {
 		r.Points = append(r.Points, PointResult{
@@ -35,20 +40,29 @@ func catalogFixture(t *testing.T) (*Scenario, map[string]any, map[string]any, *R
 			Prom:    []PromPoint{{RSSBytes: 100}, {RSSBytes: uint64(1000 * (i + 1))}, {RSSBytes: 500}},
 		})
 	}
-	return s, input, output, r
+	return s, r
 }
 
 func TestCatalogEntryFromResult(t *testing.T) {
-	s, in, out, r := catalogFixture(t)
+	s, r := catalogFixture(t)
 	meta := catalogMeta{SessionID: "bench-1", RunURL: "https://x/run/1", Now: time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)}
-	e, err := catalogEntryFromResult(s, in, out, r, meta)
+	e, err := catalogEntryFromResult(s, r, meta)
 	require.NoError(t, err)
 	require.NoError(t, e.Validate())
 	require.Equal(t, "bench-1", e.ID)
 	require.Equal(t, "postgres/orders-cdc", e.Scenario)
 	require.Equal(t, "postgres_cdc", e.Input)
 	require.Equal(t, "redpanda", e.Output)
-	require.Equal(t, []string{"benchmark"}, e.Processors)
+	// The harness's benchmark processor and topic are not identity.
+	require.Empty(t, e.Processors)
+	wantFP, err := catalog.Fingerprint(map[string]any{
+		"input":  s.Pipeline["input"],
+		"output": map[string]any{"redpanda": map[string]any{"seed_brokers": []any{"b"}, "topic": "customer"}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, wantFP, e.Fingerprint)
+	require.Equal(t, "v4.50.0-3-gabc123", e.ConnectVersion)
+	require.Nil(t, e.AWSCostUSD)
 	require.Equal(t, "cdc", e.Workload.Mode)
 	require.Equal(t, 1200, e.Workload.MessageSizeBytes)
 	require.Equal(t, 5000, e.Workload.OfferedRatePerSec)
@@ -67,22 +81,72 @@ func TestCatalogEntryFromResult(t *testing.T) {
 }
 
 func TestCatalogEntryMemoryLimited(t *testing.T) {
-	s, in, out, r := catalogFixture(t)
-	s.Infra.MemoryPerVCPUBytes = 1 << 30
-	e, err := catalogEntryFromResult(s, in, out, r, catalogMeta{SessionID: "bench-1"})
+	s, r := catalogFixture(t)
+	s.Infra.MemoryPerVCPUBytes = 4_000_000_000
+	e, err := catalogEntryFromResult(s, r, catalogMeta{SessionID: "bench-1"})
 	require.NoError(t, err)
 	require.True(t, e.MemoryLimited)
 }
 
 func TestCatalogEntryUnknownSHA(t *testing.T) {
-	s, in, out, r := catalogFixture(t)
+	s, r := catalogFixture(t)
 	r.GitSHA = "unknown"
-	_, err := catalogEntryFromResult(s, in, out, r, catalogMeta{SessionID: "bench-1"})
+	_, err := catalogEntryFromResult(s, r, catalogMeta{SessionID: "bench-1"})
 	require.ErrorContains(t, err, "build sha unknown")
 }
 
+func TestCatalogEntryUnknownConnectVersion(t *testing.T) {
+	s, r := catalogFixture(t)
+	r.ConnectVersion = "unknown"
+	_, err := catalogEntryFromResult(s, r, catalogMeta{SessionID: "bench-1"})
+	require.ErrorContains(t, err, "connect version unknown")
+}
+
+func TestCatalogueSweepSkipsDirtyTree(t *testing.T) {
+	prev := treeDirty
+	defer func() { treeDirty = prev }()
+	treeDirty = func(string) (bool, error) { return true, nil }
+
+	s, r := catalogFixture(t)
+	var warn bytes.Buffer
+	// Returns before any AWS call: the bucket is never reached.
+	require.NoError(t, catalogueSweep(t.Context(), benchOpts{repoRoot: t.TempDir()}, s, r, "bench-1", &warn))
+	require.Equal(t, "warning: catalogue entry skipped: working tree dirty\n", warn.String())
+}
+
+func TestTreeDirty(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+	git("init", "-q")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o644))
+	git("add", "f")
+	git("commit", "-q", "-m", "init")
+
+	dirty, err := treeDirty(dir)
+	require.NoError(t, err)
+	require.False(t, dirty)
+
+	// Untracked files do not change the build.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "untracked"), []byte("x"), 0o644))
+	dirty, err = treeDirty(dir)
+	require.NoError(t, err)
+	require.False(t, dirty)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("y"), 0o644))
+	dirty, err = treeDirty(dir)
+	require.NoError(t, err)
+	require.True(t, dirty)
+
+	_, err = treeDirty(t.TempDir())
+	require.Error(t, err)
+}
+
 func TestShouldCatalogue(t *testing.T) {
-	s, _, _, r := catalogFixture(t)
+	s, r := catalogFixture(t)
 	require.True(t, shouldCatalogue(s, r))
 
 	s.Soak = true

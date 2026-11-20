@@ -45,7 +45,7 @@ var KeepStringKeys = []string{
 // deployment rather than affect performance.
 var ignoredKeys = []string{
 	"label", "tls", "sasl", "auth", "credentials", "password", "user",
-	"username", "dsn", "url", "urls", "addresses", "seed_brokers", "topics",
+	"username", "dsn", "url", "urls", "addresses", "seed_brokers", "topic", "topics",
 	"tables", "schema",
 }
 

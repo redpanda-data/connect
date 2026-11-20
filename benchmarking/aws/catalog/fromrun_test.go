@@ -9,6 +9,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -26,13 +27,10 @@ func validRunInput() RunInput {
 		RunURL:            "https://example.com/run",
 		MessageSizeBytes:  1200,
 		OfferedRatePerSec: 5000,
-		Pipeline: map[string]any{
+		SinkMeasured:      true,
+		Pipeline: BenchSourcePipeline(map[string]any{
 			"input": map[string]any{"postgres_cdc": map[string]any{"schema": "public"}},
-			"output": map[string]any{
-				"processors": []any{map[string]any{"benchmark": map[string]any{}}},
-				"redpanda":   map[string]any{"topic": "t"},
-			},
-		},
+		}),
 		Points: []RunPoint{
 			{VCPU: 1, Engine: "connect", MedianMBps: 10, MedianMsgps: 100, RSSBytes: []uint64{5, 9, 7}},
 			{VCPU: 2, MedianMBps: 20, MedianMsgps: 200},
@@ -48,7 +46,7 @@ func TestEntryFromRun(t *testing.T) {
 	require.NoError(t, e.Validate())
 	require.Equal(t, "postgres_cdc", e.Input)
 	require.Equal(t, "redpanda", e.Output)
-	require.Equal(t, []string{"benchmark"}, e.Processors)
+	require.Empty(t, e.Processors)
 	require.Equal(t, "cdc", e.Workload.Mode)
 	require.Equal(t, 5000, e.Workload.OfferedRatePerSec)
 	require.True(t, e.SinkMeasured)
@@ -59,6 +57,25 @@ func TestEntryFromRun(t *testing.T) {
 		{VCPU: 2, CUs: 20, CapacityMBps: 20, CapacityMsgps: 200},
 	}, e.Points)
 	require.Equal(t, validRunInput().Now, e.RecordedAt)
+	require.Nil(t, e.AWSCostUSD)
+	require.Nil(t, e.SaaSCostUSD)
+}
+
+func TestEntryFromRunCopiesSinkMeasured(t *testing.T) {
+	r := validRunInput()
+	r.SinkMeasured = false
+	e, err := EntryFromRun(r)
+	require.NoError(t, err)
+	require.False(t, e.SinkMeasured)
+}
+
+func TestEntryFromRunCostsOmittedWhenUnknown(t *testing.T) {
+	e, err := EntryFromRun(validRunInput())
+	require.NoError(t, err)
+	b, err := json.Marshal(e)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "aws_cost_usd")
+	require.NotContains(t, string(b), "saas_cost_usd")
 }
 
 func TestEntryFromRunErrors(t *testing.T) {
@@ -72,6 +89,8 @@ func TestEntryFromRunErrors(t *testing.T) {
 		"arm":         {func(r *RunInput) { r.Points[0].Arm = "a" }, "arm/binary result"},
 		"binary":      {func(r *RunInput) { r.Points[1].Binary = "base" }, "arm/binary result"},
 		"no instance": {func(r *RunInput) { r.InstanceType = "" }, "runner instance type missing"},
+		"no version":  {func(r *RunInput) { r.ConnectVersion = "" }, "connect version unknown"},
+		"unknown ver": {func(r *RunInput) { r.ConnectVersion = "unknown" }, "connect version unknown"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := validRunInput()
@@ -80,4 +99,14 @@ func TestEntryFromRunErrors(t *testing.T) {
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
+}
+
+func TestBenchSourcePipeline(t *testing.T) {
+	in := map[string]any{"postgres_cdc": map[string]any{}}
+	require.Equal(t, map[string]any{"input": in, "output": BenchSourceOutput()},
+		BenchSourcePipeline(map[string]any{"input": in}))
+
+	pp := map[string]any{"processors": []any{map[string]any{"mapping": "root = this"}}}
+	require.Equal(t, map[string]any{"input": in, "pipeline": pp, "output": BenchSourceOutput()},
+		BenchSourcePipeline(map[string]any{"input": in, "pipeline": pp}))
 }
