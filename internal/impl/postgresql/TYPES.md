@@ -58,6 +58,12 @@ rely on them.
   fallback, and the snapshot path resolves the numeric OID via `resolveTypeName`.
 - **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. The special
   values `infinity` and `-infinity` are handled as for DATE.
+- **Infinite values in arrays and ranges**: Known gap. The CDC path decodes an
+  infinite element of a DATE, TIMESTAMP or TIMESTAMPTZ array, or an infinite
+  bound of a TSTZRANGE or DATERANGE, to `pgtype.InfinityModifier`, which
+  marshals to the number `1` (`-1` for `-infinity`). The snapshot path returns
+  the raw PostgreSQL text. TSRANGE is not affected, because the CDC path also
+  returns its raw text.
 - **JSON / JSONB**: Both paths run `json.Unmarshal`, producing a tree of stdlib
   types (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.
