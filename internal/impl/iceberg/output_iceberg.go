@@ -11,6 +11,7 @@ package iceberg
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
@@ -522,10 +523,17 @@ func parseAzureProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 		// iceberg-go looks up "adls.sas-token.<host>", where <host> is the
 		// host of the table location (<account>.<storage domain>). The table
 		// location is not known here, so store the token for the two public
-		// Azure domains and for the custom endpoint.
+		// Azure domains and for the custom endpoint. The endpoint is the Blob
+		// domain, but an abfss:// location uses the DFS domain, so also store
+		// the token for the blob./dfs. twin of the endpoint.
 		domains := []string{"dfs.core.windows.net", "blob.core.windows.net"}
 		if endpoint != "" {
 			domains = append(domains, endpoint)
+			if rest, ok := strings.CutPrefix(endpoint, "blob."); ok {
+				domains = append(domains, "dfs."+rest)
+			} else if rest, ok := strings.CutPrefix(endpoint, "dfs."); ok {
+				domains = append(domains, "blob."+rest)
+			}
 		}
 		for _, d := range domains {
 			props[io.ADLSSasTokenPrefix+storageAccount+"."+d] = sasToken

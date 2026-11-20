@@ -271,7 +271,7 @@ S3 Tables manages snapshots itself and its Iceberg REST endpoint supports only s
 
 To use with Azure Data Lake Storage Gen2:
 
-* Configure `+"`storage.azure_blob_storage`"+` with your storage account name and container.
+* Configure `+"`storage.azure_blob_storage`"+` with your storage account name. The container comes from the table location.
 * Authenticate using one of: `+"`storage_access_key`"+` (shared key), `+"`storage_sas_token`"+`, or `+"`storage_connection_string`"+`.
 * The storage account must have hierarchical namespace (HNS) enabled for ADLS Gen2 compatibility.
 

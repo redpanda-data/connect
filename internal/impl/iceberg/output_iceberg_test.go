@@ -411,14 +411,15 @@ func TestParseAzureSASToken(t *testing.T) {
 			storage: `
   azure_blob_storage:
     storage_account: myaccount
-    endpoint: dfs.core.chinacloudapi.cn
+    endpoint: blob.core.chinacloudapi.cn
     storage_sas_token: sv=token
 `,
 			want: map[string]string{
-				"adls.endpoint": "dfs.core.chinacloudapi.cn",
-				"adls.sas-token.myaccount.dfs.core.windows.net":      "sv=token",
-				"adls.sas-token.myaccount.blob.core.windows.net":     "sv=token",
-				"adls.sas-token.myaccount.dfs.core.chinacloudapi.cn": "sv=token",
+				"adls.endpoint": "blob.core.chinacloudapi.cn",
+				"adls.sas-token.myaccount.dfs.core.windows.net":       "sv=token",
+				"adls.sas-token.myaccount.blob.core.windows.net":      "sv=token",
+				"adls.sas-token.myaccount.dfs.core.chinacloudapi.cn":  "sv=token",
+				"adls.sas-token.myaccount.blob.core.chinacloudapi.cn": "sv=token",
 			},
 		},
 	}
