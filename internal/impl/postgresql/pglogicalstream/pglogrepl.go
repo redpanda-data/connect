@@ -282,9 +282,10 @@ type publicationInfo struct {
 	// fields are then zero.
 	exists bool
 	// allTables is pg_publication.puballtables. It must be read from there:
-	// pg_publication_tables lists every table for a FOR ALL TABLES
-	// publication, and nothing for a FOR TABLE publication that has had all of
-	// its tables dropped, so the table list alone cannot tell them apart.
+	// pg_publication_tables lists only the tables a FOR ALL TABLES publication
+	// streams (EXCEPT and unlogged tables are left out), and nothing for a FOR
+	// TABLE publication that has had all of its tables dropped, so the table
+	// list alone cannot tell them apart.
 	allTables bool
 	// The operations the publication streams. Truncates are not read, since
 	// the stream ignores them.
