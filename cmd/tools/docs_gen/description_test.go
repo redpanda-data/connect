@@ -107,7 +107,7 @@ func TestRenderDescriptionPartial(t *testing.T) {
 	}
 	excluded := func(_, name string) bool { return name == "grok" }
 
-	got := renderDescriptionPartial(c, "inputs", componentPlatform{CgoOnly: true}, excluded)
+	got := renderDescriptionPartial(c, "inputs", componentPlatform{CgoOnly: true}, excluded, repoSource)
 	assert.Contains(t, got, "// tag::meta[]\n:description: Consumes messages from a ZeroMQ socket.\n:status: beta\n:page-beta: true\n:page-cgo-only: true\nifndef::env-cloud[]\n:page-introduced-in: 4.1.0\nendif::[]\n// end::meta[]\n",
 		"beta components set page-beta, which shows the docs UI beta badge in the page header")
 	assert.Contains(t, got, "// tag::body[]\nConsumes messages", "beta components get the badge instead of a notice")
@@ -116,25 +116,25 @@ func TestRenderDescriptionPartial(t *testing.T) {
 	assert.Contains(t, got, "// tag::footnotes[]\n== Patterns\n\nUse xref:components:processors/grok.adoc[grok].\n// end::footnotes[]\n")
 	assert.NotContains(t, got, "ifdef::env-cloud[]", "components that Cloud doesn't include keep their links")
 
-	cloud := renderDescriptionPartial(c, "inputs", componentPlatform{Cloud: true}, excluded)
+	cloud := renderDescriptionPartial(c, "inputs", componentPlatform{Cloud: true}, excluded, repoSource)
 	assert.NotContains(t, cloud, ":page-cgo-only:")
 	assert.Contains(t, cloud, "ifdef::env-cloud[]\nUse grok.\nendif::[]", "Cloud components unlink components that Cloud doesn't include")
 
 	c.Status, c.Footnotes = "deprecated", ""
-	deprecated := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil)
+	deprecated := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil, repoSource)
 	assert.Contains(t, deprecated, "// tag::body[]\n[WARNING]\n====\nThis component is deprecated")
 	assert.Contains(t, deprecated, "// tag::footnotes[]\n// end::footnotes[]\n", "the footnotes tag is always present")
 
 	assert.NotContains(t, deprecated, ":page-beta:")
 
 	c.Status = "experimental"
-	experimental := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil)
+	experimental := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil, repoSource)
 	assert.Contains(t, experimental, ":status: experimental\n")
 	assert.NotContains(t, experimental, ":page-beta:", "the docs UI has no experimental badge")
 	assert.Contains(t, experimental, "// tag::body[]\n[CAUTION]\n====\nThis component is experimental.")
 
 	c.Status = "stable"
-	stable := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil)
+	stable := renderDescriptionPartial(c, "inputs", componentPlatform{}, nil, repoSource)
 	assert.Contains(t, stable, ":status: stable\n")
 	assert.NotContains(t, stable, ":page-beta:")
 	assert.Contains(t, stable, "// tag::body[]\nConsumes messages", "stable components get no notice")
