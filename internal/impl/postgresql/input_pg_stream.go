@@ -274,7 +274,7 @@ With ` + "`false`" + `, the publication decides what is streamed. Every table it
 			Description("Specify the value to emit for the PostgreSQL special values `infinity` and `-infinity` in `date`, `timestamp`, and `timestamptz` columns. They have no timestamp representation. The setting applies to the message and to the `before` metadata, on the snapshot and on the stream.").
 			ShortDescription("The value to emit for infinite dates and timestamps.").
 			Default(infiniteTimestampsNull).
-			Version("4.119.0").
+			Version("4.120.0").
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
 			Description("The interval between heartbeat messages, which Redpanda Connect writes to the write-ahead log (WAL) using the `pg_logical_emit_message` function.\n\n" +
