@@ -14,7 +14,12 @@ workload:
     warmup: 2m
 pipeline:
     input:
-        http_server: {}
+        redpanda:
+            consumer_group: ${BENCH_CONSUMER_GROUP}
+            seed_brokers:
+                - ${BENCH_REDPANDA_BROKERS}
+            topics:
+                - ${BENCH_TOPIC}
     output:
         drop: {}
 sink:

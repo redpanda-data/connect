@@ -177,6 +177,9 @@ func Render(p Plan) ([]byte, error) {
 		// The sweep consumes as fast as the pipeline allows, so the target
 		// rate is no bound on consumption: size for the default peak.
 		sc.Stack = "none"
+		if p.Source == SourceApproximated {
+			sc.Pipeline = approximatedPipeline(p.Pipeline)
+		}
 		sc.Infra.Runner.InstanceType = "c8g.4xlarge"
 		sc.Workload = &renderLoad{
 			WriteRatePerSec: ProducerRatePerSec(size, 0),
@@ -199,6 +202,28 @@ func Render(p Plan) ([]byte, error) {
 		return nil, fmt.Errorf("marshalling scenario: %w", err)
 	}
 	return out, nil
+}
+
+// approximatedPipeline returns a copy of pipeline whose input is the bench's
+// redpanda input reading the source topic the producer fills. An approximated
+// input (http_server, generate, ...) cannot run as written: SwapIdentity has
+// stripped its strings, and the bench has no stack for it. Input-level
+// processors are pipeline logic and are kept; the stored Plan is not changed.
+func approximatedPipeline(pipeline map[string]any) map[string]any {
+	out := make(map[string]any, len(pipeline))
+	for k, v := range pipeline {
+		out[k] = v
+	}
+	const component = "redpanda"
+	tpl := SourceTemplates[SourceRedpanda](component)
+	in := map[string]any{component: tpl.Fields}
+	if orig, ok := pipeline["input"].(map[string]any); ok {
+		if procs, ok := orig["processors"]; ok {
+			in["processors"] = deepCopy(procs)
+		}
+	}
+	out["input"] = in
+	return out
 }
 
 // comment sets a line comment on the value of key found inside the mapping

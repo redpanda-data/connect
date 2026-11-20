@@ -35,9 +35,11 @@ var soakEmitGrace = 30 * time.Second
 
 // MatrixRunner orchestrates the CPU sweep against the runner EC2.
 type MatrixRunner struct {
-	SSM             SSMExecutor
-	LogFetcher      LogFetcher
-	RunnerInstance  string
+	SSM            SSMExecutor
+	LogFetcher     LogFetcher
+	RunnerInstance string
+	// LoadGenInstance runs the workload script: the load-gen host, or the
+	// runner host for stack none (see workloadInstance).
 	LoadGenInstance string
 	ConfigPath      string // path on the runner host to benchmark_config.yaml
 	// ConfigPaths maps sweepPoint.Key() to that point's launch config paths on
@@ -94,6 +96,10 @@ type MatrixRunner struct {
 	// point's broker-side series, tracking whether the engine is keeping
 	// pace with the source over the run. 0 disables backlog computation.
 	ExpectedRecordsPerSec float64
+	// ProducerRatePerSec, when > 0, is a stack-none scenario's producer
+	// rate. A point whose measured median msg/s reaches 95% of it gets a
+	// producer_bound anomaly (see producerBoundAnomaly).
+	ProducerRatePerSec float64
 	// Emitter, when non-nil, makes Run publish per-minute CloudWatch metrics
 	// for a soak point: a mid-run goroutine re-fetches the checkpointed log
 	// and Prometheus/broker artifacts every CheckpointSec (see
@@ -370,6 +376,9 @@ func (m *MatrixRunner) Run(
 		// T=0 is point launch (see offsetSampleT) — without it the prom
 		// annotations describe a moment warmup seconds before the anomaly.
 		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts, int(warmup.Seconds()))
+		if a, ok := producerBoundAnomaly(summary, m.ProducerRatePerSec); ok {
+			anomalies = append(anomalies, a)
+		}
 		var backlog []BacklogPoint
 		if !fromSamples {
 			backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)

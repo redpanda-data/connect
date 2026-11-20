@@ -329,11 +329,8 @@ func runBench(opts benchOpts) (errOut error) {
 		BackendFile: backendAbs,
 		StateKey:    "shared",
 	}
-	tfStack := &Terraform{
-		Dir:         StackDir(opts.repoRoot, s.Stack),
-		BackendFile: backendAbs,
-		StateKey:    s.Stack,
-	}
+	// Stack none has no source system: its stack terraform is a no-op.
+	tfStack := stackTerraform(s, opts.repoRoot, backendAbs)
 
 	if err := tfShared.Init(); err != nil {
 		return fmt.Errorf("terraform init shared: %w", err)
@@ -437,8 +434,9 @@ func runBench(opts benchOpts) (errOut error) {
 	plan := buildSweepPlan(s)
 	// legacy scenarios (no matrix.arms) share one config across every point,
 	// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
-	// path, so the six existing scenarios are byte-for-byte unchanged.
-	legacy := len(s.Matrix.Arms) == 0
+	// path, so the six existing scenarios are byte-for-byte unchanged. Stack
+	// none renders per point too: each point has its own consumer group.
+	legacy := !perPointConfigs(s)
 	var sets []renderedPointConfigs
 	if legacy {
 		set, err := renderPointConfigs(s, sharedOuts, topo, names, plan[0])
@@ -478,7 +476,7 @@ func runBench(opts benchOpts) (errOut error) {
 		SSM:             ssmExec,
 		LogFetcher:      logFetcher,
 		RunnerInstance:  sharedOuts["runner_instance_id"],
-		LoadGenInstance: sharedOuts["load_gen_instance_id"],
+		LoadGenInstance: workloadInstance(s, sharedOuts),
 		ConfigPath:      "/opt/bench/config.yaml",
 		ConfigPaths: func() map[string]pointConfigPaths {
 			if legacy {
@@ -499,6 +497,7 @@ func runBench(opts benchOpts) (errOut error) {
 		PromScrapeSec:            promScrapeSec,
 		CheckpointSec:            checkpointSec,
 		ExpectedRecordsPerSec:    expectedRecordsPerSec,
+		ProducerRatePerSec:       producerRatePerSec(s),
 	}
 	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
 	// operator (or an alarm) can watch a run that may still have 23 hours
@@ -1019,11 +1018,7 @@ func downCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve backend.hcl: %w", err)
 	}
-	stack := &Terraform{
-		Dir:         StackDir(*repoRoot, s.Stack),
-		BackendFile: backendAbs,
-		StateKey:    s.Stack,
-	}
+	stack := stackTerraform(s, *repoRoot, backendAbs)
 	shared := &Terraform{
 		Dir:         SharedDir(*repoRoot),
 		BackendFile: backendAbs,
@@ -1222,6 +1217,7 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 // by BenchNames (WithStreams/WithStream, _s<i>).
 func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, names BenchNames, p sweepPoint) (renderedPointConfigs, error) {
 	out := renderedPointConfigs{Key: p.Key()}
+	outs = pointOuts(outs, names, p.Key())
 
 	// Arms carry a merged pipeline; arm-less points use the scenario's own.
 	armScenario := *s
@@ -1344,6 +1340,11 @@ func binaryNamesReferenced(s *Scenario) map[string]bool {
 // the first check anyway; catching both in one pass gives a single clear
 // error instead of two confusing ones.
 func validateBinaryFlags(s *Scenario, binaries map[string]string) error {
+	// The stack-none producer runs the default staged binary
+	// (producerBinary), which --binary mappings replace.
+	if s.Stack == stackNone && len(binaries) > 0 {
+		return fmt.Errorf("scenario %s: stack %q does not support --binary mappings: its producer runs the default %s", s.Name, stackNone, producerBinary)
+	}
 	referenced := binaryNamesReferenced(s)
 
 	var missing []string
@@ -1525,6 +1526,18 @@ chmod 0600 /opt/bench/license.jwt
 }
 
 func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames, execTimeout time.Duration) error {
+	if s.Stack == stackNone {
+		// No seeder binary: the seed step only creates the source topic.
+		script, err := topo.SeedScript(s, outs, names)
+		if err != nil {
+			return err
+		}
+		ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
+		if err != nil {
+			return err
+		}
+		return ssmExec.Run(ctx, workloadInstance(s, outs), script, streamingOnLine(os.Stdout, "seed"))
+	}
 	if s.Dataset.Seeder == "" {
 		return nil
 	}
@@ -1572,5 +1585,13 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	if err != nil {
 		return err
 	}
-	return ssmExec.Run(ctx, outs["load_gen_instance_id"], script, streamingOnLine(os.Stdout, "seed"))
+	return ssmExec.Run(ctx, workloadInstance(s, outs), script, streamingOnLine(os.Stdout, "seed"))
+}
+
+// producerRatePerSec is a stack-none scenario's producer rate, or 0.
+func producerRatePerSec(s *Scenario) float64 {
+	if s.Stack != stackNone || s.Workload == nil {
+		return 0
+	}
+	return float64(s.Workload.WriteRatePerSec)
 }

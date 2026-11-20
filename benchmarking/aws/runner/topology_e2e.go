@@ -68,20 +68,32 @@ func (e2eTopology) Pipeline(s *Scenario, _ BenchNames) (input, output map[string
 	return in, out, nil
 }
 
-func (e2eTopology) SeedScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
+// SeedScript for stack none creates the source topic the producer fills.
+func (e2eTopology) SeedScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
 	if s.Stack == stackNone {
-		return "", nil
+		brokers, err := sourceBrokers(outs)
+		if err != nil {
+			return "", err
+		}
+		return renderSourceTopicScript(brokers, n.SourceTopic()), nil
 	}
 	return renderSeedScript(s, outs, "stage/"+s.Dataset.Seeder)
 }
 
-func (e2eTopology) WorkloadScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
+// WorkloadScript for stack none is the sustained producer (producer.go).
+func (e2eTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
 	if s.Stack == stackNone {
-		return "", nil
+		args, err := producerArgsFor(s, outs, n)
+		if err != nil {
+			return "", err
+		}
+		return renderProducerScript(args), nil
 	}
 	return renderWorkloadScript(s, outs)
 }
 
+// ResetScript for stack none is empty: each point's fresh consumer group
+// (BenchNames.ConsumerGroup) is the reset.
 func (e2eTopology) ResetScript(s *Scenario, outs map[string]string, _ BenchNames) (string, error) {
 	if s.Stack == stackNone {
 		return "", nil

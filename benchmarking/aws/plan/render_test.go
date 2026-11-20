@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -98,4 +99,36 @@ func TestRenderMySQLToRedpandaGolden(t *testing.T) {
 	require.Contains(t, string(out), "bench_cache")
 	require.Contains(t, string(out), "checkpoint_limit: 10000")
 	checkGolden(t, "bot-cccccccccccc.yaml", out)
+}
+
+func TestRenderApproximatedInputReadsBenchTopic(t *testing.T) {
+	cfg := map[string]any{
+		"input": map[string]any{
+			"http_server": map[string]any{"path": "/post", "timeout": "5s"},
+			"processors":  []any{map[string]any{"mapping": "root = this"}},
+		},
+		"output": map[string]any{"drop": map[string]any{}},
+	}
+	p := build(t, cfg)
+	require.Equal(t, SourceApproximated, p.Source)
+	out, err := Render(p)
+	require.NoError(t, err)
+
+	var sc struct {
+		Connector string         `yaml:"connector"`
+		Pipeline  map[string]any `yaml:"pipeline"`
+	}
+	require.NoError(t, yaml.Unmarshal(out, &sc))
+	require.Equal(t, "http_server", sc.Connector, "the catalogue still names the customer's input")
+	in := sc.Pipeline["input"].(map[string]any)
+	require.NotContains(t, in, "http_server")
+	require.Equal(t, map[string]any{
+		"seed_brokers":   []any{"${BENCH_REDPANDA_BROKERS}"},
+		"topics":         []any{"${BENCH_TOPIC}"},
+		"consumer_group": "${BENCH_CONSUMER_GROUP}",
+	}, in["redpanda"])
+	require.Equal(t, []any{map[string]any{"mapping": "root = this"}}, in["processors"],
+		"input-level processors are pipeline logic and stay")
+	// The stored plan is untouched: the swap happens at render time only.
+	require.Contains(t, p.Pipeline["input"], "http_server")
 }

@@ -68,7 +68,7 @@ var instanceTypeVCPU = map[string]int{
 }
 
 // stackNone is the stack of an e2e scenario with no source stack: the input
-// reads from a preloaded Redpanda topic.
+// reads a Redpanda topic that a sustained producer fills (producer.go).
 const stackNone = "none"
 
 // Direction is the role the connector-under-test plays in the pipeline.

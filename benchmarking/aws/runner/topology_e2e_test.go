@@ -74,16 +74,11 @@ func TestE2ERenderedConfigCarriesPipelineSection(t *testing.T) {
 }
 
 func TestE2EStackNoneScripts(t *testing.T) {
+	// Seed and workload scripts for stack none are covered in producer_test.go.
 	s := e2eScenario(map[string]any{"drop": map[string]any{}})
-	for _, f := range []func() (string, error){
-		func() (string, error) { return e2eTopology{}.SeedScript(s, nil, BenchNames{}) },
-		func() (string, error) { return e2eTopology{}.WorkloadScript(s, nil, BenchNames{}) },
-		func() (string, error) { return e2eTopology{}.ResetScript(s, nil, BenchNames{}) },
-	} {
-		got, err := f()
-		require.NoError(t, err)
-		require.Empty(t, got)
-	}
+	got, err := e2eTopology{}.ResetScript(s, nil, BenchNames{})
+	require.NoError(t, err)
+	require.Empty(t, got)
 	pts, err := e2eTopology{}.EngineSeries(MetricInputs{})
 	require.NoError(t, err)
 	require.Nil(t, pts)
