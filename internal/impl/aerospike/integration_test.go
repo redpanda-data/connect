@@ -523,53 +523,6 @@ func TestIntegrationCoalescing(t *testing.T) {
 	assert.NotNil(t, outputRead(t, client, "c2"))
 }
 
-// TestIntegrationCoalesceKeepsSequentialOutcome sends pairs of messages for one
-// key in one batch whose result one command cannot reproduce, and checks that
-// the record and the errors match the messages written one at a time.
-func TestIntegrationCoalesceKeepsSequentialOutcome(t *testing.T) {
-	t.Run("create_only twice keeps the first and fails the second", func(t *testing.T) {
-		w, client := outputSetup(t, "operation: create_only\n")
-
-		batch := service.MessageBatch{
-			msg(t, `{"id":"co1","a":1}`),
-			msg(t, `{"id":"co1","a":2}`),
-		}
-		indexer := batch.Index()
-		err := w.WriteBatch(t.Context(), batch)
-		require.Error(t, err)
-
-		var berr *service.BatchError
-		require.ErrorAs(t, err, &berr)
-		failed := map[int]string{}
-		berr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, msgErr error) bool {
-			if msgErr != nil {
-				failed[i] = msgErr.Error()
-			}
-			return true
-		})
-		require.Len(t, failed, 1)
-		assert.Contains(t, failed[1], "code 5")
-
-		rec := outputRead(t, client, "co1")
-		require.NotNil(t, rec)
-		assert.Equal(t, 1, rec.Bins["a"])
-	})
-
-	t.Run("a later keep leaves the earlier ttl", func(t *testing.T) {
-		w, client := outputSetup(t, "ttl: '${! json(\"ttl\") }'\n")
-
-		require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{
-			msg(t, `{"id":"ttl-keep","a":1,"ttl":"3600"}`),
-			msg(t, `{"id":"ttl-keep","a":2,"ttl":"keep"}`),
-		}))
-
-		rec := outputRead(t, client, "ttl-keep")
-		require.NotNil(t, rec)
-		assert.Equal(t, 2, rec.Bins["a"])
-		assert.InDelta(t, 3600, rec.Expiration, 60)
-	})
-}
-
 // TestIntegrationCoalesceDisjointBins proves two messages for one key in the
 // same batch, with no bin names in common, become one record that has both
 // sets of bins.
@@ -615,7 +568,9 @@ func TestIntegrationBinNamesAreCaseSensitive(t *testing.T) {
 // Messages in different WriteBatch calls are not folded. A later write keeps
 // bins from the earlier batch. A later delete removes the record. The same
 // write-then-delete pair inside one batch must not leave the record, because
-// that pair is folded into a single delete.
+// that pair is folded into a single delete. Pairs that one command cannot
+// reproduce, such as two create_only messages or a ttl followed by keep, leave
+// the same record and errors in one batch as in two.
 func TestIntegrationSameKeyAcrossBatches(t *testing.T) {
 	w, client := outputSetup(t, "operation: '${! meta(\"op\") }'\n")
 
@@ -653,6 +608,63 @@ func TestIntegrationSameKeyAcrossBatches(t *testing.T) {
 			opMsg(t, "delete", `{"id":"x3"}`),
 		}))
 		assert.Nil(t, outputRead(t, client, "x3"))
+	})
+
+	t.Run("create_only twice keeps the first in one batch and in two", func(t *testing.T) {
+		require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "create_only", `{"id":"x4","a":1}`),
+		}))
+		err := w.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "create_only", `{"id":"x4","a":2}`),
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "code 5")
+
+		batch := service.MessageBatch{
+			opMsg(t, "create_only", `{"id":"x5","a":1}`),
+			opMsg(t, "create_only", `{"id":"x5","a":2}`),
+		}
+		indexer := batch.Index()
+		err = w.WriteBatch(t.Context(), batch)
+		var berr *service.BatchError
+		require.ErrorAs(t, err, &berr)
+		failed := map[int]string{}
+		berr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, msgErr error) bool {
+			if msgErr != nil {
+				failed[i] = msgErr.Error()
+			}
+			return true
+		})
+		require.Len(t, failed, 1)
+		assert.Contains(t, failed[1], "code 5")
+
+		for _, key := range []string{"x4", "x5"} {
+			rec := outputRead(t, client, key)
+			require.NotNil(t, rec, key)
+			assert.Equal(t, 1, rec.Bins["a"], key)
+		}
+	})
+
+	t.Run("a later keep leaves the earlier ttl in one batch and in two", func(t *testing.T) {
+		tw, tclient := outputSetup(t, "ttl: '${! json(\"ttl\") }'\n")
+
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"x6","a":1,"ttl":"3600"}`),
+		}))
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"x6","a":2,"ttl":"keep"}`),
+		}))
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			msg(t, `{"id":"x7","a":1,"ttl":"3600"}`),
+			msg(t, `{"id":"x7","a":2,"ttl":"keep"}`),
+		}))
+
+		for _, key := range []string{"x6", "x7"} {
+			rec := outputRead(t, tclient, key)
+			require.NotNil(t, rec, key)
+			assert.Equal(t, 2, rec.Bins["a"], key)
+			assert.InDelta(t, 3600, rec.Expiration, 60, key)
+		}
 	})
 }
 
