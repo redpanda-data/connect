@@ -666,9 +666,9 @@ func TestMysqlColumnToCommonDecimalCarriesLogical(t *testing.T) {
 	assert.True(t, got.Optional)
 }
 
-// TestParseSnapshotTime checks that the snapshot gives the same DATE,
-// DATETIME and TIMESTAMP values as the stream, so a row has the same value
-// whether the snapshot or the stream delivered it.
+// TestParseSnapshotTime checks the DATE, DATETIME and TIMESTAMP values that
+// the snapshot gives. For zero, partial-zero and invalid dates, they must be
+// the same values as the stream gives.
 func TestParseSnapshotTime(t *testing.T) {
 	berlin, err := time.LoadLocation("Europe/Berlin")
 	require.NoError(t, err)
