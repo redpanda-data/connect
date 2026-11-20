@@ -128,6 +128,35 @@ func TestStalenessUnresolvableComponent(t *testing.T) {
 	require.Equal(t, []string{"no source path for mapping"}, s.Reasons)
 }
 
+func TestStalenessInvalidSHA(t *testing.T) {
+	for _, sha := range []string{"--output=x", "xyz1234", "abc12", "abcdef1234567890abcdef1234567890abcdef123", "HEAD"} {
+		e := stalenessEntry()
+		e.BuildSHA = sha
+		s, err := CheckStaleness(t.Context(), stalenessFake(), e)
+		require.NoError(t, err, sha)
+		require.Equal(t, "unknown", s.State, sha)
+		require.Equal(t, []string{"build sha unknown"}, s.Reasons, sha)
+	}
+}
+
+func TestStalenessChangelogMentionsAgainstRepo(t *testing.T) {
+	g := NewGitCLI("../../..")
+	ctx := t.Context()
+	const from, to = "v4.118.0", "v4.119.0"
+	if _, err := g.ChangedPaths(ctx, from, to, []string{"CHANGELOG.md"}); err != nil {
+		t.Skipf("tags %s..%s unavailable: %v", from, to, err)
+	}
+
+	got, err := g.ChangelogMentions(ctx, from, to, "oracledb_cdc")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Contains(t, got[0], "- oracledb_cdc: Concurrent pipeline starts")
+
+	got, err = g.ChangelogMentions(ctx, from, to, "snowflake_streaming")
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
 func TestStalenessGitCLIAgainstRepo(t *testing.T) {
 	g := NewGitCLI("../../..")
 	ctx := t.Context()
@@ -144,6 +173,11 @@ func TestStalenessGitCLIAgainstRepo(t *testing.T) {
 	for _, p := range paths {
 		require.NotContains(t, p, "_test.go")
 	}
+
+	// Registered with the name on a separate line from the Register call.
+	snow, err := g.ComponentPaths(ctx, "snowflake_streaming")
+	require.NoError(t, err)
+	require.Contains(t, snow, "internal/impl/snowflake")
 
 	none, err := g.ComponentPaths(ctx, "no_such_component_xyz")
 	require.NoError(t, err)

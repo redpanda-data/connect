@@ -63,6 +63,9 @@ func lines(s string) []string {
 	return out
 }
 
+// validSHA guards what reaches git: hex only, abbreviated or full.
+var validSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
+
 var releaseTag = regexp.MustCompile(`^v4\.\d+\.\d+$`)
 
 func (g *gitCLI) LatestRelease(ctx context.Context) (string, error) {
@@ -78,19 +81,34 @@ func (g *gitCLI) LatestRelease(ctx context.Context) (string, error) {
 	return "", errors.New("no v4.x.y release tag found")
 }
 
-func (g *gitCLI) ComponentPaths(ctx context.Context, component string) ([]string, error) {
-	pattern := `Register[A-Za-z]*\("` + regexp.QuoteMeta(component) + `"`
-	out, err := g.run(ctx, "grep", "-l", "-E", pattern, "--", "internal/impl")
+// grepFiles runs git grep -l and treats exit status 1 (no matches) as empty.
+func (g *gitCLI) grepFiles(ctx context.Context, args ...string) ([]string, error) {
+	out, err := g.run(ctx, append([]string{"grep", "-l"}, args...)...)
 	if err != nil {
 		var ee *exec.ExitError
-		if errors.As(errors.Unwrap(err), &ee) && ee.ExitCode() == 1 {
-			return nil, nil // no matches
+		if errors.As(err, &ee) && ee.ExitCode() == 1 {
+			return nil, nil
 		}
+		return nil, err
+	}
+	return lines(out), nil
+}
+
+// ComponentPaths finds non-test files under internal/impl containing the
+// quoted component name and a Register call. The name is matched anywhere in
+// the file because gofmt often puts it on the line after the Register call.
+func (g *gitCLI) ComponentPaths(ctx context.Context, component string) ([]string, error) {
+	named, err := g.grepFiles(ctx, "-F", "-e", `"`+component+`"`, "--", "internal/impl", ":!*_test.go")
+	if err != nil || len(named) == 0 {
+		return nil, err
+	}
+	files, err := g.grepFiles(ctx, append([]string{"-E", `Register[A-Za-z]*\(`, "--"}, named...)...)
+	if err != nil {
 		return nil, err
 	}
 	seen := map[string]bool{}
 	var dirs []string
-	for _, f := range lines(out) {
+	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
 			continue
 		}
@@ -156,7 +174,7 @@ type Staleness struct {
 // CheckStaleness checks the entry's input, processors and output against code
 // changes and CHANGELOG mentions between its build SHA and the latest release.
 func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
-	if e.BuildSHA == "" || e.BuildSHA == "unknown" {
+	if !validSHA.MatchString(e.BuildSHA) {
 		return Staleness{State: "unknown", Reasons: []string{"build sha unknown"}}, nil
 	}
 	latest, err := g.LatestRelease(ctx)
