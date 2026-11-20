@@ -267,9 +267,11 @@ func (k *kafkaReader) connectExplicitTopics(_ context.Context, config *sarama.Co
 		}
 	}
 
-	doneCtx, doneFn := context.WithCancel(context.Background())
+	// doneCtx is cancelled when the goroutine below has stopped the partition
+	// consumers and closed the client. Close waits on it after it calls doneFn.
+	doneCtx, finishedFn := context.WithCancel(context.Background())
 	go func() {
-		defer doneFn()
+		defer finishedFn()
 		looping := true
 		for looping {
 			select {
@@ -290,7 +292,9 @@ func (k *kafkaReader) connectExplicitTopics(_ context.Context, config *sarama.Co
 		for _, consumer := range partConsumers {
 			consumer.AsyncClose()
 		}
-		consumerWG.Done()
+		// Wait for the partition consumers to stop before msgChan is closed,
+		// because they send on it.
+		consumerWG.Wait()
 
 		k.cMut.Lock()
 		if k.msgChan != nil {
