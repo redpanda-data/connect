@@ -202,6 +202,9 @@ func (s *objectStore) RecordRun(ctx context.Context, id string, runID int64) err
 	if err := checkID(id); err != nil {
 		return err
 	}
+	if runID <= 0 {
+		return fmt.Errorf("invalid run id %d: must be positive (0 means no run)", runID)
+	}
 	body, err := json.Marshal(runMarker{RunID: runID, At: s.now().UTC()})
 	if err != nil {
 		return err

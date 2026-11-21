@@ -228,3 +228,14 @@ func TestLockAcquireFailsWhenEC2ErrorsPersist(t *testing.T) {
 	var so, se bytes.Buffer
 	require.Equal(t, 1, run(lockArgs("acquire", root, "--holder", "a", "--wait", "40ms", "--poll", "5ms"), &so, &se))
 }
+
+func TestLockAcquireTimeoutAfterEC2ErrorIsExit3(t *testing.T) {
+	root := t.TempDir()
+	e := &fakeEC2{}
+	useFakes(t, root, e)
+	var so, se bytes.Buffer
+	require.Equal(t, 0, run(lockArgs("acquire", root, "--holder", "a", "--wait", "1s", "--poll", "5ms"), &so, &se), se.String())
+	e.errs = 1
+	require.Equal(t, 3, run(lockArgs("acquire", root, "--holder", "b", "--wait", "40ms", "--poll", "5ms"), &so, &se),
+		"one EC2 error, then a held lock until the deadline")
+}

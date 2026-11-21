@@ -281,3 +281,14 @@ func TestMarkDoneIdempotent(t *testing.T) {
 	require.Contains(t, string(api.objs["plans/0123456789ab.done"]), "succeeded")
 	require.NotContains(t, string(api.objs["plans/0123456789ab.done"]), "failed")
 }
+
+func TestRecordRunRejectsNonPositive(t *testing.T) {
+	api := newFakeS3()
+	s := NewS3Store(api, "bucket")
+	ctx := context.Background()
+	require.NoError(t, s.Put(ctx, testPlan("0123456789ab")))
+	for _, id := range []int64{0, -1} {
+		require.Error(t, s.RecordRun(ctx, "0123456789ab", id))
+	}
+	require.NotContains(t, api.objs, "plans/0123456789ab.run")
+}

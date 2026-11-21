@@ -209,7 +209,7 @@ func acquire(ctx context.Context, lock plan.Lock, api EC2API, holder string, ttl
 			// Retry on the next poll; fail only if it persists to the deadline.
 			fmt.Fprintf(log, "error checking bench instances (will retry): %v\n", err)
 			lastErr = err
-		} else if n == 0 {
+		} else if lastErr = nil; n == 0 {
 			ok, err := lock.Acquire(ctx, holder, ttl)
 			if err != nil {
 				return err
@@ -220,7 +220,6 @@ func acquire(ctx context.Context, lock plan.Lock, api EC2API, holder string, ttl
 			}
 			fmt.Fprintln(log, "stack lock held by another run; waiting")
 		} else {
-			lastErr = nil
 			fmt.Fprintf(log, "%d bench instance(s) still running; waiting\n", n)
 		}
 		if !time.Now().Add(poll).Before(deadline) {
