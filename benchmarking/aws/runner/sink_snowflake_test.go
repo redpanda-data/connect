@@ -485,3 +485,74 @@ func TestSnowflakeHostSetupScript(t *testing.T) {
 	require.Less(t, strings.Index(b, "get-secret-value"), strings.Index(b, "taskset"), "the key is on disk before Connect launches")
 	require.NotContains(t, renderBenchScript(benchScriptArgs{VCPU: 1}), "secretsmanager")
 }
+
+// startingSink is a fakeSink that also implements PointStarter.
+type startingSink struct {
+	fakeSink
+	startErr error
+}
+
+func (s *startingSink) BeforePoint(_ context.Context, point string) error {
+	*s.events = append(*s.events, "before "+point)
+	return s.startErr
+}
+
+// The pre-point hook runs once per point, right after the pre-point count,
+// and survives countableSink hiding Count.
+func TestSinkBeforePointCalledPerPoint(t *testing.T) {
+	var events []string
+	sink := &startingSink{fakeSink: fakeSink{events: &events, counts: []int64{0, 10_150, 10_150, 20_300}}}
+	mr := e2eSinkRunner(t, sink, &eventSSM{FakeSSM: FakeSSM{}, events: &events}, 10)
+	_, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"count 1", "before 1", "bench", "count 1",
+		"count 2", "before 2", "bench", "count 2",
+	}, events)
+
+	events = nil
+	mr = e2eSinkRunner(t, uncountedSink{sink}, &eventSSM{FakeSSM: FakeSSM{}, events: &events}, 10)
+	_, err = mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.NoError(t, err)
+	require.Equal(t, []string{"before 1", "bench", "before 2", "bench"}, events)
+
+	events = nil
+	sink.startErr = errors.New("resize denied")
+	sink.counts = []int64{0}
+	mr = e2eSinkRunner(t, sink, &eventSSM{FakeSSM: FakeSSM{}, events: &events}, 10)
+	_, err = mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.ErrorContains(t, err, "resize denied")
+	require.NotContains(t, events, "bench", "a failed hook stops the point before launch")
+}
+
+// A sink without the hook runs exactly as before.
+func TestSinkWithoutBeforePointUnaffected(t *testing.T) {
+	var events []string
+	sink := &fakeSink{events: &events, counts: []int64{0, 10_150, 10_150, 20_300}}
+	var _ Sink = sink
+	_, isStarter := any(sink).(PointStarter)
+	require.False(t, isStarter)
+	mr := e2eSinkRunner(t, sink, &eventSSM{FakeSSM: FakeSSM{}, events: &events}, 10)
+	_, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.NoError(t, err)
+	require.Equal(t, []string{"count 1", "bench", "count 1", "count 2", "bench", "count 2"}, events)
+}
+
+// Snowflake re-asserts the run's warehouse size before every point, so a
+// reaper reset (or any other resize) between Provision and a point cannot
+// make it measure at the wrong size.
+func TestSinkSnowflakeBeforePointReassertsSize(t *testing.T) {
+	f := &fakeSnowflake{}
+	sink, _ := newTestSnowflakeSink(t, f, SinkSpec{Size: "LARGE"}, nil)
+	require.NoError(t, sink.BeforePoint(t.Context(), "1"))
+	require.NoError(t, sink.BeforePoint(t.Context(), "2"))
+	want := "ALTER WAREHOUSE BENCH_WH SET WAREHOUSE_SIZE = LARGE"
+	require.Equal(t, []string{want, want}, f.sql)
+
+	f.errs = map[string]error{"ALTER": errors.New("denied")}
+	require.ErrorContains(t, sink.BeforePoint(t.Context(), "3"), "denied")
+
+	var _ PointStarter = sink
+	_, isStarter := any(dropSink{}).(PointStarter)
+	require.False(t, isStarter)
+}

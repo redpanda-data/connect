@@ -37,6 +37,22 @@ type Sink interface {
 	Teardown(ctx context.Context, session string) error
 }
 
+// PointStarter is an optional Sink hook, run right after the pre-point
+// Count and before the point launches. The snowflake sink uses it to
+// re-assert the run's warehouse size, which something else (the reaper's
+// reset) may have changed since Provision. An error fails the point.
+type PointStarter interface {
+	BeforePoint(ctx context.Context, point string) error
+}
+
+// beforePoint runs sink's PointStarter hook, if it has one.
+func beforePoint(ctx context.Context, sink Sink, point string) error {
+	if ps, ok := sink.(PointStarter); ok {
+		return ps.BeforePoint(ctx, point)
+	}
+	return nil
+}
+
 // ErrCountUnsupported is Count's answer for a sink that cannot count its
 // records; the ground-truth check is skipped for it.
 var ErrCountUnsupported = errors.New("sink cannot count records")
@@ -166,6 +182,12 @@ func withSink(ctx context.Context, sink Sink, session string, fn func(placeholde
 type uncountedSink struct{ Sink }
 
 func (uncountedSink) Count(context.Context, string) (int64, error) { return 0, ErrCountUnsupported }
+
+// BeforePoint forwards to the wrapped sink's hook: hiding Count must not
+// hide it.
+func (u uncountedSink) BeforePoint(ctx context.Context, point string) error {
+	return beforePoint(ctx, u.Sink, point)
+}
 
 // countableSink returns sink, or sink with Count hidden when any point's
 // output declares batching processors. Those run on the batch just before

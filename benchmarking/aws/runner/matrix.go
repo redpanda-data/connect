@@ -224,6 +224,11 @@ func (m *MatrixRunner) Run(
 				sinkBefore, sinkCounted = c, true
 			}
 		}
+		if m.Sink != nil {
+			if err := beforePoint(ctx, m.Sink, key); err != nil {
+				return nil, fmt.Errorf("sink before %d vCPU: %w", n, err)
+			}
+		}
 
 		// benchCtx is separate from workloadCtx: the workload goroutine
 		// below cancels benchCtx (not the other way around) the moment

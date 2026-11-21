@@ -142,7 +142,9 @@ sets the warehouse back to `XSMALL`.
   `orphan_ttl_hours` (4 h). Do not create `BENCH_*` schemas by hand in the
   bench database: the reaper drops them.
 - When no `BENCH_*` schema younger than the TTL remains, the reaper also sets
-  the warehouse back to `XSMALL`, in case a crashed run left it resized.
+  the warehouse back to `XSMALL`, in case a crashed run left it resized. A
+  live run re-applies its size immediately before each point, so this reset
+  cannot make a point run at the wrong size.
 - The bench warehouse must have `AUTO_SUSPEND` set (for example 60 s), so a
   warehouse that a crashed run left oversized bills for at most that long
   after its last query, not until the reaper runs.

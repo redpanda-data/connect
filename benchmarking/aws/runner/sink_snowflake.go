@@ -272,6 +272,17 @@ func (s *snowflakeSink) Count(ctx context.Context, _ string) (int64, error) {
 	return last, nil
 }
 
+// BeforePoint re-asserts the run's warehouse size, so a reset by the
+// reaper (or anything else) since Provision cannot make a point measure at
+// the wrong size.
+func (s *snowflakeSink) BeforePoint(ctx context.Context, _ string) error {
+	q := fmt.Sprintf("ALTER WAREHOUSE %s SET WAREHOUSE_SIZE = %s", s.target.Warehouse, s.size)
+	if err := s.exec.Exec(ctx, q); err != nil {
+		return fmt.Errorf("snowflake %q: %w", q, err)
+	}
+	return nil
+}
+
 // Teardown drops the run's schema and everything in it, then puts the
 // warehouse back to its base size. Both run, whatever the first returns.
 func (s *snowflakeSink) Teardown(ctx context.Context, session string) error {
