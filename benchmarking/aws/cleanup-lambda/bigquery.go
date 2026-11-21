@@ -95,7 +95,12 @@ func sweepBigQueryDatasets(ctx context.Context, open bigQueryOpener, now time.Ti
 		return
 	}
 	for _, d := range datasets {
-		if !bigQueryDatasetRe.MatchString(d.ID) || !olderThanTTL(d.Created, now, ttl) {
+		// A zero creation time means the metadata gave none; it is not
+		// "infinitely old", so the dataset is left for a later sweep.
+		if !bigQueryDatasetRe.MatchString(d.ID) || d.Created.IsZero() || !olderThanTTL(d.Created, now, ttl) {
+			if d.Created.IsZero() && bigQueryDatasetRe.MatchString(d.ID) {
+				slog.Warn("bigquery dataset skipped: no creation time", "dataset", d.ID)
+			}
 			continue
 		}
 		id := project + "." + d.ID

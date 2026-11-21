@@ -160,3 +160,18 @@ func quoteJSON(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+// A dataset whose metadata gave no creation time is skipped, never treated
+// as infinitely old: the zero time would otherwise delete a live run's
+// dataset.
+func TestSweepBigQuery_SkipsZeroCreationTime(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	bq := &fakeBigQueryReaper{datasets: []bigQueryDatasetInfo{
+		{ID: "bench_bench_20261120_115900"},
+		{ID: "bench_bench_20261120_060000", Created: now.Add(-5 * time.Hour)},
+	}}
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", nil, bqOpenerFor(bq, "p"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"p.bench_bench_20261120_060000"}, bq.deleted)
+	require.Zero(t, report.Errors)
+}
