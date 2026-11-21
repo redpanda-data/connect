@@ -105,12 +105,12 @@ var urlUserinfo = regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+
 // separator, which redaction keeps. It is not in SecretPatterns: in
 // Bloblang it applies only inside string literals (see redactLogic), so an
 // assignment such as root.password = this.password is never rewritten.
-var keyValueSecret = regexp.MustCompile(`(?i)\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)\S+`)
+var keyValueSecret = regexp.MustCompile(`(?i)((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)\S+`)
 
 // keyValueSecretInLiteral is keyValueSecret for the inside of a quoted
 // Bloblang string: the value stops at the closing quote, and an escaped
 // quote is part of the value.
-var keyValueSecretInLiteral = regexp.MustCompile(`(?i)\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)(?:[^\s"\\]|\\.)+`)
+var keyValueSecretInLiteral = regexp.MustCompile(`(?i)((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)(?:[^\s"\\]|\\.)+`)
 
 // bloblangKeys hold Bloblang (or other code) whose assignments must survive
 // redaction; key=value secrets in them are redacted only inside string
