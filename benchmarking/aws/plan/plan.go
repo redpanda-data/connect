@@ -16,20 +16,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
 
-// DefaultSinkSize is the Snowflake warehouse size used when none is given,
-// and the size snowflake_streaming is always pinned to.
+// DefaultSinkSize is the Snowflake warehouse size every Snowflake plan is
+// pinned to, for both outputs: neither path runs COPY on the warehouse in
+// this harness (snowflake_streaming is serverless Snowpipe Streaming), so
+// the size does not change the measurement and is never offered.
 const DefaultSinkSize = "XSMALL"
-
-// sizedOutput is the only output whose throughput depends on the Snowflake
-// warehouse size. snowflake_streaming ingests through serverless Snowpipe
-// Streaming, which the warehouse does not drive.
-const sizedOutput = "snowflake_put"
 
 // Workload is the load profile requested for a plan.
 type Workload struct {
@@ -56,8 +52,8 @@ type Plan struct {
 	Source     SourceKind `json:"source"`
 	Sink       SinkKind   `json:"sink"`
 	SinkSize   string     `json:"sink_size,omitempty"`
-	// SinkSizeAdjustable is true only for snowflake_put, the one output a
-	// warehouse size changes; only then is a size worth offering.
+	// SinkSizeAdjustable is always false: no bench sink's size changes the
+	// measurement (see DefaultSinkSize). Kept for sinks that may need it.
 	SinkSizeAdjustable bool           `json:"sink_size_adjustable"`
 	Pipeline           map[string]any `json:"pipeline"`
 	// Fingerprint is catalog.ConfigIdentity's fingerprint of the customer's
@@ -82,26 +78,11 @@ type Plan struct {
 	Outcome string `json:"outcome,omitempty"`
 }
 
-// BuildOption adjusts how Build makes a plan.
-type BuildOption func(*buildOptions)
-
-type buildOptions struct{ sinkSize string }
-
-// WithSinkSize requests a Snowflake warehouse size. It applies only when the
-// output is snowflake_put; for any other output it is ignored.
-func WithSinkSize(size string) BuildOption {
-	return func(o *buildOptions) { o.sinkSize = strings.ToUpper(strings.TrimSpace(size)) }
-}
-
 // Build classifies a customer pipeline config and produces a Plan. A config
 // that cannot be run (CDC input with no bench stack) yields a Plan with
-// Runnable false and an empty Pipeline; only a malformed config or an
-// unknown requested sink size is an error.
-func Build(config map[string]any, w Workload, slack SlackRef, now time.Time, opts ...BuildOption) (Plan, error) {
-	var o buildOptions
-	for _, opt := range opts {
-		opt(&o)
-	}
+// Runnable false and an empty Pipeline; only a malformed config is an
+// error.
+func Build(config map[string]any, w Workload, slack SlackRef, now time.Time) (Plan, error) {
 	ident, err := catalog.ConfigIdentity(config)
 	if err != nil {
 		return Plan{}, fmt.Errorf("reading pipeline identity: %w", err)
@@ -143,12 +124,6 @@ func Build(config map[string]any, w Workload, slack SlackRef, now time.Time, opt
 	p.Runnable, p.Source, p.Sink = true, src, sink
 	if sink == SinkSnowflake {
 		p.SinkSize = DefaultSinkSize
-		if output == sizedOutput {
-			p.SinkSizeAdjustable = true
-			if o.sinkSize != "" {
-				p.SinkSize = o.sinkSize
-			}
-		}
 	}
 	if p.Estimate, err = catalog.EstimateRun(stackFor(src), string(sink), p.SinkSize); err != nil {
 		return Plan{}, fmt.Errorf("estimating run: %w", err)

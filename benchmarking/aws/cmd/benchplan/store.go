@@ -92,15 +92,14 @@ func parse(fs *flag.FlagSet, args []string) error {
 func runBuild(args []string, stdout io.Writer) error {
 	fs := newFlags("build")
 	var (
-		cfgPath, mode, sinkSize, channel, thread, store string
-		msgSize                                         int
-		target                                          float64
+		cfgPath, mode, channel, thread, store string
+		msgSize                               int
+		target                                float64
 	)
 	fs.StringVar(&cfgPath, "config", "", "pipeline config YAML")
 	fs.IntVar(&msgSize, "message-size", 0, "message size in bytes")
 	fs.Float64Var(&target, "target-mb-s", 0, "target throughput in MB/s")
 	fs.StringVar(&mode, "mode", "", "cdc or bulk (default: derived from the input)")
-	fs.StringVar(&sinkSize, "sink-size", "", "Snowflake warehouse size")
 	fs.StringVar(&channel, "slack-channel", "", "Slack channel of the requesting thread")
 	fs.StringVar(&thread, "slack-thread", "", "Slack thread timestamp")
 	fs.StringVar(&store, "store", "", "s3://<bucket> or dir:<path>")
@@ -132,12 +131,8 @@ func runBuild(args []string, stdout io.Writer) error {
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
 		return fmt.Errorf("parsing config %s: %w", cfgPath, err)
 	}
-	var opts []plan.BuildOption
-	if sinkSize != "" {
-		opts = append(opts, plan.WithSinkSize(sinkSize))
-	}
 	p, err := plan.Build(cfg, plan.Workload{MessageSizeBytes: msgSize, TargetMBps: target, Mode: mode},
-		plan.SlackRef{Channel: channel, ThreadTS: thread}, deps.now().UTC(), opts...)
+		plan.SlackRef{Channel: channel, ThreadTS: thread}, deps.now().UTC())
 	if err != nil {
 		return err
 	}

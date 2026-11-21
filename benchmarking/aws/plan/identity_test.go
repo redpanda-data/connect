@@ -229,10 +229,60 @@ func TestSwapIdentityBigQueryNoCredentialsJSONAndForcesCreate(t *testing.T) {
 	require.Equal(t, "CREATE_IF_NEEDED", bq["create_disposition"])
 	require.Contains(t, caveats, CaveatSchemaEvoForced)
 
-	bq, caveats = swapBigQuery(t, map[string]any{"project": "p", "dataset": "d", "table": "t"})
+	bq, caveats = swapBigQuery(t, map[string]any{"project": "p", "dataset": "d", "table": "t", "auto_detect": true})
 	require.Equal(t, "CREATE_IF_NEEDED", bq["create_disposition"])
 	require.NotContains(t, caveats, CaveatSchemaEvoForced, "unset is the default: no caveat")
 
-	_, caveats = swapBigQuery(t, map[string]any{"table": "t", "create_disposition": "CREATE_IF_NEEDED"})
+	_, caveats = swapBigQuery(t, map[string]any{"table": "t", "create_disposition": "CREATE_IF_NEEDED", "auto_detect": true})
 	require.NotContains(t, caveats, CaveatSchemaEvoForced)
+}
+
+// The run's dataset starts empty, so a JSON or CSV load must infer its
+// schema: auto_detect is forced on, and the caveat says so.
+func TestSwapIdentityBigQueryForcesAutoDetect(t *testing.T) {
+	for name, bq := range map[string]map[string]any{
+		"absent": {"table": "t"},
+		"false":  {"table": "t", "auto_detect": false},
+		"csv":    {"table": "t", "format": "CSV", "auto_detect": false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, caveats := swapBigQuery(t, bq)
+			require.Equal(t, true, out["auto_detect"])
+			require.Contains(t, caveats, CaveatSchemaEvoForced)
+		})
+	}
+
+	out, caveats := swapBigQuery(t, map[string]any{"auto_detect": true})
+	require.Equal(t, true, out["auto_detect"])
+	require.NotContains(t, caveats, CaveatSchemaEvoForced)
+
+	// Parquet carries its own schema; auto_detect does not apply.
+	out, caveats = swapBigQuery(t, map[string]any{"format": "PARQUET", "auto_detect": false})
+	require.Equal(t, false, out["auto_detect"])
+	require.NotContains(t, caveats, CaveatSchemaEvoForced)
+	out, _ = swapBigQuery(t, map[string]any{"format": "PARQUET"})
+	require.NotContains(t, out, "auto_detect")
+}
+
+func TestSwapIdentityCapsCommitPeriod(t *testing.T) {
+	for _, component := range []string{"redpanda", "kafka_franz", "redpanda_common", "kafka"} {
+		for in, want := range map[any]any{"1s": "1s", "5s": "5s", "500ms": "500ms", "30s": "5s", "2m": "5s", "${COMMIT}": "5s"} {
+			cfg := map[string]any{
+				"input":  map[string]any{component: map[string]any{"commit_period": in}},
+				"output": map[string]any{"drop": map[string]any{}},
+			}
+			out, caveats, err := SwapIdentity(cfg, SourceRedpanda, SinkDrop)
+			require.NoError(t, err)
+			require.Empty(t, caveats)
+			require.Equal(t, want, out["input"].(map[string]any)[component].(map[string]any)["commit_period"], "%s %v", component, in)
+		}
+		cfg := map[string]any{
+			"input":  map[string]any{component: map[string]any{}},
+			"output": map[string]any{"drop": map[string]any{}},
+		}
+		out, _, err := SwapIdentity(cfg, SourceRedpanda, SinkDrop)
+		require.NoError(t, err)
+		require.NotContains(t, out["input"].(map[string]any)[component].(map[string]any), "commit_period",
+			"unset keeps the component default, which is at most 5s")
+	}
 }

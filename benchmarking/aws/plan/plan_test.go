@@ -531,47 +531,28 @@ func snowflakePut() map[string]any {
 	return cfg
 }
 
-func buildSized(t *testing.T, cfg map[string]any, size string) (Plan, error) {
-	t.Helper()
-	return Build(cfg, Workload{MessageSizeBytes: 1000, TargetMBps: 10}, SlackRef{}, testNow, WithSinkSize(size))
+// Neither Snowflake path runs COPY on the warehouse in this harness
+// (snowflake_streaming is serverless Snowpipe Streaming; snowflake_put's
+// Snowpipe is serverless too), so the size is pinned at XSMALL and never
+// offered, for both outputs.
+func TestBuildSnowflakePinsXSmall(t *testing.T) {
+	for name, cfg := range map[string]map[string]any{"streaming": pgToSnowflake(), "put": snowflakePut()} {
+		t.Run(name, func(t *testing.T) {
+			p := build(t, cfg)
+			require.Equal(t, SinkSnowflake, p.Sink)
+			require.Equal(t, "XSMALL", p.SinkSize)
+			require.False(t, p.SinkSizeAdjustable)
+			want, err := catalog.EstimateRun("postgres", "snowflake", "XSMALL")
+			require.NoError(t, err)
+			require.Equal(t, want, p.Estimate)
+		})
+	}
 }
 
-// Snowpipe Streaming ingest is serverless: the warehouse size does not change
-// it, so it is pinned and not offered.
-func TestBuildStreamingPinsWarehouseSize(t *testing.T) {
-	p, err := buildSized(t, pgToSnowflake(), "LARGE")
-	require.NoError(t, err)
-	require.Equal(t, "XSMALL", p.SinkSize)
-	require.False(t, p.SinkSizeAdjustable)
-	require.InDelta(t, 1.0, p.Estimate.SaaSUSD, 1e-9)
-}
-
-func TestBuildPutHonoursWarehouseSize(t *testing.T) {
-	p, err := buildSized(t, snowflakePut(), "LARGE")
-	require.NoError(t, err)
-	require.Equal(t, SinkSnowflake, p.Sink)
-	require.Equal(t, "LARGE", p.SinkSize)
-	require.True(t, p.SinkSizeAdjustable)
-	require.InDelta(t, 8.0, p.Estimate.SaaSUSD, 1e-9)
-
-	p, err = buildSized(t, snowflakePut(), "")
-	require.NoError(t, err)
-	require.Equal(t, "XSMALL", p.SinkSize)
-	require.True(t, p.SinkSizeAdjustable)
-
-	p, err = buildSized(t, snowflakePut(), "medium")
-	require.NoError(t, err)
-	require.Equal(t, "MEDIUM", p.SinkSize)
-
-	_, err = buildSized(t, snowflakePut(), "HUGE")
-	require.ErrorContains(t, err, "HUGE")
-}
-
-func TestBuildSizeIgnoredForOtherSinks(t *testing.T) {
+func TestBuildNoSizeForOtherSinks(t *testing.T) {
 	cfg := pgToSnowflake()
 	cfg["output"] = map[string]any{"elasticsearch_v8": map[string]any{}}
-	p, err := buildSized(t, cfg, "LARGE")
-	require.NoError(t, err)
+	p := build(t, cfg)
 	require.Empty(t, p.SinkSize)
 	require.False(t, p.SinkSizeAdjustable)
 }
@@ -579,15 +560,8 @@ func TestBuildSizeIgnoredForOtherSinks(t *testing.T) {
 func TestBuildPlanJSONCarriesEstimateAndAdjustable(t *testing.T) {
 	b, err := json.Marshal(build(t, snowflakePut()))
 	require.NoError(t, err)
-	require.Contains(t, string(b), `"sink_size_adjustable":true`)
+	require.Contains(t, string(b), `"sink_size_adjustable":false`)
 	require.Contains(t, string(b), `"estimate":{"aws_usd":2.5,"saas_usd":1,"minutes":25}`)
-}
-
-func TestBuildPutXLarge(t *testing.T) {
-	p, err := buildSized(t, snowflakePut(), "XLARGE")
-	require.NoError(t, err)
-	require.Equal(t, "XLARGE", p.SinkSize)
-	require.InDelta(t, 16.0, p.Estimate.SaaSUSD, 1e-9)
 }
 
 // Every source kind's stack and every sink kind a plan can pick has a row in

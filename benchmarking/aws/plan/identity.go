@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 )
@@ -381,6 +382,9 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 		}
 		cv, err := applyTemplate(out, h, name, SourceTemplates[kind](name))
 		caveats = append(caveats, cv...)
+		if err == nil && kind == SourceRedpanda {
+			capCommitPeriod(h[name])
+		}
 		return err
 	})
 	if err != nil {
@@ -396,6 +400,9 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 			return nil, nil, err
 		}
 		caveats = append(caveats, cv...)
+		if sink == SinkBigQuery && forceAutoDetect(outMap[outName]) {
+			caveats = append(caveats, CaveatSchemaEvoForced)
+		}
 	}
 
 	if swapCheckpointCaches(inMap) || st.benchCache {
@@ -406,6 +413,50 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 }
 
 type swapState struct{ benchCache bool }
+
+// maxCommitPeriod caps a Kafka-flavoured input's commit_period, so offsets
+// are committed often enough for the bench's lag and drain checks. Every
+// such input defaults to at most this, so an unset value is left alone.
+const maxCommitPeriod = 5 * time.Second
+
+// capCommitPeriod keeps a commit_period of at most maxCommitPeriod and sets
+// anything longer, or not a plain duration, to maxCommitPeriod. It is a
+// bench-side cadence, not a measured setting, so it adds no caveat.
+func capCommitPeriod(v any) {
+	cfg, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	raw, set := cfg["commit_period"]
+	if !set {
+		return
+	}
+	if s, ok := raw.(string); ok {
+		if d, err := time.ParseDuration(s); err == nil && d <= maxCommitPeriod {
+			return
+		}
+	}
+	cfg["commit_period"] = maxCommitPeriod.String()
+}
+
+// forceAutoDetect sets auto_detect on a gcp_bigquery output: the run's
+// dataset starts empty and the bench cannot know the customer's table, so a
+// JSON or CSV load must infer the schema. PARQUET carries its own schema and
+// is left alone. It reports whether the customer's value was changed.
+func forceAutoDetect(v any) bool {
+	cfg, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	if f, _ := cfg["format"].(string); strings.EqualFold(f, "PARQUET") {
+		return false
+	}
+	if cfg["auto_detect"] == true {
+		return false
+	}
+	cfg["auto_detect"] = true
+	return true
+}
 
 // inputLeaves calls fn for every non-wrapper input under holder, recursing
 // through broker, sequence and read_until.

@@ -111,6 +111,12 @@ bench warehouse to the scenario's `sink.size` (default `XSMALL`) for the run.
 At teardown, even when the sweep fails, it drops the schema with `CASCADE` and
 sets the warehouse back to `XSMALL`.
 
+Bench Bot plans pin the warehouse at `XSMALL` for both `snowflake_streaming`
+and `snowflake_put`, and never offer a size: neither path runs `COPY` on the
+warehouse in this harness (Snowpipe Streaming is serverless, and
+`snowflake_put` only stages files), so the size does not change the
+measurement. The catalogue entry records the size in `infra.sink_size`.
+
 - Credentials are in the Secrets Manager secret
   `redpanda-connect-bench/snowflake`, as JSON
   `{account, user, private_key, database, warehouse, role}`. The operator

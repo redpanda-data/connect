@@ -180,7 +180,7 @@ This brings the parent spec's end-to-end topology (Design §4) forward from part
 | `redpanda`, `kafka_franz`, `kafka` | The bench Redpanda cluster, with a per-run topic | none |
 | `aws_s3` | A per-run prefix in a bench bucket, deleted after the run | none |
 | `iceberg` (S3 + Glue/REST catalog) | A per-run namespace on S3, dropped after the run | none |
-| `snowflake_streaming`, `snowflake_put` | Our Snowflake account, a per-run schema dropped after the run. Snowpipe Streaming ingest is serverless, so for `snowflake_streaming` the warehouse size is fixed at XSMALL and not offered *(decided 2026-11-20)*. For `snowflake_put` the fixed reference size applies and the user can raise it before the run | none |
+| `snowflake_streaming`, `snowflake_put` | Our Snowflake account, a per-run schema dropped after the run. The warehouse size is fixed at XSMALL for both outputs and not offered, because neither path runs COPY on the warehouse in this harness: Snowpipe Streaming ingest is serverless, and `snowflake_put` only stages files (the customer's Snowpipe is not kept) *(decided 2026-11-20, extended to `snowflake_put` in the final review)* | none |
 | `gcp_bigquery` | Our BigQuery project, a per-run dataset deleted after the run | none |
 | anything else | **Fallback:** a `drop` output, so source plus processors are measured | `sink_not_measured` in the headline, and a request is logged to add the sink |
 
