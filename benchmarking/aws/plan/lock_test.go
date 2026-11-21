@@ -129,3 +129,47 @@ func TestLockReleaseByNonHolderIsNoOp(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 }
+
+func TestLockExpiredDeletedBetweenGetAndReplace(t *testing.T) {
+	api := newFakeS3()
+	now := time.Unix(1700000000, 0)
+	ctx := context.Background()
+	ok, err := newTestLock(api, &now).Acquire(ctx, "old", time.Hour)
+	require.NoError(t, err)
+	require.True(t, ok)
+	now = now.Add(2 * time.Hour)
+
+	// The expired lock is released after we read it: S3 answers the
+	// If-Match put with 404 NoSuchKey. That is a lost race, not a failure.
+	api.afterGet = map[string]func(){"locks/shared-stack": func() {
+		api.mu.Lock()
+		delete(api.objs, "locks/shared-stack")
+		delete(api.etags, "locks/shared-stack")
+		api.mu.Unlock()
+	}}
+	ok, err = newTestLock(api, &now).Acquire(ctx, "new", time.Hour)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	api.afterGet = nil
+	ok, err = newTestLock(api, &now).Acquire(ctx, "new", time.Hour)
+	require.NoError(t, err)
+	require.True(t, ok, "the next poll takes the free lock")
+}
+
+func TestLockReleaseWhenDeletedBetweenGetAndDelete(t *testing.T) {
+	api := newFakeS3()
+	now := time.Unix(1700000000, 0)
+	ctx := context.Background()
+	l := newTestLock(api, &now)
+	ok, err := l.Acquire(ctx, "a", time.Hour)
+	require.NoError(t, err)
+	require.True(t, ok)
+	api.afterGet = map[string]func(){"locks/shared-stack": func() {
+		api.mu.Lock()
+		delete(api.objs, "locks/shared-stack")
+		delete(api.etags, "locks/shared-stack")
+		api.mu.Unlock()
+	}}
+	require.NoError(t, l.Release(ctx, "a"), "already gone is success")
+}

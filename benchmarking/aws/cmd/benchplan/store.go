@@ -202,12 +202,14 @@ func runLock(args []string, stderr io.Writer) error {
 // the lock is only attempted once the stack is empty.
 func acquire(ctx context.Context, lock plan.Lock, api EC2API, holder string, ttl, wait, poll time.Duration, log io.Writer) error {
 	deadline := time.Now().Add(wait)
+	var lastErr error
 	for {
 		n, err := runningBenchInstances(ctx, api)
 		if err != nil {
-			return err
-		}
-		if n == 0 {
+			// Retry on the next poll; fail only if it persists to the deadline.
+			fmt.Fprintf(log, "error checking bench instances (will retry): %v\n", err)
+			lastErr = err
+		} else if n == 0 {
 			ok, err := lock.Acquire(ctx, holder, ttl)
 			if err != nil {
 				return err
@@ -218,9 +220,13 @@ func acquire(ctx context.Context, lock plan.Lock, api EC2API, holder string, ttl
 			}
 			fmt.Fprintln(log, "stack lock held by another run; waiting")
 		} else {
+			lastErr = nil
 			fmt.Fprintf(log, "%d bench instance(s) still running; waiting\n", n)
 		}
 		if !time.Now().Add(poll).Before(deadline) {
+			if lastErr != nil {
+				return lastErr
+			}
 			return fmt.Errorf("%w: gave up after %s", errTimeout, wait)
 		}
 		select {

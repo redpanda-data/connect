@@ -50,13 +50,18 @@ type Store interface {
 	// Put stores a new plan and refuses to overwrite an existing one
 	// (ErrConflict).
 	Put(ctx context.Context, p Plan) error
-	// Get returns the plan, with DispatchedRunID filled from the dispatch
-	// marker when one exists. ErrNotFound when there is no such plan.
+	// Get returns the plan with Claimed and Approver filled from the claim
+	// marker and DispatchedRunID from the run marker, when they exist. A
+	// claim with no run reads as Claimed with DispatchedRunID 0. ErrNotFound when there is no such plan.
 	Get(ctx context.Context, id string) (Plan, error)
-	// MarkDispatched records the run that was started for the plan. The bool
-	// is true only for the first caller; later callers get the plan carrying
-	// the first caller's run id.
-	MarkDispatched(ctx context.Context, id string, runID int64, approver string) (Plan, bool, error)
+	// Claim atomically claims the right to dispatch the plan. Callers MUST
+	// Claim before dispatching and dispatch only when first is true, so two
+	// approvers (or a retry after a crash) can never start two paid runs.
+	// ErrNotFound when there is no such plan.
+	Claim(ctx context.Context, id, approver string) (first bool, err error)
+	// RecordRun records the run started after a successful Claim. Repeating
+	// the same runID is a no-op; a different runID returns ErrConflict.
+	RecordRun(ctx context.Context, id string, runID int64) error
 	// MarkDone records the outcome once; a second call is a no-op.
 	MarkDone(ctx context.Context, id, outcome string) error
 }
@@ -78,12 +83,17 @@ type Objects interface {
 
 func planKey(id string) string       { return "plans/" + id + ".json" }
 func dispatchedKey(id string) string { return "plans/" + id + ".dispatched" }
+func runKey(id string) string        { return "plans/" + id + ".run" }
 func doneKey(id string) string       { return "plans/" + id + ".done" }
 
-type dispatchMarker struct {
-	RunID    int64     `json:"run_id"`
+type claimMarker struct {
 	Approver string    `json:"approver"`
 	At       time.Time `json:"at"`
+}
+
+type runMarker struct {
+	RunID int64     `json:"run_id"`
+	At    time.Time `json:"at"`
 }
 
 type doneMarker struct {
@@ -109,7 +119,7 @@ func (s *objectStore) Put(ctx context.Context, p Plan) error {
 	if err := checkID(p.ID); err != nil {
 		return err
 	}
-	p.DispatchedRunID = 0 // the marker is the only source of truth
+	p.Claimed, p.Approver, p.DispatchedRunID = false, "", 0 // the markers are the only source of truth
 	body, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding plan %s: %w", p.ID, err)
@@ -135,61 +145,82 @@ func (s *objectStore) Get(ctx context.Context, id string) (Plan, error) {
 	if err := json.Unmarshal(body, &p); err != nil {
 		return Plan{}, fmt.Errorf("parsing plan %s: %w", id, err)
 	}
-	m, ok, err := s.readDispatched(ctx, id)
+	c, ok, err := readMarker[claimMarker](ctx, s.objs, dispatchedKey(id))
 	if err != nil {
 		return Plan{}, err
 	}
 	if ok {
-		p.DispatchedRunID = m.RunID
+		p.Claimed, p.Approver = true, c.Approver
+	}
+	r, ok, err := readMarker[runMarker](ctx, s.objs, runKey(id))
+	if err != nil {
+		return Plan{}, err
+	}
+	if ok {
+		p.DispatchedRunID = r.RunID
 	}
 	return p, nil
 }
 
-func (s *objectStore) readDispatched(ctx context.Context, id string) (dispatchMarker, bool, error) {
-	body, _, err := s.objs.Get(ctx, dispatchedKey(id))
+func readMarker[T any](ctx context.Context, objs Objects, key string) (T, bool, error) {
+	var m T
+	body, _, err := objs.Get(ctx, key)
 	if errors.Is(err, ErrNotFound) {
-		return dispatchMarker{}, false, nil
+		return m, false, nil
 	}
 	if err != nil {
-		return dispatchMarker{}, false, fmt.Errorf("reading dispatch marker for %s: %w", id, err)
+		return m, false, fmt.Errorf("reading %s: %w", key, err)
 	}
-	var m dispatchMarker
 	if err := json.Unmarshal(body, &m); err != nil {
-		return dispatchMarker{}, false, fmt.Errorf("parsing dispatch marker for %s: %w", id, err)
+		return m, false, fmt.Errorf("parsing %s: %w", key, err)
 	}
 	return m, true, nil
 }
 
-func (s *objectStore) MarkDispatched(ctx context.Context, id string, runID int64, approver string) (Plan, bool, error) {
+func (s *objectStore) Claim(ctx context.Context, id, approver string) (bool, error) {
 	if err := checkID(id); err != nil {
-		return Plan{}, false, err
+		return false, err
 	}
-	p, err := s.Get(ctx, id)
+	if _, _, err := s.objs.Get(ctx, planKey(id)); err != nil {
+		return false, fmt.Errorf("reading plan %s: %w", id, err)
+	}
+	body, err := json.Marshal(claimMarker{Approver: approver, At: s.now().UTC()})
 	if err != nil {
-		return Plan{}, false, err
+		return false, err
 	}
-	body, err := json.Marshal(dispatchMarker{RunID: runID, Approver: approver, At: s.now().UTC()})
-	if err != nil {
-		return Plan{}, false, err
-	}
-	err = s.objs.Create(ctx, dispatchedKey(id), body)
-	switch {
+	switch err := s.objs.Create(ctx, dispatchedKey(id), body); {
 	case err == nil:
-		p.DispatchedRunID = runID
-		return p, true, nil
+		return true, nil
 	case errors.Is(err, ErrConflict):
-		m, ok, err := s.readDispatched(ctx, id)
-		if err != nil {
-			return Plan{}, false, err
-		}
-		if !ok {
-			return Plan{}, false, fmt.Errorf("dispatch marker for %s vanished after a conflict", id)
-		}
-		p.DispatchedRunID = m.RunID
-		return p, false, nil
+		return false, nil
 	default:
-		return Plan{}, false, fmt.Errorf("marking plan %s dispatched: %w", id, err)
+		return false, fmt.Errorf("claiming plan %s: %w", id, err)
 	}
+}
+
+func (s *objectStore) RecordRun(ctx context.Context, id string, runID int64) error {
+	if err := checkID(id); err != nil {
+		return err
+	}
+	body, err := json.Marshal(runMarker{RunID: runID, At: s.now().UTC()})
+	if err != nil {
+		return err
+	}
+	err = s.objs.Create(ctx, runKey(id), body)
+	if !errors.Is(err, ErrConflict) {
+		if err != nil {
+			return fmt.Errorf("recording run for plan %s: %w", id, err)
+		}
+		return nil
+	}
+	r, ok, err := readMarker[runMarker](ctx, s.objs, runKey(id))
+	if err != nil {
+		return err
+	}
+	if ok && r.RunID == runID {
+		return nil
+	}
+	return fmt.Errorf("plan %s already has run %d recorded, not %d: %w", id, r.RunID, runID, ErrConflict)
 }
 
 func (s *objectStore) MarkDone(ctx context.Context, id, outcome string) error {

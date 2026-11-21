@@ -58,12 +58,15 @@ func mapErr(err error) error {
 	return err
 }
 
+// put writes conditionally. S3 answers 404 NoSuchKey, not 412, to a put with
+// If-Match on a missing key; for such a put that is a lost race (ErrConflict).
 func (o *s3Objects) put(ctx context.Context, key string, body []byte, in *s3.PutObjectInput) error {
 	in.Bucket, in.Key = aws.String(o.bucket), aws.String(key)
 	in.Body, in.ContentType = bytes.NewReader(body), aws.String("application/json")
 	if _, err := o.api.PutObject(ctx, in); err != nil {
-		if m := mapErr(err); errors.Is(m, ErrConflict) {
-			return m
+		m := mapErr(err)
+		if errors.Is(m, ErrConflict) || (in.IfMatch != nil && errors.Is(m, ErrNotFound)) {
+			return ErrConflict
 		}
 		return fmt.Errorf("putting s3://%s/%s: %w", o.bucket, key, err)
 	}

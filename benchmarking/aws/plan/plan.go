@@ -70,9 +70,13 @@ type Plan struct {
 	Caveats     []string `json:"caveats"`
 	// Estimate is the sweep's expected cost and duration (catalog.EstimateRun
 	// at SinkSize); zero for an unrunnable plan.
-	Estimate        catalog.Estimate `json:"estimate"`
-	Slack           SlackRef         `json:"slack"`
-	DispatchedRunID int64            `json:"dispatched_run_id,omitempty"`
+	Estimate catalog.Estimate `json:"estimate"`
+	Slack    SlackRef         `json:"slack"`
+	// Claimed, Approver and DispatchedRunID are filled by Store.Get from the
+	// claim and run markers; they are never stored in the plan itself.
+	Claimed         bool   `json:"claimed,omitempty"`
+	Approver        string `json:"approver,omitempty"`
+	DispatchedRunID int64  `json:"dispatched_run_id,omitempty"`
 }
 
 // BuildOption adjusts how Build makes a plan.

@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -46,11 +47,16 @@ func (c *countingObjects) Get(ctx context.Context, k string) ([]byte, string, er
 type fakeEC2 struct {
 	running []int // instances reported on successive calls; empty after
 	calls   int
+	errs    int // the first errs calls fail
 	inputs  []*ec2.DescribeInstancesInput
 }
 
 func (f *fakeEC2) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput, _ ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
 	f.inputs = append(f.inputs, in)
+	if f.errs > 0 {
+		f.errs--
+		return nil, errors.New("throttled")
+	}
 	n := 0
 	if f.calls < len(f.running) {
 		n = f.running[f.calls]
@@ -205,4 +211,20 @@ func TestLockAcquireTimesOutWhileInstancesRunning(t *testing.T) {
 	require.Equal(t, 3, run(lockArgs("acquire", root, "--holder", "a", "--wait", "40ms", "--poll", "5ms"), &so, &se))
 	_, err := os.Stat(filepath.Join(root, "locks", "shared-stack"))
 	require.True(t, os.IsNotExist(err), "lock must not be taken while instances run")
+}
+
+func TestLockAcquireRetriesEC2Errors(t *testing.T) {
+	root := t.TempDir()
+	e := &fakeEC2{errs: 2}
+	useFakes(t, root, e)
+	var so, se bytes.Buffer
+	require.Equal(t, 0, run(lockArgs("acquire", root, "--holder", "a", "--wait", "5s", "--poll", "5ms"), &so, &se), se.String())
+	require.Contains(t, se.String(), "will retry")
+}
+
+func TestLockAcquireFailsWhenEC2ErrorsPersist(t *testing.T) {
+	root := t.TempDir()
+	useFakes(t, root, &fakeEC2{errs: 1 << 20})
+	var so, se bytes.Buffer
+	require.Equal(t, 1, run(lockArgs("acquire", root, "--holder", "a", "--wait", "40ms", "--poll", "5ms"), &so, &se))
 }

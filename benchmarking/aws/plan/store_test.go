@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -61,8 +60,13 @@ func (f *fakeS3) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*
 	if aws.ToString(in.IfNoneMatch) == "*" && exists {
 		return nil, apiErr{"PreconditionFailed"}
 	}
-	if m := aws.ToString(in.IfMatch); m != "" && (!exists || m != cur) {
-		return nil, apiErr{"PreconditionFailed"}
+	if m := aws.ToString(in.IfMatch); m != "" {
+		if !exists {
+			return nil, apiErr{"NoSuchKey"} // S3 answers 404, not 412, for If-Match on a missing key
+		}
+		if m != cur {
+			return nil, apiErr{"PreconditionFailed"}
+		}
 	}
 	f.ver++
 	f.objs[key] = b
@@ -92,8 +96,14 @@ func (f *fakeS3) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...
 	defer f.mu.Unlock()
 	f.calls++
 	key := aws.ToString(in.Key)
-	if m := aws.ToString(in.IfMatch); m != "" && m != f.etags[key] {
-		return nil, apiErr{"PreconditionFailed"}
+	if m := aws.ToString(in.IfMatch); m != "" {
+		cur, exists := f.etags[key]
+		if !exists {
+			return nil, apiErr{"NoSuchKey"}
+		}
+		if m != cur {
+			return nil, apiErr{"PreconditionFailed"}
+		}
 	}
 	delete(f.objs, key)
 	delete(f.etags, key)
@@ -150,8 +160,9 @@ func TestStoreRejectsBadIDBeforeAnyS3Call(t *testing.T) {
 		require.Error(t, s.Put(ctx, testPlan(id)), id)
 		_, err := s.Get(ctx, id)
 		require.Error(t, err, id)
-		_, _, err = s.MarkDispatched(ctx, id, 1, "me")
+		_, err = s.Claim(ctx, id, "me")
 		require.Error(t, err, id)
+		require.Error(t, s.RecordRun(ctx, id, 1), id)
 		require.Error(t, s.MarkDone(ctx, id, "ok"), id)
 	}
 	require.Zero(t, api.calls, "no S3 call may happen for an invalid id")
@@ -166,31 +177,30 @@ func TestStoreGetMissing(t *testing.T) {
 	}
 }
 
-func TestMarkDispatchedFirstOnce(t *testing.T) {
+func TestClaimFirstOnce(t *testing.T) {
 	for name, s := range stores(t) {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			p := testPlan("0123456789ab")
 			require.NoError(t, s.Put(ctx, p))
 
-			got, first, err := s.MarkDispatched(ctx, p.ID, 111, "alice")
+			first, err := s.Claim(ctx, p.ID, "alice")
 			require.NoError(t, err)
 			require.True(t, first)
-			require.EqualValues(t, 111, got.DispatchedRunID)
-
-			got, first, err = s.MarkDispatched(ctx, p.ID, 222, "bob")
+			first, err = s.Claim(ctx, p.ID, "bob")
 			require.NoError(t, err)
 			require.False(t, first)
-			require.EqualValues(t, 111, got.DispatchedRunID, "the loser sees the winner's run id")
 
-			got, err = s.Get(ctx, p.ID)
+			got, err := s.Get(ctx, p.ID)
 			require.NoError(t, err)
-			require.EqualValues(t, 111, got.DispatchedRunID)
+			require.True(t, got.Claimed, "a claim with no run is visible")
+			require.Equal(t, "alice", got.Approver)
+			require.Zero(t, got.DispatchedRunID)
 		})
 	}
 }
 
-func TestMarkDispatchedConcurrentExactlyOne(t *testing.T) {
+func TestClaimConcurrentExactlyOne(t *testing.T) {
 	s := NewS3Store(newFakeS3(), "bucket")
 	ctx := context.Background()
 	require.NoError(t, s.Put(ctx, testPlan("0123456789ab")))
@@ -199,41 +209,66 @@ func TestMarkDispatchedConcurrentExactlyOne(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
-			_, first, err := s.MarkDispatched(ctx, "0123456789ab", int64(i+1), "x")
+			first, err := s.Claim(ctx, "0123456789ab", "x")
 			require.NoError(t, err)
 			if first {
 				mu.Lock()
 				wins++
 				mu.Unlock()
 			}
-		}(i)
+		}()
 	}
 	wg.Wait()
 	require.EqualValues(t, 1, wins)
 }
 
-func TestMarkDispatchedUnknownPlan(t *testing.T) {
+func TestRecordRun(t *testing.T) {
 	for name, s := range stores(t) {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := s.MarkDispatched(context.Background(), "0123456789ab", 1, "a")
+			ctx := context.Background()
+			p := testPlan("0123456789ab")
+			require.NoError(t, s.Put(ctx, p))
+			first, err := s.Claim(ctx, p.ID, "alice")
+			require.NoError(t, err)
+			require.True(t, first)
+
+			require.NoError(t, s.RecordRun(ctx, p.ID, 111))
+			require.NoError(t, s.RecordRun(ctx, p.ID, 111), "same run id is a no-op")
+			require.ErrorIs(t, s.RecordRun(ctx, p.ID, 222), ErrConflict)
+
+			got, err := s.Get(ctx, p.ID)
+			require.NoError(t, err)
+			require.True(t, got.Claimed)
+			require.Equal(t, "alice", got.Approver)
+			require.EqualValues(t, 111, got.DispatchedRunID)
+		})
+	}
+}
+
+func TestClaimUnknownPlan(t *testing.T) {
+	for name, s := range stores(t) {
+		t.Run(name, func(t *testing.T) {
+			_, err := s.Claim(context.Background(), "0123456789ab", "a")
 			require.ErrorIs(t, err, ErrNotFound)
 		})
 	}
 }
 
-func TestMarkDispatchedMarkerContents(t *testing.T) {
+func TestClaimMarkerContents(t *testing.T) {
 	api := newFakeS3()
 	s := NewS3Store(api, "bucket")
 	ctx := context.Background()
 	require.NoError(t, s.Put(ctx, testPlan("0123456789ab")))
-	_, _, err := s.MarkDispatched(ctx, "0123456789ab", 42, "alice")
+	_, err := s.Claim(ctx, "0123456789ab", "alice")
 	require.NoError(t, err)
+	require.NoError(t, s.RecordRun(ctx, "0123456789ab", 42))
 	raw := string(api.objs["plans/0123456789ab.dispatched"])
-	require.Contains(t, raw, "\"run_id\":42")
 	require.Contains(t, raw, "\"approver\":\"alice\"")
-	require.True(t, strings.Contains(raw, "\"at\""))
+	require.Contains(t, raw, "\"at\"")
+	require.NotContains(t, raw, "run_id")
+	require.Contains(t, string(api.objs["plans/0123456789ab.run"]), "\"run_id\":42")
 }
 
 func TestMarkDoneIdempotent(t *testing.T) {
