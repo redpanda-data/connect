@@ -267,7 +267,7 @@ output:
 To find your account ID and generate R2 API credentials, see https://developers.cloudflare.com/r2/api/tokens/[Cloudflare R2 authentication^].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewInterpolatedStringField(s3oFieldBucket).
-				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN. All buckets must be in the region set by `region`, because the output uses one S3 client for all messages. This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], which are calculated per message of a batch, allowing messages to be routed to different buckets. A bucket name that resolves to an empty string or `null` (for example because a referenced metadata field is missing) is rejected. When the bucket name is dynamic, connection tests are skipped for the bucket.").
+				Description("The name of the bucket to upload messages to, such as `my-bucket`. Use the bucket name, not the bucket ARN. All buckets must be in the region set by `region`, because the output uses one S3 client for all messages. This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], which are calculated per message of a batch, allowing messages to be routed to different buckets. When the bucket name is dynamic, connection tests are skipped for the bucket.").
 				Example("my-bucket").
 				Example(`${! metadata("client_id") }-logs`),
 			service.NewInterpolatedStringField(s3oFieldPath).
