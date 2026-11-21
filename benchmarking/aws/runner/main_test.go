@@ -178,3 +178,27 @@ func TestSortedBinaryNames(t *testing.T) {
 	require.Equal(t, []string{"base", "pr"}, sortedBinaryNames(map[string]string{"pr": "/x", "base": "/y"}))
 	require.Empty(t, sortedBinaryNames(nil))
 }
+
+// Sink secrets are readable by the runner host role only for a run whose
+// sink needs one: PR binaries (soak) must never run with them reachable.
+func TestSharedVarsGateSinkSecrets(t *testing.T) {
+	vars := func(s *Scenario) map[string]string { return sharedStackVars(s, "us-east-2", "bench-x") }
+	e2e := func(kind string) *Scenario {
+		return &Scenario{Direction: DirectionE2E, Sink: &SinkSpec{Kind: kind}, Infra: InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}}}
+	}
+	got := vars(e2e("snowflake"))
+	require.Equal(t, map[string]string{
+		"region": "us-east-2", "runner_instance_type": "c8g.4xlarge", "bench_session_id": "bench-x",
+		"sink_secrets_enabled": "true",
+	}, got)
+	require.Equal(t, "false", vars(e2e("redpanda"))["sink_secrets_enabled"])
+	require.Equal(t, "false", vars(&Scenario{Direction: "source"})["sink_secrets_enabled"])
+	require.Equal(t, "false", vars(&Scenario{Soak: true})["sink_secrets_enabled"])
+}
+
+func TestValidateBinaryFlagsRejectsE2E(t *testing.T) {
+	s := &Scenario{Name: "bot-x", Direction: DirectionE2E, Stack: "postgres", Matrix: MatrixSpec{Arms: []Arm{{ID: "a", Binary: "base"}}}}
+	require.ErrorContains(t, validateBinaryFlags(s, map[string]string{"base": "/tmp/x"}), "bot runs build from the checkout only")
+	s.Matrix.Arms = nil
+	require.NoError(t, validateBinaryFlags(s, nil))
+}

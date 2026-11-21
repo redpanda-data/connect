@@ -75,7 +75,12 @@ type SnowflakeTarget struct {
 	Account, User, Role, Database, Warehouse string
 }
 
-var snowflakeIdentRe = regexp.MustCompile(`^[A-Z0-9_]+$`)
+var (
+	snowflakeIdentRe = regexp.MustCompile(`^[A-Z0-9_]+$`)
+	// snowflakeNameRe is what the account, user and role from the secret
+	// may hold (account identifiers carry '-' and '.').
+	snowflakeNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+)
 
 // validSnowflakeIdent admits only unquoted upper-case identifiers, so a name
 // interpolated into SQL cannot change the statement.
@@ -96,17 +101,17 @@ type snowflakeSink struct {
 	target SnowflakeTarget
 	region string
 	size   string
-	// createTable is set when the output will not create its own table
-	// (no schema evolution), so Provision creates it.
-	createTable bool
 	// put is set for a snowflake_put output: it uploads to a stage and
 	// loads no rows (the customer's snowpipe is not kept), so there is
 	// nothing to count.
 	put bool
 	// schema is the run's schema, from SinkDeps.SessionID; Count reads it.
 	schema string
-	now    func() time.Time
-	sleep  func(ctx context.Context, d time.Duration) error
+	// seenRows is set once a count has read rows: from then on the table
+	// must exist.
+	seenRows bool
+	now      func() time.Time
+	sleep    func(ctx context.Context, d time.Duration) error
 }
 
 func newSnowflakeSink(spec SinkSpec, deps SinkDeps) (*snowflakeSink, error) {
@@ -127,7 +132,7 @@ func newSnowflakeSink(spec SinkSpec, deps SinkDeps) (*snowflakeSink, error) {
 	if !slices.Contains(snowflakeSizes, size) {
 		return nil, fmt.Errorf("snowflake sink: sink.size %q must be one of %v", size, snowflakeSizes)
 	}
-	component, cfg := snowflakeOutput(deps.Output)
+	component := snowflakeOutput(deps.Output)
 	s := &snowflakeSink{
 		exec:   deps.Snowflake,
 		target: t,
@@ -138,7 +143,6 @@ func newSnowflakeSink(spec SinkSpec, deps SinkDeps) (*snowflakeSink, error) {
 		now:    time.Now,
 		sleep:  sleepCtx,
 	}
-	s.createTable = !s.put && !schemaEvolutionEnabled(cfg)
 	return s, nil
 }
 
@@ -155,45 +159,35 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 
 // snowflakeOutput finds the first snowflake output anywhere in an output
 // config (including inside a broker, switch or fallback) and returns its
-// component name and config. No snowflake output means snowflake_streaming
-// with no settings.
-func snowflakeOutput(output any) (string, map[string]any) {
-	if name, cfg, ok := findSnowflakeOutput(output); ok {
-		return name, cfg
+// component name. No snowflake output means snowflake_streaming.
+func snowflakeOutput(output any) string {
+	if name, ok := findSnowflakeOutput(output); ok {
+		return name
 	}
-	return "snowflake_streaming", nil
+	return "snowflake_streaming"
 }
 
-func findSnowflakeOutput(v any) (string, map[string]any, bool) {
+func findSnowflakeOutput(v any) (string, bool) {
 	switch v := v.(type) {
 	case map[string]any:
 		for _, name := range []string{"snowflake_streaming", "snowflake_put"} {
-			if c, ok := v[name]; ok {
-				m, _ := c.(map[string]any)
-				return name, m, true
+			if _, ok := v[name]; ok {
+				return name, true
 			}
 		}
 		for _, c := range v {
-			if name, m, ok := findSnowflakeOutput(c); ok {
-				return name, m, true
+			if name, ok := findSnowflakeOutput(c); ok {
+				return name, true
 			}
 		}
 	case []any:
 		for _, c := range v {
-			if name, m, ok := findSnowflakeOutput(c); ok {
-				return name, m, true
+			if name, ok := findSnowflakeOutput(c); ok {
+				return name, true
 			}
 		}
 	}
-	return "", nil, false
-}
-
-// schemaEvolutionEnabled reports whether a snowflake_streaming config
-// creates its own table: it does only with schema_evolution.enabled true.
-func schemaEvolutionEnabled(cfg map[string]any) bool {
-	evo, _ := cfg["schema_evolution"].(map[string]any)
-	enabled, _ := evo["enabled"].(bool)
-	return enabled
+	return "", false
 }
 
 func (s *snowflakeSink) qualified(schema string, obj ...string) string {
@@ -209,9 +203,6 @@ func (s *snowflakeSink) Provision(ctx context.Context, session string) (map[stri
 	stmts := []string{
 		"CREATE SCHEMA IF NOT EXISTS " + s.qualified(schema),
 		fmt.Sprintf("ALTER WAREHOUSE %s SET WAREHOUSE_SIZE = %s", s.target.Warehouse, s.size),
-	}
-	if s.createTable {
-		stmts = append(stmts, fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (RECORD VARIANT)", s.qualified(schema, snowflakeTable)))
 	}
 	if s.put {
 		stmts = append(stmts, "CREATE STAGE IF NOT EXISTS "+s.qualified(schema, snowflakeStage))
@@ -236,8 +227,9 @@ func (s *snowflakeSink) Provision(ctx context.Context, session string) (map[stri
 
 // Count is the table's row count once it stops moving: Snowpipe Streaming
 // commits become visible with a delay, so it re-reads every 10 s until two
-// reads agree or 90 s have passed, and returns the last read. A table the
-// output has not created yet (schema evolution) counts as empty.
+// reads agree or 90 s have passed, and returns the last read. The output
+// creates the table by schema evolution on its first write, so a missing
+// table counts as empty until rows have been seen, and is an error after.
 func (s *snowflakeSink) Count(ctx context.Context, _ string) (int64, error) {
 	if s.put {
 		return 0, ErrCountUnsupported
@@ -245,11 +237,17 @@ func (s *snowflakeSink) Count(ctx context.Context, _ string) (int64, error) {
 	q := "SELECT COUNT(*) FROM " + s.qualified(s.schema, snowflakeTable)
 	read := func() (int64, error) {
 		n, err := s.exec.QueryInt(ctx, q)
-		if errors.Is(err, ErrSnowflakeNoObject) {
+		if errors.Is(err, ErrSnowflakeNoObject) && !s.seenRows {
 			return 0, nil
+		}
+		if errors.Is(err, ErrSnowflakeNoObject) {
+			return 0, fmt.Errorf("snowflake %q: table missing after rows were written: %w", q, err)
 		}
 		if err != nil {
 			return 0, fmt.Errorf("snowflake %q: %w", q, err)
+		}
+		if n > 0 {
+			s.seenRows = true
 		}
 		return n, nil
 	}
@@ -302,6 +300,7 @@ func (s *snowflakeSink) HostSetup() string {
 	return fmt.Sprintf(`mkdir -p %[1]s
 chmod 0700 %[1]s
 trap 'rm -f %[2]s' EXIT
+rm -f %[2]s
 (umask 077 && aws secretsmanager get-secret-value --region %[3]q --secret-id %[4]q --query SecretString --output text | jq -er .private_key > %[2]s)
 chmod 0600 %[2]s`, snowflakeKeyDir, snowflakeKeyFile, s.region, snowflakeSecretID)
 }
@@ -348,6 +347,12 @@ func loadSnowflake(ctx context.Context, sm SecretsManagerClient, open snowflakeO
 	for k, v := range map[string]string{"account": t.Account, "user": t.User, "role": t.Role, "database": t.Database, "warehouse": t.Warehouse, "private_key": sec.PrivateKey} {
 		if v == "" {
 			return nil, SnowflakeTarget{}, fmt.Errorf("snowflake secret %q: %s is missing or empty", id, k)
+		}
+	}
+	// These land in the rendered config, so they must be plain names.
+	for k, v := range map[string]string{"account": t.Account, "user": t.User, "role": t.Role} {
+		if !snowflakeNameRe.MatchString(v) {
+			return nil, SnowflakeTarget{}, fmt.Errorf("snowflake secret %q: %s must match %s", id, k, snowflakeNameRe)
 		}
 	}
 	key, err := parseRSAKey(sec.PrivateKey)

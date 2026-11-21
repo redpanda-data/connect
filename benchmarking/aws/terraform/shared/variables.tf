@@ -50,3 +50,9 @@ variable "redpanda_broker_ips" {
   type        = list(string)
   default     = ["10.42.0.10", "10.42.1.10", "10.42.0.11"]
 }
+
+variable "sink_secrets_enabled" {
+  description = "Attach the runner host role's read grant on the e2e sink credential secrets. The runner sets it only for e2e runs whose sink needs one; soaks and every other run leave it false."
+  type        = bool
+  default     = false
+}

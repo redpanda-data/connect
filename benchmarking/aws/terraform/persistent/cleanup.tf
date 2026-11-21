@@ -133,10 +133,16 @@ resource "aws_iam_role_policy" "orphan_cleanup" {
       },
       {
         # The snowflake sweep logs in to the bench account with this key.
-        Sid      = "SnowflakeSecret"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "${local.snowflake_secret_arn}-??????"
+        # Both forms: the suffixed ARN is the real secret; the bare partial
+        # ARN lets a lookup before the secret exists answer ResourceNotFound
+        # (the Lambda skips the sweep on that, and on AccessDenied).
+        Sid    = "SnowflakeSecret"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          local.snowflake_secret_arn,
+          "${local.snowflake_secret_arn}-??????",
+        ]
       },
       {
         Sid      = "Alert"

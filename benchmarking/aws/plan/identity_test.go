@@ -110,6 +110,39 @@ func TestSwapIdentitySnowflakeUsesPrivateKeyFile(t *testing.T) {
 	}
 }
 
+func swapSnowflakeEvo(t *testing.T, evo map[string]any) (map[string]any, []string) {
+	t.Helper()
+	sf := map[string]any{"table": "CUSTOMERS"}
+	if evo != nil {
+		sf["schema_evolution"] = evo
+	}
+	cfg := map[string]any{
+		"input":  map[string]any{"redpanda": map[string]any{}},
+		"output": map[string]any{"snowflake_streaming": sf},
+	}
+	out, caveats, err := SwapIdentity(cfg, SourceRedpanda, SinkSnowflake)
+	require.NoError(t, err)
+	return out["output"].(map[string]any)["snowflake_streaming"].(map[string]any)["schema_evolution"].(map[string]any), caveats
+}
+
+// The bench table comes from the output's schema evolution: it is forced on,
+// with a caveat unless the customer already had it on, and the customer's
+// other schema_evolution keys are kept.
+func TestSwapIdentitySnowflakeForcesSchemaEvolution(t *testing.T) {
+	evo, caveats := swapSnowflakeEvo(t, nil)
+	require.Equal(t, map[string]any{"enabled": true}, evo)
+	require.Contains(t, caveats, CaveatSchemaEvoForced, "absent")
+
+	evo, caveats = swapSnowflakeEvo(t, map[string]any{"enabled": false, "ignore_nulls": false})
+	require.Equal(t, true, evo["enabled"])
+	require.Equal(t, false, evo["ignore_nulls"])
+	require.Contains(t, caveats, CaveatSchemaEvoForced, "off")
+
+	evo, caveats = swapSnowflakeEvo(t, map[string]any{"enabled": true, "new_column_type_mapping": "root = \"VARIANT\""})
+	require.Equal(t, "root = \"VARIANT\"", evo["new_column_type_mapping"])
+	require.NotContains(t, caveats, CaveatSchemaEvoForced, "already on")
+}
+
 func TestSwapIdentityMySQL(t *testing.T) {
 	cfg := map[string]any{
 		"input":  map[string]any{"mysql_cdc": map[string]any{"dsn": "u:p@tcp(h)/d", "tables": []any{"x"}, "checkpoint_cache": "redis_cache", "stream_snapshot": true}},

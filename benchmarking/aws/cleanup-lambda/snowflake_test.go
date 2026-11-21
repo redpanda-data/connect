@@ -22,6 +22,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +49,9 @@ func (f *fakeSnowflakeReaper) Exec(_ context.Context, q string) error {
 func (f *fakeSnowflakeReaper) Close() error { f.closed = true; return nil }
 
 func openerFor(f *fakeSnowflakeReaper, db string) snowflakeOpener {
-	return func(context.Context) (snowflakeReaperAPI, string, error) { return f, db, nil }
+	return func(context.Context) (snowflakeReaperAPI, snowflakeCreds, error) {
+		return f, snowflakeCreds{Database: db, Warehouse: "BENCH_WH"}, nil
+	}
 }
 
 func TestSweepSnowflake_SelectsBenchPrefixOlderThanTTL(t *testing.T) {
@@ -87,7 +90,9 @@ func TestSweepSnowflake_FailuresAreReportedNotFatal(t *testing.T) {
 	require.Equal(t, 1, report.Errors)
 	require.Contains(t, report.Failed[0], "snowflake-schemas")
 
-	failOpen := func(context.Context) (snowflakeReaperAPI, string, error) { return nil, "", errors.New("login failed") }
+	failOpen := func(context.Context) (snowflakeReaperAPI, snowflakeCreds, error) {
+		return nil, snowflakeCreds{}, errors.New("login failed")
+	}
 	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", failOpen)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
@@ -103,16 +108,30 @@ func TestSweepSnowflake_FailuresAreReportedNotFatal(t *testing.T) {
 // the Snowflake sweep is skipped without an error.
 func TestSweepSnowflake_SkippedWhenSecretMissing(t *testing.T) {
 	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
-	sm := &fakeSecrets{err: &smtypes.ResourceNotFoundException{Message: strPtr("not found")}}
-	open := newSnowflakeOpener(sm, "arn:aws:secretsmanager:us-east-2:1:secret:redpanda-connect-bench/snowflake", nil)
+	// A secret that does not exist yet answers AccessDenied rather than
+	// ResourceNotFound when the caller's grant names only the suffixed ARN,
+	// so both mean "not set up yet".
+	for name, gerr := range map[string]error{
+		"not found":     &smtypes.ResourceNotFoundException{Message: strPtr("not found")},
+		"access denied": &smithy.GenericAPIError{Code: "AccessDeniedException", Message: "not authorized"},
+	} {
+		sm := &fakeSecrets{err: gerr}
+		open := newSnowflakeOpener(sm, "arn:aws:secretsmanager:us-east-2:1:secret:redpanda-connect-bench/snowflake", nil)
+		_, _, err := open(t.Context())
+		require.ErrorIs(t, err, errSnowflakeSecretMissing, name)
+
+		report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", open)
+		require.NoError(t, err, name)
+		require.Zero(t, report.Errors, name)
+		require.Empty(t, report.Failed, name)
+	}
+	// Any other secrets error is a real failure.
+	open := newSnowflakeOpener(&fakeSecrets{err: errors.New("throttled")}, "sid", nil)
 	_, _, err := open(t.Context())
-	require.ErrorIs(t, err, errSnowflakeSecretMissing)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errSnowflakeSecretMissing)
 
-	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", open)
-	require.NoError(t, err)
-	require.Zero(t, report.Errors)
-
-	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", nil)
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", nil)
 	require.NoError(t, err)
 	require.Zero(t, report.Errors)
 }
@@ -157,10 +176,10 @@ func TestSnowflakeOpenerReadsSecret(t *testing.T) {
 		got, gotKey = c, k
 		return fake, nil
 	})
-	api, db, err := open(t.Context())
+	api, creds, err := open(t.Context())
 	require.NoError(t, err)
 	require.Same(t, fake, api)
-	require.Equal(t, "BENCH_DB", db, "upper-cased")
+	require.Equal(t, "BENCH_DB", creds.Database, "upper-cased")
 	require.Equal(t, []string{"sid"}, sm.ids)
 	require.NotNil(t, gotKey)
 	require.Equal(t, "ORG-ACCT", got.Account)
@@ -176,4 +195,46 @@ func TestSnowflakeOpenerReadsSecret(t *testing.T) {
 	_, _, err = open(t.Context())
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "PRIVATE KEY")
+}
+
+// With no live run left (no BENCH_ schema younger than the TTL), the reaper
+// puts the warehouse back to XSMALL after a crashed run left it resized.
+func TestSweepSnowflake_ResetsWarehouseOnlyWhenNoLiveRun(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	reset := "ALTER WAREHOUSE BENCH_WH SET WAREHOUSE_SIZE = XSMALL"
+
+	sf := &fakeSnowflakeReaper{schemas: []snowflakeSchemaInfo{
+		{Name: "BENCH_OLD", CreatedOn: now.Add(-5 * time.Hour)},
+		{Name: "BENCHMARKS", CreatedOn: now}, // not a run schema
+	}}
+	_, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"DROP SCHEMA IF EXISTS BENCH_DB.BENCH_OLD CASCADE", reset}, sf.sql)
+
+	sf = &fakeSnowflakeReaper{}
+	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	require.NoError(t, err)
+	require.Equal(t, []string{reset}, sf.sql, "no schemas at all: nothing is running")
+
+	sf = &fakeSnowflakeReaper{schemas: []snowflakeSchemaInfo{
+		{Name: "BENCH_OLD", CreatedOn: now.Add(-5 * time.Hour)},
+		{Name: "BENCH_LIVE", CreatedOn: now.Add(-10 * time.Minute)},
+	}}
+	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	require.NoError(t, err)
+	require.NotContains(t, sf.sql, reset, "a live run keeps its warehouse size")
+
+	sf = &fakeSnowflakeReaper{listErr: errors.New("boom")}
+	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	require.NoError(t, err)
+	require.Empty(t, sf.sql, "an unknown schema set leaves the warehouse alone")
+
+	bad := func(context.Context) (snowflakeReaperAPI, snowflakeCreds, error) {
+		return sf, snowflakeCreds{Database: "BENCH_DB", Warehouse: "WH; DROP"}, nil
+	}
+	sf = &fakeSnowflakeReaper{}
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", bad)
+	require.NoError(t, err)
+	require.Equal(t, 1, report.Errors)
+	require.Empty(t, sf.sql)
 }

@@ -25,6 +25,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
+	"github.com/aws/smithy-go"
 	"github.com/snowflakedb/gosnowflake/v2"
 )
 
@@ -59,21 +60,24 @@ type snowflakeReaperAPI interface {
 	Exec(ctx context.Context, query string) error
 }
 
-// snowflakeOpener connects to the bench account and returns its database.
-// errSnowflakeSecretMissing when the secret does not exist.
-type snowflakeOpener func(ctx context.Context) (snowflakeReaperAPI, string, error)
+// snowflakeOpener connects to the bench account and returns its database
+// and warehouse. errSnowflakeSecretMissing when the secret does not exist
+// or cannot be read.
+type snowflakeOpener func(ctx context.Context) (snowflakeReaperAPI, snowflakeCreds, error)
 
-// sweepSnowflakeSchemas drops stale BENCH_ schemas into report. A nil
-// opener (no secret configured) or a missing secret skips the sweep; any
-// other failure is recorded, not fatal.
+// sweepSnowflakeSchemas drops stale BENCH_ schemas into report, then puts
+// the warehouse back to XSMALL when no run is live (no BENCH_ schema younger
+// than ttl), so a crashed run's resize does not keep billing. A nil opener
+// (no secret configured) or an unreadable secret skips the sweep; any other
+// failure is recorded, not fatal.
 func sweepSnowflakeSchemas(ctx context.Context, open snowflakeOpener, now time.Time, ttl time.Duration, report *SweepReport) {
 	if open == nil {
 		slog.Info("snowflake sweep skipped: no snowflake secret configured")
 		return
 	}
-	api, db, err := open(ctx)
+	api, creds, err := open(ctx)
 	if errors.Is(err, errSnowflakeSecretMissing) {
-		slog.Info("snowflake sweep skipped: the snowflake secret does not exist yet")
+		slog.Warn("snowflake sweep skipped: the snowflake secret is missing or unreadable", "err", err)
 		return
 	}
 	if err != nil {
@@ -83,22 +87,36 @@ func sweepSnowflakeSchemas(ctx context.Context, open snowflakeOpener, now time.T
 	if c, ok := api.(io.Closer); ok {
 		defer c.Close()
 	}
-	if !snowflakeIdentRe.MatchString(db) {
-		report.record("snowflake", "database", false, fmt.Errorf("database %q is not a plain identifier", db))
-		return
+	db, wh := creds.Database, creds.Warehouse
+	for _, id := range []string{db, wh} {
+		if !snowflakeIdentRe.MatchString(id) {
+			report.record("snowflake", "config", false, fmt.Errorf("identifier %q is not a plain identifier", id))
+			return
+		}
 	}
 	schemas, err := api.ListBenchSchemas(ctx, db)
 	if err != nil {
 		report.record("snowflake-schemas", db, false, err)
 		return
 	}
+	live := false
 	for _, s := range schemas {
-		if !snowflakeSchemaRe.MatchString(s.Name) || !olderThanTTL(s.CreatedOn, now, ttl) {
+		if !snowflakeSchemaRe.MatchString(s.Name) {
+			continue
+		}
+		if !olderThanTTL(s.CreatedOn, now, ttl) {
+			live = true
 			continue
 		}
 		id := db + "." + s.Name
 		err := api.Exec(ctx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", id))
 		report.record("snowflake-schema", id, err == nil, err)
+	}
+	if live {
+		return
+	}
+	if err := api.Exec(ctx, fmt.Sprintf("ALTER WAREHOUSE %s SET WAREHOUSE_SIZE = XSMALL", wh)); err != nil {
+		report.record("snowflake-warehouse", wh, false, err)
 	}
 }
 
@@ -119,16 +137,22 @@ type snowflakeConnect func(c snowflakeCreds, key *rsa.PrivateKey) (snowflakeReap
 // private_key, database, warehouse, role}) on each sweep. Its errors go to
 // SNS and Slack, so they name the problem, never the secret's content.
 func newSnowflakeOpener(sm secretsGetter, secretID string, connect snowflakeConnect) snowflakeOpener {
-	return func(ctx context.Context) (snowflakeReaperAPI, string, error) {
+	return func(ctx context.Context) (snowflakeReaperAPI, snowflakeCreds, error) {
+		none := snowflakeCreds{}
 		out, err := sm.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{SecretId: &secretID})
 		if _, ok := errors.AsType[*smtypes.ResourceNotFoundException](err); ok {
-			return nil, "", errSnowflakeSecretMissing
+			return nil, none, fmt.Errorf("%w: %s not found", errSnowflakeSecretMissing, secretID)
+		}
+		// Before the secret exists, a grant on the suffixed ARN can answer
+		// AccessDenied instead of ResourceNotFound.
+		if ae, ok := errors.AsType[smithy.APIError](err); ok && ae.ErrorCode() == "AccessDeniedException" {
+			return nil, none, fmt.Errorf("%w: access denied reading %s", errSnowflakeSecretMissing, secretID)
 		}
 		if err != nil {
-			return nil, "", fmt.Errorf("get snowflake secret: %w", err)
+			return nil, none, fmt.Errorf("get snowflake secret: %w", err)
 		}
 		if out.SecretString == nil {
-			return nil, "", errors.New("snowflake secret has no SecretString")
+			return nil, none, errors.New("snowflake secret has no SecretString")
 		}
 		var sec struct {
 			Account    string `json:"account"`
@@ -139,24 +163,24 @@ func newSnowflakeOpener(sm secretsGetter, secretID string, connect snowflakeConn
 			Role       string `json:"role"`
 		}
 		if json.Unmarshal([]byte(*out.SecretString), &sec) != nil {
-			return nil, "", errors.New("snowflake secret is not a JSON object of strings")
+			return nil, none, errors.New("snowflake secret is not a JSON object of strings")
 		}
 		c := snowflakeCreds{
 			Account: sec.Account, User: sec.User, Role: sec.Role,
 			Database: strings.ToUpper(sec.Database), Warehouse: strings.ToUpper(sec.Warehouse),
 		}
-		if c.Account == "" || c.User == "" || c.Database == "" || sec.PrivateKey == "" {
-			return nil, "", errors.New("snowflake secret needs account, user, database and private_key")
+		if c.Account == "" || c.User == "" || c.Database == "" || c.Warehouse == "" || sec.PrivateKey == "" {
+			return nil, none, errors.New("snowflake secret needs account, user, database, warehouse and private_key")
 		}
 		key, err := parseRSAKey(sec.PrivateKey)
 		if err != nil {
-			return nil, "", err
+			return nil, none, err
 		}
 		api, err := connect(c, key)
 		if err != nil {
-			return nil, "", fmt.Errorf("open snowflake: %w", err)
+			return nil, none, fmt.Errorf("open snowflake: %w", err)
 		}
-		return api, c.Database, nil
+		return api, c, nil
 	}
 }
 

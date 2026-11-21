@@ -121,17 +121,31 @@ sets the warehouse back to `XSMALL`.
   Each point's bench script fetches the secret, writes `private_key` to
   `/opt/bench/secrets/snowflake_key.p8` (mode 0600), and removes the file on
   exit. The output reads the file with `private_key_file`. The key is never in
-  a placeholder, a rendered config, an SSM command or a log line. The runner
-  host role may read exactly this one secret.
-- If the output has no `schema_evolution.enabled: true`, the runner creates
-  `BENCH_<SESSION>.T (RECORD VARIANT)` for the output to write to. Otherwise
-  the output creates `T` itself.
+  a placeholder, a rendered config, an SSM command or a log line.
+- The runner host role can read the secret only during a run that needs it.
+  Its grant exists only when the shared stack is applied with
+  `sink_secrets_enabled=true`, and the runner sets that only for e2e
+  scenarios with a Snowflake sink. Soaks, which may run PR binaries, never
+  get it. E2E scenarios refuse `--binary` mappings: bot runs build from the
+  checkout only.
+- The output creates its table, `BENCH_<SESSION>.T`, through schema
+  evolution. The plan forces `schema_evolution.enabled: true` and keeps the
+  customer's other `schema_evolution` settings. When the customer had it off
+  or unset, the plan carries the caveat `schema_evolution_forced`. Until the
+  first write the table does not exist, so it counts as 0. A missing table
+  after rows have been counted fails the run.
 - The count check reads `SELECT COUNT(*)` before and after each point. Snowpipe
   Streaming rows become visible with a delay, so each count is re-read every
   10 s until two reads agree, for at most 90 s. `snowflake_put` loads no rows
   (the customer's Snowpipe is not kept), so its count check is skipped.
 - The reaper drops any `BENCH_*` schema whose `created_on` is older than
-  `orphan_ttl_hours` (4 h).
+  `orphan_ttl_hours` (4 h). Do not create `BENCH_*` schemas by hand in the
+  bench database: the reaper drops them.
+- When no `BENCH_*` schema younger than the TTL remains, the reaper also sets
+  the warehouse back to `XSMALL`, in case a crashed run left it resized.
+- The bench warehouse must have `AUTO_SUSPEND` set (for example 60 s), so a
+  warehouse that a crashed run left oversized bills for at most that long
+  after its last query, not until the reaper runs.
 - **Single lane until part 3.** Concurrent runs share the one bench warehouse,
   so one run's resize (and its teardown reset to `XSMALL`) changes the other's
   reference size. Run one Snowflake e2e scenario at a time.

@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -340,11 +341,7 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	sessionID := newSessionID()
 	names := newBenchNames(sessionID, s.Connector)
-	sharedVars := map[string]string{
-		"region":               opts.region,
-		"runner_instance_type": s.Infra.Runner.InstanceType,
-		"bench_session_id":     sessionID,
-	}
+	sharedVars := sharedStackVars(s, opts.region, sessionID)
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
 	// The per-connector stack (e.g. the postgres stack's RDS instance,
 	// subnet/parameter groups, and SGs) stamps this onto its resources via
@@ -1382,6 +1379,25 @@ func binaryNamesReferenced(s *Scenario) map[string]bool {
 	return out
 }
 
+// sinkSecretKinds are the e2e sink kinds whose credentials the runner host
+// fetches from Secrets Manager itself.
+var sinkSecretKinds = []string{"snowflake"}
+
+// sharedStackVars are the shared stack's terraform variables.
+// sink_secrets_enabled attaches the runner host role's read grant on the
+// sink credential secrets, and is true only for an e2e run whose sink needs
+// one: every other run (soaks, which may run PR binaries, included) gets a
+// host role that cannot read them.
+func sharedStackVars(s *Scenario, region, sessionID string) map[string]string {
+	secrets := s.Direction == DirectionE2E && s.Sink != nil && slices.Contains(sinkSecretKinds, s.Sink.Kind)
+	return map[string]string{
+		"region":               region,
+		"runner_instance_type": s.Infra.Runner.InstanceType,
+		"bench_session_id":     sessionID,
+		"sink_secrets_enabled": strconv.FormatBool(secrets),
+	}
+}
+
 // validateBinaryFlags checks --binary mappings against the scenario's
 // referenced logical binary names BEFORE any AWS spend: every name an arm
 // references must have a mapping, and every mapping must be referenced by
@@ -1395,6 +1411,11 @@ func validateBinaryFlags(s *Scenario, binaries map[string]string) error {
 	// (producerBinary), which --binary mappings replace.
 	if s.Stack == stackNone && len(binaries) > 0 {
 		return fmt.Errorf("scenario %s: stack %q does not support --binary mappings: its producer runs the default %s", s.Name, stackNone, producerBinary)
+	}
+	// An e2e run may hold sink secrets on the runner host (see
+	// sharedStackVars), so it never runs a binary built elsewhere.
+	if s.Direction == DirectionE2E && len(binaries) > 0 {
+		return fmt.Errorf("scenario %s: e2e scenarios do not take --binary mappings: bot runs build from the checkout only", s.Name)
 	}
 	referenced := binaryNamesReferenced(s)
 

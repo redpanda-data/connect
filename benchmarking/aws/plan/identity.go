@@ -127,11 +127,14 @@ type Template struct {
 	// MergeCaveats maps a dotted leaf path under Merge to the caveat added
 	// when the customer had set that leaf to a different value.
 	MergeCaveats map[string]string
+	// MergeCaveatsIfUnset also adds a MergeCaveats caveat when the customer
+	// had not set the leaf at all.
+	MergeCaveatsIfUnset bool
 }
 
 // mergeInto deep-merges src into dst. Template leaves win; it appends the
 // caveat for every path in caveats whose customer value was overridden.
-func mergeInto(dst, src map[string]any, path string, caveats map[string]string, hit *[]string) {
+func mergeInto(dst, src map[string]any, path string, caveats map[string]string, ifUnset bool, hit *[]string) {
 	for k, v := range src {
 		p := path + k
 		if sm, ok := v.(map[string]any); ok {
@@ -140,10 +143,10 @@ func mergeInto(dst, src map[string]any, path string, caveats map[string]string, 
 				dm = map[string]any{}
 				dst[k] = dm
 			}
-			mergeInto(dm, sm, p+".", caveats, hit)
+			mergeInto(dm, sm, p+".", caveats, ifUnset, hit)
 			continue
 		}
-		if old, set := dst[k]; set && old != v {
+		if old, set := dst[k]; (set && old != v) || (!set && ifUnset) {
 			if c, ok := caveats[p]; ok {
 				*hit = append(*hit, c)
 			}
@@ -258,10 +261,19 @@ var SinkTemplates = map[SinkKind]func(component string) Template{
 		if component == "snowflake_put" {
 			f["warehouse"] = "${BENCH_SNOWFLAKE_WAREHOUSE}"
 			f["stage"] = "@${BENCH_SNOWFLAKE_STAGE}"
-		} else {
-			f["table"] = "${BENCH_SNOWFLAKE_TABLE}"
+			return Template{Fields: f}
 		}
-		return Template{Fields: f}
+		f["table"] = "${BENCH_SNOWFLAKE_TABLE}"
+		// The run's schema starts empty and the bench cannot know the
+		// customer's table shape, so the output creates and evolves its
+		// table from the data it writes. The customer's other
+		// schema_evolution settings are kept.
+		return Template{
+			Fields:              f,
+			Merge:               map[string]any{"schema_evolution": map[string]any{"enabled": true}},
+			MergeCaveats:        map[string]string{"schema_evolution.enabled": CaveatSchemaEvoForced},
+			MergeCaveatsIfUnset: true,
+		}
 	},
 	SinkBigQuery: func(string) Template {
 		// credentials_json is left unset: the runner uses its ambient identity.
@@ -443,7 +455,7 @@ func applyTemplate(root, holder map[string]any, name string, t Template) ([]stri
 		cfg[k] = deepCopy(v)
 	}
 	var caveats []string
-	mergeInto(cfg, t.Merge, "", t.MergeCaveats, &caveats)
+	mergeInto(cfg, t.Merge, "", t.MergeCaveats, t.MergeCaveatsIfUnset, &caveats)
 	for k, v := range t.Defaults {
 		if _, set := cfg[k]; !set {
 			cfg[k] = deepCopy(v)

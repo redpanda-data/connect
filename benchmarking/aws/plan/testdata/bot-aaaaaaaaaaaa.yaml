@@ -45,6 +45,8 @@ pipeline:
             private_key_file: ${BENCH_SNOWFLAKE_PRIVATE_KEY_FILE}
             role: ${BENCH_SNOWFLAKE_ROLE}
             schema: ${BENCH_SNOWFLAKE_SCHEMA}
+            schema_evolution:
+                enabled: true
             table: ${BENCH_SNOWFLAKE_TABLE}
             user: ${BENCH_SNOWFLAKE_USER}
     pipeline:

@@ -21,8 +21,8 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 # Scoped to the session results bucket ONLY. This role is what an approved
 # /soak PR binary runs under, so its reach defines the blast radius of
 # untrusted-but-authorized code: it must not be able to touch the persistent
-# soak archive (forged baselines), tfstate, or secrets other than the bench
-# Snowflake key below. The license reaches the host via the staged S3 object,
+# soak archive (forged baselines), tfstate, or secrets (the sink-secret grant
+# below is attached only for e2e runs, which never run PR binaries). The license reaches the host via the staged S3 object,
 # not Secrets Manager (the orchestrator fetches the secret). dynamodb:*
 # returns, scoped, with the stack that needs it (dynamodb benches — not in
 # this tree). The Glue grant below is the iceberg sink's: Connect on this host
@@ -78,15 +78,17 @@ resource "aws_iam_role_policy" "bench_host_glue" {
   })
 }
 
-# The snowflake sink's key. The bench script fetches it on the host and
-# writes it to a 0600 file for Connect's private_key_file, so the key never
-# passes through the orchestrator or an SSM parameter. Exactly one secret is
-# readable: the -?????? matches the random suffix Secrets Manager appends to
-# the name. Its value is a dedicated bench-account key: an approved PR binary
-# running under this role can read it, and that account holds only bench
-# scratch.
-resource "aws_iam_role_policy" "bench_host_snowflake_secret" {
-  role = aws_iam_role.bench_host.name
+# The e2e sinks' credential secrets (snowflake now; bigquery to follow).
+# The bench script fetches the key on the host and writes it to a 0600 file
+# for Connect, so the key never passes through the orchestrator or an SSM
+# parameter. The grant exists only when sink_secrets_enabled is true, which
+# the runner sets only for an e2e run whose sink needs a secret; e2e runs
+# never take --binary, so a PR binary never runs under a role that can read
+# it. The -?????? matches the random suffix Secrets Manager appends to the
+# name, so exactly one secret per sink is readable.
+resource "aws_iam_role_policy" "bench_host_sink_secrets" {
+  count = var.sink_secrets_enabled ? 1 : 0
+  role  = aws_iam_role.bench_host.name
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

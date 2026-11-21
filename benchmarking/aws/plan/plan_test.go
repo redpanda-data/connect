@@ -46,6 +46,9 @@ func pgToSnowflake() map[string]any {
 				"schema":      "PUBLIC",
 				"table":       "CUSTOMERS",
 				"private_key": "-----BEGIN PRIVATE KEY-----MIIEvQ-----END PRIVATE KEY-----",
+				// On already, so the bench's forced schema evolution adds
+				// no caveat to the baseline fixture.
+				"schema_evolution": map[string]any{"enabled": true},
 			},
 		},
 	}

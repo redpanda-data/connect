@@ -121,8 +121,7 @@ func TestSinkSnowflakeProvisionSQLAndPlaceholders(t *testing.T) {
 	require.Equal(t, []string{
 		"CREATE SCHEMA IF NOT EXISTS BENCH_DB." + sfTestSchema,
 		"ALTER WAREHOUSE BENCH_WH SET WAREHOUSE_SIZE = XSMALL",
-		"CREATE TABLE IF NOT EXISTS BENCH_DB." + sfTestSchema + ".T (RECORD VARIANT)",
-	}, f.sql)
+	}, f.sql, "the output creates its table by schema evolution")
 	require.Equal(t, map[string]string{
 		"BENCH_SNOWFLAKE_ACCOUNT":          "BENCHORG-BENCHACCT",
 		"BENCH_SNOWFLAKE_USER":             "BENCH_SVC",
@@ -147,24 +146,25 @@ func TestSinkSnowflakeSizeFromSpec(t *testing.T) {
 	require.ErrorContains(t, err, `"HUGE"`)
 }
 
-// With schema evolution the output creates its own table, so Provision does
-// not; and Count reads zero until the output has created it.
-func TestSinkSnowflakeSchemaEvolutionSkipsTable(t *testing.T) {
-	f := &fakeSnowflake{counts: []int64{0}}
-	out := map[string]any{"broker": map[string]any{"outputs": []any{
-		streamingOutput(map[string]any{"schema_evolution": map[string]any{"enabled": true}}),
-	}}}
-	sink, _ := newTestSnowflakeSink(t, f, SinkSpec{}, out)
-	_, err := sink.Provision(t.Context(), sinkTestSession)
-	require.NoError(t, err)
-	for _, q := range f.sql {
-		require.NotContains(t, q, "CREATE TABLE")
-	}
-
-	f.errs = map[string]error{"SELECT COUNT(*)": ErrSnowflakeNoObject}
+// The output creates its table on its first write, so a missing table reads
+// as empty until rows have been seen; after that a missing table is an error.
+func TestSinkSnowflakeCountMissingTable(t *testing.T) {
+	f := &fakeSnowflake{errs: map[string]error{"SELECT COUNT(*)": ErrSnowflakeNoObject}}
+	sink, _ := newTestSnowflakeSink(t, f, SinkSpec{}, nil)
 	n, err := sink.Count(t.Context(), "1")
 	require.NoError(t, err)
 	require.Zero(t, n)
+
+	f.errs = nil
+	f.counts = []int64{500}
+	n, err = sink.Count(t.Context(), "1")
+	require.NoError(t, err)
+	require.Equal(t, int64(500), n)
+
+	f.errs = map[string]error{"SELECT COUNT(*)": ErrSnowflakeNoObject}
+	_, err = sink.Count(t.Context(), "2")
+	require.ErrorIs(t, err, ErrSnowflakeNoObject)
+	require.ErrorContains(t, err, "after rows were written")
 }
 
 // snowflake_put stages files and loads no rows, so it gets a stage, no
@@ -323,6 +323,8 @@ func TestLoadSnowflakeErrorsCarryNoKeyMaterial(t *testing.T) {
 		"bad key":      sfSecretJSON(t, strings.Replace(key, body[:40], "AAAA", 1)),
 		"not pem":      sfSecretJSON(t, body),
 		"missing user": strings.Replace(sfSecretJSON(t, key), `"user":"BENCH_SVC"`, `"user":""`, 1),
+		"bad account":  strings.Replace(sfSecretJSON(t, key), `"account":"BENCHORG-BENCHACCT"`, `"account":"X\" -o /tmp/y"`, 1),
+		"bad role":     strings.Replace(sfSecretJSON(t, key), `"role":"BENCH_ROLE"`, `"role":"R\nlogger: {}"`, 1),
 	} {
 		_, _, err := loadSnowflake(t.Context(), &FakeSecretsManagerClient{SecretString: secret}, opener)
 		require.Error(t, err, name)
@@ -471,6 +473,8 @@ func TestSnowflakeHostSetupScript(t *testing.T) {
 	require.Contains(t, script, `aws secretsmanager get-secret-value --region "us-east-2" --secret-id "redpanda-connect-bench/snowflake" --query SecretString --output text`)
 	require.Contains(t, script, "jq -er .private_key > /opt/bench/secrets/snowflake_key.p8")
 	require.Contains(t, script, "umask 077")
+	require.Less(t, strings.Index(script, "rm -f /opt/bench/secrets/snowflake_key.p8\n"), strings.Index(script, "get-secret-value"),
+		"a stale key file is removed before the fetch")
 	require.Less(t, strings.Index(script, "trap"), strings.Index(script, "get-secret-value"),
 		"the cleanup trap is armed before the key is written")
 
