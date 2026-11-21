@@ -14,6 +14,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,6 +54,11 @@ var (
 	entryPattern = regexp.MustCompile(`^bench-[0-9]{8}-[0-9]{6}$`)
 )
 
+// errNotifySkipped means notify sent nothing because its config is unset
+// (exit 5): the plan may still be marked done, unlike a send failure (exit
+// 1), which leaves it for a retry.
+var errNotifySkipped = errors.New("completion message skipped: notify config unset")
+
 // resultText is the completion message the agent parses.
 func resultText(planID, runURL, outcome, entry string) string {
 	return fmt.Sprintf("BENCH RESULT plan=%s run=%s outcome=%s entry=%s", planID, runURL, outcome, entry)
@@ -85,7 +91,7 @@ func runNotify(args []string, stdout io.Writer) error {
 	for _, e := range [][2]string{{envA2AURL, endpoint}, {envClientID, id}, {envClientSecret, secret}} {
 		if e[1] == "" {
 			fmt.Fprintf(stdout, "::warning::%s is not set; the Bench Bot completion message was not sent\n", e[0])
-			return nil
+			return errNotifySkipped
 		}
 	}
 	if u, err := url.Parse(endpoint); err != nil || u.Scheme != "https" || u.Host == "" {

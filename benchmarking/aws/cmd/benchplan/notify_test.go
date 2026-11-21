@@ -123,7 +123,7 @@ func TestNotifySkipsWithWarningWhenUnconfigured(t *testing.T) {
 			f := startNotifyFakes(t)
 			t.Setenv(unset, "")
 			var so, se bytes.Buffer
-			require.Equal(t, 0, run(notifyArgs, &so, &se), se.String())
+			require.Equal(t, 5, run(notifyArgs, &so, &se), "skipped is exit 5, so the workflow can tell it from sent (0) and failed (1)")
 			require.Contains(t, so.String(), "::warning::")
 			require.Contains(t, so.String(), unset)
 			require.Nil(t, f.body, "nothing is sent")

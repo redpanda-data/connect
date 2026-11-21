@@ -26,11 +26,14 @@ const (
 	OutcomeStackBusy     = "stack_busy"
 	OutcomeNeverReported = "never_reported"
 	OutcomeNeverStarted  = "never_started"
+	// OutcomeInvalidConfig: the rendered Connect config failed lint, so the
+	// run stopped before taking the lock or spending anything.
+	OutcomeInvalidConfig = "invalid_config"
 )
 
 var outcomes = []string{
 	OutcomeSuccess, OutcomeFailure, OutcomeCancelled, OutcomeStackBusy,
-	OutcomeNeverReported, OutcomeNeverStarted,
+	OutcomeNeverReported, OutcomeNeverStarted, OutcomeInvalidConfig,
 }
 
 // ValidOutcome reports whether o is one of the known outcomes.

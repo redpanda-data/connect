@@ -18,6 +18,12 @@ name: Bench Bot
 # The provisioner session is 4h at most, so credentials are refreshed once
 # the lock is held.
 #
+# Public logs: this repo is public, so neither the plan's pipeline (the
+# customer's logic) nor the rendered config nor Connect's log is ever
+# printed or uploaded. The plan is shown with `benchplan summary` (component
+# names, caveats, sink, estimate), lint findings are counted, not shown, and
+# the runner keeps Connect's log in the session bucket for e2e runs.
+#
 # Repo config (part 2b): var BENCH_BOT_A2A_URL, secrets
 # BENCH_BOT_ADP_CLIENT_ID / BENCH_BOT_ADP_CLIENT_SECRET. While they are
 # unset, the completion message is skipped with a warning.
@@ -114,18 +120,44 @@ jobs:
           fi
           exit "$rc"
 
-      - name: Show and render the plan
+      - name: Summarise and render the plan
         id: render
         shell: bash
         env:
           PLAN_ID: ${{ inputs.plan_id }}
         run: |
           LOC="s3://$PLAN_BUCKET/plans/$PLAN_ID.json"
-          "$RUNNER_TEMP/benchplan" show --plan "$LOC"
+          # summary, never show: show prints the pipeline.
+          "$RUNNER_TEMP/benchplan" summary --plan "$LOC"
           # Rendered outside the checkout so the runner's dirty-tree guard
-          # still lets the catalogue entry through.
+          # still lets the catalogue entry through. render also writes the
+          # standalone Connect config, connect-<id>.yaml, beside the scenario.
           FILE=$("$RUNNER_TEMP/benchplan" render --plan "$LOC" --out "$RUNNER_TEMP/bench-bot")
           echo "scenario_file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "connect_file=$RUNNER_TEMP/bench-bot/connect-$PLAN_ID.yaml" >> "$GITHUB_OUTPUT"
+
+      - name: Build redpanda-connect for lint
+        run: go build -o "$RUNNER_TEMP/redpanda-connect" ./cmd/redpanda-connect
+
+      # Before the lock: a config Connect rejects would spend a whole stack
+      # bring-up to fail at the first point.
+      - name: Lint the rendered Connect config
+        id: lint
+        shell: bash
+        env:
+          CONNECT_FILE: ${{ steps.render.outputs.connect_file }}
+        run: |
+          set +e
+          # Findings stay in RUNNER_TEMP: they can quote the customer's
+          # pipeline, and this log is public.
+          "$RUNNER_TEMP/redpanda-connect" lint "$CONNECT_FILE" > "$RUNNER_TEMP/lint.out" 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            N=$(grep -c . "$RUNNER_TEMP/lint.out" || true)
+            echo "invalid=true" >> "$GITHUB_OUTPUT"
+            echo "::error::The rendered Connect config failed lint ($N line(s) of findings, not shown in this public log). Outcome invalid_config; the lock was not taken and the bench did not run."
+          fi
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v4.0.1
@@ -137,6 +169,7 @@ jobs:
 
       - name: Acquire the shared-stack lock
         id: lock
+        if: steps.lint.outputs.invalid != 'true'
         shell: bash
         env:
           RUN_ID: ${{ github.run_id }}
@@ -205,11 +238,14 @@ jobs:
         if: always() && steps.record.outcome == 'success'
         shell: bash
         env:
+          LINT_INVALID: ${{ steps.lint.outputs.invalid }}
           LOCK_BUSY: ${{ steps.lock.outputs.busy }}
           BENCH: ${{ steps.bench.outcome }}
           JOB_STATUS: ${{ job.status }}
         run: |
-          if [ "$LOCK_BUSY" = "true" ]; then
+          if [ "$LINT_INVALID" = "true" ]; then
+            OUTCOME=invalid_config
+          elif [ "$LOCK_BUSY" = "true" ]; then
             OUTCOME=stack_busy
           elif [ "$BENCH" = "success" ]; then
             OUTCOME=success
@@ -241,14 +277,27 @@ jobs:
           BENCH_BOT_A2A_URL: ${{ vars.BENCH_BOT_A2A_URL }}
           BENCH_BOT_ADP_CLIENT_ID: ${{ secrets.BENCH_BOT_ADP_CLIENT_ID }}
           BENCH_BOT_ADP_CLIENT_SECRET: ${{ secrets.BENCH_BOT_ADP_CLIENT_SECRET }}
+        shell: bash
         run: |
+          # notify exits 0 when sent, 5 when skipped because its config is
+          # unset (a warning), 1 when the send failed.
+          set +e
           "$RUNNER_TEMP/benchplan" notify --plan "$PLAN_ID" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --outcome "$OUTCOME" --entry "$ENTRY"
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then
+            echo "::error::The completion message was not sent; the plan stays not done, so the watchdog reports it later."
+            exit "$rc"
+          fi
 
+      # Only after the message went out (or was skipped for unset config): a
+      # failed send leaves the plan not done, so the watchdog retries it.
       - name: Mark the plan done
         id: done
-        if: always() && steps.record.outcome == 'success'
+        if: always() && steps.record.outcome == 'success' && (steps.notify.outputs.rc == '0' || steps.notify.outputs.rc == '5')
         env:
           PLAN_ID: ${{ inputs.plan_id }}
           OUTCOME: ${{ steps.outcome.outputs.outcome || 'failure' }}

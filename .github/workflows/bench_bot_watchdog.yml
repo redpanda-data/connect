@@ -71,9 +71,12 @@ jobs:
             else
               URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN"
             fi
-            # A send failure leaves the plan not done, so the next tick
-            # retries it. Unset config is a warning and exit 0 (marked done).
-            if ! "$BP" notify --plan "$ID" --run-url "$URL" --outcome "$OUTCOME" --entry none; then
+            # A send failure (exit 1) leaves the plan not done, so the next
+            # tick retries it. Unset config is a warning and exit 5: marked
+            # done, as a sent message (exit 0) is.
+            rc=0
+            "$BP" notify --plan "$ID" --run-url "$URL" --outcome "$OUTCOME" --entry none || rc=$?
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then
               echo "::error::could not report plan $ID ($OUTCOME); will retry next tick"
               FAILED=1
               continue

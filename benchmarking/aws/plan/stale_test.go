@@ -173,7 +173,7 @@ func TestStaleRejectsBadThresholds(t *testing.T) {
 }
 
 func TestValidOutcome(t *testing.T) {
-	for _, o := range []string{"success", "failure", "cancelled", "stack_busy", "never_reported", "never_started"} {
+	for _, o := range []string{"success", "failure", "cancelled", "stack_busy", "never_reported", "never_started", "invalid_config"} {
 		require.True(t, ValidOutcome(o), o)
 	}
 	for _, o := range []string{"", "ok", "SUCCESS", "success\n", "never"} {

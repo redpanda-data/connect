@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -221,6 +222,65 @@ func Render(p Plan) ([]byte, error) {
 		return nil, fmt.Errorf("marshalling scenario: %w", err)
 	}
 	return out, nil
+}
+
+// lintPlaceholder matches the bench placeholders the runner fills at run
+// time: ${BENCH_*}, ${POSTGRES_DSN} and ${MYSQL_DSN}.
+var lintPlaceholder = regexp.MustCompile(`\$\{(BENCH_[A-Z0-9_]*|POSTGRES_DSN|MYSQL_DSN)\}`)
+
+// lintDummies are syntactically valid stand-ins for placeholders that are
+// not plain names; every other placeholder becomes "bench".
+var lintDummies = map[string]string{
+	"POSTGRES_DSN":                     "postgres://bench:bench@localhost:5432/bench",
+	"MYSQL_DSN":                        "bench:bench@tcp(localhost:3306)/bench",
+	"BENCH_REDPANDA_BROKERS":           "localhost:9092",
+	"BENCH_AWS_REGION":                 "us-east-2",
+	"BENCH_ICEBERG_CATALOG_URL":        "http://localhost:8181",
+	"BENCH_ICEBERG_TABLE_LOCATION":     "s3://bench/bench",
+	"BENCH_SNOWFLAKE_PRIVATE_KEY_FILE": "/tmp/bench.p8",
+	"BENCH_S3_PREFIX":                  "bench/",
+}
+
+// ConnectConfig renders the Connect config the bench will run for p (the
+// scenario's pipeline, as Render writes it) as a standalone YAML document,
+// with every bench placeholder replaced by a syntactically valid dummy, so
+// `redpanda-connect lint` can check it before any spend. It is the
+// customer's pipeline logic: never print it in a public log.
+func ConnectConfig(p Plan) ([]byte, error) {
+	if !p.Runnable {
+		return nil, errors.New("plan is not runnable")
+	}
+	pipeline := p.Pipeline
+	if p.Source == SourceApproximated {
+		pipeline = approximatedPipeline(p.Pipeline)
+	}
+	cfg, _ := fillLintDummies(deepCopy(pipeline)).(map[string]any)
+	out, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling connect config: %w", err)
+	}
+	return out, nil
+}
+
+func fillLintDummies(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, c := range t {
+			t[k] = fillLintDummies(c)
+		}
+	case []any:
+		for i, c := range t {
+			t[i] = fillLintDummies(c)
+		}
+	case string:
+		return lintPlaceholder.ReplaceAllStringFunc(t, func(m string) string {
+			if d, ok := lintDummies[m[2:len(m)-1]]; ok {
+				return d
+			}
+			return "bench"
+		})
+	}
+	return v
 }
 
 func nonNil(s []string) []string {

@@ -158,3 +158,28 @@ func TestRenderCatalogBlock(t *testing.T) {
 	require.Equal(t, p.Caveats, sc.Catalog.Caveats)
 	require.True(t, sc.Catalog.SourceApproximated)
 }
+
+func TestConnectConfigReplacesBenchPlaceholders(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["pipeline"] = map[string]any{"processors": []any{map[string]any{"mapping": `root.id = "${!counter()}"`}}}
+	p := build(t, cfg)
+	out, err := ConnectConfig(p)
+	require.NoError(t, err)
+	require.NotRegexp(t, `\$\{(BENCH_|POSTGRES_DSN|MYSQL_DSN)`, string(out))
+	require.Contains(t, string(out), "postgres://bench:bench@localhost:5432/bench")
+	require.Contains(t, string(out), "/tmp/bench.p8")
+	require.Contains(t, string(out), `${!counter()}`, "Bloblang interpolations are kept")
+	require.NotContains(t, string(out), "catalog:", "a Connect config, not a scenario")
+
+	// The stored plan is not changed.
+	require.Equal(t, "${POSTGRES_DSN}", p.Pipeline["input"].(map[string]any)["postgres_cdc"].(map[string]any)["dsn"])
+
+	approx := build(t, httpToDrop())
+	out, err = ConnectConfig(approx)
+	require.NoError(t, err)
+	require.Contains(t, string(out), "redpanda:", "the approximated input is the bench's redpanda input")
+	require.Contains(t, string(out), "localhost:9092")
+
+	_, err = ConnectConfig(Plan{Reason: "x"})
+	require.Error(t, err)
+}

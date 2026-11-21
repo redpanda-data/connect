@@ -224,6 +224,34 @@ go run ./cmd/catalog import --repo ../.. --results-root <dir laid out as connect
 latest release tag, and `import` reads scenarios and describes build SHAs
 from it, so a shallow or tagless clone gives wrong or `unknown` answers.
 
+An e2e entry's `capacity_mb_s` is input-equivalent (`capacity_basis:
+input_equivalent`): the msg/s measured at the output times the workload's
+message size, so a pipeline that shrinks or grows messages is still sized by
+the input rate it sustains. The bytes measured at the output are in each
+point's `output_mb_s`. Source entries have no `capacity_basis`: their
+capacity is the output bytes, as before.
+
+## Bench Bot runs by hand (operator)
+
+The Bench Bot agent normally builds, claims and dispatches plans. To run one
+by hand (for example the first end-to-end run of a new account):
+
+```sh
+# 1. build: store a plan from a customer config
+go run ./cmd/benchplan build --config cfg.yaml --message-size 1024 --target-mb-s 40 \
+  --store s3://redpanda-connect-bench-catalog
+# 2. claim: the approval the workflow refuses to run without
+go run ./cmd/benchplan claim --plan s3://redpanda-connect-bench-catalog/plans/<id>.json --approver <your name>
+# 3. dispatch, only if claim printed "won": true
+gh workflow run bench_bot.yml -f plan_id=<id>
+```
+
+The workflow's log is public: it prints `benchplan summary` (component names,
+caveats, sink, estimate), never the plan's pipeline. `benchplan show` prints
+the whole plan and is for local use only. Before taking the shared-stack lock
+the workflow lints the rendered Connect config; a config Connect rejects ends
+with outcome `invalid_config` and spends nothing.
+
 ## Layout
 
 | Path | Role |

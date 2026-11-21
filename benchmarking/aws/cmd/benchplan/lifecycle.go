@@ -95,6 +95,44 @@ func runStatus(args []string, stdout io.Writer) error {
 	})
 }
 
+// claimResult is what claim prints. Approver is the plan's approver after
+// the call: the caller's name when it won, the earlier winner's when not.
+type claimResult struct {
+	PlanID   string `json:"plan_id"`
+	Won      bool   `json:"won"`
+	Approver string `json:"approver"`
+}
+
+// runClaim claims a plan for dispatch (Store.Claim), as the agent's tool
+// server does on approval; an operator runs it by hand before
+// `gh workflow run`. Exit 0 either way: won says whether this call claimed
+// it, and only the winner may dispatch.
+func runClaim(args []string, stdout io.Writer) error {
+	fs := newFlags("claim")
+	ref, store := planRefFlags(fs)
+	approver := fs.String("approver", "", "who approved the run")
+	if err := parse(fs, args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*approver) == "" {
+		return fmt.Errorf("%w: --approver is required", errUsage)
+	}
+	ctx := context.Background()
+	s, id, err := openPlan(ctx, *ref, *store)
+	if err != nil {
+		return err
+	}
+	won, err := s.Claim(ctx, id, *approver)
+	if err != nil {
+		return err
+	}
+	p, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	return printJSON(stdout, claimResult{PlanID: id, Won: won, Approver: p.Approver})
+}
+
 func runRecordRun(args []string, stderr io.Writer) error {
 	fs := newFlags("record-run")
 	ref, store := planRefFlags(fs)

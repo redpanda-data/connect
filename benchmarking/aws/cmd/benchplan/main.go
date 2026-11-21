@@ -6,10 +6,14 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 // Command benchplan builds, stores and renders Bench Bot plans, tracks their
-// lifecycle (status, record-run, done, stale), sends the completion message
-// (notify), and takes the shared bench-stack lock.
+// lifecycle (claim, status, record-run, done, stale), sends the completion
+// message (notify), and takes the shared bench-stack lock.
 // Exit codes: 0 ok, 1 runtime error, 2 bad flags or usage, 3 lock wait
-// timeout, 4 duplicate dispatch (another run is recorded for the plan).
+// timeout, 4 duplicate dispatch (another run is recorded for the plan), 5
+// notify skipped because its config is unset (nothing was sent).
+//
+// `show` prints the whole plan, pipeline included, for local use only. CI
+// logs of this public repo use `summary`, which never prints the pipeline.
 package main
 
 import (
@@ -24,6 +28,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
 )
 
@@ -31,7 +36,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const usageText = "usage: benchplan <render|show|build|status|record-run|done|stale|notify|lock> ..."
+const usageText = "usage: benchplan <render|show|summary|build|claim|status|record-run|done|stale|notify|lock> ..."
 
 var errUsage = errors.New("usage")
 
@@ -46,6 +51,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = runRender(args[1:], stdout)
 	case "show":
 		err = runShow(args[1:], stdout)
+	case "summary":
+		err = runSummary(args[1:], stdout)
+	case "claim":
+		err = runClaim(args[1:], stdout)
 	case "build":
 		err = runBuild(args[1:], stdout)
 	case "status":
@@ -76,6 +85,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case errors.Is(err, errDuplicate):
 		fmt.Fprintln(stderr, "error:", err)
 		return 4
+	case errors.Is(err, errNotifySkipped):
+		return 5
 	default:
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
@@ -150,12 +161,25 @@ func runRender(args []string, stdout io.Writer) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", outDir, err)
 	}
+	cfg, err := plan.ConnectConfig(p)
+	if err != nil {
+		return err
+	}
 	dst := filepath.Join(outDir, "bot-"+p.ID+".yaml")
 	if err := os.WriteFile(dst, out, 0o644); err != nil {
 		return fmt.Errorf("writing scenario: %w", err)
 	}
+	// Beside the scenario, for `redpanda-connect lint` before the lock.
+	if err := os.WriteFile(connectConfigPath(outDir, p.ID), cfg, 0o644); err != nil {
+		return fmt.Errorf("writing connect config: %w", err)
+	}
 	fmt.Fprintln(stdout, dst)
 	return nil
+}
+
+// connectConfigPath is where render writes the standalone Connect config.
+func connectConfigPath(outDir, id string) string {
+	return filepath.Join(outDir, "connect-"+id+".yaml")
 }
 
 func runShow(args []string, stdout io.Writer) error {
@@ -168,6 +192,41 @@ func runShow(args []string, stdout io.Writer) error {
 		return err
 	}
 	return printPlan(stdout, p)
+}
+
+// planSummary is what summary prints: identity, caveats, sink and estimate,
+// never the pipeline or the Slack thread.
+type planSummary struct {
+	PlanID     string           `json:"plan_id"`
+	Input      string           `json:"input"`
+	Processors []string         `json:"processors"`
+	Output     string           `json:"output"`
+	Caveats    []string         `json:"caveats"`
+	Sink       plan.SinkKind    `json:"sink"`
+	SinkSize   string           `json:"sink_size"`
+	Estimate   catalog.Estimate `json:"estimate"`
+}
+
+func runSummary(args []string, stdout io.Writer) error {
+	planPath, _, err := parseFlags("summary", args, false)
+	if err != nil {
+		return err
+	}
+	p, err := loadPlan(planPath)
+	if err != nil {
+		return err
+	}
+	procs, caveats := p.Processors, p.Caveats
+	if procs == nil {
+		procs = []string{}
+	}
+	if caveats == nil {
+		caveats = []string{}
+	}
+	return printJSON(stdout, planSummary{
+		PlanID: p.ID, Input: p.Input, Processors: procs, Output: p.Output,
+		Caveats: caveats, Sink: p.Sink, SinkSize: p.SinkSize, Estimate: p.Estimate,
+	})
 }
 
 func printPlan(stdout io.Writer, p plan.Plan) error {

@@ -309,3 +309,66 @@ func TestWorkflowActionsArePinnedByTheLockfile(t *testing.T) {
 		}
 	}
 }
+
+// The repo is public, so its CI logs are: the plan's pipeline, the rendered
+// scenario or Connect config, lint findings and Connect's log must never be
+// printed or uploaded.
+func TestWorkflowBenchBotNeverPrintsThePipeline(t *testing.T) {
+	_, job := benchBotJob(t)
+	show := regexp.MustCompile(`benchplan"?\s+show\b`)
+	cat := regexp.MustCompile(`\b(cat|less|more|head|tail|tee)\b[^\n|]*(SCENARIO_FILE|CONNECT_FILE|scenario_file|connect_file|bench-bot/|connect-|bot-|lint\.out|sweep-|prom-)`)
+	for _, s := range job.Steps {
+		require.NotRegexp(t, show, s.Run, "step %q prints the whole plan", s.Name)
+		require.NotRegexp(t, cat, s.Run, "step %q prints a rendered file", s.Name)
+		require.NotContains(t, s.Run, "set -x", s.Name)
+		if strings.HasPrefix(s.Uses, "actions/upload-artifact@") {
+			require.Equal(t, "${{ runner.temp }}/bench-run.log", s.With["path"], "only the runner's own log is uploaded")
+		}
+	}
+	render := job.Steps[stepIndex(t, job.Steps, "render")]
+	require.Contains(t, render.Run, " summary --plan ")
+}
+
+// Lint runs before the lock: a config Connect rejects is invalid_config,
+// with no lock and no spend.
+func TestWorkflowBenchBotLintsBeforeTheLock(t *testing.T) {
+	_, job := benchBotJob(t)
+	steps := job.Steps
+	render := stepIndex(t, steps, "render")
+	lint := stepIndex(t, steps, "lint")
+	lock := stepIndex(t, steps, "lock")
+	outcome := stepIndex(t, steps, "outcome")
+	require.Less(t, render, lint)
+	require.Less(t, lint, lock)
+	require.Contains(t, steps[lint].Run, `redpanda-connect" lint "$CONNECT_FILE"`)
+	require.Equal(t, "${{ steps.render.outputs.connect_file }}", steps[lint].Env["CONNECT_FILE"])
+	require.Contains(t, steps[lint].Run, "invalid=true")
+	build := firstRunIndex(steps, "go build -o \"$RUNNER_TEMP/redpanda-connect\" ./cmd/redpanda-connect")
+	require.GreaterOrEqual(t, build, 0)
+	require.Less(t, build, lint)
+	require.Equal(t, "steps.lint.outputs.invalid != 'true'", steps[lock].If)
+	require.Equal(t, "${{ steps.lint.outputs.invalid }}", steps[outcome].Env["LINT_INVALID"])
+	require.Contains(t, steps[outcome].Run, "OUTCOME=invalid_config")
+	// Every step that spends (terraform, the bench) sits behind the lock.
+	require.Less(t, lock, stepIndex(t, steps, "bench"))
+}
+
+// The plan is marked done only once the completion message went out, or was
+// skipped for unset config: a failed send is retried by the watchdog.
+func TestWorkflowBenchBotDoneGatedOnNotify(t *testing.T) {
+	_, job := benchBotJob(t)
+	notify := job.Steps[stepIndex(t, job.Steps, "notify")]
+	done := job.Steps[stepIndex(t, job.Steps, "done")]
+	require.Contains(t, notify.Run, `echo "rc=$rc" >> "$GITHUB_OUTPUT"`)
+	require.Contains(t, notify.Run, `[ "$rc" -ne 5 ]`)
+	require.Equal(t, "always() && steps.record.outcome == 'success' && (steps.notify.outputs.rc == '0' || steps.notify.outputs.rc == '5')", done.If)
+
+	w := loadWorkflow(t, "bench_bot_watchdog.yml")
+	for _, j := range w.Jobs {
+		all := ""
+		for _, s := range j.Steps {
+			all += s.Run
+		}
+		require.Contains(t, all, `[ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]`, "the watchdog marks done on 0 or 5 only")
+	}
+}
