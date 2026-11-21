@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -26,6 +27,7 @@ type S3API interface {
 	PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)
 	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 	DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+	ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 }
 
 var _ S3API = (*s3.Client)(nil)
@@ -109,4 +111,24 @@ func (o *s3Objects) Delete(ctx context.Context, key, etag string) error {
 		return fmt.Errorf("deleting s3://%s/%s: %w", o.bucket, key, err)
 	}
 	return nil
+}
+
+func (o *s3Objects) List(ctx context.Context, prefix string) ([]string, error) {
+	keys := []string{}
+	in := &s3.ListObjectsV2Input{Bucket: aws.String(o.bucket), Prefix: aws.String(prefix)}
+	for {
+		page, err := o.api.ListObjectsV2(ctx, in)
+		if err != nil {
+			return nil, fmt.Errorf("listing s3://%s/%s: %w", o.bucket, prefix, err)
+		}
+		for _, obj := range page.Contents {
+			keys = append(keys, aws.ToString(obj.Key))
+		}
+		if !aws.ToBool(page.IsTruncated) || page.NextContinuationToken == nil {
+			break
+		}
+		in.ContinuationToken = page.NextContinuationToken
+	}
+	sort.Strings(keys)
+	return keys, nil
 }

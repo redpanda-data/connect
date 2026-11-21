@@ -5,9 +5,11 @@
 // the License. You may obtain a copy of the License at
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
-// Command benchplan builds, stores and renders Bench Bot plans, and takes the
-// shared bench-stack lock.
-// Exit codes: 0 ok, 1 runtime error, 2 bad flags or usage, 3 lock wait timeout.
+// Command benchplan builds, stores and renders Bench Bot plans, tracks their
+// lifecycle (status, record-run, done, stale), sends the completion message
+// (notify), and takes the shared bench-stack lock.
+// Exit codes: 0 ok, 1 runtime error, 2 bad flags or usage, 3 lock wait
+// timeout, 4 duplicate dispatch (another run is recorded for the plan).
 package main
 
 import (
@@ -29,7 +31,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const usageText = "usage: benchplan <render|show|build|lock> ..."
+const usageText = "usage: benchplan <render|show|build|status|record-run|done|stale|notify|lock> ..."
 
 var errUsage = errors.New("usage")
 
@@ -46,6 +48,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = runShow(args[1:], stdout)
 	case "build":
 		err = runBuild(args[1:], stdout)
+	case "status":
+		err = runStatus(args[1:], stdout)
+	case "record-run":
+		err = runRecordRun(args[1:], stderr)
+	case "done":
+		err = runDone(args[1:], stderr)
+	case "stale":
+		err = runStale(args[1:], stdout)
+	case "notify":
+		err = runNotify(args[1:], stdout)
 	case "lock":
 		err = runLock(args[1:], stderr)
 	default:
@@ -61,6 +73,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case errors.Is(err, errUsage):
 		fmt.Fprintln(stderr, err)
 		return 2
+	case errors.Is(err, errDuplicate):
+		fmt.Fprintln(stderr, "error:", err)
+		return 4
 	default:
 		fmt.Fprintln(stderr, "error:", err)
 		return 1

@@ -1,0 +1,266 @@
+name: Bench Bot
+
+# Runs one stored, approved Bench Bot plan end to end in the bench account
+# and reports the outcome back to the Bench Bot agent.
+#
+# Dispatch: the agent's tool server CLAIMS the plan (plans/<id>.dispatched,
+# a conditional put) and only then dispatches this workflow with the plan
+# id. This workflow refuses a plan that is not claimed, so a manual
+# `gh workflow run` cannot bypass the approval gate, and records its run id
+# (plans/<id>.run) before doing anything paid, so a duplicate dispatch stops.
+#
+# Serialisation: no `concurrency:` group. A group cancels queued runs, which
+# would silently drop approved plans. Runs (bot and soak alike) serialise on
+# the shared-stack lock (locks/shared-stack in the catalogue bucket), which
+# waits for the stack to be empty before it is taken.
+#
+# Timing: up to 2h waiting for the lock + a ~2h sweep fits in 330 minutes.
+# The provisioner session is 4h at most, so credentials are refreshed once
+# the lock is held.
+#
+# Repo config (part 2b): var BENCH_BOT_A2A_URL, secrets
+# BENCH_BOT_ADP_CLIENT_ID / BENCH_BOT_ADP_CLIENT_SECRET. While they are
+# unset, the completion message is skipped with a warning.
+
+on:
+  workflow_dispatch:
+    inputs:
+      plan_id:
+        description: 'Bench Bot plan id (12 lower-case hex characters)'
+        required: true
+        type: string
+
+run-name: bench-bot ${{ inputs.plan_id }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
+      PLAN_BUCKET: redpanda-connect-bench-catalog
+      PLAN_STORE: s3://redpanda-connect-bench-catalog
+    steps:
+      # First, before anything credentialed. The input reaches later steps
+      # only through env:, never ${{ }}-interpolated into a script.
+      - name: Validate plan_id
+        id: validate
+        env:
+          PLAN_ID: ${{ inputs.plan_id }}
+        run: |
+          # bash [[ =~ ]], not grep: grep matches per line, so a multi-line
+          # value would pass on its first line.
+          re='^[0-9a-f]{12}$'
+          if ! [[ "$PLAN_ID" =~ $re ]]; then
+            echo "::error::Invalid plan_id: expected 12 lower-case hex characters"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v6.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
+      - name: Install Go
+        uses: actions/setup-go@v6.5.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build benchplan
+        working-directory: benchmarking/aws
+        run: go build -o "$RUNNER_TEMP/benchplan" ./cmd/benchplan
+
+      - name: Require a claimed plan
+        id: gate
+        shell: bash
+        env:
+          PLAN_ID: ${{ inputs.plan_id }}
+        run: |
+          ST=$("$RUNNER_TEMP/benchplan" status --store "$PLAN_STORE" --plan "$PLAN_ID")
+          echo "$ST"
+          if [ "$(jq -r '.claimed' <<<"$ST")" != "true" ]; then
+            echo "::error::Plan $PLAN_ID is not claimed. Bench Bot plans run only after approval in Slack; this workflow is not run by hand."
+            exit 1
+          fi
+          if [ "$(jq -r '.done' <<<"$ST")" = "true" ]; then
+            echo "::error::Plan $PLAN_ID is already done ($(jq -r '.outcome' <<<"$ST")); it will not run again."
+            exit 1
+          fi
+
+      - name: Record this run against the plan
+        id: record
+        shell: bash
+        env:
+          PLAN_ID: ${{ inputs.plan_id }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set +e
+          "$RUNNER_TEMP/benchplan" record-run --store "$PLAN_STORE" --plan "$PLAN_ID" --run-id "$RUN_ID"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 4 ]; then
+            echo "::error::Duplicate dispatch: another run is already recorded for plan $PLAN_ID. That run owns the plan; this one stops and reports nothing."
+          fi
+          exit "$rc"
+
+      - name: Show and render the plan
+        id: render
+        shell: bash
+        env:
+          PLAN_ID: ${{ inputs.plan_id }}
+        run: |
+          LOC="s3://$PLAN_BUCKET/plans/$PLAN_ID.json"
+          "$RUNNER_TEMP/benchplan" show --plan "$LOC"
+          # Rendered outside the checkout so the runner's dirty-tree guard
+          # still lets the catalogue entry through.
+          FILE=$("$RUNNER_TEMP/benchplan" render --plan "$LOC" --out "$RUNNER_TEMP/bench-bot")
+          echo "scenario_file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Install Task
+        uses: $/.github/actions/setup-task
+
+      - name: Acquire the shared-stack lock
+        id: lock
+        shell: bash
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set +e
+          "$RUNNER_TEMP/benchplan" lock acquire --store "$PLAN_STORE" --holder "$RUN_ID" --ttl 4h --wait 2h --poll 2m
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "acquired=true" >> "$GITHUB_OUTPUT" ;;
+            3)
+              # Outcome stack_busy: reported, not a workflow failure.
+              echo "busy=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::The shared bench stack stayed busy for 2h; outcome stack_busy, the bench did not run."
+              ;;
+            *) exit "$rc" ;;
+          esac
+
+      - name: Refresh AWS credentials
+        id: reauth
+        if: steps.lock.outputs.acquired == 'true'
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
+      - name: Run the bench
+        id: bench
+        if: steps.lock.outputs.acquired == 'true'
+        working-directory: benchmarking/aws
+        # Explicit bash for pipefail: without it `| tee` hides a failed run.
+        shell: bash
+        env:
+          SCENARIO_FILE: ${{ steps.render.outputs.scenario_file }}
+        run: |
+          task aws:bench scenario_file="$SCENARIO_FILE" 2>&1 | tee "$RUNNER_TEMP/bench-run.log"
+
+      - name: Verify teardown actually completed
+        if: always() && steps.lock.outputs.acquired == 'true'
+        run: |
+          LIVE=$(aws ec2 describe-instances --region us-east-2 \
+            --filters Name=tag:Project,Values=redpanda-connect-bench Name=instance-state-name,Values=pending,running,stopping,stopped \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          RDS=$(aws rds describe-db-instances --region us-east-2 \
+            --query "DBInstances[?starts_with(DBInstanceIdentifier, 'rpcn-bench')].DBInstanceIdentifier" --output text)
+          if [ -n "$LIVE$RDS" ]; then
+            echo "::error::Teardown left resources behind (EC2: ${LIVE:-none}; RDS: ${RDS:-none}). The orphan reaper will sweep them within its TTL, but investigate the run log."
+            exit 1
+          fi
+          echo "account clean: no bench EC2, no RDS"
+
+      # Release is a no-op unless this run holds the lock.
+      - name: Release the shared-stack lock
+        id: release
+        if: always() && steps.lock.outcome != 'skipped'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          "$RUNNER_TEMP/benchplan" lock release --store "$PLAN_STORE" --holder "$RUN_ID"
+
+      # Everything below runs only once this run owns the plan: a refused or
+      # duplicate dispatch sends nothing and marks nothing.
+      - name: Resolve the outcome
+        id: outcome
+        if: always() && steps.record.outcome == 'success'
+        shell: bash
+        env:
+          LOCK_BUSY: ${{ steps.lock.outputs.busy }}
+          BENCH: ${{ steps.bench.outcome }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$LOCK_BUSY" = "true" ]; then
+            OUTCOME=stack_busy
+          elif [ "$BENCH" = "success" ]; then
+            OUTCOME=success
+          elif [ "$BENCH" = "cancelled" ] || [ "$JOB_STATUS" = "cancelled" ]; then
+            OUTCOME=cancelled
+          else
+            OUTCOME=failure
+          fi
+          # The runner prints "catalogue-entry-id: <session id>" at column 0
+          # once the entry is written; remote output is always prefixed, so
+          # nothing else can produce this line.
+          ENTRY=none
+          if [ -f "$RUNNER_TEMP/bench-run.log" ]; then
+            FOUND=$(grep -m1 -E '^catalogue-entry-id: bench-[0-9]{8}-[0-9]{6}$' "$RUNNER_TEMP/bench-run.log" | sed 's/^catalogue-entry-id: //' || true)
+            ENTRY=${FOUND:-none}
+          fi
+          echo "outcome=$OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "entry=$ENTRY" >> "$GITHUB_OUTPUT"
+          echo "outcome=$OUTCOME entry=$ENTRY"
+
+      - name: Send the completion message
+        id: notify
+        if: always() && steps.record.outcome == 'success'
+        env:
+          PLAN_ID: ${{ inputs.plan_id }}
+          OUTCOME: ${{ steps.outcome.outputs.outcome || 'failure' }}
+          ENTRY: ${{ steps.outcome.outputs.entry || 'none' }}
+          # benchplan mints the oauth2 token itself and never prints it.
+          BENCH_BOT_A2A_URL: ${{ vars.BENCH_BOT_A2A_URL }}
+          BENCH_BOT_ADP_CLIENT_ID: ${{ secrets.BENCH_BOT_ADP_CLIENT_ID }}
+          BENCH_BOT_ADP_CLIENT_SECRET: ${{ secrets.BENCH_BOT_ADP_CLIENT_SECRET }}
+        run: |
+          "$RUNNER_TEMP/benchplan" notify --plan "$PLAN_ID" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --outcome "$OUTCOME" --entry "$ENTRY"
+
+      - name: Mark the plan done
+        id: done
+        if: always() && steps.record.outcome == 'success'
+        env:
+          PLAN_ID: ${{ inputs.plan_id }}
+          OUTCOME: ${{ steps.outcome.outputs.outcome || 'failure' }}
+        run: |
+          # `done` is benchplan's subcommand here, not the shell keyword.
+          # shellcheck disable=SC1010
+          "$RUNNER_TEMP/benchplan" done --store "$PLAN_STORE" --plan "$PLAN_ID" --outcome "$OUTCOME"
+
+      - name: Upload run log
+        if: always() && steps.bench.outcome != 'skipped'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: bench-bot-run-log
+          path: ${{ runner.temp }}/bench-run.log
+          retention-days: 30

@@ -1,0 +1,84 @@
+name: Bench Bot Watchdog
+
+# Reports Bench Bot plans that were approved (claimed) but never reported
+# back, so no Slack thread waits forever:
+#   - claimed more than 30 min ago and no run recorded: never_started
+#     (the dispatch was lost, or the run was refused before recording);
+#   - claimed more than 6h ago and still not done: never_reported
+#     (bench_bot.yml times out at 330 min, so its own completion step
+#     should have run).
+# Each is reported once: the plan is marked done after the message is sent.
+# The selection logic is `benchplan stale` (Go, tested).
+#
+# The schedule only runs from the default branch; elsewhere use dispatch.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+# Two overlapping ticks would report the same plan twice.
+concurrency:
+  group: bench-bot-watchdog
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PLAN_STORE: s3://redpanda-connect-bench-catalog
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.1.0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+
+      - name: Install Go
+        uses: actions/setup-go@v6.5.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build benchplan
+        working-directory: benchmarking/aws
+        run: go build -o "$RUNNER_TEMP/benchplan" ./cmd/benchplan
+
+      - name: Report stale plans
+        shell: bash
+        env:
+          BENCH_BOT_A2A_URL: ${{ vars.BENCH_BOT_A2A_URL }}
+          BENCH_BOT_ADP_CLIENT_ID: ${{ secrets.BENCH_BOT_ADP_CLIENT_ID }}
+          BENCH_BOT_ADP_CLIENT_SECRET: ${{ secrets.BENCH_BOT_ADP_CLIENT_SECRET }}
+        run: |
+          BP="$RUNNER_TEMP/benchplan"
+          STALE=$("$BP" stale --store "$PLAN_STORE" --older-than 6h --unstarted-older-than 30m)
+          echo "stale plans: $STALE"
+          # Plan ids, outcomes and run ids come from benchplan, which only
+          # emits validated ids and known outcomes.
+          FAILED=0
+          while IFS=$'\t' read -r ID OUTCOME RUN; do
+            [ -n "$ID" ] || continue
+            if [ "$RUN" = "0" ]; then
+              URL=none
+            else
+              URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN"
+            fi
+            # A send failure leaves the plan not done, so the next tick
+            # retries it. Unset config is a warning and exit 0 (marked done).
+            if ! "$BP" notify --plan "$ID" --run-url "$URL" --outcome "$OUTCOME" --entry none; then
+              echo "::error::could not report plan $ID ($OUTCOME); will retry next tick"
+              FAILED=1
+              continue
+            fi
+            # shellcheck disable=SC1010 # benchplan's `done`, not the keyword
+            "$BP" done --store "$PLAN_STORE" --plan "$ID" --outcome "$OUTCOME" || FAILED=1
+          done < <(jq -r '.[] | [.plan_id, .outcome, ((.run_id // 0) | tostring)] | @tsv' <<<"$STALE")
+          exit "$FAILED"

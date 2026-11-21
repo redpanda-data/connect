@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -64,6 +66,11 @@ type Store interface {
 	RecordRun(ctx context.Context, id string, runID int64) error
 	// MarkDone records the outcome once; a second call is a no-op.
 	MarkDone(ctx context.Context, id, outcome string) error
+	// Stale lists claimed plans that are not done and either have no run
+	// recorded more than notStarted after the claim (OutcomeNeverStarted) or
+	// are still not done more than notReported after it
+	// (OutcomeNeverReported), as of now. Sorted by plan ID.
+	Stale(ctx context.Context, now time.Time, notReported, notStarted time.Duration) ([]StalePlan, error)
 }
 
 // Objects is the conditional-write object API the plan store and the lock
@@ -79,6 +86,8 @@ type Objects interface {
 	// Delete removes the object only if its version is still etag
 	// (ErrConflict otherwise). A missing object is not an error.
 	Delete(ctx context.Context, key, etag string) error
+	// List returns every key under prefix, sorted.
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
 func planKey(id string) string       { return "plans/" + id + ".json" }
@@ -106,8 +115,22 @@ type objectStore struct {
 	now  func() time.Time
 }
 
+// StoreOption configures NewStore.
+type StoreOption func(*objectStore)
+
+// WithClock sets the clock the store stamps markers with; for tests.
+func WithClock(now func() time.Time) StoreOption {
+	return func(s *objectStore) { s.now = now }
+}
+
 // NewStore returns a Store over any Objects.
-func NewStore(objs Objects) Store { return &objectStore{objs: objs, now: time.Now} }
+func NewStore(objs Objects, opts ...StoreOption) Store {
+	s := &objectStore{objs: objs, now: time.Now}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
 
 // NewS3Store returns a Store keeping plans in bucket.
 func NewS3Store(api S3API, bucket string) Store { return NewStore(NewS3Objects(api, bucket)) }
@@ -119,7 +142,8 @@ func (s *objectStore) Put(ctx context.Context, p Plan) error {
 	if err := checkID(p.ID); err != nil {
 		return err
 	}
-	p.Claimed, p.Approver, p.DispatchedRunID = false, "", 0 // the markers are the only source of truth
+	// The markers are the only source of truth for these.
+	p.Claimed, p.Approver, p.DispatchedRunID, p.Done, p.Outcome = false, "", 0, false, ""
 	body, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding plan %s: %w", p.ID, err)
@@ -158,6 +182,13 @@ func (s *objectStore) Get(ctx context.Context, id string) (Plan, error) {
 	}
 	if ok {
 		p.DispatchedRunID = r.RunID
+	}
+	d, ok, err := readMarker[doneMarker](ctx, s.objs, doneKey(id))
+	if err != nil {
+		return Plan{}, err
+	}
+	if ok {
+		p.Done, p.Outcome = true, d.Outcome
 	}
 	return p, nil
 }
@@ -317,6 +348,33 @@ func (d *dirObjects) Replace(_ context.Context, key string, body []byte, etag st
 		return err
 	}
 	return d.write(key, body)
+}
+
+func (d *dirObjects) List(_ context.Context, prefix string) ([]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	keys := []string{}
+	err := filepath.WalkDir(d.root, func(p string, e fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fs.SkipAll
+		}
+		if err != nil || e.IsDir() || strings.HasPrefix(e.Name(), ".tmp-") {
+			return err
+		}
+		rel, err := filepath.Rel(d.root, p)
+		if err != nil {
+			return err
+		}
+		if key := filepath.ToSlash(rel); strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 func (d *dirObjects) Delete(_ context.Context, key, etag string) error {

@@ -182,17 +182,35 @@ var treeDirty = func(repoRoot string) (bool, error) {
 	return strings.TrimSpace(string(out)) != "", nil
 }
 
-// catalogueSweep writes a completed sweep's entry to the catalogue bucket. A
-// build from a dirty working tree is not the commit its build SHA names, so
-// it is skipped with a warning on warn.
-func catalogueSweep(ctx context.Context, opts benchOpts, s *Scenario, r *Result, sessionID string, warn io.Writer) error {
+// catalogueEntryMarker starts the line the runner prints once a catalogue
+// entry is written. bench_bot.yml reads the entry id from it, anchored at
+// column 0: remote output is always prefixed, so only the runner can print it.
+const catalogueEntryMarker = "catalogue-entry-id: "
+
+func catalogueEntryLine(id string) string { return catalogueEntryMarker + id + "\n" }
+
+// putCatalogEntry writes e to the catalogue bucket. A var so tests can
+// substitute it.
+var putCatalogEntry = func(ctx context.Context, opts benchOpts, e catalog.Entry) error {
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
+	if err != nil {
+		return fmt.Errorf("load AWS config: %w", err)
+	}
+	return catalog.NewS3Store(s3.NewFromConfig(cfg), opts.catalogBucket).Put(ctx, e)
+}
+
+// catalogueSweep writes a completed sweep's entry to the catalogue bucket and
+// returns its id, or "" when nothing was written. A build from a dirty
+// working tree is not the commit its build SHA names, so it is skipped with a
+// warning on warn.
+func catalogueSweep(ctx context.Context, opts benchOpts, s *Scenario, r *Result, sessionID string, warn io.Writer) (string, error) {
 	dirty, err := treeDirty(opts.repoRoot)
 	if err != nil {
-		return fmt.Errorf("checking working tree: %w", err)
+		return "", fmt.Errorf("checking working tree: %w", err)
 	}
 	if dirty {
 		fmt.Fprintln(warn, "warning: catalogue entry skipped: working tree dirty")
-		return nil
+		return "", nil
 	}
 	e, err := catalogEntryFromResult(s, r, catalogMeta{
 		SessionID: sessionID,
@@ -200,11 +218,10 @@ func catalogueSweep(ctx context.Context, opts benchOpts, s *Scenario, r *Result,
 		Now:       time.Now().UTC(),
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
-	if err != nil {
-		return fmt.Errorf("load AWS config: %w", err)
+	if err := putCatalogEntry(ctx, opts, e); err != nil {
+		return "", err
 	}
-	return catalog.NewS3Store(s3.NewFromConfig(cfg), opts.catalogBucket).Put(ctx, e)
+	return e.ID, nil
 }

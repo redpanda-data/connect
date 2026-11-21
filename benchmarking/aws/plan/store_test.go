@@ -13,6 +13,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -108,6 +111,35 @@ func (f *fakeS3) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...
 	delete(f.objs, key)
 	delete(f.etags, key)
 	return &s3.DeleteObjectOutput{}, nil
+}
+
+func (f *fakeS3) ListObjectsV2(_ context.Context, in *s3.ListObjectsV2Input, _ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	prefix := aws.ToString(in.Prefix)
+	keys := make([]string, 0, len(f.objs))
+	for k := range f.objs {
+		if strings.HasPrefix(k, prefix) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	// Two keys per page, so listing must follow continuation tokens.
+	start := 0
+	if tok := aws.ToString(in.ContinuationToken); tok != "" {
+		start, _ = strconv.Atoi(tok)
+	}
+	end := min(start+2, len(keys))
+	out := &s3.ListObjectsV2Output{}
+	for _, k := range keys[start:end] {
+		out.Contents = append(out.Contents, s3types.Object{Key: aws.String(k)})
+	}
+	if end < len(keys) {
+		out.IsTruncated = aws.Bool(true)
+		out.NextContinuationToken = aws.String(strconv.Itoa(end))
+	}
+	return out, nil
 }
 
 func testPlan(id string) Plan {

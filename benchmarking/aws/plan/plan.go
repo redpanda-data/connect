@@ -77,6 +77,9 @@ type Plan struct {
 	Claimed         bool   `json:"claimed,omitempty"`
 	Approver        string `json:"approver,omitempty"`
 	DispatchedRunID int64  `json:"dispatched_run_id,omitempty"`
+	// Done and Outcome are filled by Store.Get from the done marker.
+	Done    bool   `json:"done,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
 }
 
 // BuildOption adjusts how Build makes a plan.

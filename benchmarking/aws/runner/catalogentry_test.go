@@ -10,6 +10,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,8 +112,35 @@ func TestCatalogueSweepSkipsDirtyTree(t *testing.T) {
 	s, r := catalogFixture(t)
 	var warn bytes.Buffer
 	// Returns before any AWS call: the bucket is never reached.
-	require.NoError(t, catalogueSweep(t.Context(), benchOpts{repoRoot: t.TempDir()}, s, r, "bench-1", &warn))
+	id, err := catalogueSweep(t.Context(), benchOpts{repoRoot: t.TempDir()}, s, r, "bench-1", &warn)
+	require.NoError(t, err)
+	require.Empty(t, id, "nothing was written")
 	require.Equal(t, "warning: catalogue entry skipped: working tree dirty\n", warn.String())
+}
+
+func TestCatalogueSweepReturnsWrittenEntryID(t *testing.T) {
+	prevDirty, prevPut := treeDirty, putCatalogEntry
+	defer func() { treeDirty, putCatalogEntry = prevDirty, prevPut }()
+	treeDirty = func(string) (bool, error) { return false, nil }
+	var put catalog.Entry
+	putCatalogEntry = func(_ context.Context, _ benchOpts, e catalog.Entry) error { put = e; return nil }
+
+	s, r := catalogFixture(t)
+	var warn bytes.Buffer
+	id, err := catalogueSweep(t.Context(), benchOpts{repoRoot: t.TempDir()}, s, r, "bench-20261120-120000", &warn)
+	require.NoError(t, err)
+	require.Equal(t, "bench-20261120-120000", id)
+	require.Equal(t, id, put.ID)
+
+	putCatalogEntry = func(context.Context, benchOpts, catalog.Entry) error { return errors.New("s3 down") }
+	id, err = catalogueSweep(t.Context(), benchOpts{repoRoot: t.TempDir()}, s, r, "bench-20261120-120001", &warn)
+	require.Error(t, err)
+	require.Empty(t, id, "no id is reported for an entry that was not written")
+}
+
+func TestCatalogueEntryLine(t *testing.T) {
+	// bench_bot.yml greps exactly this line (anchored) for the entry id.
+	require.Equal(t, "catalogue-entry-id: bench-20261120-120000\n", catalogueEntryLine("bench-20261120-120000"))
 }
 
 func TestTreeDirty(t *testing.T) {
