@@ -89,14 +89,26 @@ func TestE2EPointAnomalies(t *testing.T) {
 	}{
 		{"clean", e2ePoint{Samples: 600, Counters: ok, MedianMsgPerSec: 1000}, nil, false},
 		{"no samples", e2ePoint{Samples: 0, Counters: ok}, []string{anomalyNoSamples}, true},
-		{"errors", e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 4, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
-			[]string{anomalySinkErrors}, true},
-		{"sent short of processed", e2ePoint{Samples: 600, Counters: outputCounters{Sent: 50000, HasSent: true, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
-			[]string{anomalySinkSendMismatch}, true},
+		{
+			"errors",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 4, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkErrors},
+			true,
+		},
+		{
+			"sent short of processed",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 50000, HasSent: true, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkSendMismatch},
+			true,
+		},
 		// 2% of 100000 is 2000; 3 s of 1000 msg/s is 3000: 2900 is inside.
 		{"within floor tolerance", e2ePoint{Samples: 600, Counters: outputCounters{Sent: 97100, HasSent: true, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000}, nil, false},
-		{"just over tolerance", e2ePoint{Samples: 600, Counters: outputCounters{Sent: 96900, HasSent: true, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
-			[]string{anomalySinkSendMismatch}, true},
+		{
+			"just over tolerance",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 96900, HasSent: true, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkSendMismatch},
+			true,
+		},
 		{"unverified", e2ePoint{Samples: 600, MedianMsgPerSec: 1000}, []string{anomalySinkUnverified}, false},
 		{"sink count covers missing output_sent", e2ePoint{Samples: 600, SinkCounted: true, MedianMsgPerSec: 1000}, nil, false},
 		{"drop sink needs no verification", e2ePoint{Samples: 600, SinkDrop: true, MedianMsgPerSec: 1000}, nil, false},
