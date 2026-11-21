@@ -11,6 +11,7 @@ package catalog
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -20,26 +21,32 @@ const SchemaVersion = 1
 
 // Entry is one benchmark session's result in the catalogue.
 type Entry struct {
-	SchemaVersion   int       `json:"schema_version"`
-	ID              string    `json:"id"` // bench session ID
-	Scenario        string    `json:"scenario"`
-	Input           string    `json:"input"`
-	Processors      []string  `json:"processors"`
-	Output          string    `json:"output"`
-	Fingerprint     string    `json:"fingerprint"`
-	Workload        Workload  `json:"workload"`
-	ConnectVersion  string    `json:"connect_version"` // git describe output
-	BuildSHA        string    `json:"build_sha"`
-	Infra           Infra     `json:"infra"`
-	SinkMeasured    bool      `json:"sink_measured"`
-	ExternalStubbed bool      `json:"external_calls_stubbed"`
-	MemoryLimited   bool      `json:"memory_limited"` // hard per-point limit applied
-	Points          []Point   `json:"points"`
-	AWSCostUSD      *float64  `json:"aws_cost_usd,omitempty"`  // nil = not recorded
-	SaaSCostUSD     *float64  `json:"saas_cost_usd,omitempty"` // nil = not recorded
-	RunURL          string    `json:"run_url,omitempty"`
-	ResultKey       string    `json:"result_key,omitempty"`
-	RecordedAt      time.Time `json:"recorded_at"`
+	SchemaVersion   int      `json:"schema_version"`
+	ID              string   `json:"id"` // bench session ID
+	Scenario        string   `json:"scenario"`
+	Input           string   `json:"input"`
+	Processors      []string `json:"processors"`
+	Output          string   `json:"output"`
+	Fingerprint     string   `json:"fingerprint"`
+	Workload        Workload `json:"workload"`
+	ConnectVersion  string   `json:"connect_version"` // git describe output
+	BuildSHA        string   `json:"build_sha"`
+	Infra           Infra    `json:"infra"`
+	SinkMeasured    bool     `json:"sink_measured"`
+	ExternalStubbed bool     `json:"external_calls_stubbed"`
+	MemoryLimited   bool     `json:"memory_limited"` // hard per-point limit applied
+	// SourceApproximated is true when the plan's input had no bench stack
+	// and the bench read a Redpanda topic in its place.
+	SourceApproximated bool `json:"source_approximated,omitempty"`
+	// Caveats are the plan's caveats (sorted, de-duplicated); empty for
+	// entries not made from a plan.
+	Caveats     []string  `json:"caveats,omitempty"`
+	Points      []Point   `json:"points"`
+	AWSCostUSD  *float64  `json:"aws_cost_usd,omitempty"`  // nil = not recorded
+	SaaSCostUSD *float64  `json:"saas_cost_usd,omitempty"` // nil = not recorded
+	RunURL      string    `json:"run_url,omitempty"`
+	ResultKey   string    `json:"result_key,omitempty"`
+	RecordedAt  time.Time `json:"recorded_at"`
 }
 
 // Workload describes the load profile of a benchmark.
@@ -67,6 +74,16 @@ type Point struct {
 	// or "producer" (a stack-none point whose consumer caught up with the
 	// bench producer, so capacity is a lower bound).
 	LimitedBy string `json:"limited_by,omitempty"`
+}
+
+// unreleasedVersion matches the git describe suffix of a build past its
+// latest tag: -<commits>-g<sha>.
+var unreleasedVersion = regexp.MustCompile(`-\d+-g[0-9a-f]+$`)
+
+// Unreleased reports whether the entry was measured on a build that is not a
+// release: ConnectVersion carries a git describe -N-g<sha> suffix.
+func (e Entry) Unreleased() bool {
+	return unreleasedVersion.MatchString(e.ConnectVersion)
 }
 
 // Validate reports the first schema violation in the entry, naming the field.

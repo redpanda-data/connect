@@ -39,15 +39,16 @@ const (
 	SinkDrop      SinkKind = "drop"
 )
 
-// Caveat strings attached to plans.
+// Caveat strings attached to plans; catalog.KnownCaveats lists them all with
+// their meanings.
 const (
-	CaveatSourceApproximated = "source_approximated"
-	CaveatSinkNotMeasured    = "sink_not_measured"
-	CaveatExternalStubbed    = "external_calls_stubbed"
-	CaveatSnapshotNotMeasure = "snapshot_not_measured"
-	CaveatUnreleasedBuild    = "unreleased_build"
-	CaveatMemoryNotLimited   = "memory_not_limited"
-	CaveatSchemaEvoForced    = "schema_evolution_forced"
+	CaveatSourceApproximated = catalog.CaveatSourceApproximated
+	CaveatSinkNotMeasured    = catalog.CaveatSinkNotMeasured
+	CaveatExternalStubbed    = catalog.CaveatExternalStubbed
+	CaveatSnapshotNotMeasure = catalog.CaveatSnapshotNotMeasured
+	CaveatUnreleasedBuild    = catalog.CaveatUnreleasedBuild
+	CaveatMemoryNotLimited   = catalog.CaveatMemoryNotLimited
+	CaveatSchemaEvoForced    = catalog.CaveatSchemaEvolutionForced
 )
 
 // RealSources maps customer input components to the bench source stack that

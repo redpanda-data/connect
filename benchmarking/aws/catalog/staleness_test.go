@@ -11,6 +11,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"regexp"
 	"testing"
 
@@ -35,6 +36,8 @@ func (f *fakeGit) BenthosVersion(_ context.Context, ref string) (string, error) 
 }
 
 func (f *fakeGit) LatestRelease(context.Context) (string, error) { return f.release, nil }
+
+func (f *fakeGit) MainRef(context.Context) (string, error) { return "origin/main", nil }
 
 func (f *fakeGit) ComponentPaths(_ context.Context, c string) ([]string, error) {
 	return f.paths[c], nil
@@ -298,4 +301,93 @@ func TestStalenessBenthosUnreadableAfterStale(t *testing.T) {
 	require.Contains(t, s.Reasons[0], "2 commits to internal/impl/postgresql")
 	require.Contains(t, s.Reasons[1], "no go.mod")
 	require.Contains(t, s.Reasons[1], "mapping")
+}
+
+// refGit records the toRef each comparison used.
+type refGit struct {
+	*fakeGit
+	main    string
+	mainErr error
+	toRefs  []string
+}
+
+func (g *refGit) MainRef(context.Context) (string, error) { return g.main, g.mainErr }
+
+func (g *refGit) ChangedPaths(ctx context.Context, from, to string, paths []string) ([]string, error) {
+	g.toRefs = append(g.toRefs, to)
+	return g.fakeGit.ChangedPaths(ctx, from, to, paths)
+}
+
+func (g *refGit) ChangelogMentions(ctx context.Context, from, to, c string) ([]string, error) {
+	g.toRefs = append(g.toRefs, to)
+	return g.fakeGit.ChangelogMentions(ctx, from, to, c)
+}
+
+// An unreleased build compares against main, not the latest tag.
+func TestUnreleasedStalenessComparesToMain(t *testing.T) {
+	for _, mainRef := range []string{"origin/main", "main"} {
+		t.Run(mainRef, func(t *testing.T) {
+			f := stalenessFake()
+			f.benthos[mainRef] = "v4.80.0"
+			g := &refGit{fakeGit: f, main: mainRef}
+			e := stalenessEntry()
+			e.ConnectVersion = "v4.50.0-3-gabcdef1"
+			s, err := CheckStaleness(t.Context(), g, e)
+			require.NoError(t, err)
+			require.Equal(t, "current", s.State)
+			require.Equal(t, mainRef, s.ComparedTo)
+			require.NotEmpty(t, g.toRefs)
+			for _, r := range g.toRefs {
+				require.Equal(t, mainRef, r)
+			}
+		})
+	}
+}
+
+func TestReleasedStalenessComparesToLatestTag(t *testing.T) {
+	g := &refGit{fakeGit: stalenessFake(), main: "origin/main"}
+	e := stalenessEntry()
+	e.ConnectVersion = "v4.50.0"
+	s, err := CheckStaleness(t.Context(), g, e)
+	require.NoError(t, err)
+	require.Equal(t, "v4.99.0", s.LatestRelease)
+	require.Equal(t, "v4.99.0", s.ComparedTo)
+	for _, r := range g.toRefs {
+		require.Equal(t, "v4.99.0", r)
+	}
+}
+
+func TestUnreleasedStalenessNoMain(t *testing.T) {
+	g := &refGit{fakeGit: stalenessFake(), mainErr: errors.New("no main branch")}
+	e := stalenessEntry()
+	e.ConnectVersion = "v4.50.0-3-gabcdef1"
+	s, err := CheckStaleness(t.Context(), g, e)
+	require.NoError(t, err)
+	require.Equal(t, "unknown", s.State)
+	require.Contains(t, s.Reasons[0], "no main branch")
+}
+
+func TestGitCLIMainRef(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+	git("init", "-q", "-b", "main")
+	git("commit", "-q", "--allow-empty", "-m", "init")
+	g := NewGitCLI(dir)
+	ref, err := g.MainRef(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, "main", ref)
+
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	ref, err = NewGitCLI(dir).MainRef(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, "origin/main", ref)
+
+	git("branch", "-m", "main", "trunk")
+	git("update-ref", "-d", "refs/remotes/origin/main")
+	_, err = NewGitCLI(dir).MainRef(t.Context())
+	require.Error(t, err)
 }

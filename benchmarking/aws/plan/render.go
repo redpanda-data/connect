@@ -54,6 +54,19 @@ type renderScenario struct {
 	Sink      renderSink     `yaml:"sink"`
 	Matrix    renderMatrix   `yaml:"matrix"`
 	Reset     []renderReset  `yaml:"reset,omitempty"`
+	Catalog   renderCatalog  `yaml:"catalog"`
+}
+
+// renderCatalog is the plan's catalogue identity, carried to the runner so
+// the entry names the customer's config rather than the identity-swapped
+// pipeline the bench runs.
+type renderCatalog struct {
+	Fingerprint        string   `yaml:"fingerprint"`
+	Input              string   `yaml:"input"`
+	Processors         []string `yaml:"processors"`
+	Output             string   `yaml:"output"`
+	Caveats            []string `yaml:"caveats"`
+	SourceApproximated bool     `yaml:"source_approximated"`
 }
 
 type renderInfra struct {
@@ -162,21 +175,27 @@ func Render(p Plan) ([]byte, error) {
 		Pipeline:  p.Pipeline,
 		Sink:      renderSink{Kind: string(p.Sink), Size: p.SinkSize},
 		Matrix:    renderMatrix{CPUPoints: []int{1, 2, 4, 8}},
+		Catalog: renderCatalog{
+			Fingerprint:        p.Fingerprint,
+			Input:              p.Input,
+			Processors:         nonNil(p.Processors),
+			Output:             p.Output,
+			Caveats:            nonNil(p.Caveats),
+			SourceApproximated: p.Source == SourceApproximated,
+		},
 	}
 	sc.Infra.MemoryPerVCPUBytes = memoryPerVCPUBytes
 	var startingValue bool
+	sc.Stack = stackFor(p.Source)
 	switch p.Source {
 	case SourcePostgres:
-		sc.Stack = "postgres"
 		sc.Infra.Source, sc.Infra.Runner.InstanceType, sc.Dataset, sc.Workload, sc.Reset = postgresBase()
 	case SourceMySQL:
-		sc.Stack = "mysql"
 		sc.Infra.Source, sc.Infra.Runner.InstanceType, sc.Dataset, sc.Workload, sc.Reset = mysqlBase()
 		startingValue = true
 	default:
 		// The sweep consumes as fast as the pipeline allows, so the target
 		// rate is no bound on consumption: size for the default peak.
-		sc.Stack = "none"
 		if p.Source == SourceApproximated {
 			sc.Pipeline = approximatedPipeline(p.Pipeline)
 		}
@@ -202,6 +221,13 @@ func Render(p Plan) ([]byte, error) {
 		return nil, fmt.Errorf("marshalling scenario: %w", err)
 	}
 	return out, nil
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // approximatedPipeline returns a copy of pipeline whose input is the bench's

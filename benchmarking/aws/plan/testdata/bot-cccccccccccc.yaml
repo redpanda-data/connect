@@ -55,3 +55,10 @@ matrix:
 reset:
     - sql: CALL mysql.rds_set_configuration('binlog retention hours', 24)
     - sql: TRUNCATE TABLE orders
+catalog:
+    fingerprint: 75331b1d127f93d831491844ecf3af505c3e40c4d6c9366835dc24579ee69c5e
+    input: mysql_cdc
+    processors: []
+    output: kafka_franz
+    caveats: []
+    source_approximated: false

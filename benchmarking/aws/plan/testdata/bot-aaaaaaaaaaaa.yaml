@@ -64,3 +64,11 @@ matrix:
 reset:
     - sql: SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'
     - sql: TRUNCATE TABLE orders
+catalog:
+    fingerprint: fdd4e84ca016a8a753a882360fcd3f1432522e87f34331ebbc66a61a0c22189a
+    input: postgres_cdc
+    processors:
+        - mapping
+    output: snowflake_streaming
+    caveats: []
+    source_approximated: false

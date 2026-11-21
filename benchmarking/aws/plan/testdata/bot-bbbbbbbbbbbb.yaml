@@ -31,3 +31,12 @@ matrix:
         - 2
         - 4
         - 8
+catalog:
+    fingerprint: c66830153d0e0a1397191f04c13d67b06579592364fb89f44ac93ec1096d58e1
+    input: http_server
+    processors: []
+    output: drop
+    caveats:
+        - sink_not_measured
+        - source_approximated
+    source_approximated: true

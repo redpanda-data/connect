@@ -99,3 +99,29 @@ func TestModeFor(t *testing.T) {
 		require.Equal(t, want, ModeFor(input), input)
 	}
 }
+
+func TestEntryUnreleased(t *testing.T) {
+	for v, want := range map[string]bool{
+		"v4.50.0":                 false,
+		"v4.50.0-rc1":             false,
+		"v4.50.0-3-gabc123":       true,
+		"v4.50.0-120-g0123456789": true,
+		"v4.50.0-3-gABC123":       false,
+		"v4.50.0-3-gabc123-dirty": false,
+		"":                        false,
+	} {
+		require.Equal(t, want, Entry{ConnectVersion: v}.Unreleased(), v)
+	}
+}
+
+func TestEntryPlanFieldsOmittedWhenEmpty(t *testing.T) {
+	b, err := json.Marshal(Entry{})
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "source_approximated")
+	require.NotContains(t, string(b), "caveats")
+
+	b, err = json.Marshal(Entry{SourceApproximated: true, Caveats: []string{"source_approximated"}})
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"source_approximated":true`)
+	require.Contains(t, string(b), `"caveats":["source_approximated"]`)
+}

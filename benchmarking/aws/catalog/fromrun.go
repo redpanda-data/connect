@@ -11,6 +11,8 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"slices"
 	"time"
 )
 
@@ -44,17 +46,35 @@ func BenchSourcePipeline(scenario map[string]any) map[string]any {
 	return p
 }
 
+// Identity is a catalogue identity given whole, rather than derived from
+// RunInput.Pipeline: an e2e run's plan fingerprints the customer's original
+// config, which the identity-swapped pipeline the bench ran cannot reproduce.
+type Identity struct {
+	Fingerprint string
+	Input       string
+	Processors  []string
+	Output      string
+}
+
+var fingerprintRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
 // RunInput is a completed bench run in the shape EntryFromRun maps to an
 // Entry. It is shared by the runner and the historical-results importer.
 type RunInput struct {
 	ID, Scenario, GitSHA, ConnectVersion, InstanceType, Region, RunURL, ResultKey string
 
 	// Pipeline is {"input":..., "pipeline":{"processors":...}, "output":...}.
-	Pipeline          map[string]any
-	MessageSizeBytes  int
-	OfferedRatePerSec int
-	Soak              bool
-	MemoryLimited     bool
+	// It is ignored when Identity is set.
+	Pipeline map[string]any
+	// Identity, when set, is the entry's fingerprint and components.
+	Identity *Identity
+	// SourceApproximated and Caveats come from the plan, if any.
+	SourceApproximated bool
+	Caveats            []string
+	MessageSizeBytes   int
+	OfferedRatePerSec  int
+	Soak               bool
+	MemoryLimited      bool
 	// SinkMeasured is true when throughput was measured end to end, with the
 	// output writing to a real sink.
 	SinkMeasured bool
@@ -101,13 +121,13 @@ func EntryFromRun(r RunInput) (Entry, error) {
 			LimitedBy:     p.LimitedBy,
 		})
 	}
-	input, processors, output, err := Components(r.Pipeline)
+	input, processors, output, fp, err := runIdentity(r)
 	if err != nil {
-		return Entry{}, fmt.Errorf("components: %w", err)
+		return Entry{}, err
 	}
-	fp, err := Fingerprint(r.Pipeline)
-	if err != nil {
-		return Entry{}, fmt.Errorf("fingerprint: %w", err)
+	var caveats []string
+	if len(r.Caveats) > 0 {
+		caveats = slices.Compact(slices.Sorted(slices.Values(r.Caveats)))
 	}
 	e := Entry{
 		SchemaVersion: SchemaVersion,
@@ -126,15 +146,39 @@ func EntryFromRun(r RunInput) (Entry, error) {
 		BuildSHA:       r.GitSHA,
 		Infra:          Infra{RunnerInstanceType: r.InstanceType, Region: r.Region},
 		SinkMeasured:   r.SinkMeasured,
-		MemoryLimited:  r.MemoryLimited,
-		Points:         points,
-		AWSCostUSD:     r.AWSCostUSD,
-		RunURL:         r.RunURL,
-		ResultKey:      r.ResultKey,
-		RecordedAt:     r.Now,
+		// A plan that stubbed external calls says so in its caveats.
+		ExternalStubbed:    slices.Contains(caveats, CaveatExternalStubbed),
+		MemoryLimited:      r.MemoryLimited,
+		SourceApproximated: r.SourceApproximated,
+		Caveats:            caveats,
+		Points:             points,
+		AWSCostUSD:         r.AWSCostUSD,
+		RunURL:             r.RunURL,
+		ResultKey:          r.ResultKey,
+		RecordedAt:         r.Now,
 	}
 	if err := e.Validate(); err != nil {
 		return Entry{}, fmt.Errorf("invalid entry: %w", err)
 	}
 	return e, nil
+}
+
+// runIdentity returns the run's components and fingerprint: r.Identity when
+// set, otherwise derived from r.Pipeline.
+func runIdentity(r RunInput) (input string, processors []string, output, fp string, err error) {
+	if id := r.Identity; id != nil {
+		if !fingerprintRe.MatchString(id.Fingerprint) {
+			return "", nil, "", "", fmt.Errorf("identity fingerprint %q: want 64 lower-case hex characters", id.Fingerprint)
+		}
+		return id.Input, slices.Clone(id.Processors), id.Output, id.Fingerprint, nil
+	}
+	input, processors, output, err = Components(r.Pipeline)
+	if err != nil {
+		return "", nil, "", "", fmt.Errorf("components: %w", err)
+	}
+	fp, err = Fingerprint(r.Pipeline)
+	if err != nil {
+		return "", nil, "", "", fmt.Errorf("fingerprint: %w", err)
+	}
+	return input, processors, output, fp, nil
 }

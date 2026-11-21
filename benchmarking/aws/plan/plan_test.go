@@ -507,3 +507,78 @@ func TestBuildRetryAndTryCatchRecursed(t *testing.T) {
 	require.Equal(t, []any{stub, keep}, tc["catch"])
 	require.Equal(t, 3, procs[0].(map[string]any)["retry"].(map[string]any)["max_retries"])
 }
+
+func TestBuildEstimate(t *testing.T) {
+	p := build(t, pgToSnowflake())
+	require.Equal(t, catalog.Estimate{AWSUSD: 2.5, SaaSUSD: 1.0, Minutes: 25}, p.Estimate)
+
+	p = build(t, httpToDrop())
+	want, err := catalog.EstimateRun("none", "drop", "")
+	require.NoError(t, err)
+	require.Equal(t, want, p.Estimate)
+
+	cfg := pgToSnowflake()
+	cfg["input"] = map[string]any{"oracledb_cdc": map[string]any{}}
+	require.Zero(t, build(t, cfg).Estimate, "an unrunnable plan has no estimate")
+}
+
+func snowflakePut() map[string]any {
+	cfg := pgToSnowflake()
+	cfg["output"] = map[string]any{"snowflake_put": map[string]any{
+		"account": "CUSTORG-ACCT", "user": "svc_loader", "warehouse": "LOAD_WH",
+		"database": "PROD", "schema": "PUBLIC", "stage": "@stage", "path": "p",
+	}}
+	return cfg
+}
+
+func buildSized(t *testing.T, cfg map[string]any, size string) (Plan, error) {
+	t.Helper()
+	return Build(cfg, Workload{MessageSizeBytes: 1000, TargetMBps: 10}, SlackRef{}, testNow, WithSinkSize(size))
+}
+
+// Snowpipe Streaming ingest is serverless: the warehouse size does not change
+// it, so it is pinned and not offered.
+func TestBuildStreamingPinsWarehouseSize(t *testing.T) {
+	p, err := buildSized(t, pgToSnowflake(), "LARGE")
+	require.NoError(t, err)
+	require.Equal(t, "XSMALL", p.SinkSize)
+	require.False(t, p.SinkSizeAdjustable)
+	require.InDelta(t, 1.0, p.Estimate.SaaSUSD, 1e-9)
+}
+
+func TestBuildPutHonoursWarehouseSize(t *testing.T) {
+	p, err := buildSized(t, snowflakePut(), "LARGE")
+	require.NoError(t, err)
+	require.Equal(t, SinkSnowflake, p.Sink)
+	require.Equal(t, "LARGE", p.SinkSize)
+	require.True(t, p.SinkSizeAdjustable)
+	require.InDelta(t, 8.0, p.Estimate.SaaSUSD, 1e-9)
+
+	p, err = buildSized(t, snowflakePut(), "")
+	require.NoError(t, err)
+	require.Equal(t, "XSMALL", p.SinkSize)
+	require.True(t, p.SinkSizeAdjustable)
+
+	p, err = buildSized(t, snowflakePut(), "medium")
+	require.NoError(t, err)
+	require.Equal(t, "MEDIUM", p.SinkSize)
+
+	_, err = buildSized(t, snowflakePut(), "HUGE")
+	require.ErrorContains(t, err, "HUGE")
+}
+
+func TestBuildSizeIgnoredForOtherSinks(t *testing.T) {
+	cfg := pgToSnowflake()
+	cfg["output"] = map[string]any{"elasticsearch_v8": map[string]any{}}
+	p, err := buildSized(t, cfg, "LARGE")
+	require.NoError(t, err)
+	require.Empty(t, p.SinkSize)
+	require.False(t, p.SinkSizeAdjustable)
+}
+
+func TestBuildPlanJSONCarriesEstimateAndAdjustable(t *testing.T) {
+	b, err := json.Marshal(build(t, snowflakePut()))
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"sink_size_adjustable":true`)
+	require.Contains(t, string(b), `"estimate":{"aws_usd":2.5,"saas_usd":1,"minutes":25}`)
+}

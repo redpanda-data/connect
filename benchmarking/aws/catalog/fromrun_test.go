@@ -124,3 +124,40 @@ func TestEntryFromRunCopiesLimitedBy(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, strings.Count(string(raw), `"limited_by":"producer"`), "omitted when empty")
 }
+
+// Plan caveats flow through EntryFromRun into the recommendation, and a plan
+// identity replaces the pipeline-derived one.
+func TestEntryFromRunPlanCaveats(t *testing.T) {
+	in := validRunInput()
+	in.Points = []RunPoint{{VCPU: 1, MedianMBps: 10}, {VCPU: 2, MedianMBps: 20}}
+	in.SinkMeasured = false
+	in.SourceApproximated = true
+	in.Caveats = []string{"source_approximated", "sink_not_measured", "external_calls_stubbed"}
+	in.Identity = &Identity{
+		Fingerprint: strings.Repeat("a", 64),
+		Input:       "http_server",
+		Processors:  []string{"http"},
+		Output:      "elasticsearch_v8",
+	}
+	e, err := EntryFromRun(in)
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat("a", 64), e.Fingerprint)
+	require.Equal(t, "http_server", e.Input)
+	require.Equal(t, []string{"http"}, e.Processors)
+	require.Equal(t, "elasticsearch_v8", e.Output)
+	require.Equal(t, "bulk", e.Workload.Mode)
+	require.True(t, e.SourceApproximated)
+	require.True(t, e.ExternalStubbed)
+	require.Equal(t, []string{"external_calls_stubbed", "sink_not_measured", "source_approximated"}, e.Caveats)
+
+	r, err := Recommend(e, 5, SizingConfig{Headroom: 0.7, CUsPerVCPU: 10, BytesPerCU: 400000000})
+	require.NoError(t, err)
+	require.Equal(t, []string{"external_calls_stubbed", "memory_not_limited", "sink_not_measured", "source_approximated", "unreleased_build"}, r.Caveats)
+}
+
+func TestEntryFromRunIdentityValidated(t *testing.T) {
+	in := validRunInput()
+	in.Identity = &Identity{Fingerprint: "", Input: "x", Output: "y"}
+	_, err := EntryFromRun(in)
+	require.ErrorContains(t, err, "fingerprint")
+}

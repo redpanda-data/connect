@@ -99,6 +99,9 @@ type Scenario struct {
 	Pipeline map[string]any `yaml:"pipeline"`
 	Matrix   MatrixSpec     `yaml:"matrix"`
 	Reset    []ResetStep    `yaml:"reset"`
+	// Catalog is the catalogue identity of a rendered Bench Bot plan
+	// (plan.Render). Optional, direction e2e only; see CatalogSpec.
+	Catalog *CatalogSpec `yaml:"catalog,omitempty"`
 	// Soak marks this scenario as a long, single-CPU-point, sustained-moderate-
 	// load run whose purpose is catching leaks/stalls/rotation bugs over wall
 	// clock — unlike the short max-load sweeps matrix.cpu_points/arms are for.
@@ -128,6 +131,38 @@ type DatasetSpec struct {
 	Tables            []string `yaml:"tables"`
 	Seeder            string   `yaml:"seeder"`
 	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
+}
+
+// CatalogSpec is a plan's catalogue identity. The plan fingerprinted the
+// customer's original config before swapping identity, which the scenario
+// pipeline cannot reproduce, so the entry takes these values as given.
+type CatalogSpec struct {
+	Fingerprint        string   `yaml:"fingerprint"`
+	Input              string   `yaml:"input"`
+	Processors         []string `yaml:"processors"`
+	Output             string   `yaml:"output"`
+	Caveats            []string `yaml:"caveats"`
+	SourceApproximated bool     `yaml:"source_approximated"`
+}
+
+var catalogFingerprintRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func (c *CatalogSpec) validate(d Direction) error {
+	if d != DirectionE2E {
+		return fmt.Errorf("catalog is only allowed for direction %q", DirectionE2E)
+	}
+	if !catalogFingerprintRe.MatchString(c.Fingerprint) {
+		return fmt.Errorf("catalog.fingerprint %q: want 64 lower-case hex characters", c.Fingerprint)
+	}
+	if c.Input == "" || c.Output == "" {
+		return errors.New("catalog.input and catalog.output are required")
+	}
+	for _, cv := range c.Caveats {
+		if _, ok := catalog.KnownCaveats[cv]; !ok {
+			return fmt.Errorf("catalog.caveats: unknown caveat %q", cv)
+		}
+	}
+	return nil
 }
 
 // SinkSpec names the bench sink of an e2e scenario.
@@ -319,6 +354,11 @@ func (s *Scenario) Validate() error {
 		// normalizes it via applyDirectionDefault.
 	default:
 		return fmt.Errorf("direction %q is invalid; must be %q, %q or %q", s.Direction, DirectionSource, DirectionSink, DirectionE2E)
+	}
+	if s.Catalog != nil {
+		if err := s.Catalog.validate(s.Direction); err != nil {
+			return err
+		}
 	}
 	topo, err := topologyFor(s.Direction)
 	if err != nil {

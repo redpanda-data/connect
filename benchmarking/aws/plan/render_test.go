@@ -133,3 +133,28 @@ func TestRenderApproximatedInputReadsBenchTopic(t *testing.T) {
 	// The stored plan is untouched: the swap happens at render time only.
 	require.Contains(t, p.Pipeline["input"], "http_server")
 }
+
+// The rendered scenario carries the plan's catalogue identity: the
+// fingerprint of the customer's original config and its component names.
+func TestRenderCatalogBlock(t *testing.T) {
+	p := build(t, httpToDrop())
+	out, err := Render(p)
+	require.NoError(t, err)
+	var sc struct {
+		Catalog struct {
+			Fingerprint        string   `yaml:"fingerprint"`
+			Input              string   `yaml:"input"`
+			Processors         []string `yaml:"processors"`
+			Output             string   `yaml:"output"`
+			Caveats            []string `yaml:"caveats"`
+			SourceApproximated bool     `yaml:"source_approximated"`
+		} `yaml:"catalog"`
+	}
+	require.NoError(t, yaml.Unmarshal(out, &sc))
+	require.Equal(t, p.Fingerprint, sc.Catalog.Fingerprint)
+	require.Equal(t, "http_server", sc.Catalog.Input)
+	require.Empty(t, sc.Catalog.Processors)
+	require.Equal(t, "drop", sc.Catalog.Output)
+	require.Equal(t, p.Caveats, sc.Catalog.Caveats)
+	require.True(t, sc.Catalog.SourceApproximated)
+}

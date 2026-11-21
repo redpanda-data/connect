@@ -125,7 +125,7 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 			rec.MemoryBound = fmt.Sprintf("%d CUs", n)
 			return n
 		}
-		rec.Caveats = append(rec.Caveats, "memory_not_limited")
+		rec.Caveats = append(rec.Caveats, CaveatMemoryNotLimited)
 		return 0
 	}
 
@@ -200,13 +200,22 @@ func (r *Recommendation) addLimitedCaveat(p Point) {
 	}
 }
 
+// addEntryCaveats adds the entry's own caveats (measurement, build and the
+// plan's) and leaves Caveats sorted and de-duplicated. Every Recommend
+// return path after validation calls it last.
 func (r *Recommendation) addEntryCaveats(e Entry) {
 	if !e.SinkMeasured {
-		r.Caveats = append(r.Caveats, "sink_not_measured")
+		r.Caveats = append(r.Caveats, CaveatSinkNotMeasured)
 	}
 	if e.ExternalStubbed {
-		r.Caveats = append(r.Caveats, "external_calls_stubbed")
+		r.Caveats = append(r.Caveats, CaveatExternalStubbed)
 	}
+	if e.Unreleased() {
+		r.Caveats = append(r.Caveats, CaveatUnreleasedBuild)
+	}
+	r.Caveats = append(r.Caveats, e.Caveats...)
+	slices.Sort(r.Caveats)
+	r.Caveats = slices.Compact(r.Caveats)
 }
 
 // roundUp10 rounds a positive CU count up to the next multiple of 10.

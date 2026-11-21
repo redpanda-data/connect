@@ -31,6 +31,9 @@ var ErrSHANotInRepo = errors.New("sha not in repo")
 type Git interface {
 	// LatestRelease returns the highest vX.Y.Z tag.
 	LatestRelease(ctx context.Context) (string, error)
+	// MainRef returns the ref unreleased builds are compared against:
+	// origin/main, or main when the repository has no such remote branch.
+	MainRef(ctx context.Context) (string, error)
 	// ComponentPaths returns the repo-relative directories under internal/impl
 	// whose non-test Go files register the component. Empty means the
 	// component is not registered in this repo (it is benthos-hosted).
@@ -116,6 +119,19 @@ func (g *gitCLI) LatestRelease(ctx context.Context) (string, error) {
 		}
 	}
 	return "", errors.New("no v4.x.y release tag found")
+}
+
+func (g *gitCLI) MainRef(ctx context.Context) (string, error) {
+	for _, ref := range []string{"origin/main", "main"} {
+		_, err := g.run(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+		if err == nil {
+			return ref, nil
+		}
+		if errors.Is(err, ErrRepoRoot) {
+			return "", err
+		}
+	}
+	return "", errors.New("neither origin/main nor main exists")
 }
 
 // grepFiles runs git grep -l and treats exit status 1 (no matches) as empty.
@@ -242,25 +258,45 @@ func (g *gitCLI) ChangelogMentions(ctx context.Context, fromSHA, toRef, componen
 
 // Staleness is whether a stored result is still current.
 type Staleness struct {
-	State         string   `json:"state"` // "current" | "stale" | "unknown"
-	LatestRelease string   `json:"latest_release"`
-	Reasons       []string `json:"reasons"`
+	State string `json:"state"` // "current" | "stale" | "unknown"
+	// LatestRelease is the latest tag a released entry was compared against;
+	// empty for an unreleased entry.
+	LatestRelease string `json:"latest_release"`
+	// ComparedTo is the ref the entry was compared against: LatestRelease,
+	// or the main ref for an unreleased entry.
+	ComparedTo string   `json:"compared_to,omitempty"`
+	Reasons    []string `json:"reasons"`
 }
 
 // CheckStaleness checks the entry's input, processors and output against code
-// changes and CHANGELOG mentions between its build SHA and the latest release.
+// changes and CHANGELOG mentions between its build SHA and a later ref: the
+// latest release for a released entry, or main (Git.MainRef) for an
+// unreleased one, whose build is already past the latest tag.
 func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 	if !validSHA.MatchString(e.BuildSHA) {
 		return Staleness{State: "unknown", Reasons: []string{"build sha unknown"}}, nil
 	}
-	latest, err := g.LatestRelease(ctx)
-	if errors.Is(err, ErrRepoRoot) {
-		return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
+	var latest, toRef string
+	var err error
+	if e.Unreleased() {
+		toRef, err = g.MainRef(ctx)
+		if err != nil {
+			return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
+		}
+	} else {
+		latest, err = g.LatestRelease(ctx)
+		if errors.Is(err, ErrRepoRoot) {
+			return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
+		}
+		if err != nil {
+			return Staleness{}, err
+		}
+		toRef = latest
 	}
-	if err != nil {
-		return Staleness{}, err
+	unknown := func(reason string) Staleness {
+		return Staleness{State: "unknown", LatestRelease: latest, ComparedTo: toRef, Reasons: []string{reason}}
 	}
-	s := Staleness{State: "current", LatestRelease: latest, Reasons: []string{}}
+	s := Staleness{State: "current", LatestRelease: latest, ComparedTo: toRef, Reasons: []string{}}
 	short := e.BuildSHA
 	if len(short) > 7 {
 		short = short[:7]
@@ -290,10 +326,10 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 				benthosRead = true
 				benthosFrom, err = g.BenthosVersion(ctx, e.BuildSHA)
 				if err == nil {
-					benthosTo, err = g.BenthosVersion(ctx, latest)
+					benthosTo, err = g.BenthosVersion(ctx, toRef)
 				}
 				if errors.Is(err, ErrSHANotInRepo) {
-					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{"build sha not in repo"}}, nil
+					return unknown("build sha not in repo"), nil
 				}
 				if err != nil {
 					reason := fmt.Sprintf("benthos version unknown (hosts %s): %v", c, err)
@@ -304,7 +340,7 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 						s.Reasons = append(s.Reasons, reason)
 						return s, nil
 					}
-					return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{reason}}, nil
+					return unknown(reason), nil
 				}
 			}
 			if benthosFrom != benthosTo {
@@ -314,9 +350,9 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 				s.Reasons = append(s.Reasons, c+" is benthos-hosted; benthos unchanged")
 			}
 		} else {
-			commits, err := g.ChangedPaths(ctx, e.BuildSHA, latest, paths)
+			commits, err := g.ChangedPaths(ctx, e.BuildSHA, toRef, paths)
 			if errors.Is(err, ErrSHANotInRepo) {
-				return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{"build sha not in repo"}}, nil
+				return unknown("build sha not in repo"), nil
 			}
 			if err != nil {
 				return Staleness{}, err
@@ -327,9 +363,9 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 			}
 		}
 
-		mentions, err := g.ChangelogMentions(ctx, e.BuildSHA, latest, c)
+		mentions, err := g.ChangelogMentions(ctx, e.BuildSHA, toRef, c)
 		if errors.Is(err, ErrSHANotInRepo) {
-			return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{"build sha not in repo"}}, nil
+			return unknown("build sha not in repo"), nil
 		}
 		if err != nil {
 			return Staleness{}, err

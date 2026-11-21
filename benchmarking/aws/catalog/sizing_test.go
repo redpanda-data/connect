@@ -137,7 +137,7 @@ func TestRecommendCaveats(t *testing.T) {
 	e.ExternalStubbed = true
 	r, err := Recommend(e, 40, sizingCfg())
 	require.NoError(t, err)
-	require.Equal(t, []string{"sink_not_measured", "external_calls_stubbed"}, r.Caveats)
+	require.Equal(t, []string{"external_calls_stubbed", "sink_not_measured"}, r.Caveats)
 }
 
 func TestRecommendRejectsBadTarget(t *testing.T) {
@@ -296,4 +296,33 @@ func TestRecommendSourceRateLimited(t *testing.T) {
 		})
 	}
 	require.Equal(t, "source_rate_limited", CaveatSourceRateLimited)
+}
+
+func TestRecommendUnreleasedCaveat(t *testing.T) {
+	e := fixtureEntry()
+	e.ConnectVersion = "v4.50.0-3-gabc123"
+	r, err := Recommend(e, 40, sizingCfg())
+	require.NoError(t, err)
+	require.Equal(t, []string{CaveatUnreleasedBuild}, r.Caveats)
+
+	e.ConnectVersion = "v4.50.0"
+	r, err = Recommend(e, 40, sizingCfg())
+	require.NoError(t, err)
+	require.Empty(t, r.Caveats)
+}
+
+// Entry caveats (from the plan) merge with Recommend's own, de-duplicated
+// and sorted, on every return path.
+func TestRecommendMergesPlanCaveats(t *testing.T) {
+	e := fixtureEntry()
+	e.SinkMeasured = false
+	e.Caveats = []string{"source_approximated", "sink_not_measured", "external_calls_stubbed"}
+	e.ExternalStubbed = true
+	e.ConnectVersion = "v4.50.0-3-gabc123"
+	want := []string{"external_calls_stubbed", "sink_not_measured", "source_approximated", "unreleased_build"}
+	for _, target := range []float64{1, 40, 1000} { // below floor, interpolated, over ceiling
+		r, err := Recommend(e, target, sizingCfg())
+		require.NoError(t, err)
+		require.Equal(t, want, r.Caveats, "target %v", target)
+	}
 }

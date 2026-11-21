@@ -12,8 +12,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,8 +68,11 @@ func shouldCatalogue(s *Scenario, r *Result) bool {
 }
 
 // catalogEntryFromResult adapts a Scenario and its Result into a
-// catalog.RunInput and maps it to an Entry. The pipeline is the catalogued
-// identity (catalog.BenchSourcePipeline), not the rendered harness config.
+// catalog.RunInput and maps it to an Entry. The identity is never the
+// rendered harness config: a source scenario uses
+// catalog.BenchSourcePipeline; an e2e scenario uses its plan's catalog
+// block, or, hand-written without one, its pipeline minus any harness
+// benchmark processor.
 func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.Entry, error) {
 	run := catalog.RunInput{
 		ID:                meta.SessionID,
@@ -78,13 +83,17 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 		Region:            r.Infra.Region,
 		RunURL:            meta.RunURL,
 		ResultKey:         meta.ResultKey,
-		Pipeline:          catalog.BenchSourcePipeline(s.Pipeline),
 		MessageSizeBytes:  r.Dataset.RowSizeBytes,
 		OfferedRatePerSec: s.Workload.WriteRatePerSec,
 		Soak:              s.Soak,
 		MemoryLimited:     s.MemoryLimited(),
 		SinkMeasured:      true,
 		Now:               meta.Now,
+	}
+	if s.Direction == DirectionE2E {
+		setE2EIdentity(&run, s)
+	} else {
+		run.Pipeline = catalog.BenchSourcePipeline(s.Pipeline)
 	}
 	for _, p := range r.Points {
 		rp := catalog.RunPoint{
@@ -106,6 +115,61 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 		run.Points = append(run.Points, rp)
 	}
 	return catalog.EntryFromRun(run)
+}
+
+// setE2EIdentity fills run's identity, caveats and sink measurement for an
+// e2e scenario. A drop sink, or a plan's sink_not_measured caveat, means the
+// output's throughput was not measured.
+func setE2EIdentity(run *catalog.RunInput, s *Scenario) {
+	run.SinkMeasured = s.Sink == nil || s.Sink.Kind != "drop"
+	c := s.Catalog
+	if c == nil {
+		run.Pipeline = withoutBenchmark(s.Pipeline)
+		return
+	}
+	run.Identity = &catalog.Identity{
+		Fingerprint: c.Fingerprint,
+		Input:       c.Input,
+		Processors:  c.Processors,
+		Output:      c.Output,
+	}
+	run.SourceApproximated = c.SourceApproximated
+	run.Caveats = c.Caveats
+	if slices.Contains(c.Caveats, catalog.CaveatSinkNotMeasured) {
+		run.SinkMeasured = false
+	}
+}
+
+// withoutBenchmark returns a copy of pipeline whose output.processors has no
+// benchmark processor: that is harness measurement, not customer workload.
+// pipeline itself is not changed.
+func withoutBenchmark(pipeline map[string]any) map[string]any {
+	out := maps.Clone(pipeline)
+	o, ok := pipeline["output"].(map[string]any)
+	if !ok {
+		return out
+	}
+	procs, ok := o["processors"].([]any)
+	if !ok {
+		return out
+	}
+	o = maps.Clone(o)
+	var kept []any
+	for _, p := range procs {
+		if m, ok := p.(map[string]any); ok {
+			if _, bench := m["benchmark"]; bench {
+				continue
+			}
+		}
+		kept = append(kept, p)
+	}
+	if len(kept) == 0 {
+		delete(o, "processors")
+	} else {
+		o["processors"] = kept
+	}
+	out["output"] = o
+	return out
 }
 
 // treeDirty reports whether the checkout at repoRoot has uncommitted changes
