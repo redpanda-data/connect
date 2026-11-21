@@ -496,12 +496,6 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		if bucket == "" {
 			return errors.New("bucket interpolation resulted in an empty bucket name")
 		}
-		// A missing metadata field or JSON path interpolates to "null". Writing
-		// to a bucket named "null" would silently send data to whichever
-		// account owns that globally unique name, so fail instead.
-		if bucket == "null" {
-			return errors.New(`bucket interpolation resulted in the bucket name "null", which usually means a metadata field or value used in the bucket expression is missing`)
-		}
 
 		key, err := msg.TryInterpolatedString(i, a.conf.Path)
 		if err != nil {

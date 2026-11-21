@@ -892,48 +892,6 @@ func s3DynamicBucketSuite(t *testing.T, lsPort string) {
 		assert.True(t, ok, "good message after the bad one must be uploaded")
 	})
 
-	t.Run("missing_routing_metadata_is_rejected_before_any_upload", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-
-		w := newDynamicBucketWriter(t, ctx, lsPort, `${! metadata("tenant") }`, `k.txt`)
-		err := w.WriteBatch(ctx, service.MessageBatch{service.NewMessage([]byte("no tenant set"))})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), `"null"`)
-		assert.Contains(t, err.Error(), "missing")
-		assert.NotContains(t, err.Error(), "NoSuchBucket", "must fail before attempting an upload")
-	})
-
-	t.Run("missing_json_field_is_rejected_before_any_upload", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-
-		w := newDynamicBucketWriter(t, ctx, lsPort, `${! json("tenant") }`, `k.txt`)
-		err := w.WriteBatch(ctx, service.MessageBatch{service.NewMessage([]byte(`{"other":"field"}`))})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), `"null"`)
-		assert.NotContains(t, err.Error(), "NoSuchBucket")
-	})
-
-	t.Run("one_message_missing_routing_key_does_not_block_others", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		mk := uniqueBucketPrefix("mk")
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, mk+"-acme"))
-
-		w := newDynamicBucketWriter(t, ctx, lsPort, mk+`-${! metadata("tenant") }`, `${! metadata("id") }.txt`)
-		// The prefix makes the resolved name "<prefix>-null", which cannot be
-		// told apart from a real bucket, so it is attempted and reported by name.
-		err := w.WriteBatch(ctx, service.MessageBatch{
-			metaMsg("a", "tenant", "acme", "id", "0"),
-			metaMsg("b", "id", "1"),
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), mk+"-null")
-		_, ok := s3ObjectBody(ctx, t, client, mk+"-acme", "0.txt")
-		assert.True(t, ok, "the message with a valid tenant must still be uploaded")
-	})
-
 	t.Run("invalid_bucket_name_from_data_names_the_bucket", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
