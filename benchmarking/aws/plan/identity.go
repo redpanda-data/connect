@@ -83,16 +83,42 @@ var externalRefKeys = []string{
 
 // SecretPatterns are applied to every string value kept in a Plan pipeline;
 // matches are replaced with Redacted. They catch literals inside Bloblang,
-// log messages and similar logic text.
+// log messages and similar logic text. Each pattern matches the secret
+// itself, so whatever surrounds it (and the config's syntax) is kept; the
+// URL pattern keeps the scheme and the '@' (see redact).
 var SecretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._~+/=-]+`),
 	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
-	regexp.MustCompile(`xox[abprs]-[A-Za-z0-9-]+`),
+	regexp.MustCompile(`(?i)\bxox[abprs]-[A-Za-z0-9-]+`),
 	regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`),
 	regexp.MustCompile(`-----BEGIN [A-Z ]+-----`),
-	regexp.MustCompile(`(?i)(password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*\S+`),
-	regexp.MustCompile(`[a-z]+://[^/\s:@]+:[^/\s@]+@`),
+	urlUserinfo,
+	regexp.MustCompile(`(?i)\bsk_(live|test)_[A-Za-z0-9]+`),
+	regexp.MustCompile(`(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]+`),
+	regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`),
 }
+
+// urlUserinfo matches user:password@ after a URL scheme, any case.
+var urlUserinfo = regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@`)
+
+// keyValueSecret matches "password=..." style text; group 1 is the key and
+// separator, which redaction keeps. It is not in SecretPatterns: in
+// Bloblang it applies only inside string literals (see redactLogic), so an
+// assignment such as root.password = this.password is never rewritten.
+var keyValueSecret = regexp.MustCompile(`(?i)\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)\S+`)
+
+// keyValueSecretInLiteral is keyValueSecret for the inside of a quoted
+// Bloblang string: the value stops at the closing quote, and an escaped
+// quote is part of the value.
+var keyValueSecretInLiteral = regexp.MustCompile(`(?i)\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)(?:[^\s"\\]|\\.)+`)
+
+// bloblangKeys hold Bloblang (or other code) whose assignments must survive
+// redaction; key=value secrets in them are redacted only inside string
+// literals. mutation and bloblang are processors whose value is a mapping.
+var bloblangKeys = []string{"mapping", "mutation", "bloblang", "check", "request_map", "result_map", "code", "query", "program"}
+
+// stringLiteral matches a double-quoted Bloblang string, escapes included.
+var stringLiteral = regexp.MustCompile(`"(?:[^"\\]|\\.)*"`)
 
 // Redacted replaces secret-looking text.
 const Redacted = "REDACTED"
@@ -621,7 +647,15 @@ func scrubProcessor(v any) {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
-			if k == "processors" || k == "catch" || slices.Contains(logicKeys, k) {
+			if k == "processors" || k == "catch" || k == "order" || slices.Contains(logicKeys, k) {
+				continue
+			}
+			// workflow.branches is keyed by branch name, which order refers
+			// to: the names are never matched, only the branches scrubbed.
+			if br, ok := child.(map[string]any); ok && k == "branches" {
+				for _, b := range br {
+					scrubProcessor(b)
+				}
 				continue
 			}
 			if slices.Contains(DeletedObjects, k) || secretKeyMatches(k) {
@@ -641,13 +675,18 @@ func secretKeyMatches(k string) bool {
 	return !slices.Contains(secretKeyExempt, k) && secretKey.MatchString(k)
 }
 
-// redactStrings applies SecretPatterns to every string value under v.
+// redactStrings applies SecretPatterns to every string value under v, and
+// the key=value pattern as redact or redactLogic decides by the key.
 func redactStrings(v any) {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
 			if str, ok := child.(string); ok {
-				t[k] = redact(str)
+				if slices.Contains(bloblangKeys, k) {
+					t[k] = redactLogic(str)
+				} else {
+					t[k] = redact(str)
+				}
 				continue
 			}
 			redactStrings(child)
@@ -663,8 +702,29 @@ func redactStrings(v any) {
 	}
 }
 
+// redact replaces secrets in a plain (non-Bloblang) string.
 func redact(s string) string {
+	s = redactPatterns(s)
+	return keyValueSecret.ReplaceAllString(s, "${1}"+Redacted)
+}
+
+// redactLogic replaces secrets in Bloblang or other code: SecretPatterns
+// everywhere, the key=value pattern only inside string literals.
+func redactLogic(s string) string {
+	s = redactPatterns(s)
+	return stringLiteral.ReplaceAllStringFunc(s, func(lit string) string {
+		return keyValueSecretInLiteral.ReplaceAllString(lit, "${1}"+Redacted)
+	})
+}
+
+func redactPatterns(s string) string {
 	for _, re := range SecretPatterns {
+		if re == urlUserinfo {
+			s = re.ReplaceAllStringFunc(s, func(m string) string {
+				return m[:strings.Index(m, "://")+3] + Redacted + "@"
+			})
+			continue
+		}
 		s = re.ReplaceAllString(s, Redacted)
 	}
 	return s
