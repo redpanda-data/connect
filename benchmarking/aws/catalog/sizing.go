@@ -61,8 +61,9 @@ func parseSizingConfig(b []byte) (SizingConfig, error) {
 }
 
 // CaveatSourceRateLimited marks a recommendation that rests on a point the
-// bench producer, not the pipeline, capped (Point.LimitedBy): the measured
-// capacity there is a lower bound.
+// source (the bench producer, or a CDC workload's offered rate), not the
+// pipeline, capped (Point.LimitedBy): the measured capacity there is a lower
+// bound.
 const CaveatSourceRateLimited = "source_rate_limited"
 
 // Recommendation is the CU sizing for a target throughput.

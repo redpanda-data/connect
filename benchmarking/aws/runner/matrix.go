@@ -119,6 +119,17 @@ type MatrixRunner struct {
 	HostSetup string
 	// HostEnv is extra environment for the Connect process (see hostEnvFor).
 	HostEnv map[string]string
+	// E2E marks an e2e sweep: every point is checked for zero samples, for
+	// output errors and for output_sent against the output samples (see
+	// e2ePointAnomalies), and the Connect log never reaches stdout, which
+	// for a Bench Bot run is a public CI log.
+	E2E bool
+	// SinkDrop is true for an e2e drop sink, which has nothing to verify.
+	SinkDrop bool
+	// WorkloadRatePerSec, when > 0 (e2e on a CDC stack), is the workload's
+	// offered rate: a point whose median reaches 95% of it is flagged
+	// workload_bound.
+	WorkloadRatePerSec float64
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -380,7 +391,7 @@ func (m *MatrixRunner) Run(
 		}
 		rawLog := raw
 		samples := parseAndTrim(raw, warmup)
-		promPts := m.fetchProm(ctx, key)
+		promPts, promRaw := m.fetchProm(ctx, key)
 
 		// Broker-side: the bench script scrapes /public_metrics during its
 		// window and uploads it to this point's artifact.
@@ -466,6 +477,19 @@ func (m *MatrixRunner) Run(
 				anomalies = append(anomalies, a)
 			}
 		}
+		var e2eFail bool
+		if m.E2E {
+			var extra []Anomaly
+			extra, e2eFail = e2ePointAnomalies(e2ePoint{
+				Samples:            len(samples),
+				Counters:           parseOutputCounters(promRaw),
+				SinkCounted:        sinkCounted,
+				SinkDrop:           m.SinkDrop,
+				MedianMsgPerSec:    summary.MedianMsgPerSec,
+				WorkloadRatePerSec: m.WorkloadRatePerSec,
+			})
+			anomalies = append(anomalies, extra...)
+		}
 		var backlog []BacklogPoint
 		if !fromSamples {
 			backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
@@ -499,8 +523,8 @@ func (m *MatrixRunner) Run(
 		if probeFail {
 			return out, fmt.Errorf("%s at %d vCPU: the source topic gained no records during the window", anomalyProducerUnreachable, n)
 		}
-		if sinkFail {
-			return out, fmt.Errorf("point at %d vCPU failed: %s", n, anomalies[len(anomalies)-1].Note)
+		if sinkFail || e2eFail {
+			return out, fmt.Errorf("point at %d vCPU failed: %s", n, failNotes(anomalies))
 		}
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
@@ -519,7 +543,10 @@ func (m *MatrixRunner) Run(
 		// the first point unconditionally (pre-arms behaviour), AND
 		// check every point that carries an arm, regardless of position
 		// in the plan.
-		if pt.Key() == plan[0].Key() || pt.ArmID != "" {
+		// An e2e point never gets here with zero samples (no_samples fails
+		// it above), so its Connect log, which may quote the customer's
+		// pipeline, never reaches stdout.
+		if !m.E2E && (pt.Key() == plan[0].Key() || pt.ArmID != "") {
 			if len(samples) == 0 {
 				const tailMax = 4 * 1024
 				tail := rawLog
@@ -543,6 +570,18 @@ func (m *MatrixRunner) Run(
 		}
 	}
 	return out, nil
+}
+
+// failNotes joins the notes of a point's failing anomalies.
+func failNotes(anomalies []Anomaly) string {
+	var notes []string
+	for _, a := range anomalies {
+		switch a.Kind {
+		case anomalySinkCountMismatch, anomalyNoSamples, anomalySinkErrors, anomalySinkSendMismatch:
+			notes = append(notes, a.Note)
+		}
+	}
+	return strings.Join(notes, "; ")
 }
 
 // configPathsFor returns the launch config paths for a point key, falling back
@@ -584,23 +623,29 @@ func (m *MatrixRunner) fetchLog(ctx context.Context, key string) ([]byte, error)
 // fetchProm downloads the per-point Prometheus dump uploaded by the bench
 // script. Failure is non-fatal — the sweep point is still useful without
 // goroutine/heap context.
-func (m *MatrixRunner) fetchProm(ctx context.Context, key string) []PromPoint {
+// It also returns the raw dump, for the e2e output counters.
+func (m *MatrixRunner) fetchProm(ctx context.Context, key string) ([]PromPoint, []byte) {
 	if m.LogFetcher == nil {
-		return nil
+		return nil, nil
 	}
 	s3Key := fmt.Sprintf("runs/%s/prom-%s.txt", m.SessionID, key)
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] fetch prom (non-fatal): %v\n", err)
-		return nil
+		return nil, nil
 	}
 	defer body.Close()
-	pts, err := ParsePromStream(body)
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] read prom (non-fatal): %v\n", err)
+		return nil, nil
+	}
+	pts, err := ParsePromStream(bytes.NewReader(raw))
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] parse prom (non-fatal): %v\n", err)
-		return nil
+		return nil, raw
 	}
-	return pts
+	return pts, raw
 }
 
 // fetchBrokerSeries downloads this point's broker metrics dump and returns
@@ -758,7 +803,7 @@ func (m *MatrixRunner) emitSoakCycle(ctx context.Context, key string, pointStart
 	} else {
 		samples = parseAndTrim(raw, warmup)
 	}
-	promPts := m.fetchProm(ctx, key)
+	promPts, _ := m.fetchProm(ctx, key)
 	var brokerSeries []TopicPoint
 	var backlog []BacklogPoint
 	if m.Topology == nil || !m.Topology.SummaryFromSamples() {

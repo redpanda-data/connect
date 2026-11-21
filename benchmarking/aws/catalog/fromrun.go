@@ -23,6 +23,7 @@ type RunPoint struct {
 	MedianMBps, MedianMsgps float64
 	RSSBytes                []uint64 // process RSS samples; the peak is kept
 	LimitedBy               string   // see Point.LimitedBy
+	OutputMBps              float64  // see Point.OutputMBps
 }
 
 // BenchSourceOutput is the catalogued identity of a source-direction bench's
@@ -78,6 +79,10 @@ type RunInput struct {
 	// SinkMeasured is true when throughput was measured end to end, with the
 	// output writing to a real sink.
 	SinkMeasured bool
+	// CapacityBasis is Entry.CapacityBasis; "" for the legacy output basis.
+	CapacityBasis string
+	// SinkSize is the sink's size (Snowflake warehouse), if any.
+	SinkSize string
 	// AWSCostUSD is the run's AWS cost; nil when not recorded.
 	AWSCostUSD *float64
 	Points     []RunPoint
@@ -117,6 +122,7 @@ func EntryFromRun(r RunInput) (Entry, error) {
 			CUs:           p.VCPU * 10,
 			CapacityMBps:  p.MedianMBps,
 			CapacityMsgps: p.MedianMsgps,
+			OutputMBps:    p.OutputMBps,
 			PeakRSSBytes:  peak,
 			LimitedBy:     p.LimitedBy,
 		})
@@ -144,13 +150,14 @@ func EntryFromRun(r RunInput) (Entry, error) {
 		},
 		ConnectVersion: r.ConnectVersion,
 		BuildSHA:       r.GitSHA,
-		Infra:          Infra{RunnerInstanceType: r.InstanceType, Region: r.Region},
+		Infra:          Infra{RunnerInstanceType: r.InstanceType, Region: r.Region, SinkSize: r.SinkSize},
 		SinkMeasured:   r.SinkMeasured,
 		// A plan that stubbed external calls says so in its caveats.
 		ExternalStubbed:    slices.Contains(caveats, CaveatExternalStubbed),
 		MemoryLimited:      r.MemoryLimited,
 		SourceApproximated: r.SourceApproximated,
 		Caveats:            caveats,
+		CapacityBasis:      r.CapacityBasis,
 		Points:             points,
 		AWSCostUSD:         r.AWSCostUSD,
 		RunURL:             r.RunURL,

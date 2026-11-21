@@ -17,6 +17,7 @@ const (
 	CaveatUnreleasedBuild       = "unreleased_build"
 	CaveatMemoryNotLimited      = "memory_not_limited"
 	CaveatSchemaEvolutionForced = "schema_evolution_forced"
+	CaveatSinkUnverified        = "sink_unverified"
 	// CaveatSourceRateLimited is declared in sizing.go.
 )
 
@@ -29,6 +30,7 @@ var KnownCaveats = map[string]string{
 	CaveatSnapshotNotMeasured:   "the CDC initial snapshot was turned off; only streaming changes were measured",
 	CaveatUnreleasedBuild:       "measured on an unreleased build of main; a release may perform differently",
 	CaveatMemoryNotLimited:      "points ran without a hard memory cap, so the memory bound is not measured",
-	CaveatSourceRateLimited:     "the bench producer, not the pipeline, capped a point; its capacity is a lower bound",
+	CaveatSourceRateLimited:     "the source (the bench producer, or the CDC workload's offered rate), not the pipeline, capped a point; its capacity is a lower bound",
 	CaveatSchemaEvolutionForced: "the bench turned on sink schema evolution or table creation the customer config left off",
+	CaveatSinkUnverified:        "at least one point could not check what the sink received (no sink count and no output_sent metric)",
 }

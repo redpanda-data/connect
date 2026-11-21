@@ -555,6 +555,9 @@ func runBench(opts benchOpts) (errOut error) {
 			Sink:                     countableSink(sink, s, plan),
 			HostSetup:                hostSetupFor(sink),
 			HostEnv:                  hostEnvFor(sink),
+			E2E:                      s.Direction == DirectionE2E,
+			SinkDrop:                 s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "drop",
+			WorkloadRatePerSec:       e2eWorkloadRate(s),
 		}
 		// A soak run publishes per-minute CloudWatch metrics as it goes, so an
 		// operator (or an alarm) can watch a run that may still have 23 hours

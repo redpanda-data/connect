@@ -38,15 +38,20 @@ type Entry struct {
 	// SourceApproximated is true when the plan's input had no bench stack
 	// and the bench read a Redpanda topic in its place.
 	SourceApproximated bool `json:"source_approximated,omitempty"`
-	// Caveats are the plan's caveats (sorted, de-duplicated); empty for
-	// entries not made from a plan.
-	Caveats     []string  `json:"caveats,omitempty"`
-	Points      []Point   `json:"points"`
-	AWSCostUSD  *float64  `json:"aws_cost_usd,omitempty"`  // nil = not recorded
-	SaaSCostUSD *float64  `json:"saas_cost_usd,omitempty"` // nil = not recorded
-	RunURL      string    `json:"run_url,omitempty"`
-	ResultKey   string    `json:"result_key,omitempty"`
-	RecordedAt  time.Time `json:"recorded_at"`
+	// Caveats are the plan's caveats plus run-level ones such as
+	// sink_unverified (sorted, de-duplicated); empty for entries not made
+	// from a plan.
+	Caveats []string `json:"caveats,omitempty"`
+	// CapacityBasis says what Point.CapacityMBps measures:
+	// CapacityBasisInputEquivalent for e2e entries; absent (the legacy
+	// basis, CapacityBasisOutput) for source entries.
+	CapacityBasis string    `json:"capacity_basis,omitempty"`
+	Points        []Point   `json:"points"`
+	AWSCostUSD    *float64  `json:"aws_cost_usd,omitempty"`  // nil = not recorded
+	SaaSCostUSD   *float64  `json:"saas_cost_usd,omitempty"` // nil = not recorded
+	RunURL        string    `json:"run_url,omitempty"`
+	ResultKey     string    `json:"result_key,omitempty"`
+	RecordedAt    time.Time `json:"recorded_at"`
 }
 
 // Workload describes the load profile of a benchmark.
@@ -63,16 +68,41 @@ type Infra struct {
 	SinkSize           string `json:"sink_size,omitempty"`
 }
 
+// Capacity bases (Entry.CapacityBasis).
+const (
+	// CapacityBasisOutput: capacity_mb_s is the bytes measured at the
+	// output. Source entries; stored as an absent field.
+	CapacityBasisOutput = "output"
+	// CapacityBasisInputEquivalent: capacity_mb_s is the output's msg/s
+	// times the workload's message size, i.e. the input rate the pipeline
+	// sustains, whatever it does to message size. The measured output
+	// bytes are in Point.OutputMBps.
+	CapacityBasisInputEquivalent = "input_equivalent"
+)
+
+// LimitedBy values (Point.LimitedBy).
+const (
+	// LimitedByProducer: a stack-none point whose consumer caught up with
+	// the bench producer.
+	LimitedByProducer = "producer"
+	// LimitedByWorkload: a CDC e2e point whose median reached 95% of the
+	// workload's offered write rate.
+	LimitedByWorkload = "workload"
+)
+
 // Point is the measured capacity at one vCPU allocation.
 type Point struct {
 	VCPU          float64 `json:"vcpu"` // float: 0.5 is allowed
 	CUs           int     `json:"cus"`  // VCPU*10
 	CapacityMBps  float64 `json:"capacity_mb_s"`
 	CapacityMsgps float64 `json:"capacity_msg_s"`
-	PeakRSSBytes  uint64  `json:"peak_rss_bytes"` // 0 = not measured
-	// LimitedBy names what capped this point other than the pipeline: ""
-	// or "producer" (a stack-none point whose consumer caught up with the
-	// bench producer, so capacity is a lower bound).
+	// OutputMBps is the MB/s measured at the output, for entries whose
+	// CapacityBasis is input_equivalent; 0 (absent) otherwise.
+	OutputMBps   float64 `json:"output_mb_s,omitempty"`
+	PeakRSSBytes uint64  `json:"peak_rss_bytes"` // 0 = not measured
+	// LimitedBy names what capped this point other than the pipeline: "",
+	// LimitedByProducer or LimitedByWorkload. Either way the source, not the
+	// pipeline, set the rate, so capacity is a lower bound.
 	LimitedBy string `json:"limited_by,omitempty"`
 }
 

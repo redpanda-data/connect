@@ -298,6 +298,7 @@ func e2eSinkRunner(t *testing.T, sink Sink, ssm SSMExecutor, samplesPerPoint int
 		Topology:       e2eTopology{},
 		Names:          newBenchNames("s", "x"),
 		Sink:           sink,
+		E2E:            true,
 	}
 }
 
@@ -342,7 +343,9 @@ func TestSinkCountUnsupportedSkipsCheck(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 	for _, p := range points {
-		require.Empty(t, p.Anomalies, "no anomaly when the sink cannot count")
+		// No sink count and no output_sent in a prom dump: unverified, a
+		// caveat, never a failure.
+		require.Equal(t, []string{anomalySinkUnverified}, kinds(p.Anomalies))
 	}
 }
 
@@ -481,7 +484,7 @@ func TestSinkCountSkippedForBatchingProcessors(t *testing.T) {
 	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
 	require.NoError(t, err, "a 100x disagreement is not checked")
 	for _, p := range points {
-		require.Empty(t, p.Anomalies)
+		require.Equal(t, []string{anomalySinkUnverified}, kinds(p.Anomalies))
 	}
 
 	_, err = sink.Provision(t.Context(), "sess")
@@ -560,4 +563,70 @@ func TestSSMRPKRendersBrokersAndCollectsLines(t *testing.T) {
 	lines, err = r.RunRPK(t.Context(), sinkTestBrokers, "topic", "delete", sinkTestTopic)
 	require.Error(t, err)
 	require.NotEmpty(t, lines, "output is returned on failure so callers can read rpk's reason")
+}
+
+// e2eProm is a prom dump whose last complete frame carries the given
+// output counters.
+func e2eProm(sent, errs, bench float64) string {
+	return promFrame(1, 0, 0, 0) + promFrame(11, sent, errs, bench)
+}
+
+func TestE2EOutputErrorsFailPoint(t *testing.T) {
+	var events []string
+	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
+	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
+	mr.LogFetcher.(*FakeLogFetcher).Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 7, 10_000)
+	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.ErrorContains(t, err, anomalySinkErrors)
+	require.Len(t, points, 1)
+	require.Equal(t, []string{anomalySinkErrors}, kinds(points[0].Anomalies))
+	require.Contains(t, points[0].Anomalies[0].Note, "7 errors")
+}
+
+func TestE2EOutputSentMismatchFailsPoint(t *testing.T) {
+	var events []string
+	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
+	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
+	fetcher := mr.LogFetcher.(*FakeLogFetcher)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 0, 10_100)
+	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(2_000, 0, 10_000)
+	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.ErrorContains(t, err, anomalySinkSendMismatch)
+	require.Len(t, points, 2)
+	require.Empty(t, points[0].Anomalies, "output_sent verified the first point")
+	require.Equal(t, []string{anomalySinkSendMismatch}, kinds(points[1].Anomalies))
+}
+
+// Every e2e point, not only the first, must capture samples; the Connect
+// log is never printed (the run log of a Bench Bot run is public).
+func TestE2EZeroSamplesFailsAnyPointWithoutLogTail(t *testing.T) {
+	var events []string
+	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
+	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
+	fetcher := mr.LogFetcher.(*FakeLogFetcher)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 0, 10_000)
+	fetcher.Contents["runs/s/sweep-2.log"] = "level=error msg=\"customer secret config line\"\n"
+	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.ErrorContains(t, err, anomalyNoSamples)
+	require.ErrorContains(t, err, "see run artefacts in the session bucket")
+	require.Len(t, points, 2)
+	require.Equal(t, []string{anomalyNoSamples}, kinds(points[1].Anomalies))
+	out := stdout.(*bytes.Buffer).String()
+	require.NotContains(t, out, "customer secret config line")
+	require.NotContains(t, out, "[log]")
+}
+
+func TestE2EWorkloadBoundPoint(t *testing.T) {
+	var events []string
+	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
+	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
+	mr.WorkloadRatePerSec = 1000 // makeLog writes 1000 msg/s
+	fetcher := mr.LogFetcher.(*FakeLogFetcher)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 0, 10_000)
+	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(10_000, 0, 10_000)
+	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.NoError(t, err)
+	for _, p := range points {
+		require.Equal(t, []string{anomalyWorkloadBound}, kinds(p.Anomalies))
+	}
 }

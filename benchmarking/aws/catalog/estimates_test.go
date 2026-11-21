@@ -66,9 +66,9 @@ func TestKnownCaveats(t *testing.T) {
 	for _, c := range []string{
 		"source_approximated", "sink_not_measured", "external_calls_stubbed",
 		"snapshot_not_measured", "unreleased_build", "memory_not_limited",
-		"source_rate_limited", "schema_evolution_forced",
+		"source_rate_limited", "schema_evolution_forced", "sink_unverified",
 	} {
 		require.NotEmpty(t, KnownCaveats[c], c)
 	}
-	require.Len(t, KnownCaveats, 8)
+	require.Len(t, KnownCaveats, 9)
 }

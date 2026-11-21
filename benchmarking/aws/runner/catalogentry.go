@@ -90,11 +90,21 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 		SinkMeasured:      true,
 		Now:               meta.Now,
 	}
-	if s.Direction == DirectionE2E {
+	e2e := s.Direction == DirectionE2E
+	if e2e {
 		setE2EIdentity(&run, s)
+		// msg/s is measured at the output, but it is the input's message
+		// count unless the pipeline filters or fans out; times the
+		// workload's message size it is the input rate the pipeline
+		// sustains, which is what a customer sizes for.
+		run.CapacityBasis = catalog.CapacityBasisInputEquivalent
+		if s.Sink != nil {
+			run.SinkSize = s.Sink.Size
+		}
 	} else {
 		run.Pipeline = catalog.BenchSourcePipeline(s.Pipeline)
 	}
+	unverified := false
 	for _, p := range r.Points {
 		rp := catalog.RunPoint{
 			VCPU:        p.VCPU,
@@ -104,15 +114,27 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 			MedianMBps:  p.Summary.MedianMBPerSec,
 			MedianMsgps: p.Summary.MedianMsgPerSec,
 		}
+		if e2e {
+			rp.MedianMBps = p.Summary.MedianMsgPerSec * float64(r.Dataset.RowSizeBytes) / 1e6
+			rp.OutputMBps = p.Summary.MedianMBPerSec
+		}
 		for _, a := range p.Anomalies {
-			if a.Kind == anomalyProducerBound {
-				rp.LimitedBy = "producer"
+			switch a.Kind {
+			case anomalyProducerBound:
+				rp.LimitedBy = catalog.LimitedByProducer
+			case anomalyWorkloadBound:
+				rp.LimitedBy = catalog.LimitedByWorkload
+			case anomalySinkUnverified:
+				unverified = true
 			}
 		}
 		for _, pp := range p.Prom {
 			rp.RSSBytes = append(rp.RSSBytes, pp.RSSBytes)
 		}
 		run.Points = append(run.Points, rp)
+	}
+	if unverified {
+		run.Caveats = append(slices.Clone(run.Caveats), catalog.CaveatSinkUnverified)
 	}
 	return catalog.EntryFromRun(run)
 }
