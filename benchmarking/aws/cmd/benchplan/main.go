@@ -5,11 +5,13 @@
 // the License. You may obtain a copy of the License at
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
-// Command benchplan renders a stored Bench Bot plan into a runner scenario.
-// Exit codes: 0 ok, 1 runtime error, 2 bad flags or usage.
+// Command benchplan builds, stores and renders Bench Bot plans, and takes the
+// shared bench-stack lock.
+// Exit codes: 0 ok, 1 runtime error, 2 bad flags or usage, 3 lock wait timeout.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
@@ -26,11 +29,13 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
+const usageText = "usage: benchplan <render|show|build|lock> ..."
+
 var errUsage = errors.New("usage")
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: benchplan <render|show> --plan <file> [--out <dir>]")
+		fmt.Fprintln(stderr, usageText)
 		return 2
 	}
 	var err error
@@ -39,13 +44,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = runRender(args[1:], stdout)
 	case "show":
 		err = runShow(args[1:], stdout)
+	case "build":
+		err = runBuild(args[1:], stdout)
+	case "lock":
+		err = runLock(args[1:], stderr)
 	default:
-		fmt.Fprintf(stderr, "unknown subcommand %q\nusage: benchplan <render|show> --plan <file> [--out <dir>]\n", args[0])
+		fmt.Fprintf(stderr, "unknown subcommand %q\n%s\n", args[0], usageText)
 		return 2
 	}
 	switch {
 	case err == nil:
 		return 0
+	case errors.Is(err, errTimeout):
+		fmt.Fprintln(stderr, err)
+		return 3
 	case errors.Is(err, errUsage):
 		fmt.Fprintln(stderr, err)
 		return 2
@@ -58,7 +70,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 func parseFlags(name string, args []string, needOut bool) (planPath, outDir string, err error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&planPath, "plan", "", "path to the plan JSON file")
+	fs.StringVar(&planPath, "plan", "", "plan JSON file, or s3://<bucket>/plans/<id>.json")
 	if needOut {
 		fs.StringVar(&outDir, "out", "", "directory to write the scenario into")
 	}
@@ -74,9 +86,27 @@ func parseFlags(name string, args []string, needOut bool) (planPath, outDir stri
 	return planPath, outDir, nil
 }
 
+var s3PlanRef = regexp.MustCompile(`^s3://([^/]+)/plans/([^/]+)\.json$`)
+
 func loadPlan(path string) (plan.Plan, error) {
+	if strings.HasPrefix(path, "s3://") {
+		m := s3PlanRef.FindStringSubmatch(path)
+		if m == nil {
+			return plan.Plan{}, fmt.Errorf("plan location %q: want s3://<bucket>/plans/<id>.json", path)
+		}
+		// Validate the id before anything touches S3 (plan.Store checks too).
+		if !plan.ValidID(m[2]) {
+			return plan.Plan{}, fmt.Errorf("plan location %q: invalid plan id %q", path, m[2])
+		}
+		ctx := context.Background()
+		objs, err := deps.s3Objects(ctx, m[1])
+		if err != nil {
+			return plan.Plan{}, err
+		}
+		return plan.NewStore(objs).Get(ctx, m[2])
+	}
 	if strings.Contains(path, "://") {
-		return plan.Plan{}, fmt.Errorf("plan location %q: only local files are supported", path)
+		return plan.Plan{}, fmt.Errorf("plan location %q: only local files and s3:// are supported", path)
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -122,6 +152,10 @@ func runShow(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	return printPlan(stdout, p)
+}
+
+func printPlan(stdout io.Writer, p plan.Plan) error {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err
