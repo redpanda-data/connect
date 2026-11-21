@@ -2,7 +2,8 @@
 # Project=redpanda-connect-bench resource older than var.orphan_ttl_hours,
 # plus Glue databases named bench_* (the iceberg sink's per-run scratch) and
 # Snowflake schemas named BENCH_* in the bench Snowflake account (the
-# snowflake sink's per-run scratch).
+# snowflake sink's per-run scratch) and BigQuery datasets named bench_* in
+# the bench GCP project (the bigquery sink's per-run scratch).
 #
 # Lives in persistent/ (NOT shared/) as of 2026-08-17: when it lived inside
 # the session stack, an interrupted `terraform destroy` deleted the
@@ -23,9 +24,10 @@ data "aws_caller_identity" "current" {}
 # The bench Snowflake credentials secret, created by the operator (not by
 # Terraform: its value is a private key). The partial ARN (no random suffix)
 # lets the Lambda name it before it exists; until it does, the Lambda skips
-# its Snowflake sweep.
+# its Snowflake sweep (likewise the BigQuery secret below and its sweep).
 locals {
   snowflake_secret_arn = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/snowflake"
+  bigquery_secret_arn  = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/bigquery"
 }
 
 resource "aws_iam_role" "orphan_cleanup" {
@@ -145,6 +147,18 @@ resource "aws_iam_role_policy" "orphan_cleanup" {
         ]
       },
       {
+        # The bigquery sweep authenticates to the bench project with the
+        # service-account key in this secret; same two ARN forms and the
+        # same skip-on-missing behaviour as the snowflake secret.
+        Sid    = "BigQuerySecret"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          local.bigquery_secret_arn,
+          "${local.bigquery_secret_arn}-??????",
+        ]
+      },
+      {
         Sid      = "Alert"
         Effect   = "Allow"
         Action   = ["sns:Publish"]
@@ -169,6 +183,7 @@ resource "aws_lambda_function" "orphan_cleanup" {
       BENCH_ORPHAN_TTL_HOURS     = tostring(var.orphan_ttl_hours)
       BENCH_ORPHAN_SNS_TOPIC_ARN = aws_sns_topic.orphan_cleanup.arn
       BENCH_SNOWFLAKE_SECRET_ARN = local.snowflake_secret_arn
+      BENCH_BIGQUERY_SECRET_ARN  = local.bigquery_secret_arn
     }
   }
 }

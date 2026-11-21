@@ -71,9 +71,7 @@ func TestSinkForKinds(t *testing.T) {
 		require.NoError(t, err, kind)
 		require.IsType(t, want, got, kind)
 	}
-	_, err := sinkFor(SinkSpec{Kind: "bigquery"}, deps)
-	require.ErrorContains(t, err, "sink bigquery not implemented yet")
-	_, err = sinkFor(SinkSpec{Kind: "bogus"}, deps)
+	_, err := sinkFor(SinkSpec{Kind: "bogus"}, deps)
 	require.ErrorContains(t, err, `unknown sink kind "bogus"`)
 }
 

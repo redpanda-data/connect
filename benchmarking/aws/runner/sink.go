@@ -53,6 +53,15 @@ func beforePoint(ctx context.Context, sink Sink, point string) error {
 	return nil
 }
 
+// hostEnvFor is the extra environment a sink needs Connect to launch with
+// (paths and flags, never secret values), or nil for a sink that needs none.
+func hostEnvFor(sink Sink) map[string]string {
+	if h, ok := sink.(interface{ HostEnv() map[string]string }); ok {
+		return h.HostEnv()
+	}
+	return nil
+}
+
 // ErrCountUnsupported is Count's answer for a sink that cannot count its
 // records; the ground-truth check is skipped for it.
 var ErrCountUnsupported = errors.New("sink cannot count records")
@@ -70,6 +79,10 @@ type SinkDeps struct {
 	// snowflake sink.
 	Snowflake       SnowflakeExec
 	SnowflakeTarget SnowflakeTarget
+	// BigQuery is the orchestrator's client for the bench GCP project and
+	// BigQueryTarget its non-secret identity, for the bigquery sink.
+	BigQuery       BigQueryAPI
+	BigQueryTarget BigQueryTarget
 	// Output is the scenario's output config, for sinks whose scratch
 	// depends on it (the snowflake sink reads schema_evolution).
 	Output any
@@ -120,7 +133,7 @@ func sinkFor(spec SinkSpec, deps SinkDeps) (Sink, error) {
 	case "snowflake":
 		return newSnowflakeSink(spec, deps)
 	case "bigquery":
-		return nil, fmt.Errorf("sink %s not implemented yet", spec.Kind)
+		return newBigQuerySink(deps)
 	default:
 		return nil, fmt.Errorf("unknown sink kind %q", spec.Kind)
 	}
@@ -188,6 +201,11 @@ func (uncountedSink) Count(context.Context, string) (int64, error) { return 0, E
 func (u uncountedSink) BeforePoint(ctx context.Context, point string) error {
 	return beforePoint(ctx, u.Sink, point)
 }
+
+// HostSetup and HostEnv forward the wrapped sink's host hooks.
+func (u uncountedSink) HostSetup() string { return hostSetupFor(u.Sink) }
+
+func (u uncountedSink) HostEnv() map[string]string { return hostEnvFor(u.Sink) }
 
 // countableSink returns sink, or sink with Count hidden when any point's
 // output declares batching processors. Those run on the batch just before

@@ -460,6 +460,18 @@ func runBench(opts benchOpts) (errOut error) {
 			defer c.Close()
 		}
 	}
+	if s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "bigquery" {
+		sm, err := NewSecretsManagerClient(ctx, opts.region)
+		if err != nil {
+			return fmt.Errorf("build secrets manager client for the bigquery sink: %w", err)
+		}
+		if deps.BigQuery, deps.BigQueryTarget, err = loadBigQuery(ctx, sm, openGoBigQuery); err != nil {
+			return err
+		}
+		if c, ok := deps.BigQuery.(io.Closer); ok {
+			defer c.Close()
+		}
+	}
 	sink, err := sinkForScenario(s, deps)
 	if err != nil {
 		return err
@@ -542,6 +554,7 @@ func runBench(opts benchOpts) (errOut error) {
 			SourceProbe:              sourceProbeFor(s, sharedOuts, names),
 			Sink:                     countableSink(sink, s, plan),
 			HostSetup:                hostSetupFor(sink),
+			HostEnv:                  hostEnvFor(sink),
 		}
 		// A soak run publishes per-minute CloudWatch metrics as it goes, so an
 		// operator (or an alarm) can watch a run that may still have 23 hours
@@ -1381,7 +1394,7 @@ func binaryNamesReferenced(s *Scenario) map[string]bool {
 
 // sinkSecretKinds are the e2e sink kinds whose credentials the runner host
 // fetches from Secrets Manager itself.
-var sinkSecretKinds = []string{"snowflake"}
+var sinkSecretKinds = []string{"snowflake", "bigquery"}
 
 // sharedStackVars are the shared stack's terraform variables.
 // sink_secrets_enabled attaches the runner host role's read grant on the

@@ -152,6 +152,41 @@ sets the warehouse back to `XSMALL`.
   so one run's resize (and its teardown reset to `XSMALL`) changes the other's
   reference size. Run one Snowflake e2e scenario at a time.
 
+## End-to-end sinks: BigQuery
+
+An e2e run with a BigQuery sink writes to a scratch dataset,
+`bench_<session>`, in the bench GCP project. At teardown, even when the sweep
+fails, it deletes the dataset with its contents (already gone counts as done).
+
+- Credentials are in the Secrets Manager secret
+  `redpanda-connect-bench/bigquery`, as JSON
+  `{project, credentials_json, location}`. `credentials_json` is a
+  service-account key JSON string; `location` is optional and defaults to
+  `US`. The operator creates the secret by hand; Terraform does not. Until it
+  exists, the reaper skips its BigQuery sweep.
+- The service account needs BigQuery Data Editor and BigQuery Job User on the
+  bench project only. Do not create `bench_*` datasets by hand there: the
+  reaper deletes any `bench_*` dataset older than `orphan_ttl_hours` (4 h).
+- The orchestrator reads the secret with its own credentials for its API calls
+  (create, count, delete). Connect gets the key on the runner host only. Each
+  point's bench script fetches the secret, writes `credentials_json` to
+  `/opt/bench/secrets/bigquery.json` (mode 0600), and removes the file on exit.
+  `gcp_bigquery` has no credentials-file field, so Connect is launched with
+  `GOOGLE_APPLICATION_CREDENTIALS=/opt/bench/secrets/bigquery.json` and uses
+  application-default credentials; the plan removes `credentials_json` from
+  the config. The key is never in a placeholder, a rendered config, an SSM
+  command or a log line.
+- The runner host role can read the secret only during a run that needs it,
+  under the same `sink_secrets_enabled` gate as the Snowflake secret.
+- The output creates its table, `t`. The plan forces
+  `create_disposition: CREATE_IF_NEEDED`; when the customer had `CREATE_NEVER`
+  the plan carries the caveat `schema_evolution_forced`. Until the first write
+  the table does not exist, so it counts as 0. A missing table after rows have
+  been counted fails the run.
+- The count check reads `SELECT COUNT(*)` before and after each point. Streamed
+  rows become visible with a delay, so each count is re-read every 10 s until
+  two reads agree, for at most 90 s.
+
 ## Results catalogue
 
 Every completed bench sweep writes one entry to the results catalogue in the

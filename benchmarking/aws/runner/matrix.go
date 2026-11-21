@@ -14,7 +14,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -115,6 +117,8 @@ type MatrixRunner struct {
 	// HostSetup is a sink's bench-script prologue (see hostSetupFor),
 	// run before Connect launches at every point. Empty for most sinks.
 	HostSetup string
+	// HostEnv is extra environment for the Connect process (see hostEnvFor).
+	HostEnv map[string]string
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -302,6 +306,7 @@ func (m *MatrixRunner) Run(
 			CheckpointSec:            m.CheckpointSec,
 			SourceProbe:              probe,
 			HostSetup:                m.HostSetup,
+			HostEnv:                  m.HostEnv,
 		})
 
 		// pointStart is this point's wall-clock launch — the base every
@@ -847,6 +852,8 @@ type benchScriptArgs struct {
 	// HostSetup, when set, runs right after set -euo pipefail, before
 	// anything else (see MatrixRunner.HostSetup).
 	HostSetup string
+	// HostEnv adds K=V pairs to the launch line's env, sorted by key.
+	HostEnv map[string]string
 }
 
 // artifactKey names this point's log and metric files: the bare vCPU count for
@@ -897,6 +904,15 @@ func (a benchScriptArgs) promScrapeSec() int {
 
 // launchCmd is the engine invocation: streams mode when the point runs more
 // than one pipeline in the process, single-config run mode otherwise.
+// hostEnvPairs is HostEnv as " K=V" pairs in key order, or "" when unset.
+func (a benchScriptArgs) hostEnvPairs() string {
+	var b strings.Builder
+	for _, k := range slices.Sorted(maps.Keys(a.HostEnv)) {
+		fmt.Fprintf(&b, " %s=%s", k, a.HostEnv[k])
+	}
+	return b.String()
+}
+
 func (a benchScriptArgs) launchCmd() string {
 	if a.Streams > 1 {
 		return fmt.Sprintf("%s streams -o %s %s", a.BinaryPath, a.RootConfigPath, a.StreamsDir)
@@ -938,8 +954,8 @@ func renderBenchScript(a benchScriptArgs) string {
 		// The core pin follows VCPU while GOMAXPROCS is independent: an arm can
 		// oversubscribe the runtime on a fixed core allocation. GOMEMLIMIT is
 		// vCPU-derived by the caller, so it is constant across an A/B's arms.
-		fmt.Sprintf(`%staskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%s REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
-			a.memoryScopePrefix(), cpusetHi, a.gomaxprocs(), a.goMemLimit(), a.launchCmd()),
+		fmt.Sprintf(`%staskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%s REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt%s %s >"$LOG" 2>&1 &`,
+			a.memoryScopePrefix(), cpusetHi, a.gomaxprocs(), a.goMemLimit(), a.hostEnvPairs(), a.launchCmd()),
 		`PID=$!`,
 		// Heartbeat: every heartbeatSec(), echo the latest rolling-stats line
 		// so the operator can see throughput live. At the sweep default

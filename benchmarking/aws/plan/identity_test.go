@@ -201,3 +201,38 @@ func TestSwapIdentityForcesEarliestReads(t *testing.T) {
 		})
 	}
 }
+
+func swapBigQuery(t *testing.T, bq map[string]any) (map[string]any, []string) {
+	t.Helper()
+	cfg := map[string]any{
+		"input":  map[string]any{"generate": map[string]any{"mapping": `root = {}`}},
+		"output": map[string]any{"gcp_bigquery": bq},
+	}
+	out, caveats, err := SwapIdentity(cfg, SourceApproximated, SinkBigQuery)
+	require.NoError(t, err)
+	return out["output"].(map[string]any)["gcp_bigquery"].(map[string]any), caveats
+}
+
+// The key never reaches the config (the runner host supplies it as
+// application-default credentials), and CREATE_NEVER cannot stand: the run's
+// dataset starts empty.
+func TestSwapIdentityBigQueryNoCredentialsJSONAndForcesCreate(t *testing.T) {
+	bq, caveats := swapBigQuery(t, map[string]any{
+		"project": "cust", "dataset": "d", "table": "t",
+		"credentials_json":   `{"private_key":"bq-private-key"}`,
+		"create_disposition": "CREATE_NEVER",
+	})
+	require.NotContains(t, bq, "credentials_json")
+	require.Equal(t, "${BENCH_BQ_PROJECT}", bq["project"])
+	require.Equal(t, "${BENCH_BQ_DATASET}", bq["dataset"])
+	require.Equal(t, "${BENCH_BQ_TABLE}", bq["table"])
+	require.Equal(t, "CREATE_IF_NEEDED", bq["create_disposition"])
+	require.Contains(t, caveats, CaveatSchemaEvoForced)
+
+	bq, caveats = swapBigQuery(t, map[string]any{"project": "p", "dataset": "d", "table": "t"})
+	require.Equal(t, "CREATE_IF_NEEDED", bq["create_disposition"])
+	require.NotContains(t, caveats, CaveatSchemaEvoForced, "unset is the default: no caveat")
+
+	_, caveats = swapBigQuery(t, map[string]any{"table": "t", "create_disposition": "CREATE_IF_NEEDED"})
+	require.NotContains(t, caveats, CaveatSchemaEvoForced)
+}

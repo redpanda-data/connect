@@ -275,13 +275,22 @@ var SinkTemplates = map[SinkKind]func(component string) Template{
 			MergeCaveatsIfUnset: true,
 		}
 	},
+	// The key is never a config value: the runner host writes it to a file
+	// and Connect finds it as application-default credentials (see
+	// runner/sink_bigquery.go), so credentials_json is removed. The run's
+	// dataset starts empty and the bench cannot know the customer's table
+	// shape, so the output creates its table; CREATE_NEVER cannot stand.
 	SinkBigQuery: func(string) Template {
-		// credentials_json is left unset: the runner uses its ambient identity.
-		return Template{Fields: map[string]any{
-			"project": "${BENCH_BQ_PROJECT}",
-			"dataset": "${BENCH_BQ_DATASET}",
-			"table":   "${BENCH_BQ_TABLE}",
-		}}
+		return Template{
+			Fields: map[string]any{
+				"project": "${BENCH_BQ_PROJECT}",
+				"dataset": "${BENCH_BQ_DATASET}",
+				"table":   "${BENCH_BQ_TABLE}",
+			},
+			Remove:       []string{"credentials_json"},
+			Merge:        map[string]any{"create_disposition": "CREATE_IF_NEEDED"},
+			MergeCaveats: map[string]string{"create_disposition": CaveatSchemaEvoForced},
+		}
 	},
 }
 

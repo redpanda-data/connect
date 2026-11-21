@@ -64,7 +64,7 @@ func TestSweepSnowflake_SelectsBenchPrefixOlderThanTTL(t *testing.T) {
 		{Name: "PUBLIC", CreatedOn: old},       // never listed by the LIKE, but never touched either
 		{Name: "BENCH_X;DROP", CreatedOn: old}, // not a plain identifier
 	}}
-	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.Equal(t, "BENCH_DB", sf.listDB)
 	require.Equal(t, []string{"DROP SCHEMA IF EXISTS BENCH_DB.BENCH_BENCH_20261120_060000 CASCADE"}, sf.sql)
@@ -79,13 +79,13 @@ func TestSweepSnowflake_FailuresAreReportedNotFatal(t *testing.T) {
 		schemas: []snowflakeSchemaInfo{{Name: "BENCH_A", CreatedOn: now.Add(-5 * time.Hour)}},
 		execErr: map[string]error{q: errors.New("insufficient privileges")},
 	}
-	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
 	require.Contains(t, report.Failed[0], "snowflake-schema:BENCH_DB.BENCH_A")
 
 	sf = &fakeSnowflakeReaper{listErr: errors.New("warehouse suspended")}
-	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
 	require.Contains(t, report.Failed[0], "snowflake-schemas")
@@ -93,12 +93,12 @@ func TestSweepSnowflake_FailuresAreReportedNotFatal(t *testing.T) {
 	failOpen := func(context.Context) (snowflakeReaperAPI, snowflakeCreds, error) {
 		return nil, snowflakeCreds{}, errors.New("login failed")
 	}
-	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", failOpen)
+	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", failOpen, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
 
 	sf = &fakeSnowflakeReaper{}
-	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH-DB"))
+	report, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH-DB"), nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors, "a bad database name is refused before any SQL")
 	require.Empty(t, sf.sql)
@@ -120,7 +120,7 @@ func TestSweepSnowflake_SkippedWhenSecretMissing(t *testing.T) {
 		_, _, err := open(t.Context())
 		require.ErrorIs(t, err, errSnowflakeSecretMissing, name)
 
-		report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", open)
+		report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", open, nil)
 		require.NoError(t, err, name)
 		require.Zero(t, report.Errors, name)
 		require.Empty(t, report.Failed, name)
@@ -131,7 +131,7 @@ func TestSweepSnowflake_SkippedWhenSecretMissing(t *testing.T) {
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errSnowflakeSecretMissing)
 
-	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", nil)
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Zero(t, report.Errors)
 }
@@ -207,12 +207,12 @@ func TestSweepSnowflake_ResetsWarehouseOnlyWhenNoLiveRun(t *testing.T) {
 		{Name: "BENCH_OLD", CreatedOn: now.Add(-5 * time.Hour)},
 		{Name: "BENCHMARKS", CreatedOn: now}, // not a run schema
 	}}
-	_, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	_, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"DROP SCHEMA IF EXISTS BENCH_DB.BENCH_OLD CASCADE", reset}, sf.sql)
 
 	sf = &fakeSnowflakeReaper{}
-	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{reset}, sf.sql, "no schemas at all: nothing is running")
 
@@ -220,12 +220,12 @@ func TestSweepSnowflake_ResetsWarehouseOnlyWhenNoLiveRun(t *testing.T) {
 		{Name: "BENCH_OLD", CreatedOn: now.Add(-5 * time.Hour)},
 		{Name: "BENCH_LIVE", CreatedOn: now.Add(-10 * time.Minute)},
 	}}
-	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.NotContains(t, sf.sql, reset, "a live run keeps its warehouse size")
 
 	sf = &fakeSnowflakeReaper{listErr: errors.New("boom")}
-	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"))
+	_, err = Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", openerFor(sf, "BENCH_DB"), nil)
 	require.NoError(t, err)
 	require.Empty(t, sf.sql, "an unknown schema set leaves the warehouse alone")
 
@@ -233,7 +233,7 @@ func TestSweepSnowflake_ResetsWarehouseOnlyWhenNoLiveRun(t *testing.T) {
 		return sf, snowflakeCreds{Database: "BENCH_DB", Warehouse: "WH; DROP"}, nil
 	}
 	sf = &fakeSnowflakeReaper{}
-	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", bad)
+	report, err := Sweep(t.Context(), &FakeAWS{}, now, 4*time.Hour, "arn:sns:topic", bad, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Errors)
 	require.Empty(t, sf.sql)

@@ -78,7 +78,7 @@ resource "aws_iam_role_policy" "bench_host_glue" {
   })
 }
 
-# The e2e sinks' credential secrets (snowflake now; bigquery to follow).
+# The e2e sinks' credential secrets (snowflake and bigquery).
 # The bench script fetches the key on the host and writes it to a 0600 file
 # for Connect, so the key never passes through the orchestrator or an SSM
 # parameter. The grant exists only when sink_secrets_enabled is true, which
@@ -93,9 +93,12 @@ resource "aws_iam_role_policy" "bench_host_sink_secrets" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/snowflake-??????"]
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/snowflake-??????",
+          "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:redpanda-connect-bench/bigquery-??????",
+        ]
       },
     ]
   })

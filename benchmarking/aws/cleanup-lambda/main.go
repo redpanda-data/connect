@@ -250,8 +250,14 @@ func handleRequest(ctx context.Context, _ struct{}) (SweepReport, error) {
 	if arn := os.Getenv("BENCH_SNOWFLAKE_SECRET_ARN"); arn != "" {
 		sf = newSnowflakeOpener(api.sm, arn, connectGoSnowflake)
 	}
+	// BENCH_BIGQUERY_SECRET_ARN names the bench BigQuery credentials secret.
+	// Unset skips the BigQuery sweep.
+	var bq bigQueryOpener
+	if arn := os.Getenv("BENCH_BIGQUERY_SECRET_ARN"); arn != "" {
+		bq = newBigQueryOpener(api.sm, arn, connectGoBigQuery)
+	}
 	slog.Info("starting sweep", "ttl", ttl)
-	return Sweep(ctx, api, time.Now(), ttl, topicARN, sf)
+	return Sweep(ctx, api, time.Now(), ttl, topicARN, sf, bq)
 }
 
 func main() {
