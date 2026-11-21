@@ -21,6 +21,10 @@ func TestEstimateRun(t *testing.T) {
 	require.InDelta(t, 2.5, e.AWSUSD, 1e-9)
 	require.Equal(t, 25, e.Minutes)
 
+	e, err = EstimateRun("postgres", "snowflake", "XLARGE")
+	require.NoError(t, err)
+	require.InDelta(t, 16.0, e.SaaSUSD, 1e-9)
+
 	e, err = EstimateRun("postgres", "snowflake", "XSMALL")
 	require.NoError(t, err)
 	require.InDelta(t, 1.0, e.SaaSUSD, 1e-9)

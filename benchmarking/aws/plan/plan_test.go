@@ -582,3 +582,38 @@ func TestBuildPlanJSONCarriesEstimateAndAdjustable(t *testing.T) {
 	require.Contains(t, string(b), `"sink_size_adjustable":true`)
 	require.Contains(t, string(b), `"estimate":{"aws_usd":2.5,"saas_usd":1,"minutes":25}`)
 }
+
+func TestBuildPutXLarge(t *testing.T) {
+	p, err := buildSized(t, snowflakePut(), "XLARGE")
+	require.NoError(t, err)
+	require.Equal(t, "XLARGE", p.SinkSize)
+	require.InDelta(t, 16.0, p.Estimate.SaaSUSD, 1e-9)
+}
+
+// Every source kind's stack and every sink kind a plan can pick has a row in
+// catalog/estimates.json: adding a sink or source without one fails here.
+func TestEstimatesCoverEveryPlanSinkAndStack(t *testing.T) {
+	sources := []SourceKind{SourceApproximated}
+	for _, k := range RealSources {
+		sources = append(sources, k)
+	}
+	sinks := []SinkKind{SinkDrop}
+	for _, k := range RealSinks {
+		sinks = append(sinks, k)
+	}
+	for _, src := range sources {
+		for _, sink := range sinks {
+			size := ""
+			if sink == SinkSnowflake {
+				size = DefaultSinkSize
+			}
+			_, err := catalog.EstimateRun(stackFor(src), string(sink), size)
+			require.NoError(t, err, "source %s sink %s", src, sink)
+		}
+	}
+	// Every warehouse size the runner accepts for snowflake_put is priced.
+	for _, size := range []string{"XSMALL", "SMALL", "MEDIUM", "LARGE", "XLARGE"} {
+		_, err := catalog.EstimateRun("postgres", string(SinkSnowflake), size)
+		require.NoError(t, err, size)
+	}
+}

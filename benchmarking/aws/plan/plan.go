@@ -60,8 +60,9 @@ type Plan struct {
 	// warehouse size changes; only then is a size worth offering.
 	SinkSizeAdjustable bool           `json:"sink_size_adjustable"`
 	Pipeline           map[string]any `json:"pipeline"`
-	// Fingerprint is catalog.Fingerprint of the customer's ORIGINAL config
-	// (input, pipeline, output), taken before any identity swap. It is a hash
+	// Fingerprint is catalog.ConfigIdentity's fingerprint of the customer's
+	// ORIGINAL config (input, buffer, pipeline, output), taken before any
+	// identity swap. It is a hash
 	// only. Catalogue identity must use this, never Fingerprint(Plan.Pipeline),
 	// which can never equal it.
 	Fingerprint string   `json:"fingerprint"`
@@ -94,20 +95,11 @@ func Build(config map[string]any, w Workload, slack SlackRef, now time.Time, opt
 	for _, opt := range opts {
 		opt(&o)
 	}
-	input, processors, output, err := catalog.Components(config)
+	ident, err := catalog.ConfigIdentity(config)
 	if err != nil {
-		return Plan{}, fmt.Errorf("reading pipeline components: %w", err)
+		return Plan{}, fmt.Errorf("reading pipeline identity: %w", err)
 	}
-	orig := map[string]any{}
-	for _, k := range []string{"input", "pipeline", "output"} {
-		if v, ok := config[k]; ok {
-			orig[k] = v
-		}
-	}
-	fp, err := catalog.Fingerprint(orig)
-	if err != nil {
-		return Plan{}, fmt.Errorf("fingerprinting pipeline: %w", err)
-	}
+	input, processors, output, fp := ident.Input, ident.Processors, ident.Output, ident.Fingerprint
 	id, err := newID()
 	if err != nil {
 		return Plan{}, err

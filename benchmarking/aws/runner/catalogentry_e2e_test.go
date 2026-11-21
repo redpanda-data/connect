@@ -96,15 +96,23 @@ func e2eResult(t *testing.T, name string) *Result {
 // The e2e entry's fingerprint is the customer's ORIGINAL config's, not the
 // identity-swapped pipeline's.
 func TestCatalogEntryE2EFingerprintMatchesCustomerConfig(t *testing.T) {
-	cfg := pgToSnowflakeConfig()
-	want, err := catalog.Fingerprint(cfg)
-	require.NoError(t, err)
-
-	p, s := renderedScenario(t, cfg)
+	p, s := renderedScenario(t, pgToSnowflakeConfig())
 	e, err := catalogEntryFromResult(s, e2eResult(t, s.Name), catalogMeta{SessionID: "bench-1"})
 	require.NoError(t, err)
-	require.Equal(t, want, e.Fingerprint)
 	require.Equal(t, p.Fingerprint, e.Fingerprint)
+
+	// The customer re-asks with the same pipeline pasted as a whole config,
+	// carrying top-level keys that do not change throughput.
+	reask := pgToSnowflakeConfig()
+	reask["logger"] = map[string]any{"level": "DEBUG"}
+	reask["http"] = map[string]any{"address": "0.0.0.0:4195"}
+	reask["metrics"] = map[string]any{"prometheus": map[string]any{}}
+	reask["tracer"] = map[string]any{"none": map[string]any{}}
+	reask["cache_resources"] = []any{map[string]any{"label": "c", "memory": map[string]any{}}}
+	reask["rate_limit_resources"] = []any{map[string]any{"label": "r", "local": map[string]any{"count": 10}}}
+	want, err := catalog.ConfigIdentity(reask)
+	require.NoError(t, err)
+	require.Equal(t, want.Fingerprint, e.Fingerprint)
 	require.Equal(t, "postgres_cdc", e.Input)
 	require.Equal(t, []string{"mapping"}, e.Processors)
 	require.Equal(t, "snowflake_streaming", e.Output)

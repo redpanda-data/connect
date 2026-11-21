@@ -259,8 +259,8 @@ func (g *gitCLI) ChangelogMentions(ctx context.Context, fromSHA, toRef, componen
 // Staleness is whether a stored result is still current.
 type Staleness struct {
 	State string `json:"state"` // "current" | "stale" | "unknown"
-	// LatestRelease is the latest tag a released entry was compared against;
-	// empty for an unreleased entry.
+	// LatestRelease is the latest release tag, whatever the entry was
+	// compared against.
 	LatestRelease string `json:"latest_release"`
 	// ComparedTo is the ref the entry was compared against: LatestRelease,
 	// or the main ref for an unreleased entry.
@@ -276,22 +276,18 @@ func CheckStaleness(ctx context.Context, g Git, e Entry) (Staleness, error) {
 	if !validSHA.MatchString(e.BuildSHA) {
 		return Staleness{State: "unknown", Reasons: []string{"build sha unknown"}}, nil
 	}
-	var latest, toRef string
-	var err error
+	latest, err := g.LatestRelease(ctx)
+	if errors.Is(err, ErrRepoRoot) {
+		return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
+	}
+	if err != nil {
+		return Staleness{}, err
+	}
+	toRef := latest
 	if e.Unreleased() {
-		toRef, err = g.MainRef(ctx)
-		if err != nil {
-			return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
+		if toRef, err = g.MainRef(ctx); err != nil {
+			return Staleness{State: "unknown", LatestRelease: latest, Reasons: []string{err.Error()}}, nil
 		}
-	} else {
-		latest, err = g.LatestRelease(ctx)
-		if errors.Is(err, ErrRepoRoot) {
-			return Staleness{State: "unknown", Reasons: []string{err.Error()}}, nil
-		}
-		if err != nil {
-			return Staleness{}, err
-		}
-		toRef = latest
 	}
 	unknown := func(reason string) Staleness {
 		return Staleness{State: "unknown", LatestRelease: latest, ComparedTo: toRef, Reasons: []string{reason}}

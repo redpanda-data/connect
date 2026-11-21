@@ -86,6 +86,15 @@ func (e Entry) Unreleased() bool {
 	return unreleasedVersion.MatchString(e.ConnectVersion)
 }
 
+// BaseRelease is the release an entry's build descends from: ConnectVersion
+// without its -N-g<sha> suffix, or ConnectVersion itself for a release.
+func (e Entry) BaseRelease() string {
+	if loc := unreleasedVersion.FindStringIndex(e.ConnectVersion); loc != nil {
+		return e.ConnectVersion[:loc[0]]
+	}
+	return e.ConnectVersion
+}
+
 // Validate reports the first schema violation in the entry, naming the field.
 func (e Entry) Validate() error {
 	if e.SchemaVersion != SchemaVersion {

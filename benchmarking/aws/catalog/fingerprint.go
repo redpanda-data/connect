@@ -160,6 +160,33 @@ func processorName(p any) (string, error) {
 	return names[0], nil
 }
 
+// identitySections are the top-level config keys that make up a pipeline's
+// catalogue identity. Every other key (logger, http, metrics, tracer,
+// resources, ...) is ignored: it does not change throughput.
+var identitySections = []string{"input", "buffer", "pipeline", "output"}
+
+// ConfigIdentity is the catalogue identity of a whole Connect config: its
+// components and the fingerprint of its input, buffer, pipeline and output.
+// Plans and catalogue queries both use it, so a re-asked config matches the
+// entry its plan recorded.
+func ConfigIdentity(config map[string]any) (Identity, error) {
+	sections := map[string]any{}
+	for _, k := range identitySections {
+		if v, ok := config[k]; ok {
+			sections[k] = v
+		}
+	}
+	input, processors, output, err := Components(sections)
+	if err != nil {
+		return Identity{}, fmt.Errorf("components: %w", err)
+	}
+	fp, err := Fingerprint(sections)
+	if err != nil {
+		return Identity{}, fmt.Errorf("fingerprint: %w", err)
+	}
+	return Identity{Fingerprint: fp, Input: input, Processors: processors, Output: output}, nil
+}
+
 // Fingerprint is the hex sha256 of the canonical JSON of the normalised
 // pipeline. Callers must pass values decoded from JSON/YAML into
 // map[string]any / []any, since typed maps and slices are not normalised.

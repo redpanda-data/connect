@@ -336,6 +336,7 @@ func TestUnreleasedStalenessComparesToMain(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "current", s.State)
 			require.Equal(t, mainRef, s.ComparedTo)
+			require.Equal(t, "v4.99.0", s.LatestRelease, "latest_release is always the latest tag")
 			require.NotEmpty(t, g.toRefs)
 			for _, r := range g.toRefs {
 				require.Equal(t, mainRef, r)

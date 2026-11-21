@@ -326,3 +326,21 @@ func TestRecommendMergesPlanCaveats(t *testing.T) {
 		require.Equal(t, want, r.Caveats, "target %v", target)
 	}
 }
+
+func TestRecommendBaseRelease(t *testing.T) {
+	e := fixtureEntry()
+	e.ConnectVersion = "v4.50.0-3-gabc123"
+	r, err := Recommend(e, 40, sizingCfg())
+	require.NoError(t, err)
+	require.Equal(t, "v4.50.0", r.BaseRelease)
+	b, err := json.Marshal(r)
+	require.NoError(t, err)
+	require.Contains(t, string(b), `"base_release":"v4.50.0"`)
+
+	// Every return path carries it: below floor and over ceiling.
+	for _, target := range []float64{1, 1000} {
+		r, err := Recommend(e, target, sizingCfg())
+		require.NoError(t, err)
+		require.Equal(t, "v4.50.0", r.BaseRelease)
+	}
+}

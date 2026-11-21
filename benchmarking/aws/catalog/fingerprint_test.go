@@ -9,6 +9,7 @@
 package catalog
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,4 +178,34 @@ func TestFingerprintKeepsProcessorLogic(t *testing.T) {
 			assert.NotEqual(t, fa, fb)
 		})
 	}
+}
+
+func TestConfigIdentityIgnoresNonThroughputKeys(t *testing.T) {
+	base := map[string]any{
+		"input":    map[string]any{"postgres_cdc": map[string]any{"schema": "public"}},
+		"pipeline": map[string]any{"processors": []any{map[string]any{"mapping": "root = this"}}},
+		"output":   map[string]any{"drop": map[string]any{}},
+	}
+	want, err := ConfigIdentity(base)
+	require.NoError(t, err)
+	fp, err := Fingerprint(base)
+	require.NoError(t, err)
+	require.Equal(t, Identity{Fingerprint: fp, Input: "postgres_cdc", Processors: []string{"mapping"}, Output: "drop"}, want)
+
+	extra := maps.Clone(base)
+	for _, k := range []string{"logger", "http", "metrics", "tracer", "cache_resources", "rate_limit_resources", "shutdown_timeout"} {
+		extra[k] = map[string]any{"x": "y"}
+	}
+	got, err := ConfigIdentity(extra)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+
+	buffered := maps.Clone(base)
+	buffered["buffer"] = map[string]any{"memory": map[string]any{"limit": 1000000}}
+	got, err = ConfigIdentity(buffered)
+	require.NoError(t, err)
+	require.NotEqual(t, want.Fingerprint, got.Fingerprint)
+
+	_, err = ConfigIdentity(map[string]any{"input": map[string]any{}})
+	require.Error(t, err)
 }

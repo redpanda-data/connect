@@ -125,3 +125,16 @@ func TestEntryPlanFieldsOmittedWhenEmpty(t *testing.T) {
 	require.Contains(t, string(b), `"source_approximated":true`)
 	require.Contains(t, string(b), `"caveats":["source_approximated"]`)
 }
+
+func TestEntryBaseRelease(t *testing.T) {
+	for v, want := range map[string]string{
+		"v4.50.0":                 "v4.50.0",
+		"v4.50.0-3-gabc123":       "v4.50.0",
+		"v4.50.0-120-g0123456789": "v4.50.0",
+		"v4.50.0-rc1":             "v4.50.0-rc1",
+		"v4.50.0-rc1-2-gabc1234":  "v4.50.0-rc1",
+		"":                        "",
+	} {
+		require.Equal(t, want, Entry{ConnectVersion: v}.BaseRelease(), v)
+	}
+}

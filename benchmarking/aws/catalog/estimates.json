@@ -5,7 +5,7 @@
     "none": {"usd": 1.0, "minutes": 20}
   },
   "sinks": {
-    "snowflake": {"usd_per_xsmall_sweep": 1.0, "size_multiplier": {"XSMALL": 1, "SMALL": 2, "MEDIUM": 4, "LARGE": 8}},
+    "snowflake": {"usd_per_xsmall_sweep": 1.0, "size_multiplier": {"XSMALL": 1, "SMALL": 2, "MEDIUM": 4, "LARGE": 8, "XLARGE": 16}},
     "bigquery": {"usd": 0.5},
     "iceberg": {"usd": 0.2},
     "s3": {"usd": 0.05},

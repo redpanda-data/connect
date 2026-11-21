@@ -83,6 +83,10 @@ type Recommendation struct {
 	MemoryBound      string   `json:"memory_bound"` // "<n> CUs" | "not_measured"
 	Headroom         float64  `json:"headroom"`
 	Caveats          []string `json:"caveats"`
+	// BaseRelease is the release the entry's build descends from (see
+	// Entry.BaseRelease): with unreleased_build it reads "measured on an
+	// unreleased build after <base_release>".
+	BaseRelease string `json:"base_release"`
 }
 
 // relTol absorbs floating-point noise from dividing by the headroom, so a
@@ -114,6 +118,7 @@ func Recommend(e Entry, targetMBps float64, cfg SizingConfig) (Recommendation, e
 		BoundBy:     "throughput",
 		MemoryBound: "not_measured",
 		Caveats:     []string{},
+		BaseRelease: e.BaseRelease(),
 	}
 	need := targetMBps / cfg.Headroom
 

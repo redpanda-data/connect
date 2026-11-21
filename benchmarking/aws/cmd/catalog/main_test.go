@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
 )
 
 // testEntry is an entry shaped like the bench catalogues one: no harness
@@ -162,6 +164,7 @@ func TestRecommendJSON(t *testing.T) {
 		BuildSHA       string                 `json:"build_sha"`
 		InstanceType   string                 `json:"instance_type"`
 		SinkSize       string                 `json:"sink_size"`
+		BaseRelease    string                 `json:"base_release"`
 		Recommendation catalog.Recommendation `json:"recommendation"`
 		Staleness      catalog.Staleness      `json:"staleness"`
 		Points         []catalog.Point        `json:"points"`
@@ -172,6 +175,8 @@ func TestRecommendJSON(t *testing.T) {
 	require.Equal(t, "abc1234", got.BuildSHA)
 	require.Equal(t, "c8g.4xlarge", got.InstanceType)
 	require.Equal(t, "small", got.SinkSize)
+	require.Equal(t, "v4.50.0", got.BaseRelease, "unreleased v4.50.0-3-gabc1234 is after v4.50.0")
+	require.Equal(t, "v4.50.0", got.Recommendation.BaseRelease)
 	require.Equal(t, 40, got.Recommendation.CUs)
 	require.Len(t, got.Points, 4)
 	require.Equal(t, "unknown", got.Staleness.State)
@@ -222,4 +227,97 @@ func TestBadFlagsExit2(t *testing.T) {
 			require.Equal(t, 2, code)
 		})
 	}
+}
+
+// reaskBase is the customer's original postgres -> snowflake config.
+const reaskBase = `
+input:
+  postgres_cdc:
+    dsn: postgres://admin:pw@db.customer-corp.internal:5432/prod
+    stream_snapshot: false
+    schema: public
+    tables: [customers]
+    slot_name: cust_slot
+    batching:
+      count: 5000
+      period: 1s
+pipeline:
+  processors:
+    - mapping: root = this
+output:
+  snowflake_streaming:
+    account: CUSTORG-ACCT
+    user: svc_loader
+    database: PROD
+    schema: PUBLIC
+    table: CUSTOMERS
+    schema_evolution:
+      enabled: true
+`
+
+// reaskExtras are top-level keys a pasted config carries that do not change
+// throughput.
+const reaskExtras = `
+logger:
+  level: DEBUG
+http:
+  address: 0.0.0.0:4195
+metrics:
+  prometheus: {}
+tracer:
+  none: {}
+cache_resources:
+  - label: c
+    memory: {}
+rate_limit_resources:
+  - label: r
+    local:
+      count: 10
+`
+
+// e2eEntryFromPlan stores the entry the runner records for a plan built
+// from cfg: its identity is the plan's (runner/catalogentry.go).
+func e2eEntryFromPlan(t *testing.T, cfgYAML string) catalog.Entry {
+	t.Helper()
+	var cfg map[string]any
+	require.NoError(t, yaml.Unmarshal([]byte(cfgYAML), &cfg))
+	p, err := plan.Build(cfg, plan.Workload{MessageSizeBytes: 1000}, plan.SlackRef{}, time.Now())
+	require.NoError(t, err)
+	e, err := catalog.EntryFromRun(catalog.RunInput{
+		ID: "e2e-1", Scenario: "bot-" + p.ID, GitSHA: "abcdef1", ConnectVersion: "v4.50.0",
+		InstanceType: "c8g.4xlarge", MessageSizeBytes: 1000, SinkMeasured: true, Now: time.Now(),
+		Identity: &catalog.Identity{Fingerprint: p.Fingerprint, Input: p.Input, Processors: p.Processors, Output: p.Output},
+		Caveats:  p.Caveats,
+		Points:   []catalog.RunPoint{{VCPU: 1, MedianMBps: 18}},
+	})
+	require.NoError(t, err)
+	return e
+}
+
+func queryConfig(t *testing.T, store, cfgYAML string) queryOut {
+	t.Helper()
+	cfg := filepath.Join(t.TempDir(), "cfg.yaml")
+	require.NoError(t, os.WriteFile(cfg, []byte(cfgYAML), 0o644))
+	code, stdout, stderr := runCLI(t, "query", "--store", store, "--repo", t.TempDir(), "--config", cfg, "--message-size", "1000")
+	require.Equal(t, 0, code, stderr)
+	var got queryOut
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+	return got
+}
+
+// A re-asked config with extra non-throughput top-level keys finds the e2e
+// entry its plan recorded as an exact match.
+func TestQueryReaskWithExtraKeysMatchesE2EEntry(t *testing.T) {
+	store := seedStore(t, e2eEntryFromPlan(t, reaskBase))
+	got := queryConfig(t, store, reaskBase+reaskExtras)
+	require.Len(t, got.Matches, 1)
+	require.Equal(t, "exact", got.Matches[0].Kind, got.Matches[0].Differences)
+}
+
+func TestQueryBufferChangesFingerprint(t *testing.T) {
+	store := seedStore(t, e2eEntryFromPlan(t, reaskBase))
+	got := queryConfig(t, store, reaskBase+"buffer:\n  memory:\n    limit: 1000000\n")
+	require.Len(t, got.Matches, 1)
+	require.Equal(t, "close", got.Matches[0].Kind)
+	require.Contains(t, got.Matches[0].Differences, "config fingerprint differs")
 }

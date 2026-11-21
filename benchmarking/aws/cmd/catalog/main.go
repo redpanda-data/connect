@@ -175,12 +175,11 @@ func runQuery(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		if err := yaml.Unmarshal(raw, &pipeline); err != nil {
 			return fmt.Errorf("parsing --config: %w", err)
 		}
-		if q.Input, q.Processors, q.Output, err = catalog.Components(pipeline); err != nil {
+		id, err := catalog.ConfigIdentity(pipeline)
+		if err != nil {
 			return fmt.Errorf("--config: %w", err)
 		}
-		if q.Fingerprint, err = catalog.Fingerprint(pipeline); err != nil {
-			return fmt.Errorf("--config: %w", err)
-		}
+		q.Input, q.Processors, q.Output, q.Fingerprint = id.Input, id.Processors, id.Output, id.Fingerprint
 	}
 	if q.Input == "" || q.Output == "" {
 		return usageErr("query needs --input and --output, or --config")
@@ -263,6 +262,7 @@ func runRecommend(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		writeJSON(stdout, map[string]any{
 			"entry_id":        e.ID,
 			"connect_version": e.ConnectVersion,
+			"base_release":    e.BaseRelease(),
 			"build_sha":       e.BuildSHA,
 			"instance_type":   e.Infra.RunnerInstanceType,
 			"sink_size":       e.Infra.SinkSize,
