@@ -325,3 +325,60 @@ credentials:
 	assert.Equal(t, 1, hits["same-region-bucket"], "the good bucket must be written exactly once")
 	t.Logf("requests per bucket: %v, elapsed: %v", hits, elapsed)
 }
+
+// TestBucketInterpolationFailsBeforeUpload covers the bucket expressions that
+// cannot be resolved into a bucket name. They fail before any request is sent,
+// so no S3 server is needed.
+func TestBucketInterpolationFailsBeforeUpload(t *testing.T) {
+	tests := []struct {
+		name        string
+		bucket      string
+		meta        map[string]any
+		errContains []string
+	}{
+		{
+			name:        "empty bucket name",
+			bucket:      `${! metadata("tenant") }`,
+			meta:        map[string]any{"tenant": ""},
+			errContains: []string{"empty bucket name"},
+		},
+		{
+			name:        "interpolation function fails",
+			bucket:      `${! throw("boom") }`,
+			errContains: []string{"bucket interpolation", "boom"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := s3oOutputSpec().ParseYAML(fmt.Sprintf(`
+bucket: '%s'
+endpoint: http://127.0.0.1:1
+force_path_style_urls: true
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+`, tt.bucket), nil)
+			require.NoError(t, err)
+
+			conf, err := s3oConfigFromParsed(parsed)
+			require.NoError(t, err)
+
+			w, err := newAmazonS3Writer(conf, service.MockResources())
+			require.NoError(t, err)
+			require.NoError(t, w.Connect(t.Context()))
+
+			msg := service.NewMessage([]byte("x"))
+			for k, v := range tt.meta {
+				msg.MetaSetMut(k, v)
+			}
+
+			err = w.WriteBatch(t.Context(), service.MessageBatch{msg})
+			require.Error(t, err)
+			for _, want := range tt.errContains {
+				assert.Contains(t, err.Error(), want)
+			}
+		})
+	}
+}

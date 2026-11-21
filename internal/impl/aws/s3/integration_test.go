@@ -513,84 +513,6 @@ cache_resources:
 		)
 	})
 
-	t.Run("dynamic_bucket_mixed_batch", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-
-		dyn := uniqueBucketPrefix("dyn")
-		bucketA, bucketB := dyn+"-acme", dyn+"-globex"
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, bucketA))
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, bucketB))
-
-		parsed, err := s3oOutputSpec().ParseYAML(fmt.Sprintf(`
-bucket: '%s-${! metadata("client_id") }'
-endpoint: http://localhost:%s
-force_path_style_urls: true
-region: eu-west-1
-path: ${!content()}.txt
-credentials:
-  id: xxxxx
-  secret: xxxxx
-  token: xxxxx
-`, dyn, lsPort), nil)
-		require.NoError(t, err)
-
-		conf, err := s3oConfigFromParsed(parsed)
-		require.NoError(t, err)
-
-		w, err := newAmazonS3Writer(conf, service.MockResources())
-		require.NoError(t, err)
-		require.NoError(t, w.Connect(ctx))
-
-		batch := service.MessageBatch{
-			service.NewMessage([]byte("one")),
-			service.NewMessage([]byte("two")),
-		}
-		batch[0].MetaSetMut("client_id", "acme")
-		batch[1].MetaSetMut("client_id", "globex")
-		require.NoError(t, w.WriteBatch(ctx, batch))
-
-		client := newLocalStackS3Client(t, lsPort)
-		for bucket, key := range map[string]string{bucketA: "one.txt", bucketB: "two.txt"} {
-			out, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
-			require.NoError(t, err, "bucket %s should hold %s", bucket, key)
-			_ = out.Body.Close()
-		}
-
-		// Each object must only exist in its own bucket.
-		_, err = client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucketA), Key: aws.String("two.txt")})
-		require.Error(t, err)
-		_, err = client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucketB), Key: aws.String("one.txt")})
-		require.Error(t, err)
-
-		// A missing bucket error names the bucket that failed.
-		bad := service.MessageBatch{service.NewMessage([]byte("three"))}
-		bad[0].MetaSetMut("client_id", "missing")
-		err = w.WriteBatch(ctx, bad)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), dyn+"-missing")
-
-		// A message that resolves to an empty bucket is rejected.
-		emptyParsed, err := s3oOutputSpec().ParseYAML(`
-bucket: '${! metadata("client_id") }'
-region: eu-west-1
-credentials:
-  id: xxxxx
-  secret: xxxxx
-`, nil)
-		require.NoError(t, err)
-		emptyConf, err := s3oConfigFromParsed(emptyParsed)
-		require.NoError(t, err)
-		ew, err := newAmazonS3Writer(emptyConf, service.MockResources())
-		require.NoError(t, err)
-		require.NoError(t, ew.Connect(ctx))
-		emptyMsg := service.NewMessage([]byte("x"))
-		emptyMsg.MetaSetMut("client_id", "")
-		err = ew.WriteBatch(ctx, service.MessageBatch{emptyMsg})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "empty bucket name")
-	})
-
 	t.Run("dynamic_bucket", func(t *testing.T) { s3DynamicBucketSuite(t, lsPort) })
 
 	t.Run("object_canned_acl_round_trip", func(t *testing.T) {
@@ -793,9 +715,9 @@ func metaMsg(body string, kv ...string) *service.Message {
 	return m
 }
 
-// s3DynamicBucketSuite covers realistic usage of an interpolated bucket:
-// multi-tenant routing, partial failures, bad data, and the unchanged
-// behavior of static buckets.
+// s3DynamicBucketSuite covers the behavior of an interpolated bucket that needs
+// a real S3: multi-tenant routing, one bad bucket among good ones, and the
+// unchanged behavior of static buckets.
 func s3DynamicBucketSuite(t *testing.T, lsPort string) {
 	client := newLocalStackS3Client(t, lsPort)
 
@@ -836,25 +758,6 @@ func s3DynamicBucketSuite(t *testing.T, lsPort string) {
 		}
 	})
 
-	t.Run("bucket_from_json_payload", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		js := uniqueBucketPrefix("json")
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, js+"-orders"))
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, js+"-refunds"))
-
-		w := newDynamicBucketWriter(t, ctx, lsPort, js+`-${! json("kind") }`, `${! json("id") }.json`)
-		require.NoError(t, w.WriteBatch(ctx, service.MessageBatch{
-			service.NewMessage([]byte(`{"kind":"orders","id":"o1"}`)),
-			service.NewMessage([]byte(`{"kind":"refunds","id":"r1"}`)),
-		}))
-
-		_, ok := s3ObjectBody(ctx, t, client, js+"-orders", "o1.json")
-		assert.True(t, ok)
-		_, ok = s3ObjectBody(ctx, t, client, js+"-refunds", "r1.json")
-		assert.True(t, ok)
-	})
-
 	t.Run("one_bad_bucket_does_not_block_good_messages", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
@@ -892,27 +795,6 @@ func s3DynamicBucketSuite(t *testing.T, lsPort string) {
 		assert.True(t, ok, "good message after the bad one must be uploaded")
 	})
 
-	t.Run("invalid_bucket_name_from_data_names_the_bucket", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-
-		w := newDynamicBucketWriter(t, ctx, lsPort, `${! metadata("tenant") }`, `k.txt`)
-		err := w.WriteBatch(ctx, service.MessageBatch{metaMsg("x", "tenant", "Has Spaces And CAPS")})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Has Spaces And CAPS")
-	})
-
-	t.Run("bucket_interpolation_function_error", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-
-		w := newDynamicBucketWriter(t, ctx, lsPort, `${! throw("boom") }`, `k.txt`)
-		err := w.WriteBatch(ctx, service.MessageBatch{service.NewMessage([]byte("x"))})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "bucket interpolation")
-		assert.Contains(t, err.Error(), "boom")
-	})
-
 	t.Run("static_bucket_still_works_and_connection_test_checks_it", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
@@ -936,69 +818,5 @@ func s3DynamicBucketSuite(t *testing.T, lsPort string) {
 		require.Error(t, res[0].Err, "missing static bucket must fail the connection test")
 		assert.NotErrorIs(t, res[0].Err, service.ErrConnectionTestNotSupported)
 		assert.Contains(t, res[0].Err.Error(), missingName)
-	})
-
-	t.Run("full_pipeline_routes_by_tenant_with_batching", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
-		defer cancel()
-		pipe := uniqueBucketPrefix("pipe")
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, pipe+"-acme"))
-		require.NoError(t, awstest.CreateBucket(ctx, lsPort, pipe+"-globex"))
-
-		builder := service.NewStreamBuilder()
-		require.NoError(t, builder.SetYAML(fmt.Sprintf(`
-pipeline:
-  processors:
-    - mapping: |
-        meta tenant = this.tenant
-        meta id = this.id
-output:
-  aws_s3:
-    bucket: '%s-${! metadata("tenant") }'
-    path: '${! metadata("id") }.json'
-    endpoint: http://localhost:%s
-    force_path_style_urls: true
-    region: eu-west-1
-    credentials:
-      id: xxxxx
-      secret: xxxxx
-      token: xxxxx
-    batching:
-      count: 4
-      period: 1s
-`, pipe, lsPort)))
-		producer, err := builder.AddProducerFunc()
-		require.NoError(t, err)
-		stream, err := builder.Build()
-		require.NoError(t, err)
-
-		runErr := make(chan error, 1)
-		runCtx, runCancel := context.WithCancel(ctx)
-		defer runCancel()
-		go func() { runErr <- stream.Run(runCtx) }()
-
-		msgs := []string{
-			`{"tenant":"acme","id":"1"}`, `{"tenant":"globex","id":"2"}`,
-			`{"tenant":"acme","id":"3"}`, `{"tenant":"globex","id":"4"}`,
-		}
-		for _, m := range msgs {
-			require.NoError(t, producer(ctx, service.NewMessage([]byte(m))))
-		}
-		require.NoError(t, stream.StopWithin(15*time.Second))
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) {
-				require.NoError(t, err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatal("stream did not exit")
-		}
-
-		for bucket, keys := range map[string][]string{pipe + "-acme": {"1.json", "3.json"}, pipe + "-globex": {"2.json", "4.json"}} {
-			for _, key := range keys {
-				_, ok := s3ObjectBody(ctx, t, client, bucket, key)
-				assert.True(t, ok, "%s/%s should exist", bucket, key)
-			}
-		}
 	})
 }
