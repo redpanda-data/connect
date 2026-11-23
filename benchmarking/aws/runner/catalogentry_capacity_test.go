@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 // e2eCapacityResult is a one-point result of a 1 KB-message pipeline that

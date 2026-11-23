@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 func catalogFixture(t *testing.T) (*Scenario, *Result) {

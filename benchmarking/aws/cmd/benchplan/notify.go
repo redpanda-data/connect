@@ -26,7 +26,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 // The Bench Bot agent runs on Redpanda Cloud ADP; its A2A endpoint takes a

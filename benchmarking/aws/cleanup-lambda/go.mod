@@ -1,4 +1,4 @@
-module github.com/redpanda-data/connect/v4/benchmarking/aws/cleanup-lambda
+module github.com/redpanda-data/connect/benchmarking/aws/cleanup-lambda
 
 go 1.26.3
 

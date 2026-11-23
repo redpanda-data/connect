@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 // snowflakePlan has customer logic in its pipeline that a public CI log

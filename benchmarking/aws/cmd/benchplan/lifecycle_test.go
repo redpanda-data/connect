@@ -17,7 +17,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 var fixedNow = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)

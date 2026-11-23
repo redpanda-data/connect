@@ -22,7 +22,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 // defaultCatalogBucket is the persistent bucket holding the results catalogue.

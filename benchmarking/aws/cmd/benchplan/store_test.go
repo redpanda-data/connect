@@ -24,7 +24,7 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 // countingObjects counts calls reaching the object store.

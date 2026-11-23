@@ -18,7 +18,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 // DefaultSinkSize is the Snowflake warehouse size every Snowflake plan is

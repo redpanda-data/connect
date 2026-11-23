@@ -21,7 +21,7 @@ import (
 	gluetypes "github.com/aws/aws-sdk-go-v2/service/glue/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 const (

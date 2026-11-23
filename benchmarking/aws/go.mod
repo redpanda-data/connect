@@ -3,7 +3,7 @@
 // distributions, so its AWS SDK clients (ec2, ssm, costexplorer, ...) must
 // not become dependencies of the published github.com/redpanda-data/connect/v4
 // module that library consumers resolve.
-module github.com/redpanda-data/connect/v4/benchmarking/aws
+module github.com/redpanda-data/connect/benchmarking/aws
 
 go 1.26.6
 

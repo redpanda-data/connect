@@ -28,8 +28,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 func main() {

@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 // SourceKind says which bench source stack a plan uses.

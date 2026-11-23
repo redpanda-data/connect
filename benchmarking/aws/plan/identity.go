@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/catalog"
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 // DeletedKeys are removed at any depth of the input, output and buffer

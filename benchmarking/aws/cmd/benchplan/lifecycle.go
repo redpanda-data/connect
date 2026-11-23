@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/benchmarking/aws/plan"
+	"github.com/redpanda-data/connect/benchmarking/aws/plan"
 )
 
 // errDuplicate means another workflow run is already recorded for the plan.
