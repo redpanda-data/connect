@@ -1315,6 +1315,94 @@ func consumeWithUsername(t *testing.T, batch *oracledbtest.Batch, usernameByID m
 	}
 }
 
+// TestIntegrationOracleDBCDCLOBWriteThenDeleteSameTxn is a regression test for
+// a nil map panic when one transaction writes a LOB on a row and deletes it.
+func TestIntegrationOracleDBCDCLOBWriteThenDeleteSameTxn(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+
+	table := db.Schema + ".LOBDEL"
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), table,
+		`CREATE TABLE `+table+` (id NUMBER PRIMARY KEY, name VARCHAR2(50), doc CLOB)`))
+
+	var batch oracledbtest.MsgBatch
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  snapshot_mode: snapshot_and_stream
+  logminer:
+    lob_enabled: true
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + table + `"]`
+	stream := oracledbtest.StartPipelineAndWaitForStreaming(t, cfg, batch.Consumer())
+	t.Cleanup(func() {
+		if err := stream.StopWithin(10 * time.Second); err != nil {
+			t.Log(err)
+		}
+	})
+
+	operations := func() []string {
+		var ops []string
+		for _, m := range batch.Clone() {
+			op, _ := m.MetaGet("operation")
+			ops = append(ops, op)
+		}
+		return ops
+	}
+
+	// The rows must exist before the transactions under test.
+	db.MustExec("INSERT INTO "+table+" (id, name, doc) VALUES (1, 'row1', :1)", strings.Repeat("A", 5000))
+	db.MustExec("INSERT INTO "+table+" (id, name, doc) VALUES (2, 'row2', :1)", strings.Repeat("A", 5000))
+
+	// Transaction 1: LOB update, then delete.
+	tx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(t.Context(), "UPDATE "+table+" SET doc = :1 WHERE id = 1", strings.Repeat("B", 5000))
+	require.NoError(t, err)
+	_, err = tx.ExecContext(t.Context(), "DELETE FROM "+table+" WHERE id = 1")
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	// Transaction 2: non-LOB and LOB update, then delete.
+	tx, err = db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(t.Context(), "UPDATE "+table+" SET name = 'changed', doc = :1 WHERE id = 2", strings.Repeat("C", 5000))
+	require.NoError(t, err)
+	_, err = tx.ExecContext(t.Context(), "DELETE FROM "+table+" WHERE id = 2")
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	// A final insert shows the pipeline survived and marks the last event.
+	db.MustExec("INSERT INTO "+table+" (id, name, doc) VALUES (3, 'row3', :1)", strings.Repeat("D", 5000))
+
+	oracledbtest.WaitForCount(t, batch.Count, 6, 2*time.Minute)
+
+	// Transaction 1 emits only its DELETE; transaction 2 its UPDATE and DELETE.
+	assert.Equal(t, []string{"insert", "insert", "delete", "update", "delete", "insert"}, operations())
+
+	for _, m := range batch.Clone() {
+		op, _ := m.MetaGet("operation")
+		if op != "update" && op != "delete" {
+			continue
+		}
+		b, err := m.AsBytes()
+		require.NoError(t, err)
+		var row map[string]any
+		require.NoError(t, json.Unmarshal(b, &row))
+		if op == "delete" {
+			// Oracle doesn't log LOBs in a DELETE, and none is merged into it.
+			assert.Nil(t, row["DOC"])
+			continue
+		}
+		assert.Equal(t, "changed", row["NAME"])
+		assert.Equal(t, strings.Repeat("C", 5000), row["DOC"])
+	}
+}
+
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()

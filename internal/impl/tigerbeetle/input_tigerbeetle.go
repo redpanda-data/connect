@@ -51,6 +51,13 @@ const (
 	shutdownTimeout       = 5 * time.Second
 )
 
+// minClusterVersion is the oldest TigerBeetle cluster release that accepts
+// the linked tigerbeetle-go client. A cluster evicts a client with a higher
+// release, so this value must equal the client release. The input docs and
+// the integration test read it. TestMinClusterVersionMatchesClient fails when
+// a tigerbeetle-go bump leaves this value behind.
+const minClusterVersion = "0.16.78"
+
 func configSpec() *service.ConfigSpec {
 	jsonSampleObject, err := json.MarshalIndent(JsonChangeEvent{
 		Timestamp: "1745328372758695656",
@@ -136,10 +143,12 @@ This input keeps one batch in flight to preserve event order. It delivers the ne
 
 == Upgrading
 
-The TigerBeetle client version must not be newer than the cluster version, as it will fail
-with an error message if so.
+Requires TigerBeetle cluster version `+minClusterVersion+` or later.
 
-Requires TigerBeetle cluster version 0.16.57 or greater.`).
+A cluster older than this version rejects the connection, and the input logs
+`+"`Client was evicted; release too new.`"+`
+A newer version of Redpanda Connect can require a newer cluster version.
+Upgrade the cluster before you upgrade Redpanda Connect.`).
 		Fields(
 			service.NewStringField(fieldClusterID).
 				Description("The TigerBeetle unique 128-bit cluster ID.").

@@ -821,7 +821,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 		}
 	}()
 
-	snapshotTasks := []func(context.Context) error{}
+	var perTableTasks [][]func(context.Context) error
 
 	for _, table := range s.tables {
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
@@ -879,10 +879,11 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			)
 		}
 
+		tableTasks := make([]func(context.Context) error, 0, len(ranges))
 		for _, r := range ranges {
 			start := r[0]
 			end := r[1]
-			snapshotTasks = append(snapshotTasks, func(ctx context.Context) error {
+			tableTasks = append(tableTasks, func(ctx context.Context) error {
 				s.logger.Debugf("Scanning %s in range (%+v %+v]", table, start, end)
 				err := s.scanTableRange(ctx, snapshotter, table, start, end, primaryKeyColumns)
 				if err != nil {
@@ -891,7 +892,9 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 				return err
 			})
 		}
+		perTableTasks = append(perTableTasks, tableTasks)
 	}
+	snapshotTasks := orderSnapshotTasks(perTableTasks)
 	s.logger.Debugf("Starting snapshot processing")
 	// Run all the snapshot reads now
 	wg, ctx := errgroup.WithContext(ctx)
@@ -904,6 +907,20 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 	}
 	s.logger.Debugf("Finished snapshot processing")
 	return nil
+}
+
+// orderSnapshotTasks flattens per-table tasks, putting single-task tables
+// first so their serial scans overlap the chunked work.
+func orderSnapshotTasks[T any](perTable [][]T) []T {
+	var serial, chunked []T
+	for _, tasks := range perTable {
+		if len(tasks) == 1 {
+			serial = append(serial, tasks...)
+		} else {
+			chunked = append(chunked, tasks...)
+		}
+	}
+	return append(serial, chunked...)
 }
 
 func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, table TableFQN, minExclusive, maxInclusive primaryKey, primaryKeyIndex []string) error {

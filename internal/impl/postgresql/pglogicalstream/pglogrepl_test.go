@@ -9,10 +9,12 @@
 package pglogicalstream
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"strconv"
@@ -817,6 +819,80 @@ func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
 	require.NoError(t, err)
 	_, err = ValidatePublication(ctx, conn, "pub_events", events)
 	require.NoError(t, err)
+}
+
+// TestIntegrationAllTablesExceptHints checks the hints that the runtime
+// publication monitor and the backfill signal check give for a table that a
+// FOR ALL TABLES publication excludes with EXCEPT.
+//
+// Context:
+//   - PostgreSQL 19 adds FOR ALL TABLES EXCEPT (TABLE ...). An excluded table
+//     does not stream.
+//   - PostgreSQL rejects ALTER PUBLICATION ... ADD TABLE on a FOR ALL TABLES
+//     publication.
+//
+// Expected behavior:
+//   - The monitor logs a hint that uses SET ALL TABLES EXCEPT, not ADD TABLE,
+//     when a DBA excludes a configured table while the stream runs.
+//   - The backfill signal check rejects the excluded table with the same kind
+//     of hint.
+//
+// The test runs on PostgreSQL 19 only, since older versions have no EXCEPT.
+func TestIntegrationAllTablesExceptHints(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, dbURL := createDockerInstanceVersion(t, 19)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	// A plain query connection, as the monitor and the incremental snapshot
+	// use.
+	db, err := sql.Open("postgres", strings.Replace(dbURL, " replication=database", "", 1))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.ExecContext(ctx, sql)
+		require.NoError(t, err)
+	}
+	exec("CREATE TABLE orders (id int PRIMARY KEY);")
+	exec("CREATE TABLE users (id int PRIMARY KEY);")
+	exec("CREATE PUBLICATION pglog_stream_except FOR ALL TABLES;")
+
+	t.Run("monitor", func(t *testing.T) {
+		var logs bytes.Buffer
+		m := &Monitor{dbConn: db, logger: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, nil)))}
+		m.WatchPublication("pglog_stream_except", []TableFQN{{`"public"`, `"orders"`}, {`"public"`, `"users"`}})
+		m.checkPublication(ctx)
+		require.Zero(t, m.Report().TablesMissingFromPublication)
+
+		exec("ALTER PUBLICATION pglog_stream_except SET ALL TABLES EXCEPT (TABLE orders);")
+		m.checkPublication(ctx)
+		require.Equal(t, int64(1), m.Report().TablesMissingFromPublication)
+		assert.Contains(t, logs.String(), "ALTER PUBLICATION pglog_stream_except SET ALL TABLES EXCEPT")
+		assert.NotContains(t, logs.String(), "ADD TABLE")
+	})
+
+	t.Run("backfill signal", func(t *testing.T) {
+		s := &Stream{
+			pgVersion:                    19,
+			slotName:                     "except",
+			snapshotSchema:               "public",
+			externallyManagedPublication: true,
+			logger:                       service.MockResources().Logger(),
+			incSnapshot: incrementalSnapshot{
+				conn:    db,
+				pkCache: map[string][]string{},
+			},
+		}
+		exec("ALTER PUBLICATION pglog_stream_except SET ALL TABLES EXCEPT (TABLE orders);")
+		require.NoError(t, s.checkBackfillable(ctx, incrementalsnapshot.TableID{Schema: "public", Table: "users"}))
+
+		err := s.checkBackfillable(ctx, incrementalsnapshot.TableID{Schema: "public", Table: "orders"})
+		require.ErrorIs(t, err, errSignalRejected)
+		assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_except SET ALL TABLES EXCEPT")
+		assert.NotContains(t, err.Error(), "ADD TABLE")
+	})
 }
 
 // TestIntegrationBackfillRequiresTablePublishedAsItself checks the
