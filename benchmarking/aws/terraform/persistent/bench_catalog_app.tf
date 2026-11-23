@@ -41,12 +41,13 @@ resource "aws_iam_role_policy" "bench_catalog_app" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Unconditional on purpose: without ListBucket S3 answers a missing key
+        # with 403, not 404, and the plan store relies on 404 for the absent
+        # plans/<id>.dispatched/.run/.done markers. GetObject carries no
+        # s3:prefix, so a prefix condition would not help here either.
         Effect   = "Allow"
         Action   = "s3:ListBucket"
         Resource = aws_s3_bucket.bench_catalog.arn
-        Condition = {
-          StringLike = { "s3:prefix" = ["catalog/v1/*", "plans/*"] }
-        }
       },
       {
         Effect = "Allow"
