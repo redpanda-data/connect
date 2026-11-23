@@ -8,6 +8,26 @@ inputs:
       value (for example, integration test binaries). The module cache is shared by all jobs.
     required: false
     default: ''
+  save-build-cache:
+    description: >-
+      Set to false so the action only restores the build cache. Use it when the job builds only some packages, or
+      when the job saves the build cache itself with the outputs below.
+    required: false
+    default: 'true'
+
+outputs:
+  save:
+    description: 'true when this run may save to the main cache.'
+    value: ${{ steps.go-env.outputs.save }}
+  gocache:
+    description: 'The GOCACHE path.'
+    value: ${{ steps.go-env.outputs.gocache }}
+  build-key:
+    description: 'The build cache key.'
+    value: ${{ steps.go-env.outputs.key }}
+  build-cache-hit:
+    description: 'true when the build cache key was an exact hit.'
+    value: ${{ steps.build-cache.outputs.cache-hit || steps.build-restore.outputs.cache-hit }}
 
 runs:
   using: "composite"
@@ -66,7 +86,8 @@ runs:
 
     # A composite action has no post step of its own, so main uses actions/cache to save the build cache at job end.
     - name: Cache Go build
-      if: steps.go-env.outputs.save == 'true'
+      id: build-cache
+      if: steps.go-env.outputs.save == 'true' && inputs.save-build-cache == 'true'
       uses: actions/cache@v6.1.0
       with:
         path: ${{ steps.go-env.outputs.gocache }}
@@ -74,7 +95,8 @@ runs:
         restore-keys: ${{ steps.go-env.outputs.prefix }}
 
     - name: Restore Go build
-      if: steps.go-env.outputs.save != 'true'
+      id: build-restore
+      if: steps.go-env.outputs.save != 'true' || inputs.save-build-cache != 'true'
       uses: actions/cache/restore@v6.1.0
       with:
         path: ${{ steps.go-env.outputs.gocache }}
