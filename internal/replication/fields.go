@@ -32,6 +32,5 @@ func MaxParallelSnapshotTablesField(extra string) *service.ConfigField {
 	}
 	return service.NewIntField("max_parallel_snapshot_tables").
 		Description(desc).
-		Version("4.69.0").
 		Default(1)
 }

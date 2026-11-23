@@ -248,10 +248,9 @@ With ` + "`false`" + `, the publication decides what is streamed. Every table it
 			Description("How often to report changes to the replication lag and write them to Redpanda Connect metrics. When <<" + fieldSelfManagePublication + ",`" + fieldSelfManagePublication + "`>> is `false`, this interval also sets how often the input checks that the publication still includes the required tables.").
 			Example("6s").
 			Default("3s")).
-		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.").
-			ShortDescription("Number of tables to snapshot in parallel.").
-			Default(1)).
+		Field(replication.MaxParallelSnapshotTablesField("").
+			Description("Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.\n\nThe snapshot opens this many database connections when it starts and holds them until it finishes. Keep this below the database's max connections setting, allowing for the replication connection and the database's other clients.").
+			ShortDescription("Number of tables to snapshot in parallel.")).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
 			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See <<" + fieldSignalTableName + ",`" + fieldSignalTableName + "`>>.").Version("4.46.0").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
