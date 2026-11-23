@@ -383,43 +383,103 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 	}
 }
 
-// TestStorageBucketIsOptional checks that a storage config is valid with and
-// without a bucket. The table location decides where data files go, so the
-// bucket has no effect and must not be required.
-func TestStorageBucketIsOptional(t *testing.T) {
+// TestParseStorageProps checks that each storage block gives the properties of
+// its own backend, and that no storage block gives no properties. The bucket
+// fields are deprecated and have no effect, so a config that sets them must
+// parse and must give the same properties as one that does not.
+func TestParseStorageProps(t *testing.T) {
 	tests := []struct {
 		name    string
 		storage string
+		want    map[string]string
 	}{
+		{
+			name:    "no storage block",
+			storage: ``,
+			want:    map[string]string{},
+		},
 		{
 			name: "aws_s3",
 			storage: `
+storage:
   aws_s3:
     region: us-east-1
 `,
+			want: map[string]string{
+				"s3.region":                   "us-east-1",
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "aws_s3 with path style URLs",
+			storage: `
+storage:
+  aws_s3:
+    force_path_style_urls: true
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "false",
+			},
+		},
+		{
+			name: "aws_s3 with deprecated bucket",
+			storage: `
+storage:
+  aws_s3:
+    bucket: my-bucket
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "true",
+			},
 		},
 		{
 			name: "gcp_cloud_storage",
 			storage: `
+storage:
   gcp_cloud_storage:
     credentials_type: service_account
+    credentials_json: '{"type":"service_account"}'
 `,
-		},
-		{
-			// The bucket fields are deprecated. Old configs that set them
-			// must still parse.
-			name: "aws_s3 with deprecated bucket",
-			storage: `
-  aws_s3:
-    bucket: my-bucket
-`,
+			want: map[string]string{
+				"gcs.credtype": "service_account",
+				"gcs.jsonkey":  `{"type":"service_account"}`,
+			},
 		},
 		{
 			name: "gcp_cloud_storage with deprecated bucket",
 			storage: `
+storage:
   gcp_cloud_storage:
     bucket: my-bucket
 `,
+			want: map[string]string{},
+		},
+		{
+			name: "azure_blob_storage with SAS token",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_sas_token: mytoken
+`,
+			want: map[string]string{
+				"adls.sas-token.mycontainer": "mytoken",
+			},
+		},
+		{
+			name: "azure_blob_storage with access key",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_access_key: mykey
+`,
+			want: map[string]string{
+				"adls.auth.shared-key.account.name": "myaccount",
+				"adls.auth.shared-key.account.key":  "mykey",
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -429,11 +489,12 @@ catalog:
   url: http://localhost:8181/api/catalog
 namespace: ns
 table: t
-storage:`+tt.storage, nil)
+`+tt.storage, nil)
 			require.NoError(t, err)
 
-			_, err = parseStorageProps(conf)
+			props, err := parseStorageProps(conf)
 			require.NoError(t, err)
+			assert.Equal(t, tt.want, map[string]string(props))
 		})
 	}
 }

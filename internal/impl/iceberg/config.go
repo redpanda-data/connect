@@ -413,9 +413,13 @@ See the Row-level operations section above for the full constraints, including t
 						Description("Custom endpoint for S3-compatible storage (for example, MinIO).").
 						Optional().
 						Example("http://localhost:9000"),
+					// Optional, not Default(false). A default makes benthos
+					// fill in aws_s3 for every config, and parseStorageProps
+					// then picks S3 for GCS and Azure configs too.
+					// parseS3Props reads an absent value as false.
 					service.NewBoolField(ioFieldS3ForcePathStyleURLs).
-						Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints.").
-						Default(false).
+						Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints. Defaults to `false`.").
+						Optional().
 						Advanced(),
 					service.NewObjectField(ioFieldS3Credentials,
 						service.NewStringField(ioFieldS3CredID).
