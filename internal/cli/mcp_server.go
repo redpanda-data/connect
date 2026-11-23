@@ -36,7 +36,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		},
 		&cli.StringSliceFlag{
 			Name:  "tag",
-			Usage: "Optionally limit the resources that this command runs by providing one or more regular expressions. Resources that do not contain a match within the field `meta.tags` for each tag regular expression specified will be ignored.",
+			Usage: "Optionally limit the resources that this command runs by providing one or more regular expressions. Resources that do not contain a match within the field meta.tags for each tag regular expression specified will be ignored.",
 		},
 		secretsFlag,
 		envFileFlag,
