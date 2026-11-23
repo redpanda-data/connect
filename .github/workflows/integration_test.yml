@@ -86,7 +86,8 @@ jobs:
           path: ${{ runner.temp }}/integration/
           retention-days: 7
 
-      # Save only when the tests ran, so a failure before the build does not save an empty cache under the key.
+      # Save when the test step ran, also when a test failed. A failure inside the tool before the tests, or a
+      # timeout, can save a partial cache, and it then stays until go.mod changes. Both are rare on main.
       - name: Save Go build cache
         if: >-
           !cancelled() && steps.setup-go.outputs.save == 'true' && steps.setup-go.outputs.build-cache-hit != 'true' &&
