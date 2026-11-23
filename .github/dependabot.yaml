@@ -10,10 +10,6 @@ updates:
       development-dependencies:
         dependency-type: "development"
     open-pull-requests-limit: 10
-    ignore:
-      # A TigerBeetle cluster rejects a client with a newer release, so each bump raises the minimum cluster version.
-      # Bump it by hand, with the docs in input_tigerbeetle.go and the version pin in its integration test.
-      - dependency-name: "github.com/tigerbeetle/tigerbeetle-go"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
