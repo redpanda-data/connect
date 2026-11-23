@@ -4,6 +4,16 @@
 version: 'v0.0.3'
 workflows:
     '.github/workflows/auto-label-integration.yml': []
+    '.github/workflows/bench_bot.yml':
+        - 'actions/checkout@v6.1.0'
+        - 'actions/setup-go@v6.5.0'
+        - 'actions/upload-artifact@v7.0.1'
+        - 'aws-actions/configure-aws-credentials@v6.2.4'
+        - 'hashicorp/setup-terraform@v4.0.1'
+    '.github/workflows/bench_bot_watchdog.yml':
+        - 'actions/checkout@v6.1.0'
+        - 'actions/setup-go@v6.5.0'
+        - 'aws-actions/configure-aws-credentials@v6.2.4'
     '.github/workflows/claude-code-review.yml':
         - 'actions/checkout@v6.1.0'
         - 'anthropics/claude-code-action@v1.0.273'
