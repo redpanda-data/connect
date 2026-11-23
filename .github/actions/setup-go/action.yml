@@ -20,16 +20,18 @@ runs:
         go-version-file: 'go.mod'
         cache: false
 
-    # CGO_ENABLED is in the key: a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
-    # The prefix is the key without the go.mod hash. A go.mod change then restores the last cache and compiles only
-    # the changed packages. The Go build cache removes entries that it did not use for 5 days, so it does not grow
-    # without limit. The name goes before cgo, so the prefix of an unnamed cache does not match a named one.
-    - name: Get Go cache paths and key
+    # Build cache: CGO_ENABLED is in the key, because a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    # The prefix lets a go.mod change start from the last cache. Go removes build entries unused for 5 days.
+    # The name goes before cgo, so the prefix of an unnamed cache does not match a named one.
+    # Module cache: Go never removes old module versions, so main saves it with an exact go.sum key.
+    # All jobs share one module entry.
+    - name: Get Go cache paths and keys
       id: go-env
       shell: bash
       env:
         NAME: ${{ inputs.cache-name && format('{0}-', inputs.cache-name) || '' }}
         GO_MOD_HASH: ${{ hashFiles('go.mod') }}
+        GO_SUM_HASH: ${{ hashFiles('go.sum') }}
       run: |
         gocache=$(go env GOCACHE)
         gomodcache=$(go env GOMODCACHE)
@@ -38,27 +40,47 @@ runs:
         echo "gomodcache=$gomodcache" >> "$GITHUB_OUTPUT"
         echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
         echo "key=${prefix}${GO_MOD_HASH}" >> "$GITHUB_OUTPUT"
+        echo "mod-prefix=gomod-${RUNNER_OS}-" >> "$GITHUB_OUTPUT"
+        echo "mod-key=gomod-${RUNNER_OS}-${GO_SUM_HASH}" >> "$GITHUB_OUTPUT"
 
     # Only main saves the cache. The repository has 10 GB of cache, and GitHub removes the least recently used
     # entries when it is full. A pull request cache is about 2 GB and only that pull request can use it, so pull
     # request caches pushed the main caches out within hours. A pull request run restores the main cache instead.
     # A PR command (/integration, issue_comment) runs on the main ref with PR code, so it must not save either.
-    - name: Cache Go
+    - name: Cache Go modules
+      id: mod-cache
       if: github.ref == 'refs/heads/main' && github.event_name != 'issue_comment'
       uses: actions/cache@v6.1.0
       with:
-        path: |
-          ${{ steps.go-env.outputs.gocache }}
-          ${{ steps.go-env.outputs.gomodcache }}
-        key: ${{ steps.go-env.outputs.key }}
-        restore-keys: ${{ steps.go-env.outputs.prefix }}
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: ${{ steps.go-env.outputs.mod-key }}
 
-    - name: Restore Go cache
+    # The first main job to finish saves the module cache. All jobs download all modules, so the entry is complete.
+    - name: Download Go modules
+      if: steps.mod-cache.outcome == 'success' && steps.mod-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: go mod download
+
+    - name: Restore Go modules
       if: github.ref != 'refs/heads/main' || github.event_name == 'issue_comment'
       uses: actions/cache/restore@v6.1.0
       with:
-        path: |
-          ${{ steps.go-env.outputs.gocache }}
-          ${{ steps.go-env.outputs.gomodcache }}
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: ${{ steps.go-env.outputs.mod-key }}
+        restore-keys: ${{ steps.go-env.outputs.mod-prefix }}
+
+    - name: Cache Go build
+      if: github.ref == 'refs/heads/main' && github.event_name != 'issue_comment'
+      uses: actions/cache@v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gocache }}
+        key: ${{ steps.go-env.outputs.key }}
+        restore-keys: ${{ steps.go-env.outputs.prefix }}
+
+    - name: Restore Go build
+      if: github.ref != 'refs/heads/main' || github.event_name == 'issue_comment'
+      uses: actions/cache/restore@v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gocache }}
         key: ${{ steps.go-env.outputs.key }}
         restore-keys: ${{ steps.go-env.outputs.prefix }}
