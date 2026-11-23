@@ -402,8 +402,8 @@ func (s *Stream) unpublishedTableError(ctx context.Context, publication string, 
 	if err != nil {
 		return fmt.Errorf("sanitizing publication query: %w", err)
 	}
-	var partitioned, partition, viaRoot bool
-	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&partitioned, &partition, &viaRoot); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	var partitioned, partition, viaRoot, allTables bool
+	if err := s.incSnapshot.conn.QueryRowContext(ctx, q).Scan(&partitioned, &partition, &viaRoot, &allTables); err != nil {
 		return fmt.Errorf("reading partitioning of table %s: %w", table, err)
 	}
 
@@ -445,7 +445,13 @@ func (s *Stream) unpublishedTableError(ctx context.Context, publication string, 
 	}
 
 	fix := "Add the table to the input's tables"
-	if s.externallyManagedPublication {
+	switch {
+	case s.externallyManagedPublication && allTables:
+		// PostgreSQL rejects ADD TABLE on a FOR ALL TABLES publication. SET
+		// ALL TABLES EXCEPT replaces the whole list, so the hint says to give
+		// the tables that stay excluded.
+		fix = fmt.Sprintf("Check that the table exists and is not unlogged. If it is in the EXCEPT list of the FOR ALL TABLES publication, run ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded (PostgreSQL 19+)", publication)
+	case s.externallyManagedPublication:
 		fix = fmt.Sprintf("Add the table to the publication: ALTER PUBLICATION %s ADD TABLE %s;", publication, fqn)
 	}
 	return fmt.Errorf("%w: publication %s does not include table %s, so the stream never sends its changes. %s",
