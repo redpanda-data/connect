@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.115.2 - 2026-11-23
+
+### Fixed
+
+- oracledb_cdc: A transaction that writes an out-of-row LOB to a row and then deletes that row no longer panics at commit with "assignment to entry in nil map". LOBs are no longer merged into DELETE events, and an UPDATE that changes a key column alongside a LOB now receives its LOB value instead. ([@josephwoodward](https://github.com/josephwoodward), [#5274](https://github.com/redpanda-data/connect/pull/5274))
+
 ## 4.115.1 - 2026-10-23
 
 ### Fixed
