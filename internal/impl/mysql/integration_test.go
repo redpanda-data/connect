@@ -11,10 +11,12 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -904,6 +906,144 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 			got, err := mapMessageColumn(raw, c.col)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// A zero, partial-zero or invalid date in a primary key must not stop the
+// snapshot or skip a row. The next batch starts after the last key that it
+// read, and that key must be the one in the table, not the date that the
+// snapshot gives for it. A moved cursor for 2024-02-30 would skip 2024-03-01. A
+// composite key with DATETIME(6) values that differ only in the fraction must
+// page without a gap or a repeat. The snapshot gives the same values as the
+// stream for these dates.
+func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
+	for _, version := range []string{"8.0", "8.4"} {
+		t.Run(version, func(t *testing.T) {
+			dsn, db := setupTestWithMySQLVersion(t, version)
+			db.Exec(`CREATE TABLE zero_dates (id INT PRIMARY KEY, d DATE, dt DATETIME, ts TIMESTAMP NULL)`)
+			db.Exec(`CREATE TABLE zero_date_keys (d DATE PRIMARY KEY)`)
+			db.Exec(`CREATE TABLE fraction_keys (tenant INT, created_at DATETIME(6), PRIMARY KEY (tenant, created_at))`)
+			// The default SQL mode rejects zero and invalid dates.
+			// multiStatements keeps both statements on one connection.
+			// ts is NULL for valid dates, because the stream gives a
+			// TIMESTAMP in the local time zone of the process, which this
+			// test does not set.
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates VALUES
+        (1, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00'),
+        (2, '2024-00-15', '2024-00-15 10:00:00', '2024-00-15 10:00:00'),
+        (3, '2024-12-00', '2024-12-00 10:00:00', '2024-12-00 10:00:00'),
+        (4, '0001-01-01', '0001-01-01 00:00:00', NULL),
+        (5, '2024-02-30', '2024-02-30 10:00:00', NULL),
+        (6, '1965-02-30', '1965-02-30 10:00:00', NULL),
+        (7, '1965-03-04', '1965-03-04 10:00:00', NULL)`)
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_date_keys VALUES ('0000-00-00'), ('2024-00-15'), ('2024-02-30'), ('2024-03-01'), ('2024-06-01')`)
+			db.Exec(`INSERT INTO fraction_keys VALUES
+        (1, '2024-06-01 12:00:00.000001'),
+        (1, '2024-06-01 12:00:00.000002'),
+        (1, '2024-06-01 12:00:00.000010'),
+        (2, '2024-06-01 12:00:00.000001')`)
+
+			streamOutBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamOutBuilder.AddCacheYAML(`
+label: memcache
+memory: {}
+`))
+			require.NoError(t, streamOutBuilder.AddInputYAML(fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 1
+  checkpoint_cache: memcache
+  tables:
+    - zero_dates
+    - zero_date_keys
+    - fraction_keys
+`, dsn)))
+
+			var outBatches []string
+			var outBatchMut sync.Mutex
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					require.NoError(t, err)
+					outBatchMut.Lock()
+					outBatches = append(outBatches, string(msgBytes))
+					outBatchMut.Unlock()
+				}
+				return nil
+			}))
+
+			streamOut, err := streamOutBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(streamOut.Resources())
+
+			go func() {
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			t.Cleanup(func() {
+				require.NoError(t, streamOut.StopWithin(10*time.Second))
+			})
+
+			snapshot := []string{
+				`{"id": 1, "d": null, "dt": null, "ts": null}`,
+				`{"id": 2, "d": null, "dt": null, "ts": null}`,
+				`{"id": 3, "d": null, "dt": null, "ts": null}`,
+				`{"id": 4, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": null}`,
+				`{"id": 5, "d": null, "dt": "2024-03-01T10:00:00Z", "ts": null}`,
+				`{"id": 6, "d": null, "dt": null, "ts": null}`,
+				`{"id": 7, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
+				`{"d": null}`,
+				`{"d": null}`,
+				`{"d": null}`,
+				`{"d": "2024-03-01T00:00:00Z"}`,
+				`{"d": "2024-06-01T00:00:00Z"}`,
+				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000001Z"}`,
+				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000002Z"}`,
+				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.00001Z"}`,
+				`{"tenant": 2, "created_at": "2024-06-01T12:00:00.000001Z"}`,
+			}
+			// checkOutput checks that the messages so far match want, in any
+			// order. It fails fast on a repeated row, because the snapshot
+			// then gives more messages than want.
+			checkOutput := func(c *assert.CollectT, want []string) {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				require.LessOrEqual(c, len(outBatches), len(want))
+				require.Len(c, outBatches, len(want))
+				var got, wantNorm []any
+				for i := range want {
+					var g, w any
+					require.NoError(c, json.Unmarshal([]byte(outBatches[i]), &g))
+					require.NoError(c, json.Unmarshal([]byte(want[i]), &w))
+					got = append(got, g)
+					wantNorm = append(wantNorm, w)
+				}
+				assert.ElementsMatch(c, wantNorm, got)
+			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				checkOutput(c, snapshot)
+			}, 30*time.Second, 100*time.Millisecond)
+
+			// The input streams only after the snapshot ends. So rows that
+			// are inserted now arrive only if the snapshot ended. The copied
+			// rows have the same stored values, so the stream must give the
+			// same values as the snapshot.
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates SELECT id + 10, d, dt, ts FROM zero_dates`)
+			streamed := []string{
+				`{"id": 11, "d": null, "dt": null, "ts": null}`,
+				`{"id": 12, "d": null, "dt": null, "ts": null}`,
+				`{"id": 13, "d": null, "dt": null, "ts": null}`,
+				`{"id": 14, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": null}`,
+				`{"id": 15, "d": null, "dt": "2024-03-01T10:00:00Z", "ts": null}`,
+				`{"id": 16, "d": null, "dt": null, "ts": null}`,
+				`{"id": 17, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
+			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				checkOutput(c, append(slices.Clone(snapshot), streamed...))
+			}, 30*time.Second, 100*time.Millisecond)
 		})
 	}
 }
