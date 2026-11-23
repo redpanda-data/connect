@@ -192,8 +192,6 @@ tigerbeetle_cdc:
 // change to minClusterVersion makes the docs and the integration test pin
 // wrong.
 func TestMinClusterVersionMatchesClient(t *testing.T) {
-	// Go 1.27 and later list the dependencies of a test binary in its build
-	// info. Go 1.26 gives an empty list, and this test fails with "not found".
 	bi, ok := debug.ReadBuildInfo()
 	require.True(t, ok, "no build info in the test binary")
 
