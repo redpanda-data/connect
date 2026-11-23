@@ -479,13 +479,17 @@ See the Row-level operations section above for the full constraints, including t
 						Secret(),
 				).Description("Azure Blob Storage (ADLS Gen2) configuration.").
 					Optional(),
-			).Description("Storage backend configuration for data files. Specify at most one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage`. Without a block, the storage settings come from the catalog, for example vended credentials.").
+			).Description("Storage backend configuration for data files. Specify at most one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage`. Without a block, the output uses the storage properties that the catalog returns, for example vended credentials. For settings the catalog does not return, the default credential chain of the cloud SDK applies.").
 				ShortDescription("Storage backend for data files. At most one of aws_s3, gcp_cloud_storage or azure_blob_storage.").
 				// parseStorageProps reads only the first block it finds, so a second
-				// block would be ignored silently. The rule runs on the raw config, so
-				// it sees only the keys the user wrote.
-				LintRule(`root = if this.keys().catch([]).filter(k -> ["`+ioFieldStorageS3+`", "`+ioFieldStorageGCS+`", "`+ioFieldStorageAzure+`"].contains(k)).length() > 1 {
-  [ "specify at most one of `+ioFieldStorageS3+`, `+ioFieldStorageGCS+` or `+ioFieldStorageAzure+`" ]
+				// block would be ignored silently. Before the rule runs, benthos adds
+				// the defaults of blocks the user did not write. It skips a block only
+				// when a required field of it has no default. Each block has such a
+				// field (bucket, or storage_account and container), so the rule sees
+				// only the blocks the user wrote. If such a field gets a default, this
+				// rule rejects every single-block config.
+				LintRule(`root = if [this.aws_s3, this.gcp_cloud_storage, this.azure_blob_storage].filter(b -> b != null).length() > 1 {
+  [ "specify at most one of aws_s3, gcp_cloud_storage or azure_blob_storage" ]
 }`),
 
 			// Schema evolution
