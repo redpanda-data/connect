@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -219,4 +220,36 @@ func TestReadBatchReconnectsOnPoisonedLoopDeath(t *testing.T) {
 		require.NoError(t, ackFn(ctx, nil))
 		require.NoError(t, <-flushed)
 	})
+}
+
+// TestConnectFailureReleasesConnections guards against a leak where every
+// failed Connect left its sql.DB (and that DB's opener goroutine) behind,
+// growing memory on each retry until the process was OOM killed.
+func TestConnectFailureReleasesConnections(t *testing.T) {
+	i, _ := newTestInput(t)
+	i.cpCache = nil
+	i.stopSig.TriggerHasStopped() // as the constructor does: no session running
+	// Nothing listens on port 1, so the default checkpoint cache fails to
+	// initialise after the main sql.DB has been opened.
+	i.cfg.connectionString = "sqlserver://user:pass@127.0.0.1:1?database=db&dial+timeout=1"
+	i.cfg.cpCacheTableName = "dbo.CdcCheckpointCache"
+
+	attempt := func() {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		require.ErrorContains(t, i.Connect(ctx), "initialising sql server based checkpoint cache")
+		require.Nil(t, i.db, "failed Connect must close and clear its database handle")
+		require.Nil(t, i.cpCache)
+	}
+
+	attempt()
+	baseline := runtime.NumGoroutine()
+	for range 50 {
+		attempt()
+	}
+	require.Eventually(t, func() bool {
+		return runtime.NumGoroutine() <= baseline+5
+	}, 5*time.Second, 10*time.Millisecond, "goroutines leaked across failed Connect attempts")
+
+	require.NoError(t, i.Close(t.Context()))
 }
