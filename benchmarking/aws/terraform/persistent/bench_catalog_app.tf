@@ -64,6 +64,13 @@ resource "aws_iam_role_policy" "bench_catalog_app" {
           "${aws_s3_bucket.bench_catalog.arn}/plans/*.json",
           "${aws_s3_bucket.bench_catalog.arn}/plans/*.dispatched",
         ]
+        # Create only: S3 refuses a put without If-None-Match, so a plan
+        # can't be rewritten after it was approved and claimed, and a claim
+        # marker can't be replaced. The app's plan store always sends
+        # If-None-Match: * for these keys.
+        Condition = {
+          Null = { "s3:if-none-match" = "false" }
+        }
       },
     ]
   })
