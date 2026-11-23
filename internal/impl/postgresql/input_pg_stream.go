@@ -151,7 +151,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | ` + "`POINT`" + `, ` + "`TSRANGE`" + `, ` + "`TSVECTOR`" + `
 | String in its PostgreSQL text form, for example ` + "`\"(45.5,-122.6)\"`" + `, ` + "`\"[2024-01-01 00:00:00,2024-12-31 00:00:00)\"`" + `, or ` + "`\"'brown':3 'fox':4\"`" + `
 
-| ` + "`INTERVAL`" + `, ` + "`DATERANGE`" + `, ` + "`TSTZRANGE`" + `, their multiranges, and arrays of these types or of ` + "`TSRANGE`" + `
+| ` + "`INTERVAL`" + `, the other range types (for example ` + "`INT4RANGE`" + `, ` + "`NUMRANGE`" + `, ` + "`DATERANGE`" + `, or ` + "`TSTZRANGE`" + `), all multirange types, and arrays of ` + "`INTERVAL`" + ` or of a range type
 | String in its PostgreSQL text form, for example ` + "`\"1 day 02:03:04\"`" + ` or ` + "`\"[2026-01-02,infinity)\"`" + `. The infinite values stay as ` + "`infinity`" + ` and ` + "`-infinity`" + ` in the text
 |===
 

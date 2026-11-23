@@ -40,7 +40,7 @@ rely on them.
 | TIMESTAMPTZ | Timestamp | time.Time | time.Time |
 | UUID | String | string | string |
 | JSON / JSONB | Any | (native) | (native) |
-| INTERVAL, DATERANGE, TSTZRANGE (and their arrays and multiranges) | Any | string | string |
+| INTERVAL, ranges other than TSRANGE, multiranges (and the arrays of intervals and ranges) | Any | string | string |
 
 ### Notes
 
@@ -63,11 +63,14 @@ rely on them.
   element of a DATE, TIMESTAMP or TIMESTAMPTZ array to
   `pgtype.InfinityModifier`, which marshals to the number `1` (`-1` for
   `-infinity`). The snapshot path returns the raw PostgreSQL text.
-- **INTERVAL and time ranges**: Both paths return the raw PostgreSQL text.
-  pgx decodes these types to pgtype.Interval and pgtype.Range structs, which
-  marshal with internal fields, and it fails to decode the interval `infinity`
-  of PostgreSQL 17. The text keeps `infinity` and `-infinity` as they are.
-  The arrays of tsrange and the tsmultirange type also return the raw text.
+- **INTERVAL, ranges and multiranges**: Both paths return the raw PostgreSQL
+  text. pgx decodes these types to pgtype.Interval and pgtype.Range structs,
+  which marshal with internal fields, and it fails to decode the interval
+  `infinity` of PostgreSQL 17. The text keeps `infinity` and `-infinity` as
+  they are. The CDC path finds the ranges and multiranges by their pgx codec
+  (RangeCodec, MultirangeCodec), also as array elements, so INT4RANGE, INT8RANGE,
+  NUMRANGE, DATERANGE, TSTZRANGE and their arrays and multiranges are all
+  covered. TSRANGE goes through `sanitizeTsrange` on both paths instead.
 - **JSON / JSONB**: Both paths run `json.Unmarshal`, producing a tree of stdlib
   types (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.

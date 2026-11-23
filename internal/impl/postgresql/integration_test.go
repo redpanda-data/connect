@@ -585,25 +585,60 @@ postgres_cdc:
 	}
 }
 
-// TestIntegrationPostgresInfiniteRangesAndIntervals verifies that intervals and
-// time ranges with infinite values reach the output as PostgreSQL text, the
-// same on the snapshot and on the streaming path. The interval infinity needs
-// PostgreSQL 17. The stream used to fail to decode it, and it emitted pgx
-// structs with an infinite bound as the number 1 for the ranges.
-func TestIntegrationPostgresInfiniteRangesAndIntervals(t *testing.T) {
+// TestIntegrationPostgresTextRangesAndIntervals verifies that intervals and
+// ranges, their arrays, and the multiranges reach the output as PostgreSQL text,
+// the same on the snapshot and on the streaming path. Each type gets a row with
+// infinite or unbounded values and a row with finite values. The interval
+// infinity needs PostgreSQL 17, and the multiranges need PostgreSQL 14. The
+// stream used to fail to decode the interval infinity, and it emitted pgx
+// structs (with an infinite bound as the number 1) for the other types.
+func TestIntegrationPostgresTextRangesAndIntervals(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "17")
 	require.NoError(t, err)
 
-	db.MustExec(t, "CREATE TABLE validity_spans (id int PRIMARY KEY, span interval, spans interval[], active daterange, during tstzrange);")
-	const values = `'infinity', '{"1 day",-infinity}', '[2026-01-02,infinity)', '["2026-01-02 03:04:05+00",infinity)'`
-	db.MustExec(t, "INSERT INTO validity_spans VALUES (1, "+values+");")
+	// infinite and finite are SQL literals. The expected values are the text
+	// that PostgreSQL gives back, which can differ from the literal.
+	columns := []struct {
+		name, typ                        string
+		infinite, finite                 string
+		expectedInfinite, expectedFinite string
+	}{
+		{"span", "interval", `'infinity'`, `'1 day 02:03:04'`, `infinity`, `1 day 02:03:04`},
+		{"spans", "interval[]", `'{"1 day",-infinity}'`, `'{"1 day","2 hours"}'`, `{"1 day",-infinity}`, `{"1 day",02:00:00}`},
+		{"active", "daterange", `'[2026-01-02,infinity)'`, `'[2026-01-02,2026-02-03)'`, `[2026-01-02,infinity)`, `[2026-01-02,2026-02-03)`},
+		{"actives", "daterange[]", `'{"[2026-01-02,infinity)"}'`, `'{"[2026-01-02,2026-02-03)"}'`, `{"[2026-01-02,infinity)"}`, `{"[2026-01-02,2026-02-03)"}`},
+		{"during", "tstzrange", `'["2026-01-02 03:04:05+00",infinity)'`, `'["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")'`, `["2026-01-02 03:04:05+00",infinity)`, `["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")`},
+		{"durings", "tstzmultirange", `'{["2026-01-02 03:04:05+00",infinity)}'`, `'{["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")}'`, `{["2026-01-02 03:04:05+00",infinity)}`, `{["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")}`},
+		{"periods", "tsrange[]", `'{"[\"2026-01-02 03:04:05\",infinity)"}'`, `'{"[\"2026-01-02 03:04:05\",\"2026-02-03 00:00:00\")"}'`, `{"[\"2026-01-02 03:04:05\",infinity)"}`, `{"[\"2026-01-02 03:04:05\",\"2026-02-03 00:00:00\")"}`},
+		{"windows", "tsmultirange", `'{["2026-01-02 03:04:05",infinity)}'`, `'{["2026-01-02 03:04:05","2026-02-03 00:00:00")}'`, `{["2026-01-02 03:04:05",infinity)}`, `{["2026-01-02 03:04:05","2026-02-03 00:00:00")}`},
+		{"counts", "int4range", `'[1,)'`, `'[1,10]'`, `[1,)`, `[1,11)`},
+		{"counts_list", "int4range[]", `'{"[1,)"}'`, `'{"[1,10]"}'`, `{"[1,)"}`, `{"[1,11)"}`},
+		{"totals", "nummultirange", `'{[1.5,)}'`, `'{[1.5,2.5)}'`, `{[1.5,)}`, `{[1.5,2.5)}`},
+		{"big_counts", "int8range", `'(,100]'`, `'[1,100)'`, `(,101)`, `[1,100)`},
+	}
+
+	var defs, infinite, finite []string
+	expected := map[bool]map[string]any{true: {}, false: {}}
+	for _, c := range columns {
+		defs = append(defs, c.name+" "+c.typ)
+		infinite = append(infinite, c.infinite)
+		finite = append(finite, c.finite)
+		expected[true][c.name] = c.expectedInfinite
+		expected[false][c.name] = c.expectedFinite
+	}
+	db.MustExec(t, "CREATE TABLE validity_spans (id int PRIMARY KEY, "+strings.Join(defs, ", ")+");")
+	insert := func(id int, values []string) {
+		db.MustExec(t, fmt.Sprintf("INSERT INTO validity_spans VALUES (%d, %s);", id, strings.Join(values, ", ")))
+	}
+	insert(1, infinite)
+	insert(2, finite)
 
 	template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
-    slot_name: test_slot_infinite_spans
+    slot_name: test_slot_text_spans
     stream_snapshot: true
     schema: public
     tables:
@@ -643,30 +678,32 @@ pg_stream:
 	require.Eventually(t, func() bool {
 		receivedMu.Lock()
 		defer receivedMu.Unlock()
-		return len(received) == 1
-	}, 30*time.Second, 100*time.Millisecond, "the snapshot row was never delivered")
+		return len(received) == 2
+	}, 30*time.Second, 100*time.Millisecond, "the snapshot rows were never delivered")
 
-	// Streamed after the snapshot, so this row goes through the pgoutput decoder.
-	db.MustExec(t, "INSERT INTO validity_spans VALUES (2, "+values+");")
+	// Streamed after the snapshot, so these rows go through the pgoutput decoder.
+	insert(3, infinite)
+	insert(4, finite)
 
 	require.Eventually(t, func() bool {
 		receivedMu.Lock()
 		defer receivedMu.Unlock()
-		return len(received) == 2
-	}, 30*time.Second, 100*time.Millisecond, "the streamed row was never delivered")
+		return len(received) == 4
+	}, 30*time.Second, 100*time.Millisecond, "the streamed rows were never delivered")
 
 	receivedMu.Lock()
 	got := append([]map[string]any(nil), received...)
 	receivedMu.Unlock()
 
-	for i, path := range []string{"snapshot", "stream"} {
-		require.Equal(t, map[string]any{
-			"id":     float64(i + 1),
-			"span":   "infinity",
-			"spans":  `{"1 day",-infinity}`,
-			"active": "[2026-01-02,infinity)",
-			"during": `["2026-01-02 03:04:05+00",infinity)`,
-		}, got[i], path)
+	byID := map[int]map[string]any{}
+	for _, row := range got {
+		id, ok := row["id"].(float64)
+		require.True(t, ok, "row without a numeric id: %v", row)
+		delete(row, "id")
+		byID[int(id)] = row
+	}
+	for id, name := range map[int]string{1: "snapshot infinite", 2: "snapshot finite", 3: "stream infinite", 4: "stream finite"} {
+		assert.Equal(t, expected[id%2 == 1], byID[id], name)
 	}
 
 	require.NoError(t, stream.StopWithin(30*time.Second))

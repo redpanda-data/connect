@@ -927,7 +927,7 @@ func TestDecodeTextColumnDataInfiniteTimestamps(t *testing.T) {
 
 func TestDecodeTextColumnDataTimeRangesAndIntervals(t *testing.T) {
 	// pgx decodes these types to its own structs, which marshal with internal
-	// fields and an infinite bound as the number 1, and it rejects the
+	// fields (and an infinite bound as the number 1), and it rejects the
 	// interval infinity of PostgreSQL 17. The stream returns the PostgreSQL
 	// text, the same value the snapshot returns.
 	mp := pgtype.NewMap()
@@ -983,6 +983,38 @@ func TestDecodeTextColumnDataTimeRangesAndIntervals(t *testing.T) {
 		{
 			typeName: "tsmultirange",
 			data:     `{["2026-01-02 03:04:05",infinity)}`,
+		},
+		{
+			typeName: "int4range",
+			data:     "[1,11)",
+		},
+		{
+			typeName: "int8range",
+			data:     "(,101)",
+		},
+		{
+			typeName: "numrange",
+			data:     "[1.5,)",
+		},
+		{
+			typeName: "_int4range",
+			data:     `{"[1,11)"}`,
+		},
+		{
+			typeName: "_numrange",
+			data:     `{"[1.5,2.5)"}`,
+		},
+		{
+			typeName: "int4multirange",
+			data:     "{[1,11)}",
+		},
+		{
+			typeName: "int8multirange",
+			data:     "{[1,11)}",
+		},
+		{
+			typeName: "nummultirange",
+			data:     "{[1.5,)}",
 		},
 	}
 
