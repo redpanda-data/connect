@@ -237,6 +237,101 @@ func TestMergeLOBsEmptyPKSingleCandidate(t *testing.T) {
 	assert.Equal(t, "hello", events[0].Data["DOC"])
 }
 
+// TestMergeLOBsSkipsDeleteEvents checks that LOBs are never written into DELETE
+// events, which have nil Data.
+func TestMergeLOBsSkipsDeleteEvents(t *testing.T) {
+	newDelete := func(id string) *DMLEvent {
+		return &DMLEvent{Operation: OpDelete, Schema: "S", Table: "T", OldValues: map[string]any{"ID": id}}
+	}
+	newUpdate := func(id string) *DMLEvent {
+		return &DMLEvent{Operation: OpUpdate, Schema: "S", Table: "T", Data: map[string]any{"NAME": "x"}, OldValues: map[string]any{"ID": id}}
+	}
+
+	tests := []struct {
+		name         string
+		pk           map[string]any
+		events       []*DMLEvent
+		wantUnmerged int
+		// wantMergedIdx is the event expected to get the LOB, or -1 for none.
+		wantMergedIdx int
+	}{
+		{
+			name:          "pass 2: only PK match is a DELETE drops accumulator",
+			pk:            map[string]any{"ID": "1"},
+			events:        []*DMLEvent{newDelete("1")},
+			wantUnmerged:  0,
+			wantMergedIdx: -1,
+		},
+		{
+			name:          "pass 2: merges into earlier UPDATE, skipping later DELETE",
+			pk:            map[string]any{"ID": "1"},
+			events:        []*DMLEvent{newUpdate("1"), newDelete("1")},
+			wantUnmerged:  0,
+			wantMergedIdx: 0,
+		},
+		{
+			name: "pass 2: merges into earlier INSERT, skipping later DELETE",
+			pk:   map[string]any{"ID": "1"},
+			events: []*DMLEvent{
+				{Operation: OpInsert, Schema: "S", Table: "T", Data: map[string]any{"ID": "1"}},
+				newDelete("1"),
+			},
+			wantUnmerged:  0,
+			wantMergedIdx: 0,
+		},
+		{
+			name:          "pass 2: DELETE of a different row does not drop accumulator",
+			pk:            map[string]any{"ID": "1"},
+			events:        []*DMLEvent{newDelete("2")},
+			wantUnmerged:  1,
+			wantMergedIdx: -1,
+		},
+		{
+			// The DELETE row may own the LOB, so merging into the UPDATE is unsafe.
+			name:          "pass 3: empty PK with UPDATE and DELETE is ambiguous and returned unmerged",
+			pk:            map[string]any{},
+			events:        []*DMLEvent{newUpdate("1"), newDelete("2")},
+			wantUnmerged:  1,
+			wantMergedIdx: -1,
+		},
+		{
+			name:          "pass 3: empty PK with only a DELETE drops accumulator",
+			pk:            map[string]any{},
+			events:        []*DMLEvent{newDelete("1")},
+			wantUnmerged:  0,
+			wantMergedIdx: -1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state := NewTxnLOBState()
+			key := LobKey{Schema: "S", Table: "T", Column: "DOC"}
+			acc := &LobAccumulator{Schema: "S", Table: "T", Column: "DOC", PKValues: test.pk}
+			acc.AddFragment(1, []byte("hello"))
+			state.Accumulators[key] = acc
+
+			var unmerged []*LobAccumulator
+			require.NotPanics(t, func() {
+				unmerged = MergeLOBsIntoDMLEvents(state, test.events, nil)
+			})
+			assert.Len(t, unmerged, test.wantUnmerged)
+
+			for i, ev := range test.events {
+				if ev.Operation == OpDelete {
+					assert.Nilf(t, ev.Data, "DELETE event %d must remain untouched", i)
+					continue
+				}
+				if i == test.wantMergedIdx {
+					assert.Equalf(t, "hello", ev.Data["DOC"], "event %d should have received the LOB", i)
+				} else {
+					assert.NotContainsf(t, ev.Data, "DOC", "event %d must not receive the LOB", i)
+				}
+			}
+		})
+	}
+}
+
 func TestValuesEqualMatchesSprintf(t *testing.T) {
 	ts := time.Date(2024, 1, 2, 3, 4, 5, 6, time.UTC)
 	values := []any{

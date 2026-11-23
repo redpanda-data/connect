@@ -150,6 +150,10 @@ func NewTxnLOBState() *TxnLOBState {
 // Oracle SecureFile out-of-row LOBs may emit only SELECT_LOB_LOCATOR + LOB_WRITE +
 // LOB_TRIM with no DML UPDATE. In that case all three passes find nothing and the
 // accumulator is returned as unmerged so the caller can synthesize a synthetic UPDATE.
+//
+// LOBs are never written into DELETE events, which have nil Data. When the only
+// match is a DELETE, the LOB is dropped: the row no longer exists, and a
+// synthesized UPDATE would be emitted after the DELETE.
 func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service.Logger) []*LobAccumulator {
 	logDebugf := func(msg string, args ...any) {
 		if log != nil {
@@ -198,20 +202,32 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// Pass 2: fall back to the most-recent DML event of any type with a matching PK.
 		// For LOB-only UPDATE events the SET clause contains only LOB columns, so
 		// PK columns are not in ev.Data — they are in ev.OldValues (WHERE clause).
+		// DELETEs are skipped, so an earlier INSERT or UPDATE of the row can match.
+		var deleted bool
 		for _, ev := range slices.Backward(events) {
-
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}
-			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) {
-				ev.Data[acc.Column] = assembled
-				merged = true
-				logDebugf("LOB merge: set %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
-				break
+			if !pkMatches(ev.Data, acc.PKValues) && !pkMatches(ev.OldValues, acc.PKValues) {
+				continue
 			}
+			if ev.Operation == OpDelete {
+				deleted = true
+				continue
+			}
+			ev.Data[acc.Column] = assembled
+			merged = true
+			logDebugf("LOB merge: set %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
+			break
 		}
 
 		if merged {
+			continue
+		}
+
+		// Only a DELETE matched: the row is gone, so drop the LOB.
+		if deleted {
+			logDebugf("LOB merge: dropping %s.%s.%s (pks=%v) — row deleted later in transaction", acc.Schema, acc.Table, acc.Column, acc.PKValues)
 			continue
 		}
 
@@ -220,6 +236,7 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// PK matching impossible. Only merge when exactly one candidate event exists
 		// for this table; if multiple exist, rows cannot be distinguished and the
 		// accumulator is left unmerged so the caller synthesizes a separate UPDATE.
+		// DELETEs count toward the ambiguity check but are never written to.
 		var candidates []*DMLEvent
 		for i := range events {
 			ev := events[i]
@@ -229,6 +246,13 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		}
 		switch len(candidates) {
 		case 1:
+			if candidates[0].Operation == OpDelete {
+				if len(acc.PKValues) == 0 {
+					logDebugf("LOB merge: dropping %s.%s.%s — row deleted later in transaction (schema/table fallback)", acc.Schema, acc.Table, acc.Column)
+					continue
+				}
+				break // Pass 2 showed this DELETE is a different row.
+			}
 			candidates[0].Data[acc.Column] = assembled
 			merged = true
 			logDebugf("LOB merge: set %s.%s.%s via schema/table fallback (fragments=%d)", acc.Schema, acc.Table, acc.Column, len(acc.Fragments))
