@@ -231,6 +231,13 @@ the input rate it sustains. The bytes measured at the output are in each
 point's `output_mb_s`. Source entries have no `capacity_basis`: their
 capacity is the output bytes, as before.
 
+The catalogue app on Google Cloud Run reads this bucket and creates plan
+objects through the `redpanda-connect-bench-catalog-app` role, by GCP web
+identity (no AWS keys). The persistent stack creates it only when
+`bench_catalog_gcp_sa_unique_id` is set; read the id with
+`gcloud iam service-accounts describe bench-catalog-sa@rp-internal-agents.iam.gserviceaccount.com --format='value(uniqueId)'`.
+The role's ARN is the output `bench_catalog_app_role_arn`.
+
 ## Bench Bot runs by hand (operator)
 
 The Bench Bot agent normally builds, claims and dispatches plans. To run one

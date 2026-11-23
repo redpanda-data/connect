@@ -27,3 +27,17 @@ variable "soak_scenarios" {
     }
   }
 }
+
+variable "bench_catalog_gcp_sa_unique_id" {
+  # Numeric unique ID of the catalogue app's Cloud Run runtime service account
+  # (bench-catalog-sa@rp-internal-agents.iam.gserviceaccount.com). The role
+  # below exists only when this is set.
+  type    = string
+  default = ""
+}
+
+variable "bench_catalog_gcp_audience" {
+  # Audience the app requests on its Google ID token; the role trusts only it.
+  type    = string
+  default = "redpanda-connect-bench-catalog"
+}
