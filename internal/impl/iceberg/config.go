@@ -213,7 +213,6 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"A table pinned `legacy` keeps receiving the legacy annotation on every new file, byte-identical to what previous releases wrote, so appends and `merge-on-read` continue working unchanged forever. The one restriction is mutating `copy-on-write` (`upsert`/`delete`): it must rewrite existing files, which the legacy annotation prevents, so such writes fail upfront with an actionable error (pure `insert` batches still work). To migrate a legacy table to the spec encoding: rewrite/compact the table's data files with an engine that writes the spec annotation (for example, Spark's `rewrite_data_files`), then set the table property `redpanda-connect.timestamp-encoding` to `spec`, keeping any running instances of this output that write to the table stopped (or restarting them) around the migration: a live writer only re-reads the property when its writer is recreated. A table whose existing files already mix both annotations (for example one written to by several engines or connector versions over time) can be pinned either way by the probe, depending on which file it happens to read first, and a `copy-on-write` mutation on such a table may then fail mid-rewrite with the underlying library's type-promotion error rather than the upfront migration message: compact or rewrite such a table to a single encoding before mutating it. Alternatively, keep the table on `merge-on-read`.\n"
 
-// icebergOutputConfig returns the configuration spec for the Iceberg output.
 // deprecatedBucketField is the bucket field of the aws_s3 and
 // gcp_cloud_storage storage blocks. The table location (from the catalog
 // warehouse or schema_evolution.table_location) decides where files go, so
@@ -226,6 +225,7 @@ func deprecatedBucketField(name string) *service.ConfigField {
 		Deprecated()
 }
 
+// icebergOutputConfig returns the configuration spec for the Iceberg output.
 func icebergOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
