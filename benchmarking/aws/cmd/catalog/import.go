@@ -30,6 +30,7 @@ import (
 // resultFile is the subset of the runner's result JSON the importer reads.
 // The runner package is package main and cannot be imported.
 type resultFile struct {
+	SessionID  string    `json:"session_id"`
 	Scenario   string    `json:"scenario"`
 	GitSHA     string    `json:"git_sha"`
 	StartedAt  time.Time `json:"started_at"`
@@ -132,6 +133,14 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		Imported []string  `json:"imported"`
 		Skipped  []skipped `json:"skipped"`
 	}{Imported: []string{}, Skipped: []skipped{}}
+	existing, err := st.List(ctx, "")
+	if err != nil {
+		return fmt.Errorf("listing catalogue: %w", err)
+	}
+	have := make(map[string]struct{}, len(existing))
+	for _, e := range existing {
+		have[e.ID] = struct{}{}
+	}
 	describe := gitDescribeIn(*repo)
 	scenarioAt := gitScenarioAt(*repo, root)
 	for _, f := range files {
@@ -140,9 +149,14 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 			out.Skipped = append(out.Skipped, skipped{Path: f, Reason: reason})
 			continue
 		}
+		if _, exists := have[e.ID]; exists {
+			out.Skipped = append(out.Skipped, skipped{Path: f, Reason: "already in catalogue"})
+			continue
+		}
 		if err := st.Put(ctx, e); err != nil {
 			return fmt.Errorf("storing %s: %w", e.ID, err)
 		}
+		have[e.ID] = struct{}{}
 		out.Imported = append(out.Imported, e.ID)
 	}
 	writeJSON(stdout, out)
@@ -190,6 +204,9 @@ func entryFromResultFile(file, resultsRoot string, scenarioAt scenarioAtFunc, de
 	if scen.Direction == "sink" {
 		return catalog.Entry{}, "sink direction not supported"
 	}
+	if scen.Direction == "e2e" {
+		return catalog.Entry{}, "e2e runs are catalogued by the run itself"
+	}
 	version, err := describe(res.GitSHA)
 	if err != nil || version == "" {
 		return catalog.Entry{}, "connect version unknown"
@@ -205,8 +222,12 @@ func entryFromResultFile(file, resultsRoot string, scenarioAt scenarioAtFunc, de
 	if now.IsZero() {
 		now = res.StartedAt
 	}
+	id := res.SessionID
+	if id == "" {
+		id = strings.Join(append(parts[:len(parts)-1:len(parts)-1], stamp), "-")
+	}
 	run := catalog.RunInput{
-		ID:                strings.Join(append(parts[:len(parts)-1:len(parts)-1], stamp), "-"),
+		ID:                id,
 		Scenario:          res.Scenario,
 		GitSHA:            res.GitSHA,
 		ConnectVersion:    version,

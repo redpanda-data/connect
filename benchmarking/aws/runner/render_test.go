@@ -52,6 +52,7 @@ func sampleResult() *Result {
 func TestWriteResultJSON(t *testing.T) {
 	dir := t.TempDir()
 	r := sampleResult()
+	r.SessionID = "bench-abc123"
 	path, err := WriteResultJSON(dir, r)
 	require.NoError(t, err)
 	require.True(t, filepath.IsAbs(path) || filepath.Dir(path) != ".")
@@ -61,6 +62,8 @@ func TestWriteResultJSON(t *testing.T) {
 	var got Result
 	require.NoError(t, json.Unmarshal(raw, &got))
 	require.Equal(t, r.Scenario, got.Scenario)
+	require.Equal(t, "bench-abc123", got.SessionID)
+	require.Contains(t, string(raw), `"session_id": "bench-abc123"`)
 	require.Equal(t, r.Points[0].Summary.MedianMBPerSec, got.Points[0].Summary.MedianMBPerSec)
 }
 

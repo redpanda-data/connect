@@ -24,6 +24,10 @@ import (
 // Result is the canonical per-run artefact, written as JSON and rendered to
 // markdown.
 type Result struct {
+	// SessionID is the bench session ID the sweep ran under. It is also the
+	// sweep's catalogue entry ID, so `catalog import` can recognise a run the
+	// runner has already catalogued.
+	SessionID    string `json:"session_id,omitempty"`
 	Scenario     string `json:"scenario"`
 	ScenarioHash string `json:"scenario_hash"`
 	GitSHA       string `json:"git_sha"`

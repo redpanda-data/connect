@@ -594,6 +594,7 @@ func runBench(opts benchOpts) (errOut error) {
 	fmt.Println("[6/7] sweep complete")
 
 	result := &Result{
+		SessionID:      sessionID,
 		Scenario:       fmt.Sprintf("%s/%s", s.Stack, strings.TrimPrefix(s.Name, s.Stack+"-")),
 		ScenarioHash:   hashScenario(s),
 		GitSHA:         gitSHA(opts.repoRoot),

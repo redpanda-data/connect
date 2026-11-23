@@ -254,3 +254,123 @@ func TestImportEmptyRoot(t *testing.T) {
 	require.Equal(t, 0, code, stderr)
 	require.JSONEq(t, `{"imported":[],"skipped":[]}`, stdout)
 }
+
+// writeResult writes a minimal postgres/orders-cdc result under root and
+// sessionID may be empty for a pre-session-ID result.
+func writeResult(t *testing.T, root, scenario, stamp, sha, sessionID string) {
+	t.Helper()
+	body := map[string]any{
+		"scenario": scenario, "git_sha": sha,
+		"started_at": "2026-07-01T10:00:00Z", "finished_at": "2026-07-01T11:00:00Z",
+		"infra":   map[string]any{"runner_instance_type": "c8g.4xlarge", "region": "us-east-2"},
+		"dataset": map[string]any{"row_size_bytes": 1200},
+		"points": []any{map[string]any{
+			"vcpu": 1, "engine": "connect",
+			"summary": map[string]any{"median_mb_s": 18, "median_msg_s": 15000},
+		}},
+	}
+	if sessionID != "" {
+		body["session_id"] = sessionID
+	}
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	p := filepath.Join(root, filepath.FromSlash(scenario), stamp+".json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+	require.NoError(t, os.WriteFile(p, raw, 0o644))
+}
+
+func TestImportEntryIDs(t *testing.T) {
+	const (
+		stamp       = "2026-07-01T10-00-00Z"
+		pathID      = "postgres-orders-cdc-" + stamp
+		sessionID   = "bench-abc123"
+		runnerTitle = "runner wrote this"
+	)
+	tests := []struct {
+		name         string
+		sessionID    string
+		seed         bool // runner already catalogued the run
+		runTwice     bool
+		wantImported []string
+		wantSkipped  string
+	}{
+		{name: "session id is the entry id", sessionID: sessionID, wantImported: []string{sessionID}},
+		{name: "no session id keeps the path id", wantImported: []string{pathID}},
+		{name: "second import adds nothing", sessionID: sessionID, runTwice: true, wantSkipped: "already in catalogue"},
+		{name: "runner entry is not overwritten", sessionID: sessionID, seed: true, wantSkipped: "already in catalogue"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, sha := tempRepo(t)
+			root := t.TempDir()
+			writeResult(t, root, "postgres/orders-cdc", stamp, sha, tc.sessionID)
+			store := t.TempDir()
+			ctx := context.Background()
+
+			if tc.seed {
+				// An entry as the runner would have stored it under the session ID.
+				seedRoot := t.TempDir()
+				writeResult(t, seedRoot, "postgres/orders-cdc", "2026-06-30T10-00-00Z", sha, tc.sessionID)
+				code, _, stderr := runCLI(t, "import", "--store", "dir:"+store, "--results-root", seedRoot, "--repo", repo)
+				require.Equal(t, 0, code, stderr)
+				st := catalog.NewDirStore(store)
+				seeded, err := st.List(ctx, "")
+				require.NoError(t, err)
+				require.Len(t, seeded, 1)
+				seeded[0].ConnectVersion = runnerTitle
+				require.NoError(t, st.Put(ctx, seeded[0]))
+			}
+			runOnce := func() importOut {
+				code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+store, "--results-root", root, "--repo", repo)
+				require.Equal(t, 0, code, stderr)
+				var got importOut
+				require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+				return got
+			}
+			got := runOnce()
+			if tc.runTwice {
+				require.Equal(t, []string{tc.sessionID}, got.Imported)
+				got = runOnce()
+			}
+
+			entries, err := catalog.NewDirStore(store).List(ctx, "")
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+			if tc.wantSkipped != "" {
+				require.Empty(t, got.Imported)
+				require.Len(t, got.Skipped, 1)
+				require.Equal(t, tc.wantSkipped, got.Skipped[0].Reason)
+				require.Equal(t, sessionID, entries[0].ID)
+				if tc.seed {
+					require.Equal(t, runnerTitle, entries[0].ConnectVersion)
+				}
+				return
+			}
+			require.Equal(t, tc.wantImported, got.Imported)
+			require.Equal(t, tc.wantImported[0], entries[0].ID)
+		})
+	}
+}
+
+func TestImportSkipsE2EDirection(t *testing.T) {
+	repo, _ := tempRepo(t)
+	scen := filepath.Join(repo, scenariosPath, "postgres", "orders-e2e.yaml")
+	require.NoError(t, os.WriteFile(scen, []byte("name: postgres-orders-e2e\nconnector: postgres_cdc\ndirection: e2e\npipeline:\n  input:\n    postgres_cdc: {}\n"), 0o644))
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-q", "-m", "e2e")
+	sha := git(t, repo, "rev-parse", "HEAD")
+
+	root := t.TempDir()
+	writeResult(t, root, "postgres/orders-e2e", "2026-07-02T10-00-00Z", sha, "bench-e2e1")
+	store := t.TempDir()
+	code, stdout, stderr := runCLI(t, "import", "--store", "dir:"+store, "--results-root", root, "--repo", repo)
+	require.Equal(t, 0, code, stderr)
+	var got importOut
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+	require.Empty(t, got.Imported)
+	require.Len(t, got.Skipped, 1)
+	require.Equal(t, "e2e runs are catalogued by the run itself", got.Skipped[0].Reason)
+	entries, err := catalog.NewDirStore(store).List(context.Background(), "")
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}
