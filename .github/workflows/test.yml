@@ -100,7 +100,8 @@ jobs:
             exit 1
           fi
           git checkout --quiet HEAD^1
-      # Pull requests only restore the cache, so this job uses the main cgo1 cache (test and docs share it).
+      # Pull requests only restore, so this job restores the main cache for CGO_ENABLED=1. Both test and docs save
+      # to that key, so it holds the build of whichever job finished first.
       - name: Install Go
         uses: $/.github/actions/setup-go
       - name: Install system dependencies
