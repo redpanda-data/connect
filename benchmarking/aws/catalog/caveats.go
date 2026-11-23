@@ -18,6 +18,7 @@ const (
 	CaveatMemoryNotLimited      = "memory_not_limited"
 	CaveatSchemaEvolutionForced = "schema_evolution_forced"
 	CaveatSinkUnverified        = "sink_unverified"
+	CaveatSinkRetried           = "sink_retried"
 	// CaveatSourceRateLimited is declared in sizing.go.
 )
 
@@ -33,4 +34,5 @@ var KnownCaveats = map[string]string{
 	CaveatSourceRateLimited:     "the source (the bench producer, or the CDC workload's offered rate), not the pipeline, capped a point; its capacity is a lower bound",
 	CaveatSchemaEvolutionForced: "the bench turned on sink schema evolution or table creation the customer config left off",
 	CaveatSinkUnverified:        "at least one point could not check what the sink received (no sink count and no output_sent metric)",
+	CaveatSinkRetried:           "the sink reported write errors on at least one point (at most 1% of messages sent), so it retried writes; capacity includes the retries",
 }

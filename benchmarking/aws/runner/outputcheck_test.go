@@ -89,9 +89,34 @@ func TestE2EPointAnomalies(t *testing.T) {
 	}{
 		{"clean", e2ePoint{Samples: 600, Counters: ok, MedianMsgPerSec: 1000}, nil, false},
 		{"no samples", e2ePoint{Samples: 0, Counters: ok}, []string{anomalyNoSamples}, true},
+		// 1% of 100000 sent is 1000 errors: at or under it passes with a caveat.
 		{
-			"errors",
+			"few errors are retries",
 			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 4, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkRetried},
+			false,
+		},
+		{
+			"errors at the limit",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 1000, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkRetried},
+			false,
+		},
+		{
+			"errors over the limit",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 1001, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkErrors},
+			true,
+		},
+		{
+			"errors judged against processed without output_sent",
+			e2ePoint{Samples: 600, SinkCounted: true, Counters: outputCounters{Errors: 5, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkRetried},
+			false,
+		},
+		{
+			"errors with nothing to compare fail",
+			e2ePoint{Samples: 600, SinkCounted: true, Counters: outputCounters{Errors: 5, HasErrors: true}, MedianMsgPerSec: 1000},
 			[]string{anomalySinkErrors},
 			true,
 		},

@@ -101,6 +101,23 @@ func TestCatalogEntryE2ESinkUnverifiedCaveat(t *testing.T) {
 	require.Contains(t, rec.Caveats, catalog.CaveatSinkUnverified, "sales see it")
 }
 
+func TestCatalogEntryE2ESinkRetriedCaveat(t *testing.T) {
+	_, s := renderedScenario(t, pgToSnowflakeConfig())
+	e, err := catalogEntryFromResult(s, e2eCapacityResult(t, s.Name), catalogMeta{SessionID: "bench-1"})
+	require.NoError(t, err)
+	require.NotContains(t, e.Caveats, catalog.CaveatSinkRetried)
+
+	r := e2eCapacityResult(t, s.Name, Anomaly{Kind: anomalySinkRetried, Note: "x"})
+	e, err = catalogEntryFromResult(s, r, catalogMeta{SessionID: "bench-1"})
+	require.NoError(t, err)
+	require.Contains(t, e.Caveats, catalog.CaveatSinkRetried)
+	cfg, err := catalog.DefaultSizingConfig()
+	require.NoError(t, err)
+	rec, err := catalog.Recommend(e, 1, cfg)
+	require.NoError(t, err)
+	require.Contains(t, rec.Caveats, catalog.CaveatSinkRetried, "sales see it")
+}
+
 func TestCatalogEntryE2ERecordsSinkSize(t *testing.T) {
 	_, s := renderedScenario(t, pgToSnowflakeConfig())
 	require.Equal(t, "XSMALL", s.Sink.Size)

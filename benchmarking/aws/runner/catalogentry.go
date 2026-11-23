@@ -104,7 +104,7 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 	} else {
 		run.Pipeline = catalog.BenchSourcePipeline(s.Pipeline)
 	}
-	unverified := false
+	unverified, retried := false, false
 	for _, p := range r.Points {
 		rp := catalog.RunPoint{
 			VCPU:        p.VCPU,
@@ -126,6 +126,8 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 				rp.LimitedBy = catalog.LimitedByWorkload
 			case anomalySinkUnverified:
 				unverified = true
+			case anomalySinkRetried:
+				retried = true
 			}
 		}
 		for _, pp := range p.Prom {
@@ -135,6 +137,9 @@ func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.E
 	}
 	if unverified {
 		run.Caveats = append(slices.Clone(run.Caveats), catalog.CaveatSinkUnverified)
+	}
+	if retried {
+		run.Caveats = append(slices.Clone(run.Caveats), catalog.CaveatSinkRetried)
 	}
 	return catalog.EntryFromRun(run)
 }

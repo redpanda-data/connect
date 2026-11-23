@@ -22,8 +22,14 @@ import (
 const (
 	// anomalyNoSamples: the point captured no output samples. Fails it.
 	anomalyNoSamples = "no_samples"
-	// anomalySinkErrors: Connect's output_error counter grew. Fails it.
+	// anomalySinkErrors: Connect's output_error counter grew past
+	// sinkErrorFailShare of the messages sent, or grew with nothing to
+	// compare it against. Fails it.
 	anomalySinkErrors = "sink_errors"
+	// anomalySinkRetried: output_error grew, but by no more than
+	// sinkErrorFailShare of the messages sent (retried writes, reconnects).
+	// A caveat, not a failure.
+	anomalySinkRetried = "sink_retried"
 	// anomalySinkSendMismatch: output_sent and the harness benchmark
 	// processor's message count disagree beyond the count tolerance. Fails it.
 	anomalySinkSendMismatch = "sink_send_mismatch"
@@ -35,6 +41,10 @@ const (
 	// caveat; the catalogue point is LimitedBy "workload".
 	anomalyWorkloadBound = "workload_bound"
 )
+
+// sinkErrorFailShare is the share of sent messages output_error may reach
+// before a point fails; at or under it the point passes with sink_retried.
+const sinkErrorFailShare = 0.01
 
 // workloadBoundFraction is how close to the offered CDC write rate a
 // point's median must be to count as workload-bound.
@@ -172,9 +182,25 @@ func e2ePointAnomalies(p e2ePoint) (out []Anomaly, fail bool) {
 	}
 	c := p.Counters
 	if c.HasErrors && c.Errors > 0 {
-		out = append(out, Anomaly{Kind: anomalySinkErrors, Note: fmt.Sprintf(
-			"%s: the output reported %.0f errors (output_error) during the point", anomalySinkErrors, c.Errors)})
-		fail = true
+		// The share is of output_sent, else of the messages that reached
+		// the output; with neither, errors cannot be judged small.
+		base, hasBase := c.Sent, c.HasSent
+		if !hasBase || base <= 0 {
+			base, hasBase = c.Processed, c.HasProcessed
+		}
+		if hasBase && base > 0 && c.Errors <= sinkErrorFailShare*base {
+			out = append(out, Anomaly{Kind: anomalySinkRetried, Note: fmt.Sprintf(
+				"%s: the output reported %.0f errors (output_error), %.2f%% of %.0f messages, at or under the %.0f%% limit; the sink retried writes",
+				anomalySinkRetried, c.Errors, 100*c.Errors/base, base, sinkErrorFailShare*100)})
+		} else {
+			share := "with no sent count to compare against"
+			if hasBase && base > 0 {
+				share = fmt.Sprintf("%.2f%% of %.0f messages, over the %.0f%% limit", 100*c.Errors/base, base, sinkErrorFailShare*100)
+			}
+			out = append(out, Anomaly{Kind: anomalySinkErrors, Note: fmt.Sprintf(
+				"%s: the output reported %.0f errors (output_error) during the point, %s", anomalySinkErrors, c.Errors, share)})
+			fail = true
+		}
 	}
 	sendChecked := false
 	if c.HasSent && c.HasProcessed {
