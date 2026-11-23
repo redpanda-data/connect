@@ -8,6 +8,42 @@
 
 package main
 
+import (
+	"bytes"
+	"fmt"
+	"strings"
+)
+
+const (
+	// anomalyConnectExited: Connect exited before the end of the
+	// measurement window, so the point's samples cover only part of it.
+	// Fails the point.
+	anomalyConnectExited = "connect_exited"
+	// connectExitedMarker is the line prefix the bench script appends to
+	// the per-point log when Connect is already gone at the end of the
+	// window (see renderBenchScript), followed by " exit=<code>".
+	connectExitedMarker = "BENCH_CONNECT_EXITED_EARLY"
+)
+
+// connectExitedAnomaly reports a connect_exited anomaly when the per-point
+// log carries the bench script's early-exit marker.
+func connectExitedAnomaly(raw []byte) (Anomaly, bool) {
+	for line := range bytes.Lines(raw) {
+		rest, found := strings.CutPrefix(strings.TrimSpace(string(line)), connectExitedMarker)
+		if !found {
+			continue
+		}
+		code := strings.TrimPrefix(strings.TrimSpace(rest), "exit=")
+		if code == "" {
+			code = "unknown"
+		}
+		return Anomaly{Kind: anomalyConnectExited, Note: fmt.Sprintf(
+			"%s: Connect exited before the end of the measurement window (exit code %s), likely killed by the memory limit; the point's samples cover only part of the window",
+			anomalyConnectExited, code)}, true
+	}
+	return Anomaly{}, false
+}
+
 const (
 	anomalyMinSeconds = 60
 	anomalyThreshold  = 0.8 // MB/sec below this fraction of the reference median is a dip

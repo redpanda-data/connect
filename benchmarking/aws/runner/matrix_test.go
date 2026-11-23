@@ -100,6 +100,46 @@ func TestMatrixRunner_RunSweepsEveryArm(t *testing.T) {
 	require.Contains(t, scripts, "GOMAXPROCS=4")
 }
 
+// A Connect that died mid-window (the bench script's early-exit marker in
+// the point log) fails the point, whatever samples it captured first.
+func TestMatrixRunner_ConnectExitedFailsPoint(t *testing.T) {
+	const sessionID = "sess-oom"
+	fetcher := &FakeLogFetcher{Contents: map[string]string{
+		fmt.Sprintf("runs/%s/sweep-1.log", sessionID): makeLog(30, 60) + connectExitedMarker + " exit=137\n",
+		fmt.Sprintf("runs/%s/sweep-2.log", sessionID): makeLog(30, 60),
+	}}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": {"bench point complete"}}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner", Bucket: "b", SessionID: sessionID}
+	plan := []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}
+	points, err := mr.Run(t.Context(), plan, 1, 0, 30*time.Second, "", "")
+	require.ErrorContains(t, err, anomalyConnectExited)
+	require.ErrorContains(t, err, "exit code 137")
+	require.Len(t, points, 1, "the sweep stops at the failed point")
+	require.Equal(t, []string{anomalyConnectExited}, kinds(points[0].Anomalies))
+	require.Len(t, ssm.Scripts, 1)
+}
+
+func TestRenderBenchScript_MarksEarlyConnectExit(t *testing.T) {
+	got := renderBenchScript(benchScriptArgs{VCPU: 2, WarmupSec: 60, DurationSec: 300, Bucket: "b", SessionID: "s"})
+	sleep := strings.Index(got, "sleep 360")
+	alive := strings.Index(got, `if kill -0 "$PID" 2>/dev/null; then`)
+	term := strings.Index(got, `kill -TERM "$PID"`)
+	marker := strings.Index(got, `echo "`+connectExitedMarker+` exit=$EXIT_CODE" >> "$LOG"`)
+	upload := strings.Index(got, `aws s3 cp "$LOG"`)
+	for _, i := range []int{sleep, alive, term, marker, upload} {
+		require.GreaterOrEqual(t, i, 0, got)
+	}
+	require.Less(t, sleep, alive)
+	require.Less(t, alive, term, "liveness is checked before the SIGTERM")
+	require.Less(t, term, marker)
+	require.Less(t, marker, upload, "the marker lands in the log before it is uploaded")
+	require.Contains(t, got, `wait "$PID" 2>/dev/null || EXIT_CODE=$?`)
+}
+
 // TestMatrixRunner_BinaryPathFor pins binaryPathFor's two branches: an
 // arm-less point (or an arm that left Binary empty) launches the scenario's
 // single default staged binary, unchanged from before matrix.arms[].binary

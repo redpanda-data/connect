@@ -490,6 +490,12 @@ func (m *MatrixRunner) Run(
 			})
 			anomalies = append(anomalies, extra...)
 		}
+		// Every topology: a Connect gone before the window ended (the bench
+		// script's marker in its log) measured only part of the window.
+		exitAnomaly, exitFail := connectExitedAnomaly(raw)
+		if exitFail {
+			anomalies = append(anomalies, exitAnomaly)
+		}
 		var backlog []BacklogPoint
 		if !fromSamples {
 			backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
@@ -523,7 +529,7 @@ func (m *MatrixRunner) Run(
 		if probeFail {
 			return out, fmt.Errorf("%s at %d vCPU: the source topic gained no records during the window", anomalyProducerUnreachable, n)
 		}
-		if sinkFail || e2eFail {
+		if sinkFail || e2eFail || exitFail {
 			return out, fmt.Errorf("point at %d vCPU failed: %s", n, failNotes(anomalies))
 		}
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
@@ -577,7 +583,7 @@ func failNotes(anomalies []Anomaly) string {
 	var notes []string
 	for _, a := range anomalies {
 		switch a.Kind {
-		case anomalySinkCountMismatch, anomalyNoSamples, anomalySinkErrors, anomalySinkSendMismatch:
+		case anomalySinkCountMismatch, anomalyNoSamples, anomalySinkErrors, anomalySinkSendMismatch, anomalyConnectExited:
 			notes = append(notes, a.Note)
 		}
 	}
@@ -1075,9 +1081,20 @@ func renderBenchScript(a benchScriptArgs) string {
 	} else {
 		lines = append(lines, fmt.Sprintf(`sleep %d`, totalSec))
 	}
+	// Connect gone before the SIGTERM means it died mid-window (most often
+	// a kernel OOM kill under MemoryMax): the samples cover only part of
+	// the window, so the marker in $LOG makes the runner fail the point
+	// (see connectExitedAnomaly) rather than catalogue a partial median.
 	lines = append(lines,
-		`kill -TERM "$PID" 2>/dev/null || true`,
-		`wait "$PID" 2>/dev/null || true`,
+		`if kill -0 "$PID" 2>/dev/null; then`,
+		`  kill -TERM "$PID" 2>/dev/null || true`,
+		`  wait "$PID" 2>/dev/null || true`,
+		`else`,
+		`  EXIT_CODE=0`,
+		`  wait "$PID" 2>/dev/null || EXIT_CODE=$?`,
+		`  echo "`+connectExitedMarker+` exit=$EXIT_CODE" >> "$LOG"`,
+		`  echo "connect exited before the end of the window (exit $EXIT_CODE)"`,
+		`fi`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
 	)

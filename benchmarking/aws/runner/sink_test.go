@@ -612,6 +612,19 @@ func TestE2EOutputSentMismatchFailsPoint(t *testing.T) {
 	require.Equal(t, []string{anomalySinkSendMismatch}, kinds(points[1].Anomalies))
 }
 
+func TestE2EConnectExitedFailsPoint(t *testing.T) {
+	var events []string
+	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
+	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
+	fetcher := mr.LogFetcher.(*FakeLogFetcher)
+	fetcher.Contents["runs/s/sweep-1.log"] = makeLog(10, 5) + connectExitedMarker + " exit=137\n"
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 10_000, 0, 10_000)
+	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
+	require.ErrorContains(t, err, anomalyConnectExited)
+	require.Len(t, points, 1)
+	require.Equal(t, []string{anomalyConnectExited}, kinds(points[0].Anomalies))
+}
+
 // Every e2e point, not only the first, must capture samples; the Connect
 // log is never printed (the run log of a Bench Bot run is public).
 func TestE2EZeroSamplesFailsAnyPointWithoutLogTail(t *testing.T) {
