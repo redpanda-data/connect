@@ -4,9 +4,8 @@ description: 'Install the Go version from go.mod and cache the Go build and modu
 inputs:
   cache-name:
     description: >-
-      A name for the cache key. Give a name when the job builds other packages than the jobs that share its
-      CGO_ENABLED value, so it does not share their cache. For example, the integration tests build test binaries
-      that golangci-lint (also CGO_ENABLED=0) does not build.
+      A name for the build cache key. Give one when the job builds other packages than the jobs with its CGO_ENABLED
+      value (for example, integration test binaries). The module cache is shared by all jobs.
     required: false
     default: ''
 
