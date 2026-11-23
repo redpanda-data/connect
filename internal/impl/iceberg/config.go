@@ -393,7 +393,7 @@ See the Row-level operations section above for the full constraints, including t
 				Default(string(mergeStrategyMOR)).
 				Advanced(),
 
-			// Storage configuration - one of s3, gcs, or azure must be specified
+			// Storage configuration - at most one of s3, gcs, or azure
 			service.NewObjectField(ioFieldStorage,
 				// S3 storage configuration
 				service.NewObjectField(ioFieldStorageS3,
@@ -479,8 +479,14 @@ See the Row-level operations section above for the full constraints, including t
 						Secret(),
 				).Description("Azure Blob Storage (ADLS Gen2) configuration.").
 					Optional(),
-			).Description("Storage backend configuration for data files. Exactly one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage` must be specified.").
-				ShortDescription("Storage backend for data files. Exactly one of aws_s3, gcp_cloud_storage or azure_blob_storage."),
+			).Description("Storage backend configuration for data files. Specify at most one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage`. Without a block, the storage settings come from the catalog, for example vended credentials.").
+				ShortDescription("Storage backend for data files. At most one of aws_s3, gcp_cloud_storage or azure_blob_storage.").
+				// parseStorageProps reads only the first block it finds, so a second
+				// block would be ignored silently. The rule runs on the raw config, so
+				// it sees only the keys the user wrote.
+				LintRule(`root = if this.keys().catch([]).filter(k -> ["`+ioFieldStorageS3+`", "`+ioFieldStorageGCS+`", "`+ioFieldStorageAzure+`"].contains(k)).length() > 1 {
+  [ "specify at most one of `+ioFieldStorageS3+`, `+ioFieldStorageGCS+` or `+ioFieldStorageAzure+`" ]
+}`),
 
 			// Schema evolution
 			service.NewObjectField(ioFieldSchemaEvolution,
