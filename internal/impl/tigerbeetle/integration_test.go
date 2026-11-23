@@ -96,9 +96,9 @@ func setupTestWithTigerBeetle(t *testing.T, version string) (tb.Client, []string
 func TestIntegrationTigerBeetle(t *testing.T) {
 	// Clients are forward compatible with new clusters, but **not** backward compatible,
 	// so the oldest supported TigerBeetle cluster must be pinned to the client version
-	// used in the connector. Keep it equal to the cluster version in the input docs.
+	// used in the connector.
 	versions := []string{
-		"0.16.78",
+		minClusterVersion,
 		"latest",
 	}
 

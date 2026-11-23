@@ -17,6 +17,8 @@
 package tigerbeetle
 
 import (
+	"runtime/debug"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -182,4 +184,30 @@ tigerbeetle_cdc:
 			}
 		})
 	}
+}
+
+// TestMinClusterVersionMatchesClient checks that the documented minimum
+// cluster version equals the release of the linked tigerbeetle-go client. A
+// cluster evicts a client with a higher release, so a client bump without a
+// change to minClusterVersion makes the docs and the integration test pin
+// wrong.
+func TestMinClusterVersionMatchesClient(t *testing.T) {
+	// Go 1.27 and later list the dependencies of a test binary in its build
+	// info. Go 1.26 gives an empty list, and this test fails with "not found".
+	bi, ok := debug.ReadBuildInfo()
+	require.True(t, ok, "no build info in the test binary")
+
+	const clientModule = "github.com/tigerbeetle/tigerbeetle-go"
+	for _, dep := range bi.Deps {
+		if dep.Path != clientModule {
+			continue
+		}
+		if dep.Replace != nil {
+			dep = dep.Replace
+		}
+		assert.Equal(t, strings.TrimPrefix(dep.Version, "v"), minClusterVersion,
+			"%s changed: set minClusterVersion to the new client release", clientModule)
+		return
+	}
+	t.Fatalf("%s not found in the build info", clientModule)
 }
