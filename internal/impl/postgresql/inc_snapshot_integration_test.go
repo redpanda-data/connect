@@ -277,6 +277,69 @@ postgres_cdc:
 			insert:  `INSERT INTO uuid_text_keyed (id, tenant, name) VALUES (gen_random_uuid(), 'tenant-a', 'orig')`,
 			keyCols: []string{"id", "tenant"},
 		},
+		// The insert runs once per row, so the keys below come from a
+		// sequence to make each one unique.
+		{
+			name:    "IntervalKey",
+			table:   "interval_keyed",
+			ddl:     `CREATE SEQUENCE k_seq; CREATE TABLE interval_keyed (id interval PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO interval_keyed (id, name) VALUES (make_interval(days => nextval('k_seq')::int, secs => 1.5), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "Int4rangeKey",
+			table:   "int4range_keyed",
+			ddl:     `CREATE SEQUENCE k_seq; CREATE TABLE int4range_keyed (id int4range PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO int4range_keyed (id, name) SELECT int4range(n::int, n::int + 10), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DaterangeKey",
+			table:   "daterange_keyed",
+			ddl:     `CREATE SEQUENCE k_seq; CREATE TABLE daterange_keyed (id daterange PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO daterange_keyed (id, name) SELECT daterange(DATE '2020-01-01' + n::int, NULL), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "TstzrangeKey",
+			table:   "tstzrange_keyed",
+			ddl:     `CREATE SEQUENCE k_seq; CREATE TABLE tstzrange_keyed (id tstzrange PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO tstzrange_keyed (id, name) SELECT tstzrange(TIMESTAMPTZ '2020-01-01 00:00:00.25+02' + make_interval(secs => n), 'infinity'), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "TsrangeKey",
+			table:   "tsrange_keyed",
+			ddl:     `CREATE SEQUENCE k_seq; CREATE TABLE tsrange_keyed (id tsrange PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO tsrange_keyed (id, name) SELECT tsrange(TIMESTAMP '2020-01-01 00:00:00.25' + make_interval(secs => n), 'infinity'), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "Int8multirangeKey",
+			table:   "int8multirange_keyed",
+			ddl:     `CREATE SEQUENCE k_seq; CREATE TABLE int8multirange_keyed (id int8multirange PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO int8multirange_keyed (id, name) SELECT int8multirange(int8range(n * 10, n * 10 + 2), int8range(n * 10 + 5, NULL)), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
+		{
+			// pgx does not know a user-defined range, so the stream decodes
+			// it through its fallback for unknown types.
+			name:  "UserDefinedRangeKey",
+			table: "floatrange_keyed",
+			ddl: `CREATE SEQUENCE k_seq; CREATE TYPE floatrange AS RANGE (subtype = float8, subtype_diff = float8mi);
+CREATE TABLE floatrange_keyed (id floatrange PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO floatrange_keyed (id, name) SELECT floatrange(n + 0.5, n + 1.25, '[]'), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
+		{
+			// The stream sees the OID of the domain, not of the range.
+			name:  "DomainOverRangeKey",
+			table: "domain_range_keyed",
+			ddl: `CREATE SEQUENCE k_seq; CREATE DOMAIN int8range_domain AS int8range;
+CREATE TABLE domain_range_keyed (id int8range_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_range_keyed (id, name) SELECT int8range(n, n + 3), 'orig' FROM nextval('k_seq') AS n`,
+			keyCols: []string{"id"},
+		},
 	} {
 		t.Run("KeyDecoding/"+keyed.name, func(t *testing.T) {
 			t.Parallel()

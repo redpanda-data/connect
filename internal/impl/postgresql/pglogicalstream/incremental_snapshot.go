@@ -290,27 +290,22 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 
 	// check for unsupported primary keys
 	for rows.Next() {
-		var column, typeName, typType string
-		if err := rows.Scan(&column, &typeName, &typType); err != nil {
+		var column, typeName string
+		if err := rows.Scan(&column, &typeName); err != nil {
 			return fmt.Errorf("scanning primary key types for table %s: %w", table, err)
 		}
 
-		switch {
+		switch typeName {
 		// Cannot be a chunk bound, so the table cannot be paged at all.
-		case typeName == "bytea":
-		// Page fine, but decode as structs over the stream (pgtype.Bits) and
+		case "bytea":
+		// Page fine, but decode as a struct over the stream (pgtype.Bits) and
 		// as text over the chunk query, so the two sides' window keys never
 		// match and nothing is ever deduplicated. bit shares varbit's decoder,
-		// so it shares the mismatch. interval now decodes as text on both
-		// sides, but no test proves its keys match yet, so it stays rejected.
-		case typeName == "interval", typeName == "varbit", typeName == "bit":
-		// Ranges had the same mismatch. They now decode as text on both sides
-		// too, but no test proves their keys match yet, so they stay rejected.
-		// Structural on typtype because ranges are user-definable, so a name
-		// list would miss custom ones. Composite types ('c') and arrays are
-		// likely affected too but unverified, so they stay accepted rather than
-		// assumed broken.
-		case typType == "r", typType == "m":
+		// so it shares the mismatch. interval and the range and multirange
+		// types are not in this list: they decode as text on both sides.
+		// Composite types ('c') and arrays of bit and varbit are likely affected too
+		// but unverified, so they stay accepted rather than assumed broken.
+		case "varbit", "bit":
 
 		default:
 			continue
@@ -1142,7 +1137,7 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 // itself.
 func primaryKeyColumnTypesQuery(table string) (string, error) {
 	return sanitize.SQLQuery(`
-        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typtype, t.typtype)
+        SELECT a.attname, COALESCE(bt.typname, t.typname)
         FROM   pg_index i
         JOIN   pg_attribute a ON a.attrelid = i.indrelid
             AND a.attnum = ANY(i.indkey)
