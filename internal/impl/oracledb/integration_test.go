@@ -1385,13 +1385,19 @@ oracledb_cdc:
 	assert.Equal(t, []string{"insert", "insert", "delete", "update", "delete", "insert"}, operations())
 
 	for _, m := range batch.Clone() {
-		if op, _ := m.MetaGet("operation"); op != "update" {
+		op, _ := m.MetaGet("operation")
+		if op != "update" && op != "delete" {
 			continue
 		}
 		b, err := m.AsBytes()
 		require.NoError(t, err)
 		var row map[string]any
 		require.NoError(t, json.Unmarshal(b, &row))
+		if op == "delete" {
+			// Oracle doesn't log LOBs in a DELETE, and none is merged into it.
+			assert.Nil(t, row["DOC"])
+			continue
+		}
 		assert.Equal(t, "changed", row["NAME"])
 		assert.Equal(t, strings.Repeat("C", 5000), row["DOC"])
 	}
