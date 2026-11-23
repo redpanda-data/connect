@@ -265,6 +265,8 @@ func TestSnapshotSignalChecksExternallyManagedPublication(t *testing.T) {
 		require.ErrorIs(t, err, errSignalRejected)
 		assert.Contains(t, err.Error(), "publication pglog_stream_test_slot does not include table public.events")
 		assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_test_slot SET ALL TABLES EXCEPT")
+		assert.Contains(t, err.Error(), "with only the tables that must stay excluded",
+			"SET ALL TABLES EXCEPT replaces the whole list")
 		assert.NotContains(t, err.Error(), "ADD TABLE", "PostgreSQL rejects ADD TABLE on a FOR ALL TABLES publication")
 	})
 
@@ -368,5 +370,7 @@ func TestMonitorWatchesPublication(t *testing.T) {
 	m.checkPublication(t.Context())
 	assert.Equal(t, int64(2), m.Report().TablesMissingFromPublication)
 	assert.Contains(t, logs.String(), "ALTER PUBLICATION pglog_stream_slot SET ALL TABLES EXCEPT")
+	assert.Contains(t, logs.String(), "with only the tables that must stay excluded",
+		"SET ALL TABLES EXCEPT replaces the whole list")
 	assert.NotContains(t, logs.String(), "ADD TABLE")
 }
