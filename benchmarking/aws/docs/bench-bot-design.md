@@ -65,7 +65,7 @@ Success means a salesperson can get a defensible CU recommendation for a custome
 - **Runs are not isolated.** Terraform state keys are fixed (`"shared"` and the stack name, `runner/main.go`), pre-flight refuses to start while bench EC2 exists, and the soak workflows serialise on `concurrency: bench-soak`. Session-scoped isolation is the documented scaling path but is unbuilt.
 - The orphan-reaper Lambda destroys `Project=redpanda-connect-bench` resources older than 4h. Bot runs must finish well inside that or tag themselves exempt.
 - Soak workflows already authenticate to AWS via GitHub OIDC and fetch the enterprise licence from Secrets Manager. Reuse this rather than adding stored keys.
-- Known framework traps (see `docs/superpowers/specs/2026-09-22-inc-snapshot-soak-design.md`): reset runs after seed at every sweep point, brokers are not on the runner host, and there is no quiesce window between workload end and Connect shutdown.
+- Known framework traps: reset runs after seed at every sweep point, brokers are not on the runner host, and there is no quiesce window between workload end and Connect shutdown.
 - ADP's custom Slack integration has no user identity, so the agent acts with its own service-account credentials. The shared `github-read` MCP is read-only, so dispatching workflows needs a separate tool with a write-scoped token (RPCN Bot hit both, Oct 2026).
 - GitHub Actions jobs are capped at 6h.
 - **Sweep points share one machine.** The runner pins Connect to N cores with `taskset` on a single c8g.4xlarge (16 vCPU), with memory unconstrained (`runner/matrix.go`). A CU includes memory, so each point must also be limited to 4 GB per vCPU (e.g. a cgroup memory limit) for results to map to CUs.

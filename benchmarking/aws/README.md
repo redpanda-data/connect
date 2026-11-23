@@ -195,6 +195,8 @@ fails, it deletes the dataset with its contents (already gone counts as done).
 
 ## Results catalogue
 
+Design: [Bench Bot](docs/bench-bot-design.md) (catalogue, sizing, connector coverage) and [Bench Bot part 2](docs/bench-bot-agent-design.md) (the Slack agent, end-to-end runs, grants).
+
 Every completed bench sweep writes one entry to the results catalogue in the
 `redpanda-connect-bench-catalog` bucket, at
 `catalog/v1/<input>/<entry_id>.json`. Only bench sweeps are catalogued: soak

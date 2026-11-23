@@ -1,7 +1,7 @@
 # Bench Bot Part 2: Slack agent on ADP
 
 Status: draft, revised 2026-11-20 after review. Fresh runs are end to end and build latest `main`. My calls are marked *(my call)*.
-Parent spec: `docs/superpowers/specs/2026-11-20-bench-bot-design.md` (decisions there still bind). Part 1 (results catalogue, `benchmarking/aws/catalog` + `cmd/catalog`) is PR #5271.
+Parent spec: [`bench-bot-design.md`](bench-bot-design.md) (decisions there still bind). Part 1 (results catalogue, `benchmarking/aws/catalog` + `cmd/catalog`) is PR #5271.
 
 ## Intent
 
@@ -186,7 +186,7 @@ This brings the parent spec's end-to-end topology (Design §4) forward from part
 
 **Processors.** The customer's processors run as written. Processors that call customer systems (`http`, `sql_*`, cache lookups, `branch`/`workflow` calling out) are swapped for canned stand-in responses, with the caveat `external_calls_stubbed`.
 
-**Identity swap.** Endpoints, credentials, TLS, topics, tables, schemas and slot names always come from the bench. Performance settings (batching, `max_in_flight`, checkpoint limits, compression, partitioning, etc.) come from the customer. `stream_snapshot: true` is honoured for CDC sources with a seeded table. Seeding before the reset is a framework change; see `docs/superpowers/specs/2026-09-22-inc-snapshot-soak-design.md`.
+**Identity swap.** Endpoints, credentials, TLS, topics, tables, schemas and slot names always come from the bench. Performance settings (batching, `max_in_flight`, checkpoint limits, compression, partitioning, etc.) come from the customer. `stream_snapshot: true` is honoured for CDC sources with a seeded table. Seeding before the reset is a framework change.
 
 **Credentials.** Snowflake, BigQuery and Iceberg catalog credentials live in the bench account's Secrets Manager. The runner fetches them like the licence, and they are never in the plan or the catalogue.
 
