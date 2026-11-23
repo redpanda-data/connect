@@ -22,8 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kfake"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -111,6 +113,72 @@ func TestRedpandaOutputReconnectsAfterClose(t *testing.T) {
 	require.NoError(t, w.Close(t.Context()))
 	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newRedpandaOutputTestMessage(&dispatched)}))
 	require.Equal(t, int32(2), dispatched.Load())
+}
+
+// TestRedpandaOutputConcurrentWritesAreDelivered runs more concurrent writes
+// than the other tests, holds them all on their acks at once, and then
+// consumes the topic to check that every record written concurrently, and the
+// one written after a reconnect, reached the broker exactly once.
+func TestRedpandaOutputConcurrentWritesAreDelivered(t *testing.T) {
+	cluster := newRedpandaOutputTestCluster(t)
+	w := newRedpandaOutputTestWriter(t, cluster)
+	release := holdRedpandaOutputTestProduce(t, cluster)
+	require.NoError(t, w.Connect(t.Context()))
+
+	const writes = 4
+	var dispatched atomic.Int32
+	done := make(chan error, writes)
+	want := make([]string, 0, writes+1)
+	for i := range writes {
+		value := fmt.Sprintf("message %d", i)
+		want = append(want, value)
+		msg := service.NewMessage([]byte(value))
+		msg = msg.WithContext(dispatch.CtxOnTriggerSignal(msg.Context(), func() {
+			dispatched.Add(1)
+		}))
+		go func() {
+			done <- w.WriteBatch(t.Context(), service.MessageBatch{msg})
+		}()
+	}
+
+	require.Eventually(t, func() bool {
+		return dispatched.Load() == writes
+	}, 5*time.Second, 10*time.Millisecond,
+		"every write should hand its record to the producer while the others wait on their acks")
+
+	select {
+	case err := <-done:
+		t.Fatalf("a write returned (%v) before the broker acknowledged anything", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	release()
+	for range writes {
+		require.NoError(t, receiveRedpandaOutputTestResult(t, done, "write"))
+	}
+
+	require.NoError(t, w.Close(t.Context()))
+	want = append(want, "after close")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{service.NewMessage([]byte("after close"))}))
+
+	consumer, err := kgo.NewClient(
+		kgo.SeedBrokers(cluster.ListenAddrs()...),
+		kgo.ConsumeTopics(redpandaOutputTestTopic),
+	)
+	require.NoError(t, err)
+	t.Cleanup(consumer.Close)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	var got []string
+	for len(got) < len(want) {
+		fetches := consumer.PollFetches(ctx)
+		require.NoError(t, fetches.Err())
+		fetches.EachRecord(func(r *kgo.Record) {
+			got = append(got, string(r.Value))
+		})
+	}
+	assert.ElementsMatch(t, want, got)
 }
 
 func newRedpandaOutputTestCluster(t *testing.T) *kfake.Cluster {

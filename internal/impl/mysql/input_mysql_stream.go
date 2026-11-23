@@ -105,7 +105,9 @@ The stored position is a binlog file name and offset on one server, not a GTID. 
 
 == Data types
 
-Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers, `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers, `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps, binary and `+"`BLOB`"+` columns become byte arrays, `+"`SET`"+` columns become arrays of strings, and `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
+Column values keep their MySQL types where an equivalent exists. Integer, `+"`YEAR`"+`, and `+"`BIT`"+` columns become integers. `+"`FLOAT`"+` and `+"`DOUBLE`"+` columns become floating-point numbers. `+"`DATE`"+`, `+"`DATETIME`"+`, and `+"`TIMESTAMP`"+` columns become timestamps. Binary and `+"`BLOB`"+` columns become byte arrays. `+"`SET`"+` columns become arrays of strings. `+"`JSON`"+` columns become structured values. `+"`DECIMAL`"+` and `+"`NUMERIC`"+` columns become strings to preserve their precision, as do text, `+"`ENUM`"+`, and `+"`TIME`"+` columns. For example, a `+"`DECIMAL(10,2)`"+` value of `+"`123.45`"+` becomes the string `+"`\"123.45\"`"+`.
+
+A zero date such as `+"`0000-00-00`"+` has no timestamp form. When streamed, it becomes `+"`null`"+`. In the snapshot, it becomes `+"`0001-01-01T00:00:00Z`"+`. A date with a zero month or day, such as `+"`2024-00-15`"+`, also becomes `+"`null`"+` when streamed. With `+"`ALLOW_INVALID_DATES`"+`, MySQL can store a date that does not exist, such as `+"`2024-02-30`"+`. When streamed, an invalid `+"`DATE`"+` becomes `+"`null`"+`. An invalid `+"`DATETIME`"+` before 1970 also becomes `+"`null`"+`. An invalid `+"`DATETIME`"+` from 1970 on moves to a nearby valid date: `+"`2024-02-30 10:00:00`"+` becomes `+"`2024-03-01 10:00:00`"+`. The snapshot moves partial-zero and invalid dates to a nearby valid date: `+"`2024-00-15`"+` becomes `+"`2023-12-15`"+`. Valid dates before 1970 keep their value in the stream and in the snapshot.
 
 == Metadata
 
@@ -1073,6 +1075,37 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	return nil
 }
 
+// parseBinlogTime parses a DATE or DATETIME string from the binlog decoder
+// into a time.Time in UTC. It returns nil for a zero, partial-zero or invalid
+// date.
+func parseBinlogTime(layout, s string) (any, error) {
+	// go-mysql gives a string for DATE, for a zero DATETIME, and for a
+	// DATETIME before 1970. The string always starts with YYYY-MM-DD.
+	//
+	// MySQL can store a zero date (0000-00-00) and a date with a zero month
+	// or day (2024-00-15, a date where only the year is known). time.Time
+	// cannot hold a zero month or day, so give nil. This loses the known
+	// part of a partial-zero date. We accept that, because the schema type
+	// is a timestamp, and a string does not match it.
+	//
+	// The snapshot gives different values for the same rows: the SQL driver
+	// gives 0001-01-01 for a zero date, and moves 2024-00-15 to 2023-12-15.
+	// Do not copy that here, because it makes a date that is not in the
+	// database.
+	if len(s) >= len("2006-01-02") && (s[5:7] == "00" || s[8:10] == "00") {
+		return nil, nil
+	}
+	t, err := time.Parse(layout, s)
+	if err != nil {
+		// With ALLOW_INVALID_DATES in the SQL mode, MySQL stores a date
+		// such as 2024-02-30 that time.Time cannot hold. Give nil, as for a
+		// zero date: an error restarts the input at the same binlog
+		// position, so the stream would stop.
+		return nil, nil
+	}
+	return t, nil
+}
+
 func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	if v == nil {
 		return v, nil
@@ -1146,15 +1179,16 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	case schema.TYPE_DATE:
 		switch d := v.(type) {
 		case string:
-			return time.Parse("2006-01-02", d)
+			return parseBinlogTime("2006-01-02", d)
 		case time.Time:
 			return d, nil
 		default:
 			return nil, fmt.Errorf("expected string or time.Time for date column got: %T", v)
 		}
 	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
-		if _, ok := v.(string); ok {
-			return nil, nil
+		if s, ok := v.(string); ok {
+			// time.Parse accepts the optional fraction (DATETIME(6)).
+			return parseBinlogTime("2006-01-02 15:04:05", s)
 		}
 		return v, nil
 	case schema.TYPE_ENUM:

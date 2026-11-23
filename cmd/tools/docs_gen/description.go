@@ -519,14 +519,16 @@ type componentPlatform struct {
 // inCloud reports whether any Redpanda Cloud pipeline can use the component.
 func (p componentPlatform) inCloud() bool { return p.Cloud || p.CloudAI }
 
-// renderDescriptionPartial renders the description partial of a component.
-// The meta tag sets page attributes for the page header, the body tag renders
-// the status notice, summary, version note, and description, and the
-// footnotes tag renders the spec footnotes. Every tag is always present, so a
-// page that includes one keeps building when the spec drops that content.
-// excluded is as in cloudGuardXrefs, and is used only for components that
-// Redpanda Cloud includes.
-func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool) string {
+// renderDescriptionPartial renders the description partial of a component. The
+// meta tag sets page attributes for the page header: page-beta, which makes the
+// docs UI show its beta badge, and page-introduced-in, which the docs UI shows
+// as a badge in the page's sticky header on self-managed pages. The body tag
+// renders the status notice of deprecated and experimental components, then the
+// summary and description. The footnotes tag renders the spec footnotes. Every
+// tag is always present, so a page that includes one keeps building when the
+// spec drops that content. excluded is as in cloudGuardXrefs, and is used only
+// for components that Redpanda Cloud includes.
+func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPlatform, excluded func(typeDir, name string) bool, source string) string {
 	guard := func(body string) string {
 		if !plat.inCloud() || excluded == nil {
 			return body
@@ -535,25 +537,32 @@ func renderDescriptionPartial(c componentSpec, typeDir string, plat componentPla
 	}
 	summary := escapePlaceholderBraces(c.Summary)
 	var b strings.Builder
-	b.WriteString(descBanner + "\n\n// tag::meta[]\n")
+	b.WriteString(descBannerFor(source) + "\n\n// tag::meta[]\n")
 	if summary != "" {
 		b.WriteString(":description: " + flattenToAttributeValue(escapePlaceholderBraces(metaSummary(c.Summary))) + "\n")
 	}
 	if c.Status != "" {
 		b.WriteString(":status: " + c.Status + "\n")
 	}
+	if c.Status == "beta" {
+		// The docs UI shows its beta badge in the page header for pages that
+		// set page-beta, so beta components get the badge instead of a notice.
+		b.WriteString(":page-beta: true\n")
+	}
 	if plat.CgoOnly {
 		b.WriteString(":page-cgo-only: true\n")
 	}
+	if c.Version != "" {
+		b.WriteString("ifndef::env-cloud[]\n:page-introduced-in: " + c.Version + "\nendif::[]\n")
+	}
 	b.WriteString("// end::meta[]\n\n// tag::body[]\n")
-	if notice := statusNotice(c.Status, "component"); notice != "" {
-		b.WriteString(notice + "\n")
+	if c.Status != "beta" {
+		if notice := statusNotice(c.Status, "component"); notice != "" {
+			b.WriteString(notice + "\n")
+		}
 	}
 	if summary != "" {
 		b.WriteString(guard(summary) + "\n\n")
-	}
-	if c.Version != "" {
-		b.WriteString("ifndef::env-cloud[]\nIntroduced in version " + htmlEscaper.Replace(c.Version) + ".\nendif::[]\n\n")
 	}
 	b.WriteString(guard(renderDescriptionBody(c.Description, typeDir, c.Name)) + "\n// end::body[]\n\n")
 	b.WriteString("// tag::footnotes[]\n")
