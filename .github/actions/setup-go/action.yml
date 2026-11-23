@@ -19,14 +19,12 @@ runs:
         go-version-file: 'go.mod'
         cache: false
 
-    # Build cache: CGO_ENABLED is in the key, because a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    # Build cache key: CGO_ENABLED is in it, because a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    # The name goes before cgo, so an unnamed prefix does not match a named key.
     # The prefix lets a go.mod change start from the last cache. Go removes build entries unused for 5 days.
-    # The name goes before cgo, so the prefix of an unnamed cache does not match a named one.
     #
-    # Only main saves. The repository has 10 GB of cache, and GitHub removes the least recently used entries when it
-    # is full. A pull request cache is about 2 GB and only that pull request can use it, so pull request caches pushed
-    # the main caches out within hours. A pull request run restores the main cache instead.
-    # A PR command (/integration, issue_comment) runs on the main ref with PR code, so it must not save either.
+    # Only main saves. Pull request caches (about 2 GB, usable only by that pull request) evicted the main caches from
+    # the 10 GB repository cache. A PR command (issue_comment) runs PR code on the main ref, so it does not save.
     - name: Get Go cache paths and keys
       id: go-env
       shell: bash
