@@ -12,9 +12,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/connect/benchmarking/aws/plan"
@@ -208,6 +210,25 @@ func TestStaleEmptyIsArray(t *testing.T) {
 	var so, se bytes.Buffer
 	require.Equal(t, 0, run([]string{"stale", "--store", "dir:" + root, "--older-than", "6h", "--unstarted-older-than", "30m"}, &so, &se), se.String())
 	require.Equal(t, "[]\n", so.String(), "jq '.[]' must see an array, never null")
+}
+
+// The watchdog runs before the catalogue bucket exists: no bucket, no
+// stale plans, and stdout is still the array jq reads.
+func TestStaleToleratesMissingBucket(t *testing.T) {
+	useErroringS3(t, &s3types.NoSuchBucket{}, &fakeEC2{})
+	var so, se bytes.Buffer
+	args := []string{"stale", "--store", "s3://redpanda-connect-bench-catalog", "--older-than", "6h", "--unstarted-older-than", "30m"}
+	require.Equal(t, 0, run(args, &so, &se), se.String())
+	require.Equal(t, "[]\n", so.String())
+	require.Contains(t, se.String(), "does not exist; no stale plans")
+}
+
+func TestStaleOtherS3ErrorsFail(t *testing.T) {
+	useErroringS3(t, errors.New("AccessDenied"), &fakeEC2{})
+	var so, se bytes.Buffer
+	args := []string{"stale", "--store", "s3://redpanda-connect-bench-catalog", "--older-than", "6h", "--unstarted-older-than", "30m"}
+	require.Equal(t, 1, run(args, &so, &se))
+	require.Empty(t, so.String())
 }
 
 func TestStaleErrors(t *testing.T) {

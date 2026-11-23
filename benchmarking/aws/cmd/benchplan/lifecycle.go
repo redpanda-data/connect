@@ -200,7 +200,7 @@ func runDone(args []string, stderr io.Writer) error {
 	return nil
 }
 
-func runStale(args []string, stdout io.Writer) error {
+func runStale(args []string, stdout, stderr io.Writer) error {
 	fs := newFlags("stale")
 	store := fs.String("store", "", "s3://<bucket> or dir:<path>")
 	var notReported, notStarted time.Duration
@@ -221,6 +221,11 @@ func runStale(args []string, stdout io.Writer) error {
 		return err
 	}
 	stale, err := plan.NewStore(objs).Stale(ctx, deps.now().UTC(), notReported, notStarted)
+	if errors.Is(err, plan.ErrNoStore) {
+		// Before the catalogue bucket exists no plan can have been claimed.
+		fmt.Fprintf(stderr, "warning: plan store %s does not exist; no stale plans\n", *store)
+		stale, err = []plan.StalePlan{}, nil
+	}
 	if err != nil {
 		return err
 	}

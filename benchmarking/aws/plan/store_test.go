@@ -324,3 +324,52 @@ func TestRecordRunRejectsNonPositive(t *testing.T) {
 	}
 	require.NotContains(t, api.objs, "plans/0123456789ab.run")
 }
+
+// noBucketS3 fails every call as S3 does for a bucket that does not exist.
+type noBucketS3 struct{ err error }
+
+func (f noBucketS3) PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	return nil, f.err
+}
+
+func (f noBucketS3) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return nil, f.err
+}
+
+func (f noBucketS3) DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	return nil, f.err
+}
+
+func (f noBucketS3) ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	return nil, f.err
+}
+
+func TestS3MissingBucketIsErrNoStore(t *testing.T) {
+	ctx := t.Context()
+	for name, err := range map[string]error{
+		"typed":     &s3types.NoSuchBucket{},
+		"api error": apiErr{"NoSuchBucket"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			objs := NewS3Objects(noBucketS3{err: err}, "b")
+			_, _, gerr := objs.Get(ctx, "k")
+			require.ErrorIs(t, gerr, ErrNoStore)
+			require.NotErrorIs(t, gerr, ErrNotFound)
+			require.ErrorIs(t, objs.Create(ctx, "k", []byte("{}")), ErrNoStore)
+			require.ErrorIs(t, objs.Replace(ctx, "k", []byte("{}"), "e"), ErrNoStore)
+			require.ErrorIs(t, objs.Delete(ctx, "k", "e"), ErrNoStore)
+			_, lerr := objs.List(ctx, "plans/")
+			require.ErrorIs(t, lerr, ErrNoStore)
+
+			lock := NewLock(objs)
+			_, aerr := lock.Acquire(ctx, "h", time.Hour)
+			require.ErrorIs(t, aerr, ErrNoStore)
+			require.ErrorIs(t, lock.Release(ctx, "h"), ErrNoStore)
+			_, serr := NewStore(objs).Stale(ctx, time.Now(), time.Hour, time.Hour)
+			require.ErrorIs(t, serr, ErrNoStore)
+		})
+	}
+	_, _, err := NewS3Objects(noBucketS3{err: apiErr{"AccessDenied"}}, "b").Get(ctx, "k")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrNoStore)
+}

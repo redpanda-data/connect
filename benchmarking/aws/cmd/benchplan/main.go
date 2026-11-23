@@ -64,7 +64,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "done":
 		err = runDone(args[1:], stderr)
 	case "stale":
-		err = runStale(args[1:], stdout)
+		err = runStale(args[1:], stdout, stderr)
 	case "notify":
 		err = runNotify(args[1:], stdout)
 	case "lock":

@@ -31,6 +31,9 @@ var (
 	ErrConflict = errors.New("conflict: object already exists or changed")
 	// ErrNotFound means the object does not exist.
 	ErrNotFound = errors.New("not found")
+	// ErrNoStore means the store itself (the S3 bucket) does not exist, as
+	// before the catalogue bucket is first provisioned.
+	ErrNoStore = errors.New("store does not exist")
 )
 
 var idPattern = regexp.MustCompile(`^[0-9a-f]{12}$`)

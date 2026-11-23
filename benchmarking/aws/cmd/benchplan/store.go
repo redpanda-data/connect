@@ -181,6 +181,10 @@ func runLock(args []string, stderr io.Writer) error {
 	lock := plan.NewLock(objs)
 	if args[0] == "release" {
 		if err := lock.Release(ctx, holder); err != nil {
+			if errors.Is(err, plan.ErrNoStore) {
+				fmt.Fprintf(stderr, "warning: lock store %s does not exist; nothing to release for %s\n", store, holder)
+				return nil
+			}
 			return err
 		}
 		fmt.Fprintf(stderr, "released lock for %s (no-op if it was not the holder)\n", holder)
@@ -190,7 +194,14 @@ func runLock(args []string, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return acquire(ctx, lock, api, holder, ttl, wait, poll, stderr)
+	err = acquire(ctx, lock, api, holder, ttl, wait, poll, stderr)
+	if errors.Is(err, plan.ErrNoStore) {
+		// Bot runs need the bucket too, so with no bucket there is no other
+		// holder to collide with: the stack is ours once it is empty.
+		fmt.Fprintf(stderr, "warning: lock store %s does not exist; treating the lock as acquired by %s\n", store, holder)
+		return nil
+	}
+	return err
 }
 
 // acquire waits until no bench instance is running, then takes the lock;

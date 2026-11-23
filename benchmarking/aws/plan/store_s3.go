@@ -42,11 +42,16 @@ type s3Objects struct {
 func NewS3Objects(api S3API, bucket string) Objects { return &s3Objects{api: api, bucket: bucket} }
 
 // mapErr turns S3's 412 PreconditionFailed and 409 ConditionalRequestConflict
-// into ErrConflict, and a missing key into ErrNotFound.
+// into ErrConflict, a missing key into ErrNotFound, and a missing bucket into
+// ErrNoStore. Any other error is returned as is.
 func mapErr(err error) error {
 	var nsk *s3types.NoSuchKey
 	if errors.As(err, &nsk) {
 		return ErrNotFound
+	}
+	var nsb *s3types.NoSuchBucket
+	if errors.As(err, &nsb) {
+		return ErrNoStore
 	}
 	var ae smithy.APIError
 	if errors.As(err, &ae) {
@@ -55,6 +60,8 @@ func mapErr(err error) error {
 			return ErrConflict
 		case "NoSuchKey", "NotFound":
 			return ErrNotFound
+		case "NoSuchBucket":
+			return ErrNoStore
 		}
 	}
 	return err
@@ -70,7 +77,7 @@ func (o *s3Objects) put(ctx context.Context, key string, body []byte, in *s3.Put
 		if errors.Is(m, ErrConflict) || (in.IfMatch != nil && errors.Is(m, ErrNotFound)) {
 			return ErrConflict
 		}
-		return fmt.Errorf("putting s3://%s/%s: %w", o.bucket, key, err)
+		return fmt.Errorf("putting s3://%s/%s: %w", o.bucket, key, m)
 	}
 	return nil
 }
@@ -86,10 +93,11 @@ func (o *s3Objects) Replace(ctx context.Context, key string, body []byte, etag s
 func (o *s3Objects) Get(ctx context.Context, key string) ([]byte, string, error) {
 	res, err := o.api.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(key)})
 	if err != nil {
-		if m := mapErr(err); errors.Is(m, ErrNotFound) {
+		m := mapErr(err)
+		if errors.Is(m, ErrNotFound) {
 			return nil, "", m
 		}
-		return nil, "", fmt.Errorf("getting s3://%s/%s: %w", o.bucket, key, err)
+		return nil, "", fmt.Errorf("getting s3://%s/%s: %w", o.bucket, key, m)
 	}
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
@@ -102,13 +110,14 @@ func (o *s3Objects) Get(ctx context.Context, key string) ([]byte, string, error)
 func (o *s3Objects) Delete(ctx context.Context, key, etag string) error {
 	_, err := o.api.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(key), IfMatch: aws.String(etag)})
 	if err != nil {
-		switch m := mapErr(err); {
+		m := mapErr(err)
+		switch {
 		case errors.Is(m, ErrNotFound):
 			return nil
 		case errors.Is(m, ErrConflict):
 			return m
 		}
-		return fmt.Errorf("deleting s3://%s/%s: %w", o.bucket, key, err)
+		return fmt.Errorf("deleting s3://%s/%s: %w", o.bucket, key, m)
 	}
 	return nil
 }
@@ -119,7 +128,7 @@ func (o *s3Objects) List(ctx context.Context, prefix string) ([]string, error) {
 	for {
 		page, err := o.api.ListObjectsV2(ctx, in)
 		if err != nil {
-			return nil, fmt.Errorf("listing s3://%s/%s: %w", o.bucket, prefix, err)
+			return nil, fmt.Errorf("listing s3://%s/%s: %w", o.bucket, prefix, mapErr(err))
 		}
 		for _, obj := range page.Contents {
 			keys = append(keys, aws.ToString(obj.Key))

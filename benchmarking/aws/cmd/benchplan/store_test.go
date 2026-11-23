@@ -22,6 +22,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/connect/benchmarking/aws/plan"
@@ -238,4 +240,82 @@ func TestLockAcquireTimeoutAfterEC2ErrorIsExit3(t *testing.T) {
 	e.errs = 1
 	require.Equal(t, 3, run(lockArgs("acquire", root, "--holder", "b", "--wait", "40ms", "--poll", "5ms"), &so, &se),
 		"one EC2 error, then a held lock until the deadline")
+}
+
+// erroringS3 is an S3 whose every call fails with err, as S3 does for a
+// bucket that does not exist (NoSuchBucket).
+type erroringS3 struct {
+	err   error
+	calls atomic.Int32
+}
+
+func (f *erroringS3) PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	f.calls.Add(1)
+	return nil, f.err
+}
+
+func (f *erroringS3) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	f.calls.Add(1)
+	return nil, f.err
+}
+
+func (f *erroringS3) DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	f.calls.Add(1)
+	return nil, f.err
+}
+
+func (f *erroringS3) ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	f.calls.Add(1)
+	return nil, f.err
+}
+
+func useErroringS3(t *testing.T, err error, e *fakeEC2) *erroringS3 {
+	t.Helper()
+	api := &erroringS3{err: err}
+	old := deps
+	deps = dependencies{
+		s3Objects: func(_ context.Context, bucket string) (plan.Objects, error) {
+			return plan.NewS3Objects(api, bucket), nil
+		},
+		ec2: func(context.Context) (EC2API, error) { return e, nil },
+		now: time.Now,
+	}
+	t.Cleanup(func() { deps = old })
+	return api
+}
+
+func s3LockArgs(sub string, extra ...string) []string {
+	return append([]string{"lock", sub, "--store", "s3://redpanda-connect-bench-catalog"}, extra...)
+}
+
+// Before the catalogue bucket exists, soaks still take the lock: there is
+// no bot run to collide with.
+func TestLockToleratesMissingBucket(t *testing.T) {
+	api := useErroringS3(t, &s3types.NoSuchBucket{}, &fakeEC2{})
+	var so, se bytes.Buffer
+	require.Equal(t, 0, run(s3LockArgs("acquire", "--holder", "soak-1", "--wait", "1s", "--poll", "5ms"), &so, &se), se.String())
+	require.Contains(t, se.String(), "does not exist; treating the lock as acquired")
+	se.Reset()
+	require.Equal(t, 0, run(s3LockArgs("release", "--holder", "soak-1"), &so, &se), se.String())
+	require.Contains(t, se.String(), "does not exist; nothing to release")
+	require.Positive(t, api.calls.Load())
+}
+
+func TestLockMissingBucketStillWaitsForTheStack(t *testing.T) {
+	e := &fakeEC2{running: make([]int, 1000)}
+	for i := range e.running {
+		e.running[i] = 1
+	}
+	api := useErroringS3(t, &s3types.NoSuchBucket{}, e)
+	var so, se bytes.Buffer
+	require.Equal(t, 3, run(s3LockArgs("acquire", "--holder", "soak-1", "--wait", "40ms", "--poll", "5ms"), &so, &se),
+		"a busy stack still times out with exit 3")
+	require.Zero(t, api.calls.Load(), "the lock is not tried while instances run")
+}
+
+func TestLockOtherS3ErrorsFail(t *testing.T) {
+	useErroringS3(t, errors.New("AccessDenied"), &fakeEC2{})
+	var so, se bytes.Buffer
+	require.Equal(t, 1, run(s3LockArgs("acquire", "--holder", "soak-1", "--wait", "1s", "--poll", "5ms"), &so, &se))
+	require.Equal(t, 1, run(s3LockArgs("release", "--holder", "soak-1"), &so, &se))
 }
