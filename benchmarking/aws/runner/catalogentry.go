@@ -75,20 +75,23 @@ func shouldCatalogue(s *Scenario, r *Result) bool {
 // benchmark processor.
 func catalogEntryFromResult(s *Scenario, r *Result, meta catalogMeta) (catalog.Entry, error) {
 	run := catalog.RunInput{
-		ID:                meta.SessionID,
-		Scenario:          r.Scenario,
-		GitSHA:            r.GitSHA,
-		ConnectVersion:    r.ConnectVersion,
-		InstanceType:      r.Infra.RunnerInstanceType,
-		Region:            r.Infra.Region,
-		RunURL:            meta.RunURL,
-		ResultKey:         meta.ResultKey,
-		MessageSizeBytes:  r.Dataset.RowSizeBytes,
-		OfferedRatePerSec: s.Workload.WriteRatePerSec,
-		Soak:              s.Soak,
-		MemoryLimited:     s.MemoryLimited(),
-		SinkMeasured:      true,
-		Now:               meta.Now,
+		ID:               meta.SessionID,
+		Scenario:         r.Scenario,
+		GitSHA:           r.GitSHA,
+		ConnectVersion:   r.ConnectVersion,
+		InstanceType:     r.Infra.RunnerInstanceType,
+		Region:           r.Infra.Region,
+		RunURL:           meta.RunURL,
+		ResultKey:        meta.ResultKey,
+		MessageSizeBytes: r.Dataset.RowSizeBytes,
+		Soak:             s.Soak,
+		MemoryLimited:    s.MemoryLimited(),
+		SinkMeasured:     true,
+		Now:              meta.Now,
+	}
+	// A bounded-dataset scenario has no workload, so no offered rate.
+	if s.Workload != nil {
+		run.OfferedRatePerSec = s.Workload.WriteRatePerSec
 	}
 	e2e := s.Direction == DirectionE2E
 	if e2e {

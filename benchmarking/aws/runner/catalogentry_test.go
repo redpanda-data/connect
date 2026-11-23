@@ -82,6 +82,21 @@ func TestCatalogEntryFromResult(t *testing.T) {
 	require.Empty(t, e.ResultKey)
 }
 
+// A bounded-dataset scenario validates without a workload and is
+// catalogued; it has no offered rate.
+func TestCatalogEntryWithoutWorkload(t *testing.T) {
+	s, err := LoadScenario("testdata/bounded-valid.yaml")
+	require.NoError(t, err)
+	require.Nil(t, s.Workload)
+	_, r := catalogFixture(t)
+	require.True(t, shouldCatalogue(s, r))
+	e, err := catalogEntryFromResult(s, r, catalogMeta{SessionID: "bench-1"})
+	require.NoError(t, err)
+	require.NoError(t, e.Validate())
+	require.Zero(t, e.Workload.OfferedRatePerSec)
+	require.Len(t, e.Points, 4)
+}
+
 func TestCatalogEntryMemoryLimited(t *testing.T) {
 	s, r := catalogFixture(t)
 	s.Infra.MemoryPerVCPUBytes = 4_000_000_000
