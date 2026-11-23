@@ -50,7 +50,7 @@ const (
 
 var secretsFlag = &cli.StringSliceFlag{
 	Name:  "secrets",
-	Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN env:, which by default is the only entry. In order to disable all secret lookups specify a single entry of none:.",
+	Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN env:, which by default is the only entry. To disable all secret lookups, specify a single entry of none:.",
 	Value: cli.NewStringSlice("env:"),
 }
 
