@@ -23,54 +23,52 @@ runs:
     # Build cache: CGO_ENABLED is in the key, because a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
     # The prefix lets a go.mod change start from the last cache. Go removes build entries unused for 5 days.
     # The name goes before cgo, so the prefix of an unnamed cache does not match a named one.
-    # Module cache: Go never removes old module versions, so main saves it with an exact go.sum key.
-    # All jobs share one module entry.
+    #
+    # Only main saves. The repository has 10 GB of cache, and GitHub removes the least recently used entries when it
+    # is full. A pull request cache is about 2 GB and only that pull request can use it, so pull request caches pushed
+    # the main caches out within hours. A pull request run restores the main cache instead.
+    # A PR command (/integration, issue_comment) runs on the main ref with PR code, so it must not save either.
     - name: Get Go cache paths and keys
       id: go-env
       shell: bash
       env:
         NAME: ${{ inputs.cache-name && format('{0}-', inputs.cache-name) || '' }}
+        GO_VERSION: ${{ steps.setup-go.outputs.go-version }}
         GO_MOD_HASH: ${{ hashFiles('go.mod') }}
-        GO_SUM_HASH: ${{ hashFiles('go.sum') }}
+        SAVE: ${{ github.ref == 'refs/heads/main' && github.event_name != 'issue_comment' }}
       run: |
-        gocache=$(go env GOCACHE)
-        gomodcache=$(go env GOMODCACHE)
-        prefix="go-${RUNNER_OS}-${{ steps.setup-go.outputs.go-version }}-${NAME}cgo${CGO_ENABLED}-"
-        echo "gocache=$gocache" >> "$GITHUB_OUTPUT"
-        echo "gomodcache=$gomodcache" >> "$GITHUB_OUTPUT"
+        prefix="go-${RUNNER_OS}-${GO_VERSION}-${NAME}cgo${CGO_ENABLED}-"
+        echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
         echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
         echo "key=${prefix}${GO_MOD_HASH}" >> "$GITHUB_OUTPUT"
-        echo "mod-prefix=gomod-${RUNNER_OS}-" >> "$GITHUB_OUTPUT"
-        echo "mod-key=gomod-${RUNNER_OS}-${GO_SUM_HASH}" >> "$GITHUB_OUTPUT"
+        echo "save=$SAVE" >> "$GITHUB_OUTPUT"
 
-    # Only main saves the cache. The repository has 10 GB of cache, and GitHub removes the least recently used
-    # entries when it is full. A pull request cache is about 2 GB and only that pull request can use it, so pull
-    # request caches pushed the main caches out within hours. A pull request run restores the main cache instead.
-    # A PR command (/integration, issue_comment) runs on the main ref with PR code, so it must not save either.
-    - name: Cache Go modules
-      id: mod-cache
-      if: github.ref == 'refs/heads/main' && github.event_name != 'issue_comment'
-      uses: actions/cache@v6.1.0
-      with:
-        path: ${{ steps.go-env.outputs.gomodcache }}
-        key: ${{ steps.go-env.outputs.mod-key }}
-
-    # The first main job to finish saves the module cache. All jobs download all modules, so the entry is complete.
-    - name: Download Go modules
-      if: steps.mod-cache.outcome == 'success' && steps.mod-cache.outputs.cache-hit != 'true'
-      shell: bash
-      run: go mod download
-
+    # Module cache: Go never removes old module versions, so main restores and saves it with an exact go.sum key only.
+    # All jobs share one module entry.
     - name: Restore Go modules
-      if: github.ref != 'refs/heads/main' || github.event_name == 'issue_comment'
+      id: mod-cache
       uses: actions/cache/restore@v6.1.0
       with:
         path: ${{ steps.go-env.outputs.gomodcache }}
-        key: ${{ steps.go-env.outputs.mod-key }}
-        restore-keys: ${{ steps.go-env.outputs.mod-prefix }}
+        key: gomod-${{ runner.os }}-${{ hashFiles('go.sum') }}
+        restore-keys: ${{ steps.go-env.outputs.save != 'true' && format('gomod-{0}-', runner.os) || '' }}
 
+    - name: Download Go modules
+      if: steps.go-env.outputs.save == 'true' && steps.mod-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: go mod download
+
+    - name: Save Go modules
+      if: steps.go-env.outputs.save == 'true' && steps.mod-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: ${{ steps.mod-cache.outputs.cache-primary-key }}
+
+    # A composite action has no post step of its own, so main uses actions/cache to save the build cache at job end.
     - name: Cache Go build
-      if: github.ref == 'refs/heads/main' && github.event_name != 'issue_comment'
+      if: steps.go-env.outputs.save == 'true'
       uses: actions/cache@v6.1.0
       with:
         path: ${{ steps.go-env.outputs.gocache }}
@@ -78,7 +76,7 @@ runs:
         restore-keys: ${{ steps.go-env.outputs.prefix }}
 
     - name: Restore Go build
-      if: github.ref != 'refs/heads/main' || github.event_name == 'issue_comment'
+      if: steps.go-env.outputs.save != 'true'
       uses: actions/cache/restore@v6.1.0
       with:
         path: ${{ steps.go-env.outputs.gocache }}
