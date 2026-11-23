@@ -203,12 +203,16 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		// For LOB-only UPDATE events the SET clause contains only LOB columns, so
 		// PK columns are not in ev.Data — they are in ev.OldValues (WHERE clause).
 		// DELETEs are skipped, so an earlier INSERT or UPDATE of the row can match.
+		// An UPDATE also matches on its post-image: the locator's WHERE reflects
+		// the row after earlier updates in the txn, not its pre-update OldValues.
 		var deleted bool
 		for _, ev := range slices.Backward(events) {
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}
-			if !pkMatches(ev.Data, acc.PKValues) && !pkMatches(ev.OldValues, acc.PKValues) {
+			matched := pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) ||
+				(ev.Operation == OpUpdate && postImageMatches(ev, acc.PKValues))
+			if !matched {
 				continue
 			}
 			if ev.Operation == OpDelete {
@@ -329,6 +333,27 @@ func pkMatches(data map[string]any, pkValues map[string]any) bool {
 			return false
 		}
 		if !valuesEqual(dataVal, pkVal) {
+			return false
+		}
+	}
+	return true
+}
+
+// postImageMatches reports whether pkValues equal the row as it is after ev:
+// each key is taken from ev.Data, falling back to ev.OldValues when the column
+// was not changed. An empty pkValues returns false, like pkMatches.
+func postImageMatches(ev *DMLEvent, pkValues map[string]any) bool {
+	if len(pkValues) == 0 {
+		return false
+	}
+	for k, pkVal := range pkValues {
+		val, exists := ev.Data[k]
+		if !exists {
+			if val, exists = ev.OldValues[k]; !exists {
+				return false
+			}
+		}
+		if !valuesEqual(val, pkVal) {
 			return false
 		}
 	}

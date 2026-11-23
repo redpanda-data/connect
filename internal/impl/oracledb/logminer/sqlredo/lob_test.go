@@ -246,6 +246,10 @@ func TestMergeLOBsSkipsDeleteEvents(t *testing.T) {
 	newUpdate := func(id string) *DMLEvent {
 		return &DMLEvent{Operation: OpUpdate, Schema: "S", Table: "T", Data: map[string]any{"NAME": "x"}, OldValues: map[string]any{"ID": id}}
 	}
+	// newRename changes NAME from "row2" to "changed" on row 2.
+	newRename := func() *DMLEvent {
+		return &DMLEvent{Operation: OpUpdate, Schema: "S", Table: "T", Data: map[string]any{"NAME": "changed"}, OldValues: map[string]any{"ID": "2", "NAME": "row2"}}
+	}
 
 	tests := []struct {
 		name         string
@@ -283,6 +287,39 @@ func TestMergeLOBsSkipsDeleteEvents(t *testing.T) {
 			name:          "pass 2: DELETE of a different row does not drop accumulator",
 			pk:            map[string]any{"ID": "1"},
 			events:        []*DMLEvent{newDelete("2")},
+			wantUnmerged:  1,
+			wantMergedIdx: -1,
+		},
+		{
+			name:          "pass 2: UPDATE of the row next to a DELETE of another row merges into the UPDATE",
+			pk:            map[string]any{"ID": "1"},
+			events:        []*DMLEvent{newUpdate("1"), newDelete("2")},
+			wantUnmerged:  0,
+			wantMergedIdx: 0,
+		},
+		{
+			// PKValues reflect the row after earlier updates, so match the UPDATE post-image.
+			name: "pass 2: post-image PK matches UPDATE ahead of a later DELETE",
+			pk:   map[string]any{"ID": "2", "NAME": "changed"},
+			events: []*DMLEvent{
+				newRename(),
+				{Operation: OpDelete, Schema: "S", Table: "T", OldValues: map[string]any{"ID": "2", "NAME": "changed"}},
+			},
+			wantUnmerged:  0,
+			wantMergedIdx: 0,
+		},
+		{
+			name:          "pass 2: post-image PK matches UPDATE with no DELETE",
+			pk:            map[string]any{"ID": "2", "NAME": "changed"},
+			events:        []*DMLEvent{newRename()},
+			wantUnmerged:  0,
+			wantMergedIdx: 0,
+		},
+		{
+			// A second candidate keeps Pass 3's single-candidate fallback from merging.
+			name:          "pass 2: PK differing from UPDATE post-image is unmerged",
+			pk:            map[string]any{"ID": "2", "NAME": "other"},
+			events:        []*DMLEvent{newRename(), newUpdate("3")},
 			wantUnmerged:  1,
 			wantMergedIdx: -1,
 		},

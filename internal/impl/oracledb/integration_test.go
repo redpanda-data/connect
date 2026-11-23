@@ -1393,6 +1393,7 @@ oracledb_cdc:
 		var row map[string]any
 		require.NoError(t, json.Unmarshal(b, &row))
 		assert.Equal(t, "changed", row["NAME"])
+		assert.Equal(t, strings.Repeat("C", 5000), row["DOC"])
 	}
 }
 
