@@ -45,16 +45,13 @@ func NewS3Objects(api S3API, bucket string) Objects { return &s3Objects{api: api
 // into ErrConflict, a missing key into ErrNotFound, and a missing bucket into
 // ErrNoStore. Any other error is returned as is.
 func mapErr(err error) error {
-	var nsk *s3types.NoSuchKey
-	if errors.As(err, &nsk) {
+	if _, ok := errors.AsType[*s3types.NoSuchKey](err); ok {
 		return ErrNotFound
 	}
-	var nsb *s3types.NoSuchBucket
-	if errors.As(err, &nsb) {
+	if _, ok := errors.AsType[*s3types.NoSuchBucket](err); ok {
 		return ErrNoStore
 	}
-	var ae smithy.APIError
-	if errors.As(err, &ae) {
+	if ae, ok := errors.AsType[smithy.APIError](err); ok {
 		switch ae.ErrorCode() {
 		case "PreconditionFailed", "ConditionalRequestConflict":
 			return ErrConflict

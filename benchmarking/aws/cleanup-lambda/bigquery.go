@@ -157,7 +157,7 @@ func newBigQueryOpener(sm secretsGetter, secretID string, connect func(ctx conte
 // connectGoBigQuery is the real connector. Its errors are replaced, as the
 // client's can echo option details.
 func connectGoBigQuery(ctx context.Context, project string, credentialsJSON []byte) (bigQueryReaperAPI, error) {
-	c, err := bigquery.NewClient(ctx, project, option.WithCredentialsJSON(credentialsJSON))
+	c, err := bigquery.NewClient(ctx, project, option.WithAuthCredentialsJSON(option.ServiceAccount, credentialsJSON))
 	if err != nil {
 		return nil, errors.New("create bigquery client failed")
 	}

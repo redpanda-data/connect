@@ -120,7 +120,7 @@ func storeFixtures() []storeFixture {
 			}
 			return NewDirStore(root), raw, count
 		}},
-		{"s3", func(t *testing.T) (Store, func(string, []byte), func() int) {
+		{"s3", func(*testing.T) (Store, func(string, []byte), func() int) {
 			f := newFakeS3(0)
 			raw := func(key string, data []byte) { f.objs[key] = data }
 			return NewS3Store(f, "bkt"), raw, func() int { return len(f.objs) }

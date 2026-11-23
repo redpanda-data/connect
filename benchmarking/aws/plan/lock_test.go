@@ -43,10 +43,8 @@ func TestLockConcurrentFreeOneWins(t *testing.T) {
 	var wins int
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range 8 {
+		wg.Go(func() {
 			ok, err := newTestLock(api, &now).Acquire(context.Background(), "h"+string(rune('a'+i)), time.Hour)
 			require.NoError(t, err)
 			if ok {
@@ -54,7 +52,7 @@ func TestLockConcurrentFreeOneWins(t *testing.T) {
 				wins++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	require.Equal(t, 1, wins)

@@ -66,7 +66,7 @@ func checkPut(e Entry) ([]byte, error) {
 // checkSegment refuses a key segment that would escape its prefix.
 func checkSegment(name, v string) error {
 	if strings.ContainsAny(v, `/\`) || v == "." || v == ".." {
-		return fmt.Errorf("%s %q must not contain path separators or be . or ..", name, v)
+		return fmt.Errorf("%s %q: path separators and the names . and .. are not allowed", name, v)
 	}
 	return nil
 }

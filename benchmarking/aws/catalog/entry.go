@@ -10,6 +10,7 @@
 package catalog
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -145,7 +146,7 @@ func (e Entry) Validate() error {
 		return fmt.Errorf("workload.mode: got %q, want \"cdc\" or \"bulk\"", m)
 	}
 	if len(e.Points) == 0 {
-		return fmt.Errorf("points: must not be empty")
+		return errors.New("points: must not be empty")
 	}
 	seen := make(map[float64]struct{}, len(e.Points))
 	for i, p := range e.Points {

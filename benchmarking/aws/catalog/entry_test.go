@@ -35,15 +35,13 @@ func validEntry() Entry {
 			{VCPU: 0.5, CUs: 5, CapacityMBps: 1.5, CapacityMsgps: 1500, PeakRSSBytes: 1 << 28},
 			{VCPU: 1, CUs: 10, CapacityMBps: 3, CapacityMsgps: 3000},
 		},
-		AWSCostUSD:  ptr(1.25),
-		SaaSCostUSD: ptr(0.5),
+		AWSCostUSD:  new(1.25),
+		SaaSCostUSD: new(0.5),
 		RunURL:      "https://example.com/run/1",
 		ResultKey:   "results/sess-1.json",
 		RecordedAt:  time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC),
 	}
 }
-
-func ptr(f float64) *float64 { return &f }
 
 func TestEntryJSONRoundTrip(t *testing.T) {
 	in := validEntry()

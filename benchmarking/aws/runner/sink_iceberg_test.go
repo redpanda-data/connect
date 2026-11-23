@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -76,7 +77,10 @@ func (f *fakeGlue) GetTables(_ context.Context, in *glue.GetTablesInput, _ ...fu
 	}
 	start := 0
 	if in.NextToken != nil {
-		fmt.Sscanf(*in.NextToken, "%d", &start)
+		var err error
+		if start, err = strconv.Atoi(*in.NextToken); err != nil {
+			return nil, fmt.Errorf("parsing next token: %w", err)
+		}
 	}
 	end := len(names)
 	var next *string

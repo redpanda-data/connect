@@ -95,7 +95,7 @@ func (g *gitCLI) run(ctx context.Context, args ...string) (string, error) {
 
 func lines(s string) []string {
 	var out []string
-	for _, l := range strings.Split(s, "\n") {
+	for l := range strings.SplitSeq(s, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			out = append(out, l)
 		}
@@ -204,7 +204,7 @@ func (g *gitCLI) BenthosVersion(ctx context.Context, ref string) (string, error)
 
 // benthosRequire returns the benthos version a go.mod requires.
 func benthosRequire(gomod string) (string, error) {
-	for _, l := range strings.Split(gomod, "\n") {
+	for l := range strings.SplitSeq(gomod, "\n") {
 		f := strings.Fields(strings.TrimPrefix(strings.TrimSpace(l), "require "))
 		if len(f) >= 2 && f[0] == benthosModule {
 			return f[1], nil
@@ -244,7 +244,7 @@ func (g *gitCLI) ChangelogMentions(ctx context.Context, fromSHA, toRef, componen
 		return nil, err
 	}
 	var hits []string
-	for _, l := range strings.Split(out, "\n") {
+	for l := range strings.SplitSeq(out, "\n") {
 		if !strings.HasPrefix(l, "+") || strings.HasPrefix(l, "+++") {
 			continue
 		}

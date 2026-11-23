@@ -10,6 +10,7 @@ package plan
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"regexp"
 
@@ -297,9 +298,7 @@ func nonNil(s []string) []string {
 // processors are pipeline logic and are kept; the stored Plan is not changed.
 func approximatedPipeline(pipeline map[string]any) map[string]any {
 	out := make(map[string]any, len(pipeline))
-	for k, v := range pipeline {
-		out[k] = v
-	}
+	maps.Copy(out, pipeline)
 	const component = "redpanda"
 	tpl := SourceTemplates[SourceRedpanda](component)
 	in := map[string]any{component: tpl.Fields}

@@ -151,7 +151,7 @@ func labelledMetrics(body string) map[string][]labelledValue {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		name, labels, rest := line, "", ""
+		var name, labels, rest string
 		if i := strings.IndexByte(line, '{'); i >= 0 {
 			j := strings.LastIndexByte(line, '}')
 			if j < i {

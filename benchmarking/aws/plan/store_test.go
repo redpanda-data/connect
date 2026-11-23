@@ -45,10 +45,10 @@ func newFakeS3() *fakeS3 {
 
 type apiErr struct{ code string }
 
-func (e apiErr) Error() string                 { return e.code }
-func (e apiErr) ErrorCode() string             { return e.code }
-func (e apiErr) ErrorMessage() string          { return e.code }
-func (e apiErr) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
+func (e apiErr) Error() string               { return e.code }
+func (e apiErr) ErrorCode() string           { return e.code }
+func (e apiErr) ErrorMessage() string        { return e.code }
+func (apiErr) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
 func (f *fakeS3) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	b, err := io.ReadAll(in.Body)
@@ -239,10 +239,8 @@ func TestClaimConcurrentExactlyOne(t *testing.T) {
 	var wins int32
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			first, err := s.Claim(ctx, "0123456789ab", "x")
 			require.NoError(t, err)
 			if first {
@@ -250,7 +248,7 @@ func TestClaimConcurrentExactlyOne(t *testing.T) {
 				wins++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	require.EqualValues(t, 1, wins)

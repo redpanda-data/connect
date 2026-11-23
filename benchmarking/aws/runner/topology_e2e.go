@@ -10,6 +10,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 )
 
 // e2eTopology runs the customer's whole pipeline and measures throughput at
@@ -50,9 +51,7 @@ func (e2eTopology) Pipeline(s *Scenario, _ BenchNames) (input, output map[string
 		return nil, nil, fmt.Errorf("e2e scenario %q: pipeline.output must be a map", s.Connector)
 	}
 	out := make(map[string]any, len(orig)+1)
-	for k, v := range orig {
-		out[k] = v
-	}
+	maps.Copy(out, orig)
 	var procs []any
 	switch p := orig["processors"].(type) {
 	case nil:

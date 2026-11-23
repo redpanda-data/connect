@@ -112,7 +112,7 @@ func TestSweepSnowflake_SkippedWhenSecretMissing(t *testing.T) {
 	// ResourceNotFound when the caller's grant names only the suffixed ARN,
 	// so both mean "not set up yet".
 	for name, gerr := range map[string]error{
-		"not found":     &smtypes.ResourceNotFoundException{Message: strPtr("not found")},
+		"not found":     &smtypes.ResourceNotFoundException{Message: new("not found")},
 		"access denied": &smithy.GenericAPIError{Code: "AccessDeniedException", Message: "not authorized"},
 	} {
 		sm := &fakeSecrets{err: gerr}
@@ -149,8 +149,6 @@ func (f *fakeSecrets) GetSecretValue(_ context.Context, in *secretsmanager.GetSe
 	}
 	return &secretsmanager.GetSecretValueOutput{SecretString: &f.value}, nil
 }
-
-func strPtr(s string) *string { return &s }
 
 func testKeyPEM(t *testing.T) string {
 	t.Helper()

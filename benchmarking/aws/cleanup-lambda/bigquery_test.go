@@ -30,7 +30,7 @@ type fakeBigQueryReaper struct {
 	closed    bool
 }
 
-func (f *fakeBigQueryReaper) ListDatasets(_ context.Context, project, prefix string) ([]bigQueryDatasetInfo, error) {
+func (f *fakeBigQueryReaper) ListDatasets(_ context.Context, project, _ string) ([]bigQueryDatasetInfo, error) {
 	f.listProj = project
 	return f.datasets, f.listErr
 }
@@ -102,7 +102,7 @@ func TestSweepBigQuery_FailuresAreReportedNotFatal(t *testing.T) {
 func TestSweepBigQuery_SkippedWhenSecretMissing(t *testing.T) {
 	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
 	for name, gerr := range map[string]error{
-		"not found":     &smtypes.ResourceNotFoundException{Message: strPtr("not found")},
+		"not found":     &smtypes.ResourceNotFoundException{Message: new("not found")},
 		"access denied": &smithy.GenericAPIError{Code: "AccessDeniedException", Message: "not authorized"},
 	} {
 		open := newBigQueryOpener(&fakeSecrets{err: gerr}, "arn:aws:secretsmanager:us-east-2:1:secret:redpanda-connect-bench/bigquery", nil)

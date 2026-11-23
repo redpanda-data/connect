@@ -376,8 +376,8 @@ func SwapIdentity(pipeline map[string]any, src SourceKind, sink SinkKind) (map[s
 				caveats = append(caveats, CaveatSnapshotNotMeasure)
 			}
 		}
-		kind, real := RealSources[name]
-		if !real || src == SourceApproximated {
+		kind, isReal := RealSources[name]
+		if !isReal || src == SourceApproximated {
 			return nil
 		}
 		cv, err := applyTemplate(out, h, name, SourceTemplates[kind](name))
@@ -667,11 +667,7 @@ func hasExternalKey(v any) bool {
 			}
 		}
 	case []any:
-		for _, child := range t {
-			if hasExternalKey(child) {
-				return true
-			}
-		}
+		return slices.ContainsFunc(t, hasExternalKey)
 	}
 	return false
 }

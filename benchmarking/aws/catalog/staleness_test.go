@@ -37,7 +37,7 @@ func (f *fakeGit) BenthosVersion(_ context.Context, ref string) (string, error) 
 
 func (f *fakeGit) LatestRelease(context.Context) (string, error) { return f.release, nil }
 
-func (f *fakeGit) MainRef(context.Context) (string, error) { return "origin/main", nil }
+func (*fakeGit) MainRef(context.Context) (string, error) { return "origin/main", nil }
 
 func (f *fakeGit) ComponentPaths(_ context.Context, c string) ([]string, error) {
 	return f.paths[c], nil

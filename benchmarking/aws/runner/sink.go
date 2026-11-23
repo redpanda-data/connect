@@ -15,6 +15,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -249,11 +250,7 @@ func outputBatchesWithProcessors(output any) bool {
 			}
 		}
 	case []any:
-		for _, c := range v {
-			if outputBatchesWithProcessors(c) {
-				return true
-			}
-		}
+		return slices.ContainsFunc(v, outputBatchesWithProcessors)
 	}
 	return false
 }

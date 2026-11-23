@@ -229,7 +229,7 @@ chmod 0600 %[2]s`, bigQueryKeyDir, bigQueryKeyFile, s.region, bigQuerySecretID)
 
 // HostEnv points Connect's application-default credentials at the host file.
 // It is a path, never key material.
-func (s *bigQuerySink) HostEnv() map[string]string {
+func (*bigQuerySink) HostEnv() map[string]string {
 	return map[string]string{"GOOGLE_APPLICATION_CREDENTIALS": bigQueryKeyFile}
 }
 
@@ -292,7 +292,7 @@ func loadBigQuery(ctx context.Context, sm SecretsManagerClient, open bigQueryOpe
 
 // openGoBigQuery is the real opener.
 func openGoBigQuery(ctx context.Context, project string, credentialsJSON []byte) (BigQueryAPI, error) {
-	c, err := bigquery.NewClient(ctx, project, option.WithCredentialsJSON(credentialsJSON))
+	c, err := bigquery.NewClient(ctx, project, option.WithAuthCredentialsJSON(option.ServiceAccount, credentialsJSON))
 	if err != nil {
 		// The client's errors can echo option details; keep them out.
 		return nil, errors.New("create bigquery client failed")

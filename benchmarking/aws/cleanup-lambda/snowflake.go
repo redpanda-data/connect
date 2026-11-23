@@ -228,7 +228,7 @@ func (g *goSnowflake) Exec(ctx context.Context, q string) error {
 // ListBenchSchemas reads SHOW SCHEMAS by column name: its column set varies
 // across Snowflake releases.
 func (g *goSnowflake) ListBenchSchemas(ctx context.Context, db string) ([]snowflakeSchemaInfo, error) {
-	rows, err := g.db.QueryContext(ctx, fmt.Sprintf("SHOW SCHEMAS LIKE 'BENCH_%%' IN DATABASE %s", db))
+	rows, err := g.db.QueryContext(ctx, "SHOW SCHEMAS LIKE 'BENCH_%' IN DATABASE "+db)
 	if err != nil {
 		return nil, err
 	}

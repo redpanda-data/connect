@@ -161,7 +161,7 @@ func runQuery(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 
 	q := catalog.Query{Input: *input, Output: *output, MessageSizeBytes: *size, Mode: *mode}
-	for _, p := range strings.Split(*procs, ",") {
+	for p := range strings.SplitSeq(*procs, ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			q.Processors = append(q.Processors, p)
 		}

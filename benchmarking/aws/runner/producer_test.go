@@ -200,11 +200,11 @@ func TestStackTerraformSkippedForStackNone(t *testing.T) {
 	require.Empty(t, outs)
 
 	s.Stack = "postgres"
-	real, ok := stackTerraform(s, "/repo", "/repo/backend.hcl").(*Terraform)
+	tfReal, ok := stackTerraform(s, "/repo", "/repo/backend.hcl").(*Terraform)
 	require.True(t, ok)
-	require.Equal(t, StackDir("/repo", "postgres"), real.Dir)
-	require.Equal(t, "postgres", real.StateKey)
-	require.Equal(t, "/repo/backend.hcl", real.BackendFile)
+	require.Equal(t, StackDir("/repo", "postgres"), tfReal.Dir)
+	require.Equal(t, "postgres", tfReal.StateKey)
+	require.Equal(t, "/repo/backend.hcl", tfReal.BackendFile)
 }
 
 func TestValidateBinaryFlagsRejectsStackNone(t *testing.T) {
