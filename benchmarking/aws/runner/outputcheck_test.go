@@ -19,11 +19,14 @@ import (
 
 // promFrame is one framed /metrics snapshot in the shape Connect's
 // prometheus exporter writes: counters carry label and path labels.
-func promFrame(ts int, sent, errs, bench float64) string {
+func promFrame(ts int, sent, batches, errs, bench float64) string {
 	return fmt.Sprintf(`###timestamp=%d
 # HELP output_sent Benthos Counter metric
 # TYPE output_sent counter
 output_sent{label="",path="root.output"} %g
+# HELP output_batch_sent Benthos Counter metric
+# TYPE output_batch_sent counter
+output_batch_sent{label="",path="root.output"} %g
 # HELP output_error Benthos Counter metric
 # TYPE output_error counter
 output_error{label="",path="root.output"} %g
@@ -34,16 +37,16 @@ benchmark_messages_total{label="",path="root.output.processors.0"} 1
 benchmark_messages_total{label="",path="root.pipeline.processors.0"} 99999999
 go_goroutines 312
 process_resident_memory_bytes 1.45e+08
-`, ts, sent, errs, bench)
+`, ts, sent, batches, errs, bench)
 }
 
 func TestParseOutputCounters(t *testing.T) {
-	raw := promFrame(100, 10, 0, 12) + promFrame(110, 5000, 3, 5100) +
+	raw := promFrame(100, 10, 1, 0, 12) + promFrame(110, 5000, 50, 3, 5100) +
 		// A truncated final frame (no RSS) and an errored one are ignored.
 		"###timestamp=120\noutput_sent{label=\"\",path=\"root.output\"} 9\n" +
 		"###timestamp=130\n###scrape_error\n"
 	c := parseOutputCounters([]byte(raw))
-	require.Equal(t, outputCounters{Sent: 5000, HasSent: true, Errors: 3, HasErrors: true, Processed: 5100, HasProcessed: true}, c)
+	require.Equal(t, outputCounters{Sent: 5000, HasSent: true, BatchSent: 50, HasBatchSent: true, Errors: 3, HasErrors: true, Processed: 5100, HasProcessed: true}, c)
 }
 
 func TestParseOutputCountersAbsent(t *testing.T) {
@@ -51,6 +54,7 @@ func TestParseOutputCountersAbsent(t *testing.T) {
 	require.NoError(t, err)
 	c := parseOutputCounters(append([]byte("###timestamp=1\n"), raw...))
 	require.False(t, c.HasSent)
+	require.False(t, c.HasBatchSent)
 	require.False(t, c.HasErrors)
 	require.True(t, c.HasProcessed, "the fixture's unlabelled benchmark counter is the harness one")
 	require.InDelta(t, 3.25e6, c.Processed, 1)
@@ -61,12 +65,15 @@ func TestParseOutputCountersFanOutBroker(t *testing.T) {
 	raw := `###timestamp=1
 output_sent{label="",path="root.output.broker.outputs.0"} 100
 output_sent{label="",path="root.output.broker.outputs.1"} 100
+output_batch_sent{label="",path="root.output.broker.outputs.0"} 10
+output_batch_sent{label="",path="root.output.broker.outputs.1"} 10
 output_error{label="",path="root.output.broker.outputs.0"} 1
 output_error{label="",path="root.output.broker.outputs.1"} 2
 process_resident_memory_bytes 1
 `
 	c := parseOutputCounters([]byte(raw))
 	require.False(t, c.HasSent, "children of a broker: no single output count")
+	require.False(t, c.HasBatchSent, "children of a broker: no single batch count")
 	require.True(t, c.HasErrors)
 	require.InDelta(t, 3, c.Errors, 0)
 }
@@ -80,7 +87,7 @@ func kinds(as []Anomaly) []string {
 }
 
 func TestE2EPointAnomalies(t *testing.T) {
-	ok := outputCounters{Sent: 100000, HasSent: true, HasErrors: true, Processed: 100500, HasProcessed: true}
+	ok := outputCounters{Sent: 100000, HasSent: true, BatchSent: 100000, HasBatchSent: true, HasErrors: true, Processed: 100500, HasProcessed: true}
 	cases := []struct {
 		name     string
 		p        e2ePoint
@@ -89,30 +96,51 @@ func TestE2EPointAnomalies(t *testing.T) {
 	}{
 		{"clean", e2ePoint{Samples: 600, Counters: ok, MedianMsgPerSec: 1000}, nil, false},
 		{"no samples", e2ePoint{Samples: 0, Counters: ok}, []string{anomalyNoSamples}, true},
-		// 1% of 100000 sent is 1000 errors: at or under it passes with a caveat.
+		// 1% of 100000 batches sent is 1000 errors: at or under it passes
+		// with a caveat.
 		{
 			"few errors are retries",
-			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 4, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, BatchSent: 100000, HasBatchSent: true, Errors: 4, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
 			[]string{anomalySinkRetried},
 			false,
 		},
 		{
 			"errors at the limit",
-			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 1000, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, BatchSent: 100000, HasBatchSent: true, Errors: 1000, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
 			[]string{anomalySinkRetried},
 			false,
 		},
 		{
 			"errors over the limit",
-			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 1001, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, BatchSent: 100000, HasBatchSent: true, Errors: 1001, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkErrors},
+			true,
+		},
+		// 1000-message batches that each fail once: errors are 0.1% of
+		// messages but 100% of writes.
+		{
+			"every batch retried fails",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 1000000, HasSent: true, BatchSent: 1000, HasBatchSent: true, Errors: 1000, HasErrors: true, Processed: 1000000, HasProcessed: true}, MedianMsgPerSec: 1000},
 			[]string{anomalySinkErrors},
 			true,
 		},
 		{
-			"errors judged against processed without output_sent",
-			e2ePoint{Samples: 600, SinkCounted: true, Counters: outputCounters{Errors: 5, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			"one retry across 500 batches is a retry",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 500000, HasSent: true, BatchSent: 500, HasBatchSent: true, Errors: 1, HasErrors: true, Processed: 500000, HasProcessed: true}, MedianMsgPerSec: 1000},
 			[]string{anomalySinkRetried},
 			false,
+		},
+		{
+			"errors without a batch count fail, messages are no base",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, Errors: 1, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkErrors},
+			true,
+		},
+		{
+			"errors with a zero batch count fail",
+			e2ePoint{Samples: 600, Counters: outputCounters{Sent: 100000, HasSent: true, HasBatchSent: true, Errors: 1, HasErrors: true, Processed: 100000, HasProcessed: true}, MedianMsgPerSec: 1000},
+			[]string{anomalySinkErrors},
+			true,
 		},
 		{
 			"errors with nothing to compare fail",

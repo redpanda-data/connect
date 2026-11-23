@@ -23,11 +23,11 @@ const (
 	// anomalyNoSamples: the point captured no output samples. Fails it.
 	anomalyNoSamples = "no_samples"
 	// anomalySinkErrors: Connect's output_error counter grew past
-	// sinkErrorFailShare of the messages sent, or grew with nothing to
-	// compare it against. Fails it.
+	// sinkErrorFailShare of the batches sent, or grew with no batch count
+	// to compare it against. Fails it.
 	anomalySinkErrors = "sink_errors"
 	// anomalySinkRetried: output_error grew, but by no more than
-	// sinkErrorFailShare of the messages sent (retried writes, reconnects).
+	// sinkErrorFailShare of the batches sent (retried writes, reconnects).
 	// A caveat, not a failure.
 	anomalySinkRetried = "sink_retried"
 	// anomalySinkSendMismatch: output_sent and the harness benchmark
@@ -42,8 +42,10 @@ const (
 	anomalyWorkloadBound = "workload_bound"
 )
 
-// sinkErrorFailShare is the share of sent messages output_error may reach
+// sinkErrorFailShare is the share of sent batches output_error may reach
 // before a point fails; at or under it the point passes with sink_retried.
+// output_error counts one per failed write, and a write is a batch, so it
+// is judged against output_batch_sent, not output_sent (messages).
 const sinkErrorFailShare = 0.01
 
 // workloadBoundFraction is how close to the offered CDC write rate a
@@ -59,6 +61,11 @@ type outputCounters struct {
 	// (a fan-out broker counts each message once per child).
 	Sent    float64
 	HasSent bool
+	// BatchSent is output_batch_sent, under the same root.output rule as
+	// Sent. output_error counts failed writes, which are batches, so the
+	// error share is of BatchSent.
+	BatchSent    float64
+	HasBatchSent bool
 	// Errors is output_error summed over every output.
 	Errors    float64
 	HasErrors bool
@@ -100,15 +107,8 @@ func parseOutputCounters(raw []byte) outputCounters {
 			c.Errors += v.value
 		}
 	}
-	if vs := last["output_sent"]; len(vs) == 1 {
-		c.Sent, c.HasSent = vs[0].value, true
-	} else {
-		for _, v := range vs {
-			if strings.Contains(v.labels, `path="root.output"`) {
-				c.Sent, c.HasSent = v.value, true
-			}
-		}
-	}
+	c.Sent, c.HasSent = rootOutputValue(last["output_sent"])
+	c.BatchSent, c.HasBatchSent = rootOutputValue(last["output_batch_sent"])
 	best := -1
 	for _, v := range last["benchmark_messages_total"] {
 		idx := 0
@@ -122,6 +122,22 @@ func parseOutputCounters(raw []byte) outputCounters {
 		}
 	}
 	return c
+}
+
+// rootOutputValue picks the root output's series of an output counter: the
+// only series, else the one at root.output. A nest of child outputs none of
+// which is root.output has none (a fan-out broker counts each message once
+// per child).
+func rootOutputValue(vs []labelledValue) (float64, bool) {
+	if len(vs) == 1 {
+		return vs[0].value, true
+	}
+	for _, v := range vs {
+		if strings.Contains(v.labels, `path="root.output"`) {
+			return v.value, true
+		}
+	}
+	return 0, false
 }
 
 // labelledMetrics parses a /metrics text body into name -> series, keeping
@@ -182,23 +198,21 @@ func e2ePointAnomalies(p e2ePoint) (out []Anomaly, fail bool) {
 	}
 	c := p.Counters
 	if c.HasErrors && c.Errors > 0 {
-		// The share is of output_sent, else of the messages that reached
-		// the output; with neither, errors cannot be judged small.
-		base, hasBase := c.Sent, c.HasSent
-		if !hasBase || base <= 0 {
-			base, hasBase = c.Processed, c.HasProcessed
-		}
-		if hasBase && base > 0 && c.Errors <= sinkErrorFailShare*base {
+		// output_error counts failed writes (batches), so its share is of
+		// output_batch_sent; never of messages, which would shrink it by
+		// the batch size. With no batch count, errors cannot be judged small.
+		base, hasBase := c.BatchSent, c.HasBatchSent && c.BatchSent > 0
+		if hasBase && c.Errors <= sinkErrorFailShare*base {
 			out = append(out, Anomaly{Kind: anomalySinkRetried, Note: fmt.Sprintf(
-				"%s: the output reported %.0f errors (output_error), %.2f%% of %.0f messages, at or under the %.0f%% limit; the sink retried writes",
+				"%s: the output reported %.0f write errors (output_error), %.2f%% of %.0f batches sent (output_batch_sent), at or under the %.0f%% limit; the sink retried writes",
 				anomalySinkRetried, c.Errors, 100*c.Errors/base, base, sinkErrorFailShare*100)})
 		} else {
-			share := "with no sent count to compare against"
-			if hasBase && base > 0 {
-				share = fmt.Sprintf("%.2f%% of %.0f messages, over the %.0f%% limit", 100*c.Errors/base, base, sinkErrorFailShare*100)
+			share := "with no batch count (output_batch_sent) to compare against"
+			if hasBase {
+				share = fmt.Sprintf("%.2f%% of %.0f batches sent (output_batch_sent), over the %.0f%% limit", 100*c.Errors/base, base, sinkErrorFailShare*100)
 			}
 			out = append(out, Anomaly{Kind: anomalySinkErrors, Note: fmt.Sprintf(
-				"%s: the output reported %.0f errors (output_error) during the point, %s", anomalySinkErrors, c.Errors, share)})
+				"%s: the output reported %.0f write errors (output_error) during the point, %s", anomalySinkErrors, c.Errors, share)})
 			fail = true
 		}
 	}

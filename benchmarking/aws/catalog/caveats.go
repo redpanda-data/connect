@@ -34,5 +34,5 @@ var KnownCaveats = map[string]string{
 	CaveatSourceRateLimited:     "the source (the bench producer, or the CDC workload's offered rate), not the pipeline, capped a point; its capacity is a lower bound",
 	CaveatSchemaEvolutionForced: "the bench turned on sink schema evolution or table creation the customer config left off",
 	CaveatSinkUnverified:        "at least one point could not check what the sink received (no sink count and no output_sent metric)",
-	CaveatSinkRetried:           "the sink reported write errors on at least one point (at most 1% of messages sent), so it retried writes; capacity includes the retries",
+	CaveatSinkRetried:           "at least one point had write errors on at most 1% of batches sent, so the sink retried writes; capacity includes the retries",
 }

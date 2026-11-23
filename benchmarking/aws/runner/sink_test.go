@@ -567,20 +567,20 @@ func TestSSMRPKRendersBrokersAndCollectsLines(t *testing.T) {
 
 // e2eProm is a prom dump whose last complete frame carries the given
 // output counters.
-func e2eProm(sent, errs, bench float64) string {
-	return promFrame(1, 0, 0, 0) + promFrame(11, sent, errs, bench)
+func e2eProm(sent, batches, errs, bench float64) string {
+	return promFrame(1, 0, 0, 0, 0) + promFrame(11, sent, batches, errs, bench)
 }
 
 func TestE2EOutputErrorsFailPoint(t *testing.T) {
 	var events []string
 	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
 	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
-	mr.LogFetcher.(*FakeLogFetcher).Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 107, 10_000)
+	mr.LogFetcher.(*FakeLogFetcher).Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 10_000, 107, 10_000)
 	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
 	require.ErrorContains(t, err, anomalySinkErrors)
 	require.Len(t, points, 1)
 	require.Equal(t, []string{anomalySinkErrors}, kinds(points[0].Anomalies))
-	require.Contains(t, points[0].Anomalies[0].Note, "107 errors")
+	require.Contains(t, points[0].Anomalies[0].Note, "107 write errors")
 }
 
 func TestE2EOutputRetriedErrorsPassWithCaveat(t *testing.T) {
@@ -588,13 +588,13 @@ func TestE2EOutputRetriedErrorsPassWithCaveat(t *testing.T) {
 	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
 	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
 	fetcher := mr.LogFetcher.(*FakeLogFetcher)
-	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 7, 10_000)
-	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(10_000, 0, 10_000)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 10_000, 7, 10_000)
+	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(10_000, 10_000, 0, 10_000)
 	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
 	require.NoError(t, err)
 	require.Len(t, points, 2)
 	require.Equal(t, []string{anomalySinkRetried}, kinds(points[0].Anomalies))
-	require.Contains(t, points[0].Anomalies[0].Note, "7 errors")
+	require.Contains(t, points[0].Anomalies[0].Note, "7 write errors")
 	require.Empty(t, points[1].Anomalies)
 }
 
@@ -603,8 +603,8 @@ func TestE2EOutputSentMismatchFailsPoint(t *testing.T) {
 	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
 	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
 	fetcher := mr.LogFetcher.(*FakeLogFetcher)
-	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 0, 10_100)
-	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(2_000, 0, 10_000)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 10_000, 0, 10_100)
+	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(2_000, 2_000, 0, 10_000)
 	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
 	require.ErrorContains(t, err, anomalySinkSendMismatch)
 	require.Len(t, points, 2)
@@ -619,7 +619,7 @@ func TestE2EZeroSamplesFailsAnyPointWithoutLogTail(t *testing.T) {
 	sink := &fakeSink{events: &events, countErr: ErrCountUnsupported}
 	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
 	fetcher := mr.LogFetcher.(*FakeLogFetcher)
-	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 0, 10_000)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 10_000, 0, 10_000)
 	fetcher.Contents["runs/s/sweep-2.log"] = "level=error msg=\"customer secret config line\"\n"
 	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
 	require.ErrorContains(t, err, anomalyNoSamples)
@@ -637,8 +637,8 @@ func TestE2EWorkloadBoundPoint(t *testing.T) {
 	mr := e2eSinkRunner(t, sink, &FakeSSM{}, 10)
 	mr.WorkloadRatePerSec = 1000 // makeLog writes 1000 msg/s
 	fetcher := mr.LogFetcher.(*FakeLogFetcher)
-	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 0, 10_000)
-	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(10_000, 0, 10_000)
+	fetcher.Contents["runs/s/prom-1.txt"] = e2eProm(10_000, 10_000, 0, 10_000)
+	fetcher.Contents["runs/s/prom-2.txt"] = e2eProm(10_000, 10_000, 0, 10_000)
 	points, err := mr.Run(t.Context(), e2eSinkPlan, 1, 5*time.Second, 5*time.Second, "", "")
 	require.NoError(t, err)
 	for _, p := range points {
