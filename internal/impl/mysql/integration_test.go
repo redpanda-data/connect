@@ -910,9 +910,10 @@ func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
 	}
 }
 
-// A zero or partial-zero date in a primary key must not stop the snapshot.
-// The next batch starts after the last key that it read, and that key must be
-// the one in the table, not the date that the snapshot gives for it. A
+// A zero, partial-zero or invalid date in a primary key must not stop the
+// snapshot or skip a row. The next batch starts after the last key that it
+// read, and that key must be the one in the table, not the date that the
+// snapshot gives for it. A moved cursor for 2024-02-30 would skip 2024-03-01. A
 // composite key with DATETIME(6) values that differ only in the fraction must
 // page without a gap or a repeat. The snapshot gives the same values as the
 // stream for these dates.
@@ -936,7 +937,7 @@ func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
         (5, '2024-02-30', '2024-02-30 10:00:00', NULL),
         (6, '1965-02-30', '1965-02-30 10:00:00', NULL),
         (7, '1965-03-04', '1965-03-04 10:00:00', NULL)`)
-			db.Exec(`SET SESSION sql_mode = ''; INSERT INTO zero_date_keys VALUES ('0000-00-00'), ('2024-00-15'), ('2024-06-01')`)
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_date_keys VALUES ('0000-00-00'), ('2024-00-15'), ('2024-02-30'), ('2024-03-01'), ('2024-06-01')`)
 			db.Exec(`INSERT INTO fraction_keys VALUES
         (1, '2024-06-01 12:00:00.000001'),
         (1, '2024-06-01 12:00:00.000002'),
@@ -996,6 +997,8 @@ mysql_cdc:
 				`{"id": 7, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
 				`{"d": null}`,
 				`{"d": null}`,
+				`{"d": null}`,
+				`{"d": "2024-03-01T00:00:00Z"}`,
 				`{"d": "2024-06-01T00:00:00Z"}`,
 				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000001Z"}`,
 				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000002Z"}`,
