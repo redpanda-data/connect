@@ -12,6 +12,7 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # cache: false: the built-in cache saves on every ref and has no restore keys.
     - name: Install Go
       id: setup-go
       uses: actions/setup-go@v6.5.0
