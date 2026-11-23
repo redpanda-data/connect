@@ -57,6 +57,23 @@ var rpcPluginsFlag = &cli.StringSliceFlag{
 	Usage: "Plugins to load over the RPC interface. This flag should point to manifest files containing the plugin definitions. Globs are also supported.",
 }
 
+var disableTelemetryFlag = &cli.BoolFlag{
+	Name:  "disable-telemetry",
+	Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
+}
+
+// disableTelemetryRequested returns the flag value set at the closest CLI level.
+// It traverses c.Lineage so --disable-telemetry placed before a subcommand is
+// found instead of a subcommand context's default false value.
+func disableTelemetryRequested(c *cli.Context) bool {
+	for _, cc := range c.Lineage() {
+		if slices.Contains(cc.LocalFlagNames(), disableTelemetryFlag.Name) {
+			return cc.Bool(disableTelemetryFlag.Name)
+		}
+	}
+	return false
+}
+
 // rpcPluginPaths returns all plugin manifest paths and glob patterns specified
 // via the --rpc-plugins flag, collected across both root and subcommand levels.
 //
