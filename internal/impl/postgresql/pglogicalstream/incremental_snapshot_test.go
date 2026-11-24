@@ -576,7 +576,8 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 			rows:    [][]driver.Value{{false, false, false, s.conn.driver.allTables}},
 		}, nil
 	}
-	if strings.Contains(s.query, "puballtables") {
+	// The coverage query reads puballtables too, so match the whole select.
+	if strings.Contains(s.query, "SELECT puballtables FROM") {
 		return &fakeQueryRows{
 			columns: []string{"puballtables"},
 			rows:    [][]driver.Value{{s.conn.driver.allTables}},

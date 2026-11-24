@@ -742,7 +742,8 @@ func testValidatePublication(t *testing.T, version int) {
 // Expected behavior:
 //   - A table that the publication does not exclude is accepted.
 //   - An excluded table is rejected, so the input fails to start instead of
-//     silently not streaming the table.
+//     silently not streaming the table. This includes an excluded partitioned
+//     table with no partition yet.
 //   - The error does not suggest ALTER PUBLICATION ... ADD TABLE, because
 //     PostgreSQL rejects it on a FOR ALL TABLES publication.
 //
@@ -763,14 +764,19 @@ func TestIntegrationValidatePublicationAllTablesExcept(t *testing.T) {
 	for _, sql := range []string{
 		"CREATE TABLE orders (id serial PRIMARY KEY);",
 		"CREATE TABLE users (id serial PRIMARY KEY);",
-		"CREATE PUBLICATION pub_except FOR ALL TABLES EXCEPT (TABLE users);",
+		"CREATE TABLE planned (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE TABLE skipped (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE PUBLICATION pub_except FOR ALL TABLES EXCEPT (TABLE users, TABLE skipped);",
 	} {
 		_, err := conn.Exec(ctx, sql).ReadAll()
 		require.NoError(t, err)
 	}
 
-	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"orders"`}})
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"orders"`}, {`"public"`, `"planned"`}})
 	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"skipped"`}})
+	require.ErrorContains(t, err, `"public"."skipped"`)
 
 	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"users"`}})
 	require.ErrorContains(t, err, `"public"."users"`)
@@ -786,8 +792,12 @@ func TestIntegrationValidatePublicationAllTablesExcept(t *testing.T) {
 //   - FOR TABLE of a partitioned table lists its foreign partitions in
 //     pg_publication_tables. FOR ALL TABLES leaves them out.
 //
-// Expected behavior: the partitioned table is covered with both kinds of
-// publication, since every partition that can stream is published.
+// Expected behavior:
+//   - The partitioned table is covered with both kinds of publication, since
+//     every partition that can stream is published.
+//   - Under FOR ALL TABLES, a partitioned table with no local partition (none
+//     yet, or only a foreign one) is covered. pg_publication_tables lists
+//     nothing for it, but any local partition added later streams.
 func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -807,6 +817,9 @@ func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
 		"CREATE TABLE events (id int, at date) PARTITION BY RANGE (at);",
 		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
 		"CREATE FOREIGN TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') SERVER archive;",
+		"CREATE TABLE archived (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE FOREIGN TABLE archived_2025 PARTITION OF archived FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') SERVER archive;",
+		"CREATE TABLE planned (id int, at date) PARTITION BY RANGE (at);",
 		"CREATE PUBLICATION pub_all FOR ALL TABLES;",
 		"CREATE PUBLICATION pub_events FOR TABLE events;",
 	} {
@@ -818,6 +831,9 @@ func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
 	_, err = ValidatePublication(ctx, conn, "pub_all", events)
 	require.NoError(t, err)
 	_, err = ValidatePublication(ctx, conn, "pub_events", events)
+	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_all", []TableFQN{{`"public"`, `"archived"`}, {`"public"`, `"planned"`}})
 	require.NoError(t, err)
 }
 

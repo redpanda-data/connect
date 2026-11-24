@@ -733,7 +733,16 @@ func allTablesFix(publication string) string {
 // lists something in its partition tree or above it, and every leaf partition
 // is listed itself or through one of its ancestors. Foreign table partitions
 // are left out of that check. A publication listing only some partitions does
-// not cover the parent. The table itself is matched directly, since
+// not cover the parent.
+//
+// A FOR ALL TABLES publication lists nothing for a partitioned table with no
+// local partition (none yet, or only foreign ones), so there is nothing to
+// match. It covers such a table when neither the table nor an ancestor is in
+// the publication's pg_publication_rel rows. On a FOR ALL TABLES publication
+// those rows can only be EXCEPT entries (PostgreSQL 19+), since ADD TABLE is
+// rejected, so the check needs no version switch.
+//
+// The table itself is matched directly, since
 // pg_partition_tree and pg_partition_ancestors return no rows for a table that
 // is neither partitioned nor a partition. A table that does not exist is not
 // covered. pg_partition_tree and pg_partition_ancestors need
@@ -769,6 +778,27 @@ func publicationCoversTableQuery(publication, table string) (string, error) {
                               SELECT 1 FROM published
                               WHERE  oid IN (SELECT relid FROM pg_partition_ancestors(leaf.relid))
                           )
+               )
+               OR (
+                   EXISTS (SELECT 1 FROM pg_publication WHERE pubname = $1 AND puballtables)
+                   AND (SELECT relkind FROM pg_class WHERE oid = to_regclass($2)) = 'p'
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM   pg_partition_tree(to_regclass($2)) leaf
+                       WHERE  leaf.isleaf
+                       AND    (SELECT relkind FROM pg_class WHERE oid = leaf.relid) <> 'f'
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM   pg_publication_rel pr
+                       JOIN   pg_publication p ON p.oid = pr.prpubid
+                       WHERE  p.pubname = $1
+                       AND    pr.prrelid IN (
+                                  SELECT to_regclass($2)::oid
+                                  UNION
+                                  SELECT relid FROM pg_partition_ancestors(to_regclass($2))
+                              )
+                   )
                );
     `, publication, table)
 }
