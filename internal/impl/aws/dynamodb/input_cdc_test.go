@@ -107,35 +107,47 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	require.Equal(t, []string{"after-start"}, kept)
 }
 
-// The snapshot dedupe allows 2 s of clock skew between the host and AWS. A host
-// clock that is further ahead must be reported, because the dedupe can then
-// skip writes made after the snapshot start.
-func TestClockSkewBeyondDedupeMargin(t *testing.T) {
+// The snapshot dedupe compares the host clock with the AWS clock. Its margin
+// must cover the host clock lead over AWS that the SDK measures, with at least
+// 2 s. A lead of more than 5 min is a broken host clock, and the input must
+// stop.
+func TestSnapshotDedupeMargin(t *testing.T) {
 	tests := []struct {
-		name       string
-		dateOffset time.Duration
-		noDate     bool
-		wantBeyond bool
+		name          string
+		dateOffset    time.Duration
+		noDate        bool
+		wantMinMargin time.Duration
+		wantMaxMargin time.Duration
+		wantErr       string
 	}{
 		{
-			name:       "host 10 s ahead of AWS",
-			dateOffset: -10 * time.Second,
-			wantBeyond: true,
+			name:          "host and AWS agree",
+			dateOffset:    0,
+			wantMinMargin: 2 * time.Second,
+			wantMaxMargin: 2 * time.Second,
 		},
 		{
-			name:       "host and AWS agree",
-			dateOffset: 0,
-			wantBeyond: false,
+			name:          "host 10 s ahead of AWS",
+			dateOffset:    -10 * time.Second,
+			wantMinMargin: 11 * time.Second,
+			wantMaxMargin: 13 * time.Second,
 		},
 		{
-			name:       "host 10 s behind AWS",
-			dateOffset: 10 * time.Second,
-			wantBeyond: false,
+			name:          "host 10 s behind AWS",
+			dateOffset:    10 * time.Second,
+			wantMinMargin: 2 * time.Second,
+			wantMaxMargin: 2 * time.Second,
 		},
 		{
-			name:       "no Date header",
-			noDate:     true,
-			wantBeyond: false,
+			name:          "no Date header",
+			noDate:        true,
+			wantMinMargin: 2 * time.Second,
+			wantMaxMargin: 2 * time.Second,
+		},
+		{
+			name:       "host 10 min ahead of AWS",
+			dateOffset: -10 * time.Minute,
+			wantErr:    "ahead of AWS",
 		},
 	}
 	for _, tt := range tests {
@@ -159,8 +171,14 @@ func TestClockSkewBeyondDedupeMargin(t *testing.T) {
 			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
 			require.NoError(t, err)
 
-			_, beyond := clockSkewBeyondDedupeMargin(out.ResultMetadata)
-			assert.Equal(t, tt.wantBeyond, beyond)
+			margin, err := snapshotDedupeMargin(out.ResultMetadata)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, margin, tt.wantMinMargin)
+			assert.LessOrEqual(t, margin, tt.wantMaxMargin)
 		})
 	}
 }
