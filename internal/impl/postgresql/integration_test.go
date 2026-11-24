@@ -371,6 +371,344 @@ pg_stream:
 	require.NoError(t, stream.StopWithin(30*time.Second))
 }
 
+// TestIntegrationPostgresInfiniteTimestamps verifies that the PostgreSQL
+// special values infinity and -infinity in date, timestamp and timestamptz
+// columns reach the output as null on both the snapshot and the streaming
+// path, and in the before metadata of an update. The snapshot used to fail the
+// scan and restart in a loop. See CON-588.
+func TestIntegrationPostgresInfiniteTimestamps(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	db.MustExec(t, "CREATE TABLE validity (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp);")
+	db.MustExec(t, "INSERT INTO validity VALUES (1, now(), now()::date, now()::timestamp);")
+	db.MustExec(t, "INSERT INTO validity VALUES (2, 'infinity', '-infinity', 'infinity');")
+
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_infinite_timestamps
+    stream_snapshot: true
+    schema: public
+    tables:
+       - validity
+`, databaseURL)
+
+	var (
+		receivedMu sync.Mutex
+		received   []map[string]any
+		// befores holds the before metadata of each row in received, nil
+		// when the row has none.
+		befores []any
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(template))
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		var row map[string]any
+		if err := json.Unmarshal(b, &row); err != nil {
+			return err
+		}
+		before, _ := m.MetaGetMut("before")
+		receivedMu.Lock()
+		received = append(received, row)
+		befores = append(befores, before)
+		receivedMu.Unlock()
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 2
+	}, 30*time.Second, 100*time.Millisecond, "the snapshot must deliver both rows, the infinite one included")
+
+	// Streamed after the snapshot, so this row goes through the pgoutput decoder.
+	db.MustExec(t, "INSERT INTO validity VALUES (3, '-infinity', 'infinity', '-infinity');")
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 3
+	}, 30*time.Second, 100*time.Millisecond, "the streamed row was never delivered")
+
+	receivedMu.Lock()
+	got := append([]map[string]any(nil), received...)
+	receivedMu.Unlock()
+
+	require.Equal(t, float64(1), got[0]["id"])
+	require.NotNil(t, got[0]["valid_to"], "a finite snapshot value must still be delivered")
+
+	require.Equal(t, float64(2), got[1]["id"])
+	require.Contains(t, got[1], "valid_to", "snapshot timestamptz")
+	require.Nil(t, got[1]["valid_to"], "snapshot timestamptz")
+	require.Contains(t, got[1], "valid_on", "snapshot date")
+	require.Nil(t, got[1]["valid_on"], "snapshot date")
+	require.Contains(t, got[1], "valid_ts", "snapshot timestamp")
+	require.Nil(t, got[1]["valid_ts"], "snapshot timestamp")
+
+	require.Equal(t, float64(3), got[2]["id"])
+	require.Contains(t, got[2], "valid_to", "streamed timestamptz")
+	require.Nil(t, got[2]["valid_to"], "streamed timestamptz")
+	require.Contains(t, got[2], "valid_on", "streamed date")
+	require.Nil(t, got[2]["valid_on"], "streamed date")
+	require.Contains(t, got[2], "valid_ts", "streamed timestamp")
+	require.Nil(t, got[2]["valid_ts"], "streamed timestamp")
+
+	// With REPLICA IDENTITY FULL the update carries the old row, infinite
+	// values included, as before metadata. It must hold null like the payload.
+	db.MustExec(t, "ALTER TABLE validity REPLICA IDENTITY FULL;")
+	db.MustExec(t, "UPDATE validity SET valid_to = now(), valid_on = now()::date, valid_ts = now()::timestamp WHERE id = 3;")
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 4
+	}, 30*time.Second, 100*time.Millisecond, "the update was never delivered")
+
+	receivedMu.Lock()
+	updated, updatedBefore := received[3], befores[3]
+	receivedMu.Unlock()
+
+	require.Equal(t, float64(3), updated["id"])
+	require.NotNil(t, updated["valid_to"], "the updated row holds finite values")
+	before, ok := updatedBefore.(map[string]any)
+	require.True(t, ok, "the update must carry before metadata, got %T", updatedBefore)
+	for _, col := range []string{"valid_to", "valid_on", "valid_ts"} {
+		require.Contains(t, before, col, "before %s", col)
+		require.Nil(t, before[col], "before %s", col)
+	}
+
+	require.NoError(t, stream.StopWithin(30*time.Second))
+}
+
+// TestIntegrationPostgresInfinitePrimaryKeySnapshot verifies that the initial
+// and the incremental snapshot read every row of a table whose primary key
+// holds infinite dates or timestamps. Both page on the primary key and pass
+// the last key back as a query argument (the incremental snapshot also passes
+// the max key, which is infinity here), so the decoders must keep the exact
+// infinite value: a nil key after the -infinity row would end the scan there.
+func TestIntegrationPostgresInfinitePrimaryKeySnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	for _, keyType := range []string{"date", "timestamp", "timestamptz"} {
+		for _, incremental := range []bool{false, true} {
+			mode := "initial"
+			if incremental {
+				mode = "incremental"
+			}
+			t.Run(keyType+"/"+mode, func(t *testing.T) {
+				table := fmt.Sprintf("validity_pk_%s_%s", keyType, mode)
+				slot := "test_slot_" + table
+				db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (valid_from %s PRIMARY KEY, name text);", table, keyType))
+				db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES ('-infinity', 'first'), ('2026-01-02', 'middle'), ('infinity', 'last');", table))
+
+				snapshotYAML := `
+    stream_snapshot: true
+    snapshot_batch_size: 1`
+				if incremental {
+					snapshotYAML = `
+    stream_snapshot: false
+    signal_table_name: rpcn_signal
+    incremental_snapshot:
+        enabled: true
+        chunk_size: 1
+        checkpoint_cache: snap_cache`
+				}
+				template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: %s
+    schema: public
+    tables:
+       - %s%s
+`, databaseURL, slot, table, snapshotYAML)
+
+				var (
+					receivedMu sync.Mutex
+					names      []string
+				)
+				stop := runIncSnapshotStream(t, incSnapshotStream{
+					inputYAML: template,
+					consume: func(_ context.Context, batch service.MessageBatch) error {
+						receivedMu.Lock()
+						defer receivedMu.Unlock()
+						for _, m := range batch {
+							if tbl, _ := m.MetaGet("table"); tbl != table {
+								continue
+							}
+							if op, _ := m.MetaGet("operation"); op != "read" {
+								continue
+							}
+							data, err := m.AsStructured()
+							if err != nil {
+								return err
+							}
+							names = append(names, data.(map[string]any)["name"].(string))
+						}
+						return nil
+					},
+				})
+				if incremental {
+					signalIncrementalSnapshot(t, db, slot, table)
+				}
+
+				require.Eventually(t, func() bool {
+					receivedMu.Lock()
+					defer receivedMu.Unlock()
+					return len(names) >= 3
+				}, time.Minute, 100*time.Millisecond, "the snapshot must read past the infinite keys")
+
+				receivedMu.Lock()
+				require.ElementsMatch(t, []string{"first", "middle", "last"}, names)
+				receivedMu.Unlock()
+				stop()
+			})
+		}
+	}
+}
+
+// TestIntegrationPostgresTextRangesAndIntervals verifies that intervals and
+// ranges, their arrays, and the multiranges reach the output as PostgreSQL text,
+// the same on the snapshot and on the streaming path. Each type gets a row with
+// infinite or unbounded values and a row with finite values. The interval
+// infinity needs PostgreSQL 17, and the multiranges need PostgreSQL 14. The
+// stream used to fail to decode the interval infinity, and it emitted pgx
+// structs (with an infinite bound as the number 1) for the other types.
+func TestIntegrationPostgresTextRangesAndIntervals(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "17")
+	require.NoError(t, err)
+
+	// infinite and finite are SQL literals. The expected values are the text
+	// that PostgreSQL gives back, which can differ from the literal.
+	columns := []struct {
+		name, typ                        string
+		infinite, finite                 string
+		expectedInfinite, expectedFinite string
+	}{
+		{"span", "interval", `'infinity'`, `'1 day 02:03:04'`, `infinity`, `1 day 02:03:04`},
+		{"spans", "interval[]", `'{"1 day",-infinity}'`, `'{"1 day","2 hours"}'`, `{"1 day",-infinity}`, `{"1 day",02:00:00}`},
+		{"active", "daterange", `'[2026-01-02,infinity)'`, `'[2026-01-02,2026-02-03)'`, `[2026-01-02,infinity)`, `[2026-01-02,2026-02-03)`},
+		{"actives", "daterange[]", `'{"[2026-01-02,infinity)"}'`, `'{"[2026-01-02,2026-02-03)"}'`, `{"[2026-01-02,infinity)"}`, `{"[2026-01-02,2026-02-03)"}`},
+		{"during", "tstzrange", `'["2026-01-02 03:04:05+00",infinity)'`, `'["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")'`, `["2026-01-02 03:04:05+00",infinity)`, `["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")`},
+		{"durings", "tstzmultirange", `'{["2026-01-02 03:04:05+00",infinity)}'`, `'{["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")}'`, `{["2026-01-02 03:04:05+00",infinity)}`, `{["2026-01-02 03:04:05+00","2026-02-03 00:00:00+00")}`},
+		{"periods", "tsrange[]", `'{"[\"2026-01-02 03:04:05\",infinity)"}'`, `'{"[\"2026-01-02 03:04:05\",\"2026-02-03 00:00:00\")"}'`, `{"[\"2026-01-02 03:04:05\",infinity)"}`, `{"[\"2026-01-02 03:04:05\",\"2026-02-03 00:00:00\")"}`},
+		{"windows", "tsmultirange", `'{["2026-01-02 03:04:05",infinity)}'`, `'{["2026-01-02 03:04:05","2026-02-03 00:00:00")}'`, `{["2026-01-02 03:04:05",infinity)}`, `{["2026-01-02 03:04:05","2026-02-03 00:00:00")}`},
+		{"counts", "int4range", `'[1,)'`, `'[1,10]'`, `[1,)`, `[1,11)`},
+		{"counts_list", "int4range[]", `'{"[1,)"}'`, `'{"[1,10]"}'`, `{"[1,)"}`, `{"[1,11)"}`},
+		{"totals", "nummultirange", `'{[1.5,)}'`, `'{[1.5,2.5)}'`, `{[1.5,)}`, `{[1.5,2.5)}`},
+		{"big_counts", "int8range", `'(,100]'`, `'[1,100)'`, `(,101)`, `[1,100)`},
+	}
+
+	var defs, infinite, finite []string
+	expected := map[bool]map[string]any{true: {}, false: {}}
+	for _, c := range columns {
+		defs = append(defs, c.name+" "+c.typ)
+		infinite = append(infinite, c.infinite)
+		finite = append(finite, c.finite)
+		expected[true][c.name] = c.expectedInfinite
+		expected[false][c.name] = c.expectedFinite
+	}
+	db.MustExec(t, "CREATE TABLE validity_spans (id int PRIMARY KEY, "+strings.Join(defs, ", ")+");")
+	insert := func(id int, values []string) {
+		db.MustExec(t, fmt.Sprintf("INSERT INTO validity_spans VALUES (%d, %s);", id, strings.Join(values, ", ")))
+	}
+	insert(1, infinite)
+	insert(2, finite)
+
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_text_spans
+    stream_snapshot: true
+    schema: public
+    tables:
+       - validity_spans
+`, databaseURL)
+
+	var (
+		receivedMu sync.Mutex
+		received   []map[string]any
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(template))
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		var row map[string]any
+		if err := json.Unmarshal(b, &row); err != nil {
+			return err
+		}
+		receivedMu.Lock()
+		received = append(received, row)
+		receivedMu.Unlock()
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 2
+	}, 30*time.Second, 100*time.Millisecond, "the snapshot rows were never delivered")
+
+	// Streamed after the snapshot, so these rows go through the pgoutput decoder.
+	insert(3, infinite)
+	insert(4, finite)
+
+	require.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		return len(received) == 4
+	}, 30*time.Second, 100*time.Millisecond, "the streamed rows were never delivered")
+
+	receivedMu.Lock()
+	got := append([]map[string]any(nil), received...)
+	receivedMu.Unlock()
+
+	byID := map[int]map[string]any{}
+	for _, row := range got {
+		id, ok := row["id"].(float64)
+		require.True(t, ok, "row without a numeric id: %v", row)
+		delete(row, "id")
+		byID[int(id)] = row
+	}
+	for id, name := range map[int]string{1: "snapshot infinite", 2: "snapshot finite", 3: "stream infinite", 4: "stream finite"} {
+		assert.Equal(t, expected[id%2 == 1], byID[id], name)
+	}
+
+	require.NoError(t, stream.StopWithin(30*time.Second))
+}
+
 // TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
 // snapshot->stream handoff (after snapshot rows are emitted but before they are
 // acknowledged) does not lose data: because the replication slot is only

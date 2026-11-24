@@ -58,8 +58,20 @@ rely on them.
 - **JSON**: Both paths run `json.Unmarshal`, producing a tree of stdlib types
   (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.
-- **Zero datetimes**: CDC delivers invalid datetimes (e.g. `"0000-00-00 00:00:00"`)
-  as strings. `mapMessageColumn` converts these to `nil`.
+- **Date strings**: CDC delivers DATE values, zero datetimes (e.g. `"0000-00-00 00:00:00"`)
+  and every DATETIME before 1970 as strings. `mapMessageColumn` parses these into
+  `time.Time`, and converts zero and partial-zero values (month or day `00`) and dates
+  that do not exist (`2024-02-30`, stored with `ALLOW_INVALID_DATES`) to `nil`.
+  A DATETIME from 1970 on that does not exist never reaches `mapMessageColumn` as a
+  string: go-mysql builds a `time.Time` with `time.Date`, so `2024-02-30 10:00:00`
+  becomes `2024-03-01 10:00:00`. So an invalid DATETIME before 1970 becomes `nil`,
+  and one from 1970 on moves to a nearby valid date.
+  Valid dates before 1970 keep their value in both paths.
+  The snapshot scans these columns as strings. For zero, partial-zero and invalid dates,
+  `parseSnapshotTime` gives the same values as the stream: `nil`, or the moved date for an
+  invalid DATETIME from 1970 on. Valid values can still differ in time zone: the snapshot
+  parses DATETIME in the DSN `loc`, the stream in UTC. The snapshot pages on the string that MySQL
+  gave for a date primary key, because the mapped value can be `nil` or a moved date.
 - **UNSIGNED BIGINT > MaxInt64**: Values exceeding `math.MaxInt64` are passed
   through as `uint64`. This is an edge case that most downstream consumers
   won't encounter.

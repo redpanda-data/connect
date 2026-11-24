@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +39,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+extra, nil)
 	require.NoError(t, err)
 
@@ -117,7 +118,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -126,6 +127,176 @@ storage:
 			assert.Equal(t, tc.wantDisable, cfg.DisableCleanupOnFailure)
 		})
 	}
+}
+
+// TestParseCommitConfigMaxSnapshotAge pins the `commit.max_snapshot_age`
+// default: zero, so expiry is opt-in, whether the commit block is absent or
+// the field is. The "field absent" case goes through the spec's Default
+// string.
+func TestParseCommitConfigMaxSnapshotAge(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       time.Duration
+		wantErr    string
+	}{
+		{
+			name:       "commit object absent",
+			commitYAML: "",
+			want:       0,
+		},
+		{
+			name:       "field absent",
+			commitYAML: "commit:\n  max_retries: 2\n",
+			want:       0,
+		},
+		{
+			name:       "explicit zero",
+			commitYAML: "commit:\n  max_snapshot_age: 0s\n",
+			want:       0,
+		},
+		{
+			name:       "at the floor",
+			commitYAML: "commit:\n  max_snapshot_age: 1m\n",
+			want:       time.Minute,
+		},
+		{
+			// The lint rule rejects this too, but lint can be skipped, and
+			// a sub-minute age is the multi-writer rewrite case.
+			name:       "below the floor is rejected",
+			commitYAML: "commit:\n  max_snapshot_age: 30s\n",
+			wantErr:    "max_snapshot_age must be zero or at least 1m",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    region: us-east-1
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.MaxSnapshotAge)
+		})
+	}
+}
+
+// TestParseCommitConfigMaintenanceInterval pins the `commit.maintenance_interval`
+// default to the constant the maintenance pass uses, and the positive-value
+// check that holds when lint is skipped.
+func TestParseCommitConfigMaintenanceInterval(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       time.Duration
+		wantErr    string
+	}{
+		{name: "commit object absent", commitYAML: "", want: defaultMaintenanceInterval},
+		{name: "field absent", commitYAML: "commit:\n  max_retries: 2\n", want: defaultMaintenanceInterval},
+		{name: "explicit value", commitYAML: "commit:\n  maintenance_interval: 1h\n", want: time.Hour},
+		{name: "zero is rejected", commitYAML: "commit:\n  maintenance_interval: 0s\n", wantErr: "maintenance_interval must be a positive duration"},
+		{name: "negative is rejected", commitYAML: "commit:\n  maintenance_interval: -1m\n", wantErr: "maintenance_interval must be a positive duration"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    region: us-east-1
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.MaintenanceInterval)
+		})
+	}
+}
+
+// TestParseCommitConfigManifestMergeEnabled pins the
+// `commit.manifest_merge_enabled` default: the output does not stamp the
+// manifest-merge property unless the config turns it on.
+func TestParseCommitConfigManifestMergeEnabled(t *testing.T) {
+	cases := []struct {
+		name       string
+		commitYAML string
+		want       bool
+	}{
+		{
+			name:       "commit object absent",
+			commitYAML: "",
+			want:       false,
+		},
+		{
+			name:       "field absent",
+			commitYAML: "commit:\n  max_retries: 2\n",
+			want:       false,
+		},
+		{
+			name:       "explicit value",
+			commitYAML: "commit:\n  manifest_merge_enabled: true\n",
+			want:       true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    region: us-east-1
+`+tc.commitYAML, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseCommitConfig(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.ManifestMergeEnabled)
+		})
+	}
+}
+
+// TestParseSchemaEvolutionConfigTableLocationAbsent pins that an absent
+// `schema_evolution.table_location` leaves the location to the catalog.
+func TestParseSchemaEvolutionConfigTableLocationAbsent(t *testing.T) {
+	conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    region: us-east-1
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := parseSchemaEvolutionConfig(conf)
+	require.NoError(t, err)
+	assert.Nil(t, cfg.TableLocation)
 }
 
 // TestRuntimeNoticeWiring pins the startup log notices wired in
@@ -208,6 +379,122 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"amplification info firing mismatch; captured log:\n%s", out)
 			assert.Equal(t, tc.wantCleanupOff, cleanupDisabledInformed(out),
 				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
+		})
+	}
+}
+
+// TestParseStorageProps checks that each storage block gives the properties of
+// its own backend, and that no storage block gives no properties. The bucket
+// fields are deprecated and have no effect, so a config that sets them must
+// parse and must give the same properties as one that does not.
+func TestParseStorageProps(t *testing.T) {
+	tests := []struct {
+		name    string
+		storage string
+		want    map[string]string
+	}{
+		{
+			name:    "no storage block",
+			storage: ``,
+			want:    map[string]string{},
+		},
+		{
+			name: "aws_s3",
+			storage: `
+storage:
+  aws_s3:
+    region: us-east-1
+`,
+			want: map[string]string{
+				"s3.region":                   "us-east-1",
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "aws_s3 with path style URLs",
+			storage: `
+storage:
+  aws_s3:
+    force_path_style_urls: true
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "false",
+			},
+		},
+		{
+			name: "aws_s3 with deprecated bucket",
+			storage: `
+storage:
+  aws_s3:
+    bucket: my-bucket
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "gcp_cloud_storage",
+			storage: `
+storage:
+  gcp_cloud_storage:
+    credentials_type: service_account
+    credentials_json: '{"type":"service_account"}'
+`,
+			want: map[string]string{
+				"gcs.credtype": "service_account",
+				"gcs.jsonkey":  `{"type":"service_account"}`,
+			},
+		},
+		{
+			name: "gcp_cloud_storage with deprecated bucket",
+			storage: `
+storage:
+  gcp_cloud_storage:
+    bucket: my-bucket
+`,
+			want: map[string]string{},
+		},
+		{
+			name: "azure_blob_storage with SAS token",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_sas_token: mytoken
+`,
+			want: map[string]string{
+				"adls.sas-token.mycontainer": "mytoken",
+			},
+		},
+		{
+			name: "azure_blob_storage with access key",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_access_key: mykey
+`,
+			want: map[string]string{
+				"adls.auth.shared-key.account.name": "myaccount",
+				"adls.auth.shared-key.account.key":  "mykey",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+`+tt.storage, nil)
+			require.NoError(t, err)
+
+			props, err := parseStorageProps(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, map[string]string(props))
 		})
 	}
 }

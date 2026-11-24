@@ -844,19 +844,20 @@ func publishedAsItselfQuery(pgVersion int, publication, schema, table, fqn strin
 
 // unpublishedTableQuery reads why a table that publishedAsItselfQuery did not
 // find is not streamed as itself: whether it is a partitioned table, whether
-// it is a partition, and whether the publication sets
-// publish_via_partition_root. pubviaroot is read through to_jsonb because the
-// column only exists from PostgreSQL 13, and it reads false before that. fqn
-// is the quoted name of the table.
+// it is a partition, whether the publication sets
+// publish_via_partition_root, and whether it is FOR ALL TABLES. pubviaroot is
+// read through to_jsonb because the column only exists from PostgreSQL 13,
+// and it reads false before that. fqn is the quoted name of the table. The
+// query always returns one row: a missing table or publication reads false.
 func unpublishedTableQuery(publication, fqn string) (string, error) {
 	return sanitize.SQLQuery(`
-        SELECT c.relkind = 'p',
-               c.relispartition,
-               COALESCE((SELECT (to_jsonb(p) ->> 'pubviaroot')::boolean
-                         FROM   pg_publication p
-                         WHERE  p.pubname = $1), false)
-        FROM   pg_class c
-        WHERE  c.oid = to_regclass($2);
+        SELECT COALESCE(c.relkind = 'p', false),
+               COALESCE(c.relispartition, false),
+               COALESCE((to_jsonb(p) ->> 'pubviaroot')::boolean, false),
+               COALESCE(p.puballtables, false)
+        FROM   (SELECT 1) AS one
+        LEFT   JOIN pg_class c ON c.oid = to_regclass($2)
+        LEFT   JOIN pg_publication p ON p.pubname = $1;
     `, publication, fqn)
 }
 

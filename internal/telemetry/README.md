@@ -30,6 +30,9 @@ We would extract the following information:
 - A unique identifier for the Redpanda Connect instance.
 - The duration for which the config has been running thus far.
 - That the config contains a `generate` input and an `aws_s3` output.
+- Basic host information: CPU count, `GOMAXPROCS`, and the OS and architecture.
+- The container CPU and memory limits (read from cgroups), when running in a container with limits set.
+- For Redpanda Cloud deployments only: the deployment type, tenant ID and pipeline ID.
 - The IP address of the running Redpanda Connect instance (as a byproduct of the data delivery mechanism).
 
 The code responsible for extracting this data is simple enough to dig into, and we encourage curious users to do so. A good place to start is the data format, which can be found at [`./payload.go`](./payload.go).

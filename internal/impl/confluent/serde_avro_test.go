@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestAvroReferences(t *testing.T) {
@@ -101,8 +103,7 @@ func TestAvroReferences(t *testing.T) {
 		return nil, nil
 	})
 
-	subj, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "root")
 
 	tests := []struct {
 		name        string
@@ -246,8 +247,7 @@ func TestAvroSchemaExtraction(t *testing.T) {
 		}), nil
 	})
 
-	subj, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "root")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
@@ -355,8 +355,7 @@ func TestAvroSchemaExtractionLameUnions(t *testing.T) {
 		}), nil
 	})
 
-	subj, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "root")
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)

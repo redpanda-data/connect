@@ -22,13 +22,14 @@ import (
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog/rest"
-	iceio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // These tests exercise the real equality-delete write path and RowDelta commit
@@ -290,10 +291,7 @@ func (f *flakyCatalog) CommitTable(ctx context.Context, ident table.Identifier, 
 	return f.memCatalog.CommitTable(ctx, ident, reqs, updates)
 }
 
-func (f *flakyCatalog) snapshot() *table.Table {
-	return table.New(f.ident, f.meta, f.metadataLocation,
-		func(context.Context) (iceio.IO, error) { return iceio.LocalFS{}, nil }, f)
-}
+func (f *flakyCatalog) snapshot() *table.Table { return tableBoundTo(f.memCatalog, f) }
 
 func (f *flakyCatalog) calls() int {
 	f.mu.Lock()
@@ -480,7 +478,7 @@ func TestWriteSkipsCleanupOnAmbiguousCommit(t *testing.T) {
 
 	w := newDeleteWriter(t, tbl)
 	w.committer = comm
-	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+	w.rowOpCfg.Operation = servicetest.NewInterpolatedString(t, `${! metadata("op") }`)
 
 	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
 	require.Error(t, err)
@@ -515,7 +513,7 @@ func TestWriteMORAmbiguousThenConflictStaysSticky(t *testing.T) {
 
 	w := newDeleteWriter(t, tbl)
 	w.committer = comm
-	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+	w.rowOpCfg.Operation = servicetest.NewInterpolatedString(t, `${! metadata("op") }`)
 
 	err = w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})})
 	require.Error(t, err)
@@ -549,7 +547,7 @@ func TestWriteMORLandedFinalAttemptSucceeds(t *testing.T) {
 
 	w := newDeleteWriter(t, tbl)
 	w.committer = comm
-	w.rowOpCfg.Operation = mustInterp(t, `${! metadata("op") }`)
+	w.rowOpCfg.Operation = servicetest.NewInterpolatedString(t, `${! metadata("op") }`)
 
 	require.NoError(t, w.Write(ctx, service.MessageBatch{cowMsg(t, "upsert", map[string]any{"id": 1})}),
 		"a landed-but-misreported final attempt must resolve to success via the token check, not surface an error")

@@ -25,6 +25,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 type mockClient struct {
@@ -154,22 +156,14 @@ func newMessage(ns, id string) mockMessage {
 	return mockMessage{ns, id, vec}
 }
 
-func setup(op operation) (*outputWriter, *mockClient) {
+func setup(t *testing.T, op operation) (*outputWriter, *mockClient) {
 	c := mockClient{
 		data: map[string]map[string]map[string]*pinecone.Vector{},
 	}
-	nsMapping, err := service.NewInterpolatedString(`${! meta("ns") }`)
-	if err != nil {
-		panic(err)
-	}
-	idMapping, err := service.NewInterpolatedString(`${! meta("id") }`)
-	if err != nil {
-		panic(err)
-	}
+	nsMapping := servicetest.NewInterpolatedString(t, `${! meta("ns") }`)
+	idMapping := servicetest.NewInterpolatedString(t, `${! meta("id") }`)
 	vectorMapping, err := bloblang.GlobalEnvironment().Parse("root = this")
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	w := outputWriter{
 		client:        &c,
 		host:          "foobar.arpa",
@@ -182,7 +176,7 @@ func setup(op operation) (*outputWriter, *mockClient) {
 }
 
 func TestUpdate(t *testing.T) {
-	w, c := setup(operationUpdate)
+	w, c := setup(t, operationUpdate)
 	c.Write(w.host, "foo", &pinecone.Vector{Id: "bar", Values: []float32{1, 2, 3}})
 	m1 := newMessage("foo", "bar")
 	m2 := newMessage("foo", "qux")
@@ -195,7 +189,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestUpsert(t *testing.T) {
-	w, c := setup(operationUpsert)
+	w, c := setup(t, operationUpsert)
 	c.Write(w.host, "foo", &pinecone.Vector{Id: "bar", Values: []float32{1, 2, 3}})
 	m1 := newMessage("foo", "bar")
 	m2 := newMessage("foo", "qux")
@@ -208,7 +202,7 @@ func TestUpsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	w, c := setup(operationDelete)
+	w, c := setup(t, operationDelete)
 	c.Write(w.host, "foo", &pinecone.Vector{Id: "bar", Values: []float32{1, 2, 3}})
 	c.Write(w.host, "fuzz", &pinecone.Vector{Id: "qux", Values: []float32{1, 2, 3}})
 	m1 := newMessage("foo", "bar")
@@ -223,7 +217,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestMapping(t *testing.T) {
-	w, c := setup(operationUpsert)
+	w, c := setup(t, operationUpsert)
 	var err error
 	w.vectorMapping, err = bloblang.GlobalEnvironment().Parse("this.map_each(v -> v * 2)")
 	require.NoError(t, err)

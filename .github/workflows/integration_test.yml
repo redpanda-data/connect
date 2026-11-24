@@ -41,10 +41,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6.1.0
 
+      # actions/cache saves only when the job succeeds, and this job fails when a test fails. The last step saves the
+      # build cache also then.
       - name: Install Go
-        uses: actions/setup-go@v6.5.0
+        id: setup-go
+        uses: $/.github/actions/setup-go
         with:
-          go-version-file: 'go.mod'
+          cache-name: integration
+          save-build-cache: false
 
       - name: Install Task
         uses: $/.github/actions/setup-task
@@ -63,6 +67,7 @@ jobs:
         run: task docker:pull-redpanda
 
       - name: Run Integration Tests
+        id: integration
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration" --parallel "${PARALLEL}"
         timeout-minutes: 120
 
@@ -80,6 +85,17 @@ jobs:
           name: integration-test-output
           path: ${{ runner.temp }}/integration/
           retention-days: 7
+
+      # Save when the test step ran, also when a test failed. A failure inside the tool before the tests, or a
+      # timeout, can save a partial cache, and it then stays until go.mod changes. Both are rare on main.
+      - name: Save Go build cache
+        if: >-
+          !cancelled() && steps.setup-go.outputs.save == 'true' && steps.setup-go.outputs.build-cache-hit != 'true' &&
+          (steps.integration.outcome == 'success' || steps.integration.outcome == 'failure')
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.gocache }}
+          key: ${{ steps.setup-go.outputs.build-key }}
 
   check-author-access:
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
@@ -152,13 +168,13 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/checkout@v6.1.0
 
+      # A filtered run builds only some packages. If it saved the integration key, the full nightly build could not
+      # replace it until go.mod changes.
       - name: Install Go
-        uses: actions/setup-go@v6.5.0
+        uses: $/.github/actions/setup-go
         with:
-          go-version-file: 'go.mod'
-          # A PR command (/integration) runs this job on the main branch, but with PR code.
-          # A cache save from that run can poison the main cache. Thus, do not cache for a PR command.
-          cache: ${{ github.event_name != 'issue_comment' }}
+          cache-name: integration
+          save-build-cache: false
 
       - name: Install Task
         uses: $/.github/actions/setup-task

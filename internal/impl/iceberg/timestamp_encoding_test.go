@@ -27,6 +27,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // encTestSchema is the canonical schema for timestamp-encoding tests: an id
@@ -487,7 +488,7 @@ func TestCOWLegacyTimestampGuard(t *testing.T) {
 			caseSensitive: true,
 			tsEncoding:    icebergx.TimestampEncodingLegacy,
 			rowOpCfg: RowOpConfig{
-				Operation:        mustInterp(t, `${! metadata("op") }`),
+				Operation:        servicetest.NewInterpolatedString(t, `${! metadata("op") }`),
 				IdentifierFields: []string{"id"},
 				MergeStrategy:    mergeStrategyMOR,
 			},

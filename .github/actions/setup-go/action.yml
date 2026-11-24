@@ -1,9 +1,38 @@
 name: 'Setup Go'
 description: 'Install the Go version from go.mod and cache the Go build and module caches'
 
+inputs:
+  cache-name:
+    description: >-
+      A name for the build cache key. Give one when the job builds other packages than the jobs with its CGO_ENABLED
+      value (for example, integration test binaries). The module cache is shared by all jobs.
+    required: false
+    default: ''
+  save-build-cache:
+    description: >-
+      Set to false so the action only restores the build cache. Use it when the job builds only some packages, or
+      when the job saves the build cache itself with the outputs below.
+    required: false
+    default: 'true'
+
+outputs:
+  save:
+    description: 'true when this run may save to the main cache.'
+    value: ${{ steps.go-env.outputs.save }}
+  gocache:
+    description: 'The GOCACHE path.'
+    value: ${{ steps.go-env.outputs.gocache }}
+  build-key:
+    description: 'The build cache key.'
+    value: ${{ steps.go-env.outputs.key }}
+  build-cache-hit:
+    description: 'true when the build cache key was an exact hit.'
+    value: ${{ steps.build-cache.outputs.cache-hit || steps.build-restore.outputs.cache-hit }}
+
 runs:
   using: "composite"
   steps:
+    # cache: false: the built-in cache saves on every ref and has no restore keys.
     - name: Install Go
       id: setup-go
       uses: actions/setup-go@v6.5.0
@@ -11,20 +40,65 @@ runs:
         go-version-file: 'go.mod'
         cache: false
 
-    - name: Get Go cache paths
+    # Build cache key: CGO_ENABLED is in it, because a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
+    # The name goes before cgo, so an unnamed prefix does not match a named key.
+    # The prefix lets a go.mod change start from the last cache. Go removes build entries unused for 5 days.
+    #
+    # Only main saves. Pull request caches (about 2 GB, usable only by that pull request) evicted the main caches from
+    # the 10 GB repository cache. A PR command (issue_comment) runs PR code on the main ref, so it does not save.
+    - name: Get Go cache paths and keys
       id: go-env
       shell: bash
+      env:
+        NAME: ${{ inputs.cache-name && format('{0}-', inputs.cache-name) || '' }}
+        GO_VERSION: ${{ steps.setup-go.outputs.go-version }}
+        GO_MOD_HASH: ${{ hashFiles('go.mod') }}
+        SAVE: ${{ github.ref == 'refs/heads/main' && github.event_name != 'issue_comment' }}
       run: |
-        gocache=$(go env GOCACHE)
-        gomodcache=$(go env GOMODCACHE)
-        echo "gocache=$gocache" >> "$GITHUB_OUTPUT"
-        echo "gomodcache=$gomodcache" >> "$GITHUB_OUTPUT"
+        prefix="go-${RUNNER_OS}-${GO_VERSION}-${NAME}cgo${CGO_ENABLED}-"
+        echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "key=${prefix}${GO_MOD_HASH}" >> "$GITHUB_OUTPUT"
+        echo "save=$SAVE" >> "$GITHUB_OUTPUT"
 
-    # CGO_ENABLED is in the key: a CGO_ENABLED=0 build cache does not help a CGO_ENABLED=1 build.
-    - name: Cache Go
+    # Module cache: Go never removes old module versions, so main restores and saves it with an exact go.sum key only.
+    # All jobs share one module entry.
+    - name: Restore Go modules
+      id: mod-cache
+      uses: actions/cache/restore@v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: gomod-${{ runner.os }}-${{ hashFiles('go.sum') }}
+        restore-keys: ${{ steps.go-env.outputs.save != 'true' && format('gomod-{0}-', runner.os) || '' }}
+
+    - name: Download Go modules
+      if: steps.go-env.outputs.save == 'true' && steps.mod-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: go mod download
+
+    - name: Save Go modules
+      if: steps.go-env.outputs.save == 'true' && steps.mod-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: ${{ steps.mod-cache.outputs.cache-primary-key }}
+
+    # A composite action has no post step of its own, so main uses actions/cache to save the build cache at job end.
+    - name: Cache Go build
+      id: build-cache
+      if: steps.go-env.outputs.save == 'true' && inputs.save-build-cache == 'true'
       uses: actions/cache@v6.1.0
       with:
-        path: |
-          ${{ steps.go-env.outputs.gocache }}
-          ${{ steps.go-env.outputs.gomodcache }}
-        key: go-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}-cgo${{ env.CGO_ENABLED }}-${{ hashFiles('go.mod') }}
+        path: ${{ steps.go-env.outputs.gocache }}
+        key: ${{ steps.go-env.outputs.key }}
+        restore-keys: ${{ steps.go-env.outputs.prefix }}
+
+    - name: Restore Go build
+      id: build-restore
+      if: steps.go-env.outputs.save != 'true' || inputs.save-build-cache != 'true'
+      uses: actions/cache/restore@v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gocache }}
+        key: ${{ steps.go-env.outputs.key }}
+        restore-keys: ${{ steps.go-env.outputs.prefix }}

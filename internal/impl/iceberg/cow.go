@@ -498,13 +498,13 @@ func cowKeyLiteral(t iceberg.Type, name string, v any, common *schema.Common, re
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}
 		// jsonLeafValue canonicalises every accepted timestamp shape to the
-		// µs-truncated UTC RFC 3339 string the data path stores; parse it
+		// µs-truncated UTC string the data path stores; parse it
 		// back so the literal encodes the identical microsecond instant.
 		s, ok := jv.(string)
 		if !ok {
 			return nil, fmt.Errorf("%s %q: %s column requires a value convertible to its canonical string form, got %T", ioFieldIdentifierFields, name, t, v)
 		}
-		tm, err := time.Parse(time.RFC3339Nano, s)
+		tm, err := time.Parse(arrowTimestampLayout(t), s)
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", ioFieldIdentifierFields, name, err)
 		}

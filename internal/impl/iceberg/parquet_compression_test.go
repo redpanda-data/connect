@@ -263,7 +263,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `
 
 // TestParquetCompressionConfigParsing pins the design claim that an unset

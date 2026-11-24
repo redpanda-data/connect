@@ -456,7 +456,7 @@ func init() {
 			}
 			m.srcAdm = kadm.NewClient(fr.Client)
 
-			return service.AutoRetryNacksBatchedToggled(pConf, migratorBatchInput{fr, m})
+			return kafka.WrapBatchInputNackWarnings(pConf, mgr, kafka.NackMetricNameRedpanda, migratorBatchInput{fr, m})
 		})
 
 	service.MustRegisterBatchOutput("redpanda_migrator", migratorOutputConfig(),

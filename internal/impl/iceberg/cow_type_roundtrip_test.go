@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/table"
@@ -93,6 +94,23 @@ func toBatch(t testing.TB, rows []map[string]any) service.MessageBatch {
 	return b
 }
 
+// storedCellJSON returns the JSON of the value stored in row r of arr. A
+// timestamp cell is formatted from its stored int64 as RFC 3339 in UTC, not
+// with Arrow's text form: that text changes between arrow-go versions, and the
+// stored value does not.
+func storedCellJSON(t testing.TB, arr arrow.Array, r int) string {
+	t.Helper()
+	v := arr.GetOneForMarshal(r)
+	if ts, ok := arr.(*array.Timestamp); ok {
+		toTime, err := ts.DataType().(*arrow.TimestampType).GetToTimeFunc()
+		require.NoError(t, err)
+		v = toTime(ts.Value(r)).UTC().Format(time.RFC3339Nano)
+	}
+	b, err := json.Marshal(v)
+	require.NoError(t, err)
+	return string(b)
+}
+
 // cowReadColJSON reads column `col` for the row whose int64 "id" == id and
 // returns its value as canonical JSON (via the Arrow array's GetOneForMarshal),
 // plus whether the value was present (non-null). JSON is a type-agnostic,
@@ -115,9 +133,7 @@ func cowReadColJSON(t testing.TB, ctx context.Context, tbl *table.Table, col str
 			if carr.IsNull(r) {
 				return "", false
 			}
-			b, err := json.Marshal(carr.GetOneForMarshal(r))
-			require.NoError(t, err)
-			return string(b), true
+			return storedCellJSON(t, carr, r), true
 		}
 	}
 	return "", false

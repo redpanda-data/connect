@@ -889,3 +889,142 @@ func TestDecodeTextColumnDataNumericSpecialValues(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeTextColumnDataInfiniteTimestamps(t *testing.T) {
+	// PostgreSQL accepts infinity and -infinity in date, timestamp and
+	// timestamptz columns. They have no time.Time form, so the stream decodes
+	// them to InfiniteTime, the same value the snapshot decodes them to.
+	mp := pgtype.NewMap()
+
+	tests := []struct {
+		name string
+		oid  uint32
+		data string
+		want InfiniteTime
+	}{
+		{name: "timestamptz infinity", oid: pgtype.TimestamptzOID, data: "infinity", want: PositiveInfinity},
+		{name: "timestamptz -infinity", oid: pgtype.TimestamptzOID, data: "-infinity", want: NegativeInfinity},
+		{name: "timestamp infinity", oid: pgtype.TimestampOID, data: "infinity", want: PositiveInfinity},
+		{name: "timestamp -infinity", oid: pgtype.TimestampOID, data: "-infinity", want: NegativeInfinity},
+		{name: "date infinity", oid: pgtype.DateOID, data: "infinity", want: PositiveInfinity},
+		{name: "date -infinity", oid: pgtype.DateOID, data: "-infinity", want: NegativeInfinity},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := decodeTextColumnData(mp, []byte(tt.data), tt.oid, -1)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	t.Run("finite timestamptz stays a time.Time", func(t *testing.T) {
+		got, err := decodeTextColumnData(mp, []byte("2026-01-02 03:04:05+00"), pgtype.TimestamptzOID, -1)
+		require.NoError(t, err)
+		assert.Equal(t, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), got.(time.Time).UTC())
+	})
+}
+
+func TestDecodeTextColumnDataTimeRangesAndIntervals(t *testing.T) {
+	// pgx decodes these types to its own structs, which marshal with internal
+	// fields (and an infinite bound as the number 1), and it rejects the
+	// interval infinity of PostgreSQL 17. The stream returns the PostgreSQL
+	// text, the same value the snapshot returns.
+	mp := pgtype.NewMap()
+
+	tests := []struct {
+		typeName string
+		data     string
+	}{
+		{
+			typeName: "interval",
+			data:     "1 day 02:03:04",
+		},
+		{
+			typeName: "interval",
+			data:     "infinity",
+		},
+		{
+			typeName: "interval",
+			data:     "-infinity",
+		},
+		{
+			typeName: "_interval",
+			data:     `{"1 day",infinity}`,
+		},
+		{
+			typeName: "daterange",
+			data:     "[2026-01-02,infinity)",
+		},
+		{
+			typeName: "tstzrange",
+			data:     `["2026-01-02 03:04:05+00",infinity)`,
+		},
+		{
+			typeName: "_daterange",
+			data:     `{"[2026-01-02,infinity)"}`,
+		},
+		{
+			typeName: "_tstzrange",
+			data:     `{"[\"2026-01-02 03:04:05+00\",infinity)"}`,
+		},
+		{
+			typeName: "_tsrange",
+			data:     `{"[\"2026-01-02 03:04:05\",infinity)"}`,
+		},
+		{
+			typeName: "datemultirange",
+			data:     "{[2026-01-02,infinity)}",
+		},
+		{
+			typeName: "tstzmultirange",
+			data:     `{["2026-01-02 03:04:05+00",infinity)}`,
+		},
+		{
+			typeName: "tsmultirange",
+			data:     `{["2026-01-02 03:04:05",infinity)}`,
+		},
+		{
+			typeName: "int4range",
+			data:     "[1,11)",
+		},
+		{
+			typeName: "int8range",
+			data:     "(,101)",
+		},
+		{
+			typeName: "numrange",
+			data:     "[1.5,)",
+		},
+		{
+			typeName: "_int4range",
+			data:     `{"[1,11)"}`,
+		},
+		{
+			typeName: "_numrange",
+			data:     `{"[1.5,2.5)"}`,
+		},
+		{
+			typeName: "int4multirange",
+			data:     "{[1,11)}",
+		},
+		{
+			typeName: "int8multirange",
+			data:     "{[1,11)}",
+		},
+		{
+			typeName: "nummultirange",
+			data:     "{[1.5,)}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.typeName+" "+tt.data, func(t *testing.T) {
+			dt, ok := mp.TypeForName(tt.typeName)
+			require.True(t, ok)
+			got, err := decodeTextColumnData(mp, []byte(tt.data), dt.OID, -1)
+			require.NoError(t, err)
+			assert.Equal(t, tt.data, got)
+		})
+	}
+}

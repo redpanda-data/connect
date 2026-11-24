@@ -34,6 +34,7 @@ import (
 	v2 "github.com/redpanda-data/connect/v4/internal/impl/snowflake/streamingv2"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/pool"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 type fakeChannel struct {
@@ -150,21 +151,13 @@ func renderChannelName(expr *service.InterpolatedString, batch service.MessageBa
 // defaultChannelNameExpr builds the constant default channel_name.
 func defaultChannelNameExpr(t *testing.T, db, schema, pipe string) *service.InterpolatedString {
 	t.Helper()
-	expr, err := service.NewInterpolatedString(defaultChannelName(db, schema, pipe))
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
-	return expr
+	return servicetest.NewInterpolatedString(t, defaultChannelName(db, schema, pipe))
 }
 
 // kafkaOffsetTokenExpr builds "${! @kafka_offset }".
 func kafkaOffsetTokenExpr(t *testing.T) *service.InterpolatedString {
 	t.Helper()
-	expr, err := service.NewInterpolatedString("${! @kafka_offset }")
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
-	return expr
+	return servicetest.NewInterpolatedString(t, "${! @kafka_offset }")
 }
 
 // partitionedBatch builds a single-message batch tagged with kafka_partition,
@@ -229,10 +222,7 @@ func testOutputMultiChannel(t *testing.T) (*snowpipeIndexedOutputPipe, map[strin
 	var mu sync.Mutex
 	channels := map[string]*fakeChannel{}
 
-	channelNameExpr, err := service.NewInterpolatedString(`${! meta("channel") }`)
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
+	channelNameExpr := servicetest.NewInterpolatedString(t, `${! meta("channel") }`)
 
 	o := &snowpipeIndexedOutputPipe{
 		db:            "DB",
@@ -290,10 +280,7 @@ func TestChannelNameDefaultsToSingleConstantChannel(t *testing.T) {
 // TestChannelNamePerPartitionInterpolation: the documented per-partition
 // channel_name pattern resolves against a @kafka_partition-tagged message.
 func TestChannelNamePerPartitionInterpolation(t *testing.T) {
-	expr, err := service.NewInterpolatedString("prefix-p${! @kafka_partition }")
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
+	expr := servicetest.NewInterpolatedString(t, "prefix-p${! @kafka_partition }")
 	name, err := renderChannelName(expr, partitionedBatch(t, 3))
 	if err != nil {
 		t.Fatalf("renderChannelName: %v", err)
@@ -343,10 +330,7 @@ func TestExactlyOnceFallsBackToLexicographicForNonNumericTokens(t *testing.T) {
 	// Non-numeric tokens compare as strings: "0/A" < "0/B".
 	ch := &fakeChannel{name: "c", committed: "0/A"}
 	m0 := msg("row")
-	offsetTok, err := service.NewInterpolatedString("${! @custom_offset }")
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
+	offsetTok := servicetest.NewInterpolatedString(t, "${! @custom_offset }")
 	m0.MetaSetMut("custom_offset", "0/A")
 	m1 := msg("row")
 	m1.MetaSetMut("custom_offset", "0/B")
@@ -377,14 +361,11 @@ func TestExactlyOnceFailsLoudOnMissingOffsetMetadata(t *testing.T) {
 func TestExactlyOnceFailsLoudOnEmptyOffsetToken(t *testing.T) {
 	// "" collides with LatestOffsetToken's nothing-committed sentinel.
 	ch := &fakeChannel{name: "c", committed: ""}
-	offsetTok, err := service.NewInterpolatedString("${! @custom_offset }")
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
+	offsetTok := servicetest.NewInterpolatedString(t, "${! @custom_offset }")
 	m := msg("row")
 	m.MetaSetMut("custom_offset", "")
 	batch := service.MessageBatch{m}
-	_, err = preprocessForExactlyOncePipe(t.Context(), ch, offsetTok, batch)
+	_, err := preprocessForExactlyOncePipe(t.Context(), ch, offsetTok, batch)
 	if err == nil {
 		t.Fatal("expected an error when the offset token interpolates to an empty string")
 	}
@@ -469,10 +450,7 @@ func chMsg(channel, payload string, offset int) *service.Message {
 // TestGroupMessagesByChannel: groups come out in first-appearance order and
 // each preserves its messages' relative order.
 func TestGroupMessagesByChannel(t *testing.T) {
-	channelExpr, err := service.NewInterpolatedString(`${! meta("channel") }`)
-	if err != nil {
-		t.Fatalf("NewInterpolatedString: %v", err)
-	}
+	channelExpr := servicetest.NewInterpolatedString(t, `${! meta("channel") }`)
 
 	tests := []struct {
 		name  string

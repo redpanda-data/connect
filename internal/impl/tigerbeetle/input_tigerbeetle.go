@@ -51,6 +51,13 @@ const (
 	shutdownTimeout       = 5 * time.Second
 )
 
+// minClusterVersion is the oldest TigerBeetle cluster release that accepts
+// the linked tigerbeetle-go client. A cluster evicts a client with a higher
+// release, so this value must equal the client release. The input docs and
+// the integration test read it. TestMinClusterVersionMatchesClient fails when
+// a tigerbeetle-go bump leaves this value behind.
+const minClusterVersion = "0.16.78"
+
 func configSpec() *service.ConfigSpec {
 	jsonSampleObject, err := json.MarshalIndent(JsonChangeEvent{
 		Timestamp: "1745328372758695656",
@@ -132,12 +139,16 @@ messages that could have been already delivered to consumers.
 
 It is the consumer’s responsibility to perform idempotency checks when processing messages.
 
+This input keeps one batch in flight to preserve event order. It delivers the next batch only after the current one is acknowledged, so a higher output `+"`max_in_flight`"+` does not raise throughput. Each batch holds the events of one request, so `+"`event_count_max`"+` sets the maximum batch size.
+
 == Upgrading
 
-The TigerBeetle client version must not be newer than the cluster version, as it will fail
-with an error message if so.
+Requires TigerBeetle cluster version `+minClusterVersion+` or later.
 
-Requires TigerBeetle cluster version 0.16.57 or greater.`).
+A cluster older than this version rejects the connection, and the input logs
+`+"`Client was evicted; release too new.`"+`
+A newer version of Redpanda Connect can require a newer cluster version.
+Upgrade the cluster before you upgrade Redpanda Connect.`).
 		Fields(
 			service.NewStringField(fieldClusterID).
 				Description("The TigerBeetle unique 128-bit cluster ID.").
@@ -155,7 +166,10 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				Description("A xref:components:caches/about.adoc[cache resource] "+
 					"used to track progress by storing the last acknowledged timestamp.\n"+
 					"This allows Redpanda Connect to resume from the latest delivered event "+
-					"upon restart.").
+					"upon restart.\n"+
+					"The input stores the timestamp under the key `timestamp_last_<cluster_id>` "+
+					"as an 8-byte little-endian unsigned integer.\n"+
+					"A value of any other length makes the input fail to connect.").
 				ShortDescription("Cache resource tracking progress by storing the last acknowledged timestamp."),
 			service.NewStringField(fieldRateLimit).
 				Description("An optional xref:components:rate_limits/about.adoc[rate limit] "+

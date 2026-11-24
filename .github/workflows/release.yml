@@ -467,7 +467,7 @@ jobs:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
           # Downstream repository receiving the bump PR; override via the
           # OPERATOR_REPO repository variable.
-          OPERATOR_REPO: ${{ vars.OPERATOR_REPO || 'redpanda-data/redpanda-operator' }}
+          OPERATOR_REPO: ${{ vars.OPERATOR_REPO || 'redpanda-data/operator-enterprise' }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BRANCH="auto/bump-connect"

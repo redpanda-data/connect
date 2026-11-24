@@ -19,6 +19,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // opMsg builds a message whose body is the row data and whose `op` metadata
@@ -44,8 +46,7 @@ func TestRowOperationsIntegration(t *testing.T) {
 	const ns, tbl = "row_ops_ns", "row_ops_test"
 	infra.EnsureNamespaceAbsent(t, ns)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 
 	router := infra.NewRouter(t, ns, tbl,
 		WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}),
