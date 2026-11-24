@@ -330,13 +330,13 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.").Version("4.82.0").
-				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering CDC events.").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items and skips CDC events for those keys that are older than the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. The host clock must be within 1 minute of the AWS clock. Writes made in the minute before the snapshot start can appear as duplicates.").Version("4.82.0").
+				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering the keys of scanned items.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
-				Description("Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").Version("4.82.0").
-				ShortDescription("Maximum CDC events buffered for deduplication. Deduplication is disabled if exceeded.").
+				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").Version("4.82.0").
+				ShortDescription("Maximum scanned item keys buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
 		).
