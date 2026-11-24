@@ -77,7 +77,7 @@ const (
 
 	//-- default values
 	shutdownTimeout      = 5 * time.Second
-	defaultSocketTimeout = 180
+	defaultSocketTimeout = 300
 )
 
 func init() {
