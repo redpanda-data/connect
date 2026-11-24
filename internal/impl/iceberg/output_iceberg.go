@@ -11,6 +11,7 @@ package iceberg
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
@@ -494,7 +495,6 @@ func parseGCSProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 func parseAzureProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 	props := make(iceberg.Properties)
 
-	// Get storage account name for SAS token prefix
 	storageAccount := ""
 	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureStorageAccount) {
 		var err error
@@ -504,36 +504,39 @@ func parseAzureProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 		}
 	}
 
-	// Get container name for SAS token prefix
-	container := ""
-	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureContainer) {
-		var err error
-		container, err = conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureContainer)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// Get endpoint
+	endpoint := ""
 	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureEndpoint) {
-		endpoint, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureEndpoint)
+		var err error
+		endpoint, err = conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureEndpoint)
 		if err != nil {
 			return nil, err
 		}
 		props[io.ADLSEndpoint] = endpoint
 	}
 
-	// Get SAS token - uses container-specific prefix
 	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSASToken) {
 		sasToken, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSASToken)
 		if err != nil {
 			return nil, err
 		}
-		// SAS tokens are prefixed with "adls.sas-token.<container>." for container-specific tokens
-		if container != "" {
-			props[io.ADLSSasTokenPrefix+container] = sasToken
-		} else if storageAccount != "" {
-			props[io.ADLSSasTokenPrefix+storageAccount] = sasToken
+		// iceberg-go looks up "adls.sas-token.<host>", where <host> is the
+		// host of the table location (<account>.<storage domain>). The table
+		// location is not known here, so store the token for the two public
+		// Azure domains and for the custom endpoint. The endpoint is the Blob
+		// domain, but an abfss:// location uses the DFS domain, so also store
+		// the token for the blob./dfs. twin of the endpoint.
+		domains := []string{"dfs.core.windows.net", "blob.core.windows.net"}
+		if endpoint != "" {
+			domains = append(domains, endpoint)
+			if rest, ok := strings.CutPrefix(endpoint, "blob."); ok {
+				domains = append(domains, "dfs."+rest)
+			} else if rest, ok := strings.CutPrefix(endpoint, "dfs."); ok {
+				domains = append(domains, "blob."+rest)
+			}
+		}
+		for _, d := range domains {
+			props[io.ADLSSasTokenPrefix+storageAccount+"."+d] = sasToken
 		}
 	}
 
