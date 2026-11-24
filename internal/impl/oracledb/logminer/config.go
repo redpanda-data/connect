@@ -9,7 +9,9 @@
 package logminer
 
 import (
+	"fmt"
 	"time"
+	_ "time/tzdata" // Resolve SourceTimezone in images without zoneinfo.
 )
 
 var (
@@ -114,6 +116,9 @@ type Config struct {
 	RedoVolumeMin          int
 	RedoVolumeGrowthMax    int
 	PrefetchRows           int
+	// SourceTimezone is the database host's clock zone, used to interpret
+	// LogMiner timestamps. Nil defaults to UTC.
+	SourceTimezone *time.Location
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -132,4 +137,16 @@ func NewDefaultConfig() *Config {
 		RedoVolumeMin:         DefaultRedoVolumeMin,
 		RedoVolumeGrowthMax:   DefaultRedoVolumeGrowthMax,
 	}
+}
+
+// ParseSourceTimezone returns the location for name, or nil (UTC) when empty.
+func ParseSourceTimezone(name string) (*time.Location, error) {
+	if name == "" {
+		return nil, nil
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("%q must be an IANA time zone name such as America/New_York, Europe/London, Asia/Kolkata or UTC: %w", name, err)
+	}
+	return loc, nil
 }

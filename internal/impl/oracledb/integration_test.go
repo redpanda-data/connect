@@ -3214,3 +3214,81 @@ oracledb_cdc:
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
+
+func TestIntegrationOracleDBCDCSourceTimezone(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+
+	// Asia/Kolkata is a fixed +05:30 with no DST, so the expected shift is stable.
+	const kolkataOffsetSecs = 5*3600 + 30*60
+
+	var dbOffsetSecs int
+	require.NoError(t, db.QueryRowContext(t.Context(),
+		`SELECT EXTRACT(TIMEZONE_HOUR FROM SYSTIMESTAMP) * 3600 + EXTRACT(TIMEZONE_MINUTE FROM SYSTIMESTAMP) * 60 FROM DUAL`).Scan(&dbOffsetSecs))
+
+	// The wall-clock fields are reinterpreted in Kolkata instead of the DB's zone,
+	// so the resulting instant moves by (dbOffset - kolkataOffset).
+	shift := time.Duration(kolkataOffsetSecs-dbOffsetSecs) * time.Second
+	if shift == 0 {
+		t.Skip("database host clock is already at the Asia/Kolkata offset, so source_timezone has no observable effect")
+	}
+
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo",
+		"CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+
+	cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+    source_timezone: Asia/Kolkata
+  include: ["` + db.Schema + `.FOO"]
+  batching:
+    count: 1`
+
+	var logBuf oracledbtest.SyncBuffer
+	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	msgChan := make(chan *service.Message, 10)
+	stream := oracledbtest.StartPipelineWithLogger(t, cfg, logger, func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgChan <- msg
+		}
+		return nil
+	})
+	t.Cleanup(func() {
+		if err := stream.StopWithin(10 * time.Second); err != nil {
+			t.Log(err)
+		}
+	})
+
+	oracledbtest.WaitForStreaming(t, &logBuf)
+
+	t.Log("Then: a mismatch between source_timezone and the database offset is warned about")
+	require.Eventually(t, func() bool {
+		return strings.Contains(logBuf.String(), "Check that logminer.source_timezone")
+	}, 10*time.Second, 100*time.Millisecond, "expected source_timezone mismatch warning")
+
+	db.MustExec("INSERT INTO " + db.Schema + ".foo (val) VALUES (1)")
+	msgs := oracledbtest.CollectMessages(t, msgChan, 1)
+	require.Len(t, msgs, 1)
+
+	// An unshifted timestamp would be ~now; shifted it must be ~now-shift.
+	const tolerance = 2 * time.Minute
+	now := time.Now()
+	for _, key := range []string{"source_ts_ms", "commit_ts_ms"} {
+		str, ok := msgs[0].MetaGet(key)
+		require.Truef(t, ok, "missing %q metadata", key)
+		ms, err := strconv.ParseInt(str, 10, 64)
+		require.NoErrorf(t, err, "%s %q is not a valid int64", key, str)
+		got := time.UnixMilli(ms)
+
+		assert.WithinDurationf(t, now.Add(-shift), got, tolerance, "%s should be shifted by %s from now", key, -shift)
+		assert.Greaterf(t, got.Sub(now).Abs(), tolerance, "%s must not be close to the unshifted time", key)
+	}
+}

@@ -265,9 +265,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		msg.MetaSet("scn", m.SCN.String())
 	}
 	if !m.Timestamp.IsZero() {
-		// upcon connection go-ora automatically queries the server's timezone and stores
-		// it in conn.dbServerTimeZone so it can convert the redo log timestamp
-		// from database-local time to UTC
+		// Host wall-clock time, converted using logminer.source_timezone (see inSourceTimezone).
 		msg.MetaSet("source_ts_ms", strconv.FormatInt(m.Timestamp.UnixMilli(), 10))
 	}
 	if m.CheckpointSCN.IsValid() {

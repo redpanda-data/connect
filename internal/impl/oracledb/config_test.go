@@ -603,3 +603,43 @@ logminer: {}
 		assert.Equal(t, 30*time.Second, got.MaxElapsedTime)
 	})
 }
+
+func TestParseLogMinerConfigSourceTimezone(t *testing.T) {
+	const base = `connection_string: oracle://user:pass@host:1521/svc
+include:
+  - SCHEMA.TABLE
+`
+	tests := []struct {
+		name    string
+		yaml    string
+		want    string
+		wantErr string
+	}{
+		{name: "unset", yaml: base},
+		{name: "unset with logminer block", yaml: base + "logminer: {}\n"},
+		{name: "empty", yaml: base + "logminer:\n  source_timezone: \"\"\n"},
+		{name: "valid", yaml: base + "logminer:\n  source_timezone: America/New_York\n", want: "America/New_York"},
+		{name: "invalid name", yaml: base + "logminer:\n  source_timezone: Not/AZone\n", wantErr: "logminer.source_timezone"},
+		{name: "fixed offset rejected", yaml: base + "logminer:\n  source_timezone: \"-05:00\"\n", wantErr: "logminer.source_timezone"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			conf, err := oracleDBStreamConfigSpec.ParseYAML(test.yaml, nil)
+			require.NoError(t, err)
+
+			cfg, err := parseLogMinerConfig(conf)
+			if test.wantErr != "" {
+				require.ErrorContains(t, err, test.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			if test.want == "" {
+				assert.Nil(t, cfg.SourceTimezone)
+				return
+			}
+			require.NotNil(t, cfg.SourceTimezone)
+			assert.Equal(t, test.want, cfg.SourceTimezone.String())
+		})
+	}
+}

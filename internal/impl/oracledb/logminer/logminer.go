@@ -178,6 +178,8 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		return fmt.Errorf("applying NLS settings for logminer: %w", err)
 	}
 
+	lm.warnOnSourceTimezoneMismatch(ctx, conn)
+
 	// always find all lob columns on start up as redo logs don't include column data types.
 	// this also prevents inline lob rows being emitted as events.
 	if err := lm.loadLOBColumnTypes(ctx); err != nil {
@@ -1324,6 +1326,7 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 			}
 			return err
 		}
+		event.Timestamp = inSourceTimezone(event.Timestamp, lm.cfg.SourceTimezone)
 		rowsInBatch++
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
@@ -1714,4 +1717,45 @@ func adaptWindowSize(currentSize int, hitCap bool, minSize, maxSize, increment i
 		return min(currentSize+increment, maxSize)
 	}
 	return max(currentSize-increment, minSize)
+}
+
+// inSourceTimezone reinterprets t's wall-clock fields as local time in loc.
+// A nil loc or zero t returns t unchanged.
+func inSourceTimezone(t time.Time, loc *time.Location) time.Time {
+	if loc == nil || t.IsZero() {
+		return t
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
+}
+
+// warnOnSourceTimezoneMismatch logs a warning when the database's current UTC
+// offset differs from SourceTimezone (or UTC when unset), which means
+// LogMiner timestamps will be shifted. A failed query is logged and ignored.
+func (lm *LogMiner) warnOnSourceTimezoneMismatch(ctx context.Context, conn *sql.Conn) {
+	var dbOffsetSecs int
+	if err := conn.QueryRowContext(ctx, `SELECT EXTRACT(TIMEZONE_HOUR FROM SYSTIMESTAMP) * 3600 + EXTRACT(TIMEZONE_MINUTE FROM SYSTIMESTAMP) * 60 FROM DUAL`).Scan(&dbOffsetSecs); err != nil {
+		lm.log.Debugf("Unable to read database UTC offset to check source_timezone: %v", err)
+		return
+	}
+	if msg, ok := sourceTimezoneMismatch(dbOffsetSecs, lm.cfg.SourceTimezone, time.Now()); ok {
+		lm.log.Warn(msg)
+	}
+}
+
+// sourceTimezoneMismatch reports whether dbOffsetSecs differs from loc's
+// offset at now (UTC when loc is nil), with a warning describing it.
+func sourceTimezoneMismatch(dbOffsetSecs int, loc *time.Location, now time.Time) (string, bool) {
+	hint := "Set logminer.source_timezone to the database host's time zone."
+	if loc == nil {
+		loc = time.UTC
+	} else {
+		hint = "Check that logminer.source_timezone matches the database host's time zone."
+	}
+	_, wantOffsetSecs := now.In(loc).Zone()
+	if dbOffsetSecs == wantOffsetSecs {
+		return "", false
+	}
+	dbOffset := now.In(time.FixedZone("", dbOffsetSecs)).Format("-07:00")
+	return fmt.Sprintf("Database UTC offset is %s but LogMiner timestamps are interpreted as %s (%s), so source_ts_ms, commit_ts_ms and replication lag are shifted by the difference. %s",
+		dbOffset, loc, now.In(loc).Format("-07:00"), hint), true
 }

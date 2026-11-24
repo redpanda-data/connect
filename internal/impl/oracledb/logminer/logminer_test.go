@@ -1365,3 +1365,129 @@ func TestReadAheadBatches(t *testing.T) {
 		})
 	}
 }
+
+func TestInSourceTimezone(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	utc := func(y int, mo time.Month, d, h, mi, s, ns int) time.Time {
+		return time.Date(y, mo, d, h, mi, s, ns, time.UTC)
+	}
+
+	tests := []struct {
+		name string
+		in   time.Time
+		loc  *time.Location
+		want time.Time
+	}{
+		{
+			name: "nil location returns input unchanged",
+			in:   utc(2026, 1, 15, 3, 12, 0, 0),
+			loc:  nil,
+			want: utc(2026, 1, 15, 3, 12, 0, 0),
+		},
+		{
+			name: "zero time returns input unchanged",
+			in:   time.Time{},
+			loc:  ny,
+			want: time.Time{},
+		},
+		{
+			name: "winter wall-clock is EST (UTC-5)",
+			in:   utc(2026, 1, 15, 3, 12, 0, 0),
+			loc:  ny,
+			want: utc(2026, 1, 15, 8, 12, 0, 0),
+		},
+		{
+			name: "summer wall-clock is EDT (UTC-4)",
+			in:   utc(2026, 7, 15, 3, 12, 0, 0),
+			loc:  ny,
+			want: utc(2026, 7, 15, 7, 12, 0, 0),
+		},
+		{
+			name: "wall fields are used, not the instant, when input is labelled in another zone",
+			in:   time.Date(2026, 1, 15, 3, 12, 0, 0, time.FixedZone("minus5", -5*3600)),
+			loc:  ny,
+			want: utc(2026, 1, 15, 8, 12, 0, 0),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := inSourceTimezone(test.in, test.loc)
+			assert.Equal(t, test.want.UnixMilli(), got.UnixMilli())
+		})
+	}
+}
+
+func TestSourceTimezoneMismatch(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	kolkata, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	winter := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+	summer := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		dbOffsetSecs int
+		loc          *time.Location
+		now          time.Time
+		wantMismatch bool
+		wantContains []string
+	}{
+		{
+			name:         "nil location and UTC database",
+			dbOffsetSecs: 0,
+			now:          winter,
+		},
+		{
+			name:         "nil location and non-UTC database",
+			dbOffsetSecs: -18000,
+			now:          winter,
+			wantMismatch: true,
+			wantContains: []string{"-05:00", "UTC (+00:00)", "Set logminer.source_timezone"},
+		},
+		{
+			name:         "New York winter matches EST",
+			dbOffsetSecs: -18000,
+			loc:          ny,
+			now:          winter,
+		},
+		{
+			name:         "New York summer matches EDT",
+			dbOffsetSecs: -14400,
+			loc:          ny,
+			now:          summer,
+		},
+		{
+			name:         "New York summer with EST database",
+			dbOffsetSecs: -18000,
+			loc:          ny,
+			now:          summer,
+			wantMismatch: true,
+			wantContains: []string{"-05:00", "Check that logminer.source_timezone", "America/New_York (-04:00)"},
+		},
+		{
+			name:         "Kolkata half-hour offset matches",
+			dbOffsetSecs: 19800,
+			loc:          kolkata,
+			now:          winter,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			msg, mismatch := sourceTimezoneMismatch(test.dbOffsetSecs, test.loc, test.now)
+			assert.Equal(t, test.wantMismatch, mismatch)
+			if !test.wantMismatch {
+				assert.Empty(t, msg)
+				return
+			}
+			for _, want := range test.wantContains {
+				assert.Contains(t, msg, want)
+			}
+		})
+	}
+}

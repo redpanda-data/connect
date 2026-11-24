@@ -72,6 +72,7 @@ const (
 	ociFieldWindowStrategy       = "window_strategy"
 	ociFieldRedoVolumeMin        = "redo_volume_min"
 	ociFieldRedoVolumeGrowthMax  = "redo_volume_growth_max"
+	ociFieldSourceTimezone       = "source_timezone"
 
 	//-- snapshot specific
 	ociFieldSnapshotFilters = "snapshot_filters"
@@ -96,8 +97,8 @@ This input adds the following metadata fields to each message:
 - ` + "`operation`" + `: Type of operation that generated the message: ` + "`read`" + `, ` + "`delete`" + `, ` + "`insert`" + `, or ` + "`update`" + `. ` + "`read`" + ` is from messages that are read in the initial snapshot phase.
 - ` + "`scn`" + `: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - ` + "`transaction_id`" + `: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
-- ` + "`source_ts_ms`" + `: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time. Not present on snapshot (` + "`read`" + `) messages.
-- ` + "`commit_ts_ms`" + `: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
+- ` + "`source_ts_ms`" + `: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time. Set ` + "`" + ociFieldLogMiner + "." + ociFieldSourceTimezone + "`" + ` when the database host clock isn't UTC. Not present on snapshot (` + "`read`" + `) messages.
+- ` + "`commit_ts_ms`" + `: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record: this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. Set ` + "`" + ociFieldLogMiner + "." + ociFieldSourceTimezone + "`" + ` when the database host clock isn't UTC. For snapshot (` + "`read`" + `) messages, this reflects Oracle's ` + "`SYSTIMESTAMP`" + ` at the moment the snapshot SCN was captured, so all snapshot messages share the same value.
 - ` + "`username`" + `: The Oracle database username of the session that performed the DML, sourced from ` + "`V$LOGMNR_CONTENTS.USERNAME`" + `. Not present on snapshot (` + "`read`" + `) messages, nor on change messages where Oracle reports a NULL or empty username.
 - ` + "`rs_id`" + `: The LogMiner record set ID from ` + "`V$LOGMNR_CONTENTS.RS_ID`" + `, identifying the redo record that produced the change. Use ` + "`rs_id`" + `, ` + "`ssn`" + ` and ` + "`row_seq`" + ` together to identify one row change and to order the changes of a transaction. Not present on snapshot (` + "`read`" + `) messages, nor on LOB-only synthetic updates.
 - ` + "`ssn`" + `: The SQL sequence number from ` + "`V$LOGMNR_CONTENTS.SSN`" + `. Compare it numerically. Not present whenever ` + "`rs_id`" + ` is not present.
@@ -243,6 +244,12 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Default(logminer.DefaultMaxSessionAge.String()).
 			Example("20m").
 			LintRule(`root = if this.parse_duration().catch(0) < 0 { [ "`+ociFieldMaxSessionAge+` must be 0 or greater" ] }`).
+			Optional(),
+		service.NewStringField(ociFieldSourceTimezone).
+			Description("The IANA time zone name (for example `America/New_York`) of the Oracle database host clock. LogMiner records each change's time in `V$LOGMNR_CONTENTS.TIMESTAMP`, a `DATE` value holding the host's local wall-clock time with no time zone attached. The `source_ts_ms` and `commit_ts_ms` metadata of streamed messages and the replication lag metric are derived from it. When this field is unset, the value is used as the database driver returns it, which currently treats the wall-clock time as UTC. That is only correct when the host clock is UTC; otherwise the timestamps are shifted by the host's UTC offset. At startup, a warning is logged if the database's current UTC offset differs from this field's zone, or from UTC when the field is unset. Set this to the time zone configured on the database host's operating system. Use a region name rather than a fixed offset so daylight saving changes are applied. `SELECT SYSTIMESTAMP FROM DUAL` shows the host's current UTC offset, which can be used to check the choice. Snapshot messages and column values are not affected.").
+			ShortDescription("The IANA time zone of the Oracle database host clock, used to interpret LogMiner timestamps.").
+			Example("America/New_York").
+			Version("4.120.0").
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
@@ -1098,6 +1105,15 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.MaxSessionAge < 0 {
 			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %s", ociFieldMaxSessionAge, cfg.MaxSessionAge)
+		}
+		if lmConf.Contains(ociFieldSourceTimezone) {
+			tz, err := lmConf.FieldString(ociFieldSourceTimezone)
+			if err != nil {
+				return nil, err
+			}
+			if cfg.SourceTimezone, err = logminer.ParseSourceTimezone(tz); err != nil {
+				return nil, fmt.Errorf("invalid logminer.%s: %w", ociFieldSourceTimezone, err)
+			}
 		}
 		// support cache_resources for buffering logminer transactions
 		if lmConf.Contains(ociFieldTransactionCache) {
