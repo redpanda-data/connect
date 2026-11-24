@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -150,21 +151,34 @@ func writeAffected(out, log io.Writer, res affectedResult) error {
 // goListTestDeps returns, for each package path, the set of import paths its
 // test binary depends on, including the package itself.
 func goListTestDeps(modPath string, pkgs []TestPackage) (map[string]map[string]bool, error) {
+	// Packages with CGO set are listed in a separate call with CGO_ENABLED=1,
+	// as run.go tests them. CI sets CGO_ENABLED=0, and with it go list fails
+	// on a package that builds only with cgo, and would give it no deps.
 	byImport := map[string]string{}
-	args := []string{"list", "-test", "-f", "{{.ImportPath}}|{{join .Deps \",\"}}"}
-	for _, p := range pkgs {
-		args = append(args, p.Path)
-	}
-	cmd := exec.Command("go", args...)
-	cmd.Stderr = os.Stderr
-	outb, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("go list: %w", err)
-	}
+	groups := map[bool][]string{}
 	for _, p := range pkgs {
 		byImport[modPath+"/"+strings.TrimPrefix(p.Path, "./")+".test"] = p.Path
+		groups[p.CGO] = append(groups[p.CGO], p.Path)
 	}
-	return parseGoListTestDeps(outb, byImport), nil
+
+	deps := map[string]map[string]bool{}
+	for _, cgo := range []bool{false, true} {
+		if len(groups[cgo]) == 0 {
+			continue
+		}
+		args := append([]string{"list", "-test", "-f", "{{.ImportPath}}|{{join .Deps \",\"}}"}, groups[cgo]...)
+		cmd := exec.Command("go", args...)
+		cmd.Stderr = os.Stderr
+		if cgo {
+			cmd.Env = append(os.Environ(), "CGO_ENABLED=1")
+		}
+		outb, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("go list: %w", err)
+		}
+		maps.Copy(deps, parseGoListTestDeps(outb, byImport))
+	}
+	return deps, nil
 }
 
 // parseGoListTestDeps parses "ImportPath|dep,dep,..." lines from go list
