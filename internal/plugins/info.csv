@@ -1,5 +1,6 @@
 name                      ,type      ,commercial_name           ,support    ,deprecated ,cloud ,cloud_with_gpu ,cloud_unsupported_reason
 a2a_message               ,processor ,a2a_message               ,enterprise ,n          ,y     ,y              ,
+aerospike                 ,output    ,aerospike                 ,community  ,n          ,n     ,n              ,not yet certified for cloud
 amqp_0_9                  ,input     ,amqp_0_9                  ,certified  ,n          ,y     ,y              ,
 amqp_0_9                  ,output    ,amqp_0_9                  ,certified  ,n          ,y     ,y              ,
 amqp_1                    ,input     ,amqp_1                    ,community  ,n          ,n     ,n              ,not yet certified for cloud
