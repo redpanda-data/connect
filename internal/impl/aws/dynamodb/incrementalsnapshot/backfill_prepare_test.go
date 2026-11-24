@@ -97,11 +97,6 @@ func TestPrepareInProgressSnapshot(t *testing.T) {
 			name:      "fresh checkpoint resumes without a reset",
 			wantCalls: []string{"progress", "stale?"},
 		},
-		{
-			name:      "failed staleness check resumes without a reset",
-			staleErr:  errors.New("describe failed"),
-			wantCalls: []string{"progress", "stale?"},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,6 +106,27 @@ func TestPrepareInProgressSnapshot(t *testing.T) {
 			assert.False(t, skip, "an in-progress snapshot is never skipped")
 			assert.Equal(t, tt.wantReset, reset)
 			assert.Equal(t, tt.wantCalls, deps.calls)
+		})
+	}
+}
+
+func TestPrepareFailedStalenessCheckReturnsError(t *testing.T) {
+	tests := []struct {
+		name     string
+		progress fakeProgress
+	}{
+		{name: "completed snapshot", progress: fakeProgress{complete: true, segments: true}},
+		{name: "in-progress snapshot", progress: fakeProgress{segments: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			staleErr := errors.New("describe failed")
+			deps := &prepareDeps{progress: tt.progress, staleErr: staleErr}
+			skip, reset, err := prepareBackfill(deps).Prepare(t.Context(), false)
+			require.ErrorIs(t, err, staleErr, "a failed check must not be read as a valid checkpoint")
+			assert.False(t, skip)
+			assert.False(t, reset)
+			assert.Equal(t, []string{"progress", "stale?"}, deps.calls, "nothing is reset on a failed check")
 		})
 	}
 }
@@ -134,7 +150,6 @@ func TestPrepareCompletedSnapshot(t *testing.T) {
 	}{
 		{name: "valid snapshot is skipped", wantSkip: true},
 		{name: "stale snapshot is reset", stale: true, wantReset: true},
-		{name: "failed staleness check keeps the snapshot", staleErr: errors.New("describe failed"), wantSkip: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

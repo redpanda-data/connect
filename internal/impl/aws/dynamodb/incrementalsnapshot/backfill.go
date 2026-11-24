@@ -198,7 +198,8 @@ func (b *Backfill[P]) Run(ctx context.Context) (retErr error) {
 // scanned, so their trimmed changes would be lost. It reports skip=true when
 // the snapshot is complete and still valid, and reset=true when it just
 // reset a stale snapshot. A fresh or still valid in-progress snapshot
-// reports neither and resumes. signalOnly is true when signal_table_name is
+// reports neither and resumes. A failed staleness check is returned, so the
+// caller retries the prepare. signalOnly is true when signal_table_name is
 // set, so backfills run only on request.
 func (b *Backfill[P]) Prepare(ctx context.Context, signalOnly bool) (skip, reset bool, err error) {
 	progress, err := b.Deps.SnapshotProgress(ctx)
@@ -209,14 +210,13 @@ func (b *Backfill[P]) Prepare(ctx context.Context, signalOnly bool) (skip, reset
 	if !complete && !progress.HasSegmentProgress() {
 		return false, false, nil
 	}
+	// A failed check is returned rather than read as "not stale": the
+	// readers would then fall back to trim horizon and checkpoint past the
+	// trimmed gap, after which no later check could see it. The caller
+	// retries the prepare instead.
 	stale, err := b.Deps.CDCCheckpointStale(ctx)
 	if err != nil {
-		if complete {
-			b.Logger.Warnf("Failed to check CDC checkpoint staleness for table %s, keeping the completed snapshot: %v", b.Table, err)
-			return true, false, nil
-		}
-		b.Logger.Warnf("Failed to check CDC checkpoint staleness for table %s, resuming its in-progress snapshot: %v", b.Table, err)
-		return false, false, nil
+		return false, false, fmt.Errorf("checking CDC checkpoint staleness for table %s: %w", b.Table, err)
 	}
 	if !stale {
 		return complete, false, nil
