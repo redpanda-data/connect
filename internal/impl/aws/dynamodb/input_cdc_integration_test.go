@@ -976,6 +976,11 @@ credentials:
 
 			structured, err := msg.AsStructured()
 			require.NoError(t, err)
+			// READ records carry the primary key in dynamodb.keys, as
+			// stream events do.
+			dynamoData := structured.(map[string]any)["dynamodb"].(map[string]any)
+			newImage := dynamoData["newImage"].(map[string]any)
+			require.Equal(t, map[string]any{"id": newImage["id"]}, dynamoData["keys"])
 			messages = append(messages, structured)
 		}
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -146,6 +147,85 @@ func TestIncrementalBackfillEmitsUntouchedItemsAndCompletes(t *testing.T) {
 	<-done
 	assert.Equal(t, []string{"a"}, got, "b was touched while its page was in flight")
 	assert.True(t, tr.putContains("snapshot#complete"), "completion marker written after acks")
+}
+
+func TestIncrementalBackfillReadRecordsCarryStreamKeys(t *testing.T) {
+	tr := &scanStubTransport{items: `[{"pk":{"S":"a"},"sk":{"N":"1"},"v":{"S":"x"}}]`}
+	d := newBackfillTestInput(t, tr)
+	cp := newBackfillCheckpointer(t, d.dynamoClient)
+	tgt := backfillTargetFor(cp, settledIncrementalState(time.Now().Add(time.Hour)))
+	tgt.keySchema = []dynamodbtypes.KeySchemaElement{
+		{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash},
+		{AttributeName: aws.String("sk"), KeyType: dynamodbtypes.KeyTypeRange},
+	}
+
+	var got []any
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for m := range d.msgChan {
+			for _, msg := range m.msg {
+				s, err := msg.AsStructured()
+				assert.NoError(t, err)
+				got = append(got, s)
+			}
+			assert.NoError(t, m.ackFn(t.Context(), nil))
+		}
+	}()
+
+	require.NoError(t, d.runIncrementalBackfill(t.Context(), tgt))
+	close(d.msgChan)
+	<-done
+	require.Len(t, got, 1)
+	read := got[0].(map[string]any)["dynamodb"].(map[string]any)
+
+	// A stream INSERT of the same item: the READ record's keys must match it.
+	stream := convertTableRecordsToBatch([]streamstypes.Record{{
+		EventName: streamstypes.OperationTypeInsert,
+		Dynamodb: &streamstypes.StreamRecord{
+			Keys: map[string]streamstypes.AttributeValue{
+				"pk": &streamstypes.AttributeValueMemberS{Value: "a"},
+				"sk": &streamstypes.AttributeValueMemberN{Value: "1"},
+			},
+			NewImage: map[string]streamstypes.AttributeValue{
+				"pk": &streamstypes.AttributeValueMemberS{Value: "a"},
+				"sk": &streamstypes.AttributeValueMemberN{Value: "1"},
+				"v":  &streamstypes.AttributeValueMemberS{Value: "x"},
+			},
+		},
+	}}, "t", "s1", nil, time.Time{}, nil)
+	require.Len(t, stream, 1)
+	ss, err := stream[0].AsStructured()
+	require.NoError(t, err)
+	insert := ss.(map[string]any)["dynamodb"].(map[string]any)
+
+	assert.Equal(t, map[string]any{"pk": "a", "sk": "1"}, read["keys"])
+	assert.Equal(t, insert["keys"], read["keys"])
+	assert.Equal(t, insert["newImage"], read["newImage"])
+}
+
+func TestSnapshotItemKeys(t *testing.T) {
+	item := map[string]dynamodbtypes.AttributeValue{
+		"pk": &dynamodbtypes.AttributeValueMemberS{Value: "a"},
+		"v":  &dynamodbtypes.AttributeValueMemberS{Value: "x"},
+	}
+	hash := dynamodbtypes.KeySchemaElement{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash}
+	rng := dynamodbtypes.KeySchemaElement{AttributeName: aws.String("sk"), KeyType: dynamodbtypes.KeyTypeRange}
+
+	tests := []struct {
+		name   string
+		schema []dynamodbtypes.KeySchemaElement
+		want   map[string]any
+	}{
+		{name: "hash key", schema: []dynamodbtypes.KeySchemaElement{hash}, want: map[string]any{"pk": "a"}},
+		{name: "missing range key", schema: []dynamodbtypes.KeySchemaElement{hash, rng}, want: nil},
+		{name: "no key schema", schema: nil, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, snapshotItemKeys(item, tt.schema))
+		})
+	}
 }
 
 func TestIncrementalBackfillHoldsUntilCaughtUp(t *testing.T) {

@@ -284,7 +284,7 @@ For better performance and longer retention (up to 1 year vs 24 hours), consider
 
 == Message format
 
-Each change event is a JSON object with the fields `+"`tableName`"+`, `+"`eventID`"+`, `+"`eventName`"+` (`+"`INSERT`"+`, `+"`MODIFY`"+`, or `+"`REMOVE`"+`), `+"`eventVersion`"+`, `+"`eventSource`"+`, and `+"`awsRegion`"+`, plus a `+"`dynamodb`"+` object. The `+"`dynamodb`"+` object contains `+"`keys`"+`, `+"`newImage`"+`, and `+"`oldImage`"+` when the stream view type provides them, along with `+"`sequenceNumber`"+`, `+"`streamViewType`"+`, and `+"`sizeBytes`"+`. Snapshot records have an `+"`eventName`"+` of `+"`READ`"+` and carry the whole item in `+"`dynamodb.newImage`"+`.
+Each change event is a JSON object with the fields `+"`tableName`"+`, `+"`eventID`"+`, `+"`eventName`"+` (`+"`INSERT`"+`, `+"`MODIFY`"+`, or `+"`REMOVE`"+`), `+"`eventVersion`"+`, `+"`eventSource`"+`, and `+"`awsRegion`"+`, plus a `+"`dynamodb`"+` object. The `+"`dynamodb`"+` object contains `+"`keys`"+`, `+"`newImage`"+`, and `+"`oldImage`"+` when the stream view type provides them, along with `+"`sequenceNumber`"+`, `+"`streamViewType`"+`, and `+"`sizeBytes`"+`. Snapshot records have an `+"`eventName`"+` of `+"`READ`"+`, carry the whole item in `+"`dynamodb.newImage`"+`, and carry its primary key in `+"`dynamodb.keys`"+`, as stream events do.
 
 Attribute values are converted from DynamoDB's typed format, such as `+"`{\"S\": \"value\"}`"+`, to plain values, such as `+"`\"value\"`"+`. Number attributes stay strings, so convert them in a mapping if you need numeric values.
 
@@ -1827,6 +1827,9 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	segments := resolveSnapshotSegments(snapshotCheckpoint, d.conf.snapshot.segments, tableName, d.log)
 	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, segments, d.log)
 	ackGate := new(sync.WaitGroup)
+	d.mu.RLock()
+	keySchema := d.keySchema
+	d.mu.RUnlock()
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
 		Client:    d.dynamoClient,
 		Table:     tableName,
@@ -1838,7 +1841,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 
 	// Set batch callback to send snapshot records to msgChan
 	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error {
-		return d.handleSnapshotBatch(ctx, items, segment, tableName, lastKey, ackTracker, ackGate)
+		return d.handleSnapshotBatch(ctx, items, segment, tableName, keySchema, lastKey, ackTracker, ackGate)
 	})
 
 	// Set progress callback to update metrics
@@ -3949,9 +3952,11 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 }
 
 // handleSnapshotBatch processes a batch of items from the snapshot scan.
+// keySchema is the table's primary key, copied into each record's
+// dynamodb.keys so READ records carry the same keys object as stream events.
 // lastKey is the scan position after this batch; it is registered with the
 // segment's ordered ack tracker and persisted only once acknowledged.
-func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, lastKey map[string]dynamodbtypes.AttributeValue, tracker *snapshotAckTracker, ackGate *sync.WaitGroup) error {
+func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, keySchema []dynamodbtypes.KeySchemaElement, lastKey map[string]dynamodbtypes.AttributeValue, tracker *snapshotAckTracker, ackGate *sync.WaitGroup) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -3960,7 +3965,6 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	d.mu.RLock()
 	buffer := d.snapshot.seqBuffer
 	startTime := d.snapshot.startTime
-	keySchema := d.keySchema
 	d.mu.RUnlock()
 
 	batch := make(service.MessageBatch, 0, len(items))
@@ -3977,6 +3981,9 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 		// Add the full item as newImage (similar to CDC INSERT events)
 		dynamoData := map[string]any{
 			"newImage": convertDynamoDBAttributeMap(item),
+		}
+		if keys := snapshotItemKeys(item, keySchema); keys != nil {
+			dynamoData["keys"] = keys
 		}
 		if buffer != nil {
 			keyStr := buildItemKeyString(item, keySchema)
@@ -4050,6 +4057,25 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 // buildItemKeyString creates a string representation of an item's primary key for deduplication.
 // Uses the table's actual key schema to extract primary key attributes reliably.
 // Keys are sorted alphabetically to match buildItemKeyFromStream ordering.
+// snapshotItemKeys returns the primary key attributes of a scanned item,
+// shaped like a stream record's dynamodb.keys. It returns nil when the key
+// schema is unknown or the item lacks a key attribute.
+func snapshotItemKeys(item map[string]dynamodbtypes.AttributeValue, keySchema []dynamodbtypes.KeySchemaElement) map[string]any {
+	if len(keySchema) == 0 {
+		return nil
+	}
+	keys := make(map[string]any, len(keySchema))
+	for _, keyElem := range keySchema {
+		name := aws.ToString(keyElem.AttributeName)
+		v, ok := item[name]
+		if !ok {
+			return nil
+		}
+		keys[name] = convertDynamoDBAttributeValue(v)
+	}
+	return keys
+}
+
 func buildItemKeyString(item map[string]dynamodbtypes.AttributeValue, keySchema []dynamodbtypes.KeySchemaElement) string {
 	if len(keySchema) == 0 {
 		return ""

@@ -67,7 +67,7 @@ func (d *dynamoDBCDCInput) incrementalBackfill(tgt backfillTarget, streamArn *st
 		Table:     tgt.table,
 		KeySchema: tgt.keySchema,
 		State:     tgt.state,
-		Deps:      &backfillDeps{Checkpointer: tgt.checkpointer, d: d, table: tgt.table, streamArn: streamArn},
+		Deps:      &backfillDeps{Checkpointer: tgt.checkpointer, d: d, table: tgt.table, keySchema: tgt.keySchema, streamArn: streamArn},
 		Metrics: incsnapshot.Metrics{
 			WindowHeld:         d.metrics.snapshotWindowHeld,
 			WindowDropped:      d.metrics.snapshotWindowDropped,
@@ -98,6 +98,7 @@ type backfillDeps struct {
 	*Checkpointer
 	d         *dynamoDBCDCInput
 	table     string
+	keySchema []dynamodbtypes.KeySchemaElement
 	streamArn *string
 }
 
@@ -127,10 +128,11 @@ func (b *backfillDeps) trimmedWhilePreparing() bool {
 func (b *backfillDeps) NewEmitter(resume *SnapshotCheckpoint) incsnapshot.Emitter {
 	segments, _ := resume.ScanSegments(b.d.conf.snapshot.segments)
 	return &snapshotEmitter{
-		d:       b.d,
-		table:   b.table,
-		tracker: newSnapshotAckTracker(b.Checkpointer, defaultSnapshotCheckpointBatchInterval, segments, b.d.log),
-		ackGate: new(sync.WaitGroup),
+		d:         b.d,
+		table:     b.table,
+		keySchema: b.keySchema,
+		tracker:   newSnapshotAckTracker(b.Checkpointer, defaultSnapshotCheckpointBatchInterval, segments, b.d.log),
+		ackGate:   new(sync.WaitGroup),
 	}
 }
 
@@ -155,14 +157,15 @@ func (b *backfillDeps) Scan(ctx context.Context, resume *SnapshotCheckpoint, hoo
 // pages go through handleSnapshotBatch with the run's own ack tracker and
 // ack gate.
 type snapshotEmitter struct {
-	d       *dynamoDBCDCInput
-	table   string
-	tracker *snapshotAckTracker
-	ackGate *sync.WaitGroup
+	d         *dynamoDBCDCInput
+	table     string
+	keySchema []dynamodbtypes.KeySchemaElement
+	tracker   *snapshotAckTracker
+	ackGate   *sync.WaitGroup
 }
 
 func (e *snapshotEmitter) Emit(ctx context.Context, items []incsnapshot.Item, segment int, cursor incsnapshot.Item) error {
-	return e.d.handleSnapshotBatch(ctx, items, segment, e.table, cursor, e.tracker, e.ackGate)
+	return e.d.handleSnapshotBatch(ctx, items, segment, e.table, e.keySchema, cursor, e.tracker, e.ackGate)
 }
 
 func (e *snapshotEmitter) SealSegment(ctx context.Context, segment int) error {
