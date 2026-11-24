@@ -86,8 +86,8 @@ func (e *counterExporter) add(name string, v int64) {
 func (e *counterExporter) get(name string) (int64, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	v, ok := e.counters[name]
-	return v, ok
+	v, exists := e.counters[name]
+	return v, exists
 }
 
 type counterHandle struct {
