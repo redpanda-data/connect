@@ -27,6 +27,8 @@ import (
 
 func TestIsSocketTimeout(t *testing.T) {
 	readTimeout := &net.OpError{Op: "read", Net: "tcp", Err: os.ErrDeadlineExceeded}
+	writeTimeout := &net.OpError{Op: "write", Net: "tcp", Err: os.ErrDeadlineExceeded}
+	dialTimeout := &net.OpError{Op: "dial", Net: "tcp", Err: os.ErrDeadlineExceeded}
 	connReset := &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}
 
 	tests := []struct {
@@ -37,6 +39,9 @@ func TestIsSocketTimeout(t *testing.T) {
 		{name: "nil", err: nil, want: false},
 		{name: "socket read timeout", err: readTimeout, want: true},
 		{name: "wrapped socket read timeout", err: fmt.Errorf("mining logs: fetching current SCN: %w", readTimeout), want: true},
+		{name: "socket write timeout", err: writeTimeout, want: true},
+		{name: "dial timeout means unreachable, not unresponsive", err: dialTimeout, want: false},
+		{name: "wrapped dial timeout", err: fmt.Errorf("validating connection to oracle database: %w", dialTimeout), want: false},
 		{name: "connection reset fails fast so is not a timeout", err: connReset, want: false},
 		{name: "context deadline is not a socket timeout", err: fmt.Errorf("query: %w", context.DeadlineExceeded), want: false},
 		{name: "context canceled", err: context.Canceled, want: false},

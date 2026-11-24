@@ -18,10 +18,15 @@ import (
 
 // IsSocketTimeout reports whether err comes from a network read or write that
 // timed out, meaning the database has stopped responding on that connection
-// or took longer than the socket timeout to reply.
+// or took longer than the socket timeout to reply. Dial timeouts are excluded:
+// they mean the database could not be reached, which socket_timeout does not
+// govern.
 func IsSocketTimeout(err error) bool {
 	var opErr *net.OpError
-	return errors.As(err, &opErr) && opErr.Timeout()
+	if !errors.As(err, &opErr) || !opErr.Timeout() {
+		return false
+	}
+	return opErr.Op == "read" || opErr.Op == "write"
 }
 
 // abandonConn marks conn's driver connection as closed, so that statement
