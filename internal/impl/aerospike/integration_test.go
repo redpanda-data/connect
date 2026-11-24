@@ -570,7 +570,8 @@ func TestIntegrationBinNamesAreCaseSensitive(t *testing.T) {
 // write-then-delete pair inside one batch must not leave the record, because
 // that pair is folded into a single delete. Pairs that one command cannot
 // reproduce, such as two create_only messages or a ttl followed by keep, leave
-// the same record and errors in one batch as in two.
+// the same record and errors in one batch as in two. So does a ttl of keep
+// after a delete, which the namespace default (no expiry here) replaces.
 func TestIntegrationSameKeyAcrossBatches(t *testing.T) {
 	w, client := outputSetup(t, "operation: '${! meta(\"op\") }'\n")
 
@@ -664,6 +665,33 @@ func TestIntegrationSameKeyAcrossBatches(t *testing.T) {
 			require.NotNil(t, rec, key)
 			assert.Equal(t, 2, rec.Bins["a"], key)
 			assert.InDelta(t, 3600, rec.Expiration, 60, key)
+		}
+	})
+
+	t.Run("keep after a delete does not carry over the old ttl in one batch and in two", func(t *testing.T) {
+		tw, tclient := outputSetup(t, "operation: '${! meta(\"op\") }'\nttl: '${! json(\"ttl\").or(\"keep\") }'\n")
+
+		for _, key := range []string{"x8", "x9"} {
+			require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+				opMsg(t, "write", `{"id":"`+key+`","a":9,"ttl":"3600"}`),
+			}))
+		}
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "delete", `{"id":"x8"}`),
+		}))
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "write", `{"id":"x8","a":1}`),
+		}))
+		require.NoError(t, tw.WriteBatch(t.Context(), service.MessageBatch{
+			opMsg(t, "delete", `{"id":"x9"}`),
+			opMsg(t, "write", `{"id":"x9","a":1}`),
+		}))
+
+		for _, key := range []string{"x8", "x9"} {
+			rec := outputRead(t, tclient, key)
+			require.NotNil(t, rec, key)
+			assert.Equal(t, 1, rec.Bins["a"], key)
+			assert.Equal(t, uint32(as.TTLDontExpire), rec.Expiration, key)
 		}
 	})
 }

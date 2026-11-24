@@ -444,12 +444,18 @@ func TestFoldTTL(t *testing.T) {
 		acc.fold(withTTL(1, opWrite, 200))
 		assert.Equal(t, uint32(200), acc.ttl)
 	})
-	t.Run("keep after a delete applies to the new record", func(t *testing.T) {
-		acc := withTTL(0, opWrite, 100)
-		acc.fold(withTTL(1, opDelete, 100))
-		acc.fold(withTTL(2, opWrite, as.TTLDontUpdate))
-		assert.Equal(t, opReplace, acc.kind)
-		assert.Equal(t, uint32(as.TTLDontUpdate), acc.ttl)
+	t.Run("keep after a delete becomes the namespace default", func(t *testing.T) {
+		for _, kind := range []opKind{opWrite, opReplace, opCreateOnly} {
+			acc := withTTL(0, opDelete, 100)
+			acc.fold(withTTL(1, kind, as.TTLDontUpdate))
+			assert.Equal(t, opReplace, acc.kind, kind)
+			assert.Equal(t, uint32(as.TTLServerDefault), acc.ttl, kind)
+		}
+	})
+	t.Run("an explicit ttl after a delete applies", func(t *testing.T) {
+		acc := withTTL(0, opDelete, 100)
+		acc.fold(withTTL(1, opWrite, 200))
+		assert.Equal(t, uint32(200), acc.ttl)
 	})
 }
 

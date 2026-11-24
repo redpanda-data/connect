@@ -58,7 +58,7 @@ func retryableIgnoreLint() string {
 func outputSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
-		Version("4.119.0").
+		Version("4.120.0").
 		Categories("Services").
 		Summary("Writes messages to an Aerospike cluster as records, batched and keyed by an interpolated primary key or digest.").
 		Description(`
@@ -201,7 +201,7 @@ The default is `+"`keep`"+` so a stream of updates does not reset or shorten voi
 				"- An `update_only` or `replace_only` folds into an earlier `write` or `replace`, which leaves the record in place, so the existence check is dropped. It also folds into an earlier `update_only` or `replace_only`, and the folded command keeps the check.\n"+
 				"- A `create_only` folds only into an earlier `delete`, and becomes a `replace`.\n"+
 				"- Nothing folds into a `create_only`, and a `write`, `replace`, or `delete` does not fold into an `update_only` or `replace_only`, because one command cannot fail one message and apply the other.\n"+
-				"- A later `ttl` of `keep` leaves the expiration of the earlier message, as it would on its own. After a `delete`, the later `ttl` applies.\n"+
+				"- A later `ttl` of `keep` leaves the expiration of the earlier message, as it would on its own. After a `delete`, the later `ttl` applies, and `keep` means the namespace default, as for a new record.\n"+
 				"- A later `write` or `update_only` that nulls every bin of an earlier `replace` becomes a `delete`, which is the record those messages would leave. After a `replace_only`, the delete keeps the existence check.\n\n"+
 				"Messages carrying a `generation` are never coalesced. Coalescing only ever applies within one batch — see `max_in_flight` for what happens across concurrent batches.").
 			Default(true).

@@ -189,14 +189,19 @@ func (p *pendingOp) canFold(next *pendingOp) bool {
 //
 // A later ttl of keep leaves the expiration the earlier command set, so the
 // earlier ttl stays. After a delete the later ttl applies, because the record
-// is created again.
+// is created again. A keep there becomes the namespace default: the folded
+// command reaches the record before it is deleted, and keep would carry over
+// its expiration.
 //
 // Generation is deliberately not merged here: coalesceOps never folds an
 // operation carrying a compare-and-set check, because one command can only
 // carry one expected generation.
 func (p *pendingOp) fold(next *pendingOp) {
 	p.indexes = append(p.indexes, next.indexes...)
-	if p.kind == opDelete || next.ttl != as.TTLDontUpdate {
+	switch {
+	case p.kind == opDelete && next.ttl == as.TTLDontUpdate:
+		p.ttl = as.TTLServerDefault
+	case p.kind == opDelete || next.ttl != as.TTLDontUpdate:
 		p.ttl = next.ttl
 	}
 
