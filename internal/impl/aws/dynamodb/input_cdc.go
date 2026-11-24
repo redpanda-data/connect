@@ -672,14 +672,6 @@ func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
 // Why 32 shards? Power-of-2 for fast modulo (hash%numBufferShards), and matches typical core counts.
 const numBufferShards = 32
 
-// snapshotDedupeClockSkewMargin is the time that handleSnapshotBatch subtracts
-// from the snapshot start when it records a scanned item for the dedupe. The
-// start comes from the host clock and stream stamps from the AWS clock, so a
-// host clock ahead of AWS can stamp a write after the start as older than the
-// start. A larger margin gives more duplicates, never loss. 1 min is far more
-// than the skew of a host that syncs its clock with NTP.
-const snapshotDedupeClockSkewMargin = time.Minute
-
 type snapshotSequenceBuffer struct {
 	shards           [numBufferShards]bufferShard // Independent shards with separate locks
 	maxSize          int
@@ -1441,6 +1433,14 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 	return nil
 }
 
+// snapshotDedupeClockSkewMargin is the time that handleSnapshotBatch subtracts
+// from the snapshot start when it records a scanned item for the dedupe. The
+// start comes from the host clock and stream stamps from the AWS clock, so a
+// host clock ahead of AWS can stamp a write after the start as older than the
+// start. A larger margin gives more duplicates, never loss. 1 min is far more
+// than the skew of a host that syncs its clock with NTP.
+const snapshotDedupeClockSkewMargin = time.Minute
+
 // warnIfHostClockAhead logs a warning when the clock skew that the SDK measured
 // on an AWS response puts the host clock more than
 // snapshotDedupeClockSkewMargin ahead of AWS.
@@ -1507,7 +1507,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// 1. Start CDC readers FIRST (if snapshot_and_cdc mode)
 	//    This ensures we capture ALL changes that happen during snapshot
 	if d.conf.snapshot.mode == snapshotModeAndCDC {
-		if d.snapshot.seqBuffer != nil {
+		if d.conf.snapshot.dedupe {
 			d.warnIfHostClockAhead(descTableMetadata)
 		}
 
