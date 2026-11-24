@@ -527,10 +527,10 @@ func (m *MatrixRunner) Run(
 			ConsumerLagEnd:        lagEnd,
 		})
 		if probeFail {
-			return out, fmt.Errorf("%s at %d vCPU: the source topic gained no records during the window", anomalyProducerUnreachable, n)
+			return out, fmt.Errorf("%w: %s at %d vCPU: the source topic gained no records during the window", errPointFailed, anomalyProducerUnreachable, n)
 		}
 		if sinkFail || e2eFail || exitFail {
-			return out, fmt.Errorf("point at %d vCPU failed: %s", n, failNotes(anomalies))
+			return out, fmt.Errorf("%w: point at %d vCPU: %s", errPointFailed, n, failNotes(anomalies))
 		}
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
@@ -579,6 +579,12 @@ func (m *MatrixRunner) Run(
 }
 
 // failNotes joins the notes of a point's failing anomalies.
+// errPointFailed wraps a Run error for a point that was measured and then
+// failed a check (connect_exited, sink errors, ...). That point is the last
+// one Run returns, so a caller can still report it: a soak writes and
+// archives its result before failing (see soakFailedPoint).
+var errPointFailed = errors.New("sweep point failed")
+
 func failNotes(anomalies []Anomaly) string {
 	var notes []string
 	for _, a := range anomalies {

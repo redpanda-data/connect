@@ -73,9 +73,20 @@ process_resident_memory_bytes 1
 `
 	c := parseOutputCounters([]byte(raw))
 	require.False(t, c.HasSent, "children of a broker: no single output count")
-	require.False(t, c.HasBatchSent, "children of a broker: no single batch count")
+	require.True(t, c.HasBatchSent, "a broker's batches are summed over its children, like its errors")
+	require.InDelta(t, 20, c.BatchSent, 0)
 	require.True(t, c.HasErrors)
 	require.InDelta(t, 3, c.Errors, 0)
+
+	// 3 failed writes of 20 is over the limit; one retried write in a
+	// large fan-out window is not, and must not fail the point.
+	_, fail := e2ePointAnomalies(e2ePoint{Samples: 600, Counters: c, MedianMsgPerSec: 1000})
+	require.True(t, fail)
+	c.Errors, c.BatchSent = 1, 20000
+	got, fail := e2ePointAnomalies(e2ePoint{Samples: 600, Counters: c, MedianMsgPerSec: 1000})
+	require.False(t, fail)
+	require.Contains(t, kinds(got), anomalySinkRetried)
+	require.NotContains(t, kinds(got), anomalySinkErrors)
 }
 
 func kinds(as []Anomaly) []string {

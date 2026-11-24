@@ -9,6 +9,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -201,4 +202,19 @@ func TestValidateBinaryFlagsRejectsE2E(t *testing.T) {
 	require.ErrorContains(t, validateBinaryFlags(s, map[string]string{"base": "/tmp/x"}), "bot runs build from the checkout only")
 	s.Matrix.Arms = nil
 	require.NoError(t, validateBinaryFlags(s, nil))
+}
+
+// A soak whose measured point failed a check (Connect killed hours in)
+// still writes and archives its result; any other failure has no point to
+// report, and a non-soak run fails straight away.
+func TestSoakFailedPoint(t *testing.T) {
+	pts := []SweepPoint{{VCPU: 2}}
+	failed := fmt.Errorf("%w: point at 2 vCPU: connect_exited", errPointFailed)
+	soak := &Scenario{Soak: true}
+
+	require.True(t, soakFailedPoint(soak, pts, failed))
+	require.False(t, soakFailedPoint(&Scenario{}, pts, failed), "a sweep fails at once")
+	require.False(t, soakFailedPoint(soak, nil, failed), "no point to report")
+	require.False(t, soakFailedPoint(soak, pts, errors.New("ssm: timeout")), "not a measured point")
+	require.False(t, soakFailedPoint(soak, pts, nil))
 }

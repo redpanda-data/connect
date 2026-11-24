@@ -61,9 +61,10 @@ type outputCounters struct {
 	// (a fan-out broker counts each message once per child).
 	Sent    float64
 	HasSent bool
-	// BatchSent is output_batch_sent, under the same root.output rule as
-	// Sent. output_error counts failed writes, which are batches, so the
-	// error share is of BatchSent.
+	// BatchSent is output_batch_sent summed over every output, the same
+	// set Errors is summed over. output_error counts failed writes, which
+	// are batches, so the error share is of BatchSent; for a fan-out broker
+	// both count each child's writes.
 	BatchSent    float64
 	HasBatchSent bool
 	// Errors is output_error summed over every output.
@@ -108,7 +109,10 @@ func parseOutputCounters(raw []byte) outputCounters {
 		}
 	}
 	c.Sent, c.HasSent = rootOutputValue(last["output_sent"])
-	c.BatchSent, c.HasBatchSent = rootOutputValue(last["output_batch_sent"])
+	for _, v := range last["output_batch_sent"] {
+		c.BatchSent += v.value
+		c.HasBatchSent = true
+	}
 	best := -1
 	for _, v := range last["benchmark_messages_total"] {
 		idx := 0

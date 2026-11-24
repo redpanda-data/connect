@@ -481,6 +481,11 @@ func runBench(opts benchOpts) (errOut error) {
 	// or are cancelled.
 	var points []SweepPoint
 	var logFetcher LogFetcher
+	// soakPointErr is a soak's failed point (for example Connect killed
+	// hours in). It is returned only after the result is written and
+	// archived: a late crash is what a soak exists to find, so its report
+	// must survive the failure.
+	var soakPointErr error
 	if err := withSink(ctx, sink, sessionID, func(placeholders map[string]string) error {
 		maps.Copy(sharedOuts, placeholders)
 		var err error
@@ -587,6 +592,11 @@ func runBench(opts benchOpts) (errOut error) {
 			return err
 		}
 		points, err = mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
+		if soakFailedPoint(s, points, err) {
+			fmt.Fprintf(os.Stderr, "soak point failed; writing and archiving the result before failing the run: %v\n", err)
+			soakPointErr = err
+			return nil
+		}
 		return err
 	}); err != nil {
 		return err
@@ -677,10 +687,10 @@ func runBench(opts benchOpts) (errOut error) {
 	// of the two-run comparison markdown below.
 	var soakRegressionErr error
 	if s.Soak {
-		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher)
+		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher, soakPointErr != nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: archive soak result to S3: %v\n", err)
-		} else if !s.IsBinaryArmScenario() {
+		} else if !s.IsBinaryArmScenario() && soakPointErr == nil {
 			soakRegressionErr = compareSoakRunToBaseline(ctx, opts, s, sessionID, entry, logFetcher)
 		}
 		if s.IsBinaryArmScenario() {
@@ -695,10 +705,22 @@ func runBench(opts benchOpts) (errOut error) {
 	// set here, immediately before the return the deferred teardown above
 	// observes — see its own comment for why a regression must never be
 	// treated like an ordinary failure for --keep-on-fail purposes.
+	// A failed soak point outranks a regression verdict, and it is a
+	// genuine failure, so soakRegressionOnly stays false for it.
+	if soakPointErr != nil {
+		return soakPointErr
+	}
 	if soakRegressionErr != nil {
 		soakRegressionOnly = true
 	}
 	return soakRegressionErr
+}
+
+// soakFailedPoint reports whether a soak's Run error is a measured point
+// that failed a check, so the run still has a result to write and archive.
+// Any other error (no samples, SSM, cancellation) has nothing to report.
+func soakFailedPoint(s *Scenario, points []SweepPoint, err error) bool {
+	return s.Soak && len(points) > 0 && errors.Is(err, errPointFailed)
 }
 
 // soakIndexEntry is the small per-run record a rolling-baseline comparator
@@ -812,7 +834,11 @@ func buildSoakArchivePlanForPoints(sessionID, scenarioName string, points []Poin
 // archived (not just the first), and the soak-index entry is skipped
 // entirely, since a one-off base-vs-PR A/B must never be mixed into the
 // rolling baseline's median (see compareSoakBaseline).
-func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) (soakIndexEntry, error) {
+//
+// failed is true when the soak's point failed a check (see soakFailedPoint).
+// Its result and raw artifacts are archived, but its soak-index entry is
+// not written: a partial window would skew the rolling baseline's median.
+func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher, failed bool) (soakIndexEntry, error) {
 	entry := buildSoakIndexEntry(sessionID, s, result)
 	entry.BuildSHA = gitHeadSHA()
 	if archiveBucket == "" {
@@ -836,7 +862,7 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 
 	// A binary-arm soak's entry must never land in soak-index/ — see the
 	// doc comment above.
-	if !s.IsBinaryArmScenario() {
+	if !s.IsBinaryArmScenario() && !failed {
 		indexRaw, err := json.Marshal(entry)
 		if err != nil {
 			return entry, fmt.Errorf("marshal soak index entry: %w", err)

@@ -116,6 +116,7 @@ func TestMatrixRunner_ConnectExitedFailsPoint(t *testing.T) {
 	mr := &MatrixRunner{SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner", Bucket: "b", SessionID: sessionID}
 	plan := []sweepPoint{{VCPU: 1, GOMAXPROCS: 1, Streams: 1}, {VCPU: 2, GOMAXPROCS: 2, Streams: 1}}
 	points, err := mr.Run(t.Context(), plan, 1, 0, 30*time.Second, "", "")
+	require.ErrorIs(t, err, errPointFailed, "a soak keeps its report for this error")
 	require.ErrorContains(t, err, anomalyConnectExited)
 	require.ErrorContains(t, err, "exit code 137")
 	require.Len(t, points, 1, "the sweep stops at the failed point")
