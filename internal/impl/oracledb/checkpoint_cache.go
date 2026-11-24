@@ -154,25 +154,27 @@ func selectCheckpointWrite(ctx context.Context, db *sql.DB, tbl cacheTable, metr
 	legacyProc := metrics.NewGauge("oracledb_cdc_checkpoint_legacy_procedure")
 
 	query, err := mergeWrite(ctx, db, tbl)
+	if err == nil {
+		legacyProc.Set(0)
+		return query, nil
+	}
 	// Another error does not tell if the MERGE works. Fail, so that Connect tries again.
 	if _, missing := replication.IsMissingPrivilege(err); !missing {
-		if err == nil {
-			legacyProc.Set(0)
-		}
-		return query, err
+		return "", fmt.Errorf("checking if the Connect user can write checkpoints to '%s' with MERGE: %w", tbl.String(), err)
 	}
 
 	legacyProc.Set(1)
-	log.Warnf("%v. Checkpoints are written with the deprecated stored procedure %s.%s. "+
+	log.Warnf("The Connect user cannot write checkpoints to '%s' with MERGE: %v. "+
+		"Checkpoints are written with the deprecated stored procedure %s.%s. "+
 		"A future version removes this procedure and then fails to start without these privileges. "+
 		"Grant them now: GRANT SELECT, INSERT, UPDATE ON %s TO <user>",
-		err, tbl.schema, defaultStoredProcName, tbl.String())
+		tbl.String(), err, tbl.schema, defaultStoredProcName, tbl.String())
 	return procedureWrite(ctx, db, tbl)
 }
 
 // mergeWrite returns the MERGE that upserts a checkpoint in tbl, with the key
-// as :1 and the value as :2. It first probes the MERGE, so it returns an error
-// if the user cannot run it.
+// as :1 and the value as :2. It first probes the MERGE, and returns the probe
+// error if the user cannot run it.
 func mergeWrite(ctx context.Context, db *sql.DB, tbl cacheTable) (string, error) {
 	query := fmt.Sprintf(`
 		MERGE INTO %s t
@@ -185,7 +187,7 @@ func mergeWrite(ctx context.Context, db *sql.DB, tbl cacheTable) (string, error)
 	defer cancel()
 	// go-ora driver handles []byte parameters as RAW type
 	if err := replication.ProbeStatement(ctx, db, query, checkpointMergeProbeKey, make([]byte, 8)); err != nil {
-		return "", fmt.Errorf("the Connect user cannot write checkpoints to '%s' with MERGE: %w", tbl.String(), err)
+		return "", err
 	}
 	return query, nil
 }
