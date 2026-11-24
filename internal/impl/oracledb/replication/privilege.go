@@ -9,7 +9,10 @@
 package replication
 
 import (
+	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 
 	goora "github.com/sijms/go-ora/v2/network"
 )
@@ -37,4 +40,21 @@ func IsMissingPrivilege(err error) (*goora.OracleError, bool) {
 		return nil, false
 	}
 	return oraErr, oraErr.ErrCode == errCodeInsufficientPrivileges || oraErr.ErrCode == errCodeMissingPrivilege
+}
+
+// ProbeStatement runs query in a transaction and rolls it back, so that it
+// changes nothing. Use it at start up to check that the user can run a DML
+// statement. Check the returned error with IsMissingPrivilege.
+func ProbeStatement(ctx context.Context, db *sql.DB, query string, args ...any) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && err == nil {
+			err = fmt.Errorf("rolling back: %w", rbErr)
+		}
+	}()
+	_, err = tx.ExecContext(ctx, query, args...)
+	return err
 }

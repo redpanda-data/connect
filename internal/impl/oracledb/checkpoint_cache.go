@@ -30,22 +30,18 @@ const (
 	defaultCheckpointCache = "RPCN.CDC_CHECKPOINT_CACHE"
 	// defaultStoredProcName is the deprecated checkpoint write procedure, in the
 	// schema of the checkpoint cache table. Its name cannot be configured. Only
-	// a user that cannot run checkpointMergeQuery uses it.
+	// a user that cannot run the MERGE of mergeWrite uses it.
 	defaultStoredProcName = "CDC_CHECKPOINT_CACHE_UPDATE"
 	// errCodeNameAlreadyUsed is ORA-00955: "name is already used by an existing object".
 	errCodeNameAlreadyUsed = 955
 	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
 	checkpointCacheKeyLimit = 128
-	// checkpointMergeProbeKey is the cache key that probeCheckpointMerge
-	// inserts and rolls back. No pipeline uses it as its checkpoint key, so the
-	// MERGE takes its INSERT branch.
+	// checkpointMergeProbeKey is the key that the start up MERGE probe
+	// inserts and rolls back. No pipeline uses it.
 	checkpointMergeProbeKey = "__rpcn_checkpoint_merge_probe"
-	// checkpointMergeProbeTimeout limits the probe at start up. Two pipelines
-	// that probe the same table at the same time wait for each other on the
-	// probe key, but only until the first one rolls back. If a probe session
-	// dies while it holds the lock, the other probe times out, Connect fails
-	// and tries again. Checkpoint writes never use the probe key, so the
-	// probe cannot block them.
+	// checkpointMergeProbeTimeout limits the probe. Concurrent probes of one
+	// table wait on the probe key until the first one rolls back. A probe
+	// blocked by a dead session times out, and Connect tries again.
 	checkpointMergeProbeTimeout = 10 * time.Second
 )
 
@@ -157,24 +153,46 @@ func selectCheckpointWrite(ctx context.Context, db *sql.DB, tbl cacheTable, metr
 	// the procedure is safe when no pipeline reports 1.
 	legacyProc := metrics.NewGauge("oracledb_cdc_checkpoint_legacy_procedure")
 
-	probeCtx, cancel := context.WithTimeout(ctx, checkpointMergeProbeTimeout)
-	err := probeCheckpointMerge(probeCtx, db, tbl)
-	cancel()
-	if err == nil {
-		legacyProc.Set(0)
-		return checkpointMergeQuery(tbl), nil
-	}
+	query, err := mergeWrite(ctx, db, tbl)
 	// Another error does not tell if the MERGE works. Fail, so that Connect tries again.
-	if _, ok := replication.IsMissingPrivilege(err); !ok {
-		return "", fmt.Errorf("checking if the user can write checkpoints to '%s': %w", tbl.String(), err)
+	if _, missing := replication.IsMissingPrivilege(err); !missing {
+		if err == nil {
+			legacyProc.Set(0)
+		}
+		return query, err
 	}
 
 	legacyProc.Set(1)
-	log.Warnf("The Connect user cannot write checkpoints to '%s' with MERGE: %v. "+
-		"Checkpoints are written with the deprecated stored procedure %s.%s. "+
+	log.Warnf("%v. Checkpoints are written with the deprecated stored procedure %s.%s. "+
 		"A future version removes this procedure and then fails to start without these privileges. "+
 		"Grant them now: GRANT SELECT, INSERT, UPDATE ON %s TO <user>",
-		tbl.String(), err, tbl.schema, defaultStoredProcName, tbl.String())
+		err, tbl.schema, defaultStoredProcName, tbl.String())
+	return procedureWrite(ctx, db, tbl)
+}
+
+// mergeWrite returns the MERGE that upserts a checkpoint in tbl, with the key
+// as :1 and the value as :2. It first probes the MERGE, so it returns an error
+// if the user cannot run it.
+func mergeWrite(ctx context.Context, db *sql.DB, tbl cacheTable) (string, error) {
+	query := fmt.Sprintf(`
+		MERGE INTO %s t
+		USING (SELECT :1 AS cache_key, :2 AS cache_val FROM dual) s
+		ON (t.cache_key = s.cache_key)
+		WHEN MATCHED THEN UPDATE SET t.cache_val = s.cache_val
+		WHEN NOT MATCHED THEN INSERT (cache_key, cache_val) VALUES (s.cache_key, s.cache_val)`, tbl.String())
+
+	ctx, cancel := context.WithTimeout(ctx, checkpointMergeProbeTimeout)
+	defer cancel()
+	// go-ora driver handles []byte parameters as RAW type
+	if err := replication.ProbeStatement(ctx, db, query, checkpointMergeProbeKey, make([]byte, 8)); err != nil {
+		return "", fmt.Errorf("the Connect user cannot write checkpoints to '%s' with MERGE: %w", tbl.String(), err)
+	}
+	return query, nil
+}
+
+// procedureWrite returns the call of the deprecated stored procedure, with the
+// key as :1 and the value as :2. It creates the procedure if it does not exist.
+func procedureWrite(ctx context.Context, db *sql.DB, tbl cacheTable) (string, error) {
 	if err := createUpsertStoredProc(ctx, db, tbl); err != nil {
 		return "", fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
 	}
@@ -352,34 +370,6 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	}
 
 	return nil
-}
-
-// checkpointMergeQuery returns the MERGE that upserts a checkpoint in tbl. It
-// takes the key as :1 and the value as :2.
-func checkpointMergeQuery(tbl cacheTable) string {
-	return fmt.Sprintf(`
-		MERGE INTO %s t
-		USING (SELECT :1 AS cache_key, :2 AS cache_val FROM dual) s
-		ON (t.cache_key = s.cache_key)
-		WHEN MATCHED THEN UPDATE SET t.cache_val = s.cache_val
-		WHEN NOT MATCHED THEN INSERT (cache_key, cache_val) VALUES (s.cache_key, s.cache_val)`, tbl.String())
-}
-
-// probeCheckpointMerge runs checkpointMergeQuery in a transaction and rolls it
-// back. It returns an error if the user of db cannot run that MERGE on tbl.
-func probeCheckpointMerge(ctx context.Context, db *sql.DB, tbl cacheTable) (err error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("starting transaction: %w", err)
-	}
-	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil && err == nil {
-			err = fmt.Errorf("rolling back: %w", rbErr)
-		}
-	}()
-	// go-ora driver handles []byte parameters as RAW type
-	_, err = tx.ExecContext(ctx, checkpointMergeQuery(tbl), checkpointMergeProbeKey, make([]byte, 8))
-	return err
 }
 
 // Add is unused
