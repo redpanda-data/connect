@@ -124,7 +124,7 @@ func TestRenderCatalog(t *testing.T) {
 		schemaWith(nil))
 	require.NoError(t, err)
 	info := plugins.InfoCollection{
-		"kafka-input":  {Name: "kafka", Type: plugins.TypeInput, CommercialName: "Apache Kafka", Support: "certified"},
+		"kafka-input":  {Name: "kafka", Type: plugins.TypeInput, CommercialName: "Apache Kafka", Support: "certified", UseCases: []string{"kafka-migration", "data-fan-out"}},
 		"kafka-output": {Name: "kafka", Type: plugins.TypeOutput, CommercialName: "kafka", Support: "community"},
 	}
 	out, err := renderCatalog(full, plat, info)
@@ -133,12 +133,13 @@ func TestRenderCatalog(t *testing.T) {
 	var entries []catalogEntry
 	require.NoError(t, json.Unmarshal([]byte(out), &entries))
 	assert.Equal(t, []catalogEntry{
-		{Type: "input", Name: "kafka", Status: "deprecated", Categories: []string{}, Summary: "Reads from Kafka.", Cloud: true, Support: "certified", CommercialNames: []string{"Apache Kafka"}},
-		{Type: "input", Name: "zmq4", Status: "stable", Version: "4.0.0", Categories: []string{"Network"}, Summary: "Consumes from ZeroMQ.", CgoOnly: true, CommercialNames: []string{}},
-		{Type: "output", Name: "kafka", Status: "stable", Categories: []string{}, Summary: "Writes to Kafka.", Support: "community", CommercialNames: []string{"kafka"}},
-		{Type: "rate_limit", Name: "local", Status: "stable", Categories: []string{}, CommercialNames: []string{}},
+		{Type: "input", Name: "kafka", Status: "deprecated", Categories: []string{}, Summary: "Reads from Kafka.", Cloud: true, Support: "certified", CommercialNames: []string{"Apache Kafka"}, UseCases: []string{"kafka-migration", "data-fan-out"}},
+		{Type: "input", Name: "zmq4", Status: "stable", Version: "4.0.0", Categories: []string{"Network"}, Summary: "Consumes from ZeroMQ.", CgoOnly: true, CommercialNames: []string{}, UseCases: []string{}},
+		{Type: "output", Name: "kafka", Status: "stable", Categories: []string{}, Summary: "Writes to Kafka.", Support: "community", CommercialNames: []string{"kafka"}, UseCases: []string{}},
+		{Type: "rate_limit", Name: "local", Status: "stable", Categories: []string{}, CommercialNames: []string{}, UseCases: []string{}},
 	}, entries)
 	assert.Contains(t, out, `"categories": []`, "empty lists stay arrays, not null")
+	assert.Contains(t, out, `"use_cases": []`, "empty use cases stay arrays, not null")
 }
 
 // TestPlatformsFromBuilds lists the real release builds with go list and
