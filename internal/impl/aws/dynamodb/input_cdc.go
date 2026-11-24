@@ -92,6 +92,7 @@ const (
 	dciFieldSnapshotThrottle       = "snapshot_throttle"
 	dciFieldSnapshotDedupe         = "snapshot_deduplicate"
 	dciFieldSnapshotBufferSize     = "snapshot_buffer_size"
+	dciFieldSnapshotDedupeSkew     = "snapshot_deduplicate_clock_skew_margin"
 
 	// Snapshot states.
 	snapshotStateNotStarted int32 = 0
@@ -330,7 +331,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items and skips CDC events for those keys that are older than the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. The host clock must be within 1 minute of the AWS clock. Writes made in the minute before the snapshot start can appear as duplicates.").Version("4.82.0").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items and skips CDC events for those keys that are older than the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. The host clock must not be ahead of the AWS clock by more than `"+dciFieldSnapshotDedupeSkew+"`.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering the keys of scanned items.").
 				Default(true).
 				Advanced(),
@@ -338,6 +339,11 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").Version("4.82.0").
 				ShortDescription("Maximum scanned item keys buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
+				Advanced(),
+			service.NewDurationField(dciFieldSnapshotDedupeSkew).
+				Description("How far the host clock can be ahead of the AWS clock before the snapshot deduplication can skip CDC events for writes made after the snapshot start. Writes made in this time before the snapshot start can appear as duplicates. The input logs a warning at start if the host clock is further ahead.").Version("4.120.0").
+				Default("1m").
+				LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["snapshot_deduplicate_clock_skew_margin must not be negative"] }`).
 				Advanced(),
 		).
 		Fields(config.SessionFields()...).
@@ -453,6 +459,13 @@ type snapshotConfig struct {
 	throttle   time.Duration
 	dedupe     bool
 	bufferSize int
+	// dedupeClockSkewMargin is the time that handleSnapshotBatch subtracts
+	// from the snapshot start when it records a scanned item for the dedupe.
+	// The start comes from the host clock and stream stamps from the AWS
+	// clock, so a host clock ahead of AWS can stamp a write after the start
+	// as older than the start. A larger margin gives more duplicates, never
+	// loss. warnIfHostClockAhead also uses it as its threshold.
+	dedupeClockSkewMargin time.Duration
 }
 
 type dynamoDBCDCConfig struct {
@@ -1008,6 +1021,9 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.snapshot.bufferSize, err = pConf.FieldInt(dciFieldSnapshotBufferSize); err != nil {
 		return
 	}
+	if conf.snapshot.dedupeClockSkewMargin, err = pConf.FieldDuration(dciFieldSnapshotDedupeSkew); err != nil {
+		return
+	}
 	return
 }
 
@@ -1433,22 +1449,15 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 	return nil
 }
 
-// snapshotDedupeClockSkewMargin is the time that handleSnapshotBatch subtracts
-// from the snapshot start when it records a scanned item for the dedupe. The
-// start comes from the host clock and stream stamps from the AWS clock, so a
-// host clock ahead of AWS can stamp a write after the start as older than the
-// start. A larger margin gives more duplicates, never loss. 1 min is far more
-// than the skew of a host that syncs its clock with NTP.
-const snapshotDedupeClockSkewMargin = time.Minute
-
 // warnIfHostClockAhead logs a warning when the clock skew that the SDK measured
-// on an AWS response puts the host clock more than
-// snapshotDedupeClockSkewMargin ahead of AWS.
+// on an AWS response puts the host clock more than the dedupe clock skew margin
+// ahead of AWS.
 func (d *dynamoDBCDCInput) warnIfHostClockAhead(md smithymiddleware.Metadata) {
+	margin := d.conf.snapshot.dedupeClockSkewMargin
 	// The SDK skew is the AWS time minus the host time.
-	if skew, ok := awsmiddleware.GetAttemptSkew(md); ok && -skew > snapshotDedupeClockSkewMargin {
-		d.log.Warnf("The host clock is about %v ahead of AWS, more than the %v that %s allows. The input can skip CDC events for writes made just after the snapshot start. Sync the host clock.",
-			(-skew).Round(time.Second), snapshotDedupeClockSkewMargin, dciFieldSnapshotDedupe)
+	if skew, ok := awsmiddleware.GetAttemptSkew(md); ok && -skew > margin {
+		d.log.Warnf("The host clock is about %v ahead of AWS, more than the %v that %s allows. The input can skip CDC events for writes made just after the snapshot start. Sync the host clock or increase %s.",
+			(-skew).Round(time.Second), margin, dciFieldSnapshotDedupeSkew, dciFieldSnapshotDedupeSkew)
 	}
 }
 
@@ -3538,7 +3547,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// Read immutable fields once before loop (not once per item)
 	d.mu.RLock()
 	buffer := d.snapshot.seqBuffer
-	dedupeStart := d.snapshot.startTime.Add(-snapshotDedupeClockSkewMargin)
+	dedupeStart := d.snapshot.startTime.Add(-d.conf.snapshot.dedupeClockSkewMargin)
 	keySchema := d.keySchema
 	d.mu.RUnlock()
 

@@ -207,6 +207,7 @@ func TestHandleSnapshotBatchHostClockAhead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := &dynamoDBCDCInput{
+				conf:      dynamoDBCDCConfig{snapshot: snapshotConfig{dedupeClockSkewMargin: time.Minute}},
 				snapshot:  &snapshotState{startTime: tt.startTime, seqBuffer: newSnapshotSequenceBuffer(100)},
 				keySchema: keySchema,
 				msgChan:   make(chan asyncMessage, 1),
