@@ -10,11 +10,15 @@ package dynamodb
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
@@ -77,7 +81,7 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	buffer := newSnapshotSequenceBuffer(100)
 	buffer.RecordSnapshotItem(buildItemKeyString(scanItem, keySchema), snapshotStart)
 
-	t.Log("When: the stream returns item-1 records stamped 09:59:59 and 10:00:30 UTC")
+	t.Log("When: the stream returns item-1 records stamped 09:59:57 and 10:00:30 UTC")
 	streamKeys := map[string]streamstypes.AttributeValue{
 		"pk": &streamstypes.AttributeValueMemberS{Value: "item-1"},
 	}
@@ -89,7 +93,7 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 		}}
 	}
 	records := []streamstypes.Record{
-		record("before-start", time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC)),
+		record("before-start", time.Date(2026, 1, 1, 9, 59, 57, 0, time.UTC)),
 		record("after-start", time.Date(2026, 1, 1, 10, 0, 30, 0, time.UTC)),
 	}
 	batch := convertTableRecordsToBatch(records, "t", "shard-1", buffer, time.Time{}, nil)
@@ -101,6 +105,64 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 		kept = append(kept, seq)
 	}
 	require.Equal(t, []string{"after-start"}, kept)
+}
+
+// The snapshot dedupe allows 2 s of clock skew between the host and AWS. A host
+// clock that is further ahead must be reported, because the dedupe can then
+// skip writes made after the snapshot start.
+func TestClockSkewBeyondDedupeMargin(t *testing.T) {
+	tests := []struct {
+		name       string
+		dateOffset time.Duration
+		noDate     bool
+		wantBeyond bool
+	}{
+		{
+			name:       "host 10 s ahead of AWS",
+			dateOffset: -10 * time.Second,
+			wantBeyond: true,
+		},
+		{
+			name:       "host and AWS agree",
+			dateOffset: 0,
+			wantBeyond: false,
+		},
+		{
+			name:       "host 10 s behind AWS",
+			dateOffset: 10 * time.Second,
+			wantBeyond: false,
+		},
+		{
+			name:       "no Date header",
+			noDate:     true,
+			wantBeyond: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tt.noDate {
+					w.Header()["Date"] = nil
+				} else {
+					w.Header().Set("Date", time.Now().Add(tt.dateOffset).UTC().Format(http.TimeFormat))
+				}
+				w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+				_, _ = w.Write([]byte(`{"Table":{"TableName":"t"}}`))
+			}))
+			defer srv.Close()
+			client := dynamodb.New(dynamodb.Options{
+				Region:       "us-east-1",
+				BaseEndpoint: aws.String(srv.URL),
+				Credentials:  credentials.NewStaticCredentialsProvider("id", "secret", ""),
+			})
+
+			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
+			require.NoError(t, err)
+
+			_, beyond := clockSkewBeyondDedupeMargin(out.ResultMetadata)
+			assert.Equal(t, tt.wantBeyond, beyond)
+		})
+	}
 }
 
 func TestShouldSkipFailoverRecord(t *testing.T) {

@@ -137,9 +137,14 @@ func TestSnapshotSequenceBufferSameSecondAsStart(t *testing.T) {
 		wantSkip bool
 	}{
 		{
-			name:     "second before the start second",
-			cdcTime:  time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC),
+			name:     "3 s before the start second",
+			cdcTime:  time.Date(2026, 1, 1, 9, 59, 57, 0, time.UTC),
 			wantSkip: true,
+		},
+		{
+			name:     "second before the start second, can be after the start on a host clock ahead of AWS",
+			cdcTime:  time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC),
+			wantSkip: false,
 		},
 		{
 			name:     "same second as the start, can be after the start",
@@ -156,6 +161,46 @@ func TestSnapshotSequenceBufferSameSecondAsStart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buffer := newSnapshotSequenceBuffer(100)
 			buffer.RecordSnapshotItem("key1", snapshotStart)
+
+			assert.Equal(t, tt.wantSkip, buffer.ShouldSkipCDCEvent("key1", tt.cdcTime))
+		})
+	}
+}
+
+// The snapshot start comes from the host clock and stream stamps come from the
+// AWS clock. When the host clock runs ahead of AWS, a write made after the true
+// start can get a stamp earlier than the recorded start. Up to 2 s of skew, the
+// dedupe must keep that write.
+func TestSnapshotSequenceBufferHostClockAhead(t *testing.T) {
+	tests := []struct {
+		name          string
+		snapshotStart time.Time
+		cdcTime       time.Time
+		wantSkip      bool
+	}{
+		{
+			name:          "host 300 ms ahead, write 100 ms after the true start",
+			snapshotStart: time.Date(2026, 1, 1, 10, 0, 1, 100_000_000, time.UTC),
+			cdcTime:       time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip:      false,
+		},
+		{
+			name:          "host 2 s ahead, write 100 ms after the true start",
+			snapshotStart: time.Date(2026, 1, 1, 10, 0, 2, 100_000_000, time.UTC),
+			cdcTime:       time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip:      false,
+		},
+		{
+			name:          "write 3 s before the recorded start",
+			snapshotStart: time.Date(2026, 1, 1, 10, 0, 3, 100_000_000, time.UTC),
+			cdcTime:       time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip:      true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buffer := newSnapshotSequenceBuffer(100)
+			buffer.RecordSnapshotItem("key1", tt.snapshotStart)
 
 			assert.Equal(t, tt.wantSkip, buffer.ShouldSkipCDCEvent("key1", tt.cdcTime))
 		})
