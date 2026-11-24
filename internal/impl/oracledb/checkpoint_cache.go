@@ -42,7 +42,10 @@ const (
 	checkpointMergeProbeKey = "__rpcn_checkpoint_merge_probe"
 	// checkpointMergeProbeTimeout limits the probe at start up. Two pipelines
 	// that probe the same table at the same time wait for each other on the
-	// probe key, but only until the first one rolls back.
+	// probe key, but only until the first one rolls back. If a probe session
+	// dies while it holds the lock, the other probe times out, Connect fails
+	// and tries again. Checkpoint writes never use the probe key, so the
+	// probe cannot block them.
 	checkpointMergeProbeTimeout = 10 * time.Second
 )
 
