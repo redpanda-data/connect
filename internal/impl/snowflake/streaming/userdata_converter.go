@@ -27,8 +27,9 @@ import (
 
 type typedBufferFactory func() typedBuffer
 
-// typedBuffer writes columnar data directly to a parquet ColumnWriter.
-// Each Write method writes a single value to the column.
+// typedBuffer collects the converted values of a single column, in row order,
+// so they can be written to a parquet ColumnWriter once conversion is done.
+// Each Write method appends a single value to the column.
 type typedBuffer interface {
 	WriteNull()
 	WriteInt128(int128.Num)
@@ -36,17 +37,19 @@ type typedBuffer interface {
 	WriteFloat64(float64)
 	WriteBytes([]byte) // should never be nil
 
-	// Reset prepares the buffer for writing to a new column writer.
-	// columnIndex is the column index for setting value levels.
-	Reset(columnWriter *parquet.ColumnWriter, columnIndex int)
+	// Reset prepares the buffer for collecting a new column of up to
+	// capacity rows. columnIndex is the column index for setting value
+	// levels.
+	Reset(columnIndex, capacity int)
+	// Values returns the values collected since the last Reset. Byte array
+	// values reference the memory passed to WriteBytes, so that memory must
+	// not be modified while the values are in use.
+	Values() []parquet.Value
 }
 
 type typedBufferImpl struct {
-	columnWriter *parquet.ColumnWriter
-	columnIndex  int
-
-	// Scratch buffer reused for single-value writes to avoid allocations
-	valueBuffer [1]parquet.Value
+	values      []parquet.Value
+	columnIndex int
 
 	// For int128 we don't make a bunch of small allocs,
 	// but append to this existing buffer a bunch, this
@@ -57,9 +60,7 @@ type typedBufferImpl struct {
 }
 
 func (b *typedBufferImpl) WriteValue(v parquet.Value) {
-	b.valueBuffer[0] = v
-	// WriteRowValues handles internal buffering, so calling it per-value is fine
-	_, _ = b.columnWriter.WriteRowValues(b.valueBuffer[:])
+	b.values = append(b.values, v)
 }
 
 func (b *typedBufferImpl) WriteNull() {
@@ -67,6 +68,8 @@ func (b *typedBufferImpl) WriteNull() {
 }
 
 func (b *typedBufferImpl) WriteInt128(v int128.Num) {
+	// Values written earlier keep pointing at the backing array they were
+	// appended to, which is never overwritten, so growing scratch is safe.
 	b.scratch = v.AppendBigEndian(b.scratch)
 	b.WriteValue(parquet.FixedLenByteArrayValue(b.scratch[len(b.scratch)-16:]).Level(0, 1, b.columnIndex))
 }
@@ -83,12 +86,16 @@ func (b *typedBufferImpl) WriteBytes(v []byte) {
 	b.WriteValue(parquet.ByteArrayValue(v).Level(0, 1, b.columnIndex))
 }
 
-func (b *typedBufferImpl) Reset(columnWriter *parquet.ColumnWriter, columnIndex int) {
-	b.columnWriter = columnWriter
+func (b *typedBufferImpl) Reset(columnIndex, capacity int) {
+	b.values = make([]parquet.Value, 0, capacity)
 	b.columnIndex = columnIndex
-	if b.scratch != nil {
-		b.scratch = b.scratch[:0]
-	}
+	// The previous values may still reference the old scratch memory, so
+	// start a new one instead of reusing it.
+	b.scratch = nil
+}
+
+func (b *typedBufferImpl) Values() []parquet.Value {
+	return b.values
 }
 
 var defaultTypedBufferFactory = typedBufferFactory(func() typedBuffer { return &typedBufferImpl{} })

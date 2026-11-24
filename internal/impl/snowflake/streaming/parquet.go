@@ -63,65 +63,6 @@ func objectMessageToRow(msg *service.Message, out []any, nameToPosition map[stri
 	return nil
 }
 
-// writeRowGroupFromObject writes a batch of object messages directly to a concurrent row group's column writers,
-// then flushes (compresses) the row group. Values are written directly to the column writers as they are converted.
-func writeRowGroupFromObject(
-	batch service.MessageBatch,
-	schema *parquet.Schema,
-	transformers []*dataTransformer,
-	mode SchemaMode,
-	rg *parquet.ConcurrentRowGroupWriter,
-) ([]*statsBuffer, error) {
-	rowWidth := len(schema.Fields())
-	nameToPosition := make(map[string]int, rowWidth)
-	stats := make([]*statsBuffer, rowWidth)
-	buffers := make([]typedBuffer, rowWidth)
-	columnWriters := rg.ColumnWriters()
-
-	for idx, t := range transformers {
-		leaf, ok := schema.Lookup(t.name)
-		if !ok {
-			return nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
-		}
-		buffers[idx] = t.bufferFactory()
-		buffers[idx].Reset(columnWriters[leaf.ColumnIndex], leaf.ColumnIndex)
-		stats[idx] = &statsBuffer{}
-		nameToPosition[t.name] = idx
-	}
-
-	// Shred records into columns - snowflake's data model is a flat list of columns,
-	// so no dremel style record shredding is needed. Values are written directly
-	// to column writers as they are converted.
-	row := make([]any, rowWidth)
-	for _, msg := range batch {
-		err := objectMessageToRow(msg, row, nameToPosition, mode)
-		if err != nil {
-			return nil, err
-		}
-		for i, v := range row {
-			t := transformers[i]
-			s := stats[i]
-			b := buffers[i]
-			err = t.converter.ValidateAndConvert(s, v, b)
-			if err != nil {
-				if errors.Is(err, errNullValue) {
-					return nil, &NonNullColumnError{msg, t.column.Name}
-				}
-				return nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
-			}
-			// reset the column as nil for the next row
-			row[i] = nil
-		}
-	}
-
-	// Flush compresses the row group data
-	if err := rg.Flush(); err != nil {
-		return nil, fmt.Errorf("flushing row group: %w", err)
-	}
-
-	return stats, nil
-}
-
 // arrayMessageToRow converts a message into columnar form using the provided name to index mapping.
 // We have to materialize the column into a row so that we can know if a column is null - the
 // msg can be sparse, but the row must not be sparse.
@@ -154,19 +95,59 @@ func arrayMessageToRow(msg *service.Message, out []any, mode SchemaMode) error {
 	return nil
 }
 
-// writeRowGroupFromArray writes a batch of array messages directly to a concurrent row group's column writers,
-// then flushes (compresses) the row group. Values are written directly to the column writers as they are converted.
-func writeRowGroupFromArray(
+// convertedChunk holds the rows of a slice of a batch in columnar form, ready
+// to be written to a parquet row group.
+type convertedChunk struct {
+	// numRows is the number of rows in the chunk.
+	numRows int
+	// columns holds the values of each column, indexed by parquet column index.
+	columns [][]parquet.Value
+	// stats holds the statistics of each column, indexed like the transformers.
+	stats []*statsBuffer
+}
+
+// convertObjectChunk validates and converts a batch of object messages into
+// columnar form. It does not touch any parquet writer, so several chunks can be
+// converted in parallel.
+func convertObjectChunk(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
 	mode SchemaMode,
-	rg *parquet.ConcurrentRowGroupWriter,
-) ([]*statsBuffer, error) {
+) (*convertedChunk, error) {
+	nameToPosition := make(map[string]int, len(transformers))
+	for idx, t := range transformers {
+		nameToPosition[t.name] = idx
+	}
+	return convertChunk(batch, schema, transformers, func(msg *service.Message, row []any) error {
+		return objectMessageToRow(msg, row, nameToPosition, mode)
+	})
+}
+
+// convertArrayChunk validates and converts a batch of array messages into
+// columnar form. It does not touch any parquet writer, so several chunks can be
+// converted in parallel.
+func convertArrayChunk(
+	batch service.MessageBatch,
+	schema *parquet.Schema,
+	transformers []*dataTransformer,
+	mode SchemaMode,
+) (*convertedChunk, error) {
+	return convertChunk(batch, schema, transformers, func(msg *service.Message, row []any) error {
+		return arrayMessageToRow(msg, row, mode)
+	})
+}
+
+func convertChunk(
+	batch service.MessageBatch,
+	schema *parquet.Schema,
+	transformers []*dataTransformer,
+	toRow func(msg *service.Message, row []any) error,
+) (*convertedChunk, error) {
 	rowWidth := len(schema.Fields())
 	stats := make([]*statsBuffer, rowWidth)
 	buffers := make([]typedBuffer, rowWidth)
-	columnWriters := rg.ColumnWriters()
+	columnIndexes := make([]int, rowWidth)
 
 	for idx, t := range transformers {
 		leaf, ok := schema.Lookup(t.name)
@@ -174,22 +155,21 @@ func writeRowGroupFromArray(
 			return nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
 		}
 		buffers[idx] = t.bufferFactory()
-		buffers[idx].Reset(columnWriters[leaf.ColumnIndex], leaf.ColumnIndex)
+		buffers[idx].Reset(leaf.ColumnIndex, len(batch))
+		columnIndexes[idx] = leaf.ColumnIndex
 		stats[idx] = &statsBuffer{}
 	}
 
+	// Shred records into columns - snowflake's data model is a flat list of columns,
+	// so no dremel style record shredding is needed.
 	row := make([]any, rowWidth)
 	for _, msg := range batch {
-		err := arrayMessageToRow(msg, row, mode)
-		if err != nil {
+		if err := toRow(msg, row); err != nil {
 			return nil, err
 		}
 		for i, v := range row {
 			t := transformers[i]
-			s := stats[i]
-			b := buffers[i]
-			err = t.converter.ValidateAndConvert(s, v, b)
-			if err != nil {
+			if err := t.converter.ValidateAndConvert(stats[i], v, buffers[i]); err != nil {
 				if errors.Is(err, errNullValue) {
 					return nil, &NonNullColumnError{msg, t.column.Name}
 				}
@@ -200,12 +180,33 @@ func writeRowGroupFromArray(
 		}
 	}
 
-	// Flush compresses the row group data
-	if err := rg.Flush(); err != nil {
-		return nil, fmt.Errorf("flushing row group: %w", err)
+	columns := make([][]parquet.Value, rowWidth)
+	for idx, b := range buffers {
+		columns[columnIndexes[idx]] = b.Values()
 	}
+	return &convertedChunk{numRows: len(batch), columns: columns, stats: stats}, nil
+}
 
-	return stats, nil
+// writeRowGroup writes the chunks, in order, into a single row group and
+// flushes (compresses) it. Snowflake only reads the first row group of a BDEC
+// file, so all the rows of a file must be written through one call to this
+// function.
+func writeRowGroup(rg *parquet.ConcurrentRowGroupWriter, chunks []*convertedChunk) error {
+	for columnIndex, cw := range rg.ColumnWriters() {
+		for _, chunk := range chunks {
+			values := chunk.columns[columnIndex]
+			if len(values) != chunk.numRows {
+				return fmt.Errorf("invariant failed: column %d has %d values for %d rows", columnIndex, len(values), chunk.numRows)
+			}
+			if _, err := cw.WriteRowValues(values); err != nil {
+				return fmt.Errorf("writing column %d: %w", columnIndex, err)
+			}
+		}
+	}
+	if err := rg.Flush(); err != nil {
+		return fmt.Errorf("flushing row group: %w", err)
+	}
+	return nil
 }
 
 type parquetWriter struct {
@@ -228,7 +229,8 @@ func newParquetWriter(rpcnVersion string, schema *parquet.Schema) *parquetWriter
 	return &parquetWriter{b, w, schema}
 }
 
-// BeginRowGroup creates a new concurrent row group for parallel construction.
+// BeginRowGroup creates a new row group that is written through its column
+// writers. A BDEC file must only ever contain one.
 func (w *parquetWriter) BeginRowGroup() *parquet.ConcurrentRowGroupWriter {
 	return w.w.BeginRowGroup()
 }
@@ -250,33 +252,32 @@ func (w *parquetWriter) Close() ([]byte, *format.FileMetaData, error) {
 	return w.b.Bytes(), w.w.File().Metadata(), nil
 }
 
-// verifyRowCounts checks that the parquet footer agrees with the rows that
-// were actually serialized into each row group. It guards against internally
-// inconsistent files produced by the concurrent row group writer being
-// uploaded to Snowflake, mirroring the Java SDK's verifyRowCounts check for
-// the same class of bug (SNOW-1465503). expectedRowsPerGroup holds the number
-// of rows written to each row group in order. The BDEC schema is flat, so
-// every column chunk must record exactly one value (nulls included) per row
-// of its group.
-func verifyRowCounts(expectedRowsPerGroup []int64, md *format.FileMetaData) error {
-	var expectedTotal int64
-	for _, n := range expectedRowsPerGroup {
-		expectedTotal += n
+// verifyRowCounts checks that the parquet footer describes a single row group
+// holding exactly the rows that were serialized. It guards against two classes
+// of bad files being uploaded to Snowflake:
+//
+//   - Files with more than one row group. Snowflake's scanner only reads one
+//     row group per BDEC file, so the rows of any other row group would be
+//     silently dropped. The Java SDK enforces the same constraint.
+//   - Internally inconsistent files, mirroring the Java SDK's verifyRowCounts
+//     check (SNOW-1465503).
+//
+// The BDEC schema is flat, so every column chunk must record exactly one value
+// (nulls included) per row.
+func verifyRowCounts(expectedRows int64, md *format.FileMetaData) error {
+	if len(md.RowGroups) != 1 {
+		return fmt.Errorf("parquet row count verification failed: footer reports %d row groups, expected exactly 1 row group; refusing to upload a file Snowflake cannot fully read", len(md.RowGroups))
 	}
-	if md.NumRows != expectedTotal {
-		return fmt.Errorf("parquet row count verification failed: footer reports %d rows, expected %d rows; refusing to upload corrupted file", md.NumRows, expectedTotal)
+	if md.NumRows != expectedRows {
+		return fmt.Errorf("parquet row count verification failed: footer reports %d rows, expected %d rows; refusing to upload corrupted file", md.NumRows, expectedRows)
 	}
-	if len(md.RowGroups) != len(expectedRowsPerGroup) {
-		return fmt.Errorf("parquet row count verification failed: footer reports %d row groups, expected %d row groups; refusing to upload corrupted file", len(md.RowGroups), len(expectedRowsPerGroup))
+	rg := md.RowGroups[0]
+	if rg.NumRows != expectedRows {
+		return fmt.Errorf("parquet row count verification failed: row group reports %d rows, expected %d rows; refusing to upload corrupted file", rg.NumRows, expectedRows)
 	}
-	for i, rg := range md.RowGroups {
-		if rg.NumRows != expectedRowsPerGroup[i] {
-			return fmt.Errorf("parquet row count verification failed: row group %d reports %d rows, expected %d rows; refusing to upload corrupted file", i, rg.NumRows, expectedRowsPerGroup[i])
-		}
-		for _, col := range rg.Columns {
-			if col.MetaData.NumValues != rg.NumRows {
-				return fmt.Errorf("parquet row count verification failed: column %q in row group %d reports %d values, expected %d; refusing to upload corrupted file", strings.Join(col.MetaData.PathInSchema, "."), i, col.MetaData.NumValues, rg.NumRows)
-			}
+	for _, col := range rg.Columns {
+		if col.MetaData.NumValues != rg.NumRows {
+			return fmt.Errorf("parquet row count verification failed: column %q reports %d values, expected %d; refusing to upload corrupted file", strings.Join(col.MetaData.PathInSchema, "."), col.MetaData.NumValues, rg.NumRows)
 		}
 	}
 	return nil

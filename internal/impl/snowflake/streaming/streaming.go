@@ -154,7 +154,8 @@ const (
 type BuildOptions struct {
 	// The maximum parallelism
 	Parallelism int
-	// The number of rows to chunk for parallelism
+	// The number of rows converted by each parallel task. All the rows of a
+	// batch still end up in a single parquet row group.
 	ChunkSize int
 }
 
@@ -338,41 +339,22 @@ type bdecPart struct {
 }
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
-	// concurrentRowGroup holds a row group writer and its stats after conversion
-	type concurrentRowGroup struct {
-		rg    *parquet.ConcurrentRowGroupWriter
-		stats []*statsBuffer
-	}
-
-	maxChunkSize := c.BuildOptions.ChunkSize
 	convertStart := time.Now()
 
-	// Create writer and prepare for new file
-	w := newParquetWriter(c.connectVersion, c.schema)
-	w.Reset(metadata)
-
-	// Create all row groups up front so we can process them in parallel
-	rowGroups := make([]concurrentRowGroup, 0)
-	chunks := make([]service.MessageBatch, 0)
-	for chunk := range slices.Chunk(batch, maxChunkSize) {
-		rg := w.BeginRowGroup()
-		rowGroups = append(rowGroups, concurrentRowGroup{rg: rg})
-		chunks = append(chunks, chunk)
-	}
-
-	// Convert, write, and flush row groups in parallel
+	// Validate and convert the batch into columnar form in parallel, one
+	// chunk of rows at a time.
+	chunks := slices.Collect(slices.Chunk(batch, c.BuildOptions.ChunkSize))
+	converted := make([]*convertedChunk, len(chunks))
 	var wg errgroup.Group
 	wg.SetLimit(c.BuildOptions.Parallelism)
 	for j, chunk := range chunks {
 		wg.Go(func() error {
-			var stats []*statsBuffer
 			var err error
 			if c.MessageFormat == MessageFormatArray {
-				stats, err = writeRowGroupFromArray(chunk, c.schema, c.transformers, c.SchemaMode, rowGroups[j].rg)
+				converted[j], err = convertArrayChunk(chunk, c.schema, c.transformers, c.SchemaMode)
 			} else {
-				stats, err = writeRowGroupFromObject(chunk, c.schema, c.transformers, c.SchemaMode, rowGroups[j].rg)
+				converted[j], err = convertObjectChunk(chunk, c.schema, c.transformers, c.SchemaMode)
 			}
-			rowGroups[j].stats = stats
 			return err
 		})
 	}
@@ -381,11 +363,17 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	}
 	convertDone := time.Now()
 
-	// Commit row groups serially (required for correct ordering)
-	for _, rg := range rowGroups {
-		if _, err := rg.rg.Commit(); err != nil {
-			return bdecPart{}, fmt.Errorf("committing row group: %w", err)
-		}
+	// Write every chunk into the same row group: Snowflake only reads one row
+	// group per BDEC file, so the chunks must never become row groups of their
+	// own.
+	w := newParquetWriter(c.connectVersion, c.schema)
+	w.Reset(metadata)
+	rg := w.BeginRowGroup()
+	if err := writeRowGroup(rg, converted); err != nil {
+		return bdecPart{}, err
+	}
+	if _, err := rg.Commit(); err != nil {
+		return bdecPart{}, fmt.Errorf("committing row group: %w", err)
 	}
 
 	// Finalize the file
@@ -394,24 +382,21 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 		return bdecPart{}, err
 	}
 
-	// Guard against uploading an internally inconsistent file: the footer
-	// must agree with the rows we actually serialized into each row group.
-	expectedRows := make([]int64, len(chunks))
-	for i, chunk := range chunks {
-		expectedRows[i] = int64(len(chunk))
-	}
-	if err := verifyRowCounts(expectedRows, fileMetadata); err != nil {
+	// Guard against uploading a file Snowflake cannot fully read, or an
+	// internally inconsistent one: the footer must describe a single row
+	// group holding the rows we serialized.
+	if err := verifyRowCounts(int64(len(batch)), fileMetadata); err != nil {
 		return bdecPart{}, err
 	}
 
-	// Merge stats from all row groups
+	// Merge stats from all chunks
 	combinedStats := make([]*statsBuffer, len(c.schema.Fields()))
 	for i := range combinedStats {
 		combinedStats[i] = &statsBuffer{}
 	}
-	for _, rg := range rowGroups {
+	for _, chunk := range converted {
 		for i, s := range combinedStats {
-			combinedStats[i] = mergeStats(s, rg.stats[i])
+			combinedStats[i] = mergeStats(s, chunk.stats[i])
 		}
 	}
 

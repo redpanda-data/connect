@@ -63,16 +63,17 @@ func TestWriteParquet(t *testing.T) {
 	for range 4 {
 		w.Reset(nil)
 
-		// Create a concurrent row group, write to it, and flush (all in one call)
-		rg := w.BeginRowGroup()
-		stats, err := writeRowGroupFromObject(
+		// Convert the batch, then write it into a single row group
+		chunk, err := convertObjectChunk(
 			batch,
 			schema,
 			transformers,
 			SchemaModeIgnoreExtra,
-			rg,
 		)
 		require.NoError(t, err)
+		stats := chunk.stats
+		rg := w.BeginRowGroup()
+		require.NoError(t, writeRowGroup(rg, []*convertedChunk{chunk}))
 
 		// Commit the row group
 		_, err = rg.Commit()
@@ -125,8 +126,8 @@ func readGeneric(r io.ReaderAt, size int64, schema *parquet.Schema) (rows []map[
 }
 
 func TestVerifyRowCounts(t *testing.T) {
-	// Build a real two-row-group file through the same write path as
-	// constructBdecPart so the happy path checks genuine footer metadata.
+	// Build real files through the same write path as constructBdecPart so
+	// the checks run against genuine footer metadata.
 	batches := []service.MessageBatch{
 		{msg(`{"a":2}`), msg(`{"a":12353}`), msg(`{"a":7}`)},
 		{msg(`{"a":42}`)},
@@ -156,44 +157,60 @@ func TestVerifyRowCounts(t *testing.T) {
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
-	w := newParquetWriter("latest", schema)
-	w.Reset(nil)
-	rowGroups := make([]*parquet.ConcurrentRowGroupWriter, len(batches))
+	chunks := make([]*convertedChunk, len(batches))
 	for i, batch := range batches {
-		rowGroups[i] = w.BeginRowGroup()
-		_, err := writeRowGroupFromObject(batch, schema, transformers, SchemaModeIgnoreExtra, rowGroups[i])
+		var err error
+		chunks[i], err = convertObjectChunk(batch, schema, transformers, SchemaModeIgnoreExtra)
 		require.NoError(t, err)
 	}
-	for _, rg := range rowGroups {
-		_, err := rg.Commit()
+	// writeFile writes each element of groups as its own row group.
+	writeFile := func(groups ...[]*convertedChunk) *format.FileMetaData {
+		w := newParquetWriter("latest", schema)
+		w.Reset(nil)
+		for _, group := range groups {
+			rg := w.BeginRowGroup()
+			require.NoError(t, writeRowGroup(rg, group))
+			_, err := rg.Commit()
+			require.NoError(t, err)
+		}
+		_, md, err := w.Close()
 		require.NoError(t, err)
+		return md
 	}
-	_, md, err := w.Close()
-	require.NoError(t, err)
 
-	require.NoError(t, verifyRowCounts([]int64{3, 1}, md))
+	// All chunks in one row group is the only layout Snowflake can read.
+	md := writeFile(chunks)
+	require.Len(t, md.RowGroups, 1)
+	require.NoError(t, verifyRowCounts(4, md))
+
+	// A file with one row group per chunk must be rejected even though its
+	// footer is consistent: Snowflake would only read the first row group.
+	multi := writeFile(chunks[:1], chunks[1:])
+	require.Len(t, multi.RowGroups, 2)
+	require.EqualValues(t, 4, multi.NumRows)
+	require.ErrorContains(t, verifyRowCounts(4, multi), "2 row groups")
 
 	// Every mismatch between what was serialized and what the footer claims
 	// must be rejected.
-	require.ErrorContains(t, verifyRowCounts([]int64{3}, md), "expected 3")
-	require.ErrorContains(t, verifyRowCounts([]int64{2, 2}, md), "row group 0")
-	require.ErrorContains(t, verifyRowCounts([]int64{3, 2}, md), "expected 5")
-	require.ErrorContains(t, verifyRowCounts([]int64{2, 1, 1}, md), "row groups")
+	require.ErrorContains(t, verifyRowCounts(3, md), "expected 3")
+	require.ErrorContains(t, verifyRowCounts(5, md), "expected 5")
 
 	corrupt := *md
 	corrupt.NumRows = 5
-	require.ErrorContains(t, verifyRowCounts([]int64{3, 1}, &corrupt), "5")
+	require.ErrorContains(t, verifyRowCounts(4, &corrupt), "5")
 
 	corrupt = *md
 	corrupt.RowGroups = append([]format.RowGroup{}, md.RowGroups...)
-	corrupt.RowGroups[1].NumRows = 9
-	err = verifyRowCounts([]int64{3, 1}, &corrupt)
-	require.ErrorContains(t, err, "9")
+	corrupt.RowGroups[0].NumRows = 9
+	require.ErrorContains(t, verifyRowCounts(4, &corrupt), "9")
 
 	corrupt = *md
 	corrupt.RowGroups = append([]format.RowGroup{}, md.RowGroups...)
 	corrupt.RowGroups[0].Columns = append([]format.ColumnChunk{}, md.RowGroups[0].Columns...)
 	corrupt.RowGroups[0].Columns[0].MetaData.NumValues = 2
-	err = verifyRowCounts([]int64{3, 1}, &corrupt)
-	require.ErrorContains(t, err, "column")
+	require.ErrorContains(t, verifyRowCounts(4, &corrupt), "column")
+
+	corrupt = *md
+	corrupt.RowGroups = nil
+	require.ErrorContains(t, verifyRowCounts(4, &corrupt), "0 row groups")
 }
