@@ -10,8 +10,10 @@ package dynamodb
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -161,6 +163,70 @@ func TestSnapshotDedupeMargin(t *testing.T) {
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, margin, tt.wantMinMargin)
 			assert.LessOrEqual(t, margin, tt.wantMaxMargin)
+		})
+	}
+}
+
+// A host clock ahead of AWS must widen the dedupe start and log a warning. A
+// host clock more than 5 min ahead must stop the snapshot.
+func TestSetSnapshotDedupeStart(t *testing.T) {
+	startTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name         string
+		dateOffset   time.Duration
+		wantEarliest time.Time
+		wantLatest   time.Time
+		wantWarnings int
+		wantErr      string
+	}{
+		{
+			name:         "host and AWS agree",
+			dateOffset:   0,
+			wantEarliest: time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
+			wantWarnings: 0,
+		},
+		{
+			name:         "host 10 s ahead of AWS",
+			dateOffset:   -10 * time.Second,
+			wantEarliest: time.Date(2026, 1, 1, 9, 59, 47, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 9, 59, 49, 0, time.UTC),
+			wantWarnings: 1,
+		},
+		{
+			name:         "host 10 min ahead of AWS",
+			dateOffset:   -10 * time.Minute,
+			wantEarliest: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantWarnings: 0,
+			wantErr:      "ahead of AWS",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				mu     sync.Mutex
+				levels []slog.Level
+			)
+			d := &dynamoDBCDCInput{
+				snapshot: &snapshotState{startTime: startTime, dedupeStart: startTime},
+				log:      service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "host clock is ahead", mu: &mu, levels: &levels})),
+			}
+			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset})
+			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
+			require.NoError(t, err)
+
+			err = d.setSnapshotDedupeStart(out.ResultMetadata)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.False(t, d.snapshot.dedupeStart.Before(tt.wantEarliest), "dedupe start %v", d.snapshot.dedupeStart)
+			assert.False(t, d.snapshot.dedupeStart.After(tt.wantLatest), "dedupe start %v", d.snapshot.dedupeStart)
+			mu.Lock()
+			assert.Len(t, levels, tt.wantWarnings)
+			mu.Unlock()
 		})
 	}
 }

@@ -1471,6 +1471,23 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 	return nil
 }
 
+// setSnapshotDedupeStart sets the snapshot dedupe start to the snapshot start
+// minus the clock skew margin, from the skew in descTableMetadata. It logs a
+// warning when the host clock is ahead of AWS, and returns the error of
+// snapshotDedupeMargin.
+func (d *dynamoDBCDCInput) setSnapshotDedupeStart(descTableMetadata smithymiddleware.Metadata) error {
+	margin, err := snapshotDedupeMargin(descTableMetadata)
+	if err != nil {
+		return err
+	}
+	// A synced host can measure up to about 1 s ahead (Date is rounded down), so warn only above that.
+	if margin > minSnapshotDedupeClockSkewMargin+time.Second {
+		d.log.Warnf("The host clock is ahead of AWS. The snapshot dedupe keeps CDC events up to %v before the snapshot start, so it can emit more duplicates. Sync the host clock.", margin.Round(time.Second))
+	}
+	d.snapshot.dedupeStart = d.snapshot.startTime.Add(-margin)
+	return nil
+}
+
 // connectWithSnapshot handles snapshot + CDC coordination. descTableMetadata
 // holds the clock skew that the SDK measured on DescribeTable.
 func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string, descTableMetadata smithymiddleware.Metadata) error {
@@ -1528,15 +1545,9 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	//    This ensures we capture ALL changes that happen during snapshot
 	if d.conf.snapshot.mode == snapshotModeAndCDC {
 		if d.snapshot.seqBuffer != nil {
-			margin, err := snapshotDedupeMargin(descTableMetadata)
-			if err != nil {
+			if err := d.setSnapshotDedupeStart(descTableMetadata); err != nil {
 				return err
 			}
-			// A synced host can measure up to about 1 s ahead (Date is rounded down), so warn only above that.
-			if margin > minSnapshotDedupeClockSkewMargin+time.Second {
-				d.log.Warnf("The host clock is ahead of AWS. The snapshot dedupe keeps CDC events up to %v before the snapshot start, so it can emit more duplicates. Sync the host clock.", margin.Round(time.Second))
-			}
-			d.snapshot.dedupeStart = d.snapshot.startTime.Add(-margin)
 		}
 
 		d.log.Info("Starting CDC readers before snapshot to prevent data loss")
