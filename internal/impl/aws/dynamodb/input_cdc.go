@@ -632,6 +632,12 @@ type snapshotState struct {
 	scanner       *SnapshotScanner
 	recordsRead   atomic.Int64
 	segmentsTotal int
+
+	// dedupeStart is the start that handleSnapshotBatch records in seqBuffer
+	// for each scanned item: startTime minus the clock skew margin in
+	// snapshot_and_cdc mode. It differs from startTime because startTime comes
+	// from the host clock and stream stamps from the AWS clock.
+	dedupeStart time.Time
 }
 
 // waitAckGate blocks until every batch counted on gate has been acked or
@@ -672,19 +678,17 @@ func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
 // Why 32 shards? Power-of-2 for fast modulo (hash%numBufferShards), and matches typical core counts.
 const numBufferShards = 32
 
-// minSnapshotDedupeClockSkewMargin is the smallest clock skew margin of the
-// snapshot dedupe. The snapshot start comes from the host clock, but stream
-// stamps come from the AWS clock. When the host clock is ahead, a write made
-// after the true start can get a stamp earlier than the recorded start.
-// ShouldSkipCDCEvent skips only events older than the start minus the margin.
-// A larger margin gives more duplicates, never loss. 2 s allows normal NTP
-// skew, plus the 1 s in which AWS says an eventually consistent read usually
-// shows a write.
+// minSnapshotDedupeClockSkewMargin is the smallest time that the snapshot
+// dedupe subtracts from the snapshot start. The start comes from the host
+// clock and stream stamps from the AWS clock, so a host clock ahead of AWS can
+// stamp a write after the start as older than the start. A larger margin gives
+// more duplicates, never loss. 2 s allows NTP skew plus the 1 s in which an
+// eventually consistent read usually shows a write.
 const minSnapshotDedupeClockSkewMargin = 2 * time.Second
 
 // maxSnapshotDedupeClockSkew is the largest host clock lead over AWS that the
 // snapshot dedupe accepts. A larger lead means a broken host clock, so the
-// input stops instead of using a margin of that size.
+// input stops.
 const maxSnapshotDedupeClockSkew = 5 * time.Minute
 
 type snapshotSequenceBuffer struct {
@@ -693,11 +697,6 @@ type snapshotSequenceBuffer struct {
 	totalCount       atomic.Int64 // Track total size across all shards (lock-free)
 	overflow         atomic.Bool  // true if buffer exceeded maxSize
 	overflowReported atomic.Bool  // true if overflow has been reported to metrics (emit once)
-
-	// clockSkewMargin is the time.Duration that ShouldSkipCDCEvent subtracts
-	// from the snapshot start. It is minSnapshotDedupeClockSkewMargin, or more
-	// when the host clock is ahead of AWS (see snapshotDedupeMargin).
-	clockSkewMargin atomic.Int64
 }
 
 // bufferShard is a single shard of the buffer with its own lock.
@@ -716,7 +715,6 @@ func newSnapshotSequenceBuffer(maxSize int) *snapshotSequenceBuffer {
 	buf := &snapshotSequenceBuffer{
 		maxSize: maxSize,
 	}
-	buf.clockSkewMargin.Store(int64(minSnapshotDedupeClockSkewMargin))
 	// Initialize each shard
 	for i := range buf.shards {
 		buf.shards[i].sequences = make(map[string]time.Time, maxSize/numBufferShards)
@@ -798,16 +796,9 @@ func (s *snapshotSequenceBuffer) ShouldSkipCDCEvent(key string, cdcTime time.Tim
 	}
 
 	// Skip only if the CDC event happened before the snapshot start, so the snapshot already emitted this version.
-	// The start comes from the host clock, so we move it back by the clock skew margin.
 	// ApproximateCreationDateTime is rounded down to the second, but the snapshot start keeps nanoseconds. An event
 	// stamped in the start second can have happened after the start, so we keep it (a possible duplicate, not a loss).
-	margin := time.Duration(s.clockSkewMargin.Load())
-	return cdcTime.Before(snapshotStart.Add(-margin).Truncate(time.Second))
-}
-
-// SetClockSkewMargin sets the clock skew margin that ShouldSkipCDCEvent uses.
-func (s *snapshotSequenceBuffer) SetClockSkewMargin(margin time.Duration) {
-	s.clockSkewMargin.Store(int64(margin))
+	return cdcTime.Before(snapshotStart.Truncate(time.Second))
 }
 
 func (s *snapshotSequenceBuffer) IsOverflow() bool {
@@ -819,19 +810,16 @@ func (s *snapshotSequenceBuffer) Size() int {
 }
 
 // snapshotDedupeMargin returns the clock skew margin for the snapshot dedupe,
-// from the clock skew that the SDK measured on an AWS response. It returns
-// minSnapshotDedupeClockSkewMargin when the host clock is not ahead of AWS or
-// the SDK did not measure the skew. It returns an error when the host clock is
+// from the skew that the SDK measured on an AWS response, with a minimum of
+// minSnapshotDedupeClockSkewMargin. It returns an error when the host clock is
 // more than maxSnapshotDedupeClockSkew ahead of AWS.
 func snapshotDedupeMargin(md smithymiddleware.Metadata) (time.Duration, error) {
 	skew, ok := awsmiddleware.GetAttemptSkew(md)
 	if !ok {
 		return minSnapshotDedupeClockSkewMargin, nil
 	}
-	// The SDK skew is the AWS time (the Date header) minus the midpoint of the request round trip. The Date header is
-	// rounded down to the second, so ahead can be up to 1 s more than the real lead. We compare ahead minus 1 s with
-	// the maximum, so a host clock that is just within the maximum does not stop the input. The midpoint can be off
-	// by half the round trip, so we add 1 s to the margin.
+	// The SDK skew is the Date header minus the midpoint of the round trip. Date is rounded down to the second, so
+	// ahead can be up to 1 s too high: the limit check subtracts 1 s. The margin adds 1 s for the midpoint error.
 	ahead := -skew
 	if ahead-time.Second > maxSnapshotDedupeClockSkew {
 		return 0, fmt.Errorf("the host clock is about %v ahead of AWS, more than the %v that %s accepts: sync the host clock, or set %s: false",
@@ -1483,12 +1471,12 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 	return nil
 }
 
-// connectWithSnapshot handles snapshot + CDC coordination. descTableMetadata is
-// the metadata of the DescribeTable response, where the SDK measured the clock
-// skew for the snapshot dedupe.
+// connectWithSnapshot handles snapshot + CDC coordination. descTableMetadata
+// holds the clock skew that the SDK measured on DescribeTable.
 func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string, descTableMetadata smithymiddleware.Metadata) error {
 	// Record snapshot start time BEFORE doing anything else
 	d.snapshot.startTime = time.Now()
+	d.snapshot.dedupeStart = d.snapshot.startTime
 
 	// Check if we have a partial snapshot checkpoint
 	snapshotCheckpoint, err := d.checkpointer.SnapshotProgress(ctx)
@@ -1535,24 +1523,22 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 		}
 	}
 
-	// Only snapshot_and_cdc reads the stream, so only it needs the clock skew margin.
-	if d.conf.snapshot.mode == snapshotModeAndCDC && d.snapshot.seqBuffer != nil {
-		margin, err := snapshotDedupeMargin(descTableMetadata)
-		if err != nil {
-			return err
-		}
-		// A host with a synced clock can measure up to about 1 s ahead, because the Date header is rounded down. So we
-		// warn only when the margin is more than 1 s above the minimum.
-		if margin > minSnapshotDedupeClockSkewMargin+time.Second {
-			d.log.Warnf("The host clock is ahead of AWS. The snapshot dedupe keeps CDC events up to %v before the snapshot start, so it can emit more duplicates. Sync the host clock.", margin.Round(time.Second))
-		}
-		d.snapshot.seqBuffer.SetClockSkewMargin(margin)
-	}
-
 	// CRITICAL ORDERING FOR DATA LOSS PREVENTION:
 	// 1. Start CDC readers FIRST (if snapshot_and_cdc mode)
 	//    This ensures we capture ALL changes that happen during snapshot
 	if d.conf.snapshot.mode == snapshotModeAndCDC {
+		if d.snapshot.seqBuffer != nil {
+			margin, err := snapshotDedupeMargin(descTableMetadata)
+			if err != nil {
+				return err
+			}
+			// A synced host can measure up to about 1 s ahead (Date is rounded down), so warn only above that.
+			if margin > minSnapshotDedupeClockSkewMargin+time.Second {
+				d.log.Warnf("The host clock is ahead of AWS. The snapshot dedupe keeps CDC events up to %v before the snapshot start, so it can emit more duplicates. Sync the host clock.", margin.Round(time.Second))
+			}
+			d.snapshot.dedupeStart = d.snapshot.startTime.Add(-margin)
+		}
+
 		d.log.Info("Starting CDC readers before snapshot to prevent data loss")
 
 		// Initialize shards
@@ -3580,7 +3566,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// Read immutable fields once before loop (not once per item)
 	d.mu.RLock()
 	buffer := d.snapshot.seqBuffer
-	startTime := d.snapshot.startTime
+	dedupeStart := d.snapshot.dedupeStart
 	keySchema := d.keySchema
 	d.mu.RUnlock()
 
@@ -3603,7 +3589,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 			keyStr := buildItemKeyString(item, keySchema)
 			if keyStr != "" {
 				// Record this item in the snapshot buffer (with timestamp as sequence for deduplication)
-				buffer.RecordSnapshotItem(keyStr, startTime)
+				buffer.RecordSnapshotItem(keyStr, dedupeStart)
 			}
 		}
 

@@ -9,10 +9,16 @@
 package dynamodb
 
 import (
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestSnapshotSequenceBuffer(t *testing.T) {
@@ -137,14 +143,9 @@ func TestSnapshotSequenceBufferSameSecondAsStart(t *testing.T) {
 		wantSkip bool
 	}{
 		{
-			name:     "3 s before the start second",
-			cdcTime:  time.Date(2026, 1, 1, 9, 59, 57, 0, time.UTC),
-			wantSkip: true,
-		},
-		{
-			name:     "second before the start second, can be after the start on a host clock ahead of AWS",
+			name:     "second before the start second",
 			cdcTime:  time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC),
-			wantSkip: false,
+			wantSkip: true,
 		},
 		{
 			name:     "same second as the start, can be after the start",
@@ -167,10 +168,10 @@ func TestSnapshotSequenceBufferSameSecondAsStart(t *testing.T) {
 	}
 }
 
-// The snapshot start comes from the host clock and stream stamps come from the
-// AWS clock. When the host clock runs ahead of AWS, a write made after the true
-// start can get a stamp earlier than the recorded start. Up to the clock skew
-// margin, the dedupe must keep that write.
+// The snapshot start comes from the host clock and stream stamps from the AWS
+// clock. On a host clock ahead of AWS, a write after the true start can get a
+// stamp before the recorded start. Within the clock skew margin, the dedupe
+// must keep that write.
 func TestSnapshotSequenceBufferHostClockAhead(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -218,10 +219,41 @@ func TestSnapshotSequenceBufferHostClockAhead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buffer := newSnapshotSequenceBuffer(100)
-			buffer.SetClockSkewMargin(tt.clockSkewMargin)
-			buffer.RecordSnapshotItem("key1", tt.snapshotStart)
+			// connectWithSnapshot records the snapshot start minus the clock skew margin.
+			buffer.RecordSnapshotItem("key1", tt.snapshotStart.Add(-tt.clockSkewMargin))
 
 			assert.Equal(t, tt.wantSkip, buffer.ShouldSkipCDCEvent("key1", tt.cdcTime))
 		})
 	}
+}
+
+// The scan must record each item with the dedupe start, not the host start
+// time, so that the clock skew margin applies to the items it emitted.
+func TestHandleSnapshotBatchRecordsDedupeStart(t *testing.T) {
+	keySchema := []dynamodbtypes.KeySchemaElement{
+		{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash},
+	}
+	d := &dynamoDBCDCInput{
+		snapshot: &snapshotState{
+			startTime:   time.Date(2026, 1, 1, 10, 0, 2, 100_000_000, time.UTC),
+			dedupeStart: time.Date(2026, 1, 1, 10, 0, 0, 100_000_000, time.UTC),
+			seqBuffer:   newSnapshotSequenceBuffer(100),
+		},
+		keySchema: keySchema,
+		msgChan:   make(chan asyncMessage, 1),
+		log:       service.MockResources().Logger(),
+		metrics:   newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+	}
+	item := map[string]dynamodbtypes.AttributeValue{
+		"pk": &dynamodbtypes.AttributeValueMemberS{Value: "item-1"},
+	}
+	tracker, _ := newTestSnapshotAckTracker(1)
+	var ackGate sync.WaitGroup
+
+	err := d.handleSnapshotBatch(t.Context(), []map[string]dynamodbtypes.AttributeValue{item}, 0, "t", item, tracker, &ackGate)
+	require.NoError(t, err)
+
+	key := buildItemKeyString(item, keySchema)
+	assert.False(t, d.snapshot.seqBuffer.ShouldSkipCDCEvent(key, time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)))
+	assert.True(t, d.snapshot.seqBuffer.ShouldSkipCDCEvent(key, time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC)))
 }

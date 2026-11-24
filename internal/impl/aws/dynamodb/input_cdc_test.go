@@ -11,13 +11,11 @@ package dynamodb
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
@@ -81,7 +79,7 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	buffer := newSnapshotSequenceBuffer(100)
 	buffer.RecordSnapshotItem(buildItemKeyString(scanItem, keySchema), snapshotStart)
 
-	t.Log("When: the stream returns item-1 records stamped 09:59:57 and 10:00:30 UTC")
+	t.Log("When: the stream returns item-1 records stamped 09:59:59 and 10:00:30 UTC")
 	streamKeys := map[string]streamstypes.AttributeValue{
 		"pk": &streamstypes.AttributeValueMemberS{Value: "item-1"},
 	}
@@ -93,7 +91,7 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 		}}
 	}
 	records := []streamstypes.Record{
-		record("before-start", time.Date(2026, 1, 1, 9, 59, 57, 0, time.UTC)),
+		record("before-start", time.Date(2026, 1, 1, 9, 59, 59, 0, time.UTC)),
 		record("after-start", time.Date(2026, 1, 1, 10, 0, 30, 0, time.UTC)),
 	}
 	batch := convertTableRecordsToBatch(records, "t", "shard-1", buffer, time.Time{}, nil)
@@ -107,10 +105,9 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	require.Equal(t, []string{"after-start"}, kept)
 }
 
-// The snapshot dedupe compares the host clock with the AWS clock. Its margin
-// must cover the host clock lead over AWS that the SDK measures, with at least
-// 2 s. A lead of more than 5 min is a broken host clock, and the input must
-// stop.
+// The snapshot dedupe margin must cover the host clock lead over AWS that the
+// SDK measures, with at least 2 s. A lead of more than 5 min is a broken host
+// clock, and the input must stop.
 func TestSnapshotDedupeMargin(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -152,22 +149,7 @@ func TestSnapshotDedupeMargin(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				if tt.noDate {
-					w.Header()["Date"] = nil
-				} else {
-					w.Header().Set("Date", time.Now().Add(tt.dateOffset).UTC().Format(http.TimeFormat))
-				}
-				w.Header().Set("Content-Type", "application/x-amz-json-1.0")
-				_, _ = w.Write([]byte(`{"Table":{"TableName":"t"}}`))
-			}))
-			defer srv.Close()
-			client := dynamodb.New(dynamodb.Options{
-				Region:       "us-east-1",
-				BaseEndpoint: aws.String(srv.URL),
-				Credentials:  credentials.NewStaticCredentialsProvider("id", "secret", ""),
-			})
-
+			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset, noDate: tt.noDate})
 			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
 			require.NoError(t, err)
 
@@ -181,6 +163,22 @@ func TestSnapshotDedupeMargin(t *testing.T) {
 			assert.LessOrEqual(t, margin, tt.wantMaxMargin)
 		})
 	}
+}
+
+// dateStubTransport answers every DynamoDB call with an empty table and a Date
+// header dateOffset away from the host clock, or no Date header when noDate is
+// set.
+type dateStubTransport struct {
+	dateOffset time.Duration
+	noDate     bool
+}
+
+func (s dateStubTransport) Do(req *http.Request) (*http.Response, error) {
+	resp := jsonResponse(req, http.StatusOK, `{"Table":{"TableName":"t"}}`)
+	if !s.noDate {
+		resp.Header.Set("Date", time.Now().Add(s.dateOffset).UTC().Format(http.TimeFormat))
+	}
+	return resp, nil
 }
 
 func TestShouldSkipFailoverRecord(t *testing.T) {
