@@ -10,9 +10,19 @@ package logminer
 
 import (
 	"database/sql"
+	"errors"
+	"net"
 
 	go_ora "github.com/sijms/go-ora/v2"
 )
+
+// IsSocketTimeout reports whether err comes from a network read or write that
+// timed out, meaning the database has stopped responding on that connection
+// or took longer than the socket timeout to reply.
+func IsSocketTimeout(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Timeout()
+}
 
 // abandonConn marks conn's driver connection as closed, so that statement
 // closes on it return driver.ErrBadConn immediately instead of making a
