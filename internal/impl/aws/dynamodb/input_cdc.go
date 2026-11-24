@@ -809,25 +809,6 @@ func (s *snapshotSequenceBuffer) Size() int {
 	return int(s.totalCount.Load())
 }
 
-// snapshotDedupeMargin returns the clock skew margin for the snapshot dedupe,
-// from the skew that the SDK measured on an AWS response, with a minimum of
-// minSnapshotDedupeClockSkewMargin. It returns an error when the host clock is
-// more than maxSnapshotDedupeClockSkew ahead of AWS.
-func snapshotDedupeMargin(md smithymiddleware.Metadata) (time.Duration, error) {
-	skew, ok := awsmiddleware.GetAttemptSkew(md)
-	if !ok {
-		return minSnapshotDedupeClockSkewMargin, nil
-	}
-	// The SDK skew is the Date header minus the midpoint of the round trip. Date is rounded down to the second, so
-	// ahead can be up to 1 s too high: the limit check subtracts 1 s. The margin adds 1 s for the midpoint error.
-	ahead := -skew
-	if ahead-time.Second > maxSnapshotDedupeClockSkew {
-		return 0, fmt.Errorf("the host clock is about %v ahead of AWS, more than the %v that %s accepts: sync the host clock, or set %s: false",
-			ahead.Round(time.Second), maxSnapshotDedupeClockSkew, dciFieldSnapshotDedupe, dciFieldSnapshotDedupe)
-	}
-	return max(minSnapshotDedupeClockSkewMargin, ahead+time.Second), nil
-}
-
 // parseTableTagFilter parses tag filter.
 // Format: "key1:v1,v2;key2:v3,v4" means (key1=v1 OR key1=v2) AND (key2=v3 OR key2=v4)
 // Returns: map[tagKey][]acceptableValues for efficient matching
@@ -1243,10 +1224,13 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 // connectSingleTable handles the single table mode (legacy behavior)
 func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName string) error {
 	d.resolvedTable = tableName
-	// Get stream ARN
+	// Get stream ARN. The duration includes retries, so it is never less than
+	// the round trip of the attempt that measured the clock skew.
+	descTableStart := time.Now()
 	descTable, err := d.dynamoClient.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: &tableName,
 	})
+	descTableElapsed := time.Since(descTableStart)
 	if err != nil {
 		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return fmt.Errorf("table %s does not exist", tableName)
@@ -1297,7 +1281,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 
 	// Handle snapshot mode
 	if d.conf.snapshot.mode != snapshotModeNone {
-		return d.connectWithSnapshot(ctx, tableName, descTable.ResultMetadata)
+		return d.connectWithSnapshot(ctx, tableName, descTable.ResultMetadata, descTableElapsed)
 	}
 
 	// CDC-only mode (existing behavior)
@@ -1472,25 +1456,42 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 }
 
 // setSnapshotDedupeStart sets the snapshot dedupe start to the snapshot start
-// minus the clock skew margin, from the skew in descTableMetadata. It logs a
-// warning when the host clock is ahead of AWS, and returns the error of
-// snapshotDedupeMargin.
-func (d *dynamoDBCDCInput) setSnapshotDedupeStart(descTableMetadata smithymiddleware.Metadata) error {
-	margin, err := snapshotDedupeMargin(descTableMetadata)
-	if err != nil {
-		return err
-	}
-	// A synced host can measure up to about 1 s ahead (Date is rounded down), so warn only above that.
-	if margin > minSnapshotDedupeClockSkewMargin+time.Second {
-		d.log.Warnf("The host clock is ahead of AWS. The snapshot dedupe keeps CDC events up to %v before the snapshot start, so it can emit more duplicates. Sync the host clock.", margin.Round(time.Second))
+// minus a clock skew margin. The margin comes from the skew that the SDK
+// measured on DescribeTable (descTableMetadata) and from how long that call
+// took (descTableElapsed), with a minimum of minSnapshotDedupeClockSkewMargin.
+// It returns an error when the host clock is more than
+// maxSnapshotDedupeClockSkew ahead of AWS.
+func (d *dynamoDBCDCInput) setSnapshotDedupeStart(descTableMetadata smithymiddleware.Metadata, descTableElapsed time.Duration) error {
+	margin := minSnapshotDedupeClockSkewMargin
+	skew, ok := awsmiddleware.GetAttemptSkew(descTableMetadata)
+	if !ok {
+		d.log.Warnf("The snapshot dedupe could not measure the host clock skew against AWS. If the host clock is more than 1s ahead of AWS, it can skip CDC events for writes made just after the snapshot start.")
+	} else {
+		// The SDK skew is the Date header minus the midpoint of the round trip, so the real lead can be up to half
+		// the round trip more. Date is rounded down to the second, so the lead can also be up to 1 s less. The limit
+		// check uses the lowest possible lead. The margin uses the highest, plus the 1 s for eventually consistent
+		// reads that the minimum also allows.
+		ahead := -skew
+		halfTrip := descTableElapsed / 2
+		if ahead-time.Second-halfTrip > maxSnapshotDedupeClockSkew {
+			return fmt.Errorf("checking the host clock for %s: the host clock is about %v ahead of AWS, more than the %v allowed: sync the host clock, or set %s: false",
+				dciFieldSnapshotDedupe, ahead.Round(time.Second), maxSnapshotDedupeClockSkew, dciFieldSnapshotDedupe)
+		}
+		margin = max(margin, ahead+halfTrip+time.Second)
+		// A synced host can measure up to about 1 s ahead (Date is rounded down), so warn only above that.
+		if margin > minSnapshotDedupeClockSkewMargin+time.Second {
+			d.log.Warnf("The host clock is about %v ahead of AWS (measured over a %v round trip). The snapshot dedupe keeps CDC events up to %v before the snapshot start, so it can emit more duplicates. Sync the host clock.",
+				ahead.Round(time.Second), descTableElapsed.Round(time.Millisecond), margin.Round(time.Second))
+		}
 	}
 	d.snapshot.dedupeStart = d.snapshot.startTime.Add(-margin)
 	return nil
 }
 
 // connectWithSnapshot handles snapshot + CDC coordination. descTableMetadata
-// holds the clock skew that the SDK measured on DescribeTable.
-func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string, descTableMetadata smithymiddleware.Metadata) error {
+// and descTableElapsed are the response metadata and the duration of the
+// DescribeTable call, which setSnapshotDedupeStart uses.
+func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string, descTableMetadata smithymiddleware.Metadata, descTableElapsed time.Duration) error {
 	// Record snapshot start time BEFORE doing anything else
 	d.snapshot.startTime = time.Now()
 	d.snapshot.dedupeStart = d.snapshot.startTime
@@ -1545,7 +1546,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	//    This ensures we capture ALL changes that happen during snapshot
 	if d.conf.snapshot.mode == snapshotModeAndCDC {
 		if d.snapshot.seqBuffer != nil {
-			if err := d.setSnapshotDedupeStart(descTableMetadata); err != nil {
+			if err := d.setSnapshotDedupeStart(descTableMetadata, descTableElapsed); err != nil {
 				return err
 			}
 		}

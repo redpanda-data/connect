@@ -107,98 +107,75 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	require.Equal(t, []string{"after-start"}, kept)
 }
 
-// The snapshot dedupe margin must cover the host clock lead over AWS that the
-// SDK measures, with at least 2 s. A lead of more than 5 min is a broken host
-// clock, and the input must stop.
-func TestSnapshotDedupeMargin(t *testing.T) {
-	tests := []struct {
-		name          string
-		dateOffset    time.Duration
-		noDate        bool
-		wantMinMargin time.Duration
-		wantMaxMargin time.Duration
-		wantErr       string
-	}{
-		{
-			name:          "host and AWS agree",
-			dateOffset:    0,
-			wantMinMargin: 2 * time.Second,
-			wantMaxMargin: 2 * time.Second,
-		},
-		{
-			name:          "host 10 s ahead of AWS",
-			dateOffset:    -10 * time.Second,
-			wantMinMargin: 11 * time.Second,
-			wantMaxMargin: 13 * time.Second,
-		},
-		{
-			name:          "host 10 s behind AWS",
-			dateOffset:    10 * time.Second,
-			wantMinMargin: 2 * time.Second,
-			wantMaxMargin: 2 * time.Second,
-		},
-		{
-			name:          "no Date header",
-			noDate:        true,
-			wantMinMargin: 2 * time.Second,
-			wantMaxMargin: 2 * time.Second,
-		},
-		{
-			name:       "host 10 min ahead of AWS",
-			dateOffset: -10 * time.Minute,
-			wantErr:    "ahead of AWS",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset, noDate: tt.noDate})
-			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
-			require.NoError(t, err)
-
-			margin, err := snapshotDedupeMargin(out.ResultMetadata)
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			assert.GreaterOrEqual(t, margin, tt.wantMinMargin)
-			assert.LessOrEqual(t, margin, tt.wantMaxMargin)
-		})
-	}
-}
-
-// A host clock ahead of AWS must widen the dedupe start and log a warning. A
-// host clock more than 5 min ahead must stop the snapshot.
+// The snapshot dedupe start must be the snapshot start minus a margin that
+// covers the host clock lead over AWS, the error of the SDK measurement (half
+// the DescribeTable round trip), and at least 2 s. A lead of more than 5 min is
+// a broken host clock and must fail. A wide margin and a skew that the SDK
+// could not measure must log a warning.
 func TestSetSnapshotDedupeStart(t *testing.T) {
 	startTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name         string
 		dateOffset   time.Duration
+		noDate       bool
+		elapsed      time.Duration
 		wantEarliest time.Time
 		wantLatest   time.Time
-		wantWarnings int
+		wantWarning  string
 		wantErr      string
 	}{
 		{
 			name:         "host and AWS agree",
 			dateOffset:   0,
+			elapsed:      0,
 			wantEarliest: time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
 			wantLatest:   time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
-			wantWarnings: 0,
+		},
+		{
+			name:         "host 10 s behind AWS",
+			dateOffset:   10 * time.Second,
+			elapsed:      0,
+			wantEarliest: time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
 		},
 		{
 			name:         "host 10 s ahead of AWS",
 			dateOffset:   -10 * time.Second,
+			elapsed:      0,
 			wantEarliest: time.Date(2026, 1, 1, 9, 59, 47, 0, time.UTC),
 			wantLatest:   time.Date(2026, 1, 1, 9, 59, 49, 0, time.UTC),
-			wantWarnings: 1,
+			wantWarning:  "host clock is about",
+		},
+		{
+			name:         "host 10 s ahead of AWS, 4 s round trip",
+			dateOffset:   -10 * time.Second,
+			elapsed:      4 * time.Second,
+			wantEarliest: time.Date(2026, 1, 1, 9, 59, 45, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 9, 59, 47, 0, time.UTC),
+			wantWarning:  "host clock is about",
+		},
+		{
+			name:         "no Date header",
+			noDate:       true,
+			elapsed:      0,
+			wantEarliest: time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 9, 59, 58, 0, time.UTC),
+			wantWarning:  "could not measure",
+		},
+		{
+			name:         "host 5 min 2 s ahead of AWS, 4 s round trip",
+			dateOffset:   -(5*time.Minute + 2*time.Second),
+			elapsed:      4 * time.Second,
+			wantEarliest: time.Date(2026, 1, 1, 9, 54, 53, 0, time.UTC),
+			wantLatest:   time.Date(2026, 1, 1, 9, 54, 55, 0, time.UTC),
+			wantWarning:  "host clock is about",
 		},
 		{
 			name:         "host 10 min ahead of AWS",
 			dateOffset:   -10 * time.Minute,
+			elapsed:      0,
 			wantEarliest: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
 			wantLatest:   time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
-			wantWarnings: 0,
 			wantErr:      "ahead of AWS",
 		},
 	}
@@ -208,15 +185,16 @@ func TestSetSnapshotDedupeStart(t *testing.T) {
 				mu     sync.Mutex
 				levels []slog.Level
 			)
+			// An empty substr records every log line, so a case without a warning must log nothing.
 			d := &dynamoDBCDCInput{
 				snapshot: &snapshotState{startTime: startTime, dedupeStart: startTime},
-				log:      service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "host clock is ahead", mu: &mu, levels: &levels})),
+				log:      service.NewLoggerFromSlog(slog.New(levelRecorder{substr: tt.wantWarning, mu: &mu, levels: &levels})),
 			}
-			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset})
+			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset, noDate: tt.noDate})
 			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
 			require.NoError(t, err)
 
-			err = d.setSnapshotDedupeStart(out.ResultMetadata)
+			err = d.setSnapshotDedupeStart(out.ResultMetadata, tt.elapsed)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 			} else {
@@ -224,8 +202,12 @@ func TestSetSnapshotDedupeStart(t *testing.T) {
 			}
 			assert.False(t, d.snapshot.dedupeStart.Before(tt.wantEarliest), "dedupe start %v", d.snapshot.dedupeStart)
 			assert.False(t, d.snapshot.dedupeStart.After(tt.wantLatest), "dedupe start %v", d.snapshot.dedupeStart)
+			var wantLevels []slog.Level
+			if tt.wantWarning != "" {
+				wantLevels = []slog.Level{slog.LevelWarn}
+			}
 			mu.Lock()
-			assert.Len(t, levels, tt.wantWarnings)
+			assert.Equal(t, wantLevels, levels)
 			mu.Unlock()
 		})
 	}
