@@ -709,9 +709,21 @@ func missingFromPublicationError(publicationName string, allTables bool, missing
 		names[i] = table.String()
 	}
 	if allTables {
-		return fmt.Errorf("FOR ALL TABLES publication %s does not stream table(s) %s: check that they exist and are not unlogged, remove them from its EXCEPT list with ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) (PostgreSQL 19+), or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
+		return fmt.Errorf("FOR ALL TABLES publication %s does not stream table(s) %s. %s. If the input does not need them, remove them from the input's tables", publicationName, strings.Join(names, ", "), allTablesFix(publicationName))
 	}
 	return fmt.Errorf("publication %s does not include table(s) %s: add them with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
+}
+
+// allTablesFix is the fix for a table that a FOR ALL TABLES publication does
+// not stream. The startup check, the runtime monitor and the incremental
+// snapshot signal check all give it, so the three hints stay the same. It has
+// no final period, so that callers can add text after it.
+//
+// PostgreSQL rejects ADD TABLE on a FOR ALL TABLES publication. SET ALL TABLES
+// EXCEPT replaces the whole list, so the hint says to give the tables that
+// stay excluded.
+func allTablesFix(publication string) string {
+	return fmt.Sprintf("Check that each table exists and is not unlogged. If a table is in the EXCEPT list of the FOR ALL TABLES publication, run ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded (PostgreSQL 19+)", publication)
 }
 
 // publicationCoversTableQuery reports whether a publication replicates every

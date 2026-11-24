@@ -121,7 +121,8 @@ func TestMissingFromPublicationError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `FOR ALL TABLES publication pglog_stream_slot does not stream table(s) "public"."orders"`)
-	assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_slot SET ALL TABLES EXCEPT")
+	assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_slot SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded",
+		"SET ALL TABLES EXCEPT replaces the whole list, so the hint must say to keep the other excluded tables")
 	assert.NotContains(t, err.Error(), "ADD TABLE")
 }
 

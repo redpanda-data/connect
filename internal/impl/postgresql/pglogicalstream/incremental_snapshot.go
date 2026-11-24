@@ -447,10 +447,7 @@ func (s *Stream) unpublishedTableError(ctx context.Context, publication string, 
 	fix := "Add the table to the input's tables"
 	switch {
 	case s.externallyManagedPublication && allTables:
-		// PostgreSQL rejects ADD TABLE on a FOR ALL TABLES publication. SET
-		// ALL TABLES EXCEPT replaces the whole list, so the hint says to give
-		// the tables that stay excluded.
-		fix = fmt.Sprintf("Check that the table exists and is not unlogged. If it is in the EXCEPT list of the FOR ALL TABLES publication, run ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded (PostgreSQL 19+)", publication)
+		fix = allTablesFix(publication)
 	case s.externallyManagedPublication:
 		fix = fmt.Sprintf("Add the table to the publication: ALTER PUBLICATION %s ADD TABLE %s;", publication, fqn)
 	}
