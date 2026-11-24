@@ -154,7 +154,7 @@ A flashback or point-in-time recovery on the source database followed by ` + "`O
 		ShortDescription("Maximum seconds to wait for each network read or write to Oracle before failing and reconnecting. Set to 0 to disable it.").
 		Default(defaultSocketTimeout).
 		LintRule(`root = if this < 0 { [ "` + ociFieldSocketTimeout + ` must be greater than or equal to 0" ] }`).
-		Version("4.119.0"),
+		Version("4.120.0"),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
@@ -581,6 +581,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		cachedSCN  replication.SCN
 		isCDB      bool
 	)
+	defer func() {
+		if hint := socketTimeoutHint(resErr); hint != "" {
+			resErr = fmt.Errorf("%w%s", resErr, hint)
+		}
+	}()
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
 	// (see sendTracked), and a sealed flush queue refuses every later batch
@@ -623,13 +628,23 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		cpCacheTable = cdbCheckpointTable(cpCacheTable)
 	}
 
-	// no cache specified so use default, internal oracle based cache
-	if o.cfg.SCNCache == "" && o.cpCache == nil {
+	// No cache specified, so use the default internal Oracle-based cache. It is
+	// rebuilt on every connect along with the main pool: go-ora does not mark a
+	// connection bad when a read times out, so the old pool can keep one whose
+	// late reply to the timed-out query would be read as the reply to its next
+	// query. The swap holds persistMu so it never races an in-flight cacheSCN.
+	if o.cfg.SCNCache == "" {
 		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
+		o.persistMu.Lock()
+		prev := o.cpCache
 		o.cpCache = c
+		o.persistMu.Unlock()
+		if prev != nil {
+			o.closeCheckpointCacheInBackground(prev)
+		}
 	}
 
 	// For CDB mode, run VerifyUserTables on a dedicated connection switched to the PDB
@@ -767,7 +782,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
-					o.log.Errorf("Snapshotting failed: %s", err)
+					o.log.Errorf("Snapshotting failed: %s%s", err, socketTimeoutHint(err))
 				}
 				o.stopSig.TriggerHasStopped()
 				return
@@ -826,7 +841,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			return nil
 		})
 		if err := wg.Wait(); err != nil && softCtx.Err() == nil && !errors.Is(err, context.Canceled) {
-			o.log.Errorf("Error during Oracle CDC Component: %s", err)
+			o.log.Errorf("Error during Oracle CDC Component: %s%s", err, socketTimeoutHint(err))
 		} else {
 			o.log.Info("Successfully shutdown Oracle CDC Component")
 		}
@@ -1040,6 +1055,28 @@ func (o *oracleDBCDCInput) closeDBInBackground(db *sql.DB) {
 			o.log.Debugf("Closing previous Oracle connection pool: %v", err)
 		}
 	})
+}
+
+// closeCheckpointCacheInBackground closes a replaced checkpoint cache, and its
+// connection pool, without blocking the reconnect, for the same reason as
+// closeDBInBackground.
+func (o *oracleDBCDCInput) closeCheckpointCacheInBackground(c service.Cache) {
+	o.poolCloses.Go(func() {
+		if err := c.Close(context.Background()); err != nil {
+			o.log.Debugf("Closing previous Oracle checkpoint cache: %v", err)
+		}
+	})
+}
+
+// socketTimeoutHint returns advice to append to a logged err when it is a
+// socket timeout. The driver reports only "i/o timeout", which does not point
+// at socket_timeout, and a query that is slow rather than stalled fails the
+// same way on every retry until the limit is raised.
+func socketTimeoutHint(err error) string {
+	if !replication.IsSocketTimeout(err) {
+		return ""
+	}
+	return fmt.Sprintf(" (the database did not reply within %[1]s: if it was slow rather than unresponsive, for example a snapshot query on a large table or a LogMiner window with few matching rows, raise %[1]s)", ociFieldSocketTimeout)
 }
 
 func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {

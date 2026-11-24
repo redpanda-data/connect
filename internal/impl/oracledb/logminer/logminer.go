@@ -169,7 +169,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	}()
 
 	defer func() {
-		if isSocketTimeout(resErr) {
+		if replication.IsSocketTimeout(resErr) {
 			// Each statement close is a round trip, so on a socket that has
 			// stopped responding every one would wait out the socket timeout.
 			// Marking the connection closed makes them fail immediately.
@@ -200,7 +200,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	defer func() {
 		// Ending the session on an unresponsive connection would only wait out
 		// the socket timeout; Oracle ends it when the connection goes away.
-		if lm.sessionMgr.IsActive() && !isSocketTimeout(resErr) {
+		if lm.sessionMgr.IsActive() && !replication.IsSocketTimeout(resErr) {
 			if err := lm.sessionMgr.EndSession(context.Background(), conn); err != nil {
 				lm.log.Errorf("ending logminer session on exit: %v", err)
 			}

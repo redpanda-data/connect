@@ -164,7 +164,7 @@ func parseSocketTimeoutConfig(conf *service.ParsedConfig, overrides map[string]s
 	if err != nil {
 		return err
 	}
-	u, err := url.Parse(connStr)
+	u, err := redact.ParseURL(connStr)
 	if err != nil {
 		return fmt.Errorf("parsing %s: %w", ociFieldConnectionString, err)
 	}
