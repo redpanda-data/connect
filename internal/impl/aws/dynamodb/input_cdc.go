@@ -4054,9 +4054,6 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	}
 }
 
-// buildItemKeyString creates a string representation of an item's primary key for deduplication.
-// Uses the table's actual key schema to extract primary key attributes reliably.
-// Keys are sorted alphabetically to match buildItemKeyFromStream ordering.
 // snapshotItemKeys returns the primary key attributes of a scanned item,
 // shaped like a stream record's dynamodb.keys. It returns nil when the key
 // schema is unknown or the item lacks a key attribute.
@@ -4067,8 +4064,8 @@ func snapshotItemKeys(item map[string]dynamodbtypes.AttributeValue, keySchema []
 	keys := make(map[string]any, len(keySchema))
 	for _, keyElem := range keySchema {
 		name := aws.ToString(keyElem.AttributeName)
-		v, ok := item[name]
-		if !ok {
+		v, exists := item[name]
+		if !exists {
 			return nil
 		}
 		keys[name] = convertDynamoDBAttributeValue(v)
@@ -4076,6 +4073,9 @@ func snapshotItemKeys(item map[string]dynamodbtypes.AttributeValue, keySchema []
 	return keys
 }
 
+// buildItemKeyString creates a string representation of an item's primary key for deduplication.
+// Uses the table's actual key schema to extract primary key attributes reliably.
+// Keys are sorted alphabetically to match buildItemKeyFromStream ordering.
 func buildItemKeyString(item map[string]dynamodbtypes.AttributeValue, keySchema []dynamodbtypes.KeySchemaElement) string {
 	if len(keySchema) == 0 {
 		return ""
