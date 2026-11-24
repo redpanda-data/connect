@@ -23,10 +23,12 @@ import (
 
 	"github.com/Jeffail/shutdown"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
+	smithymiddleware "github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
 	"github.com/cenkalti/backoff/v4"
 
@@ -670,6 +672,14 @@ func waitAckGate(ctx context.Context, gate *sync.WaitGroup) error {
 // Why 32 shards? Power-of-2 for fast modulo (hash%numBufferShards), and matches typical core counts.
 const numBufferShards = 32
 
+// snapshotDedupeClockSkewMargin is the time that handleSnapshotBatch subtracts
+// from the snapshot start when it records a scanned item for the dedupe. The
+// start comes from the host clock and stream stamps from the AWS clock, so a
+// host clock ahead of AWS can stamp a write after the start as older than the
+// start. A larger margin gives more duplicates, never loss. 1 min is far more
+// than the skew of a host that syncs its clock with NTP.
+const snapshotDedupeClockSkewMargin = time.Minute
+
 type snapshotSequenceBuffer struct {
 	shards           [numBufferShards]bufferShard // Independent shards with separate locks
 	maxSize          int
@@ -1257,7 +1267,7 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 
 	// Handle snapshot mode
 	if d.conf.snapshot.mode != snapshotModeNone {
-		return d.connectWithSnapshot(ctx, tableName)
+		return d.connectWithSnapshot(ctx, tableName, descTable.ResultMetadata)
 	}
 
 	// CDC-only mode (existing behavior)
@@ -1431,8 +1441,20 @@ func (d *dynamoDBCDCInput) connectCDCOnly(ctx context.Context) error {
 	return nil
 }
 
-// connectWithSnapshot handles snapshot + CDC coordination
-func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string) error {
+// warnIfHostClockAhead logs a warning when the clock skew that the SDK measured
+// on an AWS response puts the host clock more than
+// snapshotDedupeClockSkewMargin ahead of AWS.
+func (d *dynamoDBCDCInput) warnIfHostClockAhead(md smithymiddleware.Metadata) {
+	// The SDK skew is the AWS time minus the host time.
+	if skew, ok := awsmiddleware.GetAttemptSkew(md); ok && -skew > snapshotDedupeClockSkewMargin {
+		d.log.Warnf("The host clock is about %v ahead of AWS, more than the %v that %s allows. The input can skip CDC events for writes made just after the snapshot start. Sync the host clock.",
+			(-skew).Round(time.Second), snapshotDedupeClockSkewMargin, dciFieldSnapshotDedupe)
+	}
+}
+
+// connectWithSnapshot handles snapshot + CDC coordination. descTableMetadata
+// holds the clock skew that the SDK measured on DescribeTable.
+func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string, descTableMetadata smithymiddleware.Metadata) error {
 	// Record snapshot start time BEFORE doing anything else
 	d.snapshot.startTime = time.Now()
 
@@ -1485,6 +1507,10 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	// 1. Start CDC readers FIRST (if snapshot_and_cdc mode)
 	//    This ensures we capture ALL changes that happen during snapshot
 	if d.conf.snapshot.mode == snapshotModeAndCDC {
+		if d.snapshot.seqBuffer != nil {
+			d.warnIfHostClockAhead(descTableMetadata)
+		}
+
 		d.log.Info("Starting CDC readers before snapshot to prevent data loss")
 
 		// Initialize shards
@@ -3512,7 +3538,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	// Read immutable fields once before loop (not once per item)
 	d.mu.RLock()
 	buffer := d.snapshot.seqBuffer
-	startTime := d.snapshot.startTime
+	dedupeStart := d.snapshot.startTime.Add(-snapshotDedupeClockSkewMargin)
 	keySchema := d.keySchema
 	d.mu.RUnlock()
 
@@ -3535,7 +3561,7 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 			keyStr := buildItemKeyString(item, keySchema)
 			if keyStr != "" {
 				// Record this item in the snapshot buffer (with timestamp as sequence for deduplication)
-				buffer.RecordSnapshotItem(keyStr, startTime)
+				buffer.RecordSnapshotItem(keyStr, dedupeStart)
 			}
 		}
 
