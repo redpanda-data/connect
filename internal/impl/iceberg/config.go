@@ -479,7 +479,7 @@ See the Row-level operations section above for the full constraints, including t
 						Secret(),
 				).Description("Azure Blob Storage (ADLS Gen2) configuration.").
 					Optional(),
-			).Description("Storage backend configuration for data files. Specify at most one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage`. Without a block, the output uses the storage settings that the catalog returns, for example vended credentials, and falls back to the default credentials of the cloud that the table location names (AWS default credential chain, Google Application Default Credentials, or Azure `DefaultAzureCredential`).").
+			).Description("Storage backend configuration for data files. Specify at most one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage`. Without a block, the output uses the storage settings that the catalog returns, for example vended credentials. For other settings, it uses the default credentials of the cloud that the table location names (AWS default credential chain, Google Application Default Credentials, or Azure `DefaultAzureCredential`).").
 				ShortDescription("Storage backend for data files. At most one of aws_s3, gcp_cloud_storage or azure_blob_storage.").
 				// parseStorageProps reads only the first block it finds, so a second
 				// block would be ignored silently. Before the rule runs, benthos adds
