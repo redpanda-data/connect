@@ -308,9 +308,9 @@ func (f *flakyCheckpointAPI) GetItem(ctx context.Context, in *dynamodb.GetItemIn
 }
 
 // newFlakyTableStream builds table name's stream with its checkpoints in a
-// flakyCheckpointAPI failing the first failReads completion reads. Its one shard
-// s1 is read past any page high, so pages release once the coordinator has
-// settled the shard list.
+// flakyCheckpointAPI failing the first failReads completion reads. Its one
+// shard s1 is read past any page high, so pages release once the coordinator
+// has settled the shard list.
 func newFlakyTableStream(t *testing.T, d *dynamoDBCDCInput, name string, failReads int32) (*tableStream, *flakyCheckpointAPI) {
 	t.Helper()
 	api := &flakyCheckpointAPI{memCheckpointAPI: newMemCheckpointAPI(nil)}

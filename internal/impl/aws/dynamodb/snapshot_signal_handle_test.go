@@ -126,15 +126,59 @@ func TestHandleSnapshotSignalQueuesAndMarksRequested(t *testing.T) {
 	assert.Equal(t, "t1", table)
 }
 
-func TestHandleSnapshotSignalSkipsCompleteTables(t *testing.T) {
+// A completed table is reset and queued again, so a repeat signal re-reads
+// it from the start.
+func TestHandleSnapshotSignalRestartsCompleteTables(t *testing.T) {
 	mem := newMemCheckpointAPI(nil)
 	d := newSignalTestInput(mem, mem)
+	mem.put(signalArnT2, snapshotRow(signalArnT2, "snapshot#segment#0", true, nil))
+	mem.put(signalArnT2, snapshotRow(signalArnT2, "snapshot#segment#1", true, nil))
+	logs := captureLogs(d)
 
 	require.NoError(t, d.handleSnapshotSignal(t.Context(), d.log, []byte(`{"tables":["t1","t2"]}`)))
 
 	assert.True(t, mem.has(signalArnT1, "snapshot#requested"))
-	assert.False(t, mem.has(signalArnT2, "snapshot#requested"), "nothing is written for the backfilled t2")
-	assert.Equal(t, 1, d.backfills.Len(), "only t1 is queued")
+	assert.True(t, mem.has(signalArnT2, "snapshot#requested"), "the reset keeps t2's request")
+	assert.False(t, mem.has(signalArnT2, "snapshot#complete"), "t2's completion marker is deleted")
+	assert.False(t, mem.has(signalArnT2, "snapshot#segment#0"))
+	assert.False(t, mem.has(signalArnT2, "snapshot#segment#1"))
+	progress, err := d.tableStreams["t2"].checkpointer.SnapshotProgress(t.Context())
+	require.NoError(t, err)
+	assert.False(t, progress.IsComplete())
+	assert.False(t, progress.HasSegmentProgress(), "t2 is read again from the start")
+
+	var queued []string
+	for d.backfills.Len() > 0 {
+		table, ok := d.backfills.Pop(t.Context())
+		require.True(t, ok)
+		queued = append(queued, table)
+	}
+	assert.Equal(t, []string{"t1", "t2"}, queued)
+	assert.Contains(t, logs.String(), "signal restarts the completed backfill of [t2] from the start")
+}
+
+// failingDeleteAPI fails every DeleteItem, then delegates the rest to the
+// in-memory table.
+type failingDeleteAPI struct {
+	*memCheckpointAPI
+}
+
+func (*failingDeleteAPI) DeleteItem(context.Context, *dynamodb.DeleteItemInput, ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error) {
+	return nil, errors.New("stubbed DeleteItem failure")
+}
+
+// A failed reset of a completed table is returned for retry with nothing
+// queued. The request row is already durable, and the completion marker
+// still stands, so the retried signal finds the table complete again.
+func TestHandleSnapshotSignalReturnsErrorWhenResetFails(t *testing.T) {
+	mem := newMemCheckpointAPI(nil)
+	d := newSignalTestInput(&failingDeleteAPI{memCheckpointAPI: mem}, mem)
+
+	require.Error(t, d.handleSnapshotSignal(t.Context(), d.log, []byte(`{"tables":["t2"]}`)))
+
+	assert.True(t, mem.has(signalArnT2, "snapshot#requested"))
+	assert.True(t, mem.has(signalArnT2, "snapshot#complete"))
+	assert.Equal(t, 0, d.backfills.Len(), "nothing is queued before the reset is durable")
 }
 
 func TestHandleSnapshotSignalRejectsWholeRequestOnUnknownTable(t *testing.T) {
@@ -415,7 +459,7 @@ func TestHandleSnapshotSignalDeduplicatesTables(t *testing.T) {
 
 	require.NoError(t, d.handleSnapshotSignal(t.Context(), d.log, []byte(`{"tables":["t1","t2","t1"]}`)))
 
-	assert.Equal(t, int64(1), api.puts.Load(), "t1's requested row is written once")
-	assert.Equal(t, 1, d.backfills.Len())
-	assert.Contains(t, logs.String(), "signal asked for [t1 t2] but [t2] are already backfilled, so only [t1] were queued")
+	assert.Equal(t, int64(2), api.puts.Load(), "t1's and t2's requested rows are each written once")
+	assert.Equal(t, 2, d.backfills.Len())
+	assert.Contains(t, logs.String(), "signal queued 2 table(s) for backfill: [t1 t2]")
 }

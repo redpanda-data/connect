@@ -1641,11 +1641,12 @@ credentials:
 	t.Logf("Tag value matching: found events = %v", foundEvent)
 }
 
-// incrementalSnapshotRealAWSEnv switches TestIntegrationDynamoDBCDCIncrementalSnapshot
-// from DynamoDB Local to real AWS, using the default credential chain and
-// region. DynamoDB Local rounds ApproximateCreationDateTime down to the minute,
-// so the ordering refinement (which depends on stream timestamps) is only
-// asserted against real AWS; the Safety rule is clock-free and asserted on both.
+// incrementalSnapshotRealAWSEnv switches
+// TestIntegrationDynamoDBCDCIncrementalSnapshot from DynamoDB Local to real
+// AWS, using the default credential chain and region. DynamoDB Local rounds
+// ApproximateCreationDateTime down to the minute, so the ordering refinement
+// (which depends on stream timestamps) is only asserted against real AWS; the
+// Safety rule is clock-free and asserted on both.
 const incrementalSnapshotRealAWSEnv = "DYNAMODB_CDC_REAL_AWS"
 
 // TestIntegrationDynamoDBCDCIncrementalSnapshot backfills a table in
@@ -1875,11 +1876,11 @@ snapshot_throttle: 10ms
 		}
 	}()
 
-	// Wait until the writer has stopped, every key has been seen and nothing
-	// has arrived for the quiet period. Once the writer stops, the idle rule
-	// releases held pages after two empty polls plus 1s + 2 *
-	// incremental_snapshot.watermark_margin (about 5s). DynamoDB Local rounds stream
-	// timestamps down to the minute, which delays releases until the idle
+	// Wait until the writer has stopped, every key has been seen and nothing has
+	// arrived for the quiet period. Once the writer stops, the idle rule releases
+	// held pages after two empty polls plus 1s + 2 *
+	// incremental_snapshot.watermark_margin (about 5s). DynamoDB Local rounds
+	// stream timestamps down to the minute, which delays releases until the idle
 	// rule or the next minute, so the local quiet period is longer.
 	quiet := 5 * time.Second
 	if !realAWS {
@@ -1931,8 +1932,8 @@ snapshot_throttle: 10ms
 
 // TestIntegrationDynamoDBCDCSnapshotSignal checks that a signal table drives
 // incremental backfills: nothing is backfilled until a snapshot-execute
-// signal arrives, the signal then backfills the table once, and a repeated
-// signal is a no-op.
+// signal arrives, the signal then backfills the table, and a repeated
+// signal backfills it again from the start.
 func TestIntegrationDynamoDBCDCSnapshotSignal(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -2243,22 +2244,8 @@ snapshot_throttle: 10ms
 	assert.Positive(t, reads1, "the signal backfilled nothing")
 	assert.LessOrEqual(t, reads1, itemCount)
 
-	// The signal was already executed, so a second one is a no-op. Check the
-	// outcome in checkpoint state, which does not depend on release timing.
-	// The signal table's reader handles a signal before it sends the record,
-	// so once the consumer has counted it the rows are final.
-	putSignal("2")
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return signalRecords >= 2
-	}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the second signal record")
-
-	assert.Len(t, snapshotRows("snapshot#complete"), 1)
-	assert.Empty(t, snapshotRows("snapshot#requested"), "a complete table must not be requeued by a repeated signal")
-	assert.Equal(t, reads1, readCount(), "a repeated signal must not backfill again")
-
-	// Wait for the stream to deliver every write, then compare with the table.
+	// Wait for the stream to deliver every write, then compare with the
+	// table. The writer has stopped, so the table holds its final values.
 	table := map[string]int{}
 	var startKey map[string]types.AttributeValue
 	for {
@@ -2280,7 +2267,7 @@ snapshot_throttle: 10ms
 		startKey = out.LastEvaluatedKey
 	}
 	require.Len(t, table, itemCount)
-	require.Eventually(t, func() bool {
+	matchesTable := func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		for pk, want := range table {
@@ -2289,7 +2276,28 @@ snapshot_throttle: 10ms
 			}
 		}
 		return true
-	}, 5*time.Minute, 500*time.Millisecond, "emitted values never matched the table")
+	}
+	require.Eventually(t, matchesTable, 5*time.Minute, 500*time.Millisecond, "emitted values never matched the table")
+
+	// The table's backfill has completed, so a second signal resets it and
+	// reads every item again. The stream has delivered every write and
+	// nothing writes to the table any more, so no snapshot item is dropped
+	// and the second backfill reads exactly itemCount items.
+	putSignal("2")
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		sigs := signalRecords
+		mu.Unlock()
+		if sigs < 2 || readCount() < reads1+itemCount {
+			return false
+		}
+		done, err := snapshotRowsErr("snapshot#complete")
+		return err == nil && len(done) == 1
+	}, 5*time.Minute, 500*time.Millisecond, "timed out waiting for the repeated signal to backfill the table again")
+
+	assert.Equal(t, reads1+itemCount, readCount(), "a repeated signal must backfill every item once more")
+	assert.Empty(t, snapshotRows("snapshot#requested"), "the second backfill's completion clears its request")
+	assert.True(t, matchesTable(), "the second backfill re-read values that differ from the table")
 
 	mu.Lock()
 	defer mu.Unlock()

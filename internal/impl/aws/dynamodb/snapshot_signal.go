@@ -197,33 +197,38 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 		return nil
 	}
 
-	var added, covered []string
+	var added, restarted []string
 	for i, name := range sig.Tables {
 		ts := streams[i]
 		progress, err := ts.checkpointer.SnapshotProgress(ctx)
 		if err != nil {
 			return fmt.Errorf("getting snapshot progress for table %s: %w", name, err)
 		}
-		if progress.IsComplete() {
-			covered = append(covered, name)
-			continue
-		}
 		// The requested row is written before the table is queued, so a
-		// crash after the signal is acked still finds the request.
+		// crash after the signal is acked still finds the request. For a
+		// completed table it is also written before the reset, which keeps
+		// it: a crash midway leaves the signal unacked, so it is read again.
 		if err := ts.checkpointer.MarkSnapshotRequested(ctx); err != nil {
 			return fmt.Errorf("recording snapshot request for table %s: %w", name, err)
 		}
+		if progress.IsComplete() {
+			// A completed backfill is read again from the start. Its run has
+			// waited for its acks and marked the snapshot complete, so no
+			// write of that run can land after the reset.
+			if err := ts.checkpointer.ResetSnapshotProgress(ctx); err != nil {
+				return fmt.Errorf("resetting snapshot progress for table %s: %w", name, err)
+			}
+			restarted = append(restarted, name)
+		}
+		// A table already queued is not queued twice, and one being
+		// backfilled finishes that backfill.
 		d.backfills.Push(name)
 		added = append(added, name)
 	}
 
-	if len(added) == 0 {
-		log.Warnf("Incremental snapshot: signal asked for %v, all of which are already backfilled, so nothing was queued", sig.Tables)
-		return nil
-	}
 	log.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
-	if len(covered) > 0 {
-		log.Warnf("Incremental snapshot: signal asked for %v but %v are already backfilled, so only %v were queued", sig.Tables, covered, added)
+	if len(restarted) > 0 {
+		log.Infof("Incremental snapshot: signal restarts the completed backfill of %v from the start", restarted)
 	}
 	return nil
 }

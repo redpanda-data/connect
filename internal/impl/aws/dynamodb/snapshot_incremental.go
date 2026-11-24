@@ -271,16 +271,17 @@ func (d *dynamoDBCDCInput) runIncrementalSingleUntilDone(ctx context.Context, tg
 	return true
 }
 
-// prepareTableBackfill decides whether a multi-table incremental table needs
-// a backfill: it checks the stream view and resets a completed or
-// in-progress snapshot whose stream checkpoint is stale. It must run before
-// the table's coordinator starts: once readers checkpoint, the shards that
-// prove the checkpoint stale age out and the trimmed changes are never
-// backfilled. A retry runs after the coordinator has started, so a shard that
-// resumed from trim horizon meanwhile counts as stale (see markTrimmed). A table whose stream view rules out a backfill is logged and
-// reported as not needing one; a failed checkpoint read or reset is returned
-// for prepareOrRetryTableBackfill to retry. With signal_table_name set,
-// backfills are signal-only: see signalOnlyBackfillPending.
+// prepareTableBackfill decides whether a multi-table incremental table needs a
+// backfill: it checks the stream view and resets a completed or in-progress
+// snapshot whose stream checkpoint is stale. It must run before the table's
+// coordinator starts: once readers checkpoint, the shards that prove the
+// checkpoint stale age out and the trimmed changes are never backfilled. A
+// retry runs after the coordinator has started, so a shard that resumed from
+// trim horizon meanwhile counts as stale (see markTrimmed). A table whose
+// stream view rules out a backfill is logged and reported as not needing one; a
+// failed checkpoint read or reset is returned for prepareOrRetryTableBackfill
+// to retry. With signal_table_name set, backfills are signal-only: see
+// signalOnlyBackfillPending.
 func (d *dynamoDBCDCInput) prepareTableBackfill(ctx context.Context, table string, ts *tableStream) (bool, error) {
 	if ts.incremental == nil {
 		return false, nil
@@ -316,11 +317,11 @@ func (d *dynamoDBCDCInput) prepareTableBackfill(ctx context.Context, table strin
 // calls. retryCtx outlives it and bounds the background retries; it must
 // end when the input stops.
 //
-// The table is prepare-pending from its publication in d.tableStreams
-// (see initializeTableStream), or else from the first attempt, until an
-// attempt succeeds, so runBackfillQueue never runs its backfill alongside
-// a prepare (whose stale reset deletes the rows a live run writes). A push the queue skipped
-// meanwhile, such as a snapshot-execute signal's, is honoured once the
+// The table is prepare-pending from its publication in d.tableStreams (see
+// initializeTableStream), or else from the first attempt, until an attempt
+// succeeds, so runBackfillQueue never runs its backfill alongside a prepare
+// (whose stale reset deletes the rows a live run writes). A push the queue
+// skipped meanwhile, such as a snapshot-execute signal's, is honoured once the
 // prepare succeeds.
 func (d *dynamoDBCDCInput) prepareOrRetryTableBackfill(ctx, retryCtx context.Context, table string, ts *tableStream) bool {
 	d.backfillRetries.beginPrepare(table)
@@ -362,7 +363,8 @@ func (d *dynamoDBCDCInput) logPrepareRetry(table string, err error) time.Duratio
 // without waiting for a signal: see incsnapshot.Backfill.SignalOnlyPending.
 // A failed read is returned, as in prepareTableBackfill.
 func (d *dynamoDBCDCInput) signalOnlyBackfillPending(ctx context.Context, table string, cp *Checkpointer) (bool, error) {
-	// State, KeySchema and streamArn are deliberately unset: SignalOnlyPending reads only Table and the checkpointer.
+	// State, KeySchema and streamArn are deliberately unset: SignalOnlyPending
+	// reads only Table and the checkpointer.
 	return d.incrementalBackfill(backfillTarget{table: table, checkpointer: cp}, nil).SignalOnlyPending(ctx)
 }
 

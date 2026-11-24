@@ -21,10 +21,10 @@ import (
 	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
 )
 
-// TestShardReaderClosedShardFinalPageTouchesWindow: the last GetRecords response
-// of a closed shard (nil NextShardIterator) can still carry records. Both
-// reader paths must touch the incremental window with them and deliver them
-// before marking the shard exhausted, and must not mark it exhausted while
+// TestShardReaderClosedShardFinalPageTouchesWindow: the last GetRecords
+// response of a closed shard (nil NextShardIterator) can still carry records.
+// Both reader paths must touch the incremental window with them and deliver
+// them before marking the shard exhausted, and must not mark it exhausted while
 // the send is still pending (cleanup would cancel the reader and lose the
 // page).
 func TestShardReaderClosedShardFinalPageTouchesWindow(t *testing.T) {
