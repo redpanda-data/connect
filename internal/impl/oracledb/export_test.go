@@ -11,6 +11,8 @@ package oracledb
 import (
 	"context"
 	"database/sql"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // ProbeCheckpointMerge exposes probeCheckpointMerge to the integration tests in
@@ -21,4 +23,11 @@ func ProbeCheckpointMerge(ctx context.Context, db *sql.DB, table string) error {
 		return err
 	}
 	return probeCheckpointMerge(ctx, db, tbl)
+}
+
+// NewCheckpointCache exposes newCheckpointCache to the integration tests in
+// package oracledb_test.
+func NewCheckpointCache(ctx context.Context, connStr, table, key string) (service.Cache, error) {
+	res := service.MockResources()
+	return newCheckpointCache(ctx, connStr, table, key, res.Metrics(), res.Logger())
 }

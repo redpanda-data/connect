@@ -9,9 +9,11 @@
 package oracledb_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +25,9 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb"
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 // TestIntegrationMigrateCheckpointCache can be deleted once we're happy customers have migrated.
@@ -208,4 +212,152 @@ oracledb_cdc:
 	runPipeline(tableB, "pipeline_b", tableA, tableB)
 	assert.Equal(t, 1, countKey(tableB, "pipeline_b"), "expected checkpoint of pipeline B in its own table")
 	assert.Equal(t, 0, countKey(tableA, "pipeline_b"), "expected no checkpoint of pipeline B in the table of pipeline A")
+}
+
+// TestIntegrationCheckpointCacheProcedureFallback makes sure that a user without
+// INSERT on the checkpoint table can still write checkpoints. Older versions
+// wrote them with a stored procedure that runs with the rights of its owner. So
+// a DBA could grant only SELECT and UPDATE on the table and EXECUTE on the
+// procedure. Such a user must keep working after an upgrade.
+func TestIntegrationCheckpointCacheProcedureFallback(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	table := db.Schema + ".CDC_CHECKPOINT_FALLBACK"
+	proc := db.Schema + ".CDC_CHECKPOINT_CACHE_UPDATE"
+	db.MustExecContext(t.Context(), `CREATE TABLE `+table+` (cache_key VARCHAR2(128) NOT NULL PRIMARY KEY, cache_val RAW(8))`)
+	// The procedure that older versions created.
+	db.MustExecContext(t.Context(), `
+		CREATE PROCEDURE `+proc+` (
+			p_key IN VARCHAR2,
+			p_value IN RAW
+		)
+		AS
+			v_count NUMBER;
+		BEGIN
+			SELECT COUNT(*) INTO v_count FROM `+table+` WHERE cache_key = p_key;
+
+			IF v_count > 0 THEN
+				UPDATE `+table+` SET cache_val = p_value WHERE cache_key = p_key;
+			ELSE
+				INSERT INTO `+table+` (cache_key, cache_val) VALUES (p_key, p_value);
+			END IF;
+
+			COMMIT;
+		END;`)
+
+	user := db.Schema + "_F"
+	userConnStr := createUserWithGrants(t, db, connStr, user,
+		"GRANT SELECT, UPDATE ON "+table+" TO "+user,
+		"GRANT EXECUTE ON "+proc+" TO "+user)
+
+	cache, err := oracledb.NewCheckpointCache(t.Context(), userConnStr, table, "fallback")
+	require.NoError(t, err)
+	// Registered after the drop of the user, so it runs first.
+	t.Cleanup(func() { assert.NoError(t, cache.Close(context.Background())) })
+
+	want := make([]byte, 8)
+	binary.LittleEndian.PutUint64(want, 12345)
+	require.NoError(t, cache.Set(t.Context(), "fallback", want, nil))
+
+	var got []byte
+	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT cache_val FROM "+table+" WHERE cache_key = :1", "fallback").Scan(&got))
+	assert.Equal(t, want, got)
+}
+
+// TestIntegrationProbeCheckpointMerge makes sure that the probe reports a user
+// that cannot write a checkpoint with MERGE, and that it leaves no row in the
+// checkpoint table. MERGE runs with the rights of the user, and needs INSERT and
+// UPDATE on the table.
+func TestIntegrationProbeCheckpointMerge(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	table := db.Schema + ".CDC_CHECKPOINT_PROBE"
+	db.MustExecContext(t.Context(), `CREATE TABLE `+table+` (cache_key VARCHAR2(128) NOT NULL PRIMARY KEY, cache_val RAW(8))`)
+
+	tests := []struct {
+		name       string
+		grants     string
+		wantDenied bool
+	}{
+		{
+			name:       "select and update",
+			grants:     "SELECT, UPDATE",
+			wantDenied: true,
+		},
+		{
+			name:       "select, insert and update",
+			grants:     "SELECT, INSERT, UPDATE",
+			wantDenied: false,
+		},
+	}
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			user := fmt.Sprintf("%s_P%d", db.Schema, i)
+			userConnStr := createUserWithGrants(t, db, connStr, user, "GRANT "+tc.grants+" ON "+table+" TO "+user)
+			userDB, err := sql.Open("oracle", userConnStr)
+			require.NoError(t, err)
+			// Registered after the drop of the user, so it runs first: Oracle
+			// cannot drop a user that is connected (ORA-01940).
+			t.Cleanup(func() { assert.NoError(t, userDB.Close()) })
+
+			err = oracledb.ProbeCheckpointMerge(t.Context(), userDB, table)
+			if tc.wantDenied {
+				require.Error(t, err)
+				_, ok := replication.IsMissingPrivilege(err)
+				assert.Truef(t, ok, "expected a missing privilege error, got: %v", err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			var rows int
+			require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows))
+			assert.Zero(t, rows, "expected the probe to roll back its row")
+		})
+	}
+}
+
+// createUserWithGrants creates a user with CREATE SESSION and the grants, and
+// returns a connection string for it. It drops the user when the test ends, so
+// close the connections of the user in a cleanup that is registered later.
+func createUserWithGrants(t *testing.T, db *oracledbtest.TestDB, connStr, user string, grants ...string) string {
+	t.Helper()
+	ctx := t.Context()
+
+	conn, err := db.Conn(ctx)
+	require.NoError(t, err)
+	defer conn.Close()
+	// Local users in CDB$ROOT need _ORACLE_SCRIPT (to avoid ORA-65096). It is a
+	// session setting.
+	_, err = conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`)
+	require.NoError(t, err)
+	for _, q := range append([]string{"CREATE USER " + user + " IDENTIFIED BY probe123", "GRANT CREATE SESSION TO " + user}, grants...) {
+		_, err = conn.ExecContext(ctx, q)
+		require.NoErrorf(t, err, "creating user %s: %s", user, q)
+	}
+	t.Cleanup(func() {
+		// t.Context() is cancelled before cleanup runs.
+		ctx := context.Background()
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+			return
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`); err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+			return
+		}
+		if _, err := conn.ExecContext(ctx, "DROP USER "+user+" CASCADE"); err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+		}
+	})
+
+	u, err := url.Parse(connStr)
+	require.NoError(t, err)
+	u.User = url.UserPassword(user, "probe123")
+	return u.String()
 }
