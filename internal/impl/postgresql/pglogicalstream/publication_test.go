@@ -9,9 +9,11 @@
 package pglogicalstream
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -256,6 +258,18 @@ func TestSnapshotSignalChecksExternallyManagedPublication(t *testing.T) {
 			"the input does not manage the publication, so the fix is to add the table to it")
 	})
 
+	t.Run("a table missing from a FOR ALL TABLES publication gets a hint that PostgreSQL accepts", func(t *testing.T) {
+		s := newStream(true, &fakeQueryDriver{notPublishedAsItself: true, allTables: true})
+
+		err := s.checkBackfillable(t.Context(), events)
+		require.ErrorIs(t, err, errSignalRejected)
+		assert.Contains(t, err.Error(), "publication pglog_stream_test_slot does not include table public.events")
+		assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_test_slot SET ALL TABLES EXCEPT")
+		assert.Contains(t, err.Error(), "with only the tables that must stay excluded",
+			"SET ALL TABLES EXCEPT replaces the whole list")
+		assert.NotContains(t, err.Error(), "ADD TABLE", "PostgreSQL rejects ADD TABLE on a FOR ALL TABLES publication")
+	})
+
 	t.Run("a table in an externally managed publication is accepted", func(t *testing.T) {
 		s := newStream(true, &fakeQueryDriver{})
 		require.NoError(t, s.checkBackfillable(t.Context(), events))
@@ -322,7 +336,8 @@ func TestMonitorWatchesPublication(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	m := &Monitor{dbConn: db, logger: service.MockResources().Logger()}
+	var logs bytes.Buffer
+	m := &Monitor{dbConn: db, logger: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, nil)))}
 
 	// Nothing watched, so nothing is queried.
 	var queries int
@@ -341,8 +356,21 @@ func TestMonitorWatchesPublication(t *testing.T) {
 	m.checkPublication(t.Context())
 	assert.Equal(t, int64(2), m.Report().TablesMissingFromPublication)
 	assert.Equal(t, `"public"."events", "public"."orders"`, m.lastMissingFromPublication)
+	assert.Contains(t, logs.String(), "ALTER PUBLICATION pglog_stream_slot ADD TABLE")
 
 	d.notInPublication = false
 	m.checkPublication(t.Context())
 	assert.Zero(t, m.Report().TablesMissingFromPublication)
+
+	// The publication can become FOR ALL TABLES while the stream runs, and
+	// PostgreSQL rejects ADD TABLE on it.
+	logs.Reset()
+	d.notInPublication = true
+	d.allTables = true
+	m.checkPublication(t.Context())
+	assert.Equal(t, int64(2), m.Report().TablesMissingFromPublication)
+	assert.Contains(t, logs.String(), "ALTER PUBLICATION pglog_stream_slot SET ALL TABLES EXCEPT")
+	assert.Contains(t, logs.String(), "with only the tables that must stay excluded",
+		"SET ALL TABLES EXCEPT replaces the whole list")
+	assert.NotContains(t, logs.String(), "ADD TABLE")
 }

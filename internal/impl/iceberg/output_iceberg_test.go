@@ -280,6 +280,25 @@ storage:
 	}
 }
 
+// TestParseSchemaEvolutionConfigTableLocationAbsent pins that an absent
+// `schema_evolution.table_location` leaves the location to the catalog.
+func TestParseSchemaEvolutionConfigTableLocationAbsent(t *testing.T) {
+	conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: bucket
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := parseSchemaEvolutionConfig(conf)
+	require.NoError(t, err)
+	assert.Nil(t, cfg.TableLocation)
+}
+
 // TestRuntimeNoticeWiring pins the startup log notices wired in
 // newIcebergOutputFromConfig (currently 0% covered): the max_in_flight ordering
 // WARNING, the copy-on-write write-amplification INFO, and the

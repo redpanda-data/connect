@@ -51,6 +51,7 @@ import (
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 var (
@@ -122,10 +123,8 @@ func newCatalogClient(t *testing.T, ctx context.Context) *catalogx.Client {
 // copy-on-write and merge-on-read modes are testable.
 func newRouter(t *testing.T, namespace, tableName string, schemaEvo bool, rowOp icebergimpl.RowOpConfig) *icebergimpl.Router {
 	t.Helper()
-	namespaceStr, err := service.NewInterpolatedString(namespace)
-	require.NoError(t, err)
-	tableStr, err := service.NewInterpolatedString(tableName)
-	require.NoError(t, err)
+	namespaceStr := servicetest.NewInterpolatedString(t, namespace)
+	tableStr := servicetest.NewInterpolatedString(t, tableName)
 
 	logger := service.MockResources().Logger()
 	commitCfg := icebergimpl.CommitConfig{
@@ -148,8 +147,7 @@ func newRouter(t *testing.T, namespace, tableName string, schemaEvo bool, rowOp 
 //	merge_strategy: copy-on-write
 func cowRowOp(t *testing.T) icebergimpl.RowOpConfig {
 	t.Helper()
-	op, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	op := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	return icebergimpl.RowOpConfig{
 		Operation:        op,
 		IdentifierFields: []string{"id"},
@@ -161,8 +159,7 @@ func cowRowOp(t *testing.T) icebergimpl.RowOpConfig {
 // MergeStrategy value behaves as merge-on-read).
 func morRowOp(t *testing.T) icebergimpl.RowOpConfig {
 	t.Helper()
-	op, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	op := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	return icebergimpl.RowOpConfig{
 		Operation:        op,
 		IdentifierFields: []string{"id"},

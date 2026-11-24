@@ -14,14 +14,21 @@ version: '3'
 # bench:up creates are simply unused), and also run sqlcl:pdb:drop-cache before the next run,
 # since bench:reset only drops the CDB checkpoint cache.
 
+# CONTAINER and PORT select the Oracle container and the host port it listens on, so
+# several datasets can live side by side, e.g. task bench:up CONTAINER=oracledb-big PORT=1533.
+# benchmark_config.yaml connects to localhost:1521; point it at PORT when it differs.
+vars:
+  CONTAINER: '{{.CONTAINER | default "oracledb"}}'
+  PORT: '{{.PORT | default "1521"}}'
+
 tasks:
 
   bench:up:
     desc: Full CDB setup (preferred multi-PDB mode)
     cmds:
       - docker run -d
-          --name oracledb
-          -p 1521:1521
+          --name {{.CONTAINER}}
+          -p {{.PORT}}:1521
           -e ORACLE_PWD=YourPassword123
           container-registry.oracle.com/database/free:latest-lite
       - cmd: echo "Waiting for OracleDB..." && sleep 10
@@ -33,7 +40,7 @@ tasks:
 
   bench:down:
     desc: Teardown benchmark
-    cmd: docker rm -fv oracledb
+    cmd: docker rm -fv {{.CONTAINER}}
 
   bench:reset:
     desc: Clear benchmark in preparation for a new run
@@ -50,60 +57,60 @@ tasks:
   # ── Data setup ───────────────────────────────────────────────────────────────
 
   oracledb:logs:
-    cmd: docker logs -f oracledb
+    cmd: docker logs -f {{.CONTAINER}}
 
   oracledb:archivelog:
     desc: Enable ARCHIVELOG mode (required for LogMiner/CDC). Must be run after oracledb:up.
     cmds:
-      - docker exec oracledb mkdir -p /opt/oracle/oradata/recovery_area
-      - docker exec -i oracledb sqlplus / as sysdba < archivelog_enable.sql
-      - docker exec oracledb lsnrctl start || true
+      - docker exec {{.CONTAINER}} mkdir -p /opt/oracle/oradata/recovery_area
+      - docker exec -i {{.CONTAINER}} sqlplus / as sysdba < archivelog_enable.sql
+      - docker exec {{.CONTAINER}} lsnrctl start || true
       - task: rman:setup
 
   rman:setup:
     desc: Configure archive log retention for local CDC development (keeps logs available for LogMiner)
-    cmd: docker exec -i oracledb sqlplus -s / as sysdba < retention_setup.sql
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s / as sysdba < retention_setup.sql
 
   sqlcl:create:
-    cmd: docker exec -i oracledb sqlplus -s system/YourPassword123@FREE < create.sql
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s system/YourPassword123@FREE < create.sql
 
   cdb:setup:
     desc: Create C##TESTDB and C##RPCN common users for CDB-mode connector testing
-    cmd: docker exec -i oracledb sqlplus -s / as sysdba < cdb_setup.sql
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s / as sysdba < cdb_setup.sql
 
   pdb:create:
     desc: Create and open the TESTPDB pluggable database (requires Docker, runs as SYSDBA)
-    cmd: docker exec -i oracledb sqlplus -s / as sysdba < pdb_create.sql
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s / as sysdba < pdb_create.sql
 
   pdb:setup:
     desc: Create users, enable supplemental logging, and create tables in TESTPDB
-    cmd: docker exec -i oracledb sqlplus -s pdbadmin/pdbadmin123@localhost:1521/TESTPDB < pluggable.sql
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s pdbadmin/pdbadmin123@localhost:1521/TESTPDB < pluggable.sql
 
   sqlcl:pdb:data:users:
     desc: Insert test users data into TESTPDB (default 1000000 rows, override with TOTAL=...)
     vars:
       TOTAL: '{{.TOTAL | default "1000000"}}'
-    cmd: (echo "DEFINE users_total = {{.TOTAL}}"; cat users.sql) | docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
+    cmd: (echo "DEFINE users_total = {{.TOTAL}}"; cat users.sql) | docker exec -i {{.CONTAINER}} sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
 
   sqlcl:pdb:data:products:
     desc: Insert test products data into TESTPDB (default 50000 rows, override with TOTAL=...)
     vars:
       TOTAL: '{{.TOTAL | default "50000"}}'
-    cmd: (echo "DEFINE products_total = {{.TOTAL}}"; cat products.sql) | docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
+    cmd: (echo "DEFINE products_total = {{.TOTAL}}"; cat products.sql) | docker exec -i {{.CONTAINER}} sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
 
   sqlcl:pdb:data:cart:
     desc: Insert test cart data into TESTPDB (default 10000000 rows, override with TOTAL=...)
     vars:
       TOTAL: '{{.TOTAL | default "10000000"}}'
-    cmd: (echo "DEFINE cart_total = {{.TOTAL}}"; cat cart.sql) | docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
+    cmd: (echo "DEFINE cart_total = {{.TOTAL}}"; cat cart.sql) | docker exec -i {{.CONTAINER}} sqlplus -s testdb/testdb123@localhost:1521/TESTPDB
 
   sqlcl:pdb:drop-cache:
     desc: Drop the CDC checkpoint cache table from TESTPDB (PDB mode, connect via PDB service)
-    cmd: docker exec -i oracledb sqlplus -s rpcn/rpcn123@localhost:1521/TESTPDB <<< "DROP TABLE IF EXISTS RPCN.CDC_CHECKPOINT_CACHE;"
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s rpcn/rpcn123@localhost:1521/TESTPDB <<< "DROP TABLE IF EXISTS RPCN.CDC_CHECKPOINT_CACHE;"
 
   sqlcl:cdb:drop-cache:
     desc: Drop the CDC checkpoint cache table from CDB root (CDB mode, connect via CDB root)
-    cmd: docker exec -i oracledb sqlplus -s / as sysdba <<< "DROP TABLE IF EXISTS C##RPCN.CDC_CHECKPOINT_TESTPDB;"
+    cmd: docker exec -i {{.CONTAINER}} sqlplus -s / as sysdba <<< "DROP TABLE IF EXISTS C##RPCN.CDC_CHECKPOINT_TESTPDB;"
 
   connect:run:
     desc: Run Connect using the benchmark_config.yaml configuration

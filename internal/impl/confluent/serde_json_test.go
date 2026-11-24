@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestResolveJsonSchema(t *testing.T) {
@@ -83,8 +85,7 @@ func TestResolveJsonSchema(t *testing.T) {
 		return nil, nil
 	})
 
-	subj, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
+	subj := servicetest.NewInterpolatedString(t, "root")
 
 	tests := []struct {
 		name        string

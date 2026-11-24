@@ -19,6 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 func TestParseRowOperation(t *testing.T) {
@@ -33,13 +35,6 @@ func TestParseRowOperation(t *testing.T) {
 	}
 }
 
-func mustInterp(t testing.TB, expr string) *service.InterpolatedString {
-	t.Helper()
-	i, err := service.NewInterpolatedString(expr)
-	require.NoError(t, err)
-	return i
-}
-
 func TestRowOpConfigMutating(t *testing.T) {
 	cases := []struct {
 		name string
@@ -47,11 +42,11 @@ func TestRowOpConfigMutating(t *testing.T) {
 		want bool
 	}{
 		{"nil operation", RowOpConfig{}, false},
-		{"static insert", RowOpConfig{Operation: mustInterp(t, "insert")}, false},
-		{"static empty", RowOpConfig{Operation: mustInterp(t, "")}, false},
-		{"static upsert", RowOpConfig{Operation: mustInterp(t, "upsert")}, true},
-		{"static delete", RowOpConfig{Operation: mustInterp(t, "delete")}, true},
-		{"dynamic", RowOpConfig{Operation: mustInterp(t, `${! json("op") }`)}, true},
+		{"static insert", RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "insert")}, false},
+		{"static empty", RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "")}, false},
+		{"static upsert", RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "upsert")}, true},
+		{"static delete", RowOpConfig{Operation: servicetest.NewInterpolatedString(t, "delete")}, true},
+		{"dynamic", RowOpConfig{Operation: servicetest.NewInterpolatedString(t, `${! json("op") }`)}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -127,7 +122,7 @@ func TestSplitByOperation(t *testing.T) {
 	w := &writer{
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation:        mustInterp(t, `${! json("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! json("op") }`),
 			IdentifierFields: []string{"id"},
 		},
 	}
@@ -151,7 +146,7 @@ func TestSplitByOperationUnknownValueErrors(t *testing.T) {
 	w := &writer{
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation:        mustInterp(t, `${! json("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! json("op") }`),
 			IdentifierFields: []string{"id"},
 		},
 	}
@@ -165,7 +160,7 @@ func TestSplitByOperationCollapsesPerKey(t *testing.T) {
 	w := &writer{
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation:        mustInterp(t, `${! json("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! json("op") }`),
 			IdentifierFields: []string{"id"},
 		},
 	}
@@ -203,7 +198,7 @@ func TestSplitByOperationMissingKeyErrors(t *testing.T) {
 	w := &writer{
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation:        mustInterp(t, `${! json("op") }`),
+			Operation:        servicetest.NewInterpolatedString(t, `${! json("op") }`),
 			IdentifierFields: []string{"id"},
 		},
 	}
@@ -217,7 +212,7 @@ func TestSplitByOperationUpsertRequiresIdentifierFields(t *testing.T) {
 	w := &writer{
 		caseSensitive: true,
 		rowOpCfg: RowOpConfig{
-			Operation: mustInterp(t, `${! json("op") }`), // dynamic, so reaches the split
+			Operation: servicetest.NewInterpolatedString(t, `${! json("op") }`), // dynamic, so reaches the split
 		},
 	}
 	batch := service.MessageBatch{structuredMsg(t, map[string]any{"op": "upsert", "id": 1})}

@@ -23,6 +23,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestCOWTemporalDataColumnIntegration proves the no-tz `timestamp` on-disk-format
@@ -67,8 +69,7 @@ func TestCOWTemporalDataColumnIntegration(t *testing.T) {
 	))
 	require.NoError(t, err)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithRowOperation(icebergimpl.RowOpConfig{
 			Operation:        operation,

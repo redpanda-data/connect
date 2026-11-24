@@ -21,6 +21,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestCOWSchemaEvolutionIntegration drives schema evolution through the
@@ -45,8 +47,7 @@ func TestCOWSchemaEvolutionIntegration(t *testing.T) {
 	const ns, tbl = "cow_evo_ns", "cow_evo_test"
 	infra.CreateNamespace(t, ns)
 
-	operation, err := service.NewInterpolatedString(`${! meta("op") }`)
-	require.NoError(t, err)
+	operation := servicetest.NewInterpolatedString(t, `${! meta("op") }`)
 	router := infra.NewRouter(t, ns, tbl,
 		WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{Enabled: true}),
 		WithRowOperation(icebergimpl.RowOpConfig{

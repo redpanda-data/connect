@@ -11,16 +11,23 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	gomysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
+	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -661,6 +668,384 @@ memory: {}
   "set_col": ["b", "c"],
   "json_col": {"foo":-1,"bar":[3,2,1]}
 }`, outBatches[1])
+}
+
+// The binlog decoder gives some DATE and DATETIME values as strings, not as
+// time.Time: every DATETIME before 1970, and zero values. The stream must give
+// the same pre-1970 value as the snapshot, and a zero DATE must not stop it.
+func TestIntegrationMySQLCDCBinlogDateStrings(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`
+    CREATE TABLE old_dates (
+        id INT PRIMARY KEY,
+        d DATE,
+        dt DATETIME,
+        dt6 DATETIME(6)
+    )
+`)
+	db.Exec(`INSERT INTO old_dates VALUES (1, '1965-03-04', '1965-03-04 10:00:00', '1969-12-31 23:59:59.123456')`)
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  checkpoint_cache: memcache
+  tables:
+    - old_dates
+`, dsn)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(`
+label: memcache
+memory: {}
+`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	require.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1
+	}, time.Minute, 100*time.Millisecond)
+
+	db.Exec(`INSERT INTO old_dates VALUES (2, '1965-03-04', '1965-03-04 10:00:00', '1969-12-31 23:59:59.123456')`)
+	// The default SQL mode rejects zero dates. multiStatements keeps both
+	// statements on one connection.
+	db.Exec(`SET SESSION sql_mode = ''; INSERT INTO old_dates VALUES (3, '0000-00-00', '0000-00-00 00:00:00', NULL)`)
+	// ALLOW_INVALID_DATES stores dates that do not exist, such as
+	// 2024-02-30.
+	db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO old_dates VALUES (4, '2024-02-30', '1965-02-30 10:00:00', NULL)`)
+
+	require.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 4
+	}, 30*time.Second, 100*time.Millisecond)
+
+	outBatchMut.Lock()
+	defer outBatchMut.Unlock()
+	require.JSONEq(t, `{"id": 1, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[0])
+	require.JSONEq(t, `{"id": 2, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "dt6": "1969-12-31T23:59:59.123456Z"}`, outBatches[1])
+	require.JSONEq(t, `{"id": 3, "d": null, "dt": null, "dt6": null}`, outBatches[2])
+	require.JSONEq(t, `{"id": 4, "d": null, "dt": null, "dt6": null}`, outBatches[3])
+}
+
+// The parseBinlogTime comment says when go-mysql gives a string for a DATE or
+// DATETIME value. This test reads the binlog with go-mysql directly, so it
+// fails if that rule is wrong or if a go-mysql upgrade changes it. It then
+// gives each raw value to mapMessageColumn, as the input does.
+func TestIntegrationMySQLBinlogDateDecoding(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`CREATE TABLE raw_dates (id INT PRIMARY KEY, dt DATETIME, d DATE)`)
+
+	tests := []struct {
+		name       string
+		column     string
+		value      string
+		wantString bool
+		want       any
+	}{
+		{
+			name:       "earliest datetime",
+			column:     "dt",
+			value:      "1000-01-01 00:00:00",
+			wantString: true,
+			want:       time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "datetime one second before 1970",
+			column:     "dt",
+			value:      "1969-12-31 23:59:59",
+			wantString: true,
+			want:       time.Date(1969, 12, 31, 23, 59, 59, 0, time.UTC),
+		},
+		{
+			name:       "datetime at 1970",
+			column:     "dt",
+			value:      "1970-01-01 00:00:00",
+			wantString: false,
+			want:       time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "datetime after 1970",
+			column:     "dt",
+			value:      "2024-06-01 12:00:00",
+			wantString: false,
+			want:       time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "zero datetime",
+			column:     "dt",
+			value:      "0000-00-00 00:00:00",
+			wantString: true,
+			want:       nil,
+		},
+		{
+			name:       "partial zero datetime",
+			column:     "dt",
+			value:      "2024-00-15 10:00:00",
+			wantString: true,
+			want:       nil,
+		},
+		{
+			name:       "invalid datetime after 1970",
+			column:     "dt",
+			value:      "2024-02-30 10:00:00",
+			wantString: false,
+			want:       time.Date(2024, 3, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "date before 1970",
+			column:     "d",
+			value:      "1965-03-04",
+			wantString: true,
+			want:       time.Date(1965, 3, 4, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "date after 1970",
+			column:     "d",
+			value:      "2024-06-01",
+			wantString: true,
+			want:       time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:       "zero date",
+			column:     "d",
+			value:      "0000-00-00",
+			wantString: true,
+			want:       nil,
+		},
+	}
+	columns := map[string]struct {
+		index int
+		col   gomysqlschema.TableColumn
+	}{
+		"dt": {index: 1, col: gomysqlschema.TableColumn{Name: "dt", Type: gomysqlschema.TYPE_DATETIME}},
+		"d":  {index: 2, col: gomysqlschema.TableColumn{Name: "d", Type: gomysqlschema.TYPE_DATE}},
+	}
+
+	var file, doDB, ignoreDB, gtidSet string
+	var pos uint32
+	require.NoError(t, db.QueryRow("SHOW MASTER STATUS").Scan(&file, &pos, &doDB, &ignoreDB, &gtidSet))
+
+	cfg, err := mysql.ParseDSN(dsn)
+	require.NoError(t, err)
+	host, portStr, err := net.SplitHostPort(cfg.Addr)
+	require.NoError(t, err)
+	port, err := strconv.ParseUint(portStr, 10, 16)
+	require.NoError(t, err)
+	syncer := replication.NewBinlogSyncer(replication.BinlogSyncerConfig{
+		ServerID:  100,
+		Flavor:    gomysql.MySQLFlavor,
+		Host:      host,
+		Port:      uint16(port),
+		User:      cfg.User,
+		Password:  cfg.Passwd,
+		ParseTime: true, // The same setting as the mysql_cdc input.
+	})
+	t.Cleanup(syncer.Close)
+	streamer, err := syncer.StartSync(gomysql.Position{Name: file, Pos: pos})
+	require.NoError(t, err)
+
+	// The default SQL mode rejects zero and invalid dates. multiStatements
+	// keeps both statements on one connection.
+	var values []string
+	for i, tt := range tests {
+		if tt.column == "dt" {
+			values = append(values, fmt.Sprintf("(%d, '%s', NULL)", i, tt.value))
+		} else {
+			values = append(values, fmt.Sprintf("(%d, NULL, '%s')", i, tt.value))
+		}
+	}
+	db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO raw_dates VALUES ` + strings.Join(values, ", "))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	var rows [][]any
+	for len(rows) < len(tests) {
+		ev, err := streamer.GetEvent(ctx)
+		require.NoError(t, err)
+		if re, ok := ev.Event.(*replication.RowsEvent); ok && string(re.Table.Table) == "raw_dates" {
+			rows = append(rows, re.Rows...)
+		}
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := columns[tt.column]
+			raw := rows[i][c.index]
+			_, isString := raw.(string)
+			assert.Equal(t, tt.wantString, isString, "go-mysql gave %T: %v", raw, raw)
+
+			got, err := mapMessageColumn(raw, c.col)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// A zero, partial-zero or invalid date in a primary key must not stop the
+// snapshot or skip a row. The next batch starts after the last key that it
+// read, and that key must be the one in the table, not the date that the
+// snapshot gives for it. A moved cursor for 2024-02-30 would skip 2024-03-01. A
+// composite key with DATETIME(6) values that differ only in the fraction must
+// page without a gap or a repeat. The snapshot gives the same values as the
+// stream for these dates.
+func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
+	for _, version := range []string{"8.0", "8.4"} {
+		t.Run(version, func(t *testing.T) {
+			dsn, db := setupTestWithMySQLVersion(t, version)
+			db.Exec(`CREATE TABLE zero_dates (id INT PRIMARY KEY, d DATE, dt DATETIME, ts TIMESTAMP NULL)`)
+			db.Exec(`CREATE TABLE zero_date_keys (d DATE PRIMARY KEY)`)
+			db.Exec(`CREATE TABLE fraction_keys (tenant INT, created_at DATETIME(6), PRIMARY KEY (tenant, created_at))`)
+			// The default SQL mode rejects zero and invalid dates.
+			// multiStatements keeps both statements on one connection.
+			// ts is NULL for valid dates, because the stream gives a
+			// TIMESTAMP in the local time zone of the process, which this
+			// test does not set.
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates VALUES
+        (1, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00'),
+        (2, '2024-00-15', '2024-00-15 10:00:00', '2024-00-15 10:00:00'),
+        (3, '2024-12-00', '2024-12-00 10:00:00', '2024-12-00 10:00:00'),
+        (4, '0001-01-01', '0001-01-01 00:00:00', NULL),
+        (5, '2024-02-30', '2024-02-30 10:00:00', NULL),
+        (6, '1965-02-30', '1965-02-30 10:00:00', NULL),
+        (7, '1965-03-04', '1965-03-04 10:00:00', NULL)`)
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_date_keys VALUES ('0000-00-00'), ('2024-00-15'), ('2024-02-30'), ('2024-03-01'), ('2024-06-01')`)
+			db.Exec(`INSERT INTO fraction_keys VALUES
+        (1, '2024-06-01 12:00:00.000001'),
+        (1, '2024-06-01 12:00:00.000002'),
+        (1, '2024-06-01 12:00:00.000010'),
+        (2, '2024-06-01 12:00:00.000001')`)
+
+			streamOutBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamOutBuilder.AddCacheYAML(`
+label: memcache
+memory: {}
+`))
+			require.NoError(t, streamOutBuilder.AddInputYAML(fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 1
+  checkpoint_cache: memcache
+  tables:
+    - zero_dates
+    - zero_date_keys
+    - fraction_keys
+`, dsn)))
+
+			var outBatches []string
+			var outBatchMut sync.Mutex
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					require.NoError(t, err)
+					outBatchMut.Lock()
+					outBatches = append(outBatches, string(msgBytes))
+					outBatchMut.Unlock()
+				}
+				return nil
+			}))
+
+			streamOut, err := streamOutBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(streamOut.Resources())
+
+			go func() {
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			t.Cleanup(func() {
+				require.NoError(t, streamOut.StopWithin(10*time.Second))
+			})
+
+			snapshot := []string{
+				`{"id": 1, "d": null, "dt": null, "ts": null}`,
+				`{"id": 2, "d": null, "dt": null, "ts": null}`,
+				`{"id": 3, "d": null, "dt": null, "ts": null}`,
+				`{"id": 4, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": null}`,
+				`{"id": 5, "d": null, "dt": "2024-03-01T10:00:00Z", "ts": null}`,
+				`{"id": 6, "d": null, "dt": null, "ts": null}`,
+				`{"id": 7, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
+				`{"d": null}`,
+				`{"d": null}`,
+				`{"d": null}`,
+				`{"d": "2024-03-01T00:00:00Z"}`,
+				`{"d": "2024-06-01T00:00:00Z"}`,
+				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000001Z"}`,
+				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.000002Z"}`,
+				`{"tenant": 1, "created_at": "2024-06-01T12:00:00.00001Z"}`,
+				`{"tenant": 2, "created_at": "2024-06-01T12:00:00.000001Z"}`,
+			}
+			// checkOutput checks that the messages so far match want, in any
+			// order. It fails fast on a repeated row, because the snapshot
+			// then gives more messages than want.
+			checkOutput := func(c *assert.CollectT, want []string) {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				require.LessOrEqual(c, len(outBatches), len(want))
+				require.Len(c, outBatches, len(want))
+				var got, wantNorm []any
+				for i := range want {
+					var g, w any
+					require.NoError(c, json.Unmarshal([]byte(outBatches[i]), &g))
+					require.NoError(c, json.Unmarshal([]byte(want[i]), &w))
+					got = append(got, g)
+					wantNorm = append(wantNorm, w)
+				}
+				assert.ElementsMatch(c, wantNorm, got)
+			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				checkOutput(c, snapshot)
+			}, 30*time.Second, 100*time.Millisecond)
+
+			// The input streams only after the snapshot ends. So rows that
+			// are inserted now arrive only if the snapshot ended. The copied
+			// rows have the same stored values, so the stream must give the
+			// same values as the snapshot.
+			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates SELECT id + 10, d, dt, ts FROM zero_dates`)
+			streamed := []string{
+				`{"id": 11, "d": null, "dt": null, "ts": null}`,
+				`{"id": 12, "d": null, "dt": null, "ts": null}`,
+				`{"id": 13, "d": null, "dt": null, "ts": null}`,
+				`{"id": 14, "d": "0001-01-01T00:00:00Z", "dt": "0001-01-01T00:00:00Z", "ts": null}`,
+				`{"id": 15, "d": null, "dt": "2024-03-01T10:00:00Z", "ts": null}`,
+				`{"id": 16, "d": null, "dt": null, "ts": null}`,
+				`{"id": 17, "d": "1965-03-04T00:00:00Z", "dt": "1965-03-04T10:00:00Z", "ts": null}`,
+			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				checkOutput(c, append(slices.Clone(snapshot), streamed...))
+			}, 30*time.Second, 100*time.Millisecond)
+		})
+	}
 }
 
 func TestIntegrationMySQLSnapshotConsistency(t *testing.T) {

@@ -29,6 +29,7 @@ import (
 
 	icebergimpl "github.com/redpanda-data/connect/v4/internal/impl/iceberg"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 var (
@@ -62,10 +63,8 @@ func catalogConfig() catalogx.Config {
 
 func newRouter(t *testing.T, namespace, table string, schemaEvo bool) *icebergimpl.Router {
 	t.Helper()
-	namespaceStr, err := service.NewInterpolatedString(namespace)
-	require.NoError(t, err)
-	tableStr, err := service.NewInterpolatedString(table)
-	require.NoError(t, err)
+	namespaceStr := servicetest.NewInterpolatedString(t, namespace)
+	tableStr := servicetest.NewInterpolatedString(t, table)
 
 	logger := service.MockResources().Logger()
 	commitCfg := icebergimpl.CommitConfig{
@@ -75,7 +74,7 @@ func newRouter(t *testing.T, namespace, table string, schemaEvo bool) *icebergim
 	}
 	schemaEvoCfg := icebergimpl.SchemaEvolutionConfig{
 		Enabled:       schemaEvo,
-		TableLocation: fmt.Sprintf("s3://%s/", *glueBucket),
+		TableLocation: servicetest.NewInterpolatedString(t, fmt.Sprintf("s3://%s/", *glueBucket)),
 	}
 	router := icebergimpl.NewRouter(catalogConfig(), namespaceStr, tableStr, true, schemaEvoCfg, commitCfg, icebergimpl.RowOpConfig{}, nil, logger)
 	t.Cleanup(func() { router.Close() })

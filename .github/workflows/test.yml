@@ -100,10 +100,10 @@ jobs:
             exit 1
           fi
           git checkout --quiet HEAD^1
+      # Pull requests only restore, so this job restores the main cache for CGO_ENABLED=1. Both test and docs save
+      # to that key, so it holds the build of whichever job finished first.
       - name: Install Go
-        uses: actions/setup-go@v6.5.0
-        with:
-          go-version-file: 'go.mod'
+        uses: $/.github/actions/setup-go
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
       - name: Generate the reference docs
