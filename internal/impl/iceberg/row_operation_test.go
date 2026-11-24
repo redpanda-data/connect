@@ -64,7 +64,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 ` + snippet
 	conf, err := icebergOutputConfig().ParseYAML(yaml, nil)
 	require.NoError(t, err, "config should pass spec validation")
@@ -551,7 +551,7 @@ iceberg:
   table: t
   storage:
     aws_s3:
-      bucket: b
+      region: us-east-1
 ` + extra
 	}
 
