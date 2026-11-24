@@ -298,15 +298,18 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 		switch {
 		// Cannot be a chunk bound, so the table cannot be paged at all.
 		case typeName == "bytea":
-		// Page fine, but decode as structs over the stream (pgtype.Interval,
-		// pgtype.Bits) and as text over the chunk query, so the two sides'
-		// window keys never match and nothing is ever deduplicated. bit
-		// shares varbit's decoder, so it shares the mismatch.
+		// Page fine, but decode as structs over the stream (pgtype.Bits) and
+		// as text over the chunk query, so the two sides' window keys never
+		// match and nothing is ever deduplicated. bit shares varbit's decoder,
+		// so it shares the mismatch. interval now decodes as text on both
+		// sides, but no test proves its keys match yet, so it stays rejected.
 		case typeName == "interval", typeName == "varbit", typeName == "bit":
-		// Same mismatch. Structural on typtype because ranges are
-		// user-definable, so a name list would miss custom ones. Composite
-		// types ('c') and arrays are likely affected too but unverified, so
-		// they stay accepted rather than assumed broken.
+		// Ranges had the same mismatch. They now decode as text on both sides
+		// too, but no test proves their keys match yet, so they stay rejected.
+		// Structural on typtype because ranges are user-definable, so a name
+		// list would miss custom ones. Composite types ('c') and arrays are
+		// likely affected too but unverified, so they stay accepted rather than
+		// assumed broken.
 		case typType == "r", typType == "m":
 
 		default:
