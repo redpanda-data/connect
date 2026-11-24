@@ -16,16 +16,21 @@ import (
 
 const (
 	// errCodeInsufficientPrivileges is ORA-01031 (insufficient privileges).
+	// See https://docs.oracle.com/en/error-help/db/ora-01031/
 	errCodeInsufficientPrivileges = 1031
 	// errCodeMissingPrivilege is ORA-41900 (missing <privilege> privilege on
-	// <object>). Oracle 23ai returns it in place of ORA-01031 for a missing
-	// object privilege.
+	// <object>). See https://docs.oracle.com/en/error-help/db/ora-41900/
+	//
+	// The Oracle docs list it for 26ai only, and do not say that it replaces
+	// ORA-01031. Oracle Free 23ai, the test container, returns it for a
+	// missing object privilege (INSERT, FLASHBACK).
 	errCodeMissingPrivilege = 41900
 )
 
 // IsMissingPrivilege reports whether err is an Oracle error for a missing
-// privilege, and returns that error. Oracle 23ai returns ORA-41900 and older
-// versions return ORA-01031, so a check for one code only misses the other.
+// privilege, and returns that error. Newer versions return ORA-41900 and
+// older versions return ORA-01031, so a check for one code only misses the
+// other.
 func IsMissingPrivilege(err error) (*goora.OracleError, bool) {
 	var oraErr *goora.OracleError
 	if !errors.As(err, &oraErr) {

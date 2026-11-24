@@ -31,3 +31,14 @@ func NewCheckpointCache(ctx context.Context, connStr, table, key string) (servic
 	res := service.MockResources()
 	return newCheckpointCache(ctx, connStr, table, key, res.Metrics(), res.Logger())
 }
+
+// CreateUpsertStoredProc exposes createUpsertStoredProc to the integration
+// tests in package oracledb_test. It creates the procedure that older versions
+// wrote checkpoints with.
+func CreateUpsertStoredProc(ctx context.Context, db *sql.DB, table string) error {
+	tbl, err := validateCacheTableName(table)
+	if err != nil {
+		return err
+	}
+	return createUpsertStoredProc(ctx, db, tbl)
+}

@@ -17,6 +17,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -237,6 +238,61 @@ type TestDB struct {
 // a test that uses it can resume from the checkpoint of an earlier test.
 func (db *TestDB) CheckpointTable() string {
 	return db.Schema + ".CDC_CHECKPOINT_CACHE"
+}
+
+// CreateUserWithGrants creates user in CDB$ROOT with CREATE SESSION, runs
+// each grant as the admin user, and returns connStr with the credentials of
+// user. It drops a user with the same name first, if a previous run did not
+// remove it, and drops user when the test ends.
+//
+// Oracle cannot drop a connected user (ORA-01940). Close the connections of
+// user in a t.Cleanup that is registered after this call, so that it runs
+// first.
+func (db *TestDB) CreateUserWithGrants(connStr, user string, grants ...string) string {
+	t := db.T
+	t.Helper()
+	const password = "testdb123"
+
+	// Local users in CDB$ROOT need _ORACLE_SCRIPT (to avoid ORA-65096). It is
+	// a session setting, so each step runs on one connection.
+	withConn := func(ctx context.Context, fn func(*sql.Conn) error) error {
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`); err != nil {
+			return err
+		}
+		return fn(conn)
+	}
+	drop := func(ctx context.Context) error {
+		return withConn(ctx, func(conn *sql.Conn) error { return dropUser(ctx, conn.ExecContext, user) })
+	}
+
+	require.NoError(t, drop(t.Context()))
+	require.NoError(t, withConn(t.Context(), func(conn *sql.Conn) error {
+		for _, q := range append([]string{
+			"CREATE USER " + user + " IDENTIFIED BY " + password,
+			"GRANT CREATE SESSION TO " + user,
+		}, grants...) {
+			if _, err := conn.ExecContext(t.Context(), q); err != nil {
+				return fmt.Errorf("%s: %w", q, err)
+			}
+		}
+		return nil
+	}))
+	t.Cleanup(func() {
+		// t.Context() is cancelled before cleanup runs.
+		if err := drop(context.Background()); err != nil {
+			t.Errorf("dropping user %s: %v", user, err)
+		}
+	})
+
+	u, err := url.Parse(connStr)
+	require.NoError(t, err)
+	u.User = url.UserPassword(user, password)
+	return u.String()
 }
 
 // MustExec executes a SQL query and fails the test if an error occurs.

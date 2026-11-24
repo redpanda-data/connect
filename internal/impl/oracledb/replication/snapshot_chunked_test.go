@@ -9,13 +9,10 @@
 package replication_test
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -408,50 +405,10 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 // logon trigger for the new user.
 func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user string, table replication.UserTable, extra ...string) string {
 	t.Helper()
-	const password = "testdb123"
-
-	// Local users in CDB$ROOT need _ORACLE_SCRIPT, a session setting, so use one connection.
-	exec := func(ctx context.Context, queries ...string) error {
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-		if _, err := conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`); err != nil {
-			return err
-		}
-		for _, q := range queries {
-			if _, err := conn.ExecContext(ctx, q); err != nil {
-				return fmt.Errorf("%s: %w", q, err)
-			}
-		}
-		return nil
-	}
-	dropUser := func(ctx context.Context) error {
-		err := exec(ctx, "DROP USER "+user+" CASCADE")
-		if err != nil && strings.Contains(err.Error(), "ORA-01918") {
-			return nil
-		}
-		return err
-	}
-
-	require.NoError(t, dropUser(t.Context()))
-	require.NoError(t, exec(t.Context(), append([]string{
-		"CREATE USER " + user + " IDENTIFIED BY " + password,
-		"GRANT CREATE SESSION, SELECT ANY DICTIONARY TO " + user,
+	return db.CreateUserWithGrants(connStr, user, append([]string{
+		"GRANT SELECT ANY DICTIONARY TO " + user,
 		"GRANT SELECT ON " + table.FullName() + " TO " + user,
-	}, extra...)...))
-	t.Cleanup(func() {
-		// t.Context() is cancelled before cleanup runs.
-		if err := dropUser(context.Background()); err != nil {
-			t.Errorf("dropping user %s: %v", user, err)
-		}
-	})
-
-	u, err := url.Parse(connStr)
-	require.NoError(t, err)
-	u.User = url.UserPassword(user, password)
-	return u.String()
+	}, extra...)...)
 }
 
 func TestIntegrationSnapshotChunkedCDB(t *testing.T) {

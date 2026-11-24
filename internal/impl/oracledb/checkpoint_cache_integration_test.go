@@ -13,7 +13,6 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +23,7 @@ import (
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb"
 	oracledbtest "github.com/redpanda-data/connect/v4/internal/impl/oracledb/oracledbtest"
@@ -145,73 +145,31 @@ END;`)
 	assert.Greaterf(t, finalSCN, initialSCN, "expected final SCN (%d) to have advanced beyond initial SCN (%d)", finalSCN, initialSCN)
 }
 
-// TestIntegrationCheckpointCacheTablesInSameSchema makes sure that each pipeline writes its checkpoint to its own
-// checkpoint_cache_table_name when two pipelines use two tables in the same schema.
+// TestIntegrationCheckpointCacheTablesInSameSchema makes sure that two caches
+// with two tables in one schema each write to their own table. Older versions
+// wrote through one procedure per schema, whose body named the table of the
+// first cache. The second cache wrote to that table and read from its own, so
+// after a restart it found no checkpoint. Multitenant mode always has this
+// layout: one table per PDB under C##RPCN.
 func TestIntegrationCheckpointCacheTablesInSameSchema(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".cpfoo",
-		"CREATE TABLE "+db.Schema+".cpfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-
 	tableA := db.Schema + ".CDC_CHECKPOINT_A"
 	tableB := db.Schema + ".CDC_CHECKPOINT_B"
 
-	queryKeyCount := func(table, key string) (int, error) {
-		var n int
-		err := db.QueryRowContext(t.Context(), fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE cache_key = :1`, table), key).Scan(&n)
-		return n, err
-	}
-	countKey := func(table, key string) int {
-		n, err := queryKeyCount(table, key)
-		require.NoError(t, err)
-		return n
-	}
+	t.Log("Given two checkpoint caches with two tables in one schema")
+	cacheA := newCheckpointCache(t, connStr, tableA, "pipeline_a")
+	cacheB := newCheckpointCache(t, connStr, tableB, "pipeline_b")
 
-	// runPipeline starts a pipeline, inserts rows until a checkpoint for the key is in one of pollTables, then stops
-	// the pipeline. Pipeline B also polls the table of pipeline A: with the bug, its checkpoint lands there, and the
-	// test then fails on the assertion instead of the timeout.
-	runPipeline := func(table, key string, pollTables ...string) {
-		cfg := `
-oracledb_cdc:
-  connection_string: ` + connStr + `
-  stream_snapshot: false
-  checkpoint_cache_table_name: ` + table + `
-  checkpoint_cache_key: ` + key + `
-  logminer:
-    scn_window_size: 20000
-    min_scn_window_size: 0
-    backoff_interval: 1s
-  include: ["` + db.Schema + `.CPFOO"]`
+	t.Log("When each cache writes its checkpoint")
+	require.NoError(t, cacheA.Set(t.Context(), "pipeline_a", scnBytes(1), nil))
+	require.NoError(t, cacheB.Set(t.Context(), "pipeline_b", scnBytes(2), nil))
 
-		var batch oracledbtest.MsgBatch
-		stream := oracledbtest.StartPipeline(t, cfg, batch.Consumer())
-
-		require.Eventually(t, func() bool {
-			// No require in here: Eventually runs the condition on another goroutine.
-			_, err := db.ExecContext(t.Context(), "INSERT INTO "+db.Schema+".cpfoo (id) VALUES (DEFAULT)")
-			assert.NoError(t, err)
-			// The pipeline creates its table at start up, so ignore query errors until the table exists.
-			for _, pt := range pollTables {
-				if n, err := queryKeyCount(pt, key); err == nil && n > 0 {
-					return true
-				}
-			}
-			return false
-		}, time.Minute, time.Second, "expected a checkpoint for key '%s'", key)
-
-		require.NoError(t, stream.StopWithin(10*time.Second))
-	}
-
-	t.Log("Running pipeline A...")
-	runPipeline(tableA, "pipeline_a", tableA)
-	assert.Equal(t, 1, countKey(tableA, "pipeline_a"), "expected checkpoint of pipeline A in its own table")
-
-	t.Log("Running pipeline B...")
-	runPipeline(tableB, "pipeline_b", tableA, tableB)
-	assert.Equal(t, 1, countKey(tableB, "pipeline_b"), "expected checkpoint of pipeline B in its own table")
-	assert.Equal(t, 0, countKey(tableA, "pipeline_b"), "expected no checkpoint of pipeline B in the table of pipeline A")
+	t.Log("Then each checkpoint is in the table of its own cache only")
+	assert.Equal(t, map[string][]byte{"pipeline_a": scnBytes(1)}, cacheRows(t, db, tableA))
+	assert.Equal(t, map[string][]byte{"pipeline_b": scnBytes(2)}, cacheRows(t, db, tableB))
 }
 
 // TestIntegrationCheckpointCacheProcedureFallback makes sure that a user without
@@ -225,45 +183,23 @@ func TestIntegrationCheckpointCacheProcedureFallback(t *testing.T) {
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	table := db.Schema + ".CDC_CHECKPOINT_FALLBACK"
-	proc := db.Schema + ".CDC_CHECKPOINT_CACHE_UPDATE"
-	db.MustExecContext(t.Context(), `CREATE TABLE `+table+` (cache_key VARCHAR2(128) NOT NULL PRIMARY KEY, cache_val RAW(8))`)
-	// The procedure that older versions created.
-	db.MustExecContext(t.Context(), `
-		CREATE PROCEDURE `+proc+` (
-			p_key IN VARCHAR2,
-			p_value IN RAW
-		)
-		AS
-			v_count NUMBER;
-		BEGIN
-			SELECT COUNT(*) INTO v_count FROM `+table+` WHERE cache_key = p_key;
-
-			IF v_count > 0 THEN
-				UPDATE `+table+` SET cache_val = p_value WHERE cache_key = p_key;
-			ELSE
-				INSERT INTO `+table+` (cache_key, cache_val) VALUES (p_key, p_value);
-			END IF;
-
-			COMMIT;
-		END;`)
-
 	user := db.Schema + "_F"
-	userConnStr := createUserWithGrants(t, db, connStr, user,
+
+	t.Log("Given a checkpoint table and the procedure that older versions created")
+	db.MustExecContext(t.Context(), `CREATE TABLE `+table+` (cache_key VARCHAR2(128) NOT NULL PRIMARY KEY, cache_val RAW(8))`)
+	require.NoError(t, oracledb.CreateUpsertStoredProc(t.Context(), db.DB, table))
+
+	t.Log("And a user with the grants that older versions needed, so no INSERT on the table")
+	userConnStr := db.CreateUserWithGrants(connStr, user,
 		"GRANT SELECT, UPDATE ON "+table+" TO "+user,
-		"GRANT EXECUTE ON "+proc+" TO "+user)
+		"GRANT EXECUTE ON "+db.Schema+".CDC_CHECKPOINT_CACHE_UPDATE TO "+user)
 
-	cache, err := oracledb.NewCheckpointCache(t.Context(), userConnStr, table, "fallback")
-	require.NoError(t, err)
-	// Registered after the drop of the user, so it runs first.
-	t.Cleanup(func() { assert.NoError(t, cache.Close(context.Background())) })
+	t.Log("When the user writes a checkpoint")
+	cache := newCheckpointCache(t, userConnStr, table, "fallback")
+	require.NoError(t, cache.Set(t.Context(), "fallback", scnBytes(12345), nil))
 
-	want := make([]byte, 8)
-	binary.LittleEndian.PutUint64(want, 12345)
-	require.NoError(t, cache.Set(t.Context(), "fallback", want, nil))
-
-	var got []byte
-	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT cache_val FROM "+table+" WHERE cache_key = :1", "fallback").Scan(&got))
-	assert.Equal(t, want, got)
+	t.Log("Then the procedure writes it to the table")
+	assert.Equal(t, map[string][]byte{"fallback": scnBytes(12345)}, cacheRows(t, db, table))
 }
 
 // TestIntegrationProbeCheckpointMerge makes sure that the probe reports a user
@@ -284,7 +220,7 @@ func TestIntegrationProbeCheckpointMerge(t *testing.T) {
 		wantDenied bool
 	}{
 		{
-			name:       "select and update",
+			name:       "no insert",
 			grants:     "SELECT, UPDATE",
 			wantDenied: true,
 		},
@@ -296,68 +232,62 @@ func TestIntegrationProbeCheckpointMerge(t *testing.T) {
 	}
 	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("Given a user with %s on the checkpoint table", tc.grants)
 			user := fmt.Sprintf("%s_P%d", db.Schema, i)
-			userConnStr := createUserWithGrants(t, db, connStr, user, "GRANT "+tc.grants+" ON "+table+" TO "+user)
+			userConnStr := db.CreateUserWithGrants(connStr, user, "GRANT "+tc.grants+" ON "+table+" TO "+user)
 			userDB, err := sql.Open("oracle", userConnStr)
 			require.NoError(t, err)
-			// Registered after the drop of the user, so it runs first: Oracle
-			// cannot drop a user that is connected (ORA-01940).
+			// Registered after the user, so it runs before the drop of the user.
 			t.Cleanup(func() { assert.NoError(t, userDB.Close()) })
 
+			t.Log("When the probe runs as that user")
 			err = oracledb.ProbeCheckpointMerge(t.Context(), userDB, table)
-			if tc.wantDenied {
-				require.Error(t, err)
-				_, ok := replication.IsMissingPrivilege(err)
-				assert.Truef(t, ok, "expected a missing privilege error, got: %v", err)
-			} else {
-				require.NoError(t, err)
-			}
 
-			var rows int
-			require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&rows))
-			assert.Zero(t, rows, "expected the probe to roll back its row")
+			t.Log("Then it reports a missing privilege only without INSERT, and leaves no row")
+			if tc.wantDenied {
+				_, missing := replication.IsMissingPrivilege(err)
+				assert.Truef(t, missing, "expected a missing privilege error, got: %v", err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Empty(t, cacheRows(t, db, table))
 		})
 	}
 }
 
-// createUserWithGrants creates a user with CREATE SESSION and the grants, and
-// returns a connection string for it. It drops the user when the test ends, so
-// close the connections of the user in a cleanup that is registered later.
-func createUserWithGrants(t *testing.T, db *oracledbtest.TestDB, connStr, user string, grants ...string) string {
+// newCheckpointCache returns a checkpoint cache for table and closes it when
+// the test ends. Call it after CreateUserWithGrants, so that the cache closes
+// its connections before the user is dropped.
+func newCheckpointCache(t *testing.T, connStr, table, key string) service.Cache {
 	t.Helper()
-	ctx := t.Context()
+	cache, err := oracledb.NewCheckpointCache(t.Context(), connStr, table, key)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, cache.Close(context.Background())) })
+	return cache
+}
 
-	conn, err := db.Conn(ctx)
+// cacheRows returns the rows of the checkpoint table, by cache key.
+func cacheRows(t *testing.T, db *oracledbtest.TestDB, table string) map[string][]byte {
+	t.Helper()
+	rows, err := db.QueryContext(t.Context(), "SELECT cache_key, cache_val FROM "+table)
 	require.NoError(t, err)
-	defer conn.Close()
-	// Local users in CDB$ROOT need _ORACLE_SCRIPT (to avoid ORA-65096). It is a
-	// session setting.
-	_, err = conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`)
-	require.NoError(t, err)
-	for _, q := range append([]string{"CREATE USER " + user + " IDENTIFIED BY probe123", "GRANT CREATE SESSION TO " + user}, grants...) {
-		_, err = conn.ExecContext(ctx, q)
-		require.NoErrorf(t, err, "creating user %s: %s", user, q)
+	defer rows.Close()
+	got := map[string][]byte{}
+	for rows.Next() {
+		var (
+			key string
+			val []byte
+		)
+		require.NoError(t, rows.Scan(&key, &val))
+		got[key] = val
 	}
-	t.Cleanup(func() {
-		// t.Context() is cancelled before cleanup runs.
-		ctx := context.Background()
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			t.Errorf("dropping user %s: %v", user, err)
-			return
-		}
-		defer conn.Close()
-		if _, err := conn.ExecContext(ctx, `ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE`); err != nil {
-			t.Errorf("dropping user %s: %v", user, err)
-			return
-		}
-		if _, err := conn.ExecContext(ctx, "DROP USER "+user+" CASCADE"); err != nil {
-			t.Errorf("dropping user %s: %v", user, err)
-		}
-	})
+	require.NoError(t, rows.Err())
+	return got
+}
 
-	u, err := url.Parse(connStr)
-	require.NoError(t, err)
-	u.User = url.UserPassword(user, "probe123")
-	return u.String()
+// scnBytes returns scn encoded as the checkpoint cache stores it.
+func scnBytes(scn uint64) []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, scn)
+	return b
 }
