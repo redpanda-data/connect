@@ -151,8 +151,7 @@ func TestWarnIfHostClockAhead(t *testing.T) {
 			)
 			// An empty substr records every log line.
 			d := &dynamoDBCDCInput{
-				conf: dynamoDBCDCConfig{snapshot: snapshotConfig{dedupeClockSkewMargin: time.Minute}},
-				log:  service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "", mu: &mu, levels: &levels})),
+				log: service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "", mu: &mu, levels: &levels})),
 			}
 			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset, noDate: tt.noDate})
 			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
@@ -695,34 +694,6 @@ tables: [mytable]
 	cfg, err = dynamoCDCInputConfigFromParsed(parsed)
 	require.NoError(t, err)
 	require.Empty(t, cfg.checkpointNamespace, "namespace must default to empty")
-}
-
-func TestSnapshotDedupeClockSkewMarginConfigParsing(t *testing.T) {
-	tests := []struct {
-		name string
-		yaml string
-		want time.Duration
-	}{
-		{
-			name: "default",
-			yaml: "tables: [mytable]",
-			want: time.Minute,
-		},
-		{
-			name: "set",
-			yaml: "tables: [mytable]\nsnapshot_deduplicate_clock_skew_margin: 5m",
-			want: 5 * time.Minute,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			parsed, err := dynamoDBCDCInputConfig().ParseYAML(tt.yaml, service.NewEnvironment())
-			require.NoError(t, err)
-			cfg, err := dynamoCDCInputConfigFromParsed(parsed)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, cfg.snapshot.dedupeClockSkewMargin)
-		})
-	}
 }
 
 func TestCheckpointNamespaceValidation_RejectsDelimiter(t *testing.T) {
