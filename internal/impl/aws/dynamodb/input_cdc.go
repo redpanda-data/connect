@@ -330,7 +330,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items and skips CDC events for those keys that are older than the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. The host clock must be within 1 minute of the AWS clock. Writes made in the minute before the snapshot start can appear as duplicates.").Version("4.82.0").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items and skips CDC events for those keys that are older than the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. The host clock must be within 1 minute of the AWS clock, or the input can skip CDC events for writes made just after the snapshot start, and those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering the keys of scanned items.").
 				Default(true).
 				Advanced(),
