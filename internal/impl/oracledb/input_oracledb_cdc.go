@@ -1068,17 +1068,6 @@ func (o *oracleDBCDCInput) closeCheckpointCacheInBackground(c service.Cache) {
 	})
 }
 
-// socketTimeoutHint returns advice to append to a logged err when it is a
-// socket timeout. The driver reports only "i/o timeout", which does not point
-// at socket_timeout, and a query that is slow rather than stalled fails the
-// same way on every retry until the limit is raised.
-func socketTimeoutHint(err error) string {
-	if !logminer.IsSocketTimeout(err) {
-		return ""
-	}
-	return fmt.Sprintf(" (the database did not reply within %[1]s: if it was slow rather than unresponsive, for example a snapshot query on a large table or a LogMiner window with few matching rows, raise %[1]s)", ociFieldSocketTimeout)
-}
-
 func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 	var (
 		err error
@@ -1195,4 +1184,11 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func socketTimeoutHint(err error) string {
+	if !logminer.IsSocketTimeout(err) {
+		return ""
+	}
+	return fmt.Sprintf(" (the database did not reply within %[1]s: if it was slow rather than unresponsive, consider raising %[1]s)", ociFieldSocketTimeout)
 }
