@@ -15,10 +15,15 @@
 package s3
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestParseObjectPathsSNSEnvelope(t *testing.T) {
@@ -90,4 +95,35 @@ func TestParseObjectPathsSNSEnvelope(t *testing.T) {
 			assert.Equal(t, test.expectTestEvent, isS3TestEvent(gObj))
 		})
 	}
+}
+
+type failingScanner struct {
+	err    error
+	closed bool
+}
+
+func (s *failingScanner) NextBatch(context.Context) (service.MessageBatch, service.AckFunc, error) {
+	return nil, nil, s.err
+}
+
+func (s *failingScanner) Close(context.Context) error {
+	s.closed = true
+	return nil
+}
+
+func TestReadBatchClosesScannerOnError(t *testing.T) {
+	scanErr := errors.New("corrupt object")
+	scanner := &failingScanner{err: scanErr}
+	reader := &awsS3Reader{
+		s3:  new(s3.Client),
+		log: service.MockResources().Logger(),
+		object: &s3PendingObject{
+			target:  &s3ObjectTarget{key: "foo.txt"},
+			scanner: scanner,
+		},
+	}
+
+	_, _, err := reader.ReadBatch(t.Context())
+	require.ErrorIs(t, err, scanErr)
+	assert.True(t, scanner.closed, "scanner should be closed after a read error")
 }
