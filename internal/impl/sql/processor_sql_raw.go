@@ -319,6 +319,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 				}
 			}
 
+			s.logger.Tracef("Executing query: %s (%d args)", queryStr, len(args))
 			if query.execOnly {
 				if tx == nil {
 					_, err = s.db.ExecContext(ctx, queryStr, args...)

@@ -229,6 +229,7 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 			queryBuilder = queryBuilder.Where(s.where, args...)
 		}
 
+		s.logger.Tracef("Executing query: %s (%d args)", lazySQL{queryBuilder}, len(args))
 		rows, err := queryBuilder.RunWith(s.db).QueryContext(ctx)
 		if err != nil {
 			s.logger.Debugf("Failed to run query: %v", err)
