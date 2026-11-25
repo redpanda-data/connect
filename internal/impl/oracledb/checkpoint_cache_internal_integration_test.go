@@ -127,7 +127,7 @@ func TestIntegrationCheckpointCacheProcedureFallback(t *testing.T) {
 	require.NoError(t, createUpsertStoredProc(t.Context(), db.DB, mustCacheTable(t, table)))
 
 	t.Log("And a user with the grants that older versions needed, so no INSERT on the table")
-	userConnStr := db.CreateUserWithGrants(connStr, user,
+	userConnStr := db.CreateUserWithGrants(t, connStr, user,
 		"GRANT SELECT, UPDATE ON "+table+" TO "+user,
 		"GRANT EXECUTE ON "+db.Schema+".CDC_CHECKPOINT_CACHE_UPDATE TO "+user)
 

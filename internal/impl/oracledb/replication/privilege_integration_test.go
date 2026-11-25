@@ -52,7 +52,7 @@ func TestIntegrationProbeStatement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Given a user with %s on the table", tc.grants)
 			user := fmt.Sprintf("%s_P%d", db.Schema, i)
-			userConnStr := db.CreateUserWithGrants(connStr, user, "GRANT "+tc.grants+" ON "+table+" TO "+user)
+			userConnStr := db.CreateUserWithGrants(t, connStr, user, "GRANT "+tc.grants+" ON "+table+" TO "+user)
 			userDB, err := sql.Open("oracle", userConnStr)
 			require.NoError(t, err)
 			// Registered after the user, so it runs before the drop of the user.

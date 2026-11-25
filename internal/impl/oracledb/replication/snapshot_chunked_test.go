@@ -405,7 +405,7 @@ func TestIntegrationSnapshotChunked(t *testing.T) {
 // logon trigger for the new user.
 func createSelectOnlyUser(t *testing.T, db *oracledbtest.TestDB, connStr, user string, table replication.UserTable, extra ...string) string {
 	t.Helper()
-	return db.CreateUserWithGrants(connStr, user, append([]string{
+	return db.CreateUserWithGrants(t, connStr, user, append([]string{
 		"GRANT SELECT ANY DICTIONARY TO " + user,
 		"GRANT SELECT ON " + table.FullName() + " TO " + user,
 	}, extra...)...)

@@ -243,13 +243,13 @@ func (db *TestDB) CheckpointTable() string {
 // CreateUserWithGrants creates user in CDB$ROOT with CREATE SESSION, runs
 // each grant as the admin user, and returns connStr with the credentials of
 // user. It drops a user with the same name first, if a previous run did not
-// remove it, and drops user when the test ends.
+// remove it, and drops user when t ends. Pass the subtest that uses user, so
+// that a failure is reported on it.
 //
 // Oracle cannot drop a connected user (ORA-01940). Close the connections of
 // user in a t.Cleanup that is registered after this call, so that it runs
 // first.
-func (db *TestDB) CreateUserWithGrants(connStr, user string, grants ...string) string {
-	t := db.T
+func (db *TestDB) CreateUserWithGrants(t *testing.T, connStr, user string, grants ...string) string {
 	t.Helper()
 	const password = "testdb123"
 
