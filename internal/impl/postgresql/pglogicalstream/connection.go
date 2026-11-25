@@ -9,12 +9,16 @@
 package pglogicalstream
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"maps"
 	"regexp"
 	"strconv"
+	"sync"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
@@ -22,6 +26,46 @@ import (
 )
 
 var re = regexp.MustCompile(`^(\d+)`)
+
+// authTokenMu serialises every refresh of the auth token with the reads of
+// the password it writes. RefreshAuthToken stores the token in the shared
+// Config.DBConfig, and the pools open connections from their own goroutines.
+var authTokenMu sync.Mutex
+
+// RefreshAuth generates a new auth token when the config has a short lived
+// one (IAM authentication) and stores it as the password of DBConfig. It does
+// nothing otherwise.
+func (c *Config) RefreshAuth(ctx context.Context) error {
+	authTokenMu.Lock()
+	defer authTokenMu.Unlock()
+	return c.refreshAuthLocked(ctx)
+}
+
+func (c *Config) refreshAuthLocked(ctx context.Context) error {
+	if c.RefreshAuthToken == nil {
+		return nil
+	}
+	return c.RefreshAuthToken(ctx)
+}
+
+// freshPassword returns the password to open a new connection with,
+// refreshing the auth token first when there is one.
+func (c *Config) freshPassword(ctx context.Context) (string, error) {
+	authTokenMu.Lock()
+	defer authTokenMu.Unlock()
+	if err := c.refreshAuthLocked(ctx); err != nil {
+		return "", fmt.Errorf("refreshing auth token: %w", err)
+	}
+	return c.DBConfig.Password, nil
+}
+
+// dbConfigCopy returns a copy of DBConfig that is safe to connect with while
+// another goroutine refreshes the auth token.
+func (c *Config) dbConfigCopy() *pgconn.Config {
+	authTokenMu.Lock()
+	defer authTokenMu.Unlock()
+	return c.DBConfig.Copy()
+}
 
 func openPgConnectionFromConfig(cfg *Config) (*sql.DB, error) {
 	return openPgConnectionWithParams(cfg, nil)
@@ -35,10 +79,22 @@ func openPgConnectionWithParams(cfg *Config, params map[string]string) (*sql.DB,
 	if err != nil {
 		return nil, redact.Error(err, redact.Conns(cfg.DBRawDSN))
 	}
-	parsedCfg.ConnConfig.Password = cfg.DBConfig.Password
 	parsedCfg.ConnConfig.TLSConfig = cfg.TLSConfig
 	maps.Copy(parsedCfg.ConnConfig.RuntimeParams, params)
-	return stdlib.OpenDB(*parsedCfg.ConnConfig), nil
+	// The pool outlives an IAM auth token (about 15 minutes), and opens new
+	// physical connections whenever it needs one. Take the password when a
+	// connection is opened rather than once here, or every connection opened
+	// after the token expires fails to authenticate.
+	return stdlib.OpenDB(*parsedCfg.ConnConfig, stdlib.OptionBeforeConnect(
+		func(ctx context.Context, connCfg *pgx.ConnConfig) error {
+			password, err := cfg.freshPassword(ctx)
+			if err != nil {
+				return err
+			}
+			connCfg.Password = password
+			return nil
+		},
+	)), nil
 }
 
 func getPostgresVersion(cfg *Config) (int, error) {
