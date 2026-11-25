@@ -427,12 +427,12 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items. It skips CDC events for those keys that are stamped more than 1 minute before the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. If the host clock is more than 1 minute ahead of the AWS clock, the input can skip CDC events for writes made immediately after the snapshot start. Those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates. Not used by `snapshot_mode: incremental`.").Version("4.82.0").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items. It skips CDC events for those keys that are stamped more than 1 minute before the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. If the host clock is more than 1 minute ahead of the AWS clock, the input can skip CDC events for writes made immediately after the snapshot start. Those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates. It has no effect with `snapshot_mode: incremental`.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering the keys of scanned items.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
-				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. Not used by `snapshot_mode: incremental`.").Version("4.82.0").
+				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. It has no effect with `snapshot_mode: incremental`.").Version("4.82.0").
 				ShortDescription("Maximum scanned item keys buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
