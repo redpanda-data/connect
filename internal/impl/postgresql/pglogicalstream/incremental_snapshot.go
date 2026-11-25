@@ -269,10 +269,9 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// checkKeyTypesBindable rejects a primary key the incremental snapshot
-// cannot support: one the chunk query cannot page by, and one whose window
-// keys can never match between a buffered snapshot row and a streamed
-// change -- refer to the cases below for which is which.
+// checkKeyTypesBindable rejects primary keys the chunk query cannot page by.
+// Accepted key types must also decode to the same window key on the snapshot
+// and stream paths; TestIntegrationSnapshotStreamPKParity pins this.
 func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	q, err := primaryKeyColumnTypesQuery(TableFQN{
 		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
@@ -290,28 +289,22 @@ func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsna
 
 	// check for unsupported primary keys
 	for rows.Next() {
-		var column, typeName, typType string
-		if err := rows.Scan(&column, &typeName, &typType); err != nil {
+		var column, typeName, typCategory string
+		var isDomain bool
+		if err := rows.Scan(&column, &typeName, &typCategory, &isDomain); err != nil {
 			return fmt.Errorf("scanning primary key types for table %s: %w", table, err)
 		}
 
 		switch {
-		// Cannot be a chunk bound, so the table cannot be paged at all.
+		// Cannot be a chunk bound, so the table cannot be paged.
 		case typeName == "bytea":
-		// Page fine, but decode as structs over the stream (pgtype.Bits) and
-		// as text over the chunk query, so the two sides' window keys never
-		// match and nothing is ever deduplicated. bit shares varbit's decoder,
-		// so it shares the mismatch. interval now decodes as text on both
-		// sides, but no test proves its keys match yet, so it stays rejected.
-		case typeName == "interval", typeName == "varbit", typeName == "bit":
-		// Ranges had the same mismatch. They now decode as text on both sides
-		// too, but no test proves their keys match yet, so they stay rejected.
-		// Structural on typtype because ranges are user-definable, so a name
-		// list would miss custom ones. Composite types ('c') and arrays are
-		// likely affected too but unverified, so they stay accepted rather than
-		// assumed broken.
-		case typType == "r", typType == "m":
-
+		// Arrays decode to different Go values on the snapshot and stream
+		// paths, so their window keys never match.
+		case typCategory == "A":
+		// The snapshot sees a domain's base type and sanitizes tsrange, but
+		// the stream sees the domain's own type and returns the raw text, so
+		// the two keys differ.
+		case isDomain && typeName == "tsrange":
 		default:
 			continue
 		}
@@ -1134,15 +1127,12 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 }
 
 // primaryKeyColumnTypesQuery reports the primary key columns of a table with
-// their type names, resolving a domain to the type it is built on so a domain
-// over an unusable type is not mistaken for a usable one. It also reports
-// typtype through the same domain resolution, because range and multirange
-// types are user-definable and so can't be recognised by name alone -- a
-// domain over a range type needs the same structural check as the range type
-// itself.
+// their type names and categories, resolving a domain to the type it is built
+// on so a domain over an unusable type is not mistaken for a usable one, and
+// whether the column's type is a domain.
 func primaryKeyColumnTypesQuery(table string) (string, error) {
 	return sanitize.SQLQuery(`
-        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typtype, t.typtype)
+        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typcategory, t.typcategory), bt.oid IS NOT NULL
         FROM   pg_index i
         JOIN   pg_attribute a ON a.attrelid = i.indrelid
             AND a.attnum = ANY(i.indkey)
