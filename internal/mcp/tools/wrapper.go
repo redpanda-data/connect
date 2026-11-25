@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
@@ -41,6 +42,9 @@ type ResourcesWrapper struct {
 	// TODO: Remove labels in favour of tags
 	labelFilter func(label string) bool
 	tagsFilter  func(tags []string) bool
+
+	toolNamesMu sync.RWMutex
+	toolNames   map[string]struct{}
 }
 
 // NewResourcesWrapper creates a new resources wrapper.
@@ -61,9 +65,26 @@ func NewResourcesWrapper(logger *slog.Logger, svr *mcp.Server, labelFilter func(
 		builder:     service.NewResourceBuilder(),
 		labelFilter: labelFilter,
 		tagsFilter:  tagsFilter,
+		toolNames:   map[string]struct{}{},
 	}
 	w.builder.SetLogger(logger)
 	return w
+}
+
+// HasTool reports whether a tool with the given name has been registered with
+// the MCP server by this wrapper.
+func (w *ResourcesWrapper) HasTool(name string) bool {
+	w.toolNamesMu.RLock()
+	defer w.toolNamesMu.RUnlock()
+	_, exists := w.toolNames[name]
+	return exists
+}
+
+func (w *ResourcesWrapper) addTool(t *mcp.Tool, h mcp.ToolHandler) {
+	w.toolNamesMu.Lock()
+	w.toolNames[t.Name] = struct{}{}
+	w.toolNamesMu.Unlock()
+	w.svr.AddTool(t, h)
 }
 
 // SetEnvVarLookupFunc changes the behaviour of the resources wrapper so that
@@ -188,7 +209,7 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering cache tools")
 
-	w.svr.AddTool(&mcp.Tool{
+	w.addTool(&mcp.Tool{
 		Name:        "get-" + res.Label,
 		Description: "Obtain an item from " + res.Meta.MCP.Description,
 		InputSchema: map[string]any{
@@ -246,7 +267,7 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		}, nil
 	})
 
-	w.svr.AddTool(&mcp.Tool{
+	w.addTool(&mcp.Tool{
 		Name:        "set-" + res.Label,
 		Description: "Set an item within " + res.Meta.MCP.Description,
 		InputSchema: map[string]any{
@@ -342,7 +363,7 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering input tool")
 
-	w.svr.AddTool(&mcp.Tool{
+	w.addTool(&mcp.Tool{
 		Name:        res.Label,
 		Description: res.Meta.MCP.Description,
 		InputSchema: map[string]any{
@@ -470,7 +491,7 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		inputSchema["required"] = required
 	}
 
-	w.svr.AddTool(&mcp.Tool{
+	w.addTool(&mcp.Tool{
 		Name:        res.Label,
 		Description: res.Meta.MCP.Description,
 		InputSchema: inputSchema,
@@ -599,7 +620,7 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 		requiredProperties = append(requiredProperties, "value")
 	}
 
-	w.svr.AddTool(&mcp.Tool{
+	w.addTool(&mcp.Tool{
 		Name:        res.Label,
 		Description: res.Meta.MCP.Description,
 		InputSchema: map[string]any{
