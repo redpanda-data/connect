@@ -108,14 +108,14 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				if noIndentOpt != nil && *noIndentOpt {
-					return mxj.Map(obj).Xml()
-				}
 				var rootTag []string
 				if rt, err := args.GetOptionalString("root_tag"); err != nil {
 					return nil, err
 				} else if rt != nil {
 					rootTag = append(rootTag, *rt)
+				}
+				if noIndentOpt != nil && *noIndentOpt {
+					return mxj.Map(obj).Xml(rootTag...)
 				}
 				return mxj.Map(obj).XmlIndent("", indent, rootTag...)
 			}), nil

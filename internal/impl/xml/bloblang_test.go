@@ -66,3 +66,54 @@ func TestParseXML(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatXML(t *testing.T) {
+	testCases := []struct {
+		name   string
+		target any
+		args   string
+		exp    string
+	}{
+		{
+			name:   "default indentation",
+			target: map[string]any{"foo": map[string]any{"bar": "baz"}},
+			exp:    "<foo>\n    <bar>baz</bar>\n</foo>",
+		},
+		{
+			name:   "no indent",
+			target: map[string]any{"foo": map[string]any{"bar": "baz"}},
+			args:   `no_indent: true`,
+			exp:    "<foo><bar>baz</bar></foo>",
+		},
+		{
+			name:   "custom root tag with indentation",
+			target: map[string]any{"foo": map[string]any{"bar": "baz"}},
+			args:   `root_tag: "doc"`,
+			exp:    "<doc>\n    <foo>\n        <bar>baz</bar>\n    </foo>\n</doc>",
+		},
+		{
+			name:   "custom root tag with no indent",
+			target: map[string]any{"foo": map[string]any{"bar": "baz"}},
+			args:   `no_indent: true, root_tag: "doc"`,
+			exp:    "<doc><foo><bar>baz</bar></foo></doc>",
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			mapping := `root = this.format_xml()`
+			if test.args != "" {
+				mapping = fmt.Sprintf(`root = this.format_xml(%v)`, test.args)
+			}
+			exec, err := bloblang.Parse(mapping)
+			require.NoError(t, err)
+
+			res, err := exec.Query(test.target)
+			require.NoError(t, err)
+
+			resBytes, ok := res.([]byte)
+			require.True(t, ok, "expected []byte result, got %T", res)
+			assert.Equal(t, test.exp, string(resBytes))
+		})
+	}
+}
