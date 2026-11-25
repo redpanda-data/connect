@@ -240,7 +240,7 @@ func TestEcsAvroEncoderDecoderRoundTrip(t *testing.T) {
 		},
 	}
 
-	avroNode, err := commonToAvroNode(original, "Row", "", true)
+	avroNode, err := commonToAvroNode(original, "Row", "", true, avroCommonOpts{})
 	require.NoError(t, err)
 	avroJSON, err := json.Marshal(avroNode)
 	require.NoError(t, err)
