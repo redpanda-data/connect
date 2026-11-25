@@ -1447,8 +1447,8 @@ const snapshotDedupeClockSkewMargin = time.Minute
 func (d *dynamoDBCDCInput) warnIfHostClockAhead(md smithymiddleware.Metadata) {
 	// The SDK skew is the AWS time minus the host time.
 	if skew, ok := awsmiddleware.GetAttemptSkew(md); ok && -skew > snapshotDedupeClockSkewMargin {
-		d.log.Warnf("The host clock is about %v ahead of AWS, more than the %v that %s allows. The input can skip CDC events for writes made just after the snapshot start. Sync the host clock.",
-			(-skew).Round(time.Second), snapshotDedupeClockSkewMargin, dciFieldSnapshotDedupe)
+		d.log.Warnf("The host clock is about %v ahead of AWS, more than the %v that %s allows. The input can skip CDC events for writes made just after the snapshot start. Sync the host clock, or set %s: false to keep these writes as duplicates.",
+			(-skew).Round(time.Second), snapshotDedupeClockSkewMargin, dciFieldSnapshotDedupe, dciFieldSnapshotDedupe)
 	}
 }
 
