@@ -269,9 +269,11 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// checkKeyTypesBindable rejects primary keys the chunk query cannot page by.
-// Accepted key types must also decode to the same window key on the snapshot
-// and stream paths; TestIntegrationSnapshotStreamPKParity pins this.
+// checkKeyTypesBindable rejects primary keys the incremental snapshot cannot
+// support: ones the chunk query cannot page by (bytea), and ones whose snapshot
+// and stream window keys differ, so a streamed change never drops the buffered
+// row (arrays, a domain over tsrange). TestIntegrationSnapshotStreamPKParity
+// pins that accepted key types produce the same window key on both paths.
 func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) error {
 	q, err := primaryKeyColumnTypesQuery(TableFQN{
 		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
