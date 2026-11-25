@@ -1,0 +1,23 @@
+# oracledb_cdc test pipeline — streaming only (no snapshot), file checkpoint cache
+# so grant testing isn't confounded by the Oracle-based checkpoint table.
+input:
+  oracledb_cdc:
+    connection_string: oracle://C%23%23CONTROL:control123@127.0.0.1:1521/FREE
+    pdb_name: FREEPDB1
+    snapshot_mode: snapshot_and_stream
+    include:
+      - 'SPACE_APP\..*'
+    checkpoint_cache: cp
+    logminer:
+      min_scn_window_size: 0
+
+output:
+  stdout: {}
+
+cache_resources:
+  - label: cp
+    file:
+      directory: ./cpcache
+
+logger:
+  level: DEBUG
