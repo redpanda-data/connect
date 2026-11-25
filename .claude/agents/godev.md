@@ -511,7 +511,14 @@ Config spec defaults must be static/deterministic values environment-dependent v
 
 ## Configurable Time Parameters
 
-Every time-related value (timeouts, backoffs, intervals, retry delays) must be exposed as a YAML-configurable field. Do not hardcode durations.
+Expose operational tuning knobs as YAML-configurable fields.
+A tuning knob is a duration whose right value depends on the user's workload or network: timeouts, backoffs, retry delays, poll intervals, flush intervals.
+Do not hardcode these.
+
+A duration that is not a tuning knob can be a named constant.
+This applies to a safety tolerance whose right value does not depend on the workload (for example a clock skew margin), and to a timing that an external protocol or service sets.
+The constant's godoc must say why it is not a field.
+Do not ask for a field for such a constant: a field only lets users set a value that breaks correctness.
 
 ## Batch Input Batching Options
 
