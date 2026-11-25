@@ -371,6 +371,26 @@ iceberg:
 	}
 }
 
+// TestParseStoragePropsRejectsTwoBlocks pins that the parser also rejects two
+// storage blocks, so the config fails when lint does not run.
+func TestParseStoragePropsRejectsTwoBlocks(t *testing.T) {
+	conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: b
+  gcp_cloud_storage:
+    bucket: b
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parseStorageProps(conf)
+	require.EqualError(t, err, "storage: specify at most one of aws_s3, gcp_cloud_storage or azure_blob_storage, got aws_s3, gcp_cloud_storage")
+}
+
 // TestRuntimeNoticeWiring pins the startup log notices wired in
 // newIcebergOutputFromConfig (currently 0% covered): the max_in_flight ordering
 // WARNING, the copy-on-write write-amplification INFO, and the

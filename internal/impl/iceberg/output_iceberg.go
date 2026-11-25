@@ -11,6 +11,7 @@ package iceberg
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
@@ -365,6 +366,19 @@ func parseStorageProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 	// Check if storage config exists
 	if !conf.Contains(ioFieldStorage) {
 		return props, nil
+	}
+
+	// The storage lint rule rejects this too, but lint does not always run
+	// (for example with --chilled).
+	var set []string
+	for _, f := range []string{ioFieldStorageS3, ioFieldStorageGCS, ioFieldStorageAzure} {
+		if conf.Contains(ioFieldStorage, f) {
+			set = append(set, f)
+		}
+	}
+	if len(set) > 1 {
+		return nil, fmt.Errorf("%s: specify at most one of %s, %s or %s, got %s",
+			ioFieldStorage, ioFieldStorageS3, ioFieldStorageGCS, ioFieldStorageAzure, strings.Join(set, ", "))
 	}
 
 	// Check for S3 configuration
