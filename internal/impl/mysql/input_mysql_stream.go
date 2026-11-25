@@ -129,7 +129,7 @@ This input adds the following metadata fields to each message:
 			Description("The type of MySQL database to connect to.").Version("4.48.0").
 			Default(gomysql.MySQLFlavor),
 		service.NewStringField(fieldMySQLDSN).
-			Description("The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`.").
+			Description("The data source name (DSN) of the MySQL database from which you want to stream updates. Use the format `user:password@tcp(localhost:3306)/database`. The input gives all `DATE`, `DATETIME` and `TIMESTAMP` values in UTC, so it ignores the `loc` and `parseTime` options. For the snapshot, it also replaces any `time_zone` option with `'+00:00'`.").
 			Example("user:password@tcp(localhost:3306)/database"),
 		service.NewStringListField(fieldMySQLTables).
 			Description("A list of the database table names to stream changes from. Specify each table name as a separate item, without a database prefix. A name can be up to 64 characters long. It must start with an ASCII letter, `_`, or a character from U+0080 to U+FFFF, and can also contain digits and `$` after that. Names with other characters, such as `-`, are not supported. The input checks these rules when it starts, not during linting.").
