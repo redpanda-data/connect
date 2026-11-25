@@ -442,7 +442,7 @@ func TestHandleSignalRecordsLogsRejectionOnce(t *testing.T) {
 
 	out := logs.String()
 	assert.Contains(t, out, "tables=nope")
-	assert.Contains(t, out, "Snapshot signal: rejected, no table was queued: cannot snapshot nope (not watched); every table")
+	assert.Contains(t, out, "Snapshot signal: rejected, no table was queued: cannot snapshot nope (not streamed by this input)")
 	assert.Contains(t, out, "id=s9")
 	assert.Contains(t, out, "type="+replication.SnapshotSignalType)
 	assert.Contains(t, out, "Parsing snapshot signal: rejected: parsing "+replication.SnapshotSignalType+" payload")

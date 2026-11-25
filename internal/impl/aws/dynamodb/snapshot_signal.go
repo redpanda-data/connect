@@ -179,11 +179,11 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 		ts, exists := d.tableStreams[name]
 		switch {
 		case !exists:
-			bad = append(bad, name+" (not watched)")
+			bad = append(bad, name+" (not streamed by this input)")
 		case ts.isSignalTable:
-			bad = append(bad, name+" (the signal table)")
+			bad = append(bad, name+" (is the signal table, which is never snapshotted)")
 		case ts.incremental == nil:
-			bad = append(bad, name+" (no incremental snapshot state)")
+			bad = append(bad, name+" (has no incremental snapshot state)")
 		default:
 			if err := incsnapshot.RequireNewImage(name, ts.streamSpec); err != nil {
 				bad = append(bad, name+" ("+err.Error()+")")
@@ -194,7 +194,7 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 	d.mu.RUnlock()
 	if len(bad) > 0 {
 		// The signal is all or nothing, so one bad table rejects it whole.
-		log.With("tables", strings.Join(sig.Tables, ",")).Errorf("Snapshot signal: %v", fmt.Errorf("%w, no table was queued: cannot snapshot %s; every table it lists must be streamed by this input with snapshot_mode incremental, must not be the signal table, and its stream view must include new images", replication.ErrSignalRejected, strings.Join(bad, ", ")))
+		log.With("tables", strings.Join(sig.Tables, ",")).Errorf("Snapshot signal: %v", fmt.Errorf("%w, no table was queued: cannot snapshot %s", replication.ErrSignalRejected, strings.Join(bad, "; ")))
 		return nil
 	}
 
