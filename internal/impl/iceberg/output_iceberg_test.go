@@ -39,7 +39,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+extra, nil)
 	require.NoError(t, err)
 
@@ -118,7 +118,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -178,7 +178,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -219,7 +219,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -269,7 +269,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -290,7 +290,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `, nil)
 	require.NoError(t, err)
 
@@ -471,6 +471,122 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"amplification info firing mismatch; captured log:\n%s", out)
 			assert.Equal(t, tc.wantCleanupOff, cleanupDisabledInformed(out),
 				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
+		})
+	}
+}
+
+// TestParseStorageProps checks that each storage block gives the properties of
+// its own backend, and that no storage block gives no properties. The bucket
+// fields are deprecated and have no effect, so a config that sets them must
+// parse and must give the same properties as one that does not.
+func TestParseStorageProps(t *testing.T) {
+	tests := []struct {
+		name    string
+		storage string
+		want    map[string]string
+	}{
+		{
+			name:    "no storage block",
+			storage: ``,
+			want:    map[string]string{},
+		},
+		{
+			name: "aws_s3",
+			storage: `
+storage:
+  aws_s3:
+    region: us-east-1
+`,
+			want: map[string]string{
+				"s3.region":                   "us-east-1",
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "aws_s3 with path style URLs",
+			storage: `
+storage:
+  aws_s3:
+    force_path_style_urls: true
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "false",
+			},
+		},
+		{
+			name: "aws_s3 with deprecated bucket",
+			storage: `
+storage:
+  aws_s3:
+    bucket: my-bucket
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "gcp_cloud_storage",
+			storage: `
+storage:
+  gcp_cloud_storage:
+    credentials_type: service_account
+    credentials_json: '{"type":"service_account"}'
+`,
+			want: map[string]string{
+				"gcs.credtype": "service_account",
+				"gcs.jsonkey":  `{"type":"service_account"}`,
+			},
+		},
+		{
+			name: "gcp_cloud_storage with deprecated bucket",
+			storage: `
+storage:
+  gcp_cloud_storage:
+    bucket: my-bucket
+`,
+			want: map[string]string{},
+		},
+		{
+			name: "azure_blob_storage with SAS token",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_sas_token: mytoken
+`,
+			want: map[string]string{
+				"adls.sas-token.mycontainer": "mytoken",
+			},
+		},
+		{
+			name: "azure_blob_storage with access key",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_access_key: mykey
+`,
+			want: map[string]string{
+				"adls.auth.shared-key.account.name": "myaccount",
+				"adls.auth.shared-key.account.key":  "mykey",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+`+tt.storage, nil)
+			require.NoError(t, err)
+
+			props, err := parseStorageProps(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, map[string]string(props))
 		})
 	}
 }

@@ -213,6 +213,18 @@ const rowOperationDocs = "\n" +
 	"\n" +
 	"A table pinned `legacy` keeps receiving the legacy annotation on every new file, byte-identical to what previous releases wrote, so appends and `merge-on-read` continue working unchanged forever. The one restriction is mutating `copy-on-write` (`upsert`/`delete`): it must rewrite existing files, which the legacy annotation prevents, so such writes fail upfront with an actionable error (pure `insert` batches still work). To migrate a legacy table to the spec encoding: rewrite/compact the table's data files with an engine that writes the spec annotation (for example, Spark's `rewrite_data_files`), then set the table property `redpanda-connect.timestamp-encoding` to `spec`, keeping any running instances of this output that write to the table stopped (or restarting them) around the migration: a live writer only re-reads the property when its writer is recreated. A table whose existing files already mix both annotations (for example one written to by several engines or connector versions over time) can be pinned either way by the probe, depending on which file it happens to read first, and a `copy-on-write` mutation on such a table may then fail mid-rewrite with the underlying library's type-promotion error rather than the upfront migration message: compact or rewrite such a table to a single encoding before mutating it. Alternatively, keep the table on `merge-on-read`.\n"
 
+// deprecatedBucketField is the bucket field of the aws_s3 and
+// gcp_cloud_storage storage blocks. The table location (from the catalog
+// warehouse or schema_evolution.table_location) decides where files go, so
+// the field has no effect. It stays as a deprecated field so that old configs
+// still parse.
+func deprecatedBucketField(name string) *service.ConfigField {
+	return service.NewStringField(name).
+		Description("This field has no effect. The table location decides where data files are written.").
+		Optional().
+		Deprecated()
+}
+
 // icebergOutputConfig returns the configuration spec for the Iceberg output.
 func icebergOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -252,7 +264,7 @@ To use with AWS Glue Data Catalog:
 * Set `+"`catalog.warehouse`"+` to your AWS account ID (the Glue catalog identifier).
 * Set `+"`schema_evolution.table_location`"+` to an S3 prefix (for example, `+"`s3://my-bucket/`"+`; a trailing slash is optional) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
-* Configure `+"`storage.aws_s3`"+` with the same bucket and region.
+* Configure `+"`storage.aws_s3`"+` with the same region.
 
 When the Glue snapshot retention optimizer is enabled on a table, let it own snapshot expiry and leave `+"`commit.max_snapshot_age`"+` unset. The optimizer deletes the files of the snapshots it expires. Expiry from this output would remove the snapshots first and leave their files as orphans.
 
@@ -397,9 +409,7 @@ See the Row-level operations section above for the full constraints, including t
 			service.NewObjectField(ioFieldStorage,
 				// S3 storage configuration
 				service.NewObjectField(ioFieldStorageS3,
-					service.NewStringField(ioFieldS3Bucket).
-						Description("The S3 bucket name.").
-						Example("my-iceberg-data"),
+					deprecatedBucketField(ioFieldS3Bucket),
 					service.NewStringField(ioFieldS3Region).
 						Description("The AWS region.").
 						Optional().
@@ -408,9 +418,13 @@ See the Row-level operations section above for the full constraints, including t
 						Description("Custom endpoint for S3-compatible storage (for example, MinIO).").
 						Optional().
 						Example("http://localhost:9000"),
+					// Optional, not Default(false). A default makes benthos
+					// fill in aws_s3 for every config, and parseStorageProps
+					// then picks S3 for GCS and Azure configs too.
+					// parseS3Props reads an absent value as false.
 					service.NewBoolField(ioFieldS3ForcePathStyleURLs).
-						Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints.").
-						Default(false).
+						Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints. Defaults to `false`.").
+						Optional().
 						Advanced(),
 					service.NewObjectField(ioFieldS3Credentials,
 						service.NewStringField(ioFieldS3CredID).
@@ -430,9 +444,7 @@ See the Row-level operations section above for the full constraints, including t
 
 				// GCS storage configuration
 				service.NewObjectField(ioFieldStorageGCS,
-					service.NewStringField(ioFieldGCSBucket).
-						Description("The GCS bucket name.").
-						Example("my-iceberg-data"),
+					deprecatedBucketField(ioFieldGCSBucket),
 					service.NewStringField(ioFieldGCSEndpoint).
 						Description("Custom endpoint for GCS-compatible storage.").
 						Optional().
@@ -483,11 +495,10 @@ See the Row-level operations section above for the full constraints, including t
 				ShortDescription("Storage backend for data files. At most one of aws_s3, gcp_cloud_storage or azure_blob_storage.").
 				// parseStorageProps reads only the first block it finds, so a second
 				// block would be ignored silently. Before the rule runs, benthos adds
-				// the defaults of blocks the user did not write. It skips a block only
-				// when a required field of it has no default. Each block has such a
-				// field (bucket, or storage_account and container), so the rule sees
-				// only the blocks the user wrote. If such a field gets a default, this
-				// rule rejects every single-block config.
+				// the defaults of blocks the user did not write. No field in a block
+				// has a default, so benthos adds no block and the rule sees only the
+				// blocks the user wrote. If such a field gets a default, this rule
+				// rejects every single-block config.
 				LintRule(`root = if [this.aws_s3, this.gcp_cloud_storage, this.azure_blob_storage].filter(b -> b != null).length() > 1 {
   [ "specify at most one of aws_s3, gcp_cloud_storage or azure_blob_storage" ]
 }`),
@@ -633,7 +644,6 @@ output:
     max_in_flight: 1
     storage:
       aws_s3:
-        bucket: my-iceberg-data
         region: us-east-1
 `,
 		).
@@ -676,7 +686,6 @@ output:
       period: 30s
     storage:
       aws_s3:
-        bucket: my-iceberg-data
         region: us-east-1
 `,
 		)
