@@ -441,12 +441,14 @@ func TestHandleSignalRecordsLogsRejectionOnce(t *testing.T) {
 	}))
 
 	out := logs.String()
-	assert.Contains(t, out, "Snapshot signal rejected: cannot snapshot nope (not watched)")
+	assert.Contains(t, out, "tables=nope")
+	assert.Contains(t, out, "Snapshot signal: rejected, no table was queued: cannot snapshot nope (not watched); every table")
 	assert.Contains(t, out, "id=s9")
 	assert.Contains(t, out, "type="+replication.SnapshotSignalType)
-	assert.Contains(t, out, "Snapshot signal rejected: parsing "+replication.SnapshotSignalType+" payload")
+	assert.Contains(t, out, "Parsing snapshot signal: rejected: parsing "+replication.SnapshotSignalType+" payload")
 	assert.Contains(t, out, "id=s10")
-	assert.Contains(t, out, `Control signal rejected: signal record has no \"type\" attribute`)
+	assert.Contains(t, out, "id=s11")
+	assert.Contains(t, out, `Decoding control signal record: rejected: signal record has no \"type\" attribute`)
 	assert.NotContains(t, out, "rejected: rejected")
 }
 

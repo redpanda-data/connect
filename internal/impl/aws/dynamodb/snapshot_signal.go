@@ -95,7 +95,7 @@ func (d *dynamoDBCDCInput) handleSignalRecords(ctx context.Context, records []ty
 	for _, rec := range records {
 		sig, data, isSignal, err := decodeSignalRecord(rec)
 		if err != nil {
-			d.log.Errorf("Control signal %v", err)
+			d.log.With("id", signalID(rec.Dynamodb.NewImage)).Errorf("Decoding control signal record: %v", err)
 			continue
 		}
 		if !isSignal {
@@ -164,7 +164,7 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 	}
 	sig, err := replication.ParseSnapshotSignal(data)
 	if err != nil {
-		log.Errorf("Snapshot signal %v", err)
+		log.Errorf("Parsing snapshot signal: %v", err)
 		return nil
 	}
 	// A table named twice is validated, recorded and logged once.
@@ -193,7 +193,8 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 	}
 	d.mu.RUnlock()
 	if len(bad) > 0 {
-		log.Errorf("Snapshot signal %v", fmt.Errorf("%w: cannot snapshot %s", replication.ErrSignalRejected, strings.Join(bad, ", ")))
+		// The signal is all or nothing, so one bad table rejects it whole.
+		log.With("tables", strings.Join(sig.Tables, ",")).Errorf("Snapshot signal: %v", fmt.Errorf("%w, no table was queued: cannot snapshot %s; every table it lists must be streamed by this input with snapshot_mode incremental, must not be the signal table, and its stream view must include new images", replication.ErrSignalRejected, strings.Join(bad, ", ")))
 		return nil
 	}
 
