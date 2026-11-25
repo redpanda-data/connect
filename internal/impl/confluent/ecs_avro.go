@@ -839,28 +839,26 @@ func ecsAvroFromAnyMapImpl(cfg ecsAvroConfig, as map[string]any) (schema.Common,
 
 	switch c.Type {
 	case schema.Map:
-		valuesType, exists := as["values"].(string)
+		raw, exists := as["values"]
 		if !exists {
-			return schema.Common{}, fmt.Errorf("expected `values` field of type string, got %T", as["values"])
+			return schema.Common{}, errors.New("missing `values` field")
 		}
-
-		c.Children = []schema.Common{
-			{
-				Type: ecsAvroTypeToCommon(valuesType),
-			},
+		child, err := ecsAvroResolveTypeRef(cfg, raw)
+		if err != nil {
+			return schema.Common{}, fmt.Errorf("`values`: %w", err)
 		}
+		c.Children = []schema.Common{child}
 
 	case schema.Array:
-		itemsType, exists := as["items"].(string)
+		raw, exists := as["items"]
 		if !exists {
-			return schema.Common{}, fmt.Errorf("expected `items` field of type string, got %T", as["items"])
+			return schema.Common{}, errors.New("missing `items` field")
 		}
-
-		c.Children = []schema.Common{
-			{
-				Type: ecsAvroTypeToCommon(itemsType),
-			},
+		child, err := ecsAvroResolveTypeRef(cfg, raw)
+		if err != nil {
+			return schema.Common{}, fmt.Errorf("`items`: %w", err)
 		}
+		c.Children = []schema.Common{child}
 
 	case schema.Object:
 		raw, present := as["fields"]
