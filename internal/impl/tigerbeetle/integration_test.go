@@ -98,7 +98,7 @@ func TestIntegrationTigerBeetle(t *testing.T) {
 	// so the oldest supported TigerBeetle cluster must be pinned to the client version
 	// used in the connector.
 	versions := []string{
-		"0.16.57",
+		minClusterVersion,
 		"latest",
 	}
 

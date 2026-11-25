@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -109,7 +110,7 @@ The source database must have logical replication enabled, which means its ` + "
 
 This input reads changes through a logical replication slot, which it creates if the slot does not already exist. PostgreSQL retains the write-ahead log (WAL) that the slot still needs, so the input can resume from its last acknowledged position after a restart.
 
-When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `. It then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged, so if the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
+When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`true`" + ` and the replication slot does not exist yet, this input first reads a consistent snapshot of the tables listed in ` + "`" + fieldTables + "`" + `. It then streams the changes recorded in the write-ahead log (WAL) since that snapshot was taken. The input creates the replication slot only after every snapshot message is acknowledged. If the pipeline restarts before then, the snapshot runs again from the start. After the slot exists, a restart resumes streaming from the last acknowledged position in the slot without taking another snapshot.
 
 When ` + "`" + fieldStreamSnapshot + "`" + ` is ` + "`false`" + `, this input creates the replication slot and streams changes from the current end of the WAL. After a restart, it resumes from the last acknowledged position in the slot.
 
@@ -127,7 +128,7 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 | Number
 
 | ` + "`DATE`" + `, ` + "`TIMESTAMP`" + `, ` + "`TIMESTAMPTZ`" + `
-| String in RFC 3339 format
+| String in RFC 3339 format, or ` + "`null`" + ` for the infinite values (see Infinite dates and timestamps below)
 
 | ` + "`BYTEA`" + `
 | Base64-encoded string
@@ -149,6 +150,9 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 
 | ` + "`POINT`" + `, ` + "`TSRANGE`" + `, ` + "`TSVECTOR`" + `
 | String in its PostgreSQL text form, for example ` + "`\"(45.5,-122.6)\"`" + `, ` + "`\"[2024-01-01 00:00:00,2024-12-31 00:00:00)\"`" + `, or ` + "`\"'brown':3 'fox':4\"`" + `
+
+| ` + "`INTERVAL`" + `, the other range types (for example ` + "`INT4RANGE`" + `, ` + "`NUMRANGE`" + `, ` + "`DATERANGE`" + `, or ` + "`TSTZRANGE`" + `), all multirange types, and arrays of ` + "`INTERVAL`" + ` or of a range type
+| String in its PostgreSQL text form, for example ` + "`\"1 day 02:03:04\"`" + ` or ` + "`\"[2026-01-02,infinity)\"`" + `. The infinite values stay as ` + "`infinity`" + ` and ` + "`-infinity`" + ` in the text
 |===
 
 == Metadata
@@ -163,7 +167,11 @@ This input adds the following metadata fields to each message:
 
 == Unserializable rows
 
-Some rows have decoded WAL data that cannot be marshalled to JSON, in practice non-finite floating point values such as NaN or Infinity. Such a row is published with its error set and a plain-text rendering of the row as the payload. This happens instead of stalling the stream or silently dropping the row. Such messages can be inspected with the ` + "`errored()`" + ` Bloblang function and routed with error-handling components (for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + `, or a dead-letter queue). If not handled, they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+Some rows cannot be marshalled to JSON, in practice because they hold a non-finite floating point value such as NaN or Infinity. Such a row does not stall the stream or get silently dropped. Instead, it is published with its error set and a plain-text rendering of the row as the payload. You can inspect such messages with the ` + "`errored()`" + ` Bloblang function. You can route them with error-handling components, for example a ` + "`switch`" + ` output with ` + "`reject_errored`" + ` or a dead-letter queue. If not handled, they flow through the pipeline like any other message. The replication checkpoint advances past them normally once acknowledged.
+
+== Infinite dates and timestamps
+
+PostgreSQL accepts the special values ` + "`infinity`" + ` and ` + "`-infinity`" + ` in ` + "`date`" + `, ` + "`timestamp`" + ` and ` + "`timestamptz`" + ` columns, for example as an open-ended ` + "`valid_to`" + `. They have no timestamp representation, so both the snapshot and the stream deliver them as ` + "`null`" + `. A message does not show if a ` + "`null`" + ` value is a SQL ` + "`NULL`" + `, ` + "`infinity`" + `, or ` + "`-infinity`" + `.
 
 == Metrics
 
@@ -243,10 +251,9 @@ With ` + "`false`" + `, the publication decides what is streamed. Every table it
 			Description("How often to report changes to the replication lag and write them to Redpanda Connect metrics. When <<" + fieldSelfManagePublication + ",`" + fieldSelfManagePublication + "`>> is `false`, this interval also sets how often the input checks that the publication still includes the required tables.").
 			Example("6s").
 			Default("3s")).
-		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-			Description("Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.").
-			ShortDescription("Number of tables to snapshot in parallel.").
-			Default(1)).
+		Field(replication.MaxParallelSnapshotTablesField("").
+			Description("Specify the maximum number of tables that are processed in parallel when the initial snapshot of the source database is taken.\n\nThe snapshot opens this many database connections when it starts and holds them until it finishes. Keep this below the database's max connections setting, allowing for the replication connection and the database's other clients.").
+			ShortDescription("Number of tables to snapshot in parallel.")).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
 			Description("Specify the value to emit when unchanged TOAST values appear in the message stream. Unchanged values occur for data updates and deletes when `REPLICA IDENTITY` is not set to `FULL`.\n\nPrefer a distinctive sentinel over the `null` default. A `null` can't be told apart from a column that is genuinely null, so a consumer can't skip the field instead of overwriting a good value with it. This matters most alongside `" + fieldIncSnapshot + "`, where a backfilled row can be the only delivery that carries a large column's real value. See <<" + fieldSignalTableName + ",`" + fieldSignalTableName + "`>>.").Version("4.46.0").
 			ShortDescription("The value to emit when TOAST values are unchanged in the stream.").
@@ -906,6 +913,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					continue
 				}
 
+				msg.Data = withoutInfiniteTimes(msg.Data)
+				msg.BeforeData = withoutInfiniteTimes(msg.BeforeData)
+
 				var marshalErr error
 				if mb, marshalErr = json.Marshal(msg.Data); marshalErr != nil {
 					// A marshal failure is deterministic (in practice
@@ -1383,4 +1393,30 @@ func (p *pgStreamInput) Close(ctx context.Context) error {
 	case <-p.stopSig.HasStoppedChan():
 	}
 	return nil
+}
+
+// withoutInfiniteTimes returns the row with each infinite date or timestamp
+// value set to nil, which is how the stream has always emitted them. The
+// decoders keep pglogicalstream.InfiniteTime until here so that the snapshot
+// keys stay exact. It copies the row only when it changes a value, because the
+// decoder may still hold the original map.
+func withoutInfiniteTimes(row any) any {
+	m, ok := row.(map[string]any)
+	if !ok {
+		return row
+	}
+	var out map[string]any
+	for k, v := range m {
+		if _, ok := v.(pglogicalstream.InfiniteTime); !ok {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(m)
+		}
+		out[k] = nil
+	}
+	if out == nil {
+		return m
+	}
+	return out
 }

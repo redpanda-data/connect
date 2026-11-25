@@ -169,6 +169,12 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"timestamptz", "timestamptz", "'2026-01-02 03:04:05.678+00'::timestamptz"},
 		{"timestamp", "timestamp", "'2026-01-02 03:04:05.678'::timestamp"},
 		{"date", "date", "'2026-01-02'::date"},
+		// infinity has no time.Time form: the snapshot gets a string from
+		// the driver and the stream a pgtype.InfinityModifier, so both
+		// sides must agree on the same InfiniteTime.
+		{"timestamptz_infinity", "timestamptz", "'infinity'::timestamptz"},
+		{"timestamp_neg_infinity", "timestamp", "'-infinity'::timestamp"},
+		{"date_infinity", "date", "'infinity'::date"},
 		{"float8", "double precision", "0.1"},
 		{"bool", "boolean", "true"},
 		{"inet", "inet", "'192.168.0.1/24'::inet"},
@@ -524,6 +530,9 @@ type fakeQueryDriver struct {
 	// notInPublication answers the publication coverage query. The zero
 	// value reports the table as covered.
 	notInPublication bool
+	// allTables answers the queries that read pg_publication.puballtables.
+	// The zero value describes a FOR TABLE publication.
+	allTables bool
 }
 
 func (d *fakeQueryDriver) Open(string) (driver.Conn, error) {
@@ -561,6 +570,18 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	}
 	// The publication queries all name pg_publication, so they are told apart
 	// by what else they read, before the generic match below.
+	if strings.Contains(s.query, "relispartition") {
+		return &fakeQueryRows{
+			columns: []string{"partitioned", "partition", "viaroot", "puballtables"},
+			rows:    [][]driver.Value{{false, false, false, s.conn.driver.allTables}},
+		}, nil
+	}
+	if strings.Contains(s.query, "puballtables") {
+		return &fakeQueryRows{
+			columns: []string{"puballtables"},
+			rows:    [][]driver.Value{{s.conn.driver.allTables}},
+		}, nil
+	}
 	if strings.Contains(s.query, "pg_partition_tree") {
 		return &fakeQueryRows{
 			columns: []string{"exists"},

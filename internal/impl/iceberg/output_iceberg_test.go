@@ -39,7 +39,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+extra, nil)
 	require.NoError(t, err)
 
@@ -118,7 +118,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -178,7 +178,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -219,7 +219,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -269,7 +269,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 `+tc.commitYAML, nil)
 			require.NoError(t, err)
 
@@ -278,6 +278,117 @@ storage:
 			assert.Equal(t, tc.want, cfg.ManifestMergeEnabled)
 		})
 	}
+}
+
+// TestParseSchemaEvolutionConfigTableLocationAbsent pins that an absent
+// `schema_evolution.table_location` leaves the location to the catalog.
+func TestParseSchemaEvolutionConfigTableLocationAbsent(t *testing.T) {
+	conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    region: us-east-1
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := parseSchemaEvolutionConfig(conf)
+	require.NoError(t, err)
+	assert.Nil(t, cfg.TableLocation)
+}
+
+// TestStorageBlocksLint pins that a config can set at most one storage backend.
+// The parser reads only the first block it finds, so a second block must be a
+// lint error and not be silently ignored.
+func TestStorageBlocksLint(t *testing.T) {
+	linter := service.GlobalEnvironment().NewComponentConfigLinter()
+	base := `
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+`
+	cases := []struct {
+		name     string
+		storage  string
+		wantLint bool
+	}{
+		{
+			name:     "no storage block",
+			storage:  "",
+			wantLint: false,
+		},
+		{
+			name:     "empty storage block",
+			storage:  "  storage: {}\n",
+			wantLint: false,
+		},
+		{
+			name:     "aws_s3 only",
+			storage:  "  storage:\n    aws_s3:\n      bucket: b\n",
+			wantLint: false,
+		},
+		{
+			name:     "gcp_cloud_storage only",
+			storage:  "  storage:\n    gcp_cloud_storage:\n      bucket: b\n",
+			wantLint: false,
+		},
+		{
+			name:     "azure_blob_storage only",
+			storage:  "  storage:\n    azure_blob_storage:\n      storage_account: a\n      container: c\n",
+			wantLint: false,
+		},
+		{
+			name:     "aws_s3 and gcp_cloud_storage",
+			storage:  "  storage:\n    aws_s3:\n      bucket: b\n    gcp_cloud_storage:\n      bucket: b\n",
+			wantLint: true,
+		},
+		{
+			name:     "all three",
+			storage:  "  storage:\n    aws_s3:\n      bucket: b\n    gcp_cloud_storage:\n      bucket: b\n    azure_blob_storage:\n      storage_account: a\n      container: c\n",
+			wantLint: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lints, err := linter.LintOutputYAML([]byte(base + tc.storage))
+			require.NoError(t, err)
+			var found []string
+			for _, l := range lints {
+				if strings.Contains(l.Error(), "at most one of") {
+					found = append(found, l.Error())
+				}
+			}
+			if tc.wantLint {
+				assert.NotEmpty(t, found, "expected a storage lint, got: %v", lints)
+			} else {
+				assert.Empty(t, lints, "expected no lint")
+			}
+		})
+	}
+}
+
+// TestParseStoragePropsRejectsTwoBlocks pins that the parser also rejects two
+// storage blocks, so the config fails when lint does not run.
+func TestParseStoragePropsRejectsTwoBlocks(t *testing.T) {
+	conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: b
+  gcp_cloud_storage:
+    bucket: b
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parseStorageProps(conf)
+	require.EqualError(t, err, "storage: specify at most one of aws_s3, gcp_cloud_storage or azure_blob_storage, got aws_s3, gcp_cloud_storage")
 }
 
 // TestRuntimeNoticeWiring pins the startup log notices wired in
@@ -360,6 +471,122 @@ func TestRuntimeNoticeWiring(t *testing.T) {
 				"amplification info firing mismatch; captured log:\n%s", out)
 			assert.Equal(t, tc.wantCleanupOff, cleanupDisabledInformed(out),
 				"cleanup_on_failure info firing mismatch; captured log:\n%s", out)
+		})
+	}
+}
+
+// TestParseStorageProps checks that each storage block gives the properties of
+// its own backend, and that no storage block gives no properties. The bucket
+// fields are deprecated and have no effect, so a config that sets them must
+// parse and must give the same properties as one that does not.
+func TestParseStorageProps(t *testing.T) {
+	tests := []struct {
+		name    string
+		storage string
+		want    map[string]string
+	}{
+		{
+			name:    "no storage block",
+			storage: ``,
+			want:    map[string]string{},
+		},
+		{
+			name: "aws_s3",
+			storage: `
+storage:
+  aws_s3:
+    region: us-east-1
+`,
+			want: map[string]string{
+				"s3.region":                   "us-east-1",
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "aws_s3 with path style URLs",
+			storage: `
+storage:
+  aws_s3:
+    force_path_style_urls: true
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "false",
+			},
+		},
+		{
+			name: "aws_s3 with deprecated bucket",
+			storage: `
+storage:
+  aws_s3:
+    bucket: my-bucket
+`,
+			want: map[string]string{
+				"s3.force-virtual-addressing": "true",
+			},
+		},
+		{
+			name: "gcp_cloud_storage",
+			storage: `
+storage:
+  gcp_cloud_storage:
+    credentials_type: service_account
+    credentials_json: '{"type":"service_account"}'
+`,
+			want: map[string]string{
+				"gcs.credtype": "service_account",
+				"gcs.jsonkey":  `{"type":"service_account"}`,
+			},
+		},
+		{
+			name: "gcp_cloud_storage with deprecated bucket",
+			storage: `
+storage:
+  gcp_cloud_storage:
+    bucket: my-bucket
+`,
+			want: map[string]string{},
+		},
+		{
+			name: "azure_blob_storage with SAS token",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_sas_token: mytoken
+`,
+			want: map[string]string{
+				"adls.sas-token.mycontainer": "mytoken",
+			},
+		},
+		{
+			name: "azure_blob_storage with access key",
+			storage: `
+storage:
+  azure_blob_storage:
+    storage_account: myaccount
+    container: mycontainer
+    storage_access_key: mykey
+`,
+			want: map[string]string{
+				"adls.auth.shared-key.account.name": "myaccount",
+				"adls.auth.shared-key.account.key":  "mykey",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+`+tt.storage, nil)
+			require.NoError(t, err)
+
+			props, err := parseStorageProps(conf)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, map[string]string(props))
 		})
 	}
 }

@@ -9,6 +9,8 @@
 package iceberg
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -18,6 +20,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/servicetest"
 )
 
 // TestFindCaseOnlyDuplicate covers the create-time guard that prevents an
@@ -571,4 +575,151 @@ func TestTableLocationFor(t *testing.T) {
 
 	// Single-level namespace.
 	assert.Equal(t, "s3://bucket/db/t", tableLocationFor("s3://bucket", []string{"db"}, "t"))
+}
+
+// TestResolveTableLocation pins how createTable gets the location of a new
+// table from `schema_evolution.table_location`. The first message of the batch
+// sets the prefix. An empty prefix leaves the location to the catalog, with a
+// warning when interpolation gives the empty prefix, because that is likely a
+// config mistake. A static empty prefix is a choice and does not warn. A
+// location that the writer would change when it builds data file paths is an
+// error, because it splits the table across two prefixes. This applies to the
+// prefix, the namespace and the table.
+func TestResolveTableLocation(t *testing.T) {
+	cases := []struct {
+		name          string
+		unset         bool
+		tableLocation string
+		fabs          []string
+		table         string
+		want          string
+		wantErr       string
+		wantWarn      string
+	}{
+		{
+			name:  "field unset",
+			unset: true,
+			fabs:  []string{"FAB1"},
+			table: "orders",
+			want:  "",
+		},
+		{
+			name:          "static empty prefix leaves the location to the catalog",
+			tableLocation: "",
+			fabs:          []string{"FAB1"},
+			table:         "orders",
+			want:          "",
+		},
+		{
+			name:          "interpolated empty prefix leaves the location to the catalog and warns",
+			tableLocation: `${! meta("missing").or("") }`,
+			fabs:          []string{"FAB1"},
+			table:         "orders",
+			want:          "",
+			wantWarn:      `schema_evolution.table_location resolved to an empty prefix for table shop.cdc.orders`,
+		},
+		{
+			name:          "first message sets the prefix",
+			tableLocation: `s3://bucket/${! meta("fab").lowercase() }/`,
+			fabs:          []string{"FAB1", "FAB2"},
+			table:         "orders",
+			want:          "s3://bucket/fab1/shop/cdc/orders",
+		},
+		{
+			name:          "missing metadata key resolves to null",
+			tableLocation: `s3://bucket/${! meta("missing") }/`,
+			fabs:          []string{"FAB1"},
+			table:         "orders",
+			want:          "s3://bucket/null/shop/cdc/orders",
+		},
+		{
+			name:          "missing metadata key with not_null is an error",
+			tableLocation: `s3://bucket/${! meta("missing").not_null() }/`,
+			fabs:          []string{"FAB1"},
+			table:         "orders",
+			wantErr:       "interpolating table location: meta field missing: value is null",
+		},
+		{
+			name:          "static prefix with a valid percent-escape is unchanged",
+			tableLocation: "s3://bucket/acme%20corp/",
+			fabs:          []string{"FAB1"},
+			table:         "orders",
+			want:          "s3://bucket/acme%20corp/shop/cdc/orders",
+		},
+		{
+			name:          "invalid percent-escape in prefix",
+			tableLocation: `s3://bucket/${! meta("fab") }/`,
+			fabs:          []string{"acme%zzcorp"},
+			table:         "orders",
+			wantErr:       `parsing table location: parse "s3://bucket/acme%zzcorp/shop/cdc/orders": invalid URL escape "%zz"`,
+		},
+		{
+			name:          "space in prefix",
+			tableLocation: `s3://bucket/${! meta("fab") }/`,
+			fabs:          []string{"ACME Corp"},
+			table:         "orders",
+			wantErr:       `table location "s3://bucket/ACME Corp/shop/cdc/orders" is unsafe: the writer would put data files under "s3://bucket/ACME%20Corp/shop/cdc/orders/data"`,
+		},
+		{
+			name:          "non-ASCII in prefix",
+			tableLocation: `s3://bucket/${! meta("fab") }/`,
+			fabs:          []string{"café"},
+			table:         "orders",
+			wantErr:       `the writer would put data files under "s3://bucket/caf%C3%A9/shop/cdc/orders/data"`,
+		},
+		{
+			name:          "parent segment in prefix",
+			tableLocation: `s3://bucket/wh/${! meta("fab") }/`,
+			fabs:          []string{".."},
+			table:         "orders",
+			wantErr:       `the writer would put data files under "s3://bucket/shop/cdc/orders/data"`,
+		},
+		{
+			name:          "empty segment in prefix",
+			tableLocation: "s3://bucket/wh//",
+			fabs:          []string{"FAB1"},
+			table:         "orders",
+			wantErr:       `the writer would put data files under "s3://bucket/wh/shop/cdc/orders/data"`,
+		},
+		{
+			name:          "space in table",
+			tableLocation: "s3://bucket/",
+			fabs:          []string{"FAB1"},
+			table:         "ACME Corp",
+			wantErr:       `the writer would put data files under "s3://bucket/shop/cdc/ACME%20Corp/data"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var cfg SchemaEvolutionConfig
+			if !tc.unset {
+				cfg.TableLocation = servicetest.NewInterpolatedString(t, tc.tableLocation)
+			}
+			var logs bytes.Buffer
+			logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&logs, nil)))
+			r := &Router{schemaEvoCfg: cfg, logger: logger}
+
+			var batch service.MessageBatch
+			for _, fab := range tc.fabs {
+				msg := service.NewMessage([]byte(`{"id":1}`))
+				msg.MetaSetMut("fab", fab)
+				batch = append(batch, msg)
+			}
+
+			got, err := r.resolveTableLocation(batch, []string{"shop", "cdc"}, tc.table)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+			if tc.wantWarn != "" {
+				assert.Contains(t, logs.String(), "level=WARN")
+				assert.Contains(t, logs.String(), tc.wantWarn)
+			} else {
+				assert.NotContains(t, logs.String(), "level=WARN")
+			}
+		})
+	}
 }

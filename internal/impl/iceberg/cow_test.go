@@ -81,7 +81,7 @@ namespace: ns
 table: t
 storage:
   aws_s3:
-    bucket: bucket
+    region: us-east-1
 merge_strategy: sideways
 `, nil)
 		require.NoError(t, yamlErr,

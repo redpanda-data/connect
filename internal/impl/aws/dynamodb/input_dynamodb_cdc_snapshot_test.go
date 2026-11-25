@@ -9,10 +9,16 @@
 package dynamodb
 
 import (
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestSnapshotSequenceBuffer(t *testing.T) {
@@ -158,6 +164,63 @@ func TestSnapshotSequenceBufferSameSecondAsStart(t *testing.T) {
 			buffer.RecordSnapshotItem("key1", snapshotStart)
 
 			assert.Equal(t, tt.wantSkip, buffer.ShouldSkipCDCEvent("key1", tt.cdcTime))
+		})
+	}
+}
+
+// The snapshot start comes from the host clock and stream stamps from the AWS
+// clock. On a host clock ahead of AWS, a write after the true start can get a
+// stamp before the recorded start. Up to 1 min of skew, the dedupe must keep
+// that write.
+func TestHandleSnapshotBatchHostClockAhead(t *testing.T) {
+	tests := []struct {
+		name      string
+		startTime time.Time
+		cdcTime   time.Time
+		wantSkip  bool
+	}{
+		{
+			name:      "host 300 ms ahead, write 100 ms after the true start",
+			startTime: time.Date(2026, 1, 1, 10, 0, 1, 100_000_000, time.UTC),
+			cdcTime:   time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip:  false,
+		},
+		{
+			name:      "host 1 min ahead, write 100 ms after the true start",
+			startTime: time.Date(2026, 1, 1, 10, 1, 0, 100_000_000, time.UTC),
+			cdcTime:   time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip:  false,
+		},
+		{
+			name:      "write more than 1 min before the recorded start",
+			startTime: time.Date(2026, 1, 1, 10, 1, 1, 100_000_000, time.UTC),
+			cdcTime:   time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+			wantSkip:  true,
+		},
+	}
+	keySchema := []dynamodbtypes.KeySchemaElement{
+		{AttributeName: aws.String("pk"), KeyType: dynamodbtypes.KeyTypeHash},
+	}
+	item := map[string]dynamodbtypes.AttributeValue{
+		"pk": &dynamodbtypes.AttributeValueMemberS{Value: "item-1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &dynamoDBCDCInput{
+				snapshot:  &snapshotState{startTime: tt.startTime, seqBuffer: newSnapshotSequenceBuffer(100)},
+				keySchema: keySchema,
+				msgChan:   make(chan asyncMessage, 1),
+				log:       service.MockResources().Logger(),
+				metrics:   newDynamoDBCDCMetrics(service.MockResources().Metrics()),
+			}
+			tracker, _ := newTestSnapshotAckTracker(1)
+			var ackGate sync.WaitGroup
+
+			err := d.handleSnapshotBatch(t.Context(), []map[string]dynamodbtypes.AttributeValue{item}, 0, "t", keySchema, item, tracker, &ackGate)
+			require.NoError(t, err)
+
+			key := buildItemKeyString(item, keySchema)
+			assert.Equal(t, tt.wantSkip, d.snapshot.seqBuffer.ShouldSkipCDCEvent(key, tt.cdcTime))
 		})
 	}
 }

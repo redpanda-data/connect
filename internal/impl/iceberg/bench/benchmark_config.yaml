@@ -27,7 +27,6 @@ output:
     table: events
     storage:
       aws_s3:
-        bucket: "${MINIO_BUCKET:warehouse}"
         region: "${MINIO_REGION:us-east-1}"
         endpoint: "${MINIO_ENDPOINT:http://localhost:9000}"
         force_path_style_urls: true

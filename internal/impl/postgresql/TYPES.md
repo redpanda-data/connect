@@ -40,6 +40,7 @@ rely on them.
 | TIMESTAMPTZ | Timestamp | time.Time | time.Time |
 | UUID | String | string | string |
 | JSON / JSONB | Any | (native) | (native) |
+| INTERVAL, ranges other than TSRANGE, multiranges (and the arrays of intervals and ranges) | Any | string | string |
 
 ### Notes
 
@@ -49,13 +50,27 @@ rely on them.
   The CDC path returns the raw PostgreSQL text representation, bypassing the
   pgtype.Numeric struct.
 - **DATE**: Mapped to Timestamp schema type. Both paths return `time.Time`.
-  ±infinity dates return `nil`.
+  The special values `infinity` and `-infinity` have no `time.Time` form.
+  Both paths decode them to `pglogicalstream.InfiniteTime`, which keeps the
+  snapshot keys exact, and the input emits them as `nil`.
 - **TIME / TIMETZ**: Returned as raw PostgreSQL text strings. The CDC path
   bypasses pgtype.Time to avoid struct values. Note: timetz (OID 1266) is not
   in pgx's default type map; the CDC path handles it via a `string(data)`
   fallback, and the snapshot path resolves the numeric OID via `resolveTypeName`.
-- **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. ±infinity
-  timestamps return `nil`.
+- **TIMESTAMP / TIMESTAMPTZ**: Both paths return `time.Time`. The special
+  values `infinity` and `-infinity` are handled as for DATE.
+- **Infinite values in arrays**: Known gap. The CDC path decodes an infinite
+  element of a DATE, TIMESTAMP or TIMESTAMPTZ array to
+  `pgtype.InfinityModifier`, which marshals to the number `1` (`-1` for
+  `-infinity`). The snapshot path returns the raw PostgreSQL text.
+- **INTERVAL, ranges and multiranges**: Both paths return the raw PostgreSQL
+  text. pgx decodes these types to pgtype.Interval and pgtype.Range structs,
+  which marshal with internal fields, and it fails to decode the interval
+  `infinity` of PostgreSQL 17. The text keeps `infinity` and `-infinity` as
+  they are. The CDC path finds the ranges and multiranges by their pgx codec
+  (RangeCodec, MultirangeCodec), also as array elements, so INT4RANGE, INT8RANGE,
+  NUMRANGE, DATERANGE, TSTZRANGE and their arrays and multiranges are all
+  covered. TSRANGE goes through `sanitizeTsrange` on both paths instead.
 - **JSON / JSONB**: Both paths run `json.Unmarshal`, producing a tree of stdlib
   types (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.

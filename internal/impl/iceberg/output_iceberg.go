@@ -11,6 +11,7 @@ package iceberg
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
@@ -367,7 +368,22 @@ func parseStorageProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 		return props, nil
 	}
 
-	// Check for S3 configuration
+	// The storage lint rule rejects this too, but lint does not always run
+	// (for example with --chilled).
+	var set []string
+	for _, f := range []string{ioFieldStorageS3, ioFieldStorageGCS, ioFieldStorageAzure} {
+		if conf.Contains(ioFieldStorage, f) {
+			set = append(set, f)
+		}
+	}
+	if len(set) > 1 {
+		return nil, fmt.Errorf("%s: specify at most one of %s, %s or %s, got %s",
+			ioFieldStorage, ioFieldStorageS3, ioFieldStorageGCS, ioFieldStorageAzure, strings.Join(set, ", "))
+	}
+
+	// Contains is true only when the user wrote the block, because no field
+	// under aws_s3 or gcp_cloud_storage has a default. Keep it that way, or the
+	// first block with a default wins for every config.
 	if conf.Contains(ioFieldStorage, ioFieldStorageS3) {
 		return parseS3Props(conf)
 	}
@@ -411,9 +427,13 @@ func parseS3Props(conf *service.ParsedConfig) (iceberg.Properties, error) {
 	// iceberg-go uses S3ForceVirtualAddressing which is the inverse:
 	// - force_path_style_urls=true  → S3ForceVirtualAddressing="false" (path-style)
 	// - force_path_style_urls=false → S3ForceVirtualAddressing="true"  (virtual-hosted, AWS default)
-	forcePathStyle, err := conf.FieldBool(ioFieldStorage, ioFieldStorageS3, ioFieldS3ForcePathStyleURLs)
-	if err != nil {
-		return nil, err
+	// The field is optional with no spec default (see its spec), so absent means false.
+	forcePathStyle := false
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, ioFieldS3ForcePathStyleURLs) {
+		var err error
+		if forcePathStyle, err = conf.FieldBool(ioFieldStorage, ioFieldStorageS3, ioFieldS3ForcePathStyleURLs); err != nil {
+			return nil, err
+		}
 	}
 	if forcePathStyle {
 		props[io.S3ForceVirtualAddressing] = "false"
@@ -588,7 +608,7 @@ func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConf
 
 	// Parse table location prefix if present
 	if conf.Contains(ioFieldSchemaEvolution, ioFieldSchemaEvolutionTableLoc) {
-		cfg.TableLocation, err = conf.FieldString(ioFieldSchemaEvolution, ioFieldSchemaEvolutionTableLoc)
+		cfg.TableLocation, err = conf.FieldInterpolatedString(ioFieldSchemaEvolution, ioFieldSchemaEvolutionTableLoc)
 		if err != nil {
 			return cfg, err
 		}
