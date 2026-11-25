@@ -189,10 +189,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			slices.Concat(
 				flags,
 				[]cli.Flag{
-					&cli.BoolFlag{
-						Name:  "disable-telemetry",
-						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
-					},
+					disableTelemetryFlag,
 					&cli.StringFlag{
 						Name:  "telemetry-deployment-type",
 						Usage: "Tags telemetry payloads with the deployment type. Expected values: self-hosted, byoc, serverless. When unset the field is omitted from the payload.",
@@ -214,7 +211,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				applyLicenseFlag(c, &licenseConfig)
 				chrootPath = c.String("chroot")
 				chrootPassthrough = c.StringSlice("chroot-passthrough")
-				disableTelemetry = c.Bool("disable-telemetry")
+				disableTelemetry = disableTelemetryRequested(c)
 				telemetryDeploymentType = c.String("telemetry-deployment-type")
 				telemetryTenantID = c.String("telemetry-tenant-id")
 				statusEP.SetEnabled(c.Bool("status-endpoint"))
