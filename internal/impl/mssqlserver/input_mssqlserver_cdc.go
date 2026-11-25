@@ -356,7 +356,7 @@ func (i *sqlServerCDCInput) rebuildPublisherIfPoisoned() (*batchPublisher, error
 	return publisher, nil
 }
 
-func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
+func (i *sqlServerCDCInput) Connect(ctx context.Context) (err error) {
 	i.connMu.Lock()
 	defer i.connMu.Unlock()
 
@@ -368,6 +368,21 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	default:
 		return nil
 	}
+
+	// The previous session (if any) has stopped, so its connections are no
+	// longer in use. Each sql.DB owns a goroutine until closed, so overwriting
+	// them on every retry leaks memory until the process is OOM killed.
+	if cErr := i.closeConnections(ctx); cErr != nil {
+		i.log.Debugf("Closing connections from previous session: %s", cErr)
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		if cErr := i.closeConnections(ctx); cErr != nil {
+			i.log.Debugf("Closing connections after failed connect: %s", cErr)
+		}
+	}()
 
 	// A failed batch send leaves an unresolvable slot in the ordered tracker
 	// (see sendTracked), and a sealed flush queue refuses every later batch
@@ -655,11 +670,20 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 		i.log.Error("failed to shutdown 'microsoft_sql_server_cdc' component within the timeout")
 	case <-i.stopSig.HasStoppedChan():
 	}
+	return i.closeConnections(ctx)
+}
+
+// closeConnections releases the session's database handle and default
+// checkpoint cache. Callers must ensure the session goroutine has stopped.
+func (i *sqlServerCDCInput) closeConnections(ctx context.Context) error {
+	var errs []error
 	if i.cpCache != nil {
-		return i.cpCache.Close(ctx)
+		errs = append(errs, i.cpCache.Close(ctx))
+		i.cpCache = nil
 	}
 	if i.db != nil {
-		return i.db.Close()
+		errs = append(errs, i.db.Close())
+		i.db = nil
 	}
-	return nil
+	return errors.Join(errs...)
 }
