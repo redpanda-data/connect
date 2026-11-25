@@ -1,0 +1,11 @@
+{
+  "name": "s3",
+  "config": {
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "s3.bucket.name": "my-bucket",
+    "s3.region": "us-east-1",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://sr:8081",
+    "topics": "orders"
+  }
+}

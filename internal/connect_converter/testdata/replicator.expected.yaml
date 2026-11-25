@@ -1,0 +1,14 @@
+# Converted from Kafka Connect connector "replicator" (class=io.confluent.connect.replicator.ReplicatorSourceConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - src:9092
+    topics:
+      - orders
+      - payments
+    consumer_group: repl-orders
+output:
+  redpanda:
+    seed_brokers:
+      - dst:9092
+    topic: ${! @kafka_topic }.replica # TODO: from topic.rename.format=${topic}.replica — verify destination topic naming

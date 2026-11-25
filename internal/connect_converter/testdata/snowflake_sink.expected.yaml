@@ -1,0 +1,17 @@
+# Converted from Kafka Connect connector "sf" (class=com.snowflake.kafka.connector.SnowflakeSinkConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - localhost:9092 # TODO: set your Redpanda/Kafka broker(s)
+    topics:
+      - orders
+    consumer_group: connect-sf # TODO: confirm consumer group
+output:
+  snowflake_streaming:
+    account: acct.snowflakecomputing.com # TODO: RPCN expects the account identifier, not the full URL
+    user: svc
+    role: "" # TODO: set the Snowflake role
+    database: DB
+    schema: PUBLIC
+    private_key: KEY
+    table: "" # TODO: set the destination table (KC derives it from the topic)
