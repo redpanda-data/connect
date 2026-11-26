@@ -41,7 +41,8 @@ func TestIncrementalConfigAllowedWithMultiTable(t *testing.T) {
 tables: [a, b]
 table_discovery_mode: includelist
 checkpoint_table: ckpt
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 `)
 	require.NoError(t, err)
 	assert.Equal(t, snapshotModeIncremental, conf.snapshot.mode)
@@ -62,12 +63,57 @@ snapshot_mode: `+mode+`
 	}
 }
 
+func TestIncrementalConfigExclusiveWithSnapshotMode(t *testing.T) {
+	for _, mode := range []string{snapshotModeOnly, snapshotModeAndCDC} {
+		t.Run(mode, func(t *testing.T) {
+			_, err := parseCDCConfig(t, `
+tables: [a]
+checkpoint_table: ckpt
+snapshot_mode: `+mode+`
+incremental_snapshot:
+  enabled: true
+`)
+			require.ErrorContains(t, err, "incremental_snapshot.enabled requires snapshot_mode: none")
+		})
+	}
+}
+
+func TestIncrementalConfigDisabledByDefault(t *testing.T) {
+	conf, err := parseCDCConfig(t, `
+tables: [a]
+checkpoint_table: ckpt
+incremental_snapshot:
+  watermark_margin: 5s
+`)
+	require.NoError(t, err)
+	assert.Equal(t, snapshotModeNone, conf.snapshot.mode)
+}
+
+func TestIncrementalConfigNotASnapshotMode(t *testing.T) {
+	err := service.NewStreamBuilder().AddInputYAML(`
+aws_dynamodb_cdc:
+  tables: [a]
+  checkpoint_table: ckpt
+  snapshot_mode: incremental
+`)
+	require.ErrorContains(t, err, "value incremental is not a valid option")
+}
+
+func TestIncrementalConfigNotASnapshotModeWithoutLint(t *testing.T) {
+	_, err := parseCDCConfig(t, `
+tables: [a]
+checkpoint_table: ckpt
+snapshot_mode: incremental
+`)
+	require.ErrorContains(t, err, "set incremental_snapshot.enabled: true instead")
+}
+
 func TestIncrementalConfigBlock(t *testing.T) {
 	conf, err := parseCDCConfig(t, `
 tables: [a]
 checkpoint_table: ckpt
-snapshot_mode: incremental
 incremental_snapshot:
+  enabled: true
   watermark_margin: 5s
   idle_shard_grace: 2m
 `)
@@ -80,8 +126,8 @@ func TestIncrementalConfigNegativeMarginRejected(t *testing.T) {
 	_, err := parseCDCConfig(t, `
 tables: [a]
 checkpoint_table: ckpt
-snapshot_mode: incremental
 incremental_snapshot:
+  enabled: true
   watermark_margin: -1s
 `)
 	require.ErrorContains(t, err, "incremental_snapshot.watermark_margin must not be negative")
@@ -161,7 +207,8 @@ func TestIncrementalConfigIdleShardGrace(t *testing.T) {
 	const base = `
 tables: [a]
 checkpoint_table: ckpt
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 `
 	t.Run("default", func(t *testing.T) {
 		conf, err := parseCDCConfig(t, base)
@@ -169,13 +216,13 @@ snapshot_mode: incremental
 		assert.Equal(t, time.Minute, conf.snapshot.idleShardGrace)
 	})
 	t.Run("explicit", func(t *testing.T) {
-		conf, err := parseCDCConfig(t, base+"incremental_snapshot:\n  idle_shard_grace: 30s\n")
+		conf, err := parseCDCConfig(t, base+"  idle_shard_grace: 30s\n")
 		require.NoError(t, err)
 		assert.Equal(t, 30*time.Second, conf.snapshot.idleShardGrace)
 	})
 	for _, v := range []string{"0s", "-1s"} {
 		t.Run("rejects "+v, func(t *testing.T) {
-			_, err := parseCDCConfig(t, base+"incremental_snapshot:\n  idle_shard_grace: "+v+"\n")
+			_, err := parseCDCConfig(t, base+"  idle_shard_grace: "+v+"\n")
 			require.ErrorContains(t, err, "incremental_snapshot.idle_shard_grace must be greater than 0")
 		})
 	}

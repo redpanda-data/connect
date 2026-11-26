@@ -1655,7 +1655,7 @@ credentials:
 const incrementalSnapshotRealAWSEnv = "DYNAMODB_CDC_REAL_AWS"
 
 // TestIntegrationDynamoDBCDCIncrementalSnapshot backfills a table in
-// snapshot_mode incremental while a writer keeps updating random keys. It
+// the incremental snapshot while a writer keeps updating random keys. It
 // checks the Safety rule (no snapshot item is emitted after a newer stream
 // event for its key) and that the last value the input emitted for every key
 // matches the table.
@@ -1812,7 +1812,8 @@ credentials:
 tables: [%s]
 checkpoint_table: %s
 %s
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 snapshot_segments: 4
 snapshot_batch_size: 25
 snapshot_throttle: 10ms
@@ -2087,7 +2088,8 @@ tables: [%s]
 signal_table_name: %s
 checkpoint_table: %s
 %s
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 snapshot_segments: 2
 snapshot_batch_size: 25
 snapshot_throttle: 10ms

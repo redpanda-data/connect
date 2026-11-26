@@ -202,7 +202,8 @@ func TestConnectIncrementalSingleRejectsKeysOnly(t *testing.T) {
 	pConf, err := dynamoDBCDCInputConfig().ParseYAML(`
 tables: [t]
 checkpoint_table: ckpt
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 region: us-east-1
 `, service.NewEnvironment())
 	require.NoError(t, err)

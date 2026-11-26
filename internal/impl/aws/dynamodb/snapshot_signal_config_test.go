@@ -172,13 +172,13 @@ snapshot_mode: %s
 			assert.Contains(t, err.Error(), "cannot be used with signal_table_name")
 		})
 	}
-	for _, mode := range []string{snapshotModeNone, snapshotModeIncremental} {
-		_, err := parseCDCConfig(t, fmt.Sprintf(`
+	for _, extra := range []string{"", "incremental_snapshot:\n  enabled: true\n"} {
+		_, err := parseCDCConfig(t, `
 tables: [orders]
 signal_table_name: rpcn_signals
-snapshot_mode: %s
-`, mode))
-		require.NoError(t, err, mode)
+snapshot_mode: none
+`+extra)
+		require.NoError(t, err, extra)
 	}
 }
 
@@ -194,7 +194,8 @@ func TestConnectRoutesSignalTableToMultiTable(t *testing.T) {
 	d := newSignalConnectInput(t, `
 tables: [orders]
 checkpoint_table: ckpt
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 signal_table_name: rpcn_signals
 region: us-east-1
 `, stub)
@@ -265,7 +266,8 @@ func TestTagDiscoveryExcludesSignalTable(t *testing.T) {
 table_discovery_mode: tag
 table_tag_filter: "cdc:on"
 checkpoint_table: ckpt
-snapshot_mode: incremental
+incremental_snapshot:
+  enabled: true
 signal_table_name: rpcn_signals
 region: us-east-1
 `, stub)

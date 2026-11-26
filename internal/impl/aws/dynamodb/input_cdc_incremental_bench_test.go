@@ -63,7 +63,7 @@ type incSnapBenchResult struct {
 
 // BenchmarkIntegrationDynamoDBCDCIncrementalSnapshot measures a backfill with
 // and without concurrent writes to the rows being read, for
-// snapshot_mode: incremental and the snapshot_and_cdc baseline, against
+// the incremental snapshot and the snapshot_and_cdc baseline, against
 // DynamoDB Local. Run each case once:
 //
 //	go test -run BenchmarkIntegrationDynamoDBCDCIncrementalSnapshot -bench BenchmarkIntegrationDynamoDBCDCIncrementalSnapshot -benchtime 1x -timeout 60m ./internal/impl/aws/dynamodb/
@@ -208,20 +208,24 @@ func runIncSnapBenchCase(b *testing.B, port string, c incSnapBenchCase) incSnapB
 	})
 	require.NoError(b, err)
 
+	modeYAML := "snapshot_mode: " + c.mode
+	if c.mode == snapshotModeIncremental {
+		modeYAML = "incremental_snapshot:\n  enabled: true"
+	}
 	confStr := fmt.Sprintf(`
 tables: [%s]
 checkpoint_table: %s
 endpoint: %s
 region: us-east-1
 start_from: trim_horizon
-snapshot_mode: %s
+%s
 snapshot_segments: %d
 snapshot_batch_size: %d
 credentials:
   id: xxxxx
   secret: xxxxx
   token: xxxxx
-`, tableName, checkpointTable, endpoint, c.mode, c.segments, c.batchSize)
+`, tableName, checkpointTable, endpoint, modeYAML, c.segments, c.batchSize)
 	parsed, err := dynamoDBCDCInputConfig().ParseYAML(confStr, nil)
 	require.NoError(b, err)
 	res, metrics := newBenchResources(b)

@@ -153,7 +153,7 @@ func (d *dynamoDBCDCInput) retrySnapshotSignal(ctx context.Context, log *service
 // signal's id and type.
 func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *service.Logger, data []byte) error {
 	if d.conf.snapshot.mode != snapshotModeIncremental {
-		log.Warn(fmt.Errorf("%w: set snapshot_mode to incremental", replication.ErrSnapshotDisabled).Error())
+		log.Warn(fmt.Errorf("%w: set incremental_snapshot.enabled to true", replication.ErrSnapshotDisabled).Error())
 		return nil
 	}
 	if d.backfills == nil {

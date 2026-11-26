@@ -98,6 +98,7 @@ const (
 	dciFieldSnapshotDedupe         = "snapshot_deduplicate"
 	dciFieldSnapshotBufferSize     = "snapshot_buffer_size"
 	dciFieldIncrementalSnapshot    = "incremental_snapshot"
+	dciFieldIncSnapshotEnabled     = "enabled"
 	dciFieldIncSnapshotMargin      = "watermark_margin"
 	dciFieldIncSnapshotIdleGrace   = "idle_shard_grace"
 	dciFieldSignalTable            = "signal_table_name"
@@ -113,7 +114,8 @@ const (
 	snapshotModeOnly   = "snapshot_only"
 	snapshotModeAndCDC = "snapshot_and_cdc"
 	// snapshotModeIncremental backfills through a page window released as the
-	// stream catches up, interleaved with live CDC.
+	// stream catches up, interleaved with live CDC. It is not a snapshot_mode
+	// value: incremental_snapshot.enabled selects it.
 	snapshotModeIncremental = "incremental"
 
 	// Table discovery modes.
@@ -129,7 +131,7 @@ stream enabled with view type ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`
 connect. It must not also appear in ` + "`" + dciFieldTables + "`" + `, which is rejected at startup. Tag discovery
 never treats it as a source table, even when its tags match. The signal table is always streamed
 alongside the source tables. So the input runs in multi-table mode whenever it is set, and
-` + "`" + dciFieldSnapshotMode + "`" + ` must then be ` + "`none`" + ` or ` + "`incremental`" + `.
+` + "`" + dciFieldSnapshotMode + "`" + ` must then be ` + "`none`" + `.
 
 Each signal is an item with these attributes:
 
@@ -164,13 +166,13 @@ pipeline:
 object with a ` + "`message`" + ` key, whose value is written to the input's log output.
 
 **` + "`snapshot-execute`" + `**: backfills the named tables incrementally, alongside streaming. Requires
-` + "`" + dciFieldSnapshotMode + ": incremental`" + `. Without it, the signal is logged with a warning and
+` + "`" + dciFieldIncrementalSnapshot + "." + dciFieldIncSnapshotEnabled + ": true`" + `. Without it, the signal is logged with a warning and
 ignored. The ` + "`data`" + ` attribute must contain a JSON object with a ` + "`tables`" + ` key listing table names,
 for example ` + "`{\"tables\": [\"orders\", \"customers\"]}`" + `. Every named table must be one this input
 streams, with a stream view of ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `. If any table fails these
 checks, the whole request is rejected and logged, and nothing is queued.
 
-With ` + "`" + dciFieldSnapshotMode + ": incremental`" + ` and ` + "`signal_table_name`" + ` set, tables are backfilled only on
+With ` + "`" + dciFieldIncrementalSnapshot + "." + dciFieldIncSnapshotEnabled + ": true`" + ` and ` + "`signal_table_name`" + ` set, tables are backfilled only on
 request. At startup, and for tables found by discovery, a table is queued only when one of these
 is true:
 
@@ -242,23 +244,23 @@ The source DynamoDB table(s) must have https://docs.aws.amazon.com/amazondynamod
 
 == Snapshots
 
-When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+`, `+"`snapshot_and_cdc`"+`, or `+"`incremental`"+`, the input scans the entire table instead of, before, or while streaming changes. This is useful for:
+When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+` or `+"`snapshot_and_cdc`"+`, or `+"`incremental_snapshot.enabled`"+` is `+"`true`"+`, the input scans the entire table instead of, before, or while streaming changes. This is useful for:
 
 - Building a replica or cache with all existing data
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
-The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table. With `+"`table_discovery_mode: tag`"+`, either mode fails at startup, even when the filter matches only one table. An `+"`includelist`"+` with exactly one table supports them, unless `+"`signal_table_name`"+` is set. A signal table makes the input multi-table, so both modes then fail at startup. `+"`incremental`"+` also works in multi-table mode, including with `+"`signal_table_name`"+` set.
+The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table. With `+"`table_discovery_mode: tag`"+`, either mode fails at startup, even when the filter matches only one table. An `+"`includelist`"+` with exactly one table supports them, unless `+"`signal_table_name`"+` is set. A signal table makes the input multi-table, so both modes then fail at startup. The incremental snapshot also works in multi-table mode, including with `+"`signal_table_name`"+` set.
 
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `+"`snapshot_segments`"+` and `+"`snapshot_throttle`"+` to control RCU consumption.
 
 NOTE: In `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes, snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `+"`snapshot_deduplicate`"+` to minimize duplicates.
 
-When `+"`snapshot_mode`"+` is `+"`incremental`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode. In multi-table mode, this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held. So no snapshot item leaves the input after a newer change to the same key. Once the stream catches up, the last event the input emits for each key matches that key's current state in the table. This ordering holds at the input. Output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once unless a signal asks for it again. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress, while the table keeps streaming. In multi-table mode, a backfill that fails to start is retried the same way, and the other queued tables are backfilled meanwhile. In single-table mode, a backfill that fails the connection is retried with its own backoff. Retries wait 30 seconds at first and double up to 10 minutes between attempts. A failure that only a permission or configuration change can fix (AWS returns `+"`AccessDeniedException`"+`, `+"`UnrecognizedClientException`"+` or `+"`ValidationException`"+`, or the checkpoint table is missing) waits 10 minutes from the first attempt. In multi-table mode, a table deleted before its backfill completes is dropped from the queue, and the input logs an error. The input does not retry it until it restarts.
+When `+"`incremental_snapshot.enabled`"+` is `+"`true`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode. In multi-table mode, this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held. So no snapshot item leaves the input after a newer change to the same key. Once the stream catches up, the last event the input emits for each key matches that key's current state in the table. This ordering holds at the input. Output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once unless a signal asks for it again. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress, while the table keeps streaming. In multi-table mode, a backfill that fails to start is retried the same way, and the other queued tables are backfilled meanwhile. In single-table mode, a backfill that fails the connection is retried with its own backoff. Retries wait 30 seconds at first and double up to 10 minutes between attempts. A failure that only a permission or configuration change can fix (AWS returns `+"`AccessDeniedException`"+`, `+"`UnrecognizedClientException`"+` or `+"`ValidationException`"+`, or the checkpoint table is missing) waits 10 minutes from the first attempt. In multi-table mode, a table deleted before its backfill completes is dropped from the queue, and the input logs an error. The input does not retry it until it restarts.
 
 == Checkpointing
 
-Checkpoints are stored in a separate DynamoDB table (configured with `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses. With `+"`snapshot_mode: incremental`"+`, or when `+"`signal_table_name`"+` is set, it also needs `+"`dynamodb:DeleteItem`"+` on the checkpoint table, because resetting snapshot progress and clearing a handled snapshot request both delete rows.
+Checkpoints are stored in a separate DynamoDB table (configured with `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses. With `+"`incremental_snapshot.enabled: true`"+`, or when `+"`signal_table_name`"+` is set, it also needs `+"`dynamodb:DeleteItem`"+` on the checkpoint table, because resetting snapshot progress and clearing a handled snapshot request both delete rows.
 
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
@@ -280,7 +282,7 @@ DynamoDB Streams keeps records for 24 hours. If the pipeline stops for longer, a
 
 - With `+"`snapshot_mode: none`"+`, the shard resumes from `+"`TRIM_HORIZON`"+`.
 - With `+"`snapshot_mode: snapshot_and_cdc`"+` and a completed snapshot, the input runs the full snapshot again, so every item gets its current state. The CDC readers also resume from `+"`TRIM_HORIZON`"+`, so expect duplicates. The intermediate changes are still lost.
-- With `+"`snapshot_mode: incremental`"+` and a completed backfill, the input resets the backfill and runs it again while the table streams. The CDC readers also resume from `+"`TRIM_HORIZON`"+`. The intermediate changes are still lost.
+- With `+"`incremental_snapshot.enabled: true`"+` and a completed backfill, the input resets the backfill and runs it again while the table streams. The CDC readers also resume from `+"`TRIM_HORIZON`"+`. The intermediate changes are still lost.
 
 == Alternative
 
@@ -407,9 +409,9 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Description("Time to wait when applying backpressure due to too many in-flight messages.").
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
-			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc", "incremental").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `snapshot_only` and `snapshot_and_cdc` require a single table. They fail at startup with `table_discovery_mode: tag`, with more than one table in `tables`, or with `signal_table_name` set. `incremental`: Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too). It never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. `incremental` requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, and reads with strongly consistent Scans (twice the RCU of the other modes). It backfills a table once, even if that table was previously only streamed. A `snapshot-execute` signal backfills a completed table again. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). `incremental` also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset and a repeat signal delete snapshot progress rows.").Version("4.82.0").
-				ShortDescription("Snapshot behaviour: none, snapshot_only, snapshot_and_cdc, or incremental (backfill while streaming, multi-table capable).").
+			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `snapshot_only` and `snapshot_and_cdc` require a single table. They fail at startup with `table_discovery_mode: tag`, with more than one table in `tables`, or with `signal_table_name` set. To backfill while streaming, leave this at `none` and set `incremental_snapshot.enabled: true`.").Version("4.82.0").
+				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
 				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more Read Capacity Units (RCUs). A lower value is safer to start with. A snapshot that resumes from stored progress keeps the segment count it started with. A changed value applies to the next snapshot.").Version("4.82.0").
@@ -429,16 +431,20 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items. It skips CDC events for those keys that are stamped more than 1 minute before the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. If the host clock is more than 1 minute ahead of the AWS clock, the input can skip CDC events for writes made immediately after the snapshot start. Those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates. It has no effect with `snapshot_mode: incremental`.").Version("4.82.0").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items. It skips CDC events for those keys that are stamped more than 1 minute before the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. If the host clock is more than 1 minute ahead of the AWS clock, the input can skip CDC events for writes made immediately after the snapshot start. Those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates. It has no effect with `incremental_snapshot.enabled: true`.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering the keys of scanned items.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
-				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. It has no effect with `snapshot_mode: incremental`.").Version("4.82.0").
+				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. It has no effect with `incremental_snapshot.enabled: true`.").Version("4.82.0").
 				ShortDescription("Maximum scanned item keys buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
 			service.NewObjectField(dciFieldIncrementalSnapshot,
+				service.NewBoolField(dciFieldIncSnapshotEnabled).
+					Description("Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too). It never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. It requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, and reads with strongly consistent Scans (twice the RCU of the other modes). It backfills a table once, even if that table was previously only streamed. A `snapshot-execute` signal backfills a completed table again. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). It also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset and a repeat signal delete snapshot progress rows. It needs `snapshot_mode: none`: the other modes read the same items, and the input fails to start if both are set.").
+					ShortDescription("Backfill each table while streaming, in single- or multi-table mode.").
+					Default(false),
 				service.NewDurationField(dciFieldIncSnapshotMargin).
 					Description("Extra time a snapshot page is held after every shard has streamed past the time of its Scan. The margin covers clock skew between this host and AWS, plus stream publication delay. For an idle shard, the input treats the start of its last empty poll, minus this margin, as the point the shard has streamed to. A page can therefore wait up to twice the margin before release. This only affects the order in which snapshot items leave the input relative to older stream events. It does not affect the correctness of the final value emitted for each key.").
 					ShortDescription("Extra hold time per snapshot page for clock skew and stream delay.").
@@ -450,8 +456,8 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 					Default("1m").
 					LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["idle_shard_grace must be greater than 0"] }`),
 			).
-				Description("Tuning for `snapshot_mode: incremental`. These fields have no effect in the other modes. The mode itself is set with `snapshot_mode`, and the page size, segment count and throttle come from `snapshot_batch_size`, `snapshot_segments` and `snapshot_throttle`.").
-				ShortDescription("Tuning for the incremental snapshot mode, with no effect in other modes.").
+				Description("Backfills each table while it streams, the same way as `incremental_snapshot` in `postgres_cdc` and `mongodb_cdc`. Turn it on with `enabled`. The other fields tune it and have no effect while it is off. The page size, segment count and throttle come from `snapshot_batch_size`, `snapshot_segments` and `snapshot_throttle`.").
+				ShortDescription("Backfill tables while streaming, and its tuning.").
 				Version("4.120.0").
 				Advanced(),
 			service.NewStringField(dciFieldSignalTable).
@@ -622,7 +628,7 @@ type tableStream struct {
 	// shardReaders (ts.mu).
 	completedShards map[string]struct{}
 	snapshot        *snapshotState
-	incremental     *incsnapshot.State // nil unless snapshot_mode is incremental
+	incremental     *incsnapshot.State // nil unless the incremental snapshot is enabled
 	shardRefreshCh  chan struct{}      // Signal coordinator to refresh shards immediately
 	// parentFailures tracks shards discovery fails to prepare across refresh
 	// cycles, so an unreadable parent cannot hold its children back forever.
@@ -697,7 +703,7 @@ type dynamoDBCDCInput struct {
 	// shardReaders (d.mu).
 	completedShards map[string]struct{}
 	snapshot        *snapshotState     // nil if snapshot mode is "none"
-	incremental     *incsnapshot.State // nil unless snapshot_mode is incremental
+	incremental     *incsnapshot.State // nil unless the incremental snapshot is enabled
 	shardRefreshCh  chan struct{}      // Signal coordinator to refresh shards immediately
 	// parentFailures tracks shards discovery fails to prepare across refresh
 	// cycles, so an unreadable parent cannot hold its children back forever.
@@ -731,7 +737,7 @@ type dynamoDBCDCInput struct {
 	// coordinator starts; nil when no backfill runs.
 	backfillCancel context.CancelFunc
 	// backfills orders multi-table incremental backfills; nil unless
-	// snapshot_mode is incremental in multi-table mode.
+	// the incremental snapshot is enabled in multi-table mode.
 	backfills *incsnapshot.TableQueue
 
 	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
@@ -1106,10 +1112,10 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 	isMultiTable := conf.tableDiscoveryMode == discoveryModeTag ||
 		len(conf.tables) > 1 || conf.signalTable != ""
 	if conf.signalTable != "" && conf.snapshot.mode != snapshotModeNone && conf.snapshot.mode != snapshotModeIncremental {
-		return fmt.Errorf("snapshot_mode %q cannot be used with signal_table_name: a signal table makes the input multi-table; use snapshot_mode none or incremental", conf.snapshot.mode)
+		return fmt.Errorf("snapshot_mode %q cannot be used with signal_table_name: a signal table makes the input multi-table; use snapshot_mode none, with incremental_snapshot.enabled for a backfill", conf.snapshot.mode)
 	}
 	if conf.snapshot.mode != snapshotModeNone && conf.snapshot.mode != snapshotModeIncremental && isMultiTable {
-		return fmt.Errorf("snapshot_mode %q is not supported with multi-table streaming; use snapshot_mode: none or incremental", conf.snapshot.mode)
+		return fmt.Errorf("snapshot_mode %q is not supported with multi-table streaming; use snapshot_mode: none, with incremental_snapshot.enabled for a backfill", conf.snapshot.mode)
 	}
 	if conf.snapshot.watermarkMargin < 0 {
 		return fmt.Errorf("incremental_snapshot.watermark_margin must not be negative, got %v", conf.snapshot.watermarkMargin)
@@ -1179,6 +1185,12 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.snapshot.mode, err = pConf.FieldString(dciFieldSnapshotMode); err != nil {
 		return
 	}
+	// Lint rejects it as an enum value, but a config parsed without lint
+	// would otherwise still select the internal mode.
+	if conf.snapshot.mode == snapshotModeIncremental {
+		err = fmt.Errorf("%s: %s is not a valid option, set %s.%s: true instead", dciFieldSnapshotMode, snapshotModeIncremental, dciFieldIncrementalSnapshot, dciFieldIncSnapshotEnabled)
+		return
+	}
 	if conf.snapshot.segments, err = pConf.FieldInt(dciFieldSnapshotSegments); err != nil {
 		return
 	}
@@ -1202,6 +1214,18 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	}
 	if conf.signalTable, err = pConf.FieldString(dciFieldSignalTable); err != nil {
 		return
+	}
+	var incEnabled bool
+	if incEnabled, err = pConf.FieldBool(dciFieldIncrementalSnapshot, dciFieldIncSnapshotEnabled); err != nil {
+		return
+	}
+	if incEnabled {
+		// Both read the same items, so enabling both would deliver them twice.
+		if conf.snapshot.mode != snapshotModeNone {
+			err = fmt.Errorf("%s.%s requires %s: none, got %q: the two are mutually exclusive snapshot modes", dciFieldIncrementalSnapshot, dciFieldIncSnapshotEnabled, dciFieldSnapshotMode, conf.snapshot.mode)
+			return
+		}
+		conf.snapshot.mode = snapshotModeIncremental
 	}
 	return
 }
@@ -1676,7 +1700,8 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	}
 
 	// Create table stream
-	// Only snapshot_mode none or incremental reach the multi-table path
+	// Only snapshot_mode none, with or without the incremental snapshot,
+	// reaches the multi-table path
 	// (validated at config time).
 	ts := &tableStream{
 		tableName:      tableName,

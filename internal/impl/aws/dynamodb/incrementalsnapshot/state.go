@@ -40,7 +40,7 @@ type ReleasedPage = incrementalsnapshot.ReleasedPage[Item, Item]
 // State is one table's incremental snapshot machinery: the page window and
 // the shard progress tracker. Readers and shard refresh call its methods;
 // every reader hook is a no-op on a nil receiver, so tables outside
-// snapshot_mode: incremental pay nothing.
+// the incremental snapshot pay nothing.
 type State struct {
 	window   *Window
 	progress *ShardProgress
