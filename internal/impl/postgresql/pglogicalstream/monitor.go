@@ -313,9 +313,7 @@ func (m *Monitor) checkPublication(ctx context.Context) {
 
 	fix := fmt.Sprintf("Add them back with ALTER PUBLICATION %s ADD TABLE.", m.publication)
 	if allTables {
-		// SET ALL TABLES EXCEPT replaces the whole list, so the hint says to
-		// give the tables that stay excluded.
-		fix = fmt.Sprintf("Check that they exist and are not unlogged. If they are in the EXCEPT list of the FOR ALL TABLES publication, run ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded (PostgreSQL 19+).", m.publication)
+		fix = allTablesFix(m.publication) + "."
 	}
 	m.logger.Errorf("Publication %s no longer includes table(s) %s, so PostgreSQL is not capturing their changes and they are lost. %s Then request an incremental snapshot of them to backfill the missed changes. If the input does not need them, remove them from the input's tables instead.",
 		m.publication, current, fix)

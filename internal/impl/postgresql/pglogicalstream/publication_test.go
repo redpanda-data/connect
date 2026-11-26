@@ -105,15 +105,25 @@ func TestPublicationSyncPlan(t *testing.T) {
 }
 
 func TestMissingFromPublicationError(t *testing.T) {
-	require.NoError(t, missingFromPublicationError("pglog_stream_slot", nil))
+	require.NoError(t, missingFromPublicationError("pglog_stream_slot", false, nil))
 
-	err := missingFromPublicationError("pglog_stream_slot", []TableFQN{
+	err := missingFromPublicationError("pglog_stream_slot", false, []TableFQN{
 		{Schema: `"public"`, Table: `"orders"`},
 		{Schema: `"public"`, Table: `"Users"`},
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `publication pglog_stream_slot does not include table(s) "public"."orders", "public"."Users"`)
 	assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_slot ADD TABLE", "the error must say how to fix it")
+
+	// ADD TABLE fails on a FOR ALL TABLES publication, so its hint differs.
+	err = missingFromPublicationError("pglog_stream_slot", true, []TableFQN{
+		{Schema: `"public"`, Table: `"orders"`},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `FOR ALL TABLES publication pglog_stream_slot does not stream table(s) "public"."orders"`)
+	assert.Contains(t, err.Error(), "ALTER PUBLICATION pglog_stream_slot SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded",
+		"SET ALL TABLES EXCEPT replaces the whole list, so the hint must say to keep the other excluded tables")
+	assert.NotContains(t, err.Error(), "ADD TABLE")
 }
 
 func TestPublicationCoversTableQuery(t *testing.T) {

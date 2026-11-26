@@ -282,9 +282,10 @@ type publicationInfo struct {
 	// fields are then zero.
 	exists bool
 	// allTables is pg_publication.puballtables. It must be read from there:
-	// pg_publication_tables lists every table for a FOR ALL TABLES
-	// publication, and nothing for a FOR TABLE publication that has had all of
-	// its tables dropped, so the table list alone cannot tell them apart.
+	// pg_publication_tables lists only the tables a FOR ALL TABLES publication
+	// streams (EXCEPT and unlogged tables are left out), and nothing for a FOR
+	// TABLE publication that has had all of its tables dropped, so the table
+	// list alone cannot tell them apart.
 	allTables bool
 	// The operations the publication streams. Truncates are not read, since
 	// the stream ignores them.
@@ -637,9 +638,8 @@ var errPublicationOperations = errors.New("publication does not publish every op
 
 // ValidatePublication checks, without altering anything, that an externally
 // managed publication exists, streams inserts, updates and deletes, and
-// covers every table in tables. A FOR ALL TABLES publication covers every
-// table. A partitioned table counts as covered when the publication lists it,
-// one of its partitions, or one of its ancestors.
+// covers every table in tables. A partitioned table counts as covered when the
+// publication lists it, one of its partitions, or one of its ancestors.
 //
 // It returns the tables in tables that the publication streams with a row
 // filter or a column list (PostgreSQL 15 or later). Those still stream, so
@@ -656,12 +656,9 @@ func ValidatePublication(ctx context.Context, conn *pgconn.PgConn, publicationNa
 		return nil, fmt.Errorf("%w: %s does not publish %s, so those changes would never stream: set its publish option to include insert, update and delete with ALTER PUBLICATION %s SET (publish = 'insert, update, delete')",
 			errPublicationOperations, publicationName, strings.Join(missing, ", "), publicationName)
 	}
-	if pub.allTables {
-		// A FOR ALL TABLES publication can carry neither a row filter nor a
-		// column list.
-		return nil, nil
-	}
-
+	// A FOR ALL TABLES publication is checked table by table too. It does not
+	// cover every table: PostgreSQL 19 adds EXCEPT, and no version streams an
+	// unlogged table. pg_publication_tables lists only the tables it streams.
 	var missing []TableFQN
 	for _, table := range tables {
 		q, err := publicationCoversTableQuery(publicationName, table.String())
@@ -689,7 +686,7 @@ func ValidatePublication(ctx context.Context, conn *pgconn.PgConn, publicationNa
 			filtered = append(filtered, table)
 		}
 	}
-	if err := missingFromPublicationError(publicationName, missing); err != nil {
+	if err := missingFromPublicationError(publicationName, pub.allTables, missing); err != nil {
 		return nil, err
 	}
 	return filtered, nil
@@ -700,8 +697,10 @@ func queryReturnedTrue(rows []*pgconn.Result) bool {
 }
 
 // missingFromPublicationError reports the tables a publication does not
-// cover, or nil when there are none.
-func missingFromPublicationError(publicationName string, missing []TableFQN) error {
+// cover, or nil when there are none. allTables is true for a FOR ALL TABLES
+// publication, which gets its own hint: ALTER PUBLICATION ... ADD TABLE fails
+// on it.
+func missingFromPublicationError(publicationName string, allTables bool, missing []TableFQN) error {
 	if len(missing) == 0 {
 		return nil
 	}
@@ -709,7 +708,22 @@ func missingFromPublicationError(publicationName string, missing []TableFQN) err
 	for i, table := range missing {
 		names[i] = table.String()
 	}
+	if allTables {
+		return fmt.Errorf("FOR ALL TABLES publication %s does not stream table(s) %s. %s. If the input does not need them, remove them from the input's tables", publicationName, strings.Join(names, ", "), allTablesFix(publicationName))
+	}
 	return fmt.Errorf("publication %s does not include table(s) %s: add them with ALTER PUBLICATION %s ADD TABLE, or remove them from the input's tables", publicationName, strings.Join(names, ", "), publicationName)
+}
+
+// allTablesFix is the fix for a table that a FOR ALL TABLES publication does
+// not stream. The startup check, the runtime monitor and the incremental
+// snapshot signal check all give it, so the three hints stay the same. It has
+// no final period, so that callers can add text after it.
+//
+// PostgreSQL rejects ADD TABLE on a FOR ALL TABLES publication. SET ALL TABLES
+// EXCEPT replaces the whole list, so the hint says to give the tables that
+// stay excluded.
+func allTablesFix(publication string) string {
+	return fmt.Sprintf("Check that each table exists and is not unlogged. If a table is in the EXCEPT list of the FOR ALL TABLES publication, run ALTER PUBLICATION %s SET ALL TABLES EXCEPT (...) with only the tables that must stay excluded (PostgreSQL 19+)", publication)
 }
 
 // publicationCoversTableQuery reports whether a publication replicates every
@@ -717,11 +731,21 @@ func missingFromPublicationError(publicationName string, missing []TableFQN) err
 // rather than the table itself unless the publication sets
 // publish_via_partition_root, so a table is covered when the publication
 // lists something in its partition tree or above it, and every leaf partition
-// is listed itself or through one of its ancestors. A publication listing
-// only some partitions does not cover the parent. The table itself is matched
-// directly, since pg_partition_tree and pg_partition_ancestors return no rows
-// for a table that is neither partitioned nor a partition. A table that does
-// not exist is not covered. pg_partition_tree and pg_partition_ancestors need
+// is listed itself or through one of its ancestors. Foreign table partitions
+// are left out of that check. A publication listing only some partitions does
+// not cover the parent.
+//
+// A FOR ALL TABLES publication lists nothing for a partitioned table with no
+// local partition (none yet, or only foreign ones), so there is nothing to
+// match. It covers such a table when neither the table nor an ancestor is in
+// the publication's pg_publication_rel rows. On a FOR ALL TABLES publication
+// those rows can only be EXCEPT entries (PostgreSQL 19+), since ADD TABLE is
+// rejected, so the check needs no version switch.
+//
+// The table itself is matched directly, since
+// pg_partition_tree and pg_partition_ancestors return no rows for a table that
+// is neither partitioned nor a partition. A table that does not exist is not
+// covered. pg_partition_tree and pg_partition_ancestors need
 // PostgreSQL 12 or later.
 func publicationCoversTableQuery(publication, table string) (string, error) {
 	return sanitize.SQLQuery(`
@@ -746,10 +770,35 @@ func publicationCoversTableQuery(publication, table string) (string, error) {
                    SELECT 1
                    FROM   pg_partition_tree(to_regclass($2)) leaf
                    WHERE  leaf.isleaf
+                   -- A foreign table partition never streams, since its
+                   -- writes go to the remote server and not to this WAL.
+                   -- FOR ALL TABLES does not list it, so it is not required.
+                   AND    (SELECT relkind FROM pg_class WHERE oid = leaf.relid) <> 'f'
                    AND    NOT EXISTS (
                               SELECT 1 FROM published
                               WHERE  oid IN (SELECT relid FROM pg_partition_ancestors(leaf.relid))
                           )
+               )
+               OR (
+                   EXISTS (SELECT 1 FROM pg_publication WHERE pubname = $1 AND puballtables)
+                   AND (SELECT relkind FROM pg_class WHERE oid = to_regclass($2)) = 'p'
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM   pg_partition_tree(to_regclass($2)) leaf
+                       WHERE  leaf.isleaf
+                       AND    (SELECT relkind FROM pg_class WHERE oid = leaf.relid) <> 'f'
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM   pg_publication_rel pr
+                       JOIN   pg_publication p ON p.oid = pr.prpubid
+                       WHERE  p.pubname = $1
+                       AND    pr.prrelid IN (
+                                  SELECT to_regclass($2)::oid
+                                  UNION
+                                  SELECT relid FROM pg_partition_ancestors(to_regclass($2))
+                              )
+                   )
                );
     `, publication, table)
 }
