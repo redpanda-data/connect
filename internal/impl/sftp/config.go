@@ -17,11 +17,13 @@ package sftp
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -302,4 +304,36 @@ func additionalAlgorithms(pConf *service.ParsedConfig, field, kind string, defau
 		}
 	}
 	return algos, nil
+}
+
+// watchSSHClose returns a channel that is closed once client's connection has
+// shut down for any reason (server idle timeout, network failure, etc.). It
+// lets readers and writers notice a dead connection before they try to use
+// it.
+func watchSSHClose(client *ssh.Client) <-chan struct{} {
+	closed := make(chan struct{})
+	go func() {
+		_ = client.Wait()
+		close(closed)
+	}()
+	return closed
+}
+
+// isClosed reports whether ch has been closed. A nil channel is never closed.
+func isClosed(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
+
+// isConnLostErr reports whether err means the SSH connection under an SFTP
+// client is gone. In-flight SFTP requests fail with ErrSSHFxConnectionLost,
+// while an SSH client whose connection has closed fails every new channel
+// with a bare io.EOF, which is how sftp.NewClient reports it. Callers should
+// not pass errors in which io.EOF means the end of a file.
+func isConnLostErr(err error) bool {
+	return errors.Is(err, sftp.ErrSSHFxConnectionLost) || errors.Is(err, io.EOF)
 }

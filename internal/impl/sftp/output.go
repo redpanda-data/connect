@@ -16,7 +16,6 @@ package sftp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -78,6 +77,7 @@ type sftpWriter struct {
 
 	handleMut  sync.Mutex
 	sshClient  *ssh.Client
+	sshClosed  <-chan struct{} // closed once sshClient's connection has shut down
 	sftpClient *sftp.Client
 	handlePath string
 	handle     io.WriteCloser
@@ -122,13 +122,49 @@ func (s *sftpWriter) Connect(context.Context) error {
 		return nil
 	}
 
-	var err error
-	s.sshClient, err = ssh.Dial("tcp", s.address, s.sshConfig)
+	client, err := ssh.Dial("tcp", s.address, s.sshConfig)
 	if err != nil {
 		return fmt.Errorf("connecting to SFTP server: %s", err)
 	}
 
+	s.sshClient = client
+	s.sshClosed = watchSSHClose(client)
 	return nil
+}
+
+// isConnLost reports whether err, returned while using the current SSH
+// connection, means that connection is gone. A connection-closed io.EOF can
+// arrive just before the connection is reported as closed, so both are
+// checked.
+func (s *sftpWriter) isConnLost(err error) bool {
+	return isConnLostErr(err) || isClosed(s.sshClosed)
+}
+
+// closeConn closes the file handle, the SFTP client and the SSH connection,
+// and clears them so that the next write reports service.ErrNotConnected and
+// the output reconnects. Errors are logged at debug level only, since this is
+// usually called on a connection that has already failed.
+func (s *sftpWriter) closeConn() {
+	if s.handle != nil {
+		if err := s.handle.Close(); err != nil {
+			s.log.With("error", err).Debug("Failed to close written file")
+		}
+		s.handle = nil
+		s.handlePath = ""
+	}
+	if s.sftpClient != nil {
+		if err := s.sftpClient.Close(); err != nil {
+			s.log.With("error", err).Debug("Failed to close SFTP client")
+		}
+		s.sftpClient = nil
+	}
+	if s.sshClient != nil {
+		if err := s.sshClient.Close(); err != nil {
+			s.log.With("error", err).Debug("Failed to close SSH client")
+		}
+		s.sshClient = nil
+		s.sshClosed = nil
+	}
 }
 
 func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
@@ -157,16 +193,26 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
-	defer func() {
-		if wErr != nil && errors.Is(wErr, sftp.ErrSSHFxConnectionLost) {
-			s.sshClient = nil
-			wErr = service.ErrNotConnected
-		}
-	}()
-
+	if s.sshClient != nil && isClosed(s.sshClosed) {
+		s.log.Warnf("Connection to SFTP server at %s was closed, reconnecting", s.address)
+		s.closeConn()
+	}
 	if s.sshClient == nil {
 		return service.ErrNotConnected
 	}
+
+	// A write that failed because the connection is gone must drop the whole
+	// connection, not just the SFTP client, otherwise every later write
+	// fails against the same dead SSH client (e.g. "creating SFTP client:
+	// EOF") and the output never recovers. Reporting ErrNotConnected makes
+	// the output reconnect and retry the message.
+	defer func() {
+		if wErr != nil && s.isConnLost(wErr) {
+			s.log.With("error", wErr).Warnf("Lost connection to SFTP server at %s, reconnecting", s.address)
+			s.closeConn()
+			wErr = service.ErrNotConnected
+		}
+	}()
 
 	path, err := s.path.TryString(msg)
 	if err != nil {
@@ -198,6 +244,13 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 
 	s.sftpClient, err = sftp.NewClient(s.sshClient)
 	if err != nil {
+		s.sftpClient = nil
+		if !s.isConnLost(err) {
+			// The SSH connection may still be up but unable to open SFTP
+			// sessions (e.g. the server's per-connection session limit is
+			// exhausted). Start the next write on a fresh connection.
+			s.closeConn()
+		}
 		return fmt.Errorf("creating SFTP client: %w", err)
 	}
 
@@ -277,10 +330,12 @@ func (s *sftpWriter) Close(context.Context) error {
 	}
 	s.closeClient()
 
-	if err := s.sshClient.Close(); err != nil {
+	err := s.sshClient.Close()
+	s.sshClient = nil
+	s.sshClosed = nil
+	if err != nil {
 		return fmt.Errorf("closing SSH client: %w", err)
 	}
-	s.sshClient = nil
 
 	return nil
 }

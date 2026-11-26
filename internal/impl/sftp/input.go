@@ -153,6 +153,7 @@ type sftpReader struct {
 	currentFileInfo fileInfo
 
 	sshClient      *ssh.Client
+	sshClosed      <-chan struct{} // closed once sshClient's connection has shut down
 	sftpClientPool pool.Capped[*sftp.Client]
 	pathProvider   pathProvider
 }
@@ -234,8 +235,12 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	defer s.stateLock.Unlock()
 
 	if s.sshClient != nil {
-		s.log.Warnf("Already connected to SFTP server at %s", s.address)
-		return nil
+		if !isClosed(s.sshClosed) {
+			s.log.Warnf("Already connected to SFTP server at %s", s.address)
+			return nil
+		}
+		s.log.Warnf("Connection to SFTP server at %s was closed, reconnecting", s.address)
+		s.closeConnLocked(ctx)
 	}
 
 	// Clear any existing SFTP sessions
@@ -246,6 +251,7 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("connecting to SFTP server: %w", err)
 	}
+	s.sshClosed = watchSSHClose(s.sshClient)
 
 	if s.watcherEnabled && s.pathProvider == nil {
 		s.pathProvider = &watcherPathProvider{
@@ -261,20 +267,25 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
+	if s.pathProvider != nil {
+		// Reconnecting. The paths were expanded on the first connect, and the
+		// ones not read yet (including any file a lost connection
+		// interrupted) are still queued. Expanding them again would read
+		// every file a second time.
+		return nil
+	}
+
 	client, err := s.sftpClientPool.Acquire(ctx)
 	if err != nil {
+		// Drop the connection, so that the next Connect starts over instead
+		// of reporting success with no paths expanded.
+		s.closeConnLocked(ctx)
 		return err
 	}
 	defer s.sftpClientPool.Release(client)
 
-	var spp *staticPathProvider
-	switch pp := s.pathProvider.(type) {
-	case *staticPathProvider:
-		spp = pp
-	default:
-		spp = new(staticPathProvider)
-		s.pathProvider = spp
-	}
+	spp := new(staticPathProvider)
+	s.pathProvider = spp
 
 	for _, path := range s.paths {
 		expandedPaths, err := client.Glob(path)
@@ -289,23 +300,83 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 }
 
 func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	s.stateLock.Lock()
+	if s.sshClient != nil && isClosed(s.sshClosed) {
+		s.log.Warnf("Connection to SFTP server at %s was closed, reconnecting", s.address)
+		s.closeConnLocked(ctx)
+		s.stateLock.Unlock()
+		return nil, nil, service.ErrNotConnected
+	}
+	s.stateLock.Unlock()
+
 	parts, codecAckFn, err := s.tryReadBatch(ctx)
 	if err != nil {
-		if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
-			s.stateLock.Lock()
-			defer s.stateLock.Unlock()
-
-			if s.scanner != nil {
-				if err := s.scanner.Close(ctx); err != nil {
-					s.log.With("error", err).Error("Failed to close scanner")
-				}
-				s.scanner = nil
+		// A read that failed because the connection is gone must drop the
+		// whole connection, not just the file, otherwise every later read
+		// fails against the same dead SSH client (e.g. "creating SFTP
+		// client: EOF") and the input never recovers. Reporting
+		// ErrNotConnected makes the input reconnect.
+		if errors.Is(err, service.ErrNotConnected) || s.isConnLost(err) {
+			if !errors.Is(err, service.ErrNotConnected) {
+				s.log.With("error", err).Warnf("Lost connection to SFTP server at %s, reconnecting", s.address)
 			}
+			s.stateLock.Lock()
+			s.closeConnLocked(ctx)
+			s.stateLock.Unlock()
 			err = service.ErrNotConnected
 		}
 		return nil, nil, err
 	}
 	return parts, codecAckFn, nil
+}
+
+// isConnLost reports whether err, returned while using the current SSH
+// connection, means that connection is gone. A connection-closed io.EOF can
+// arrive just before the connection is reported as closed, so both are
+// checked.
+func (s *sftpReader) isConnLost(err error) bool {
+	s.stateLock.Lock()
+	closed := s.sshClosed
+	s.stateLock.Unlock()
+	return isConnLostErr(err) || isClosed(closed)
+}
+
+// closeConnLocked closes the current file, the pooled SFTP clients and the
+// SSH connection, and clears them so that the next read reports
+// service.ErrNotConnected and the input reconnects. A file that was being
+// read is queued to be read again. The caller must hold stateLock.
+func (s *sftpReader) closeConnLocked(ctx context.Context) {
+	// Close the scanner before resetting the pool: closing its file releases
+	// its SFTP client back into the pool, and the reset must drop that
+	// client too. An unfinished file is nacked by the scanner, which makes
+	// the watcher poll it again, and static paths are queued again here.
+	if s.scanner != nil {
+		s.requeueStaticPath(s.currentFileInfo.path)
+		if err := s.scanner.Close(ctx); err != nil {
+			s.log.With("error", err).Debug("Failed to close scanner")
+		}
+		s.scanner = nil
+	}
+
+	s.sftpClientPool.Reset()
+
+	if s.sshClient != nil {
+		if err := s.sshClient.Close(); err != nil {
+			s.log.With("error", err).Debug("Failed to close SSH client")
+		}
+		s.sshClient = nil
+		s.sshClosed = nil
+	}
+}
+
+// requeueStaticPath puts path back at the front of the static path list, so
+// that a file a lost connection kept from being read is read after
+// reconnecting. The watcher needs nothing here: nacking a path clears its
+// cache marker, so the next poll finds the file again.
+func (s *sftpReader) requeueStaticPath(path string) {
+	if spp, ok := s.pathProvider.(*staticPathProvider); ok {
+		spp.expandedPaths = append([]string{path}, spp.expandedPaths...)
+	}
 }
 
 func (s *sftpReader) Close(ctx context.Context) error {
@@ -326,11 +397,12 @@ func (s *sftpReader) Close(ctx context.Context) error {
 
 	s.sftpClientPool.Reset()
 
-	if err := s.sshClient.Close(); err != nil {
+	err := s.sshClient.Close()
+	s.sshClient = nil
+	s.sshClosed = nil
+	if err != nil {
 		return fmt.Errorf("closing SSH client: %s", err)
 	}
-
-	s.sshClient = nil
 
 	return nil
 }
@@ -368,6 +440,11 @@ func (s *sftpReader) tryReadBatch(ctx context.Context) (service.MessageBatch, se
 		if errors.Is(err, io.EOF) {
 			// The current file is done. Move on to the next file.
 			continue
+		}
+		if s.isConnLost(err) {
+			// The file was cut short. The scanner has nacked it, which makes
+			// the watcher poll it again. Static paths must be queued again.
+			s.requeueStaticPath(s.currentFileInfo.path)
 		}
 		return nil, nil, err
 	}
@@ -438,12 +515,32 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 		}
 		path := polled.path
 
-		client, err := s.sftpClientPool.Acquire(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("acquiring SFTP client: %w", err)
+		// retryLater hands path back so that it is read after the connection
+		// is restored, instead of being dropped.
+		retryLater := func(err error) {
+			if ackErr := s.pathProvider.Ack(ctx, polled, err); ackErr != nil {
+				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %s", path)
+			}
+			s.requeueStaticPath(path)
 		}
 
-		handleErr := func(err error) {
+		client, err := s.sftpClientPool.Acquire(ctx)
+		if err != nil {
+			err = fmt.Errorf("acquiring SFTP client: %w", err)
+			retryLater(err)
+			return nil, err
+		}
+
+		// handleErr deals with a file that couldn't be opened. It returns a
+		// non-nil error, and keeps the path for later, when the connection
+		// is gone, since every remaining file would fail the same way.
+		handleErr := func(err error) error {
+			if s.isConnLost(err) {
+				retryLater(err)
+				s.sftpClientPool.Release(client)
+				return err
+			}
+
 			s.log.With("path", path, "err", err.Error()).Warn("Failed to open previously identified file")
 
 			if os.IsNotExist(err) {
@@ -457,17 +554,22 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 			}
 
 			s.sftpClientPool.Release(client)
+			return nil
 		}
 
 		file, err = client.Open(path)
 		if err != nil {
-			handleErr(fmt.Errorf("opening file: %w", err))
+			if err := handleErr(fmt.Errorf("opening file: %w", err)); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
 		stat, err := file.Stat()
 		if err != nil {
-			handleErr(fmt.Errorf("statting file: %w", err))
+			if err := handleErr(fmt.Errorf("statting file: %w", err)); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -683,9 +785,21 @@ func (w *watcherPathProvider) Next(ctx context.Context) (fileInfo, bool, error) 
 }
 
 func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
+	// A lost connection must be reported to the input so that it
+	// reconnects. Logging it and polling again would fail the same way
+	// forever.
+	var connErr error
+	connLost := func(err error) bool {
+		return isConnLostErr(err) || errors.Is(err, service.ErrNotConnected)
+	}
+
 	if cerr := w.mgr.AccessCache(ctx, w.cacheName, func(cache service.Cache) {
 		client, err := w.clientPool.Acquire(ctx)
 		if err != nil {
+			if connLost(err) {
+				connErr = fmt.Errorf("acquiring SFTP client: %w", err)
+				return
+			}
 			w.mgr.Logger().With("error", err).Warn("Failed to acquire SFTP client")
 			return
 		}
@@ -699,6 +813,10 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 
 			paths, err := client.Glob(p)
 			if err != nil {
+				if connLost(err) {
+					connErr = fmt.Errorf("scanning files from path %v: %w", p, err)
+					return
+				}
 				w.mgr.Logger().With("error", err, "path", p).Warn("Failed to scan files from path")
 				continue
 			}
@@ -712,6 +830,10 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 
 				info, err := client.Stat(path)
 				if err != nil {
+					if connLost(err) {
+						connErr = fmt.Errorf("statting path %v: %w", path, err)
+						return
+					}
 					w.mgr.Logger().With("error", err, "path", path).Warn("Failed to stat path")
 					continue
 				}
@@ -756,7 +878,7 @@ func (w *watcherPathProvider) findNewPaths(ctx context.Context) error {
 		return fmt.Errorf("error obtaining cache: %v", cerr)
 	}
 
-	return nil
+	return connErr
 }
 
 func (w *watcherPathProvider) pendingMarker(modTime time.Time) []byte {
