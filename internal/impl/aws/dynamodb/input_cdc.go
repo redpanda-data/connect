@@ -35,6 +35,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	incsnapshot "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb/incrementalsnapshot"
 )
 
 type asyncMessage struct {
@@ -68,6 +69,10 @@ const (
 	metricCheckpointFailures      = "dynamodb_cdc_checkpoint_failures"
 	metricSnapshotSegmentDuration = "dynamodb_cdc_snapshot_segment_duration"
 	metricFailoverSkipped         = "dynamodb_cdc_failover_skipped"
+	metricSnapshotWindowDropped   = "dynamodb_cdc_snapshot_window_dropped_items"
+	metricSnapshotWindowHeld      = "dynamodb_cdc_snapshot_window_held_items"
+	metricSnapshotWindowWait      = "dynamodb_cdc_snapshot_window_wait"
+	metricBackfillTablesPending   = "dynamodb_cdc_snapshot_backfill_tables_pending"
 
 	// Config field names.
 	dciFieldTables                 = "tables"
@@ -92,6 +97,11 @@ const (
 	dciFieldSnapshotThrottle       = "snapshot_throttle"
 	dciFieldSnapshotDedupe         = "snapshot_deduplicate"
 	dciFieldSnapshotBufferSize     = "snapshot_buffer_size"
+	dciFieldIncrementalSnapshot    = "incremental_snapshot"
+	dciFieldIncSnapshotEnabled     = "enabled"
+	dciFieldIncSnapshotMargin      = "watermark_margin"
+	dciFieldIncSnapshotIdleGrace   = "idle_shard_grace"
+	dciFieldSignalTable            = "signal_table_name"
 
 	// Snapshot states.
 	snapshotStateNotStarted int32 = 0
@@ -103,12 +113,96 @@ const (
 	snapshotModeNone   = "none"
 	snapshotModeOnly   = "snapshot_only"
 	snapshotModeAndCDC = "snapshot_and_cdc"
+	// snapshotModeIncremental backfills through a page window released as the
+	// stream catches up, interleaved with live CDC. It is not a snapshot_mode
+	// value: incremental_snapshot.enabled selects it.
+	snapshotModeIncremental = "incremental"
 
 	// Table discovery modes.
 	discoveryModeSingle      = "single"
 	discoveryModeTag         = "tag"
 	discoveryModeIncludelist = "includelist"
 )
+
+// signalTableDescription documents the signal_table_name field.
+const signalTableDescription = `A DynamoDB table used to send control signals to the input. Leave empty (the default)
+to disable control signals. When set, the table must exist and have a
+stream enabled with view type ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `, otherwise the input fails to
+connect. It must not also appear in ` + "`" + dciFieldTables + "`" + `, which is rejected at startup. Tag discovery
+never treats it as a source table, even when its tags match. The signal table is always streamed
+alongside the source tables. So the input runs in multi-table mode whenever it is set, and
+` + "`" + dciFieldSnapshotMode + "`" + ` must then be ` + "`none`" + `.
+
+Each signal is an item with these attributes:
+
+- **id**: the table's partition key, of any scalar type. It identifies the signal in logs. Each
+  signal must use a new id, for example a UUID or a timestamp
+- **type**: a string (` + "`S`" + `), the signal type (see supported signals below)
+- **data**: a string (` + "`S`" + `) holding a JSON object with the signal parameters
+
+Only inserted items are signals. Modified and removed items are streamed but not acted on.
+Writing a signal with an id already in the table overwrites that item and has no effect (the
+input logs a warning). Write each signal with a new id.
+
+Signals are read from the signal table's stream like any other change. With
+` + "`" + dciFieldStartFrom + ": trim_horizon`" + ` (the default) and no checkpoint state yet, the first start reads
+the stream's retained records, which cover the last 24 hours. So ` + "`snapshot-execute`" + ` items written
+in that time are executed on that first start.
+
+Signal records are emitted downstream as regular messages, with the ` + "`dynamodb_table`" + ` metadata
+field set to the signal table. To exclude them from downstream processing, filter on that field
+with a ` + "`mapping`" + ` processor:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+    - mapping: |
+        root = if meta("dynamodb_table") == "rpcn_signals" { deleted() } else { this }
+` + "```" + `
+
+**Supported signals**
+
+**` + "`log`" + `**: recognized and logged when received. The ` + "`data`" + ` attribute must contain a JSON
+object with a ` + "`message`" + ` key, whose value is written to the input's log output.
+
+**` + "`snapshot-execute`" + `**: backfills the named tables incrementally, alongside streaming. Requires
+` + "`" + dciFieldIncrementalSnapshot + "." + dciFieldIncSnapshotEnabled + ": true`" + `. Without it, the signal is logged with a warning and
+ignored. The ` + "`data`" + ` attribute must contain a JSON object with a ` + "`tables`" + ` key listing table names,
+for example ` + "`{\"tables\": [\"orders\", \"customers\"]}`" + `. Every named table must be one this input
+streams, with a stream view of ` + "`NEW_IMAGE`" + ` or ` + "`NEW_AND_OLD_IMAGES`" + `. If any table fails these
+checks, the whole request is rejected and logged, and nothing is queued.
+
+With ` + "`" + dciFieldIncrementalSnapshot + "." + dciFieldIncSnapshotEnabled + ": true`" + ` and ` + "`signal_table_name`" + ` set, tables are backfilled only on
+request. At startup, and for tables found by discovery, a table is queued only when one of these
+is true:
+
+- It has a backfill in progress.
+- It has a request recorded that has not completed.
+- It has a completed backfill whose stream checkpoint is stale (the stream has trimmed changes
+  the backfill no longer covers). That backfill is reset and run again.
+
+Every other table waits for a signal.
+
+Each table joins the back of the backfill queue. A table already queued is not queued twice. A
+table being backfilled finishes its current backfill and is not queued again, and the input logs a
+warning. To read that table again, send the signal again once its backfill completes. A table
+whose backfill has completed is read again from the start, so to snapshot a table again, send
+another signal that names it.
+
+A table's snapshot rows (` + "`snapshot#complete`" + `, ` + "`snapshot#segment#N`" + ` and ` + "`snapshot#requested`" + `)
+are in that table's partition of the checkpoint table. The partition's hash key is the table's
+stream ARN, or the source table name when ` + "`" + dciFieldGlobalTable + "`" + ` is set. It is prefixed with
+` + "`<namespace>#`" + ` when ` + "`" + dciFieldCheckpointNamespace + "`" + ` is set.
+
+Send a signal with the AWS CLI, generating a new id for each one:
+
+` + "```sh" + `
+aws dynamodb put-item --table-name rpcn_signals --item '{
+  "id":   {"S": "'"$(uuidgen)"'"},
+  "type": {"S": "snapshot-execute"},
+  "data": {"S": "{\"tables\": [\"orders\"]}"}
+}'
+` + "```"
 
 func dynamoDBCDCInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -150,21 +244,23 @@ The source DynamoDB table(s) must have https://docs.aws.amazon.com/amazondynamod
 
 == Snapshots
 
-When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+` or `+"`snapshot_and_cdc`"+`, the input first scans the entire table before (or instead of) streaming changes. This is useful for:
+When `+"`snapshot_mode`"+` is set to `+"`snapshot_only`"+` or `+"`snapshot_and_cdc`"+`, or `+"`incremental_snapshot.enabled`"+` is `+"`true`"+`, the input scans the entire table instead of, before, or while streaming changes. This is useful for:
 
 - Building a replica or cache with all existing data
 - Syncing historical data to a data warehouse
 - Populating a search index with existing records
 
-Snapshots are supported only when streaming from a single table. With `+"`table_discovery_mode: tag`"+`, any `+"`snapshot_mode`"+` other than `+"`none`"+` fails at startup, even when the filter matches only one table. An `+"`includelist`"+` with exactly one table supports snapshots.
+The `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes are supported only when streaming from a single table. With `+"`table_discovery_mode: tag`"+`, either mode fails at startup, even when the filter matches only one table. An `+"`includelist`"+` with exactly one table supports them, unless `+"`signal_table_name`"+` is set. A signal table makes the input multi-table, so both modes then fail at startup. The incremental snapshot also works in multi-table mode, including with `+"`signal_table_name`"+` set.
 
 WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `+"`snapshot_segments`"+` and `+"`snapshot_throttle`"+` to control RCU consumption.
 
-NOTE: Snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `+"`snapshot_deduplicate`"+` to minimize duplicates.
+NOTE: In `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes, snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `+"`snapshot_deduplicate`"+` to minimize duplicates.
+
+When `+"`incremental_snapshot.enabled`"+` is `+"`true`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode. In multi-table mode, this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held. So no snapshot item leaves the input after a newer change to the same key. Once the stream catches up, the last event the input emits for each key matches that key's current state in the table. This ordering holds at the input. Output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once unless a signal asks for it again. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress, while the table keeps streaming. In multi-table mode, a backfill that fails to start is retried the same way, and the other queued tables are backfilled meanwhile. In single-table mode, a backfill that fails the connection is retried with its own backoff. Retries wait 30 seconds at first and double up to 10 minutes between attempts. A failure that only a permission or configuration change can fix (AWS returns `+"`AccessDeniedException`"+`, `+"`UnrecognizedClientException`"+` or `+"`ValidationException`"+`, or the checkpoint table is missing) waits 10 minutes from the first attempt. In multi-table mode, a table deleted before its backfill completes is dropped from the queue, and the input logs an error. The input does not retry it until it restarts.
 
 == Checkpointing
 
-Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses.
+Checkpoints are stored in a separate DynamoDB table (configured with `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures. The principal needs `+"`dynamodb:UpdateItem`"+` on the checkpoint table, in addition to the read and write permissions it already uses. With `+"`incremental_snapshot.enabled: true`"+`, or when `+"`signal_table_name`"+` is set, it also needs `+"`dynamodb:DeleteItem`"+` on the checkpoint table, because resetting snapshot progress and clearing a handled snapshot request both delete rows.
 
 Without a namespace, checkpoints are keyed only by stream and shard (or by source table and shard when `+"`global_table`"+` is enabled). Multiple pipelines that read the same stream and share one `+"`checkpoint_table`"+` without a namespace overwrite each other's positions, which causes skipped or duplicated events.
 
@@ -186,6 +282,7 @@ DynamoDB Streams keeps records for 24 hours. If the pipeline stops for longer, a
 
 - With `+"`snapshot_mode: none`"+`, the shard resumes from `+"`TRIM_HORIZON`"+`.
 - With `+"`snapshot_mode: snapshot_and_cdc`"+` and a completed snapshot, the input runs the full snapshot again, so every item gets its current state. The CDC readers also resume from `+"`TRIM_HORIZON`"+`, so expect duplicates. The intermediate changes are still lost.
+- With `+"`incremental_snapshot.enabled: true`"+` and a completed backfill, the input resets the backfill and runs it again while the table streams. The CDC readers also resume from `+"`TRIM_HORIZON`"+`. The intermediate changes are still lost.
 
 == Alternative
 
@@ -193,7 +290,7 @@ For better performance and longer retention (up to 1 year vs 24 hours), consider
 
 == Message format
 
-Each change event is a JSON object with the fields `+"`tableName`"+`, `+"`eventID`"+`, `+"`eventName`"+` (`+"`INSERT`"+`, `+"`MODIFY`"+`, or `+"`REMOVE`"+`), `+"`eventVersion`"+`, `+"`eventSource`"+`, and `+"`awsRegion`"+`, plus a `+"`dynamodb`"+` object. The `+"`dynamodb`"+` object contains `+"`keys`"+`, `+"`newImage`"+`, and `+"`oldImage`"+` when the stream view type provides them, along with `+"`sequenceNumber`"+`, `+"`streamViewType`"+`, and `+"`sizeBytes`"+`. Snapshot records have an `+"`eventName`"+` of `+"`READ`"+` and carry the whole item in `+"`dynamodb.newImage`"+`.
+Each change event is a JSON object with the fields `+"`tableName`"+`, `+"`eventID`"+`, `+"`eventName`"+` (`+"`INSERT`"+`, `+"`MODIFY`"+`, or `+"`REMOVE`"+`), `+"`eventVersion`"+`, `+"`eventSource`"+`, and `+"`awsRegion`"+`, plus a `+"`dynamodb`"+` object. The `+"`dynamodb`"+` object contains `+"`keys`"+`, `+"`newImage`"+`, and `+"`oldImage`"+` when the stream view type provides them, along with `+"`sequenceNumber`"+`, `+"`streamViewType`"+`, and `+"`sizeBytes`"+`. Snapshot records have an `+"`eventName`"+` of `+"`READ`"+`, carry the whole item in `+"`dynamodb.newImage`"+`, and carry its primary key in `+"`dynamodb.keys`"+`, as stream events do.
 
 Attribute values are converted from DynamoDB's typed format, such as `+"`{\"S\": \"value\"}`"+`, to plain values, such as `+"`\"value\"`"+`. Number attributes stay strings, so convert them in a mapping if you need numeric values.
 
@@ -214,17 +311,21 @@ This input emits the following metrics:
 
 - `+"`dynamodb_cdc_shards_tracked`"+` - Total number of shards being tracked (gauge)
 - `+"`dynamodb_cdc_shards_active`"+` - Number of shards currently being read from (gauge)
-- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=`+"`not_started`"+`, 1=`+"`in_progress`"+`, 2=`+"`complete`"+` (gauge)
+- `+"`dynamodb_cdc_snapshot_state`"+` - Snapshot state: 0=`+"`not_started`"+`, 1=`+"`in_progress`"+`, 2=`+"`complete`"+`, 3=`+"`failed`"+` (gauge). In multi-table mode, it covers the incremental snapshot queue: `+"`in_progress`"+` while a table is backfilled, `+"`failed`"+` while a failed table waits to retry, and `+"`complete`"+` otherwise.
 - `+"`dynamodb_cdc_snapshot_records_read`"+` - Total records read during snapshot (counter)
 - `+"`dynamodb_cdc_snapshot_segments_active`"+` - Number of active snapshot scan segments (gauge)
 - `+"`dynamodb_cdc_snapshot_buffer_overflow`"+` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
 - `+"`dynamodb_cdc_snapshot_segment_duration`"+` - Time taken by each snapshot scan segment to complete (timer)
 - `+"`dynamodb_cdc_checkpoint_failures`"+` - Number of failed checkpoint writes to the checkpoint table (counter)
 - `+"`dynamodb_cdc_failover_skipped`"+` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
+- `+"`dynamodb_cdc_snapshot_window_held_items`"+` - Snapshot items held in the incremental snapshot window, waiting for the streams to catch up (gauge)
+- `+"`dynamodb_cdc_snapshot_window_dropped_items`"+` - Snapshot items dropped by the incremental snapshot window because a stream record for the same key arrived while the page was read or held (counter)
+- `+"`dynamodb_cdc_snapshot_window_wait`"+` - Time from reading an incremental snapshot page to releasing it (timer)
+- `+"`dynamodb_cdc_snapshot_backfill_tables_pending`"+` - Tables queued for an incremental backfill that has not started yet (gauge)
 
 == Global table checkpoints (multi-region failover)
 
-In active/active or active/passive multi-region deployments, set `+"`global_table: true`"+` and list the other regions in `+"`global_table_replicas`"+` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. If the checkpoint table already exists, enabling `+"`global_table`"+` reconciles it towards the desired configuration: any missing replica regions are added via `+"`UpdateTable`"+`. The existing table must have been created in global mode (it must use a `+"`TableId`"+` hash key); pointing `+"`global_table`"+` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
+In active/active or active/passive multi-region deployments, set `+"`global_table: true`"+` and list the other regions in `+"`global_table_replicas`"+` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time). Same-region restarts still resume exactly. If the checkpoint table already exists, enabling `+"`global_table`"+` reconciles it towards the desired configuration: any missing replica regions are added by calling `+"`UpdateTable`"+`. The existing table must have been created in global mode (it must use a `+"`TableId`"+` hash key). Pointing `+"`global_table`"+` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
 
 When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamodb:CreateTable`"+`, `+"`dynamodb:UpdateTable`"+`, `+"`dynamodb:DescribeTable`"+`, `+"`dynamodb:DescribeLimits`"+`, `+"`iam:CreateServiceLinkedRole`"+`, and create/describe permissions in each replica region.
 `).
@@ -309,7 +410,7 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				Default(defaultDynamoDBThrottleBackoff).
 				Advanced(),
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
-				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. Snapshots require a single table. Any mode other than `none` fails at startup with `table_discovery_mode: tag` or with more than one table in `tables`.").Version("4.82.0").
+				Description("`none`: Streams CDC events only (default). `snapshot_only`: Performs a one-time full table scan with no ongoing streaming. `snapshot_and_cdc`: Scans the entire table, then streams changes. `snapshot_only` and `snapshot_and_cdc` require a single table. They fail at startup with `table_discovery_mode: tag`, with more than one table in `tables`, or with `signal_table_name` set. To backfill while streaming, leave this at `none` and set `incremental_snapshot.enabled: true`.").Version("4.82.0").
 				ShortDescription("Snapshot behaviour: none for CDC only, snapshot_only, or snapshot_and_cdc.").
 				Default("none"),
 			service.NewIntField(dciFieldSnapshotSegments).
@@ -330,15 +431,41 @@ When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamo
 				LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["snapshot_throttle must be greater than 0"] }`).
 				Advanced(),
 			service.NewBoolField(dciFieldSnapshotDedupe).
-				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items. It skips CDC events for those keys that are stamped more than 1 minute before the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. If the host clock is more than 1 minute ahead of the AWS clock, the input can skip CDC events for writes made immediately after the snapshot start. Those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates.").Version("4.82.0").
+				Description("Deduplicate records that appear in both snapshot and CDC stream. During the snapshot, the input buffers the keys of the scanned items. It skips CDC events for those keys that are stamped more than 1 minute before the snapshot start. If the buffer is exceeded, deduplication is disabled to prevent data loss. If the host clock is more than 1 minute ahead of the AWS clock, the input can skip CDC events for writes made immediately after the snapshot start. Those writes are lost. Writes made in the minute before the snapshot start can appear as duplicates. It has no effect with `incremental_snapshot.enabled: true`.").Version("4.82.0").
 				ShortDescription("Deduplicate records appearing in both the snapshot and the CDC stream, which requires buffering the keys of scanned items.").
 				Default(true).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBufferSize).
-				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.").Version("4.82.0").
+				Description("Maximum scanned item keys to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted. It has no effect with `incremental_snapshot.enabled: true`.").Version("4.82.0").
 				ShortDescription("Maximum scanned item keys buffered for deduplication. Deduplication is disabled if exceeded.").
 				Default(100000).
 				Advanced(),
+			service.NewObjectField(dciFieldIncrementalSnapshot,
+				service.NewBoolField(dciFieldIncSnapshotEnabled).
+					Description("Backfills each table while streaming, in single- or multi-table mode (in multi-table mode, tables found by discovery are backfilled too). It never emits a snapshot item after a newer change to the same key. With `signal_table_name` set, a table is backfilled only when a `snapshot-execute` signal names it, apart from the exceptions listed under `signal_table_name`. It requires a stream view of `NEW_IMAGE` or `NEW_AND_OLD_IMAGES`, and reads with strongly consistent Scans (twice the RCU of the other modes). It backfills a table once, even if that table was previously only streamed. A `snapshot-execute` signal backfills a completed table again. Each page waits a few seconds for the stream to catch up, so for large tables raise `snapshot_segments` and `snapshot_batch_size` (for example to 10 and 1000). It also needs `dynamodb:DeleteItem` on the checkpoint table, because a stale-checkpoint reset and a repeat signal delete snapshot progress rows. It needs `snapshot_mode: none`: the other modes read the same items, and the input fails to start if both are set.").
+					ShortDescription("Backfill each table while streaming, in single- or multi-table mode.").
+					Default(false),
+				service.NewDurationField(dciFieldIncSnapshotMargin).
+					Description("Extra time a snapshot page is held after every shard has streamed past the time of its Scan. The margin covers clock skew between this host and AWS, plus stream publication delay. For an idle shard, the input treats the start of its last empty poll, minus this margin, as the point the shard has streamed to. A page can therefore wait up to twice the margin before release. This only affects the order in which snapshot items leave the input relative to older stream events. It does not affect the correctness of the final value emitted for each key.").
+					ShortDescription("Extra hold time per snapshot page for clock skew and stream delay.").
+					Default("2s").
+					LintRule(`root = if this.parse_duration().catch(-1) < 0 { ["watermark_margin must not be negative"] }`),
+				service.NewDurationField(dciFieldIncSnapshotIdleGrace).
+					Description("How long a stream shard that has never returned a record must keep returning empty reads before it is treated as caught up. Until then it holds back every snapshot page of its table. It also bounds how long a listed shard that has no reader yet (for example one that is still failing to start) holds back pages. This only affects the order in which snapshot items leave the input relative to older stream events. It does not affect the correctness of the final value emitted for each key.").
+					ShortDescription("How long a shard with no records holds back snapshot pages.").
+					Default("1m").
+					LintRule(`root = if this.parse_duration().catch(0) <= 0 { ["idle_shard_grace must be greater than 0"] }`),
+			).
+				Description("Backfills each table while it streams, the same way as `incremental_snapshot` in `postgres_cdc` and `mongodb_cdc`. Turn it on with `enabled`. The other fields tune it and have no effect while it is off. The page size, segment count and throttle come from `snapshot_batch_size`, `snapshot_segments` and `snapshot_throttle`.").
+				ShortDescription("Backfill tables while streaming, and its tuning.").
+				Version("4.120.0").
+				Advanced(),
+			service.NewStringField(dciFieldSignalTable).
+				Description(signalTableDescription).Version("4.120.0").
+				ShortDescription("A DynamoDB table whose stream carries control signals, such as snapshot-execute requests.").
+				Example("rpcn_signals").
+				Default("").
+				Optional(),
 		).
 		Fields(config.SessionFields()...).
 		Example(
@@ -453,6 +580,11 @@ type snapshotConfig struct {
 	throttle   time.Duration
 	dedupe     bool
 	bufferSize int
+	// watermarkMargin is the incremental window's extra hold time.
+	watermarkMargin time.Duration
+	// idleShardGrace is how long a never-productive shard may return empty
+	// reads before it is treated as caught up.
+	idleShardGrace time.Duration
 }
 
 type dynamoDBCDCConfig struct {
@@ -474,6 +606,7 @@ type dynamoDBCDCConfig struct {
 	checkpointRetryMax     time.Duration
 	throttleBackoff        time.Duration
 	snapshot               snapshotConfig
+	signalTable            string
 }
 
 type tableStream struct {
@@ -495,10 +628,19 @@ type tableStream struct {
 	// shardReaders (ts.mu).
 	completedShards map[string]struct{}
 	snapshot        *snapshotState
-	shardRefreshCh  chan struct{} // Signal coordinator to refresh shards immediately
+	incremental     *incsnapshot.State // nil unless the incremental snapshot is enabled
+	shardRefreshCh  chan struct{}      // Signal coordinator to refresh shards immediately
 	// parentFailures tracks shards discovery fails to prepare across refresh
 	// cycles, so an unreadable parent cannot hold its children back forever.
 	parentFailures parentPrepareFailures
+	// streamSpec is the table's stream specification at initialization,
+	// checked before an incremental backfill.
+	streamSpec *dynamodbtypes.StreamSpecification
+	// coordinatorDone is closed when the table's coordinator goroutine exits.
+	coordinatorDone chan struct{}
+	// isSignalTable marks the table named by signal_table_name: its reader acts
+	// on control signals before each batch is sent.
+	isSignalTable bool
 
 	// activeShards is the number of running shard readers, published by this
 	// table's coordinator and summed across tables into the shards_active
@@ -518,6 +660,20 @@ type tableStream struct {
 // Lock hierarchy: always acquire d.mu before ts.mu to prevent deadlocks.
 // Never hold ts.mu when acquiring d.mu.
 type dynamoDBCDCInput struct {
+	// releaseTick overrides the incremental backfill release interval; tests
+	// only, zero in production.
+	releaseTick time.Duration
+	// backfillRetryBackoff overrides the backoff between retries of a failed
+	// incremental backfill; tests only, nil in production.
+	backfillRetryBackoff func() backoff.BackOff
+	// backfillNeedsChangeWait overrides the wait before retrying a backfill
+	// that failed with an error only a change can fix; tests only, zero in
+	// production.
+	backfillNeedsChangeWait time.Duration
+	// backfillRetries paces multi-table incremental prepare and backfill
+	// retries per table.
+	backfillRetries backfillRetries
+
 	conf          dynamoDBCDCConfig
 	awsConf       aws.Config
 	dynamoClient  *dynamodb.Client
@@ -546,8 +702,9 @@ type dynamoDBCDCInput struct {
 	// the shard is no longer listed. Guarded by the same lock as
 	// shardReaders (d.mu).
 	completedShards map[string]struct{}
-	snapshot        *snapshotState // nil if snapshot mode is "none"
-	shardRefreshCh  chan struct{}  // Signal coordinator to refresh shards immediately
+	snapshot        *snapshotState     // nil if snapshot mode is "none"
+	incremental     *incsnapshot.State // nil unless the incremental snapshot is enabled
+	shardRefreshCh  chan struct{}      // Signal coordinator to refresh shards immediately
 	// parentFailures tracks shards discovery fails to prepare across refresh
 	// cycles, so an unreadable parent cannot hold its children back forever.
 	parentFailures parentPrepareFailures
@@ -571,6 +728,18 @@ type dynamoDBCDCInput struct {
 	// the ack when it is true. Guarded by ackMu.
 	closed bool
 
+	// msgSenders tracks single-table producers outside the shard coordinator
+	// (the incremental backfill) that send on msgChan. The coordinator waits
+	// on it before closing msgChan, so a late send cannot hit a closed channel.
+	msgSenders sync.WaitGroup
+	// backfillCancel cancels the single-table incremental backfill; the
+	// shard coordinator calls it before waiting on msgSenders. Set before the
+	// coordinator starts; nil when no backfill runs.
+	backfillCancel context.CancelFunc
+	// backfills orders multi-table incremental backfills; nil unless
+	// the incremental snapshot is enabled in multi-table mode.
+	backfills *incsnapshot.TableQueue
+
 	// honorStartFrom (single-table path; see tableStream.honorStartFrom for
 	// multi-table) is true only until the first successful shard discovery of
 	// a pipeline with no pre-existing checkpoint state. start_from applies
@@ -590,6 +759,10 @@ type dynamoDBCDCMetrics struct {
 	snapshotSegmentDuration *service.MetricTimer   // Tracks segment scan duration
 	checkpointFailures      *service.MetricCounter // Counts checkpoint write failures
 	failoverSkipped         *service.MetricCounter // Counts records skipped during global-table failover replay
+	snapshotWindowDropped   *service.MetricCounter // Counts snapshot items a stream touch removed (skipped at Hold or dropped while held)
+	snapshotWindowHeld      *service.MetricGauge   // Live items held in incremental snapshot windows
+	snapshotWindowWait      *service.MetricTimer   // Time from a page's read to its release
+	backfillTablesPending   *service.MetricGauge   // Tables queued whose incremental backfill has not started yet
 }
 
 // newDynamoDBCDCMetrics builds the input's metric set (shared with tests so
@@ -605,6 +778,10 @@ func newDynamoDBCDCMetrics(m *service.Metrics) dynamoDBCDCMetrics {
 		snapshotSegmentDuration: m.NewTimer(metricSnapshotSegmentDuration),
 		checkpointFailures:      m.NewCounter(metricCheckpointFailures),
 		failoverSkipped:         m.NewCounter(metricFailoverSkipped),
+		snapshotWindowDropped:   m.NewCounter(metricSnapshotWindowDropped),
+		snapshotWindowHeld:      m.NewGauge(metricSnapshotWindowHeld),
+		snapshotWindowWait:      m.NewTimer(metricSnapshotWindowWait),
+		backfillTablesPending:   m.NewGauge(metricBackfillTablesPending),
 	}
 }
 
@@ -896,6 +1073,10 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 		return errors.New("global_table requires at least one replica region in global_table_replicas")
 	}
 
+	if conf.signalTable != "" && slices.Contains(conf.tables, conf.signalTable) {
+		return fmt.Errorf("signal_table_name %q must not also appear in tables", conf.signalTable)
+	}
+
 	if strings.Contains(conf.checkpointNamespace, "#") {
 		return errors.New("checkpoint_namespace must not contain '#'")
 	}
@@ -923,13 +1104,24 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 		return fmt.Errorf("snapshot_throttle must be greater than 0, got %v", conf.snapshot.throttle)
 	}
 
-	// Snapshot mode is only supported for single-table streaming.
+	// Snapshot modes other than incremental are only supported for
+	// single-table streaming; incremental is multi-table capable.
 	// Tag discovery is always multi-table. Includelist with >1 table is multi-table.
-	// Includelist with exactly 1 table routes to the single-table path at runtime.
+	// Includelist with exactly 1 table routes to the single-table path at
+	// runtime, unless a signal table is set: it is one more stream.
 	isMultiTable := conf.tableDiscoveryMode == discoveryModeTag ||
-		len(conf.tables) > 1
-	if conf.snapshot.mode != snapshotModeNone && isMultiTable {
-		return fmt.Errorf("snapshot_mode %q is not supported with multi-table streaming; use snapshot_mode: none", conf.snapshot.mode)
+		len(conf.tables) > 1 || conf.signalTable != ""
+	if conf.signalTable != "" && conf.snapshot.mode != snapshotModeNone && conf.snapshot.mode != snapshotModeIncremental {
+		return fmt.Errorf("snapshot_mode %q cannot be used with signal_table_name: a signal table makes the input multi-table; use snapshot_mode none, with incremental_snapshot.enabled for a backfill", conf.snapshot.mode)
+	}
+	if conf.snapshot.mode != snapshotModeNone && conf.snapshot.mode != snapshotModeIncremental && isMultiTable {
+		return fmt.Errorf("snapshot_mode %q is not supported with multi-table streaming; use snapshot_mode: none, with incremental_snapshot.enabled for a backfill", conf.snapshot.mode)
+	}
+	if conf.snapshot.watermarkMargin < 0 {
+		return fmt.Errorf("incremental_snapshot.watermark_margin must not be negative, got %v", conf.snapshot.watermarkMargin)
+	}
+	if conf.snapshot.idleShardGrace <= 0 {
+		return fmt.Errorf("incremental_snapshot.idle_shard_grace must be greater than 0, got %v", conf.snapshot.idleShardGrace)
 	}
 
 	return nil
@@ -993,6 +1185,12 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.snapshot.mode, err = pConf.FieldString(dciFieldSnapshotMode); err != nil {
 		return
 	}
+	// Lint rejects it as an enum value, but a config parsed without lint
+	// would otherwise still select the internal mode.
+	if conf.snapshot.mode == snapshotModeIncremental {
+		err = fmt.Errorf("%s: %s is not a valid option, set %s.%s: true instead", dciFieldSnapshotMode, snapshotModeIncremental, dciFieldIncrementalSnapshot, dciFieldIncSnapshotEnabled)
+		return
+	}
 	if conf.snapshot.segments, err = pConf.FieldInt(dciFieldSnapshotSegments); err != nil {
 		return
 	}
@@ -1007,6 +1205,27 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	}
 	if conf.snapshot.bufferSize, err = pConf.FieldInt(dciFieldSnapshotBufferSize); err != nil {
 		return
+	}
+	if conf.snapshot.watermarkMargin, err = pConf.FieldDuration(dciFieldIncrementalSnapshot, dciFieldIncSnapshotMargin); err != nil {
+		return
+	}
+	if conf.snapshot.idleShardGrace, err = pConf.FieldDuration(dciFieldIncrementalSnapshot, dciFieldIncSnapshotIdleGrace); err != nil {
+		return
+	}
+	if conf.signalTable, err = pConf.FieldString(dciFieldSignalTable); err != nil {
+		return
+	}
+	var incEnabled bool
+	if incEnabled, err = pConf.FieldBool(dciFieldIncrementalSnapshot, dciFieldIncSnapshotEnabled); err != nil {
+		return
+	}
+	if incEnabled {
+		// Both read the same items, so enabling both would deliver them twice.
+		if conf.snapshot.mode != snapshotModeNone {
+			err = fmt.Errorf("%s.%s requires %s: none, got %q: the two are mutually exclusive snapshot modes", dciFieldIncrementalSnapshot, dciFieldIncSnapshotEnabled, dciFieldSnapshotMode, conf.snapshot.mode)
+			return
+		}
+		conf.snapshot.mode = snapshotModeIncremental
 	}
 	return
 }
@@ -1044,9 +1263,16 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 	input.snapshot = &snapshotState{
 		segmentsTotal: conf.snapshot.segments,
 	}
-	// Initialize scanner and buffer only if snapshot mode is enabled
-	if conf.snapshot.mode != snapshotModeNone && conf.snapshot.dedupe {
+	// The dedupe buffer only serves snapshot_and_cdc: snapshot_only never
+	// streams, and incremental orders snapshot items through its window.
+	if conf.snapshot.mode == snapshotModeAndCDC && conf.snapshot.dedupe {
 		input.snapshot.seqBuffer = newSnapshotSequenceBuffer(conf.snapshot.bufferSize)
+	}
+	// Same multi-table test as validation. Multi-table incremental keeps its
+	// state per table stream instead.
+	isMultiTable := conf.tableDiscoveryMode == discoveryModeTag || len(conf.tables) > 1 || conf.signalTable != ""
+	if conf.snapshot.mode == snapshotModeIncremental && !isMultiTable {
+		input.incremental = incsnapshot.NewState(conf.snapshot.watermarkMargin, conf.snapshot.idleShardGrace)
 	}
 
 	return input, nil
@@ -1093,6 +1319,11 @@ func (d *dynamoDBCDCInput) discoverTablesByTag(ctx context.Context) ([]string, e
 
 		// Check each table for matching tags
 		for _, tableName := range listOutput.TableNames {
+			// The signal table is streamed as such, never as a source table.
+			if tableName == d.conf.signalTable {
+				continue
+			}
+
 			// Get table ARN first (with timeout)
 			descCtx, descCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
 			descOutput, err := d.dynamoClient.DescribeTable(descCtx, &dynamodb.DescribeTableInput{
@@ -1185,12 +1416,21 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("discovering tables: %w", err)
 	}
+	if d.conf.signalTable != "" {
+		tables = slices.DeleteFunc(slices.Clone(tables), func(t string) bool { return t == d.conf.signalTable })
+	}
 
 	if len(tables) == 0 {
 		return errors.New("no tables found to stream from")
 	}
 
 	d.log.Infof("Discovered %d table(s) to stream: %v", len(tables), tables)
+
+	// The signal table is one more stream, so the input always takes the
+	// multi-table path when one is set.
+	if d.conf.signalTable != "" {
+		return d.connectMultipleTables(ctx, append(tables, d.conf.signalTable))
+	}
 
 	// Use optimized single-table code path when there is exactly one table
 	// This covers both "single" mode and "includelist" mode with one table
@@ -1223,17 +1463,23 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 
 	// Store key schema for snapshot deduplication
 	d.keySchema = descTable.Table.KeySchema
+	if d.conf.snapshot.mode == snapshotModeIncremental {
+		if err := incsnapshot.RequireNewImage(tableName, descTable.Table.StreamSpecification); err != nil {
+			return err
+		}
+	}
 
 	// Initialize checkpointer
 	d.checkpointer, err = NewCheckpointer(ctx, d.dynamoClient, CheckpointerConfig{
-		TableName:       d.conf.checkpointTable,
-		SourceTable:     tableName,
-		StreamArn:       *d.streamArn,
-		Namespace:       d.conf.checkpointNamespace,
-		CheckpointLimit: d.conf.checkpointLimit,
-		GlobalTable:     d.conf.globalTable,
-		Region:          d.awsConf.Region,
-		ReplicaRegions:  d.conf.globalTableReplicas,
+		TableName:            d.conf.checkpointTable,
+		SourceTable:          tableName,
+		StreamArn:            *d.streamArn,
+		Namespace:            d.conf.checkpointNamespace,
+		CheckpointLimit:      d.conf.checkpointLimit,
+		GlobalTable:          d.conf.globalTable,
+		Region:               d.awsConf.Region,
+		ReplicaRegions:       d.conf.globalTableReplicas,
+		ClearSnapshotRequest: d.conf.signalTable != "",
 	}, d.log)
 	if err != nil {
 		return fmt.Errorf("creating checkpointer: %w", err)
@@ -1269,8 +1515,13 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 // connectMultipleTables handles streaming from multiple tables simultaneously
 func (d *dynamoDBCDCInput) connectMultipleTables(ctx context.Context, tables []string) error {
 	// Initialize each table stream
+	var signalErr error
 	for _, tableName := range tables {
 		if _, err := d.initializeTableStream(ctx, tableName); err != nil {
+			if tableName == d.conf.signalTable {
+				signalErr = err
+				continue
+			}
 			d.log.Errorf("Failed to initialize table stream for %s: %v", tableName, err)
 			// Continue with other tables rather than failing completely
 			continue
@@ -1279,13 +1530,52 @@ func (d *dynamoDBCDCInput) connectMultipleTables(ctx context.Context, tables []s
 
 	d.mu.RLock()
 	tableCount := len(d.tableStreams)
+	_, signalOK := d.tableStreams[d.conf.signalTable]
 	d.mu.RUnlock()
 
-	if tableCount == 0 {
+	// Signals cannot be sent without the signal table, so its failure is not
+	// tolerated like a source table's.
+	if d.conf.signalTable != "" && !signalOK {
+		if signalErr == nil {
+			signalErr = fmt.Errorf("signal_table_name %s was not initialized", d.conf.signalTable)
+		}
+		return signalErr
+	}
+
+	// A signal table alone has nothing to stream.
+	sourceCount := tableCount
+	if d.conf.signalTable != "" {
+		sourceCount--
+	}
+	if sourceCount == 0 {
 		return errors.New("initializing table streams: none succeeded")
 	}
 
 	d.log.Infof("Successfully initialized %d table stream(s)", tableCount)
+
+	// The queue exists before any coordinator starts: the signal table's
+	// reader may push to it as soon as it runs, and so may a retried prepare.
+	if d.conf.snapshot.mode == snapshotModeIncremental {
+		d.backfills = incsnapshot.NewTableQueue()
+	}
+
+	// Incremental backfills are prepared before any shard is discovered or
+	// any coordinator starts, so a stale-checkpoint reset precedes every
+	// reader checkpoint advance. Only tables that need a backfill are queued.
+	// A failed prepare is retried in the background, outliving this Connect
+	// call (but not the input).
+	var needBackfill []string
+	if d.conf.snapshot.mode == snapshotModeIncremental {
+		d.mu.RLock()
+		streams := maps.Clone(d.tableStreams)
+		d.mu.RUnlock()
+		retryCtx := context.WithoutCancel(ctx)
+		for _, tableName := range slices.Sorted(maps.Keys(streams)) {
+			if d.prepareOrRetryTableBackfill(ctx, retryCtx, tableName, streams[tableName]) {
+				needBackfill = append(needBackfill, tableName)
+			}
+		}
+	}
 
 	// Discover shards synchronously so that shard iterators (especially LATEST)
 	// are positioned before Connect returns. This prevents a race where writes
@@ -1298,12 +1588,24 @@ func (d *dynamoDBCDCInput) connectMultipleTables(ctx context.Context, tables []s
 	}
 	d.mu.RUnlock()
 
+	// Tables are queued by name so the backfill order (and its logs) is
+	// deterministic.
+	for _, tableName := range needBackfill {
+		d.backfills.Push(tableName)
+	}
+
 	// Start coordinators for all tables
 	d.mu.RLock()
 	for tableName, ts := range d.tableStreams {
 		d.startTableCoordinator(tableName, ts)
 	}
 	d.mu.RUnlock()
+
+	// The queue worker starts after every coordinator, so each table's shard
+	// readers are running before its Scan begins.
+	if d.conf.snapshot.mode == snapshotModeIncremental {
+		d.startBackgroundWorker("incremental snapshot queue", d.runBackfillQueue)
+	}
 
 	// Start periodic table discovery if enabled
 	if d.conf.tableDiscoveryInterval > 0 && d.conf.tableDiscoveryMode != discoveryModeSingle {
@@ -1350,16 +1652,25 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 
 	streamArn := *descTable.Table.LatestStreamArn
 
+	// Signals are read from the inserted item, so the stream must carry it.
+	isSignalTable := tableName == d.conf.signalTable
+	if isSignalTable {
+		if err := incsnapshot.RequireSignalStreamView(tableName, descTable.Table.StreamSpecification); err != nil {
+			return false, err
+		}
+	}
+
 	// Initialize checkpointer for this table
 	checkpointer, err := NewCheckpointer(ctx, d.dynamoClient, CheckpointerConfig{
-		TableName:       d.conf.checkpointTable,
-		SourceTable:     tableName,
-		StreamArn:       streamArn,
-		Namespace:       d.conf.checkpointNamespace,
-		CheckpointLimit: d.conf.checkpointLimit,
-		GlobalTable:     d.conf.globalTable,
-		Region:          d.awsConf.Region,
-		ReplicaRegions:  d.conf.globalTableReplicas,
+		TableName:            d.conf.checkpointTable,
+		SourceTable:          tableName,
+		StreamArn:            streamArn,
+		Namespace:            d.conf.checkpointNamespace,
+		CheckpointLimit:      d.conf.checkpointLimit,
+		GlobalTable:          d.conf.globalTable,
+		Region:               d.awsConf.Region,
+		ReplicaRegions:       d.conf.globalTableReplicas,
+		ClearSnapshotRequest: d.conf.signalTable != "",
 	}, d.log)
 	if err != nil {
 		return false, fmt.Errorf("creating checkpointer for table %s: %w", tableName, err)
@@ -1389,7 +1700,9 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	}
 
 	// Create table stream
-	// Note: snapshot mode is not supported for multi-table streaming (validated at config time)
+	// Only snapshot_mode none, with or without the incremental snapshot,
+	// reaches the multi-table path
+	// (validated at config time).
 	ts := &tableStream{
 		tableName:      tableName,
 		streamArn:      streamArn,
@@ -1398,9 +1711,24 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 		recordBatcher:  recordBatcher,
 		shardReaders:   make(map[string]*dynamoDBShardReader),
 		shardRefreshCh: make(chan struct{}, 1),
+		streamSpec:     descTable.Table.StreamSpecification,
+		// Closed by the goroutine startTableCoordinator launches.
+		coordinatorDone: make(chan struct{}),
+		isSignalTable:   isSignalTable,
+	}
+	// The signal table is never backfilled, so it gets no incremental state.
+	if d.conf.snapshot.mode == snapshotModeIncremental && !isSignalTable {
+		ts.incremental = incsnapshot.NewState(d.conf.snapshot.watermarkMargin, d.conf.snapshot.idleShardGrace)
 	}
 	ts.honorStartFrom.Store(!hasState)
 
+	// Marked prepare-pending as it is published, under the same d.mu hold,
+	// so no signal or queue pop can find the table before its first prepare
+	// (at connect or discovery) has run. That prepare clears the mark. The
+	// mark's mutex is a leaf lock, so taking it under d.mu is safe.
+	if ts.incremental != nil {
+		d.backfillRetries.beginPrepare(tableName)
+	}
 	d.tableStreams[tableName] = ts
 	d.log.Infof("Initialized table stream for %s (stream ARN: %s)", tableName, streamArn)
 
@@ -1455,6 +1783,10 @@ func (d *dynamoDBCDCInput) warnIfHostClockAhead(md smithymiddleware.Metadata) {
 // connectWithSnapshot handles snapshot + CDC coordination. descTableMetadata
 // holds the clock skew that the SDK measured on DescribeTable.
 func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName string, descTableMetadata smithymiddleware.Metadata) error {
+	if d.conf.snapshot.mode == snapshotModeIncremental {
+		return d.connectIncrementalSingle(ctx, tableName)
+	}
+
 	// Record snapshot start time BEFORE doing anything else
 	d.snapshot.startTime = time.Now()
 
@@ -1552,6 +1884,9 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	segments := resolveSnapshotSegments(snapshotCheckpoint, d.conf.snapshot.segments, tableName, d.log)
 	ackTracker := newSnapshotAckTracker(d.checkpointer, defaultSnapshotCheckpointBatchInterval, segments, d.log)
 	ackGate := new(sync.WaitGroup)
+	d.mu.RLock()
+	keySchema := d.keySchema
+	d.mu.RUnlock()
 	d.snapshot.scanner = NewSnapshotScanner(SnapshotScannerConfig{
 		Client:    d.dynamoClient,
 		Table:     tableName,
@@ -1563,7 +1898,7 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 
 	// Set batch callback to send snapshot records to msgChan
 	d.snapshot.scanner.SetBatchCallback(func(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, lastKey map[string]dynamodbtypes.AttributeValue) error {
-		return d.handleSnapshotBatch(ctx, items, segment, tableName, lastKey, ackTracker, ackGate)
+		return d.handleSnapshotBatch(ctx, items, segment, tableName, keySchema, lastKey, ackTracker, ackGate)
 	})
 
 	// Set progress callback to update metrics
@@ -1758,8 +2093,14 @@ func describeStreamAllShards(ctx context.Context, client describeStreamPager, st
 // Returns true if any checkpoint is stale (stream data no longer available).
 // This happens when the connector was down >24 hours (DynamoDB Streams retention limit).
 func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, error) {
+	return d.isCDCCheckpointStaleFor(ctx, d.checkpointer, d.streamArn)
+}
+
+// isCDCCheckpointStaleFor is isCDCCheckpointStale for any table's checkpointer
+// and stream.
+func (d *dynamoDBCDCInput) isCDCCheckpointStaleFor(ctx context.Context, cp *Checkpointer, streamArn *string) (bool, error) {
 	// Get current shards from the stream (paginated; see describeStreamAllShards).
-	shards, err := describeStreamAllShards(ctx, d.streamsClient, d.streamArn)
+	shards, err := describeStreamAllShards(ctx, d.streamsClient, streamArn)
 	if err != nil {
 		return false, fmt.Errorf("describing stream: %w", err)
 	}
@@ -1780,7 +2121,7 @@ func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, erro
 		// sequence number against this region's stream. Doing so previously
 		// errored and was misread as a stale checkpoint, forcing a needless full
 		// re-snapshot on the first restart after failover.
-		decision, err := d.checkpointer.ResolveResume(ctx, shardID)
+		decision, err := cp.ResolveResume(ctx, shardID)
 		if err != nil {
 			return false, fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
 		}
@@ -1794,17 +2135,23 @@ func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, erro
 		}
 
 		// Try to get a shard iterator using the checkpointed sequence number.
-		// If this fails, the sequence is too old and data has expired.
+		// Only TrimmedDataAccessException means the sequence is older than the
+		// trim horizon and data has expired. Any other failure (throttling, a
+		// network error) says nothing about staleness and is returned, so a
+		// transient probe error never restarts a snapshot from scratch.
 		_, err = d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
-			StreamArn:         d.streamArn,
+			StreamArn:         streamArn,
 			ShardId:           shard.ShardId,
 			ShardIteratorType: types.ShardIteratorTypeAfterSequenceNumber,
 			SequenceNumber:    &decision.SequenceNumber,
 		})
-		if err != nil {
+		if isTrimmedDataAccessError(err) {
 			d.log.Warnf("Shard %s checkpoint is stale: %v", shardID, err)
 			d.log.Warn("CDC checkpoint is stale - data may have been lost during downtime")
 			return true, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("probing checkpoint of shard %s: %w", shardID, err)
 		}
 	}
 
@@ -1829,6 +2176,9 @@ type preparedShard struct {
 	// read to the end (resumeCompleted): no iterator is acquired and the
 	// caller records the shard as completed instead of registering a reader.
 	completed bool
+	// trimmed reports that the checkpoint was beyond the stream's retention
+	// and the iterator fell back to TRIM_HORIZON.
+	trimmed bool
 }
 
 // prepareShardReader resolves where a shard should start (global-table
@@ -1847,6 +2197,7 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		iteratorType   types.ShardIteratorType
 		sequenceNumber *string
 		cutoff         time.Time
+		trimmed        bool
 	)
 	switch decision.Mode {
 	case resumeCompleted:
@@ -1876,13 +2227,14 @@ func (d *dynamoDBCDCInput) prepareShardReader(ctx context.Context, cp *Checkpoin
 		// checkpoint, so read it from TRIM_HORIZON, as a running reader does
 		// when GetRecords hits trimmed data.
 		d.log.Warnf("Checkpoint for shard %s%s points at trimmed stream data, records between it and the trim horizon were lost; resuming from TRIM_HORIZON", shardID, tableSuffix)
+		trimmed = true
 		iter, err = d.acquireShardIterator(ctx, streamArn, shardID, types.ShardIteratorTypeTrimHorizon, nil)
 	}
 	if err != nil {
 		return preparedShard{}, fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 	}
 
-	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff}, nil
+	return preparedShard{shardID: shardID, iterator: iter.ShardIterator, cutoff: cutoff, trimmed: trimmed}, nil
 }
 
 // acquireShardIterator calls GetShardIterator under its own timeout.
@@ -2187,6 +2539,25 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.honorStartFrom.Store(false)
 	}
 
+	if inc := d.incremental; inc != nil {
+		d.mu.RLock()
+		for id := range d.shardReaders {
+			inc.Register(id)
+		}
+		// A shard the checkpoint store already marks completed gets no
+		// reader but is still listed: count it as exhausted, or the tracker
+		// would never settle.
+		for id := range d.completedShards {
+			inc.Exhausted(id)
+		}
+		d.mu.RUnlock()
+		described := make([]string, 0, len(shards))
+		for _, s := range shards {
+			described = append(described, aws.ToString(s.ShardId))
+		}
+		inc.RefreshDone(described)
+	}
+
 	return nil
 }
 
@@ -2336,11 +2707,17 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 	var shardWg sync.WaitGroup
 	activeShards := make(map[string]context.CancelFunc)
 	defer func() {
+		// Cancel the incremental backfill first: once the readers stop its
+		// held page can never release, so waiting on it would hang shutdown.
+		if d.backfillCancel != nil {
+			d.backfillCancel()
+		}
 		// Cancel all active shard readers, wait for them to finish, then close channel
 		for _, cancelFn := range activeShards {
 			cancelFn()
 		}
 		shardWg.Wait()
+		d.msgSenders.Wait()
 		close(d.msgChan)
 		d.shutSig.TriggerHasStopped()
 	}()
@@ -2429,10 +2806,21 @@ func (d *dynamoDBCDCInput) periodicTableDiscovery(ctx context.Context) {
 				d.mu.RUnlock()
 
 				if exists && ts != nil {
-					d.startTableCoordinator(tableName, ts)
+					d.startDiscoveredTable(ctx, tableName, ts)
 				}
 			}
 		}
+	}
+}
+
+// startDiscoveredTable starts streaming a table found by periodic discovery.
+// In incremental mode its backfill is prepared before its coordinator
+// starts, as at connect, and the table is queued only if it needs one.
+func (d *dynamoDBCDCInput) startDiscoveredTable(ctx context.Context, tableName string, ts *tableStream) {
+	needBackfill := d.backfills != nil && d.prepareOrRetryTableBackfill(ctx, ctx, tableName, ts)
+	d.startTableCoordinator(tableName, ts)
+	if needBackfill {
+		d.backfills.Push(tableName)
 	}
 }
 
@@ -2449,7 +2837,8 @@ func (d *dynamoDBCDCInput) newShardInitBackoff() backoff.BackOff {
 
 // initTableShards runs a table coordinator's first shard refresh, retrying
 // with boff until it succeeds or ctx ends: giving up would leave the table
-// unread until restart. It reports false only when ctx ended.
+// unread until restart (and, in incremental mode, its backfill holding every
+// page). It reports false only when ctx ended.
 func (d *dynamoDBCDCInput) initTableShards(ctx context.Context, tableName string, ts *tableStream, boff backoff.BackOff) bool {
 	for {
 		err := d.refreshTableShards(ctx, tableName, ts)
@@ -2575,6 +2964,14 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 
 	// Add all new shard readers
 	if len(newShards) > 0 {
+		// A reader that falls back to TRIM_HORIZON checkpoints past the
+		// trimmed gap, after which a pending prepare's probe no longer sees
+		// the stale checkpoint: record it first so the prepare still resets.
+		for _, s := range newShards {
+			if s.trimmed {
+				d.backfillRetries.markTrimmed(tableName)
+			}
+		}
 		ts.mu.Lock()
 		for _, s := range newShards {
 			if lookupShard(ts.shardReaders, ts.completedShards, s.shardID).known {
@@ -2603,6 +3000,25 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		// cycle that committed nothing keeps the flag so start_from still
 		// applies once discovery first succeeds.
 		ts.honorStartFrom.Store(false)
+	}
+
+	if inc := ts.incremental; inc != nil {
+		ts.mu.RLock()
+		for id := range ts.shardReaders {
+			inc.Register(id)
+		}
+		// A shard the checkpoint store already marks completed gets no
+		// reader but is still listed: count it as exhausted, or the tracker
+		// would never settle.
+		for id := range ts.completedShards {
+			inc.Exhausted(id)
+		}
+		ts.mu.RUnlock()
+		described := make([]string, 0, len(shards))
+		for _, s := range shards {
+			described = append(described, aws.ToString(s.ShardId))
+		}
+		inc.RefreshDone(described)
 	}
 
 	return nil
@@ -2733,6 +3149,8 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 	d.log.Debugf("Starting reader for shard %s (table %s)", shardID, tableName)
 	defer d.log.Debugf("Stopped reader for shard %s (table %s)", shardID, tableName)
 
+	inc := ts.incremental
+
 	idleTimer := time.NewTimer(d.conf.pollInterval)
 	idleTimer.Stop()
 	defer idleTimer.Stop()
@@ -2780,6 +3198,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		}
 
 		// Read records from the shard
+		pollStart := time.Now()
 		getRecords, err := d.streamsClient.GetRecords(ctx, &dynamodbstreams.GetRecordsInput{
 			ShardIterator: iterator,
 			Limit:         aws.Int32(int32(d.conf.batchSize)),
@@ -2894,6 +3313,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 				return
 			}
 			// No records available: wait before polling again
+			inc.ObserveIdle(shardID, pollStart)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -2908,7 +3328,8 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		if ts.snapshot != nil {
 			dedupeBuffer = ts.snapshot.seqBuffer
 		}
-		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
+		failoverCutoff := ts.getShardCutoff(shardID)
+		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, failoverCutoff, d.metrics.failoverSkipped)
 		if len(batch) == 0 {
 			ts.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
@@ -2957,6 +3378,25 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			return nil
 		}
 
+		// Incremental snapshot: drop held snapshot items these records
+		// supersede before the records can be enqueued (spec, Safety rule).
+		// Records skipped by the failover replay are never enqueued, so they
+		// must not drop the snapshot item either.
+		if n := inc.TouchRecords(failoverKeptRecords(getRecords.Records, failoverCutoff)); n > 0 {
+			d.metrics.snapshotWindowDropped.Incr(int64(n))
+		}
+
+		// Signal table: act on control signals before the batch can be
+		// enqueued and acked, so a request is never lost to a crash. This
+		// sits after AddMessages because the ctx-cancelled send below
+		// untracks from exactly that state; a cancel while retrying a
+		// checkpoint write leaves the batch unsent and undoes it the same
+		// way, so the signal is read again.
+		if ts.isSignalTable && !d.handleSignalRecords(ctx, getRecords.Records) {
+			recordBatcher.RemoveBatch(tb)
+			return
+		}
+
 		// Send to channel
 		select {
 		case <-ctx.Done():
@@ -2966,6 +3406,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s (table %s)", batchLen, shardID, tableName)
+			inc.ObserveRecords(shardID, getRecords.Records)
 		}
 		if shardClosed {
 			d.completeTableShard(tableName, ts, shardID)
@@ -2994,6 +3435,7 @@ func (d *dynamoDBCDCInput) completeTableShard(tableName string, ts *tableStream,
 
 	ts.mu.Lock()
 	markShardCompleted(ts.shardReaders, &ts.completedShards, shardID)
+	ts.incremental.Exhausted(shardID)
 	ts.mu.Unlock()
 	d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
 	signalShardRefresh(ts.shardRefreshCh)
@@ -3023,6 +3465,20 @@ func shouldSkipFailoverRecord(record types.Record, failoverCutoff time.Time) boo
 		return false
 	}
 	return record.Dynamodb.ApproximateCreationDateTime.Before(failoverCutoff)
+}
+
+// failoverKeptRecords returns the records shouldSkipFailoverRecord keeps.
+func failoverKeptRecords(records []types.Record, failoverCutoff time.Time) []types.Record {
+	if failoverCutoff.IsZero() {
+		return records
+	}
+	kept := make([]types.Record, 0, len(records))
+	for _, r := range records {
+		if !shouldSkipFailoverRecord(r, failoverCutoff) {
+			kept = append(kept, r)
+		}
+	}
+	return kept
 }
 
 // convertTableRecordsToBatch converts DynamoDB Stream records to Benthos messages for a specific table
@@ -3155,6 +3611,11 @@ func (d *dynamoDBCDCInput) startTableCoordinator(tableName string, ts *tableStre
 	d.startBackgroundWorker(
 		"coordinator for table "+tableName,
 		func(ctx context.Context) {
+			// Deferred so a panic, recovered by startBackgroundWorker, still
+			// releases a backfill waiting on this table.
+			if ts.coordinatorDone != nil {
+				defer close(ts.coordinatorDone)
+			}
 			d.startTableStreamCoordinator(ctx, tableName, ts)
 		},
 	)
@@ -3256,6 +3717,7 @@ func (d *dynamoDBCDCInput) completeShard(shardID string) {
 
 	d.mu.Lock()
 	markShardCompleted(d.shardReaders, &d.completedShards, shardID)
+	d.incremental.Exhausted(shardID)
 	d.mu.Unlock()
 	d.log.Infof("Shard %s exhausted", shardID)
 	signalShardRefresh(d.shardRefreshCh)
@@ -3267,10 +3729,14 @@ func (d *dynamoDBCDCInput) completeShard(shardID string) {
 // discovery until the next cleanup tick, stalling a still-listed shard for up
 // to shardCleanupInterval after a transient error; unregistered, the refresh
 // re-registers it from its checkpoint right away, while a shard that is truly
-// gone is no longer listed and stays dropped.
+// gone is no longer listed and stays dropped. In incremental mode the shard
+// is also dropped from the shard progress tracker, so a gone shard cannot hold
+// snapshot pages back, and a re-registered one starts over from its
+// checkpoint.
 func (d *dynamoDBCDCInput) releaseShardReader(shardID string) {
 	d.mu.Lock()
 	delete(d.shardReaders, shardID)
+	d.incremental.Release(shardID)
 	d.mu.Unlock()
 	signalShardRefresh(d.shardRefreshCh)
 }
@@ -3280,6 +3746,7 @@ func (d *dynamoDBCDCInput) releaseShardReader(shardID string) {
 func (ts *tableStream) releaseShardReader(shardID string) {
 	ts.mu.Lock()
 	delete(ts.shardReaders, shardID)
+	ts.incremental.Release(shardID)
 	ts.mu.Unlock()
 	signalShardRefresh(ts.shardRefreshCh)
 }
@@ -3288,6 +3755,8 @@ func (ts *tableStream) releaseShardReader(shardID string) {
 func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string) {
 	d.log.Debugf("Starting reader for shard %s", shardID)
 	defer d.log.Debugf("Stopped reader for shard %s", shardID)
+
+	inc := d.incremental
 
 	idleTimer := time.NewTimer(d.conf.pollInterval)
 	idleTimer.Stop()
@@ -3336,6 +3805,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		}
 
 		// Read records from the shard (I/O operation - no lock held)
+		pollStart := time.Now()
 		getRecords, err := d.streamsClient.GetRecords(ctx, &dynamodbstreams.GetRecordsInput{
 			ShardIterator: iterator,
 			Limit:         aws.Int32(int32(d.conf.batchSize)),
@@ -3450,6 +3920,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 				return
 			}
 			// No records available: wait before polling again
+			inc.ObserveIdle(shardID, pollStart)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
 			case <-ctx.Done():
@@ -3460,7 +3931,8 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		}
 
 		// Convert records to messages
-		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
+		failoverCutoff := d.getShardCutoff(shardID)
+		batch := d.convertRecordsToBatch(getRecords.Records, shardID, failoverCutoff)
 		if len(batch) == 0 {
 			d.recordBatcher.Release(shardID, reserve)
 			if shardClosed {
@@ -3510,6 +3982,14 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			return nil
 		}
 
+		// Incremental snapshot: drop held snapshot items these records
+		// supersede before the records can be enqueued (spec, Safety rule).
+		// Records skipped by the failover replay are never enqueued, so they
+		// must not drop the snapshot item either.
+		if n := inc.TouchRecords(failoverKeptRecords(getRecords.Records, failoverCutoff)); n > 0 {
+			d.metrics.snapshotWindowDropped.Incr(int64(n))
+		}
+
 		// Send to channel
 		select {
 		case <-ctx.Done():
@@ -3519,6 +3999,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 			return
 		case d.msgChan <- asyncMessage{msg: batch, ackFn: ackFunc}:
 			d.log.Debugf("Sent batch of %d records from shard %s", batchLen, shardID)
+			inc.ObserveRecords(shardID, getRecords.Records)
 		}
 		if shardClosed {
 			d.completeShard(shardID)
@@ -3528,9 +4009,11 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 }
 
 // handleSnapshotBatch processes a batch of items from the snapshot scan.
+// keySchema is the table's primary key, copied into each record's
+// dynamodb.keys so READ records carry the same keys object as stream events.
 // lastKey is the scan position after this batch; it is registered with the
 // segment's ordered ack tracker and persisted only once acknowledged.
-func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, lastKey map[string]dynamodbtypes.AttributeValue, tracker *snapshotAckTracker, ackGate *sync.WaitGroup) error {
+func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[string]dynamodbtypes.AttributeValue, segment int, tableName string, keySchema []dynamodbtypes.KeySchemaElement, lastKey map[string]dynamodbtypes.AttributeValue, tracker *snapshotAckTracker, ackGate *sync.WaitGroup) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -3539,7 +4022,6 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 	d.mu.RLock()
 	buffer := d.snapshot.seqBuffer
 	dedupeStart := d.snapshot.startTime.Add(-snapshotDedupeClockSkewMargin)
-	keySchema := d.keySchema
 	d.mu.RUnlock()
 
 	batch := make(service.MessageBatch, 0, len(items))
@@ -3556,6 +4038,9 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 		// Add the full item as newImage (similar to CDC INSERT events)
 		dynamoData := map[string]any{
 			"newImage": convertDynamoDBAttributeMap(item),
+		}
+		if keys := snapshotItemKeys(item, keySchema); keys != nil {
+			dynamoData["keys"] = keys
 		}
 		if buffer != nil {
 			keyStr := buildItemKeyString(item, keySchema)
@@ -3624,6 +4109,25 @@ func (d *dynamoDBCDCInput) handleSnapshotBatch(ctx context.Context, items []map[
 		d.log.Debugf("Sent snapshot batch of %d records from segment %d", len(batch), segment)
 		return nil
 	}
+}
+
+// snapshotItemKeys returns the primary key attributes of a scanned item,
+// shaped like a stream record's dynamodb.keys. It returns nil when the key
+// schema is unknown or the item lacks a key attribute.
+func snapshotItemKeys(item map[string]dynamodbtypes.AttributeValue, keySchema []dynamodbtypes.KeySchemaElement) map[string]any {
+	if len(keySchema) == 0 {
+		return nil
+	}
+	keys := make(map[string]any, len(keySchema))
+	for _, keyElem := range keySchema {
+		name := aws.ToString(keyElem.AttributeName)
+		v, exists := item[name]
+		if !exists {
+			return nil
+		}
+		keys[name] = convertDynamoDBAttributeValue(v)
+	}
+	return keys
 }
 
 // buildItemKeyString creates a string representation of an item's primary key for deduplication.
@@ -3821,8 +4325,10 @@ func (d *dynamoDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 		return nil, nil, service.ErrNotConnected
 	}
 
-	// Check if snapshot failed and propagate the error
-	if d.snapshot != nil && d.snapshot.state.Load() == snapshotStateFailed {
+	// Check if snapshot failed and propagate the error. A failed incremental
+	// backfill is not fatal: the table keeps streaming and the backfill is
+	// retried in-process with backoff.
+	if d.snapshot != nil && d.conf.snapshot.mode != snapshotModeIncremental && d.snapshot.state.Load() == snapshotStateFailed {
 		if d.snapshot.err != nil {
 			return nil, nil, d.snapshot.err
 		}

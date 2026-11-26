@@ -42,7 +42,9 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 		config.WithRegion("us-east-1"),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	conf.BaseEndpoint = &endpoint
 	client := dynamodb.NewFromConfig(conf)

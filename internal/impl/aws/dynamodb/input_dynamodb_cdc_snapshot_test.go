@@ -216,7 +216,7 @@ func TestHandleSnapshotBatchHostClockAhead(t *testing.T) {
 			tracker, _ := newTestSnapshotAckTracker(1)
 			var ackGate sync.WaitGroup
 
-			err := d.handleSnapshotBatch(t.Context(), []map[string]dynamodbtypes.AttributeValue{item}, 0, "t", item, tracker, &ackGate)
+			err := d.handleSnapshotBatch(t.Context(), []map[string]dynamodbtypes.AttributeValue{item}, 0, "t", keySchema, item, tracker, &ackGate)
 			require.NoError(t, err)
 
 			key := buildItemKeyString(item, keySchema)

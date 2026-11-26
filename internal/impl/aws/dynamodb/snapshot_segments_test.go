@@ -9,11 +9,8 @@
 package dynamodb
 
 import (
-	"context"
-	"sync"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,43 +18,13 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// segmentRowsAPI is a fakeCheckpointAPI that stores the rows it is given and
-// returns them from the snapshot segment query; the completion marker is
-// never present.
-func segmentRowsAPI() *fakeCheckpointAPI {
-	var mu sync.Mutex
-	var rows []map[string]dynamodbtypes.AttributeValue
-	return &fakeCheckpointAPI{
-		putItem: func(_ context.Context, in *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-			mu.Lock()
-			defer mu.Unlock()
-			rows = append(rows, in.Item)
-			return &dynamodb.PutItemOutput{}, nil
-		},
-		getItem: func(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
-			return &dynamodb.GetItemOutput{}, nil
-		},
-		query: func(context.Context, *dynamodb.QueryInput, ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error) {
-			mu.Lock()
-			defer mu.Unlock()
-			return &dynamodb.QueryOutput{Items: rows}, nil
-		},
-	}
-}
-
 // TestSnapshotSegmentCountSurvivesResume: a Scan segment's key range depends
 // on the total segment count, so a resume after snapshot_segments changed
 // must keep the count the stored positions were read under. Resuming them
 // under the new count would skip or re-read keys.
 func TestSnapshotSegmentCountSurvivesResume(t *testing.T) {
-	cp := &Checkpointer{
-		tableName:       "ckpt",
-		sourceTable:     "t",
-		streamArn:       testStreamArn,
-		checkpointLimit: 10,
-		svc:             segmentRowsAPI(),
-		log:             service.MockResources().Logger(),
-	}
+	api := newMemCheckpointAPI(nil)
+	cp := memCheckpointer(t, api, "t", testStreamArn)
 	tracker := newSnapshotAckTracker(cp, 1, 4, service.MockResources().Logger())
 
 	resolve := tracker.TrackBatch(1, map[string]dynamodbtypes.AttributeValue{"pk": &dynamodbtypes.AttributeValueMemberS{Value: "k"}}, 3)
