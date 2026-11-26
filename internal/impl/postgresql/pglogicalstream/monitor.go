@@ -347,3 +347,57 @@ func (m *Monitor) Stop() error {
 	m.loop.Stop()
 	return m.dbConn.Close()
 }
+
+// noTypeModifier is the type modifier PostgreSQL reports for a column or
+// domain that declares none.
+const noTypeModifier = -1
+
+// domainBase is the type a column's type OID resolves to.
+type domainBase struct {
+	// oid is the non-domain type at the end of the chain.
+	oid uint32
+	// typeModifier is the first modifier declared along the domain chain, or
+	// noTypeModifier.
+	typeModifier int32
+}
+
+// resolveDomainBase follows typeOID's domain chain to its base type. A
+// non-domain or missing type resolves to itself.
+func (m *Monitor) resolveDomainBase(ctx context.Context, typeOID uint32) (domainBase, error) {
+	rows, err := m.dbConn.QueryContext(ctx, `
+        WITH RECURSIVE chain AS (
+            SELECT t.oid, t.typtype, t.typbasetype, t.typtypmod, 0 AS depth
+            FROM   pg_type t
+            WHERE  t.oid = $1::oid
+            UNION ALL
+            SELECT t.oid, t.typtype, t.typbasetype, t.typtypmod, c.depth + 1
+            FROM   chain c
+            JOIN   pg_type t ON t.oid = c.typbasetype
+            WHERE  c.typtype = 'd'
+        )
+        SELECT oid::bigint, typtype::text, typtypmod FROM chain ORDER BY depth`, int64(typeOID))
+	if err != nil {
+		return domainBase{}, fmt.Errorf("querying domain chain of type %d: %w", typeOID, err)
+	}
+	defer rows.Close()
+
+	res := domainBase{oid: typeOID, typeModifier: noTypeModifier}
+	for rows.Next() {
+		var (
+			oid     int64
+			typtype string
+			typmod  int32
+		)
+		if err := rows.Scan(&oid, &typtype, &typmod); err != nil {
+			return domainBase{}, fmt.Errorf("scanning domain chain of type %d: %w", typeOID, err)
+		}
+		res.oid = uint32(oid)
+		if typtype == "d" && res.typeModifier == noTypeModifier {
+			res.typeModifier = typmod
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return domainBase{}, fmt.Errorf("reading domain chain of type %d: %w", typeOID, err)
+	}
+	return res, nil
+}

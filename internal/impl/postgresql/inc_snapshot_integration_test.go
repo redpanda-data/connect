@@ -318,7 +318,7 @@ postgres_cdc:
 		},
 		{
 			// The stream sees a domain's own type and the snapshot its base
-			// type, so domains take a different decode path on each side.
+			// type, so domains must be resolved to their base on the stream.
 			name:    "DomainInt4rangeKey",
 			table:   "domain_int4range_keyed",
 			setup:   `CREATE DOMAIN int4range_key_domain AS int4range`,
@@ -340,6 +340,70 @@ postgres_cdc:
 			setup:   `CREATE DOMAIN varbit_key_domain AS varbit(16)`,
 			ddl:     `CREATE TABLE domain_varbit_keyed (id varbit_key_domain PRIMARY KEY, name TEXT)`,
 			insert:  `INSERT INTO domain_varbit_keyed (id, name) VALUES (((SELECT COUNT(*) FROM domain_varbit_keyed) + 1)::int::bit(16)::varbit, 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "IntArrayKey",
+			table:   "int_array_keyed",
+			ddl:     `CREATE TABLE int_array_keyed (id int4[] PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO int_array_keyed (id, name) VALUES (ARRAY[(SELECT COUNT(*) FROM int_array_keyed)::int, 7], 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			// Elements with spaces, commas and quotes, which PostgreSQL
+			// quotes in the array's text form.
+			name:    "TextArrayKey",
+			table:   "text_array_keyed",
+			ddl:     `CREATE TABLE text_array_keyed (id text[] PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO text_array_keyed (id, name) VALUES (ARRAY['item ' || (SELECT COUNT(*) FROM text_array_keyed), 'x, y', 'q"r', ''], 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainArrayKey",
+			table:   "domain_array_keyed",
+			setup:   `CREATE DOMAIN int4_array_key_domain AS int4[]`,
+			ddl:     `CREATE TABLE domain_array_keyed (id int4_array_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_array_keyed (id, name) VALUES (ARRAY[(SELECT COUNT(*) FROM domain_array_keyed)::int, 7], 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainTimestamptzKey",
+			table:   "domain_timestamptz_keyed",
+			setup:   `CREATE DOMAIN timestamptz_key_domain AS timestamptz`,
+			ddl:     `CREATE TABLE domain_timestamptz_keyed (id timestamptz_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_timestamptz_keyed (id, name) VALUES (TIMESTAMPTZ '2026-01-01 03:04:05.123+00' + (SELECT COUNT(*) FROM domain_timestamptz_keyed) * INTERVAL '1 second', 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainTimestampKey",
+			table:   "domain_timestamp_keyed",
+			setup:   `CREATE DOMAIN timestamp_key_domain AS timestamp`,
+			ddl:     `CREATE TABLE domain_timestamp_keyed (id timestamp_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_timestamp_keyed (id, name) VALUES (TIMESTAMP '2026-01-01 03:04:05.123' + (SELECT COUNT(*) FROM domain_timestamp_keyed) * INTERVAL '1 second', 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainDateKey",
+			table:   "domain_date_keyed",
+			setup:   `CREATE DOMAIN date_key_domain AS date`,
+			ddl:     `CREATE TABLE domain_date_keyed (id date_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_date_keyed (id, name) VALUES (DATE '2026-01-01' + (SELECT COUNT(*) FROM domain_date_keyed)::int, 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainTsrangeKey",
+			table:   "domain_tsrange_keyed",
+			setup:   `CREATE DOMAIN tsrange_key_domain AS tsrange`,
+			ddl:     `CREATE TABLE domain_tsrange_keyed (id tsrange_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_tsrange_keyed (id, name) VALUES (tsrange(TIMESTAMP '2026-01-01 00:00:00' + (SELECT COUNT(*) FROM domain_tsrange_keyed) * INTERVAL '1 second', NULL), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainOverDomainKey",
+			table:   "domain_over_domain_keyed",
+			setup:   `CREATE DOMAIN inner_timestamptz_key_domain AS timestamptz; CREATE DOMAIN outer_timestamptz_key_domain AS inner_timestamptz_key_domain`,
+			ddl:     `CREATE TABLE domain_over_domain_keyed (id outer_timestamptz_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_over_domain_keyed (id, name) VALUES (TIMESTAMPTZ '2026-01-01 03:04:05.123+00' + (SELECT COUNT(*) FROM domain_over_domain_keyed) * INTERVAL '1 second', 'orig')`,
 			keyCols: []string{"id"},
 		},
 	} {
@@ -368,13 +432,13 @@ postgres_cdc:
     dsn: %s
     slot_name: test_slot_inc_%s
     schema: public
-    heartbeat_interval: 500ms
+    heartbeat_interval: 10s
     tables:
       - %s
     signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
-        chunk_size: 50
+        chunk_size: 40
         checkpoint_cache: snap_cache
 `, databaseURL, keyed.table, keyed.table)
 
@@ -386,7 +450,19 @@ postgres_cdc:
 				latest  = map[string]string{}
 				updates int
 				reads   int
+				// rank is the highest name rank seen per key. A read below it
+				// is a stale snapshot row: the dedup missed it.
+				rank       = map[string]int{}
+				staleReads int
 			)
+			// "orig" ranks 0 and "updated-N" ranks N+1.
+			nameRank := func(name string) int {
+				var n int
+				if _, err := fmt.Sscanf(name, "updated-%d", &n); err != nil {
+					return 0
+				}
+				return n + 1
+			}
 
 			stop := runIncSnapshotStream(t, incSnapshotStream{
 				inputYAML: template,
@@ -419,26 +495,56 @@ postgres_cdc:
 							updates++
 						}
 						name, _ := fields["name"].(string)
-						latest[strings.Join(key, "|")] = name
+						joined := strings.Join(key, "|")
+						r := nameRank(name)
+						if op == "read" && r < rank[joined] {
+							staleReads++
+						}
+						rank[joined] = max(rank[joined], r)
+						latest[joined] = name
 					}
 					return nil
 				},
 			})
 
-			// Ask for the backfill now the slot exists.
-			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
-
+			// Decoding skips transactions committed before it reaches a
+			// consistent snapshot, so first wait for a no-op rewrite of every
+			// row to stream.
+			slotName := fmt.Sprintf("test_slot_inc_%s", keyed.table)
+			require.Eventually(t, func() bool {
+				var found bool
+				err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)`, slotName).Scan(&found)
+				return err == nil && found
+			}, time.Minute, 50*time.Millisecond, "replication slot %s was never created", slotName)
+			_, err = db.Exec(`UPDATE ` + keyed.table + ` SET name = name`)
+			require.NoError(t, err)
 			require.Eventually(t, func() bool {
 				mu.Lock()
 				defer mu.Unlock()
-				return reads >= 1
-			}, 30*time.Second, 50*time.Millisecond, "did not observe any backfill rows before updating")
+				return updates >= numPreExisting
+			}, 30*time.Second, 50*time.Millisecond, "the stream never delivered a change")
 
-			// Update every row repeatedly while the backfill runs, so updates
-			// land on chunks already read, currently buffered, and not yet
-			// reached.
-			const updatePasses = 3
-			for pass := range updatePasses {
+			// Hold the rewrite open while the first chunk is read, then commit
+			// it while the chunk is buffered. A dedup miss then emits the chunk
+			// after the newer streamed rows. The slow heartbeat keeps the
+			// chunk's window open.
+			pending, err := db.BeginTx(t.Context(), nil)
+			require.NoError(t, err)
+			_, err = pending.Exec(`UPDATE ` + keyed.table + ` SET name = 'updated-0'`)
+			require.NoError(t, err)
+
+			// Ask for the backfill now the slot exists.
+			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
+
+			// Give the chunk time to be read. Committing too early only weakens
+			// the check.
+			time.Sleep(time.Second)
+			require.NoError(t, pending.Commit())
+
+			// Update every row repeatedly, so updates land on chunks already
+			// read, currently buffered, and not yet reached.
+			const updatePasses = 4
+			for pass := 1; pass < updatePasses; pass++ {
 				_, err := db.Exec(`UPDATE `+keyed.table+` SET name = $1`, fmt.Sprintf("updated-%d", pass))
 				require.NoError(t, err)
 			}
@@ -451,7 +557,7 @@ postgres_cdc:
 			require.Eventually(t, func() bool {
 				mu.Lock()
 				defer mu.Unlock()
-				if int64(len(latest)) < totalRows {
+				if int64(len(latest)) < totalRows || reads == 0 {
 					return false
 				}
 				for _, name := range latest {
@@ -469,7 +575,9 @@ postgres_cdc:
 			defer mu.Unlock()
 			// One key per row: a decode mismatch would produce two.
 			require.Len(t, latest, int(totalRows))
+			require.NotZero(t, reads, "no backfill rows read")
 			require.NotZero(t, updates, "no updates streamed, so dedup was not exercised")
+			assert.Zero(t, staleReads, "a snapshot row was emitted after a newer streamed update, so the streamed key did not evict the buffered row")
 		})
 	}
 

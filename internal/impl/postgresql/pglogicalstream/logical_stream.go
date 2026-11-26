@@ -78,6 +78,10 @@ type Stream struct {
 	incSnapshot        incrementalSnapshot
 	snapshotSchema     string
 	IsBlockingSnapshot bool
+
+	// domainBases caches what each type OID unknown to pgx resolves to,
+	// non-domains included. Only the stream goroutine uses it.
+	domainBases map[uint32]domainBase
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -708,6 +712,37 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	return nil
 }
 
+// resolveRelationDomains rewrites each domain-typed column to its base type.
+// pgoutput reports a domain's own OID, which pgx does not know, so the value
+// would otherwise decode as raw text.
+func (s *Stream) resolveRelationDomains(ctx context.Context, rel *RelationMessage, typeMap *pgtype.Map) error {
+	for _, col := range rel.Columns {
+		if _, known := typeMap.TypeForOID(col.DataType); known {
+			continue
+		}
+		base, cached := s.domainBases[col.DataType]
+		if !cached {
+			var err error
+			if base, err = s.monitor.resolveDomainBase(ctx, col.DataType); err != nil {
+				return fmt.Errorf("resolving column %q: %w", col.Name, err)
+			}
+			if s.domainBases == nil {
+				s.domainBases = make(map[uint32]domainBase)
+			}
+			s.domainBases[col.DataType] = base
+		}
+		if base.oid == col.DataType {
+			continue
+		}
+		s.logger.Debugf("Resolved domain type %d of column %q in table %s.%s to base type %d", col.DataType, col.Name, rel.Namespace, rel.RelationName, base.oid)
+		col.DataType = base.oid
+		if col.TypeModifier == noTypeModifier {
+			col.TypeModifier = base.typeModifier
+		}
+	}
+	return nil
+}
+
 type processChangeResult int
 
 const (
@@ -736,6 +771,9 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	// picks up the updated column definitions.
 	if rel, ok := logicalMsg.(*RelationMessage); ok {
 		delete(schemaCache, rel.RelationID)
+		if err := s.resolveRelationDomains(ctx, rel, typeMap); err != nil {
+			return nil, changeResultNoMessage, fmt.Errorf("resolving domain types of table %s.%s: %w", rel.Namespace, rel.RelationName, err)
+		}
 	}
 
 	// capture transaction commit time and xid for insert, update and delete events

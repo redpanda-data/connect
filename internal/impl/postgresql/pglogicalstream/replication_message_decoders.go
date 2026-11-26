@@ -43,6 +43,9 @@ func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
 	return ok, m, nil
 }
 
+// relationColumnKeyFlag marks a RelationMessage column as part of the key.
+const relationColumnKeyFlag = 1
+
 // toStreamMessage decodes a logical replication message in pgoutput format.
 // It uses the provided relations map to look up the relation metadata for the
 // as a side effect it updates the relations map with any new relation metadata
@@ -73,6 +76,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 			return nil, fmt.Errorf("decoding data for insert message: %w", err)
 		}
 		message.Data = values
+		message.KeyText = arrayKeyText(logicalMsg.Tuple, rel, typeMap)
 	case *UpdateMessage:
 		rel, ok := relations[logicalMsg.RelationID]
 		if !ok {
@@ -92,12 +96,14 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 			return nil, fmt.Errorf("decoding new data for update message: %w", err)
 		}
 		message.Data = values
+		message.KeyText = arrayKeyText(logicalMsg.NewTuple, rel, typeMap)
 		if logicalMsg.OldTuple != nil {
 			before, err := decodeTuple(logicalMsg.OldTuple, rel, typeMap, unchangedToastValue, nil)
 			if err != nil {
 				return nil, fmt.Errorf("decoding before data for update message: %w", err)
 			}
 			message.BeforeData = before
+			message.BeforeKeyText = arrayKeyText(logicalMsg.OldTuple, rel, typeMap)
 		}
 	case *DeleteMessage:
 		rel, ok := relations[logicalMsg.RelationID]
@@ -113,6 +119,8 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 		}
 		message.Data = values
 		message.BeforeData = values
+		message.KeyText = arrayKeyText(logicalMsg.OldTuple, rel, typeMap)
+		message.BeforeKeyText = message.KeyText
 	case *TruncateMessage, *TypeMessage, *OriginMessage, *LogicalDecodingMessage:
 		return nil, nil
 	default:
@@ -120,6 +128,33 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 	}
 
 	return message, nil
+}
+
+// arrayKeyText returns the PostgreSQL text of the tuple's array key columns, or
+// nil when there are none.
+func arrayKeyText(tuple *TupleData, rel *RelationMessage, typeMap *pgtype.Map) map[string]string {
+	var text map[string]string
+	for idx, col := range tuple.Columns {
+		if idx >= len(rel.Columns) {
+			break
+		}
+		relCol := rel.Columns[idx]
+		if relCol.Flags&relationColumnKeyFlag == 0 || col.DataType != 't' {
+			continue
+		}
+		dt, known := typeMap.TypeForOID(relCol.DataType)
+		if !known {
+			continue
+		}
+		if _, isArray := dt.Codec.(*pgtype.ArrayCodec); !isArray {
+			continue
+		}
+		if text == nil {
+			text = make(map[string]string)
+		}
+		text[relCol.Name] = string(col.Data)
+	}
+	return text
 }
 
 func decodeTuple(tuple *TupleData, rel *RelationMessage, typeMap *pgtype.Map, unchangedToastValue any, toastFallback *TupleData) (map[string]any, error) {

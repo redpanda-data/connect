@@ -148,11 +148,16 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	require.NoError(t, db.Ping())
 
-	cases := []struct {
+	type parityCase struct {
 		name    string
 		colType string
 		value   string
-	}{
+	}
+	// ddl and insert replace the single-column key table and its insert for
+	// a case, by name.
+	ddls := map[string]string{}
+	inserts := map[string]string{}
+	scalars := []parityCase{
 		{"int4", "integer", "42"},
 		{"int8", "bigint", "9007199254740993"},
 		{"int2", "smallint", "32767"},
@@ -192,29 +197,85 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		{"tstzrange", "tstzrange", "'[2026-01-02 03:04:05+00,)'::tstzrange"},
 		{"int4multirange", "int4multirange", "'{[1,3),[5,7)}'::int4multirange"},
 		{"custom_range", "parity_range", "'[1,6)'::parity_range"},
-		// The stream sees a domain's own type, which pgx does not know, so it
-		// returns the raw text; the snapshot sees the base type.
-		{"domain_int4range", "parity_int4range_domain", "'[1,6)'"},
-		{"domain_interval", "parity_interval_domain", "'1 day 02:03:04'"},
-		{"domain_varbit", "parity_varbit_domain", "B'0101'"},
 	}
-	for _, ddl := range []string{
-		"CREATE DOMAIN parity_int4range_domain AS int4range",
-		"CREATE DOMAIN parity_interval_domain AS interval",
-		"CREATE DOMAIN parity_varbit_domain AS varbit(8)",
-	} {
-		_, err := db.Exec(ddl)
-		require.NoError(t, err, ddl)
+	arrays := []parityCase{
+		{"int4_array", "int4[]", "ARRAY[1,2,3]"},
+		{"int4_array_null_elem", "int4[]", "ARRAY[1,NULL,3]"},
+		{"int4_array_empty", "int4[]", "ARRAY[]::int4[]"},
+		// Elements that PostgreSQL has to quote in its text form.
+		{"text_array", "text[]", `ARRAY['a b','c,d','e"f','g\h','','NULL','{x}']`},
+		{"int8_array", "int8[]", "ARRAY[9007199254740993,-1]::int8[]"},
+		{"uuid_array", "uuid[]", "ARRAY['0b7f2e1e-4a5b-4c3d-8e9f-0a1b2c3d4e5f','11111111-2222-3333-4444-555555555555']::uuid[]"},
+		{"numeric_array", "numeric[]", "ARRAY[1.50,2,'NaN']::numeric[]"},
+		{"timestamptz_array", "timestamptz[]", "ARRAY['2026-01-02 03:04:05.678+00','2026-01-03 00:00:00+00']::timestamptz[]"},
+		{"bool_array", "bool[]", "ARRAY[true,false]"},
+		{"float8_array", "float8[]", "ARRAY[0.1,2.5]::float8[]"},
+		{"date_array", "date[]", "ARRAY['2026-01-02','infinity']::date[]"},
+		{"multidim_array", "int4[]", "ARRAY[[1,2],[3,4]]"},
+		// A non-default lower bound is part of the text form.
+		{"bounds_array", "int4[]", "'[0:2]={1,2,3}'::int4[]"},
 	}
 
 	// A range pgx does not know by name.
 	_, err = db.Exec("CREATE TYPE parity_range AS RANGE (subtype = int4)")
 	require.NoError(t, err)
 
+	cases := slices.Clone(scalars)
+	cases = append(cases, arrays...)
+	// A domain over every case, so no type is missed. Table and domain names
+	// differ, as they share a namespace.
+	for _, tc := range slices.Concat(scalars, arrays) {
+		domain := "d_" + tc.name
+		_, err := db.Exec(fmt.Sprintf("CREATE DOMAIN %s AS %s", domain, tc.colType))
+		require.NoError(t, err, "creating domain for %s", tc.name)
+		cases = append(cases, parityCase{"dom_" + tc.name, domain, tc.value})
+	}
+	for _, ddl := range []string{
+		"CREATE DOMAIN parity_int4range_domain AS int4range",
+		"CREATE DOMAIN parity_interval_domain AS interval",
+		"CREATE DOMAIN parity_varbit_domain AS varbit(8)",
+		// Domains over domains, down to a scalar, a range and an array.
+		"CREATE DOMAIN parity_nested_int8 AS d_int8",
+		"CREATE DOMAIN parity_nested_nested_int8 AS parity_nested_int8",
+		"CREATE DOMAIN parity_nested_timestamptz AS d_timestamptz",
+		"CREATE DOMAIN parity_nested_tsrange AS d_tsrange",
+		"CREATE DOMAIN parity_nested_array AS d_text_array",
+	} {
+		_, err := db.Exec(ddl)
+		require.NoError(t, err, ddl)
+	}
+	cases = append(cases,
+		// The snapshot sees a domain's base type, the stream its own type.
+		parityCase{"domain_int4range", "parity_int4range_domain", "'[1,6)'"},
+		parityCase{"domain_interval", "parity_interval_domain", "'1 day 02:03:04'"},
+		parityCase{"domain_varbit", "parity_varbit_domain", "B'0101'"},
+		parityCase{"domain_over_domain_int8", "parity_nested_int8", "9007199254740993"},
+		parityCase{"domain_over_domain_over_domain_int8", "parity_nested_nested_int8", "9007199254740993"},
+		parityCase{"domain_over_domain_timestamptz", "parity_nested_timestamptz", "'2026-01-02 03:04:05.678+00'::timestamptz"},
+		parityCase{"domain_over_domain_tsrange", "parity_nested_tsrange", "'[2026-01-02 03:04:05,2026-01-03 00:00:00)'::tsrange"},
+		parityCase{"domain_over_domain_array", "parity_nested_array", `ARRAY['a b','c"d']`},
+	)
+
+	// An array inside a composite key, next to a non-key array that must not
+	// affect the key. Under REPLICA IDENTITY FULL every column is flagged as a
+	// key, so the non-key array gets key text too.
+	for _, name := range []string{"composite_array", "composite_array_replica_full"} {
+		cases = append(cases, parityCase{name: name})
+		ddls[name] = fmt.Sprintf("CREATE TABLE %s (tenant bigint, id int8[], tags text[], PRIMARY KEY (tenant, id))", name)
+		inserts[name] = fmt.Sprintf(`INSERT INTO %s (tenant, id, tags) VALUES (7, ARRAY[9007199254740993,-1]::int8[], ARRAY['a b','c"d']::text[])`, name)
+	}
+
 	for _, tc := range cases {
-		_, err := db.Exec(fmt.Sprintf("CREATE TABLE %s (id %s PRIMARY KEY)", tc.name, tc.colType))
+		ddl := fmt.Sprintf("CREATE TABLE %s (id %s PRIMARY KEY)", tc.name, tc.colType)
+		if override, ok := ddls[tc.name]; ok {
+			ddl = override
+		}
+		_, err := db.Exec(ddl)
 		require.NoError(t, err, "creating table for %s", tc.name)
 	}
+
+	_, err = db.Exec("ALTER TABLE composite_array_replica_full REPLICA IDENTITY FULL")
+	require.NoError(t, err)
 
 	_, err = db.Exec("CREATE PUBLICATION parity_pub FOR ALL TABLES")
 	require.NoError(t, err)
@@ -222,40 +283,76 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tc := range cases {
-		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s (id) VALUES (%s)", tc.name, tc.value))
+		insert := fmt.Sprintf("INSERT INTO %s (id) VALUES (%s)", tc.name, tc.value)
+		if override, ok := inserts[tc.name]; ok {
+			insert = override
+		}
+		_, err := db.Exec(insert)
 		require.NoError(t, err, "inserting into %s", tc.name)
 	}
 
-	streamed := streamedPKValues(t, db)
+	// The snapshot side uses the real chunk query, with key columns resolved as
+	// for a signal.
+	s := &Stream{
+		slotName:                     "parity_slot",
+		externallyManagedPublication: true,
+		monitor:                      &Monitor{dbConn: db},
+		incSnapshot: incrementalSnapshot{
+			conn:         db,
+			pkCache:      map[string][]string{},
+			arrayPKCache: map[string]map[string]struct{}{},
+		},
+	}
+	tableID := func(name string) incrementalsnapshot.TableID {
+		return incrementalsnapshot.TableID{Schema: "public", Table: name}
+	}
+
+	snapshotKeys := map[string]string{}
+	for _, tc := range cases {
+		table := tableID(tc.name)
+		cols, err := s.incrementalPKColumns(t.Context(), table)
+		require.NoError(t, err, "resolving key of %s", tc.name)
+		if _, composite := ddls[tc.name]; composite {
+			require.Equal(t, []string{"tenant", "id"}, cols)
+		} else {
+			require.Equal(t, []string{"id"}, cols)
+		}
+
+		rows, err := s.fetchIncrementalChunk(t.Context(), table, cols, fmt.Sprintf("SELECT * FROM %s", tc.name), nil)
+		require.NoError(t, err, "fetching chunk of %s", tc.name)
+		require.Len(t, rows, 1, tc.name)
+		snapshotKeys[tc.name] = fmt.Sprintf("%v", rows[0].PK)
+	}
+
+	// Deleting too, so the key of an old tuple is covered as well.
+	for _, tc := range cases {
+		_, err := db.Exec(fmt.Sprintf("DELETE FROM %s", tc.name))
+		require.NoError(t, err, "deleting from %s", tc.name)
+	}
+
+	streamedInserts, streamedDeletes := streamedPKs(t, s, db)
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			streamVal, decoded := streamed[tc.name]
+			snapshotKey, ok := snapshotKeys[tc.name]
+			require.True(t, ok)
+
+			insertKey, decoded := streamedInserts[tc.name]
 			require.True(t, decoded, "no streamed insert decoded for %s", tc.name)
-
-			rows, err := db.Query(fmt.Sprintf("SELECT id FROM %s", tc.name))
-			require.NoError(t, err)
-			defer rows.Close()
-			columnTypes, err := rows.ColumnTypes()
-			require.NoError(t, err)
-			scanArgs, getters := prepareScannersAndGetters(columnTypes)
-			require.True(t, rows.Next())
-			require.NoError(t, rows.Scan(scanArgs...))
-			snapshotVal, err := getters[0](scanArgs[0])
-			require.NoError(t, err)
-			require.NoError(t, rows.Err())
-
-			snapshotKey := fmt.Sprintf("%v", canonicalizePKValue(snapshotVal))
-			streamKey := fmt.Sprintf("%v", canonicalizePKValue(streamVal))
-			assert.Equal(t, snapshotKey, streamKey,
+			assert.Equal(t, snapshotKey, insertKey,
 				"snapshot and stream must reduce a %s key to the same window key", tc.colType)
+
+			deleteKey, decoded := streamedDeletes[tc.name]
+			require.True(t, decoded, "no streamed delete decoded for %s", tc.name)
+			assert.Equal(t, snapshotKey, deleteKey,
+				"the key of a deleted %s row must match the snapshot's too", tc.colType)
 		})
 	}
 }
 
-// streamedPKValues drains the pgoutput slot and returns, per table, the
-// decoded primary key of its insert -- the value OnStreamedRow would key on.
-func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
+// streamedPKs drains the pgoutput slot and returns, per table, the window keys
+// of its insert and its delete, built as the stream builds them.
+func streamedPKs(t *testing.T, s *Stream, db *sql.DB) (inserts, deletes map[string]string) {
 	t.Helper()
 
 	rows, err := db.Query(`SELECT data FROM pg_logical_slot_get_binary_changes(
@@ -265,7 +362,8 @@ func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
 
 	typeMap := pgtype.NewMap()
 	relations := map[uint32]*RelationMessage{}
-	out := map[string]any{}
+	inserts = map[string]string{}
+	deletes = map[string]string{}
 
 	for rows.Next() {
 		var data []byte
@@ -274,26 +372,118 @@ func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
 		msg, err := Parse(data)
 		require.NoError(t, err)
 
-		switch m := msg.(type) {
-		case *RelationMessage:
-			relations[m.RelationID] = m
-		case *InsertMessage:
-			rel, found := relations[m.RelationID]
-			require.True(t, found, "insert for unknown relation %d", m.RelationID)
-
-			for i, col := range rel.Columns {
-				// Flag 1 marks the column as part of the key.
-				if col.Flags != 1 {
-					continue
-				}
-				val, err := decodeTextColumnData(typeMap, m.Tuple.Columns[i].Data, col.DataType, col.TypeModifier)
-				require.NoError(t, err, "decoding streamed key for %s", rel.RelationName)
-				out[rel.RelationName] = val
-			}
+		if rel, ok := msg.(*RelationMessage); ok {
+			require.NoError(t, s.resolveRelationDomains(t.Context(), rel, typeMap))
 		}
+
+		streamMsg, err := toStreamMessage(msg, relations, typeMap, nil)
+		require.NoError(t, err)
+		if streamMsg == nil {
+			continue
+		}
+
+		var out map[string]string
+		switch streamMsg.Operation {
+		case InsertOpType:
+			out = inserts
+		case DeleteOpType:
+			out = deletes
+		default:
+			continue
+		}
+		pk, err := s.incrementalStreamedRowPK(t.Context(),
+			incrementalsnapshot.TableID{Schema: streamMsg.Schema, Table: streamMsg.Table},
+			streamMsg.Data, streamMsg.KeyText)
+		require.NoError(t, err)
+		out[streamMsg.Table] = fmt.Sprintf("%v", pk)
 	}
 	require.NoError(t, rows.Err())
-	return out
+	return inserts, deletes
+}
+
+func TestResolveRelationDomains(t *testing.T) {
+	const (
+		domainOID = 50001
+		enumOID   = 50002
+	)
+	typeMap := pgtype.NewMap()
+	rel := func(cols ...*RelationMessageColumn) *RelationMessage {
+		return &RelationMessage{Namespace: "public", RelationName: "t", Columns: cols}
+	}
+	col := func(name string, oid uint32, typmod int32) *RelationMessageColumn {
+		return &RelationMessageColumn{Name: name, DataType: oid, TypeModifier: typmod}
+	}
+
+	t.Run("types pgx knows are not looked up", func(t *testing.T) {
+		// No monitor: any lookup would panic.
+		s := &Stream{}
+		r := rel(col("a", pgtype.Int4OID, -1), col("b", pgtype.TimestamptzOID, 3), col("c", pgtype.Int4ArrayOID, -1))
+		require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+		assert.EqualValues(t, pgtype.Int4OID, r.Columns[0].DataType)
+		assert.EqualValues(t, pgtype.TimestamptzOID, r.Columns[1].DataType)
+		assert.EqualValues(t, 3, r.Columns[1].TypeModifier)
+		assert.EqualValues(t, pgtype.Int4ArrayOID, r.Columns[2].DataType)
+		assert.Empty(t, s.domainBases)
+	})
+
+	t.Run("cached domain is rewritten without a lookup", func(t *testing.T) {
+		s := &Stream{domainBases: map[uint32]domainBase{
+			domainOID: {oid: pgtype.NumericOID, typeModifier: 655366},
+		}}
+		r := rel(col("unmodified", domainOID, -1), col("modified", domainOID, 42))
+		require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+		assert.EqualValues(t, pgtype.NumericOID, r.Columns[0].DataType)
+		assert.EqualValues(t, 655366, r.Columns[0].TypeModifier, "the domain's modifier fills in for none")
+		assert.EqualValues(t, pgtype.NumericOID, r.Columns[1].DataType)
+		assert.EqualValues(t, 42, r.Columns[1].TypeModifier, "a modifier the column declares is kept")
+	})
+
+	t.Run("a cached non-domain is left alone", func(t *testing.T) {
+		s := &Stream{domainBases: map[uint32]domainBase{enumOID: {oid: enumOID, typeModifier: -1}}}
+		r := rel(col("e", enumOID, -1))
+		require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+		assert.EqualValues(t, enumOID, r.Columns[0].DataType)
+		assert.EqualValues(t, -1, r.Columns[0].TypeModifier)
+	})
+
+	t.Run("looks a type up once and caches it", func(t *testing.T) {
+		var queries int
+		// The chain of a domain over numeric(10,2): the domain, then its base.
+		db := newFakeQueryDB(t, nil, [][]driver.Value{
+			{int64(domainOID), "d", int64(655366)},
+			{int64(pgtype.NumericOID), "b", int64(-1)},
+		}, &queries)
+		s := &Stream{monitor: &Monitor{dbConn: db}}
+
+		for range 2 {
+			r := rel(col("d", domainOID, -1))
+			require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+			assert.EqualValues(t, pgtype.NumericOID, r.Columns[0].DataType)
+			assert.EqualValues(t, 655366, r.Columns[0].TypeModifier)
+		}
+		assert.Equal(t, 1, queries, "the second relation message must hit the cache")
+	})
+
+	t.Run("a looked up non-domain is cached too", func(t *testing.T) {
+		var queries int
+		db := newFakeQueryDB(t, nil, [][]driver.Value{{int64(enumOID), "e", int64(-1)}}, &queries)
+		s := &Stream{monitor: &Monitor{dbConn: db}}
+
+		for range 2 {
+			r := rel(col("e", enumOID, -1))
+			require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+			assert.EqualValues(t, enumOID, r.Columns[0].DataType)
+		}
+		assert.Equal(t, 1, queries)
+	})
+
+	t.Run("a failed lookup names the column and is not cached", func(t *testing.T) {
+		s := &Stream{monitor: &Monitor{dbConn: newFailingQueryDB(t, errors.New("boom"))}}
+		err := s.resolveRelationDomains(t.Context(), rel(col("dom_col", domainOID, -1)), typeMap)
+		require.ErrorContains(t, err, `resolving column "dom_col"`)
+		require.ErrorContains(t, err, "boom")
+		assert.Empty(t, s.domainBases)
+	})
 }
 
 func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
@@ -610,10 +800,17 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	if strings.Contains(s.query, "pg_publication") {
 		return &fakeQueryRows{columns: []string{"relname"}}, nil
 	}
+	// The domain chain query reports what the test's rows say.
+	if strings.Contains(s.query, "WITH RECURSIVE chain") {
+		return &fakeQueryRows{
+			columns: []string{"oid", "typtype", "typtypmod"},
+			rows:    s.conn.driver.rows,
+		}, nil
+	}
 	// The key type query has its own shape, so it needs its own result.
 	if strings.Contains(s.query, "pg_type") {
 		return &fakeQueryRows{
-			columns: []string{"attname", "typname", "typcategory", "is_domain"},
+			columns: []string{"attname", "typname", "typcategory"},
 			rows:    s.conn.driver.keyTypeRows(),
 		}, nil
 	}
@@ -625,7 +822,7 @@ func (d *fakeQueryDriver) keyTypeRows() [][]driver.Value {
 	rows := make([][]driver.Value, 0, len(d.rows))
 	for _, row := range d.rows {
 		if len(row) > 0 {
-			rows = append(rows, []driver.Value{row[0], "int8", "N", false})
+			rows = append(rows, []driver.Value{row[0], "int8", "N"})
 		}
 	}
 	return rows
@@ -648,8 +845,8 @@ func (r *fakeQueryRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// TestIntegrationIncrementalSnapshotKeyTypes checks that bytea and array keys
-// are rejected, that other key types are accepted, and that the single-column
+// TestIntegrationIncrementalSnapshotKeyTypes checks that bytea keys are
+// rejected, that other key types are accepted, and that the single-column
 // ones page in key order when their bound round-trips through the checkpoint's
 // JSON encoding. Tables have distinct
 // names so a cached pgx plan cannot mask a type change.
@@ -676,19 +873,22 @@ func TestIntegrationIncrementalSnapshotKeyTypes(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`CREATE DOMAIN int4_array_domain AS int4[]`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE DOMAIN tsrange_domain AS tsrange`)
-	require.NoError(t, err)
+	for _, ddl := range []string{
+		`CREATE DOMAIN tsrange_domain AS tsrange`,
+		`CREATE DOMAIN timestamptz_domain AS timestamptz`,
+		`CREATE DOMAIN nested_timestamptz_domain AS timestamptz_domain`,
+		`CREATE DOMAIN text_array_domain AS text[]`,
+	} {
+		_, err = db.Exec(ddl)
+		require.NoError(t, err, ddl)
+	}
 
 	for _, ddl := range []string{
 		`CREATE TABLE bytea_key (id bytea PRIMARY KEY, payload text)`,
 		`CREATE TABLE composite_bytea_key (tenant bigint, id bytea, payload text, PRIMARY KEY (tenant, id))`,
 		`CREATE TABLE domain_bytea_key (id blob_key PRIMARY KEY, payload text)`,
 		`CREATE TABLE multi_col_key (tenant numeric, id uuid, created_at timestamptz, payload text, PRIMARY KEY (tenant, id, created_at))`,
-		`CREATE TABLE array_key (id int4[] PRIMARY KEY, payload text)`,
-		`CREATE TABLE text_array_key (id text[] PRIMARY KEY, payload text)`,
-		`CREATE TABLE domain_array_key (id int4_array_domain PRIMARY KEY, payload text)`,
 		`CREATE TABLE composite_array_key (tenant bigint, id int8[], payload text, PRIMARY KEY (tenant, id))`,
-		`CREATE TABLE domain_tsrange_key (id tsrange_domain PRIMARY KEY, payload text)`,
 		// Unverified for dedup, so deliberately left accepted.
 		`CREATE TABLE composite_type_key (id key_composite PRIMARY KEY, payload text)`,
 	} {
@@ -727,6 +927,20 @@ func TestIntegrationIncrementalSnapshotKeyTypes(t *testing.T) {
 			return fmt.Sprintf("int4multirange(int4range(%d, %d))", n, n+1)
 		}},
 		{"domain_range_key", "int4range_domain", func(n int) string { return fmt.Sprintf("int4range(%d, %d)", n, n+1) }},
+		{"array_key", "int4[]", func(n int) string { return fmt.Sprintf("ARRAY[%d]::int4[]", n) }},
+		// Padded, so the text order is the element order.
+		{"text_array_key", "text[]", func(n int) string { return fmt.Sprintf("ARRAY['%03d']::text[]", n) }},
+		{"domain_array_key", "int4_array_domain", func(n int) string { return fmt.Sprintf("ARRAY[%d]::int4[]", n) }},
+		{"domain_text_array_key", "text_array_domain", func(n int) string { return fmt.Sprintf("ARRAY['%03d', 'a b']::text[]", n) }},
+		{"domain_tsrange_key", "tsrange_domain", func(n int) string {
+			return fmt.Sprintf("tsrange(TIMESTAMP '2026-01-01 03:04:05' + %d * INTERVAL '1 day', TIMESTAMP '2027-01-01')", n)
+		}},
+		{"domain_timestamptz_key", "timestamptz_domain", func(n int) string {
+			return fmt.Sprintf("TIMESTAMPTZ '2026-01-01 03:04:05.123+00' + %d * INTERVAL '1 day'", n)
+		}},
+		{"nested_domain_key", "nested_timestamptz_domain", func(n int) string {
+			return fmt.Sprintf("TIMESTAMPTZ '2026-01-01 03:04:05.123+00' + %d * INTERVAL '1 day'", n)
+		}},
 	}
 	for _, tc := range accepted {
 		_, err := db.Exec(fmt.Sprintf(`CREATE TABLE %s (id %s PRIMARY KEY, payload text)`, tc.table, tc.colType))
@@ -749,19 +963,16 @@ func TestIntegrationIncrementalSnapshotKeyTypes(t *testing.T) {
 	stream := &Stream{
 		slotName: "unbindable_slot",
 		incSnapshot: incrementalSnapshot{
-			conn:    db,
-			pkCache: map[string][]string{},
+			conn:         db,
+			pkCache:      map[string][]string{},
+			arrayPKCache: map[string]map[string]struct{}{},
 		},
 	}
 	tableID := func(name string) incrementalsnapshot.TableID {
 		return incrementalsnapshot.TableID{Schema: "public", Table: name}
 	}
 
-	for _, name := range []string{
-		"bytea_key", "composite_bytea_key", "domain_bytea_key",
-		"array_key", "text_array_key", "domain_array_key", "composite_array_key",
-		"domain_tsrange_key",
-	} {
+	for _, name := range []string{"bytea_key", "composite_bytea_key", "domain_bytea_key"} {
 		t.Run("rejects "+name, func(t *testing.T) {
 			_, err := stream.incrementalPKColumns(t.Context(), tableID(name))
 			require.Error(t, err)
@@ -776,8 +987,9 @@ func TestIntegrationIncrementalSnapshotKeyTypes(t *testing.T) {
 	}
 
 	for name, want := range map[string][]string{
-		"multi_col_key":      {"tenant", "id", "created_at"},
-		"composite_type_key": {"id"},
+		"multi_col_key":       {"tenant", "id", "created_at"},
+		"composite_array_key": {"tenant", "id"},
+		"composite_type_key":  {"id"},
 	} {
 		t.Run("accepts "+name, func(t *testing.T) {
 			cols, err := stream.incrementalPKColumns(t.Context(), tableID(name))
@@ -785,6 +997,11 @@ func TestIntegrationIncrementalSnapshotKeyTypes(t *testing.T) {
 			assert.Equal(t, want, cols)
 		})
 	}
+
+	t.Run("records the array key columns", func(t *testing.T) {
+		assert.Equal(t, map[string]struct{}{"id": {}}, stream.incSnapshot.arrayPKCache["public.composite_array_key"])
+		assert.Empty(t, stream.incSnapshot.arrayPKCache["public.multi_col_key"])
+	})
 
 	for _, tc := range accepted {
 		t.Run("accepts and pages "+tc.table, func(t *testing.T) {

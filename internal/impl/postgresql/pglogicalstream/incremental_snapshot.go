@@ -55,6 +55,9 @@ type incrementalSnapshot struct {
 	// Stream.pgConn, which is in COPY BOTH for replication.
 	conn    *sql.DB
 	pkCache map[string][]string
+	// arrayPKCache holds each table's array primary key columns, which are
+	// matched on their PostgreSQL text.
+	arrayPKCache map[string]map[string]struct{}
 	// lastTable is only used to log a transition between tables.
 	lastTable *incrementalsnapshot.TableID
 	// replicated is the set a signal may ask for, nil when the input's
@@ -112,6 +115,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 
 	s.incSnapshot.conn = db
 	s.incSnapshot.pkCache = make(map[string][]string)
+	s.incSnapshot.arrayPKCache = make(map[string]map[string]struct{})
 	s.incSnapshot.now = time.Now
 	s.incSnapshot.retryCooldown = incSnapshotCfg.RetryCooldown
 
@@ -137,6 +141,7 @@ func (s *Stream) setupIncrementalSnapshot(ctx context.Context, config *Config) e
 		_ = db.Close()
 		s.incSnapshot.conn = nil
 		s.incSnapshot.pkCache = nil
+		s.incSnapshot.arrayPKCache = nil
 		return fmt.Errorf("constructing incremental snapshot coordinator: %w", err)
 	}
 	s.incSnapshot.coordinator = coordinator
@@ -254,7 +259,8 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 
 	// Checked before the cache is populated, so an unusable key is reported
 	// every time it is asked for rather than once.
-	if err := s.checkKeyTypesBindable(ctx, table); err != nil {
+	arrayCols, err := s.checkKeyTypesBindable(ctx, table)
+	if err != nil {
 		return nil, err
 	}
 	// An externally managed publication can change mid-run, so its check is
@@ -266,58 +272,57 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	}
 
 	s.incSnapshot.pkCache[key] = cols
+	if s.incSnapshot.arrayPKCache == nil {
+		s.incSnapshot.arrayPKCache = make(map[string]map[string]struct{})
+	}
+	s.incSnapshot.arrayPKCache[key] = arrayCols
 	return cols, nil
 }
 
-// checkKeyTypesBindable rejects primary keys the incremental snapshot cannot
-// support: ones the chunk query cannot page by (bytea), and ones whose snapshot
-// and stream window keys differ, so a streamed change never drops the buffered
-// row (arrays, a domain over tsrange). TestIntegrationSnapshotStreamPKParity
-// pins that accepted key types produce the same window key on both paths.
-func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) error {
+// checkKeyTypesBindable rejects bytea primary keys, which the chunk query
+// cannot page by. It returns the array key columns.
+func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) (map[string]struct{}, error) {
 	q, err := primaryKeyColumnTypesQuery(TableFQN{
 		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
 		Table:  sanitize.QuotePostgresIdentifier(table.Table),
 	}.String())
 	if err != nil {
-		return fmt.Errorf("sanitizing primary key type query: %w", err)
+		return nil, fmt.Errorf("sanitizing primary key type query: %w", err)
 	}
 
 	rows, err := s.incSnapshot.conn.QueryContext(ctx, q)
 	if err != nil {
-		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
+		return nil, fmt.Errorf("reading primary key types for table %s: %w", table, err)
 	}
 	defer rows.Close()
 
-	// check for unsupported primary keys
+	var arrayCols map[string]struct{}
 	for rows.Next() {
 		var column, typeName, typCategory string
-		var isDomain bool
-		if err := rows.Scan(&column, &typeName, &typCategory, &isDomain); err != nil {
-			return fmt.Errorf("scanning primary key types for table %s: %w", table, err)
+		if err := rows.Scan(&column, &typeName, &typCategory); err != nil {
+			return nil, fmt.Errorf("scanning primary key types for table %s: %w", table, err)
 		}
 
-		switch {
 		// Cannot be a chunk bound, so the table cannot be paged.
-		case typeName == "bytea":
-		// Arrays decode to different Go values on the snapshot and stream
-		// paths, so their window keys never match.
-		case typCategory == "A":
-		// The snapshot sees a domain's base type and sanitizes tsrange, but
-		// the stream sees the domain's own type and returns the raw text, so
-		// the two keys differ.
-		case isDomain && typeName == "tsrange":
-		default:
-			continue
+		if typeName == "bytea" {
+			return nil, fmt.Errorf("%w: table %s contains a primary key which we currently do not support: column %q has type %s",
+				incrementalsnapshot.ErrTableUnusable, table, column, typeName)
 		}
-		return fmt.Errorf("%w: table %s contains a primary key which we currently do not support: column %q has type %s",
-			incrementalsnapshot.ErrTableUnusable, table, column, typeName)
+		if typCategory == pgTypeCategoryArray {
+			if arrayCols == nil {
+				arrayCols = make(map[string]struct{})
+			}
+			arrayCols[column] = struct{}{}
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("reading primary key types for table %s: %w", table, err)
+		return nil, fmt.Errorf("reading primary key types for table %s: %w", table, err)
 	}
-	return nil
+	return arrayCols, nil
 }
+
+// pgTypeCategoryArray is the pg_type.typcategory of array types.
+const pgTypeCategoryArray = "A"
 
 // If REPLICA IDENTITY DEFAULT is configured then the change event won't include TOAST data (large values moved
 // out of the table) and thus if the incremental snapshot buffer has a read row that contains the TOAST value
@@ -663,9 +668,9 @@ func (s *Stream) resolveIncrementalPK(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// incrementalStreamedRowPK makes the PrimaryKey that OnStreamedRow matches
-// from the data of a streamed row.
-func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incrementalsnapshot.TableID, data any) (incrementalsnapshot.PrimaryKey, error) {
+// incrementalStreamedRowPK makes the PrimaryKey that OnStreamedRow matches from
+// the data of a streamed row. Array key columns use their text from keyText.
+func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incrementalsnapshot.TableID, data any, keyText map[string]string) (incrementalsnapshot.PrimaryKey, error) {
 	pkCols, err := s.incrementalPKColumns(ctx, table)
 	if err != nil {
 		return nil, err
@@ -673,10 +678,27 @@ func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incremental
 
 	values, _ := data.(map[string]any)
 	pk := make(incrementalsnapshot.PrimaryKey, len(pkCols))
+	arrayCols := s.incSnapshot.arrayPKCache[table.String()]
 	for i, col := range pkCols {
+		if _, isArray := arrayCols[col]; isArray {
+			if text, exists := keyText[col]; exists {
+				pk[i] = text
+				continue
+			}
+		}
 		pk[i] = canonicalizePKValue(values[col])
 	}
 	return pk, nil
+}
+
+// arrayKeyScanText returns the PostgreSQL text an array key column scanned
+// into, or nil for NULL. Arrays always scan as *sql.NullString.
+func arrayKeyScanText(scanArg any) any {
+	text, ok := scanArg.(*sql.NullString)
+	if !ok || !text.Valid {
+		return nil
+	}
+	return text.String
 }
 
 func canonicalizePKValue(v any) any {
@@ -722,8 +744,13 @@ func (s *Stream) resolveIncrementalMaxKey(ctx context.Context, table incremental
 		return nil, fmt.Errorf("scanning max key row for table %s: %w", table, err)
 	}
 
+	arrayCols := s.incSnapshot.arrayPKCache[table.String()]
 	pk := make(incrementalsnapshot.PrimaryKey, len(pkCols))
 	for i, getter := range valueGetters {
+		if _, isArray := arrayCols[pkCols[i]]; isArray {
+			pk[i] = arrayKeyScanText(scanArgs[i])
+			continue
+		}
 		val, err := getter(scanArgs[i])
 		if err != nil {
 			return nil, fmt.Errorf("decoding max key column %s for table %s: %w", pkCols[i], table, err)
@@ -794,6 +821,7 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table incrementalsna
 		}
 	}
 
+	arrayCols := s.incSnapshot.arrayPKCache[table.String()]
 	var result []incrementalsnapshot.Row
 	for rows.Next() {
 		if err := rows.Scan(scanArgs...); err != nil {
@@ -811,6 +839,10 @@ func (s *Stream) fetchIncrementalChunk(ctx context.Context, table incrementalsna
 
 		pk := make(incrementalsnapshot.PrimaryKey, len(pkCols))
 		for i, pos := range pkPositions {
+			if _, isArray := arrayCols[pkCols[i]]; isArray {
+				pk[i] = arrayKeyScanText(scanArgs[pos])
+				continue
+			}
 			pk[i] = canonicalizePKValue(data[columnNames[pos]])
 		}
 
@@ -967,7 +999,7 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 		return nil
 	}
 
-	pk, err := s.incrementalStreamedRowPK(ctx, table, message.Data)
+	pk, err := s.incrementalStreamedRowPK(ctx, table, message.Data, message.KeyText)
 	if err != nil {
 		return fmt.Errorf("resolving primary key for incremental snapshot deduplication on table %s: %w", table, err)
 	}
@@ -982,7 +1014,7 @@ func (s *Stream) deduplicateStreamedRow(ctx context.Context, message *StreamMess
 	// identity. An unchanged key is already evicted above, so this is then an
 	// O(1) miss.
 	if message.Operation == UpdateOpType && message.BeforeData != nil {
-		previous, err := s.incrementalStreamedRowPK(ctx, table, message.BeforeData)
+		previous, err := s.incrementalStreamedRowPK(ctx, table, message.BeforeData, message.BeforeKeyText)
 		if err != nil {
 			return fmt.Errorf("resolving previous primary key for incremental snapshot deduplication on table %s: %w", table, err)
 		}
@@ -1130,11 +1162,10 @@ func (s *Stream) dispatchSnapshotSignal(ctx context.Context, message *StreamMess
 
 // primaryKeyColumnTypesQuery reports the primary key columns of a table with
 // their type names and categories, resolving a domain to the type it is built
-// on so a domain over an unusable type is not mistaken for a usable one, and
-// whether the column's type is a domain.
+// on so a domain over an unusable type is not mistaken for a usable one.
 func primaryKeyColumnTypesQuery(table string) (string, error) {
 	return sanitize.SQLQuery(`
-        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typcategory, t.typcategory), bt.oid IS NOT NULL
+        SELECT a.attname, COALESCE(bt.typname, t.typname), COALESCE(bt.typcategory, t.typcategory)
         FROM   pg_index i
         JOIN   pg_attribute a ON a.attrelid = i.indrelid
             AND a.attnum = ANY(i.indkey)
