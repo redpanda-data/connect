@@ -222,9 +222,8 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 
 	cases := slices.Clone(scalars)
 	cases = append(cases, arrays...)
-	// A domain over every scalar and array case, so a type the domain
-	// resolution mishandles shows up without picking it by hand. The table
-	// name differs from the domain's, as the two share a namespace.
+	// A domain over every case, so no type is missed. Table and domain names
+	// differ, as they share a namespace.
 	for _, tc := range slices.Concat(scalars, arrays) {
 		domain := "d_" + tc.name
 		_, err := db.Exec(fmt.Sprintf("CREATE DOMAIN %s AS %s", domain, tc.colType))
@@ -246,8 +245,7 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		require.NoError(t, err, ddl)
 	}
 	cases = append(cases,
-		// The stream sees a domain's own type, which pgx does not know, so it
-		// would return the raw text; the snapshot sees the base type.
+		// The snapshot sees a domain's base type, the stream its own type.
 		parityCase{"domain_int4range", "parity_int4range_domain", "'[1,6)'"},
 		parityCase{"domain_interval", "parity_interval_domain", "'1 day 02:03:04'"},
 		parityCase{"domain_varbit", "parity_varbit_domain", "B'0101'"},
@@ -259,8 +257,8 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 	)
 
 	// An array inside a composite key, next to a non-key array that must not
-	// affect the key. Under REPLICA IDENTITY FULL pgoutput flags every column
-	// as a key column, so the non-key array reaches the key text too.
+	// affect the key. Under REPLICA IDENTITY FULL every column is flagged as a
+	// key, so the non-key array gets key text too.
 	for _, name := range []string{"composite_array", "composite_array_replica_full"} {
 		cases = append(cases, parityCase{name: name})
 		ddls[name] = fmt.Sprintf("CREATE TABLE %s (tenant bigint, id int8[], tags text[], PRIMARY KEY (tenant, id))", name)
@@ -293,8 +291,8 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 		require.NoError(t, err, "inserting into %s", tc.name)
 	}
 
-	// The snapshot side runs the real chunk query path, with the key columns
-	// and array columns resolved the way a signal resolves them.
+	// The snapshot side uses the real chunk query, with key columns resolved as
+	// for a signal.
 	s := &Stream{
 		slotName:                     "parity_slot",
 		externallyManagedPublication: true,
@@ -352,10 +350,8 @@ func TestIntegrationSnapshotStreamPKParity(t *testing.T) {
 	}
 }
 
-// streamedPKs drains the pgoutput slot and returns, per table, the window key
-// the incremental snapshot derives from its insert and from its delete. Each
-// relation goes through the domain resolution the stream applies, and each
-// change through toStreamMessage, as the stream does.
+// streamedPKs drains the pgoutput slot and returns, per table, the window keys
+// of its insert and its delete, built as the stream builds them.
 func streamedPKs(t *testing.T, s *Stream, db *sql.DB) (inserts, deletes map[string]string) {
 	t.Helper()
 

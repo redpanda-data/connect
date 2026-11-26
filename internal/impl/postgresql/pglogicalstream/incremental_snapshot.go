@@ -55,9 +55,8 @@ type incrementalSnapshot struct {
 	// Stream.pgConn, which is in COPY BOTH for replication.
 	conn    *sql.DB
 	pkCache map[string][]string
-	// arrayPKCache holds, per table as with pkCache, the primary key columns
-	// that are arrays. Their window key is the PostgreSQL text on both paths,
-	// as the decoded values differ.
+	// arrayPKCache holds each table's array primary key columns, which are
+	// matched on their PostgreSQL text.
 	arrayPKCache map[string]map[string]struct{}
 	// lastTable is only used to log a transition between tables.
 	lastTable *incrementalsnapshot.TableID
@@ -280,10 +279,8 @@ func (s *Stream) incrementalPKColumns(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// checkKeyTypesBindable rejects primary keys the chunk query cannot page by
-// (bytea). It returns the key columns that are arrays, which are matched on
-// their PostgreSQL text. TestIntegrationSnapshotStreamPKParity pins that
-// accepted key types produce the same window key on both paths.
+// checkKeyTypesBindable rejects bytea primary keys, which the chunk query
+// cannot page by. It returns the array key columns.
 func (s *Stream) checkKeyTypesBindable(ctx context.Context, table incrementalsnapshot.TableID) (map[string]struct{}, error) {
 	q, err := primaryKeyColumnTypesQuery(TableFQN{
 		Schema: sanitize.QuotePostgresIdentifier(table.Schema),
@@ -671,9 +668,8 @@ func (s *Stream) resolveIncrementalPK(ctx context.Context, table incrementalsnap
 	return cols, nil
 }
 
-// incrementalStreamedRowPK makes the PrimaryKey that OnStreamedRow matches
-// from the data of a streamed row. keyText holds the PostgreSQL text of the
-// row's array key columns, which stands in for their decoded values.
+// incrementalStreamedRowPK makes the PrimaryKey that OnStreamedRow matches from
+// the data of a streamed row. Array key columns use their text from keyText.
 func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incrementalsnapshot.TableID, data any, keyText map[string]string) (incrementalsnapshot.PrimaryKey, error) {
 	pkCols, err := s.incrementalPKColumns(ctx, table)
 	if err != nil {
@@ -696,8 +692,7 @@ func (s *Stream) incrementalStreamedRowPK(ctx context.Context, table incremental
 }
 
 // arrayKeyScanText returns the PostgreSQL text an array key column scanned
-// into, which is what the stream path sends. Arrays always scan as
-// *sql.NullString. A NULL key yields nil.
+// into, or nil for NULL. Arrays always scan as *sql.NullString.
 func arrayKeyScanText(scanArg any) any {
 	text, ok := scanArg.(*sql.NullString)
 	if !ok || !text.Valid {

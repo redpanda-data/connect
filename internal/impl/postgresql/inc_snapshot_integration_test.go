@@ -450,9 +450,8 @@ postgres_cdc:
 				latest  = map[string]string{}
 				updates int
 				reads   int
-				// rank is the highest name rank seen per key, from any event.
-				// A read below it is a buffered snapshot row emitted after a
-				// newer streamed update: the dedup missed it.
+				// rank is the highest name rank seen per key. A read below it
+				// is a stale snapshot row: the dedup missed it.
 				rank       = map[string]int{}
 				staleReads int
 			)
@@ -508,10 +507,9 @@ postgres_cdc:
 				},
 			})
 
-			// Decoding skips transactions that commit before it can see a
-			// consistent snapshot, which a transaction held open delays. So
-			// have the stream deliver a change first, which proves it is
-			// decoding. It rewrites each row to the name it has already.
+			// Decoding skips transactions committed before it reaches a
+			// consistent snapshot, so first wait for a no-op rewrite of every
+			// row to stream.
 			slotName := fmt.Sprintf("test_slot_inc_%s", keyed.table)
 			require.Eventually(t, func() bool {
 				var found bool
@@ -526,14 +524,10 @@ postgres_cdc:
 				return updates >= numPreExisting
 			}, 30*time.Second, 50*time.Millisecond, "the stream never delivered a change")
 
-			// The first chunk is read when the stream processes the request,
-			// and is buffered until a commit closes its window. The rewrite
-			// below is held back in an open transaction across that read, so
-			// the chunk holds the old rows, and then committed, so the
-			// streamed rows reach the buffered chunk. A dedup miss then emits
-			// the chunk after newer streamed rows, which the consumer counts
-			// as stale reads. The heartbeat is slow, so it does not close
-			// the window early.
+			// Hold the rewrite open while the first chunk is read, then commit
+			// it while the chunk is buffered. A dedup miss then emits the chunk
+			// after the newer streamed rows. The slow heartbeat keeps the
+			// chunk's window open.
 			pending, err := db.BeginTx(t.Context(), nil)
 			require.NoError(t, err)
 			_, err = pending.Exec(`UPDATE ` + keyed.table + ` SET name = 'updated-0'`)
@@ -542,8 +536,8 @@ postgres_cdc:
 			// Ask for the backfill now the slot exists.
 			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
 
-			// Nothing shows the chunk has been read, so wait. Committing too
-			// early only weakens the check, as the read then sees the rewrite.
+			// Give the chunk time to be read. Committing too early only weakens
+			// the check.
 			time.Sleep(time.Second)
 			require.NoError(t, pending.Commit())
 

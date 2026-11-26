@@ -715,10 +715,8 @@ pg_stream:
 	require.NoError(t, stream.StopWithin(30*time.Second))
 }
 
-// TestIntegrationPostgresDomainColumns checks that a column typed as a domain
-// is emitted as its base type, identically by the snapshot and by the stream.
-// The stream is told a domain's own type, which it does not know, and used to
-// emit such a column as the raw text.
+// TestIntegrationPostgresDomainColumns checks that the snapshot and the stream
+// both emit a domain column as its base type.
 func TestIntegrationPostgresDomainColumns(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()

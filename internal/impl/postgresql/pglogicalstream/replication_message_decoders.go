@@ -130,8 +130,8 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 	return message, nil
 }
 
-// arrayKeyText returns the PostgreSQL text of the tuple's array-typed key
-// columns, nil when there are none. A table without one costs no allocation.
+// arrayKeyText returns the PostgreSQL text of the tuple's array key columns, or
+// nil when there are none.
 func arrayKeyText(tuple *TupleData, rel *RelationMessage, typeMap *pgtype.Map) map[string]string {
 	var text map[string]string
 	for idx, col := range tuple.Columns {

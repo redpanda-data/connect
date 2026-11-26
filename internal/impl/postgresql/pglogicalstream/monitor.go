@@ -354,17 +354,15 @@ const noTypeModifier = -1
 
 // domainBase is the type a column's type OID resolves to.
 type domainBase struct {
-	// oid is the ultimate non-domain type, or the queried OID when it is not
-	// a domain.
+	// oid is the non-domain type at the end of the chain.
 	oid uint32
 	// typeModifier is the first modifier declared along the domain chain, or
 	// noTypeModifier.
 	typeModifier int32
 }
 
-// resolveDomainBase follows a chain of domains from typeOID to the type
-// underneath. A type that is not a domain, or does not exist, resolves to
-// itself.
+// resolveDomainBase follows typeOID's domain chain to its base type. A
+// non-domain or missing type resolves to itself.
 func (m *Monitor) resolveDomainBase(ctx context.Context, typeOID uint32) (domainBase, error) {
 	rows, err := m.dbConn.QueryContext(ctx, `
         WITH RECURSIVE chain AS (

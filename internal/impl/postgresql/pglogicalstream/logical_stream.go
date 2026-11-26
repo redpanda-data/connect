@@ -79,9 +79,8 @@ type Stream struct {
 	snapshotSchema     string
 	IsBlockingSnapshot bool
 
-	// domainBases caches what a type OID unknown to pgx resolves to, for
-	// non-domains too so a custom enum is looked up once. Only the stream
-	// goroutine touches it, as with the incremental snapshot's pkCache.
+	// domainBases caches what each type OID unknown to pgx resolves to,
+	// non-domains included. Only the stream goroutine uses it.
 	domainBases map[uint32]domainBase
 }
 
@@ -713,10 +712,9 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	return nil
 }
 
-// resolveRelationDomains rewrites each column typed as a domain to its base
-// type. The stream reports a domain's own OID, which pgx does not know, so
-// the value would otherwise decode as raw text where a snapshot query, which
-// sees the base type, decodes it properly.
+// resolveRelationDomains rewrites each domain-typed column to its base type.
+// pgoutput reports a domain's own OID, which pgx does not know, so the value
+// would otherwise decode as raw text.
 func (s *Stream) resolveRelationDomains(ctx context.Context, rel *RelationMessage, typeMap *pgtype.Map) error {
 	for _, col := range rel.Columns {
 		if _, known := typeMap.TypeForOID(col.DataType); known {
