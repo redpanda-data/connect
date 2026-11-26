@@ -68,6 +68,12 @@ type LogMiner struct {
 
 	contentStmt    *sql.Stmt
 	currentSCNStmt *sql.Stmt
+	dbOffsetStmt   *sql.Stmt
+
+	// dbLocation is the database's current UTC offset, used to convert LogMiner
+	// wall-clock timestamps to UTC. Set by refreshDBLocation before each
+	// contents query starts.
+	dbLocation *time.Location
 
 	// Redo logs don't include data types so we have to find lob types up front.
 	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
@@ -188,6 +194,10 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 		return fmt.Errorf("applying NLS settings for logminer: %w", err)
 	}
 
+	if err := lm.refreshDBLocation(ctx, conn); err != nil {
+		return err
+	}
+
 	// always find all lob columns on start up as redo logs don't include column data types.
 	// this also prevents inline lob rows being emitted as events.
 	if err := lm.loadLOBColumnTypes(ctx); err != nil {
@@ -257,6 +267,13 @@ func (lm *LogMiner) Close() error {
 			errs = append(errs, fmt.Errorf("closing current SCN statement: %w", err))
 		}
 		lm.currentSCNStmt = nil
+	}
+
+	if lm.dbOffsetStmt != nil {
+		if err := lm.dbOffsetStmt.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing database UTC offset statement: %w", err))
+		}
+		lm.dbOffsetStmt = nil
 	}
 
 	if err := lm.logCollector.Close(); err != nil {
@@ -422,6 +439,10 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 			return false, nil
 		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
+	}
+
+	if err := lm.refreshDBLocation(ctx, conn); err != nil {
+		return false, err
 	}
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
@@ -1336,6 +1357,7 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 			}
 			return err
 		}
+		event.Timestamp = inLocation(event.Timestamp, lm.dbLocation)
 		rowsInBatch++
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
@@ -1726,4 +1748,38 @@ func adaptWindowSize(currentSize int, hitCap bool, minSize, maxSize, increment i
 		return min(currentSize+increment, maxSize)
 	}
 	return max(currentSize-increment, minSize)
+}
+
+// inLocation reinterprets t's wall-clock fields as local time in loc, since
+// the driver labels LogMiner's zoneless DATE values as UTC. A nil loc or zero
+// t returns t unchanged.
+func inLocation(t time.Time, loc *time.Location) time.Time {
+	if loc == nil || t.IsZero() {
+		return t
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
+}
+
+// refreshDBLocation reads the database's current UTC offset from SYSTIMESTAMP
+// and stores it as dbLocation, logging only when it changes.
+func (lm *LogMiner) refreshDBLocation(ctx context.Context, conn *sql.Conn) error {
+	if lm.dbOffsetStmt == nil {
+		stmt, err := conn.PrepareContext(ctx, `SELECT EXTRACT(TIMEZONE_HOUR FROM SYSTIMESTAMP) * 3600 + EXTRACT(TIMEZONE_MINUTE FROM SYSTIMESTAMP) * 60 FROM DUAL`)
+		if err != nil {
+			return fmt.Errorf("preparing database UTC offset query: %w", err)
+		}
+		lm.dbOffsetStmt = stmt
+	}
+	var offsetSecs int
+	if err := lm.dbOffsetStmt.QueryRowContext(ctx).Scan(&offsetSecs); err != nil {
+		return fmt.Errorf("fetching database UTC offset: %w", err)
+	}
+	if lm.dbLocation != nil {
+		if _, current := time.Now().In(lm.dbLocation).Zone(); current == offsetSecs {
+			return nil
+		}
+	}
+	lm.dbLocation = time.FixedZone("", offsetSecs)
+	lm.log.Infof("Database UTC offset is %s; LogMiner timestamps are converted from it", time.Now().In(lm.dbLocation).Format("-07:00"))
+	return nil
 }

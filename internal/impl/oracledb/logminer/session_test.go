@@ -558,6 +558,8 @@ func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.N
 		c.contentCalls = append(c.contentCalls, call)
 	}
 	switch {
+	case strings.Contains(query, "TIMEZONE_HOUR"):
+		return &fakeOffsetRow{}, nil
 	case strings.Contains(query, "CURRENT_SCN"):
 		return &fakeSCNRow{scn: c.currentSCN}, nil
 	case strings.Contains(query, "V$LOGMNR_CONTENTS"):
@@ -665,6 +667,25 @@ func (r *fakeSCNRow) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 	dest[0] = int64(r.scn)
+	r.done = true
+	return nil
+}
+
+// fakeOffsetRow implements driver.Rows over the single UTC offset value that
+// refreshDBLocation reads from SYSTIMESTAMP. The fake database host is UTC.
+type fakeOffsetRow struct {
+	done bool
+}
+
+func (*fakeOffsetRow) Columns() []string { return []string{"OFFSET"} }
+
+func (*fakeOffsetRow) Close() error { return nil }
+
+func (r *fakeOffsetRow) Next(dest []driver.Value) error {
+	if r.done {
+		return io.EOF
+	}
+	dest[0] = int64(0)
 	r.done = true
 	return nil
 }

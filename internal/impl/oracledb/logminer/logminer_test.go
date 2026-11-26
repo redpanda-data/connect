@@ -1365,3 +1365,69 @@ func TestReadAheadBatches(t *testing.T) {
 		})
 	}
 }
+
+func TestInLocation(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	utc := func(y int, mo time.Month, d, h, mi, s, ns int) time.Time {
+		return time.Date(y, mo, d, h, mi, s, ns, time.UTC)
+	}
+
+	tests := []struct {
+		name string
+		in   time.Time
+		loc  *time.Location
+		want time.Time
+	}{
+		{
+			name: "nil location returns input unchanged",
+			in:   utc(2026, 1, 15, 3, 12, 0, 0),
+			loc:  nil,
+			want: utc(2026, 1, 15, 3, 12, 0, 0),
+		},
+		{
+			name: "zero time returns input unchanged",
+			in:   time.Time{},
+			loc:  ny,
+			want: time.Time{},
+		},
+		{
+			name: "winter wall-clock is EST (UTC-5)",
+			in:   utc(2026, 1, 15, 3, 12, 0, 0),
+			loc:  ny,
+			want: utc(2026, 1, 15, 8, 12, 0, 0),
+		},
+		{
+			name: "summer wall-clock is EDT (UTC-4)",
+			in:   utc(2026, 7, 15, 3, 12, 0, 0),
+			loc:  ny,
+			want: utc(2026, 7, 15, 7, 12, 0, 0),
+		},
+		{
+			name: "fixed offset from the database (UTC-5)",
+			in:   utc(2026, 1, 15, 3, 12, 0, 0),
+			loc:  time.FixedZone("", -5*3600),
+			want: utc(2026, 1, 15, 8, 12, 0, 0),
+		},
+		{
+			name: "fixed half-hour offset (UTC+5:30)",
+			in:   utc(2026, 1, 15, 3, 12, 0, 0),
+			loc:  time.FixedZone("", 5*3600+30*60),
+			want: utc(2026, 1, 14, 21, 42, 0, 0),
+		},
+		{
+			name: "wall fields are used, not the instant, when input is labelled in another zone",
+			in:   time.Date(2026, 1, 15, 3, 12, 0, 0, time.FixedZone("minus5", -5*3600)),
+			loc:  ny,
+			want: utc(2026, 1, 15, 8, 12, 0, 0),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := inLocation(test.in, test.loc)
+			assert.Equal(t, test.want.UnixMilli(), got.UnixMilli())
+		})
+	}
+}
