@@ -318,7 +318,7 @@ postgres_cdc:
 		},
 		{
 			// The stream sees a domain's own type and the snapshot its base
-			// type, so domains take a different decode path on each side.
+			// type, so domains must be resolved to their base on the stream.
 			name:    "DomainInt4rangeKey",
 			table:   "domain_int4range_keyed",
 			setup:   `CREATE DOMAIN int4range_key_domain AS int4range`,
@@ -340,6 +340,70 @@ postgres_cdc:
 			setup:   `CREATE DOMAIN varbit_key_domain AS varbit(16)`,
 			ddl:     `CREATE TABLE domain_varbit_keyed (id varbit_key_domain PRIMARY KEY, name TEXT)`,
 			insert:  `INSERT INTO domain_varbit_keyed (id, name) VALUES (((SELECT COUNT(*) FROM domain_varbit_keyed) + 1)::int::bit(16)::varbit, 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "IntArrayKey",
+			table:   "int_array_keyed",
+			ddl:     `CREATE TABLE int_array_keyed (id int4[] PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO int_array_keyed (id, name) VALUES (ARRAY[(SELECT COUNT(*) FROM int_array_keyed)::int, 7], 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			// Elements with spaces, commas and quotes, which PostgreSQL
+			// quotes in the array's text form.
+			name:    "TextArrayKey",
+			table:   "text_array_keyed",
+			ddl:     `CREATE TABLE text_array_keyed (id text[] PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO text_array_keyed (id, name) VALUES (ARRAY['item ' || (SELECT COUNT(*) FROM text_array_keyed), 'x, y', 'q"r', ''], 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainArrayKey",
+			table:   "domain_array_keyed",
+			setup:   `CREATE DOMAIN int4_array_key_domain AS int4[]`,
+			ddl:     `CREATE TABLE domain_array_keyed (id int4_array_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_array_keyed (id, name) VALUES (ARRAY[(SELECT COUNT(*) FROM domain_array_keyed)::int, 7], 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainTimestamptzKey",
+			table:   "domain_timestamptz_keyed",
+			setup:   `CREATE DOMAIN timestamptz_key_domain AS timestamptz`,
+			ddl:     `CREATE TABLE domain_timestamptz_keyed (id timestamptz_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_timestamptz_keyed (id, name) VALUES (TIMESTAMPTZ '2026-01-01 03:04:05.123+00' + (SELECT COUNT(*) FROM domain_timestamptz_keyed) * INTERVAL '1 second', 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainTimestampKey",
+			table:   "domain_timestamp_keyed",
+			setup:   `CREATE DOMAIN timestamp_key_domain AS timestamp`,
+			ddl:     `CREATE TABLE domain_timestamp_keyed (id timestamp_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_timestamp_keyed (id, name) VALUES (TIMESTAMP '2026-01-01 03:04:05.123' + (SELECT COUNT(*) FROM domain_timestamp_keyed) * INTERVAL '1 second', 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainDateKey",
+			table:   "domain_date_keyed",
+			setup:   `CREATE DOMAIN date_key_domain AS date`,
+			ddl:     `CREATE TABLE domain_date_keyed (id date_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_date_keyed (id, name) VALUES (DATE '2026-01-01' + (SELECT COUNT(*) FROM domain_date_keyed)::int, 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainTsrangeKey",
+			table:   "domain_tsrange_keyed",
+			setup:   `CREATE DOMAIN tsrange_key_domain AS tsrange`,
+			ddl:     `CREATE TABLE domain_tsrange_keyed (id tsrange_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_tsrange_keyed (id, name) VALUES (tsrange(TIMESTAMP '2026-01-01 00:00:00' + (SELECT COUNT(*) FROM domain_tsrange_keyed) * INTERVAL '1 second', NULL), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainOverDomainKey",
+			table:   "domain_over_domain_keyed",
+			setup:   `CREATE DOMAIN inner_timestamptz_key_domain AS timestamptz; CREATE DOMAIN outer_timestamptz_key_domain AS inner_timestamptz_key_domain`,
+			ddl:     `CREATE TABLE domain_over_domain_keyed (id outer_timestamptz_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_over_domain_keyed (id, name) VALUES (TIMESTAMPTZ '2026-01-01 03:04:05.123+00' + (SELECT COUNT(*) FROM domain_over_domain_keyed) * INTERVAL '1 second', 'orig')`,
 			keyCols: []string{"id"},
 		},
 	} {

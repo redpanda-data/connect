@@ -61,6 +61,12 @@ type StreamMessage struct {
 	CommitTime               time.Time `json:"-"`
 	BeforeData               any       `json:"-"`
 	IncrementalSnapshotState []byte    `json:"-"`
+	// KeyText and BeforeKeyText hold the PostgreSQL text of the array-typed
+	// key columns of the new and old tuple. The incremental snapshot matches
+	// array keys on it, because the decoded values differ from the snapshot's.
+	// Nil when the table has no such column.
+	KeyText       map[string]string `json:"-"`
+	BeforeKeyText map[string]string `json:"-"`
 	// AckLSN is the position the consumer acknowledges to Postgres once this
 	// message is processed: the row's own LSN, or the LSN of the commit record
 	// when this row is the last of its transaction. Confirming a row LSN below
