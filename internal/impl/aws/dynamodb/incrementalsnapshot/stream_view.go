@@ -20,13 +20,13 @@ import (
 // stream will deliver the item's current value.
 func RequireNewImage(tableName string, spec *dynamodbtypes.StreamSpecification) error {
 	if spec == nil || !aws.ToBool(spec.StreamEnabled) {
-		return fmt.Errorf("table %s: snapshot_mode incremental requires a stream", tableName)
+		return fmt.Errorf("table %s: incremental_snapshot.enabled requires a stream on the table", tableName)
 	}
 	switch spec.StreamViewType {
 	case dynamodbtypes.StreamViewTypeNewImage, dynamodbtypes.StreamViewTypeNewAndOldImages:
 		return nil
 	default:
-		return fmt.Errorf("table %s: snapshot_mode incremental requires stream view NEW_IMAGE or NEW_AND_OLD_IMAGES, got %s", tableName, spec.StreamViewType)
+		return fmt.Errorf("table %s: incremental_snapshot.enabled requires stream view NEW_IMAGE or NEW_AND_OLD_IMAGES, got %s", tableName, spec.StreamViewType)
 	}
 }
 

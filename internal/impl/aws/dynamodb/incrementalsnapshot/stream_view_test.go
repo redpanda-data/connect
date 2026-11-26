@@ -24,10 +24,12 @@ func TestRequireNewImage(t *testing.T) {
 		assert.NoError(t, RequireNewImage("t", &dynamodbtypes.StreamSpecification{StreamEnabled: aws.Bool(true), StreamViewType: v}))
 	}
 	for _, v := range bad {
-		assert.ErrorContains(t, RequireNewImage("t", &dynamodbtypes.StreamSpecification{StreamEnabled: aws.Bool(true), StreamViewType: v}), string(v))
+		assert.EqualError(t, RequireNewImage("t", &dynamodbtypes.StreamSpecification{StreamEnabled: aws.Bool(true), StreamViewType: v}),
+			"table t: incremental_snapshot.enabled requires stream view NEW_IMAGE or NEW_AND_OLD_IMAGES, got "+string(v))
 	}
-	assert.Error(t, RequireNewImage("t", nil))
-	assert.Error(t, RequireNewImage("t", &dynamodbtypes.StreamSpecification{StreamEnabled: aws.Bool(false), StreamViewType: dynamodbtypes.StreamViewTypeNewImage}))
+	assert.EqualError(t, RequireNewImage("t", nil), "table t: incremental_snapshot.enabled requires a stream on the table")
+	assert.EqualError(t, RequireNewImage("t", &dynamodbtypes.StreamSpecification{StreamEnabled: aws.Bool(false), StreamViewType: dynamodbtypes.StreamViewTypeNewImage}),
+		"table t: incremental_snapshot.enabled requires a stream on the table")
 }
 
 // TestRequireSignalStreamView: the signal table error names the signal table
