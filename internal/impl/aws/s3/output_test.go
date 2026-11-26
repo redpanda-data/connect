@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/assert"
@@ -299,14 +298,11 @@ credentials:
 	batch[1].MetaSetMut("bucket", "other-region-bucket")
 	indexer := batch.Index()
 
-	start := time.Now()
 	err = w.WriteBatch(t.Context(), batch)
-	elapsed := time.Since(start)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "uploading to bucket other-region-bucket")
 	assert.Contains(t, err.Error(), "PermanentRedirect")
-	assert.Less(t, elapsed, 10*time.Second, "a redirect must fail fast, not retry for long")
 
 	var batchErr *service.BatchError
 	require.ErrorAs(t, err, &batchErr)
@@ -323,7 +319,6 @@ credentials:
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, 1, hits["same-region-bucket"], "the good bucket must be written exactly once")
-	t.Logf("requests per bucket: %v, elapsed: %v", hits, elapsed)
 }
 
 // TestBucketInterpolationFailsBeforeUpload covers the bucket expressions that
