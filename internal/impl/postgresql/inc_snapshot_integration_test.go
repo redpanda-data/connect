@@ -432,13 +432,13 @@ postgres_cdc:
     dsn: %s
     slot_name: test_slot_inc_%s
     schema: public
-    heartbeat_interval: 500ms
+    heartbeat_interval: 10s
     tables:
       - %s
     signal_table_name: rpcn_signal
     incremental_snapshot:
         enabled: true
-        chunk_size: 50
+        chunk_size: 40
         checkpoint_cache: snap_cache
 `, databaseURL, keyed.table, keyed.table)
 
@@ -450,7 +450,20 @@ postgres_cdc:
 				latest  = map[string]string{}
 				updates int
 				reads   int
+				// rank is the highest name rank seen per key, from any event.
+				// A read below it is a buffered snapshot row emitted after a
+				// newer streamed update: the dedup missed it.
+				rank       = map[string]int{}
+				staleReads int
 			)
+			// "orig" ranks 0 and "updated-N" ranks N+1.
+			nameRank := func(name string) int {
+				var n int
+				if _, err := fmt.Sscanf(name, "updated-%d", &n); err != nil {
+					return 0
+				}
+				return n + 1
+			}
 
 			stop := runIncSnapshotStream(t, incSnapshotStream{
 				inputYAML: template,
@@ -483,26 +496,61 @@ postgres_cdc:
 							updates++
 						}
 						name, _ := fields["name"].(string)
-						latest[strings.Join(key, "|")] = name
+						joined := strings.Join(key, "|")
+						r := nameRank(name)
+						if op == "read" && r < rank[joined] {
+							staleReads++
+						}
+						rank[joined] = max(rank[joined], r)
+						latest[joined] = name
 					}
 					return nil
 				},
 			})
 
-			// Ask for the backfill now the slot exists.
-			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
-
+			// Decoding skips transactions that commit before it can see a
+			// consistent snapshot, which a transaction held open delays. So
+			// have the stream deliver a change first, which proves it is
+			// decoding. It rewrites each row to the name it has already.
+			slotName := fmt.Sprintf("test_slot_inc_%s", keyed.table)
+			require.Eventually(t, func() bool {
+				var found bool
+				err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)`, slotName).Scan(&found)
+				return err == nil && found
+			}, time.Minute, 50*time.Millisecond, "replication slot %s was never created", slotName)
+			_, err = db.Exec(`UPDATE ` + keyed.table + ` SET name = name`)
+			require.NoError(t, err)
 			require.Eventually(t, func() bool {
 				mu.Lock()
 				defer mu.Unlock()
-				return reads >= 1
-			}, 30*time.Second, 50*time.Millisecond, "did not observe any backfill rows before updating")
+				return updates >= numPreExisting
+			}, 30*time.Second, 50*time.Millisecond, "the stream never delivered a change")
 
-			// Update every row repeatedly while the backfill runs, so updates
-			// land on chunks already read, currently buffered, and not yet
-			// reached.
-			const updatePasses = 3
-			for pass := range updatePasses {
+			// The first chunk is read when the stream processes the request,
+			// and is buffered until a commit closes its window. The rewrite
+			// below is held back in an open transaction across that read, so
+			// the chunk holds the old rows, and then committed, so the
+			// streamed rows reach the buffered chunk. A dedup miss then emits
+			// the chunk after newer streamed rows, which the consumer counts
+			// as stale reads. The heartbeat is slow, so it does not close
+			// the window early.
+			pending, err := db.BeginTx(t.Context(), nil)
+			require.NoError(t, err)
+			_, err = pending.Exec(`UPDATE ` + keyed.table + ` SET name = 'updated-0'`)
+			require.NoError(t, err)
+
+			// Ask for the backfill now the slot exists.
+			signalIncrementalSnapshot(t, db, fmt.Sprintf("test_slot_inc_%s", keyed.table), keyed.table)
+
+			// Nothing shows the chunk has been read, so wait. Committing too
+			// early only weakens the check, as the read then sees the rewrite.
+			time.Sleep(time.Second)
+			require.NoError(t, pending.Commit())
+
+			// Update every row repeatedly, so updates land on chunks already
+			// read, currently buffered, and not yet reached.
+			const updatePasses = 4
+			for pass := 1; pass < updatePasses; pass++ {
 				_, err := db.Exec(`UPDATE `+keyed.table+` SET name = $1`, fmt.Sprintf("updated-%d", pass))
 				require.NoError(t, err)
 			}
@@ -515,7 +563,7 @@ postgres_cdc:
 			require.Eventually(t, func() bool {
 				mu.Lock()
 				defer mu.Unlock()
-				if int64(len(latest)) < totalRows {
+				if int64(len(latest)) < totalRows || reads == 0 {
 					return false
 				}
 				for _, name := range latest {
@@ -533,7 +581,9 @@ postgres_cdc:
 			defer mu.Unlock()
 			// One key per row: a decode mismatch would produce two.
 			require.Len(t, latest, int(totalRows))
+			require.NotZero(t, reads, "no backfill rows read")
 			require.NotZero(t, updates, "no updates streamed, so dedup was not exercised")
+			assert.Zero(t, staleReads, "a snapshot row was emitted after a newer streamed update, so the streamed key did not evict the buffered row")
 		})
 	}
 
