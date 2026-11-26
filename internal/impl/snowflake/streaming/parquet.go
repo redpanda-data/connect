@@ -16,6 +16,7 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -187,26 +188,32 @@ func convertChunk(
 	return &convertedChunk{numRows: len(batch), columns: columns, stats: stats}, nil
 }
 
-// writeRowGroup writes the chunks, in order, into a single row group and
-// flushes (compresses) it. Snowflake only reads the first row group of a BDEC
-// file, so all the rows of a file must be written through one call to this
-// function.
-func writeRowGroup(rg *parquet.ConcurrentRowGroupWriter, chunks []*convertedChunk) error {
+// writeRowGroup writes the chunks, in order, into a single row group.
+// Snowflake only reads the first row group of a BDEC file, so all the rows of a
+// file must be written through one call to this function. Each column has its
+// own writer and buffers, so columns are encoded and compressed in parallel,
+// up to parallelism at a time.
+func writeRowGroup(rg *parquet.ConcurrentRowGroupWriter, chunks []*convertedChunk, parallelism int) error {
+	var g errgroup.Group
+	g.SetLimit(parallelism)
 	for columnIndex, cw := range rg.ColumnWriters() {
-		for _, chunk := range chunks {
-			values := chunk.columns[columnIndex]
-			if len(values) != chunk.numRows {
-				return fmt.Errorf("invariant failed: column %d has %d values for %d rows", columnIndex, len(values), chunk.numRows)
+		g.Go(func() error {
+			for _, chunk := range chunks {
+				values := chunk.columns[columnIndex]
+				if len(values) != chunk.numRows {
+					return fmt.Errorf("invariant failed: column %d has %d values for %d rows", columnIndex, len(values), chunk.numRows)
+				}
+				if _, err := cw.WriteRowValues(values); err != nil {
+					return fmt.Errorf("writing column %d: %w", columnIndex, err)
+				}
 			}
-			if _, err := cw.WriteRowValues(values); err != nil {
-				return fmt.Errorf("writing column %d: %w", columnIndex, err)
+			if err := cw.Flush(); err != nil {
+				return fmt.Errorf("flushing column %d: %w", columnIndex, err)
 			}
-		}
+			return nil
+		})
 	}
-	if err := rg.Flush(); err != nil {
-		return fmt.Errorf("flushing row group: %w", err)
-	}
-	return nil
+	return g.Wait()
 }
 
 type parquetWriter struct {
@@ -258,7 +265,8 @@ func (w *parquetWriter) Close() ([]byte, *format.FileMetaData, error) {
 //
 //   - Files with more than one row group. Snowflake's scanner only reads one
 //     row group per BDEC file, so the rows of any other row group would be
-//     silently dropped. The Java SDK enforces the same constraint.
+//     silently dropped. The Java SDK always writes one row group per file,
+//     and checks it in Iceberg mode.
 //   - Internally inconsistent files, mirroring the Java SDK's verifyRowCounts
 //     check (SNOW-1465503).
 //

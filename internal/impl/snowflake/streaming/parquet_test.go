@@ -73,7 +73,7 @@ func TestWriteParquet(t *testing.T) {
 		require.NoError(t, err)
 		stats := chunk.stats
 		rg := w.BeginRowGroup()
-		require.NoError(t, writeRowGroup(rg, []*convertedChunk{chunk}))
+		require.NoError(t, writeRowGroup(rg, []*convertedChunk{chunk}, 1))
 
 		// Commit the row group
 		_, err = rg.Commit()
@@ -169,7 +169,7 @@ func TestVerifyRowCounts(t *testing.T) {
 		w.Reset(nil)
 		for _, group := range groups {
 			rg := w.BeginRowGroup()
-			require.NoError(t, writeRowGroup(rg, group))
+			require.NoError(t, writeRowGroup(rg, group, 4))
 			_, err := rg.Commit()
 			require.NoError(t, err)
 		}

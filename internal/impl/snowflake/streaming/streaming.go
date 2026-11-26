@@ -152,7 +152,8 @@ const (
 
 // BuildOptions is the options for building a parquet file
 type BuildOptions struct {
-	// The maximum parallelism
+	// The maximum number of parallel tasks used to convert chunks of rows and
+	// to encode columns.
 	Parallelism int
 	// The number of rows converted by each parallel task. All the rows of a
 	// batch still end up in a single parquet row group.
@@ -369,7 +370,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	w := newParquetWriter(c.connectVersion, c.schema)
 	w.Reset(metadata)
 	rg := w.BeginRowGroup()
-	if err := writeRowGroup(rg, converted); err != nil {
+	if err := writeRowGroup(rg, converted, c.BuildOptions.Parallelism); err != nil {
 		return bdecPart{}, err
 	}
 	if _, err := rg.Commit(); err != nil {
