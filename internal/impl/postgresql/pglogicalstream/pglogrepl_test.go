@@ -744,6 +744,9 @@ func testValidatePublication(t *testing.T, version int) {
 //   - An excluded table is rejected, so the input fails to start instead of
 //     silently not streaming the table. This includes an excluded partitioned
 //     table with no partition yet.
+//   - After a partition is added, a partitioned table that the publication
+//     does not exclude is still accepted, and an excluded one is still
+//     rejected.
 //   - The error does not suggest ALTER PUBLICATION ... ADD TABLE, because
 //     PostgreSQL rejects it on a FOR ALL TABLES publication.
 //
@@ -781,6 +784,20 @@ func TestIntegrationValidatePublicationAllTablesExcept(t *testing.T) {
 	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"users"`}})
 	require.ErrorContains(t, err, `"public"."users"`)
 	assert.ErrorContains(t, err, "SET ALL TABLES EXCEPT")
+
+	for _, sql := range []string{
+		"CREATE TABLE planned_2026 PARTITION OF planned FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE TABLE skipped_2026 PARTITION OF skipped FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+	} {
+		_, err := conn.Exec(ctx, sql).ReadAll()
+		require.NoError(t, err)
+	}
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"planned"`}})
+	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"skipped"`}})
+	require.ErrorContains(t, err, `"public"."skipped"`)
 }
 
 // TestIntegrationValidatePublicationForeignPartition checks that a foreign
