@@ -256,9 +256,12 @@ postgres_cdc:
 
 	// Checks the snapshot and streaming decoders format non-integer keys
 	// identically, or dedup misses and a stale snapshot row overwrites the update.
+	// The inserts derive each key from the row count, so the same statement
+	// run repeatedly gives a new key each time.
 	for _, keyed := range []struct {
 		name    string
 		table   string
+		setup   string // run before ddl, when set
 		ddl     string
 		insert  string
 		keyCols []string
@@ -277,12 +280,78 @@ postgres_cdc:
 			insert:  `INSERT INTO uuid_text_keyed (id, tenant, name) VALUES (gen_random_uuid(), 'tenant-a', 'orig')`,
 			keyCols: []string{"id", "tenant"},
 		},
+		{
+			name:    "BitKey",
+			table:   "bit_keyed",
+			ddl:     `CREATE TABLE bit_keyed (id bit(16) PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO bit_keyed (id, name) VALUES (((SELECT COUNT(*) FROM bit_keyed) + 1)::int::bit(16), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "VarbitKey",
+			table:   "varbit_keyed",
+			ddl:     `CREATE TABLE varbit_keyed (id varbit(16) PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO varbit_keyed (id, name) VALUES (((SELECT COUNT(*) FROM varbit_keyed) + 1)::int::bit(16)::varbit, 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "IntervalKey",
+			table:   "interval_keyed",
+			ddl:     `CREATE TABLE interval_keyed (id interval PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO interval_keyed (id, name) VALUES (make_interval(secs => (SELECT COUNT(*) FROM interval_keyed) + 1), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "Int4rangeKey",
+			table:   "int4range_keyed",
+			ddl:     `CREATE TABLE int4range_keyed (id int4range PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO int4range_keyed (id, name) VALUES (int4range((SELECT COUNT(*) FROM int4range_keyed)::int, (SELECT COUNT(*) FROM int4range_keyed)::int + 1), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			// tsrange has its own sanitizing path on both sides.
+			name:    "TsrangeKey",
+			table:   "tsrange_keyed",
+			ddl:     `CREATE TABLE tsrange_keyed (id tsrange PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO tsrange_keyed (id, name) VALUES (tsrange(TIMESTAMP '2026-01-01 00:00:00' + (SELECT COUNT(*) FROM tsrange_keyed) * INTERVAL '1 second', NULL), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			// The stream sees a domain's own type and the snapshot its base
+			// type, so domains take a different decode path on each side.
+			name:    "DomainInt4rangeKey",
+			table:   "domain_int4range_keyed",
+			setup:   `CREATE DOMAIN int4range_key_domain AS int4range`,
+			ddl:     `CREATE TABLE domain_int4range_keyed (id int4range_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_int4range_keyed (id, name) VALUES (int4range((SELECT COUNT(*) FROM domain_int4range_keyed)::int, (SELECT COUNT(*) FROM domain_int4range_keyed)::int + 1), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainIntervalKey",
+			table:   "domain_interval_keyed",
+			setup:   `CREATE DOMAIN interval_key_domain AS interval`,
+			ddl:     `CREATE TABLE domain_interval_keyed (id interval_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_interval_keyed (id, name) VALUES (make_interval(secs => (SELECT COUNT(*) FROM domain_interval_keyed) + 1), 'orig')`,
+			keyCols: []string{"id"},
+		},
+		{
+			name:    "DomainVarbitKey",
+			table:   "domain_varbit_keyed",
+			setup:   `CREATE DOMAIN varbit_key_domain AS varbit(16)`,
+			ddl:     `CREATE TABLE domain_varbit_keyed (id varbit_key_domain PRIMARY KEY, name TEXT)`,
+			insert:  `INSERT INTO domain_varbit_keyed (id, name) VALUES (((SELECT COUNT(*) FROM domain_varbit_keyed) + 1)::int::bit(16)::varbit, 'orig')`,
+			keyCols: []string{"id"},
+		},
 	} {
 		t.Run("KeyDecoding/"+keyed.name, func(t *testing.T) {
 			t.Parallel()
 			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 			require.NoError(t, err)
 
+			if keyed.setup != "" {
+				_, err = db.Exec(keyed.setup)
+				require.NoError(t, err)
+			}
 			_, err = db.Exec(keyed.ddl)
 			require.NoError(t, err)
 

@@ -41,6 +41,7 @@ rely on them.
 | UUID | String | string | string |
 | JSON / JSONB | Any | (native) | (native) |
 | INTERVAL, ranges other than TSRANGE, multiranges (and the arrays of intervals and ranges) | Any | string | string |
+| BIT, VARBIT (and their arrays) | Any | string | string |
 
 ### Notes
 
@@ -71,6 +72,8 @@ rely on them.
   (RangeCodec, MultirangeCodec), also as array elements, so INT4RANGE, INT8RANGE,
   NUMRANGE, DATERANGE, TSTZRANGE and their arrays and multiranges are all
   covered. TSRANGE goes through `sanitizeTsrange` on both paths instead.
+- **BIT / VARBIT**: Both paths return the raw PostgreSQL text (`0101`)
+  rather than pgx's pgtype.Bits struct.
 - **JSON / JSONB**: Both paths run `json.Unmarshal`, producing a tree of stdlib
   types (`map[string]any`, `[]any`, `float64`, `string`, `bool`, `nil`). No raw
   `sql.*` wrappers leak through.

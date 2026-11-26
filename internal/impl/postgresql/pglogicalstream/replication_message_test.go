@@ -985,6 +985,18 @@ func TestDecodeTextColumnDataTimeRangesAndIntervals(t *testing.T) {
 			data:     `{["2026-01-02 03:04:05",infinity)}`,
 		},
 		{
+			typeName: "bit",
+			data:     "01010101",
+		},
+		{
+			typeName: "varbit",
+			data:     "0101",
+		},
+		{
+			typeName: "_varbit",
+			data:     "{0101,1}",
+		},
+		{
 			typeName: "int4range",
 			data:     "[1,11)",
 		},
