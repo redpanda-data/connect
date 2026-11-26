@@ -715,6 +715,134 @@ pg_stream:
 	require.NoError(t, stream.StopWithin(30*time.Second))
 }
 
+// TestIntegrationPostgresDomainColumns checks that a column typed as a domain
+// is emitted as its base type, identically by the snapshot and by the stream.
+// The stream is told a domain's own type, which it does not know, and used to
+// emit such a column as the raw text.
+func TestIntegrationPostgresDomainColumns(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "17")
+	require.NoError(t, err)
+
+	for _, ddl := range []string{
+		"CREATE DOMAIN flag_domain AS boolean",
+		"CREATE DOMAIN moment_domain AS timestamptz",
+		"CREATE DOMAIN day_domain AS date",
+		"CREATE DOMAIN window_domain AS tsrange",
+		"CREATE DOMAIN count_domain AS int4 CHECK (VALUE >= 0)",
+		"CREATE DOMAIN price_domain AS numeric(10,2)",
+		"CREATE DOMAIN tags_domain AS int4[]",
+		"CREATE DOMAIN inner_count_domain AS int8",
+		"CREATE DOMAIN outer_count_domain AS inner_count_domain",
+		"CREATE DOMAIN outer_moment_domain AS moment_domain",
+		`CREATE TABLE domain_values (
+			id int PRIMARY KEY,
+			flag flag_domain,
+			moment moment_domain,
+			day day_domain,
+			span window_domain,
+			count count_domain,
+			price price_domain,
+			tags tags_domain,
+			nested outer_count_domain,
+			nested_moment outer_moment_domain,
+			absent flag_domain
+		)`,
+	} {
+		db.MustExec(t, ddl)
+	}
+
+	insert := func(id int) {
+		db.MustExec(t, fmt.Sprintf(`INSERT INTO domain_values VALUES (%d, true, '2026-01-02 03:04:05+00',
+			'2026-01-02', '[2026-01-02 03:04:05,2026-01-03 00:00:00)', 42, 1.5, '{1,2,3}',
+			123456789012, '2026-02-03 04:05:06+00', NULL)`, id))
+	}
+	insert(1)
+
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_domain_columns
+    stream_snapshot: true
+    schema: public
+    tables:
+       - domain_values
+`, databaseURL)
+
+	var (
+		receivedMu sync.Mutex
+		received   []map[string]any
+	)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddInputYAML(template))
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
+		var row map[string]any
+		if err := json.Unmarshal(b, &row); err != nil {
+			return err
+		}
+		receivedMu.Lock()
+		received = append(received, row)
+		receivedMu.Unlock()
+		return nil
+	}))
+	stream, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	waitForRows := func(n int) {
+		require.Eventually(t, func() bool {
+			receivedMu.Lock()
+			defer receivedMu.Unlock()
+			return len(received) == n
+		}, 30*time.Second, 100*time.Millisecond, "expected %d rows", n)
+	}
+	waitForRows(1)
+
+	// Streamed after the snapshot, so this row goes through the pgoutput decoder.
+	insert(2)
+	waitForRows(2)
+
+	receivedMu.Lock()
+	got := append([]map[string]any(nil), received...)
+	receivedMu.Unlock()
+
+	byID := map[int]map[string]any{}
+	for _, row := range got {
+		id, ok := row["id"].(float64)
+		require.True(t, ok, "row without a numeric id: %v", row)
+		delete(row, "id")
+		byID[int(id)] = row
+	}
+
+	expected := map[string]any{
+		"flag":          true,
+		"moment":        "2026-01-02T03:04:05Z",
+		"day":           "2026-01-02T00:00:00Z",
+		"span":          "[2026-01-02 03:04:05,2026-01-03 00:00:00)",
+		"count":         float64(42),
+		"price":         "1.50",
+		"tags":          []any{float64(1), float64(2), float64(3)},
+		"nested":        float64(123456789012),
+		"nested_moment": "2026-02-03T04:05:06Z",
+		"absent":        nil,
+	}
+	assert.Equal(t, expected, byID[1], "snapshot row")
+	assert.Equal(t, expected, byID[2], "stream row")
+
+	require.NoError(t, stream.StopWithin(30*time.Second))
+}
+
 // TestIntegrationPostgresSnapshotAckBarrier verifies that a crash during the
 // snapshot->stream handoff (after snapshot rows are emitted but before they are
 // acknowledged) does not lose data: because the replication slot is only

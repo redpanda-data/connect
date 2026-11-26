@@ -156,6 +156,9 @@ This input encodes each row as JSON, so each column value becomes the closest JS
 
 | ` + "`INTERVAL`" + `, the other range types (for example ` + "`INT4RANGE`" + `, ` + "`NUMRANGE`" + `, ` + "`DATERANGE`" + `, or ` + "`TSTZRANGE`" + `), all multirange types, and arrays of ` + "`INTERVAL`" + ` or of a range type
 | String in its PostgreSQL text form, for example ` + "`\"1 day 02:03:04\"`" + ` or ` + "`\"[2026-01-02,infinity)\"`" + `. The infinite values stay as ` + "`infinity`" + ` and ` + "`-infinity`" + ` in the text
+
+| A domain over any of the types above
+| Represented as its base type
 |===
 
 == Metadata

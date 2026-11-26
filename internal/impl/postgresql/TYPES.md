@@ -42,6 +42,7 @@ rely on them.
 | JSON / JSONB | Any | (native) | (native) |
 | INTERVAL, ranges other than TSRANGE, multiranges (and the arrays of intervals and ranges) | Any | string | string |
 | BIT, VARBIT (and their arrays) | Any | string | string |
+| Domain over any type above | Its base type | Its base type | Its base type |
 
 ### Notes
 
@@ -54,6 +55,11 @@ rely on them.
   The special values `infinity` and `-infinity` have no `time.Time` form.
   Both paths decode them to `pglogicalstream.InfiniteTime`, which keeps the
   snapshot keys exact, and the input emits them as `nil`.
+- **Domains**: A snapshot query reports a domain column as its base type, but
+  the replication stream reports the domain's own type OID, which pgx does not
+  know. The CDC path resolves such an OID to its base type, following a chain
+  of domains and keeping the domain's type modifier, so both paths emit a
+  domain column as its base type.
 - **TIME / TIMETZ**: Returned as raw PostgreSQL text strings. The CDC path
   bypasses pgtype.Time to avoid struct values. Note: timetz (OID 1266) is not
   in pgx's default type map; the CDC path handles it via a `string(data)`

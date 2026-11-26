@@ -296,6 +296,91 @@ func streamedPKValues(t *testing.T, db *sql.DB) map[string]any {
 	return out
 }
 
+func TestResolveRelationDomains(t *testing.T) {
+	const (
+		domainOID = 50001
+		enumOID   = 50002
+	)
+	typeMap := pgtype.NewMap()
+	rel := func(cols ...*RelationMessageColumn) *RelationMessage {
+		return &RelationMessage{Namespace: "public", RelationName: "t", Columns: cols}
+	}
+	col := func(name string, oid uint32, typmod int32) *RelationMessageColumn {
+		return &RelationMessageColumn{Name: name, DataType: oid, TypeModifier: typmod}
+	}
+
+	t.Run("types pgx knows are not looked up", func(t *testing.T) {
+		// No monitor: any lookup would panic.
+		s := &Stream{}
+		r := rel(col("a", pgtype.Int4OID, -1), col("b", pgtype.TimestamptzOID, 3), col("c", pgtype.Int4ArrayOID, -1))
+		require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+		assert.EqualValues(t, pgtype.Int4OID, r.Columns[0].DataType)
+		assert.EqualValues(t, pgtype.TimestamptzOID, r.Columns[1].DataType)
+		assert.EqualValues(t, 3, r.Columns[1].TypeModifier)
+		assert.EqualValues(t, pgtype.Int4ArrayOID, r.Columns[2].DataType)
+		assert.Empty(t, s.domainBases)
+	})
+
+	t.Run("cached domain is rewritten without a lookup", func(t *testing.T) {
+		s := &Stream{domainBases: map[uint32]domainBase{
+			domainOID: {oid: pgtype.NumericOID, typeModifier: 655366},
+		}}
+		r := rel(col("unmodified", domainOID, -1), col("modified", domainOID, 42))
+		require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+		assert.EqualValues(t, pgtype.NumericOID, r.Columns[0].DataType)
+		assert.EqualValues(t, 655366, r.Columns[0].TypeModifier, "the domain's modifier fills in for none")
+		assert.EqualValues(t, pgtype.NumericOID, r.Columns[1].DataType)
+		assert.EqualValues(t, 42, r.Columns[1].TypeModifier, "a modifier the column declares is kept")
+	})
+
+	t.Run("a cached non-domain is left alone", func(t *testing.T) {
+		s := &Stream{domainBases: map[uint32]domainBase{enumOID: {oid: enumOID, typeModifier: -1}}}
+		r := rel(col("e", enumOID, -1))
+		require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+		assert.EqualValues(t, enumOID, r.Columns[0].DataType)
+		assert.EqualValues(t, -1, r.Columns[0].TypeModifier)
+	})
+
+	t.Run("looks a type up once and caches it", func(t *testing.T) {
+		var queries int
+		// The chain of a domain over numeric(10,2): the domain, then its base.
+		db := newFakeQueryDB(t, nil, [][]driver.Value{
+			{int64(domainOID), "d", int64(655366)},
+			{int64(pgtype.NumericOID), "b", int64(-1)},
+		}, &queries)
+		s := &Stream{monitor: &Monitor{dbConn: db}}
+
+		for range 2 {
+			r := rel(col("d", domainOID, -1))
+			require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+			assert.EqualValues(t, pgtype.NumericOID, r.Columns[0].DataType)
+			assert.EqualValues(t, 655366, r.Columns[0].TypeModifier)
+		}
+		assert.Equal(t, 1, queries, "the second relation message must hit the cache")
+	})
+
+	t.Run("a looked up non-domain is cached too", func(t *testing.T) {
+		var queries int
+		db := newFakeQueryDB(t, nil, [][]driver.Value{{int64(enumOID), "e", int64(-1)}}, &queries)
+		s := &Stream{monitor: &Monitor{dbConn: db}}
+
+		for range 2 {
+			r := rel(col("e", enumOID, -1))
+			require.NoError(t, s.resolveRelationDomains(t.Context(), r, typeMap))
+			assert.EqualValues(t, enumOID, r.Columns[0].DataType)
+		}
+		assert.Equal(t, 1, queries)
+	})
+
+	t.Run("a failed lookup names the column and is not cached", func(t *testing.T) {
+		s := &Stream{monitor: &Monitor{dbConn: newFailingQueryDB(t, errors.New("boom"))}}
+		err := s.resolveRelationDomains(t.Context(), rel(col("dom_col", domainOID, -1)), typeMap)
+		require.ErrorContains(t, err, `resolving column "dom_col"`)
+		require.ErrorContains(t, err, "boom")
+		assert.Empty(t, s.domainBases)
+	})
+}
+
 func TestSnapshotSignalRejectsUnreplicatedTable(t *testing.T) {
 	signalRow := func(tables string) *StreamMessage {
 		return &StreamMessage{
@@ -609,6 +694,13 @@ func (s *fakeQueryStmt) Query([]driver.Value) (driver.Rows, error) {
 	// result: no partitioned tables.
 	if strings.Contains(s.query, "pg_publication") {
 		return &fakeQueryRows{columns: []string{"relname"}}, nil
+	}
+	// The domain chain query reports what the test's rows say.
+	if strings.Contains(s.query, "WITH RECURSIVE chain") {
+		return &fakeQueryRows{
+			columns: []string{"oid", "typtype", "typtypmod"},
+			rows:    s.conn.driver.rows,
+		}, nil
 	}
 	// The key type query has its own shape, so it needs its own result.
 	if strings.Contains(s.query, "pg_type") {
