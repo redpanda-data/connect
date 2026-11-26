@@ -181,9 +181,11 @@ is true:
 
 Every other table waits for a signal.
 
-Each table joins the back of the backfill queue. A table already queued is not queued twice, and a
-table being backfilled finishes its current backfill. A table whose backfill has completed is read
-again from the start, so to snapshot a table again, send another signal that names it.
+Each table joins the back of the backfill queue. A table already queued is not queued twice. A
+table being backfilled finishes its current backfill and is not queued again, and the input logs a
+warning. To read that table again, send the signal again once its backfill completes. A table
+whose backfill has completed is read again from the start, so to snapshot a table again, send
+another signal that names it.
 
 A table's snapshot rows (` + "`snapshot#complete`" + `, ` + "`snapshot#segment#N`" + ` and ` + "`snapshot#requested`" + `)
 are in that table's partition of the checkpoint table. The partition's hash key is the table's
@@ -252,7 +254,7 @@ WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units 
 
 NOTE: In `+"`snapshot_only`"+` and `+"`snapshot_and_cdc`"+` modes, snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `+"`snapshot_deduplicate`"+` to minimize duplicates.
 
-When `+"`snapshot_mode`"+` is `+"`incremental`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode. In multi-table mode, this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held. So no snapshot item leaves the input after a newer change to the same key. Once the stream catches up, the last event the input emits for each key matches that key's current state in the table. This ordering holds at the input. Output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once unless a signal asks for it again. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress, while the table keeps streaming. In multi-table mode, a backfill that fails to start is retried the same way, and the other queued tables are backfilled meanwhile. In single-table mode, a backfill that fails the connection is retried with its own backoff. Retries wait 30 seconds at first and double up to 10 minutes between attempts.
+When `+"`snapshot_mode`"+` is `+"`incremental`"+`, each table is backfilled page by page while it streams, in single- or multi-table mode. In multi-table mode, this includes tables found by periodic discovery. When `+"`signal_table_name`"+` is set, a table is instead backfilled when a `+"`snapshot-execute`"+` signal names it, apart from the exceptions listed under `+"`signal_table_name`"+`. A snapshot item is dropped when a stream record for its key arrives while its page is held. So no snapshot item leaves the input after a newer change to the same key. Once the stream catches up, the last event the input emits for each key matches that key's current state in the table. This ordering holds at the input. Output stages with `+"`max_in_flight`"+` above 1 can still reorder messages. Incremental mode requires a stream view of `+"`NEW_IMAGE`"+` or `+"`NEW_AND_OLD_IMAGES`"+`, uses strongly consistent Scans (twice the RCU), and backfills each table once unless a signal asks for it again. Each page waits a few seconds for the stream to catch up before it is released, so for large tables raise `+"`snapshot_segments`"+` and `+"`snapshot_batch_size`"+` (for example to 10 and 1000). A backfill that fails is retried in the background from its acknowledged progress, while the table keeps streaming. In multi-table mode, a backfill that fails to start is retried the same way, and the other queued tables are backfilled meanwhile. In single-table mode, a backfill that fails the connection is retried with its own backoff. Retries wait 30 seconds at first and double up to 10 minutes between attempts. A failure that only a permission or configuration change can fix (AWS returns `+"`AccessDeniedException`"+`, `+"`UnrecognizedClientException`"+` or `+"`ValidationException`"+`, or the checkpoint table is missing) waits 10 minutes from the first attempt. In multi-table mode, a table deleted before its backfill completes is dropped from the queue, and the input logs an error. The input does not retry it until it restarts.
 
 == Checkpointing
 
@@ -658,6 +660,10 @@ type dynamoDBCDCInput struct {
 	// backfillRetryBackoff overrides the backoff between retries of a failed
 	// incremental backfill; tests only, nil in production.
 	backfillRetryBackoff func() backoff.BackOff
+	// backfillNeedsChangeWait overrides the wait before retrying a backfill
+	// that failed with an error only a change can fix; tests only, zero in
+	// production.
+	backfillNeedsChangeWait time.Duration
 	// backfillRetries paces multi-table incremental prepare and backfill
 	// retries per table.
 	backfillRetries backfillRetries

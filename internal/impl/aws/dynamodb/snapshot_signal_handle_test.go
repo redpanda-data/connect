@@ -465,3 +465,30 @@ func TestHandleSnapshotSignalDeduplicatesTables(t *testing.T) {
 	assert.Equal(t, 2, d.backfills.Len())
 	assert.Contains(t, logs.String(), "signal queued 2 table(s) for backfill: [t1 t2]")
 }
+
+// A signal naming a table that is being backfilled warns that nothing was
+// queued for it, and records no request: queuing it would only find the run
+// complete. The other tables in the signal are still queued.
+func TestHandleSnapshotSignalSkipsTableBeingBackfilled(t *testing.T) {
+	mem := newMemCheckpointAPI(nil)
+	d := newSignalTestInput(mem, mem)
+	logs := captureLogs(d)
+	d.backfillRetries.setRunning("t1")
+
+	require.NoError(t, d.handleSnapshotSignal(t.Context(), d.log, []byte(`{"tables":["t1","t2"]}`)))
+
+	assert.False(t, mem.has(signalArnT1, "snapshot#requested"), "no request is recorded for the running table")
+	assert.True(t, mem.has(signalArnT2, "snapshot#requested"))
+	require.Equal(t, 1, d.backfills.Len())
+	table, ok := d.backfills.Pop(t.Context())
+	require.True(t, ok)
+	assert.Equal(t, "t2", table)
+	assert.Contains(t, logs.String(), "signal ignored for [t1]: already being backfilled, so nothing was queued for it")
+	assert.Contains(t, logs.String(), "signal queued 1 table(s) for backfill: [t2]")
+
+	// Once the run ends, the same signal queues the table.
+	d.backfillRetries.setRunning("")
+	require.NoError(t, d.handleSnapshotSignal(t.Context(), d.log, []byte(`{"tables":["t1"]}`)))
+	assert.True(t, mem.has(signalArnT1, "snapshot#requested"))
+	assert.Equal(t, 1, d.backfills.Len())
+}

@@ -10,10 +10,14 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/smithy-go"
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -50,6 +54,65 @@ func (d *dynamoDBCDCInput) newBackfillRetryBackoff() backoff.BackOff {
 	boff.RandomizationFactor = 0
 	boff.Reset()
 	return boff
+}
+
+// backfillFailure is the kind of error a failed incremental backfill or
+// prepare returned, which decides how it is retried.
+type backfillFailure int
+
+const (
+	// backfillFailureTransient may clear by itself, such as an outage or
+	// a timeout: it is retried with the growing backoff.
+	backfillFailureTransient backfillFailure = iota
+	// backfillFailureNeedsChange fails until someone changes permissions
+	// or configuration: it is retried at the backoff's cap from the first
+	// failure. It is still retried, because an IAM change takes effect
+	// without a restart.
+	backfillFailureNeedsChange
+	// backfillFailureTableGone means the table was deleted: its backfill is
+	// dropped from the queue and not retried until the input restarts.
+	backfillFailureTableGone
+)
+
+// needsChangeErrorCodes are the DynamoDB error codes that fail the same way
+// on every retry until permissions or configuration change.
+var needsChangeErrorCodes = map[string]struct{}{
+	"AccessDeniedException":       {},
+	"UnrecognizedClientException": {},
+	"ValidationException":         {},
+}
+
+// classifyBackfillError reports how table's failed backfill or prepare
+// should be retried. A ResourceNotFoundException can also come from the
+// checkpoint table, so the table is described to confirm it is gone; a
+// failed probe counts as transient.
+func (d *dynamoDBCDCInput) classifyBackfillError(ctx context.Context, table string, err error) backfillFailure {
+	if _, notFound := errors.AsType[*dynamodbtypes.ResourceNotFoundException](err); notFound {
+		_, probeErr := d.dynamoClient.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(table)})
+		if _, gone := errors.AsType[*dynamodbtypes.ResourceNotFoundException](probeErr); gone {
+			return backfillFailureTableGone
+		}
+		if probeErr != nil {
+			return backfillFailureTransient
+		}
+		// The table exists, so the checkpoint table is the one missing.
+		return backfillFailureNeedsChange
+	}
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
+		if _, needsChange := needsChangeErrorCodes[apiErr.ErrorCode()]; needsChange {
+			return backfillFailureNeedsChange
+		}
+	}
+	return backfillFailureTransient
+}
+
+// needsChangeRetryWait is the wait before retrying a backfill that failed
+// with backfillFailureNeedsChange.
+func (d *dynamoDBCDCInput) needsChangeRetryWait() time.Duration {
+	if d.backfillNeedsChangeWait > 0 {
+		return d.backfillNeedsChangeWait
+	}
+	return backfillRetryMaxInterval
 }
 
 // backfillTarget is one table's incremental backfill inputs.
@@ -253,8 +316,15 @@ func (d *dynamoDBCDCInput) runIncrementalSingleUntilDone(ctx context.Context, tg
 		if ctx.Err() != nil {
 			return false
 		}
+		// The single table is never dropped: a deleted table also ends its
+		// stream, so it is only retried less often.
 		wait := boff.NextBackOff()
-		d.log.Errorf("Incremental snapshot of table %s failed, retrying in %v: %v", tgt.table, wait, err)
+		if d.classifyBackfillError(ctx, tgt.table, err) != backfillFailureTransient {
+			wait = d.needsChangeRetryWait()
+			d.log.Errorf("Incremental snapshot of table %s failed with an error that retrying alone does not fix, retrying in %v: %v", tgt.table, wait, err)
+		} else {
+			d.log.Errorf("Incremental snapshot of table %s failed, retrying in %v: %v", tgt.table, wait, err)
+		}
 		d.snapshot.state.Store(snapshotStateFailed)
 		d.metrics.snapshotState.Set(int64(snapshotStateFailed))
 		timer := time.NewTimer(wait)
@@ -339,13 +409,18 @@ func (d *dynamoDBCDCInput) prepareOrRetryTableBackfill(ctx, retryCtx context.Con
 	if retryCtx.Err() != nil {
 		return false
 	}
-	d.retryInBackground(retryCtx, d.logPrepareRetry(table, err), func(ctx context.Context) (time.Duration, bool) {
+	wait, retry := d.logPrepareRetry(retryCtx, table, err)
+	if !retry {
+		return false
+	}
+	d.retryInBackground(retryCtx, wait, func(ctx context.Context) (time.Duration, bool) {
 		need, err := d.prepareTableBackfill(ctx, table, ts)
 		if err != nil {
 			if ctx.Err() != nil {
 				return 0, true
 			}
-			return d.logPrepareRetry(table, err), false
+			wait, retry := d.logPrepareRetry(ctx, table, err)
+			return wait, !retry
 		}
 		if d.backfillRetries.endPrepare(table) || need {
 			d.backfills.Push(table)
@@ -356,10 +431,23 @@ func (d *dynamoDBCDCInput) prepareOrRetryTableBackfill(ctx, retryCtx context.Con
 }
 
 // logPrepareRetry logs table's failed prepare and returns its retry delay.
-func (d *dynamoDBCDCInput) logPrepareRetry(table string, err error) time.Duration {
+// It reports false when the table was deleted: its prepare-pending mark is
+// then cleared and the prepare is not retried.
+func (d *dynamoDBCDCInput) logPrepareRetry(ctx context.Context, table string, err error) (time.Duration, bool) {
+	switch d.classifyBackfillError(ctx, table, err) {
+	case backfillFailureTableGone:
+		d.backfillRetries.endPrepare(table)
+		d.log.Errorf("Incremental snapshot of table %s dropped: the table no longer exists, so it is not retried until the input restarts: %v", table, err)
+		return 0, false
+	case backfillFailureNeedsChange:
+		d.backfillRetries.next(table, d.newBackfillRetryBackoff)
+		wait := d.needsChangeRetryWait()
+		d.log.Errorf("Incremental snapshot of table %s not started, retrying in %v (the table is still streamed); the error needs a permission or configuration change: %v", table, wait, err)
+		return wait, true
+	}
 	wait := d.backfillRetries.next(table, d.newBackfillRetryBackoff)
 	d.log.Errorf("Incremental snapshot of table %s not started, retrying in %v (the table is still streamed): %v", table, wait, err)
-	return wait
+	return wait, true
 }
 
 // signalOnlyBackfillPending reports whether table must be backfilled
@@ -381,8 +469,9 @@ type backfillRetries struct {
 	boffs map[string]backoff.BackOff
 	// preparing holds the prepare-pending tables.
 	preparing map[string]*pendingPrepare
-	// running is set while runBackfillQueue runs a table's backfill.
-	running bool
+	// running names the table whose backfill runBackfillQueue is running,
+	// or is empty.
+	running string
 	// stateGauge, once set, receives the multi-table snapshot state on every
 	// change (see publishLocked).
 	stateGauge *service.MetricGauge
@@ -396,12 +485,20 @@ func (r *backfillRetries) publishTo(g *service.MetricGauge) {
 	r.publishLocked()
 }
 
-// setRunning records whether runBackfillQueue is running a backfill.
-func (r *backfillRetries) setRunning(running bool) {
+// setRunning records the table whose backfill runBackfillQueue is running,
+// or "" when none is.
+func (r *backfillRetries) setRunning(table string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.running = running
+	r.running = table
 	r.publishLocked()
+}
+
+// isRunning reports whether runBackfillQueue is running table's backfill.
+func (r *backfillRetries) isRunning(table string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.running != "" && r.running == table
 }
 
 // publishLocked sets the snapshot state gauge: in progress while a backfill
@@ -414,7 +511,7 @@ func (r *backfillRetries) publishLocked() {
 	}
 	state := snapshotStateComplete
 	switch {
-	case r.running:
+	case r.running != "":
 		state = snapshotStateInProgress
 	case len(r.boffs) > 0:
 		state = snapshotStateFailed
@@ -563,7 +660,7 @@ func (ts *tableStream) backfillTarget() backfillTarget {
 func (d *dynamoDBCDCInput) runBackfillQueue(ctx context.Context) {
 	d.backfillRetries.publishTo(d.metrics.snapshotState)
 	for {
-		d.backfillRetries.setRunning(false)
+		d.backfillRetries.setRunning("")
 		d.metrics.backfillTablesPending.Set(int64(d.backfills.Len()))
 		table, ok := d.backfills.Pop(ctx)
 		if !ok {
@@ -582,14 +679,26 @@ func (d *dynamoDBCDCInput) runBackfillQueue(ctx context.Context) {
 			d.log.Debugf("Incremental snapshot of table %s deferred until its prepare succeeds", table)
 			continue
 		}
-		d.backfillRetries.setRunning(true)
+		d.backfillRetries.setRunning(table)
 		outcome, err := d.backfillTable(ctx, table, ts)
 		switch outcome {
 		case backfillStopped:
 			return
 		case backfillFailed:
-			wait := d.backfillRetries.next(table, d.newBackfillRetryBackoff)
-			d.log.Errorf("Incremental snapshot of table %s failed, retrying in %v (the table is still streamed): %v", table, wait, err)
+			var wait time.Duration
+			switch d.classifyBackfillError(ctx, table, err) {
+			case backfillFailureTableGone:
+				d.backfillRetries.reset(table)
+				d.log.Errorf("Incremental snapshot of table %s dropped: the table no longer exists, so it is not retried until the input restarts: %v", table, err)
+				continue
+			case backfillFailureNeedsChange:
+				d.backfillRetries.next(table, d.newBackfillRetryBackoff)
+				wait = d.needsChangeRetryWait()
+				d.log.Errorf("Incremental snapshot of table %s failed, retrying in %v (the table is still streamed); the error needs a permission or configuration change: %v", table, wait, err)
+			default:
+				wait = d.backfillRetries.next(table, d.newBackfillRetryBackoff)
+				d.log.Errorf("Incremental snapshot of table %s failed, retrying in %v (the table is still streamed): %v", table, wait, err)
+			}
 			d.retryInBackground(ctx, wait, func(context.Context) (time.Duration, bool) {
 				d.backfills.Push(table)
 				return 0, true

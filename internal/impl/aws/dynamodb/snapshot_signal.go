@@ -198,8 +198,15 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 		return nil
 	}
 
-	var added, restarted []string
+	var added, restarted, running []string
 	for i, name := range sig.Tables {
+		// A table being backfilled finishes that backfill and is not
+		// queued again, as in postgres_cdc: the signal cannot restart a
+		// run midway, and queuing it would only find the run complete.
+		if d.backfillRetries.isRunning(name) {
+			running = append(running, name)
+			continue
+		}
 		ts := streams[i]
 		progress, err := ts.checkpointer.SnapshotProgress(ctx)
 		if err != nil {
@@ -221,13 +228,17 @@ func (d *dynamoDBCDCInput) handleSnapshotSignal(ctx context.Context, log *servic
 			}
 			restarted = append(restarted, name)
 		}
-		// A table already queued is not queued twice, and one being
-		// backfilled finishes that backfill.
+		// A table already queued is not queued twice.
 		d.backfills.Push(name)
 		added = append(added, name)
 	}
 
-	log.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
+	if len(running) > 0 {
+		log.Warnf("Incremental snapshot: signal ignored for %v: already being backfilled, so nothing was queued for it", running)
+	}
+	if len(added) > 0 {
+		log.Infof("Incremental snapshot: signal queued %d table(s) for backfill: %v", len(added), added)
+	}
 	if len(restarted) > 0 {
 		log.Infof("Incremental snapshot: signal restarts the completed backfill of %v from the start", restarted)
 	}
