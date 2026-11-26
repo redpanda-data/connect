@@ -265,7 +265,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		msg.MetaSet("scn", m.SCN.String())
 	}
 	if !m.Timestamp.IsZero() {
-		// Host wall-clock time, converted to UTC using the database offset (see inLocation).
+		// Host wall-clock time, converted to UTC using the database offset (see wallClockIn).
 		msg.MetaSet("source_ts_ms", strconv.FormatInt(m.Timestamp.UnixMilli(), 10))
 	}
 	if m.CheckpointSCN.IsValid() {

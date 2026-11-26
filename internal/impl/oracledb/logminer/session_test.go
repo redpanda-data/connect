@@ -672,7 +672,7 @@ func (r *fakeSCNRow) Next(dest []driver.Value) error {
 }
 
 // fakeOffsetRow implements driver.Rows over the single UTC offset value that
-// refreshDBLocation reads from SYSTIMESTAMP. The fake database host is UTC.
+// refreshDBZone reads from SYSTIMESTAMP. The fake database host is UTC.
 type fakeOffsetRow struct {
 	done bool
 }

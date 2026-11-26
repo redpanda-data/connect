@@ -1366,7 +1366,7 @@ func TestReadAheadBatches(t *testing.T) {
 	}
 }
 
-func TestInLocation(t *testing.T) {
+func TestWallClockIn(t *testing.T) {
 	ny, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
 
@@ -1426,7 +1426,7 @@ func TestInLocation(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := inLocation(test.in, test.loc)
+			got := wallClockIn(test.in, test.loc)
 			assert.Equal(t, test.want.UnixMilli(), got.UnixMilli())
 		})
 	}
