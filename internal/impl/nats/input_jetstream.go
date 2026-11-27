@@ -410,7 +410,7 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 	if !j.pull {
 		nmsg, err := natsSub.NextMsgWithContext(ctx)
 		if err != nil {
-			if errors.Is(err, nats.ErrConnectionClosed) {
+			if subscriptionGone(err) {
 				j.disconnect()
 				return nil, nil, service.ErrNotConnected
 			}
@@ -431,7 +431,7 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 				default:
 					continue
 				}
-			} else if errors.Is(err, nats.ErrConnectionClosed) {
+			} else if subscriptionGone(err) {
 				j.disconnect()
 				return nil, nil, service.ErrNotConnected
 			}
@@ -442,6 +442,14 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 		}
 		return convertMessage(msgs[0])
 	}
+}
+
+// subscriptionGone reports whether err leaves the subscription unusable, so
+// the only way forward is to reconnect. A subscription closed under a fetch
+// (for example by a server restart) otherwise fails every later read with
+// nats.ErrBadSubscription and the input never recovers.
+func subscriptionGone(err error) bool {
+	return errors.Is(err, nats.ErrConnectionClosed) || errors.Is(err, nats.ErrBadSubscription)
 }
 
 func (j *jetStreamReader) Close(ctx context.Context) error {
