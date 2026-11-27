@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"context"
 	"crypto/tls"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,6 +30,15 @@ type Config struct {
 	DBTables  []string
 	// Refreshes short lived IAM auth token that is treated as a password
 	RefreshAuthToken func(ctx context.Context) error
+	// authMu serialises the refreshes of the auth token with the reads of the
+	// password it writes to DBConfig, which the pools do from their own
+	// goroutines. It is per config, so one input waiting on AWS does not hold
+	// up another.
+	authMu sync.Mutex
+	// authTokenBuiltAt is when RefreshAuthToken last succeeded.
+	authTokenBuiltAt time.Time
+	// authTokenMaxAge overrides the package authTokenMaxAge in tests.
+	authTokenMaxAge time.Duration
 	// ReplicationSlotName is the name of the replication slot to use
 	//
 	// MUST BE SQL INJECTION FREE

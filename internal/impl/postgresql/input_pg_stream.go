@@ -760,8 +760,8 @@ type pgStreamInput struct {
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	// If IAM authentication is enabled, generate a new token
-	if p.iamAuthEnabled && p.streamConfig.RefreshAuthToken != nil {
-		if err := p.streamConfig.RefreshAuthToken(ctx); err != nil {
+	if p.iamAuthEnabled {
+		if err := p.streamConfig.RefreshAuth(ctx); err != nil {
 			return fmt.Errorf("unable to generate IAM auth token: %w", err)
 		}
 	}

@@ -99,7 +99,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		config.Logger.Debug("Waiting to ping database...")
 	})
 	debugger.Start()
-	dbConn, err := pgconn.ConnectConfig(ctx, config.DBConfig.Copy())
+	dbConn, err := pgconn.ConnectConfig(ctx, config.dbConfigCopy())
 	debugger.Stop()
 	if err != nil {
 		return nil, err
