@@ -15,6 +15,7 @@ includes:
   build: ./taskfiles/build.yml
   docker: ./taskfiles/docker.yml
   gh: ./taskfiles/gh.yml
+  snyk: ./taskfiles/snyk.yml
   test: ./taskfiles/test.yml
   tools: ./taskfiles/tools.yml
 
