@@ -207,8 +207,8 @@ The output from the processors must be a single message that contains a string s
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").
 				ShortDescription("Maximum parallelism used when building the output for Snowflake.").Optional().Advanced().Deprecated(),
 			service.NewObjectField(ssoFieldBuildOpts,
-				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallel processing to use when building the output for Snowflake.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
-				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of table rows to submit in each chunk for processing.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
+				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum number of parallel tasks that convert messages into Snowflake column data and encode the columns of each file.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
+				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of table rows that each parallel task converts. All the rows of a batch go into one parquet row group.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
 			).Advanced().Description("Options for optimizing the build of the output data that is sent to Snowflake. Monitor the `snowflake_build_output_latency_ns` metric to assess whether you need to update these options.").Version("4.40.0").
 				ShortDescription("Options to optimise the time taken to build output data sent to Snowflake."),
 			service.NewBatchPolicyField(ssoFieldBatching),
