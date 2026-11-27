@@ -391,24 +391,81 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 		"a second Close() must not attempt to close the already-closed CURRENT_SCN statement again")
 }
 
-func TestMiningCycleUpdatesDBZoneWhenIdle(t *testing.T) {
-	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, NewDefaultConfig(), nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
-	conn, fc := newFakeSQLConn(t, nil)
+func TestMiningCycleDBOffset(t *testing.T) {
+	t.Run("idle cycle stores the offset", func(t *testing.T) {
+		lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, NewDefaultConfig(), nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		conn, fc := newFakeSQLConn(t, nil)
 
-	for _, offsetSecs := range []int64{19800, -18000} {
-		// The database is at currentSCN, so the cycle returns early as caught up.
-		fc.currentSCN = lm.currentSCN
-		fc.dbOffsetSecs = offsetSecs
+		for _, offsetSecs := range []int64{19800, -18000} {
+			// The database is at currentSCN, so the cycle returns early as caught up.
+			fc.currentSCN = lm.currentSCN
+			fc.dbOffsetSecs = offsetSecs
 
-		caughtUp, err := lm.miningCycle(t.Context(), conn)
-		require.NoError(t, err)
-		require.True(t, caughtUp)
+			caughtUp, err := lm.miningCycle(t.Context(), conn)
+			require.NoError(t, err)
+			require.True(t, caughtUp)
 
-		require.NotNil(t, lm.dbZone.zone)
-		_, got := time.Now().In(lm.dbZone.zone).Zone()
-		assert.Equal(t, int(offsetSecs), got)
+			require.NotNil(t, lm.dbZone.zone)
+			_, got := time.Now().In(lm.dbZone.zone).Zone()
+			assert.Equal(t, int(offsetSecs), got)
+		}
+		assert.Zero(t, fc.queryCount("V$LOGMNR_CONTENTS"), "an idle cycle must not query LogMiner contents")
+	})
+
+	t.Run("mined rows use each cycle's offset", func(t *testing.T) {
+		cfg := NewDefaultConfig()
+		pub := &publisherStub{}
+		lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, pub, cfg, nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+
+		files := []*LogFile{{FileName: "redo01.log", FirstSCN: 1, NextSCN: 1_000_000, Sequence: 1, Type: "ONLINE", Thread: 1}}
+		conn, fc := newFakeSQLConn(t, files)
+
+		// LogMiner returns the host wall-clock time, which the driver labels UTC.
+		wallClock := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+		cycles := []struct {
+			offsetSecs int64
+			want       time.Time
+		}{
+			{offsetSecs: 19800, want: time.Date(2026, 3, 1, 6, 30, 0, 0, time.UTC)},  // +05:30
+			{offsetSecs: -18000, want: time.Date(2026, 3, 1, 17, 0, 0, 0, time.UTC)}, // -05:00
+		}
+		for i, c := range cycles {
+			startSCN := lm.currentSCN
+			fc.currentSCN = startSCN + uint64(lm.windowSize) + uint64(cfg.MinSCNWindowSize) + 1
+			fc.dbOffsetSecs = c.offsetSecs
+			xid := []byte(fmt.Sprintf("xid%05d", i))
+			// Operation codes 1 and 7 are LogMiner's INSERT and COMMIT.
+			fc.contentRows = func() driver.Rows {
+				return &staticContentRows{rows: [][]driver.Value{
+					{int64(startSCN + 1), `insert into "S"."T"("ID") values ('1');`, int64(1), "T", "S", wallClock, xid, nil, int64(0), "u", nil, nil},
+					{int64(startSCN + 2), nil, int64(7), nil, nil, wallClock, xid, int64(startSCN + 2), int64(0), "u", nil, nil},
+				}}
+			}
+
+			_, err := lm.miningCycle(t.Context(), conn)
+			require.NoError(t, err)
+
+			require.Len(t, pub.messages, i+1, "cycle %d", i)
+			msg := pub.messages[i]
+			assert.True(t, c.want.Equal(msg.Timestamp), "cycle %d: Timestamp = %s, want %s", i, msg.Timestamp.UTC(), c.want)
+			assert.True(t, c.want.Equal(msg.CommitTimestamp), "cycle %d: CommitTimestamp = %s, want %s", i, msg.CommitTimestamp.UTC(), c.want)
+		}
+	})
+}
+
+// staticContentRows implements driver.Rows over fixed V$LOGMNR_CONTENTS rows.
+type staticContentRows struct {
+	fakeContentRows
+	rows [][]driver.Value
+}
+
+func (r *staticContentRows) Next(dest []driver.Value) error {
+	if len(r.rows) == 0 {
+		return io.EOF
 	}
-	assert.Zero(t, fc.queryCount("V$LOGMNR_CONTENTS"), "an idle cycle must not query LogMiner contents")
+	copy(dest, r.rows[0])
+	r.rows = r.rows[1:]
+	return nil
 }
 
 func TestReadChangesReturnsOnCancelDuringBackoff(t *testing.T) {
