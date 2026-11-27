@@ -16,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +41,7 @@ func TestOpenPgConnectionBadDSNRedacted(t *testing.T) {
 const unreachableDSN = "postgres://user:startup@127.0.0.1:1/db?sslmode=disable"
 
 func TestOpenPgConnectionRefreshesAuthToken(t *testing.T) {
-	t.Run("refreshes the token for every new connection", func(t *testing.T) {
+	t.Run("reuses a fresh token for new connections", func(t *testing.T) {
 		dbConf, err := pgconn.ParseConfig(unreachableDSN)
 		require.NoError(t, err)
 
@@ -58,8 +60,8 @@ func TestOpenPgConnectionRefreshesAuthToken(t *testing.T) {
 		for range 2 {
 			require.Error(t, db.PingContext(t.Context()))
 		}
-		assert.Equal(t, int64(2), refreshes.Load())
-		assert.Equal(t, "token-2", dbConf.Password)
+		assert.Equal(t, int64(1), refreshes.Load())
+		assert.Equal(t, "token-1", dbConf.Password)
 	})
 
 	t.Run("surfaces a failed refresh", func(t *testing.T) {
@@ -123,8 +125,88 @@ func TestOpenPgConnectionRefreshesAuthToken(t *testing.T) {
 			wg.Go(func() { _ = cfg.dbConfigCopy() })
 		}
 		wg.Wait()
-		assert.Equal(t, int64(8), refreshes.Load())
+		// Each RefreshAuth builds a token. The pings reuse one, and build
+		// one only if they run before every RefreshAuth.
+		assert.GreaterOrEqual(t, refreshes.Load(), int64(4))
+		assert.LessOrEqual(t, refreshes.Load(), int64(5))
 	})
+}
+
+func TestFreshPasswordRebuildsAgedToken(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var (
+			refreshes  int
+			errRefresh error
+		)
+		cfg := &Config{
+			DBConfig: &pgconn.Config{},
+			RefreshAuthToken: func(context.Context) error {
+				if errRefresh != nil {
+					return errRefresh
+				}
+				refreshes++
+				return nil
+			},
+		}
+		cfg.DBConfig.Password = "startup"
+
+		build := func() {
+			t.Helper()
+			_, err := cfg.freshPassword(t.Context())
+			require.NoError(t, err)
+		}
+
+		build()
+		assert.Equal(t, 1, refreshes, "no token yet")
+
+		time.Sleep(authTokenMaxAge - time.Second)
+		build()
+		assert.Equal(t, 1, refreshes, "token still fresh")
+
+		time.Sleep(time.Second)
+		build()
+		assert.Equal(t, 2, refreshes, "token aged")
+
+		require.NoError(t, cfg.RefreshAuth(t.Context()))
+		assert.Equal(t, 3, refreshes, "RefreshAuth always builds")
+		time.Sleep(authTokenMaxAge - time.Second)
+		build()
+		assert.Equal(t, 3, refreshes, "RefreshAuth resets the age")
+
+		// A failed build keeps the old age, so the next connection retries.
+		time.Sleep(time.Second)
+		errRefresh = errors.New("sts unavailable")
+		_, err := cfg.freshPassword(t.Context())
+		require.ErrorIs(t, err, errRefresh)
+		errRefresh = nil
+		build()
+		assert.Equal(t, 4, refreshes)
+	})
+}
+
+func TestFreshPasswordLockIsPerConfig(t *testing.T) {
+	release := make(chan struct{})
+	building := make(chan struct{})
+	slow := &Config{
+		DBConfig: &pgconn.Config{},
+		RefreshAuthToken: func(context.Context) error {
+			close(building)
+			<-release
+			return nil
+		},
+	}
+	go func() { _, _ = slow.freshPassword(context.Background()) }()
+	<-building
+	defer close(release)
+
+	for _, cfg := range []*Config{
+		{DBConfig: &pgconn.Config{Password: "pw"}},
+		{DBConfig: &pgconn.Config{Password: "pw"}, RefreshAuthToken: func(context.Context) error { return nil }},
+	} {
+		password, err := cfg.freshPassword(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "pw", password)
+	}
 }
 
 // An IAM auth token stops being accepted about 15 minutes after it is built,
@@ -149,6 +231,8 @@ func TestIntegrationOpenPgConnectionSurvivesTokenExpiry(t *testing.T) {
 			dbConf.Password = token.Load().(string)
 			return nil
 		},
+		// Every token counts as aged, as it would be after authTokenMaxAge.
+		authTokenMaxAge: time.Nanosecond,
 	})
 	require.NoError(t, err)
 	defer db.Close()

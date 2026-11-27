@@ -95,8 +95,9 @@ func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *pgco
 		}
 	}
 
-	// tokenBuilder will be called upon component connection to refresh token/password and reconnect.
-	// Tokens last ~15 minutes and will only need refreshing after a connection is lost.
+	// tokenBuilder is called on component connection, and again when a pool
+	// opens a new connection after the previous token has aged. Tokens last
+	// about 15 minutes.
 	tokenBuilder := func(ctx context.Context) error {
 		// reassign to avoid mutating original config
 		cfg := awsCfg

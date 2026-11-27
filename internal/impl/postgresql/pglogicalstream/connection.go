@@ -15,7 +15,7 @@ import (
 	"maps"
 	"regexp"
 	"strconv"
-	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,34 +27,49 @@ import (
 
 var re = regexp.MustCompile(`^(\d+)`)
 
-// authTokenMu serialises every refresh of the auth token with the reads of
-// the password it writes. RefreshAuthToken stores the token in the shared
-// Config.DBConfig, and the pools open connections from their own goroutines.
-var authTokenMu sync.Mutex
+// authTokenMaxAge is how long a built auth token is reused for new
+// connections. An IAM auth token is accepted for 15 minutes after it is built,
+// and it is only checked when a connection authenticates, so reusing it for 10
+// minutes leaves a margin while building a new one rarely.
+const authTokenMaxAge = 10 * time.Minute
 
 // RefreshAuth generates a new auth token when the config has a short lived
 // one (IAM authentication) and stores it as the password of DBConfig. It does
 // nothing otherwise.
 func (c *Config) RefreshAuth(ctx context.Context) error {
-	authTokenMu.Lock()
-	defer authTokenMu.Unlock()
+	if c.RefreshAuthToken == nil {
+		return nil
+	}
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
 	return c.refreshAuthLocked(ctx)
 }
 
 func (c *Config) refreshAuthLocked(ctx context.Context) error {
-	if c.RefreshAuthToken == nil {
-		return nil
+	if err := c.RefreshAuthToken(ctx); err != nil {
+		return err
 	}
-	return c.RefreshAuthToken(ctx)
+	c.authTokenBuiltAt = time.Now()
+	return nil
 }
 
-// freshPassword returns the password to open a new connection with,
-// refreshing the auth token first when there is one.
+// freshPassword returns the password to open a new connection with. When the
+// config has an auth token, it builds a new one first if the current one is
+// older than authTokenMaxAge.
 func (c *Config) freshPassword(ctx context.Context) (string, error) {
-	authTokenMu.Lock()
-	defer authTokenMu.Unlock()
-	if err := c.refreshAuthLocked(ctx); err != nil {
-		return "", fmt.Errorf("refreshing auth token: %w", err)
+	if c.RefreshAuthToken == nil {
+		return c.DBConfig.Password, nil
+	}
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	maxAge := c.authTokenMaxAge
+	if maxAge == 0 {
+		maxAge = authTokenMaxAge
+	}
+	if c.authTokenBuiltAt.IsZero() || time.Since(c.authTokenBuiltAt) >= maxAge {
+		if err := c.refreshAuthLocked(ctx); err != nil {
+			return "", fmt.Errorf("refreshing auth token: %w", err)
+		}
 	}
 	return c.DBConfig.Password, nil
 }
@@ -62,8 +77,11 @@ func (c *Config) freshPassword(ctx context.Context) (string, error) {
 // dbConfigCopy returns a copy of DBConfig that is safe to connect with while
 // another goroutine refreshes the auth token.
 func (c *Config) dbConfigCopy() *pgconn.Config {
-	authTokenMu.Lock()
-	defer authTokenMu.Unlock()
+	if c.RefreshAuthToken == nil {
+		return c.DBConfig.Copy()
+	}
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
 	return c.DBConfig.Copy()
 }
 
