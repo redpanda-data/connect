@@ -64,20 +64,20 @@ content with a JSON object of the record's bins. Intended for enrichment, so it 
 wrapped in a ` + "xref:components:processors/branch.adoc[`branch`]" + ` processor which grafts
 the result back onto the original message.
 
-### One batch read, deduplicated
+== One batch read, deduplicated
 
 The whole batch is served by a single Aerospike batch command, and repeated keys within a
 batch are looked up once and fanned back out to every message that asked for them. A stream
 of events referencing a few hundred entities therefore costs a few hundred reads, not one
 per event.
 
-### Failure handling
+== Failure handling
 
 Each key's result code is applied to its own message via a message-level error, so a missing
 or rejected record does not fail the rest of the batch. Use the standard
 xref:configuration:error_handling.adoc[error handling] patterns to route them.
 
-### Selecting bins
+== Selecting bins
 
 Naming bins in ` + "`bins`" + ` reduces what crosses the network, but not what the server reads
 from storage — Aerospike stores a record contiguously and reads all of it regardless. Select
