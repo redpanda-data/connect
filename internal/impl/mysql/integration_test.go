@@ -926,9 +926,9 @@ func TestIntegrationMySQLCDCSnapshotZeroDates(t *testing.T) {
 			db.Exec(`CREATE TABLE fraction_keys (tenant INT, created_at DATETIME(6), PRIMARY KEY (tenant, created_at))`)
 			// The default SQL mode rejects zero and invalid dates.
 			// multiStatements keeps both statements on one connection.
-			// ts is NULL for valid dates, because the stream gives a
-			// TIMESTAMP in the local time zone of the process, which this
-			// test does not set.
+			// ts is NULL for valid dates.
+			// TestIntegrationMySQLCDCSnapshotTimeZones tests valid
+			// TIMESTAMP values.
 			db.Exec(`SET SESSION sql_mode = 'ALLOW_INVALID_DATES'; INSERT INTO zero_dates VALUES
         (1, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00'),
         (2, '2024-00-15', '2024-00-15 10:00:00', '2024-00-15 10:00:00'),
@@ -1045,6 +1045,97 @@ mysql_cdc:
 				checkOutput(c, append(slices.Clone(snapshot), streamed...))
 			}, 30*time.Second, 100*time.Millisecond)
 		})
+	}
+}
+
+// The snapshot and the stream must give the same value for the same stored
+// DATE, DATETIME or TIMESTAMP value when the loc DSN option and the server time
+// zone are not UTC. Otherwise the state of a target depends on the path that
+// delivered a row. TestMapMessageColumn tests a process time zone that is not
+// UTC. Both paths give a DATE or DATETIME
+// wall clock in UTC, and a TIMESTAMP instant in UTC.
+func TestIntegrationMySQLCDCSnapshotTimeZones(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`CREATE TABLE tz_values (id INT PRIMARY KEY, d DATE, dt DATETIME(6), ts TIMESTAMP(6) NULL)`)
+	// Write the TIMESTAMP values in UTC, then give new sessions, such as
+	// the ones of the snapshot, a time zone that is not UTC. multiStatements
+	// keeps both statements on one connection.
+	db.Exec(`SET SESSION time_zone = '+00:00'; INSERT INTO tz_values VALUES
+    (1, '2024-06-01', '2024-06-01 12:00:00.5', '2024-06-01 12:00:00.5'),
+    (2, '1965-03-04', '1965-03-04 10:00:00', '1999-12-31 23:30:00')`)
+	db.Exec(`SET GLOBAL time_zone = '+05:00'`)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.AddCacheYAML(`
+label: memcache
+memory: {}
+`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s&loc=Asia%%2FKolkata
+  stream_snapshot: true
+  checkpoint_cache: memcache
+  tables:
+    - tz_values
+`, dsn)))
+
+	rows := map[int64]map[string]any{}
+	var rowsMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(msgBytes, &row))
+			rowsMut.Lock()
+			rows[int64(row["id"].(float64))] = row
+			rowsMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	waitForRows := func(ids ...int64) {
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			rowsMut.Lock()
+			defer rowsMut.Unlock()
+			for _, id := range ids {
+				assert.Contains(c, rows, id)
+			}
+		}, 30*time.Second, 100*time.Millisecond)
+	}
+	waitForRows(1, 2)
+
+	// The input streams only after the snapshot ends. The copied rows have
+	// the same stored values, so the stream must give the same values as
+	// the snapshot.
+	db.Exec(`INSERT INTO tz_values SELECT id + 10, d, dt, ts FROM tz_values`)
+	waitForRows(11, 12)
+
+	want := map[int64][]string{
+		1: {"2024-06-01T00:00:00Z", "2024-06-01T12:00:00.5Z", "2024-06-01T12:00:00.5Z"},
+		2: {"1965-03-04T00:00:00Z", "1965-03-04T10:00:00Z", "1999-12-31T23:30:00Z"},
+	}
+	rowsMut.Lock()
+	defer rowsMut.Unlock()
+	for id, values := range want {
+		for _, rowID := range []int64{id, id + 10} {
+			for i, col := range []string{"d", "dt", "ts"} {
+				assert.Equal(t, values[i], rows[rowID][col], "row %d, column %s", rowID, col)
+			}
+		}
 	}
 }
 
