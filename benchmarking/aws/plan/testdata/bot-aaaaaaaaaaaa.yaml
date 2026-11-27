@@ -1,0 +1,74 @@
+name: bot-aaaaaaaaaaaa
+direction: e2e
+connector: postgres_cdc
+stack: postgres
+infra:
+    source:
+        instance_class: db.r6g.4xlarge
+        iops: 24000
+        parameters:
+            max_wal_senders: "20"
+            rds.logical_replication: "1"
+        storage_gb: 800
+        storage_throughput: 1000
+    runner:
+        instance_type: c8g.4xlarge
+    memory_per_vcpu_bytes: 4000000000
+dataset:
+    initial_rows: 0
+    row_size_bytes: 1000 # from the plan workload
+    tables:
+        - orders
+    seeder: cdc-rows-postgres
+workload:
+    write_rate_per_sec: 150000
+    duration: 15m
+    warmup: 2m
+pipeline:
+    input:
+        postgres_cdc:
+            batching:
+                count: 5000
+                period: 1s
+            dsn: ${POSTGRES_DSN}
+            schema: public
+            slot_name: bench_slot
+            stream_snapshot: false
+            tables:
+                - orders
+            tls:
+                skip_cert_verify: true
+    output:
+        snowflake_streaming:
+            account: ${BENCH_SNOWFLAKE_ACCOUNT}
+            database: ${BENCH_SNOWFLAKE_DATABASE}
+            private_key_file: ${BENCH_SNOWFLAKE_PRIVATE_KEY_FILE}
+            role: ${BENCH_SNOWFLAKE_ROLE}
+            schema: ${BENCH_SNOWFLAKE_SCHEMA}
+            schema_evolution:
+                enabled: true
+            table: ${BENCH_SNOWFLAKE_TABLE}
+            user: ${BENCH_SNOWFLAKE_USER}
+    pipeline:
+        processors:
+            - mapping: root = this
+sink:
+    kind: snowflake
+    size: XSMALL
+matrix:
+    cpu_points:
+        - 1
+        - 2
+        - 4
+        - 8
+reset:
+    - sql: SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'
+    - sql: TRUNCATE TABLE orders
+catalog:
+    fingerprint: fdd4e84ca016a8a753a882360fcd3f1432522e87f34331ebbc66a61a0c22189a
+    input: postgres_cdc
+    processors:
+        - mapping
+    output: snowflake_streaming
+    caveats: []
+    source_approximated: false

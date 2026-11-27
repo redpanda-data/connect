@@ -20,10 +20,12 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/glue"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
@@ -34,7 +36,9 @@ type awsCleanup struct {
 	rds  *rds.Client
 	s3   *s3.Client
 	iam  *iam.Client
+	glue *glue.Client
 	sns  *sns.Client
+	sm   *secretsmanager.Client
 }
 
 func newAWSCleanup(ctx context.Context) (*awsCleanup, error) {
@@ -48,7 +52,9 @@ func newAWSCleanup(ctx context.Context) (*awsCleanup, error) {
 		rds:  rds.NewFromConfig(cfg),
 		s3:   s3.NewFromConfig(cfg),
 		iam:  iam.NewFromConfig(cfg),
+		glue: glue.NewFromConfig(cfg),
 		sns:  sns.NewFromConfig(cfg),
+		sm:   secretsmanager.NewFromConfig(cfg),
 	}, nil
 }
 
@@ -188,6 +194,22 @@ func (a *awsCleanup) DeleteRole(ctx context.Context, in *iam.DeleteRoleInput) (*
 	return a.iam.DeleteRole(ctx, in)
 }
 
+func (a *awsCleanup) GetDatabases(ctx context.Context, in *glue.GetDatabasesInput, opts ...func(*glue.Options)) (*glue.GetDatabasesOutput, error) {
+	return a.glue.GetDatabases(ctx, in, opts...)
+}
+
+func (a *awsCleanup) GetTables(ctx context.Context, in *glue.GetTablesInput, opts ...func(*glue.Options)) (*glue.GetTablesOutput, error) {
+	return a.glue.GetTables(ctx, in, opts...)
+}
+
+func (a *awsCleanup) DeleteTable(ctx context.Context, in *glue.DeleteTableInput, opts ...func(*glue.Options)) (*glue.DeleteTableOutput, error) {
+	return a.glue.DeleteTable(ctx, in, opts...)
+}
+
+func (a *awsCleanup) DeleteDatabase(ctx context.Context, in *glue.DeleteDatabaseInput, opts ...func(*glue.Options)) (*glue.DeleteDatabaseOutput, error) {
+	return a.glue.DeleteDatabase(ctx, in, opts...)
+}
+
 func (a *awsCleanup) Publish(ctx context.Context, in *sns.PublishInput) (*sns.PublishOutput, error) {
 	return a.sns.Publish(ctx, in)
 }
@@ -222,8 +244,20 @@ func handleRequest(ctx context.Context, _ struct{}) (SweepReport, error) {
 	if err != nil {
 		return SweepReport{}, err
 	}
+	// BENCH_SNOWFLAKE_SECRET_ARN names the bench Snowflake credentials
+	// secret (persistent/cleanup.tf). Unset skips the Snowflake sweep.
+	var sf snowflakeOpener
+	if arn := os.Getenv("BENCH_SNOWFLAKE_SECRET_ARN"); arn != "" {
+		sf = newSnowflakeOpener(api.sm, arn, connectGoSnowflake)
+	}
+	// BENCH_BIGQUERY_SECRET_ARN names the bench BigQuery credentials secret.
+	// Unset skips the BigQuery sweep.
+	var bq bigQueryOpener
+	if arn := os.Getenv("BENCH_BIGQUERY_SECRET_ARN"); arn != "" {
+		bq = newBigQueryOpener(api.sm, arn, connectGoBigQuery)
+	}
 	slog.Info("starting sweep", "ttl", ttl)
-	return Sweep(ctx, api, time.Now(), ttl, topicARN)
+	return Sweep(ctx, api, time.Now(), ttl, topicARN, sf, bq)
 }
 
 func main() {

@@ -44,7 +44,8 @@ jobs:
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/soak')
     runs-on: ubuntu-latest
-    timeout-minutes: 210
+    # Up to 2h waiting for the shared-stack lock + the A/B soak (~3h).
+    timeout-minutes: 330
     env:
       REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
     steps:
@@ -178,6 +179,30 @@ jobs:
       - name: Install Task
         uses: $/.github/actions/setup-task
 
+      - name: Build benchplan
+        working-directory: benchmarking/aws
+        run: go build -o "$RUNNER_TEMP/benchplan" ./cmd/benchplan
+
+      # Bot runs and soaks share one stack. The runner preflight alone leaves
+      # a window (a bot run holds the lock but its EC2 does not exist yet)
+      # in which a soak's preflight would pass, so soaks take the same lock.
+      # It waits for the stack to be empty; exit 3 means it stayed busy 2h.
+      - name: Acquire the shared-stack lock
+        id: lock
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          "$RUNNER_TEMP/benchplan" lock acquire --store s3://redpanda-connect-bench-catalog --holder "soak-$RUN_ID" --ttl 4h --wait 2h --poll 2m
+
+      # The lock wait can use up to 2h of the 4h provisioner session.
+      - name: Refresh AWS credentials
+        id: reauth
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
       - name: Run A/B soak
         working-directory: benchmarking/aws
         shell: bash
@@ -191,6 +216,15 @@ jobs:
           task aws:bench scenario="$SCENARIO" \
             extra_flags="--binary base=$RUNNER_TEMP/rc-base --binary pr=$RUNNER_TEMP/rc-pr" \
             2>&1 | tee "$RUNNER_TEMP/soak-pr.log"
+
+      # A no-op unless this run holds the lock.
+      - name: Release the shared-stack lock
+        id: release
+        if: always() && steps.lock.outcome != 'skipped'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          "$RUNNER_TEMP/benchplan" lock release --store s3://redpanda-connect-bench-catalog --holder "soak-$RUN_ID"
 
       - name: Compose comparison comment
         # Gated on the permission check AND the head pin: a bare always()

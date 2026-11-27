@@ -1,0 +1,64 @@
+name: bot-cccccccccccc
+direction: e2e
+connector: mysql_cdc
+stack: mysql
+infra:
+    source:
+        instance_class: db.r6g.xlarge
+        iops: 12000
+        parameters:
+            binlog_checksum: NONE
+            binlog_format: ROW
+            binlog_row_image: FULL
+        storage_gb: 400
+        storage_throughput: 500
+    runner:
+        instance_type: c8g.4xlarge
+    memory_per_vcpu_bytes: 4000000000
+dataset:
+    initial_rows: 0
+    row_size_bytes: 1000 # from the plan workload
+    tables:
+        - orders
+    seeder: cdc-rows-mysql
+workload:
+    write_rate_per_sec: 150000 # starting value, copied from the postgres bench; not tuned for mysql
+    duration: 15m
+    warmup: 2m
+pipeline:
+    cache_resources:
+        - label: bench_cache
+          memory: {}
+    input:
+        mysql_cdc:
+            checkpoint_cache: bench_cache
+            checkpoint_key: mysql_bench
+            checkpoint_limit: 10000
+            dsn: ${MYSQL_DSN}
+            tables:
+                - orders
+            tls:
+                skip_cert_verify: true
+    output:
+        kafka_franz:
+            seed_brokers:
+                - ${BENCH_REDPANDA_BROKERS}
+            topic: ${BENCH_DST_TOPIC}
+sink:
+    kind: redpanda
+matrix:
+    cpu_points:
+        - 1
+        - 2
+        - 4
+        - 8
+reset:
+    - sql: CALL mysql.rds_set_configuration('binlog retention hours', 24)
+    - sql: TRUNCATE TABLE orders
+catalog:
+    fingerprint: 75331b1d127f93d831491844ecf3af505c3e40c4d6c9366835dc24579ee69c5e
+    input: mysql_cdc
+    processors: []
+    output: kafka_franz
+    caveats: []
+    source_approximated: false

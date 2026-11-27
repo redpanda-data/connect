@@ -14,7 +14,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,9 +37,11 @@ var soakEmitGrace = 30 * time.Second
 
 // MatrixRunner orchestrates the CPU sweep against the runner EC2.
 type MatrixRunner struct {
-	SSM             SSMExecutor
-	LogFetcher      LogFetcher
-	RunnerInstance  string
+	SSM            SSMExecutor
+	LogFetcher     LogFetcher
+	RunnerInstance string
+	// LoadGenInstance runs the workload script: the load-gen host, or the
+	// runner host for stack none (see workloadInstance).
 	LoadGenInstance string
 	ConfigPath      string // path on the runner host to benchmark_config.yaml
 	// ConfigPaths maps sweepPoint.Key() to that point's launch config paths on
@@ -46,8 +50,11 @@ type MatrixRunner struct {
 	// /opt/bench/config.yaml staging path.
 	ConfigPaths map[string]pointConfigPaths
 	BinaryPath  string // path on the runner host to redpanda-connect
-	Bucket      string // S3 bucket where per-point Connect logs are uploaded
-	SessionID   string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
+	// MemoryPerVCPUBytes, when > 0, caps each point's Connect process at this
+	// many bytes per vCPU via a systemd scope. Zero leaves memory uncapped.
+	MemoryPerVCPUBytes int64
+	Bucket             string // S3 bucket where per-point Connect logs are uploaded
+	SessionID          string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
 	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
 	// per-point scraper curls every 10s. Empty disables the scraper, so callers
 	// without a Redpanda cluster (e.g. an early-stack bring-up) won't fail.
@@ -91,6 +98,11 @@ type MatrixRunner struct {
 	// point's broker-side series, tracking whether the engine is keeping
 	// pace with the source over the run. 0 disables backlog computation.
 	ExpectedRecordsPerSec float64
+	// SourceProbe, when non-nil, makes each point's bench script describe
+	// the stack-none source topic and the point's consumer group at the
+	// start and end of the window (see sourceprobe.go). Group is filled per
+	// point from Names.ConsumerGroup.
+	SourceProbe *SourceProbeArgs
 	// Emitter, when non-nil, makes Run publish per-minute CloudWatch metrics
 	// for a soak point: a mid-run goroutine re-fetches the checkpointed log
 	// and Prometheus/broker artifacts every CheckpointSec (see
@@ -98,6 +110,26 @@ type MatrixRunner struct {
 	// emit covers whatever tail minutes the loop never got to. nil is the
 	// sweep default — a short sweep point has no need for a live dashboard.
 	Emitter MetricsEmitter
+	// Sink, when non-nil (e2e only), is counted immediately before and after
+	// each point; the delta is checked against the point's output samples
+	// (see sinkCountAnomaly). A sink that cannot count is skipped.
+	Sink Sink
+	// HostSetup is a sink's bench-script prologue (see hostSetupFor),
+	// run before Connect launches at every point. Empty for most sinks.
+	HostSetup string
+	// HostEnv is extra environment for the Connect process (see hostEnvFor).
+	HostEnv map[string]string
+	// E2E marks an e2e sweep: every point is checked for zero samples, for
+	// output errors and for output_sent against the output samples (see
+	// e2ePointAnomalies), and the Connect log never reaches stdout, which
+	// for a Bench Bot run is a public CI log.
+	E2E bool
+	// SinkDrop is true for an e2e drop sink, which has nothing to verify.
+	SinkDrop bool
+	// WorkloadRatePerSec, when > 0 (e2e on a CDC stack), is the workload's
+	// offered rate: a point whose median reaches 95% of it is flagged
+	// workload_bound.
+	WorkloadRatePerSec float64
 }
 
 // pointConfigPaths locates one sweep point's launch config(s) on the runner
@@ -139,6 +171,13 @@ type SweepPoint struct {
 	// finding the ceiling, not tracking whether a fixed source rate is
 	// being kept up with).
 	Backlog []BacklogPoint
+
+	// ProducerRateMsgPerSec and ConsumerLagEnd are a stack-none point's
+	// source-side evidence (see sourceprobe.go): the producer's achieved
+	// rate over the window and the point's consumer group lag at its end.
+	// Zero and nil for every other scenario.
+	ProducerRateMsgPerSec float64
+	ConsumerLagEnd        *int64
 }
 
 // Run executes the full sweep. resetScript runs on the runner host between
@@ -186,6 +225,26 @@ func (m *MatrixRunner) Run(
 			}
 		}
 
+		// Count the sink as close to the point's start as possible: after
+		// the reset, before the workload or Connect launch.
+		var sinkBefore int64
+		sinkCounted := false
+		if m.Sink != nil {
+			c, err := m.Sink.Count(ctx, key)
+			switch {
+			case errors.Is(err, ErrCountUnsupported):
+			case err != nil:
+				return nil, fmt.Errorf("count sink before %d vCPU: %w", n, err)
+			default:
+				sinkBefore, sinkCounted = c, true
+			}
+		}
+		if m.Sink != nil {
+			if err := beforePoint(ctx, m.Sink, key); err != nil {
+				return nil, fmt.Errorf("sink before %d vCPU: %w", n, err)
+			}
+		}
+
 		// benchCtx is separate from workloadCtx: the workload goroutine
 		// below cancels benchCtx (not the other way around) the moment
 		// the workload script itself fails, so a crashed load generator
@@ -228,12 +287,19 @@ func (m *MatrixRunner) Run(
 		}
 
 		cfg := m.configPathsFor(key)
+		var probe *SourceProbeArgs
+		if m.SourceProbe != nil {
+			p := *m.SourceProbe
+			p.Group = m.Names.ConsumerGroup(key)
+			probe = &p
+		}
 		script := renderBenchScript(benchScriptArgs{
 			VCPU:                     n,
 			GOMAXPROCS:               pt.GOMAXPROCS,
 			Streams:                  pt.Streams,
 			Key:                      key,
 			MemLimitGiB:              memLimitPerVCPU * n,
+			MemoryMaxBytes:           m.MemoryPerVCPUBytes * int64(n),
 			WarmupSec:                int(warmup.Seconds()),
 			DurationSec:              int(duration.Seconds()),
 			ConfigPath:               cfg.Single,
@@ -249,6 +315,9 @@ func (m *MatrixRunner) Run(
 			HeartbeatSec:             m.HeartbeatSec,
 			PromScrapeSec:            m.PromScrapeSec,
 			CheckpointSec:            m.CheckpointSec,
+			SourceProbe:              probe,
+			HostSetup:                m.HostSetup,
+			HostEnv:                  m.HostEnv,
 		})
 
 		// pointStart is this point's wall-clock launch — the base every
@@ -267,7 +336,15 @@ func (m *MatrixRunner) Run(
 		// per-minute heartbeat (well under the ~24KB SSM content cap), so
 		// streaming every line is safe. Run against benchCtx, not ctx
 		// directly, so the workload goroutine above can cut this short.
-		if err := m.SSM.Run(benchCtx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
+		var probeLines []string
+		benchOut := streamingOnLine(stdout, "bench")
+		onBenchLine := func(line string) {
+			if strings.HasPrefix(line, sourceProbePrefix) {
+				probeLines = append(probeLines, line)
+			}
+			benchOut(line)
+		}
+		if err := m.SSM.Run(benchCtx, m.RunnerInstance, script, onBenchLine); err != nil {
 			stopEmit()
 			cancelWorkload()
 			cancelBench()
@@ -299,6 +376,14 @@ func (m *MatrixRunner) Run(
 			// rolling soak baseline.
 			return nil, fmt.Errorf("workload script failed during bench at %d vCPU: %w", n, werr)
 		}
+		var sinkWritten int64
+		if sinkCounted {
+			c, err := m.Sink.Count(ctx, key)
+			if err != nil {
+				return nil, fmt.Errorf("count sink after %d vCPU: %w", n, err)
+			}
+			sinkWritten = c - sinkBefore
+		}
 
 		raw, err := m.fetchLog(ctx, key)
 		if err != nil {
@@ -306,11 +391,17 @@ func (m *MatrixRunner) Run(
 		}
 		rawLog := raw
 		samples := parseAndTrim(raw, warmup)
-		promPts := m.fetchProm(ctx, key)
+		promPts, promRaw := m.fetchProm(ctx, key)
 
 		// Broker-side: the bench script scrapes /public_metrics during its
 		// window and uploads it to this point's artifact.
-		brokerSeries := m.fetchBrokerSeries(ctx, key)
+		// An e2e topology measures at the output from the Connect log, so
+		// there is no broker series to fetch.
+		fromSamples := m.Topology != nil && m.Topology.SummaryFromSamples()
+		var brokerSeries []TopicPoint
+		if !fromSamples {
+			brokerSeries = m.fetchBrokerSeries(ctx, key)
+		}
 
 		// A soak (ExpectedRecordsPerSec > 0) must never record an
 		// unmeasured point as a measured zero: Summary below is
@@ -326,7 +417,7 @@ func (m *MatrixRunner) Run(
 		// the non-fatal behavior: they archive nothing persistent, and a
 		// missing artifact only degrades the report.
 		if m.ExpectedRecordsPerSec > 0 {
-			if len(brokerSeries) == 0 {
+			if !fromSamples && len(brokerSeries) == 0 {
 				return nil, fmt.Errorf("soak point at %d vCPU: broker metrics artifact missing or empty — refusing to record an unmeasured point as median 0.00 MB/s", n)
 			}
 			if len(promPts) == 0 {
@@ -343,7 +434,12 @@ func (m *MatrixRunner) Run(
 		// Connect's log is NOT discarded: Samples below still carries every
 		// rolling-stats line, so the log-derived view can be recomputed
 		// from any result file.
-		summary := SummariseTopicPoints(brokerSeries)
+		var summary Summary
+		if fromSamples {
+			summary = Summarise(samples)
+		} else {
+			summary = SummariseTopicPoints(brokerSeries)
+		}
 
 		// Anomaly detection deliberately keeps using the LOG-derived median.
 		// It judges the Connect log's internal consistency — how far
@@ -355,7 +451,55 @@ func (m *MatrixRunner) Run(
 		// T=0 is point launch (see offsetSampleT) — without it the prom
 		// annotations describe a moment warmup seconds before the anomaly.
 		anomalies := DetectAnomaliesWithProm(samples, logMedian, promPts, int(warmup.Seconds()))
-		backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+		// Stack none: judge the producer from the source side (sourceprobe.go).
+		var producerRate float64
+		var lagEnd *int64
+		var probeFail bool
+		if probe != nil {
+			sm, err := parseSourceProbe(probeLines, probe.Topic)
+			if err != nil {
+				return nil, fmt.Errorf("source probe at %d vCPU: %w", n, err)
+			}
+			producerRate = sm.ProducerRate()
+			lag := sm.LagEnd
+			lagEnd = &lag
+			var extra []Anomaly
+			extra, probeFail = sourceAnomalies(sm)
+			anomalies = append(anomalies, extra...)
+		}
+		// Ground truth: the sink delta spans the whole point, so it is
+		// compared with every sample, warmup included, not the trimmed set.
+		var sinkFail bool
+		if sinkCounted {
+			all, _ := ParseRollingStatsStream(bytes.NewReader(raw))
+			var a Anomaly
+			if a, sinkFail = sinkCountAnomaly(sinkWritten, all, summary.MedianMsgPerSec); sinkFail {
+				anomalies = append(anomalies, a)
+			}
+		}
+		var e2eFail bool
+		if m.E2E {
+			var extra []Anomaly
+			extra, e2eFail = e2ePointAnomalies(e2ePoint{
+				Samples:            len(samples),
+				Counters:           parseOutputCounters(promRaw),
+				SinkCounted:        sinkCounted,
+				SinkDrop:           m.SinkDrop,
+				MedianMsgPerSec:    summary.MedianMsgPerSec,
+				WorkloadRatePerSec: m.WorkloadRatePerSec,
+			})
+			anomalies = append(anomalies, extra...)
+		}
+		// Every topology: a Connect gone before the window ended (the bench
+		// script's marker in its log) measured only part of the window.
+		exitAnomaly, exitFail := connectExitedAnomaly(raw)
+		if exitFail {
+			anomalies = append(anomalies, exitAnomaly)
+		}
+		var backlog []BacklogPoint
+		if !fromSamples {
+			backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+		}
 
 		// Final emit: whatever tail minutes the mid-run loop above never
 		// got to (it may never have ticked at all, e.g. a point shorter
@@ -378,7 +522,16 @@ func (m *MatrixRunner) Run(
 			Prom:         promPts,
 			BrokerSeries: brokerSeries,
 			Backlog:      backlog,
+
+			ProducerRateMsgPerSec: producerRate,
+			ConsumerLagEnd:        lagEnd,
 		})
+		if probeFail {
+			return out, fmt.Errorf("%w: %s at %d vCPU: the source topic gained no records during the window", errPointFailed, anomalyProducerUnreachable, n)
+		}
+		if sinkFail || e2eFail || exitFail {
+			return out, fmt.Errorf("%w: point at %d vCPU: %s", errPointFailed, n, failNotes(anomalies))
+		}
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
 
@@ -396,7 +549,10 @@ func (m *MatrixRunner) Run(
 		// the first point unconditionally (pre-arms behaviour), AND
 		// check every point that carries an arm, regardless of position
 		// in the plan.
-		if pt.Key() == plan[0].Key() || pt.ArmID != "" {
+		// An e2e point never gets here with zero samples (no_samples fails
+		// it above), so its Connect log, which may quote the customer's
+		// pipeline, never reaches stdout.
+		if !m.E2E && (pt.Key() == plan[0].Key() || pt.ArmID != "") {
 			if len(samples) == 0 {
 				const tailMax = 4 * 1024
 				tail := rawLog
@@ -420,6 +576,24 @@ func (m *MatrixRunner) Run(
 		}
 	}
 	return out, nil
+}
+
+// failNotes joins the notes of a point's failing anomalies.
+// errPointFailed wraps a Run error for a point that was measured and then
+// failed a check (connect_exited, sink errors, ...). That point is the last
+// one Run returns, so a caller can still report it: a soak writes and
+// archives its result before failing (see soakFailedPoint).
+var errPointFailed = errors.New("sweep point failed")
+
+func failNotes(anomalies []Anomaly) string {
+	var notes []string
+	for _, a := range anomalies {
+		switch a.Kind {
+		case anomalySinkCountMismatch, anomalyNoSamples, anomalySinkErrors, anomalySinkSendMismatch, anomalyConnectExited:
+			notes = append(notes, a.Note)
+		}
+	}
+	return strings.Join(notes, "; ")
 }
 
 // configPathsFor returns the launch config paths for a point key, falling back
@@ -461,23 +635,29 @@ func (m *MatrixRunner) fetchLog(ctx context.Context, key string) ([]byte, error)
 // fetchProm downloads the per-point Prometheus dump uploaded by the bench
 // script. Failure is non-fatal — the sweep point is still useful without
 // goroutine/heap context.
-func (m *MatrixRunner) fetchProm(ctx context.Context, key string) []PromPoint {
+// It also returns the raw dump, for the e2e output counters.
+func (m *MatrixRunner) fetchProm(ctx context.Context, key string) ([]PromPoint, []byte) {
 	if m.LogFetcher == nil {
-		return nil
+		return nil, nil
 	}
 	s3Key := fmt.Sprintf("runs/%s/prom-%s.txt", m.SessionID, key)
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, s3Key)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] fetch prom (non-fatal): %v\n", err)
-		return nil
+		return nil, nil
 	}
 	defer body.Close()
-	pts, err := ParsePromStream(body)
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] read prom (non-fatal): %v\n", err)
+		return nil, nil
+	}
+	pts, err := ParsePromStream(bytes.NewReader(raw))
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] parse prom (non-fatal): %v\n", err)
-		return nil
+		return nil, raw
 	}
-	return pts
+	return pts, raw
 }
 
 // fetchBrokerSeries downloads this point's broker metrics dump and returns
@@ -635,9 +815,13 @@ func (m *MatrixRunner) emitSoakCycle(ctx context.Context, key string, pointStart
 	} else {
 		samples = parseAndTrim(raw, warmup)
 	}
-	promPts := m.fetchProm(ctx, key)
-	brokerSeries := m.fetchBrokerSeries(ctx, key)
-	backlog := ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+	promPts, _ := m.fetchProm(ctx, key)
+	var brokerSeries []TopicPoint
+	var backlog []BacklogPoint
+	if m.Topology == nil || !m.Topology.SummaryFromSamples() {
+		brokerSeries = m.fetchBrokerSeries(ctx, key)
+		backlog = ComputeBacklog(brokerSeries, m.ExpectedRecordsPerSec)
+	}
 	m.emitAggregated(ctx, samples, promPts, brokerSeries, backlog, pointStart, warmup, hw)
 }
 
@@ -669,12 +853,15 @@ func (m *MatrixRunner) emitAggregated(ctx context.Context, samples []Sample, pro
 type benchScriptArgs struct {
 	VCPU        int
 	MemLimitGiB int
-	WarmupSec   int
-	DurationSec int
-	ConfigPath  string
-	BinaryPath  string
-	Bucket      string
-	SessionID   string
+	// MemoryMaxBytes, when > 0, wraps the launch in a systemd scope with a
+	// hard MemoryMax and no swap. Zero renders the historical script.
+	MemoryMaxBytes int64
+	WarmupSec      int
+	DurationSec    int
+	ConfigPath     string
+	BinaryPath     string
+	Bucket         string
+	SessionID      string
 	// RedpandaMetricsEndpoint is the legacy single-broker scrape target.
 	//
 	// Deprecated: prefer RedpandaMetricsEndpoints. Kept for back-compat with
@@ -715,6 +902,15 @@ type benchScriptArgs struct {
 	// rendered at all, keeping the script byte-identical to before this
 	// field existed.
 	CheckpointSec int
+	// SourceProbe, when non-nil, splits the window sleep around the source
+	// probe: warmup, start probe, duration, end probe, then SIGTERM. Nil
+	// keeps the single warmup+duration sleep.
+	SourceProbe *SourceProbeArgs
+	// HostSetup, when set, runs right after set -euo pipefail, before
+	// anything else (see MatrixRunner.HostSetup).
+	HostSetup string
+	// HostEnv adds K=V pairs to the launch line's env, sorted by key.
+	HostEnv map[string]string
 }
 
 // artifactKey names this point's log and metric files: the bare vCPU count for
@@ -765,6 +961,15 @@ func (a benchScriptArgs) promScrapeSec() int {
 
 // launchCmd is the engine invocation: streams mode when the point runs more
 // than one pipeline in the process, single-config run mode otherwise.
+// hostEnvPairs is HostEnv as " K=V" pairs in key order, or "" when unset.
+func (a benchScriptArgs) hostEnvPairs() string {
+	var b strings.Builder
+	for _, k := range slices.Sorted(maps.Keys(a.HostEnv)) {
+		fmt.Fprintf(&b, " %s=%s", k, a.HostEnv[k])
+	}
+	return b.String()
+}
+
 func (a benchScriptArgs) launchCmd() string {
 	if a.Streams > 1 {
 		return fmt.Sprintf("%s streams -o %s %s", a.BinaryPath, a.RootConfigPath, a.StreamsDir)
@@ -787,8 +992,11 @@ func renderBenchScript(a benchScriptArgs) string {
 	totalSec := a.WarmupSec + a.DurationSec
 	logKey := fmt.Sprintf("s3://%s/runs/%s/sweep-%s.log", a.Bucket, a.SessionID, key)
 	promKey := fmt.Sprintf("s3://%s/runs/%s/prom-%s.txt", a.Bucket, a.SessionID, key)
-	lines := []string{
-		`set -euo pipefail`,
+	lines := []string{`set -euo pipefail`}
+	if a.HostSetup != "" {
+		lines = append(lines, a.HostSetup)
+	}
+	lines = append(lines,
 		fmt.Sprintf(`echo "starting bench: %d vCPU, GOMAXPROCS %d, %d streams, %d GiB, warmup %ds, window %ds"`,
 			a.VCPU, a.gomaxprocs(), max(a.Streams, 1), a.MemLimitGiB, a.WarmupSec, a.DurationSec),
 		fmt.Sprintf(`LOG=/tmp/bench-%s.log`, key),
@@ -803,8 +1011,8 @@ func renderBenchScript(a benchScriptArgs) string {
 		// The core pin follows VCPU while GOMAXPROCS is independent: an arm can
 		// oversubscribe the runtime on a fixed core allocation. GOMEMLIMIT is
 		// vCPU-derived by the caller, so it is constant across an A/B's arms.
-		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s >"$LOG" 2>&1 &`,
-			cpusetHi, a.gomaxprocs(), a.MemLimitGiB, a.launchCmd()),
+		fmt.Sprintf(`%staskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%s REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt%s %s >"$LOG" 2>&1 &`,
+			a.memoryScopePrefix(), cpusetHi, a.gomaxprocs(), a.goMemLimit(), a.hostEnvPairs(), a.launchCmd()),
 		`PID=$!`,
 		// Heartbeat: every heartbeatSec(), echo the latest rolling-stats line
 		// so the operator can see throughput live. At the sweep default
@@ -841,7 +1049,7 @@ func renderBenchScript(a benchScriptArgs) string {
   done
 ) &`, a.promScrapeSec()),
 		`PROM_SCRAPER=$!`,
-	}
+	)
 	// Checkpoint: for a long soak run, the end-of-script upload alone means a
 	// crash anywhere before the final `aws s3 cp` loses the ENTIRE window's
 	// data. When CheckpointSec > 0, periodically re-upload $LOG and $PROM to
@@ -867,10 +1075,32 @@ func renderBenchScript(a benchScriptArgs) string {
 	if a.ScrapeSetup != "" {
 		lines = append(lines, a.ScrapeSetup)
 	}
+	if a.SourceProbe != nil {
+		// The end probe runs before SIGTERM, so the group lag is read while
+		// Connect is still consuming.
+		lines = append(lines,
+			fmt.Sprintf(`sleep %d`, a.WarmupSec),
+			renderSourceProbe(*a.SourceProbe, "start"),
+			fmt.Sprintf(`sleep %d`, a.DurationSec),
+			renderSourceProbe(*a.SourceProbe, "end"),
+		)
+	} else {
+		lines = append(lines, fmt.Sprintf(`sleep %d`, totalSec))
+	}
+	// Connect gone before the SIGTERM means it died mid-window (most often
+	// a kernel OOM kill under MemoryMax): the samples cover only part of
+	// the window, so the marker in $LOG makes the runner fail the point
+	// (see connectExitedAnomaly) rather than catalogue a partial median.
 	lines = append(lines,
-		fmt.Sprintf(`sleep %d`, totalSec),
-		`kill -TERM "$PID" 2>/dev/null || true`,
-		`wait "$PID" 2>/dev/null || true`,
+		`if kill -0 "$PID" 2>/dev/null; then`,
+		`  kill -TERM "$PID" 2>/dev/null || true`,
+		`  wait "$PID" 2>/dev/null || true`,
+		`else`,
+		`  EXIT_CODE=0`,
+		`  wait "$PID" 2>/dev/null || EXIT_CODE=$?`,
+		`  echo "`+connectExitedMarker+` exit=$EXIT_CODE" >> "$LOG"`,
+		`  echo "connect exited before the end of the window (exit $EXIT_CODE)"`,
+		`fi`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
 	)
@@ -890,4 +1120,23 @@ func renderBenchScript(a benchScriptArgs) string {
 	}
 	lines = append(lines, `echo "log uploaded"`)
 	return strings.Join(lines, "\n")
+}
+
+// memoryScopePrefix returns the systemd-run wrapper that enforces
+// MemoryMaxBytes, or "" when no cap is configured.
+func (a benchScriptArgs) memoryScopePrefix() string {
+	if a.MemoryMaxBytes <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("systemd-run --scope --quiet -p MemoryMax=%d -p MemorySwapMax=0 ", a.MemoryMaxBytes)
+}
+
+// goMemLimit is the GOMEMLIMIT value. Under a hard cap it is 90% of
+// MemoryMaxBytes in plain bytes, so the GC works to stay under the cgroup
+// limit; otherwise the historical vCPU-derived GiB value.
+func (a benchScriptArgs) goMemLimit() string {
+	if a.MemoryMaxBytes > 0 {
+		return strconv.FormatInt(a.MemoryMaxBytes/10*9, 10)
+	}
+	return fmt.Sprintf("%dGiB", a.MemLimitGiB)
 }

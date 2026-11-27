@@ -85,6 +85,182 @@ lifecycle with what it guards. A legitimate >4h run needs the rule disabled
 first (`aws events disable-rule --name redpanda-connect-bench-orphan-cleanup`),
 and re-enabled after.
 
+## End-to-end sinks: Iceberg
+
+An e2e run with an Iceberg sink writes through the Glue Iceberg REST catalog
+into a scratch Glue database, `bench_<session>`, with table data under
+`iceberg/<session>/` in the session results bucket. The runner deletes the
+database (tables first) at teardown, even when the sweep fails.
+
+- The reaper deletes any `bench_*` Glue database older than
+  `orphan_ttl_hours` (4 h). E2E iceberg runs of about 2 h fit inside that;
+  a longer custom run needs the reaper rule disabled, as for soaks (see
+  Orphan cleanup).
+- The orchestrator creates and deletes the Glue database with its own
+  credentials: the GHA provisioner role (AdministratorAccess) or admin laptop
+  credentials. The runner host role gets only `bench_*`-scoped Glue grants.
+- If the account's Glue Data Catalog is governed by Lake Formation, the runner
+  host role also needs Lake Formation grants on `bench_*`. The operator must
+  check this on the first run in an account.
+
+## End-to-end sinks: Snowflake
+
+An e2e run with a Snowflake sink writes to a scratch schema,
+`BENCH_<SESSION>`, in the bench Snowflake account. The runner resizes the
+bench warehouse to the scenario's `sink.size` (default `XSMALL`) for the run.
+At teardown, even when the sweep fails, it drops the schema with `CASCADE` and
+sets the warehouse back to `XSMALL`.
+
+Bench Bot plans pin the warehouse at `XSMALL` for both `snowflake_streaming`
+and `snowflake_put`, and never offer a size: neither path runs `COPY` on the
+warehouse in this harness (Snowpipe Streaming is serverless, and
+`snowflake_put` only stages files), so the size does not change the
+measurement. The catalogue entry records the size in `infra.sink_size`.
+
+- Credentials are in the Secrets Manager secret
+  `redpanda-connect-bench/snowflake`, as JSON
+  `{account, user, private_key, database, warehouse, role}`. The operator
+  creates it by hand; Terraform does not. Until it exists, the reaper skips its
+  Snowflake sweep.
+- The orchestrator reads the secret with its own credentials for its SQL
+  (provision, count, teardown). Connect gets the key on the runner host only.
+  Each point's bench script fetches the secret, writes `private_key` to
+  `/opt/bench/secrets/snowflake_key.p8` (mode 0600), and removes the file on
+  exit. The output reads the file with `private_key_file`. The key is never in
+  a placeholder, a rendered config, an SSM command or a log line.
+- The runner host role can read the secret only during a run that needs it.
+  Its grant exists only when the shared stack is applied with
+  `sink_secrets_enabled=true`, and the runner sets that only for e2e
+  scenarios with a Snowflake sink. Soaks, which may run PR binaries, never
+  get it. E2E scenarios refuse `--binary` mappings: bot runs build from the
+  checkout only.
+- The output creates its table, `BENCH_<SESSION>.T`, through schema
+  evolution. The plan forces `schema_evolution.enabled: true` and keeps the
+  customer's other `schema_evolution` settings. When the customer had it off
+  or unset, the plan carries the caveat `schema_evolution_forced`. Until the
+  first write the table does not exist, so it counts as 0. A missing table
+  after rows have been counted fails the run.
+- The count check reads `SELECT COUNT(*)` before and after each point. Snowpipe
+  Streaming rows become visible with a delay, so each count is re-read every
+  10 s until two reads agree, for at most 90 s. `snowflake_put` loads no rows
+  (the customer's Snowpipe is not kept), so its count check is skipped.
+- The reaper drops any `BENCH_*` schema whose `created_on` is older than
+  `orphan_ttl_hours` (4 h). Do not create `BENCH_*` schemas by hand in the
+  bench database: the reaper drops them.
+- When no `BENCH_*` schema younger than the TTL remains, the reaper also sets
+  the warehouse back to `XSMALL`, in case a crashed run left it resized. A
+  live run re-applies its size immediately before each point, so this reset
+  cannot make a point run at the wrong size.
+- The bench warehouse must have `AUTO_SUSPEND` set (for example 60 s), so a
+  warehouse that a crashed run left oversized bills for at most that long
+  after its last query, not until the reaper runs.
+- **Single lane until part 3.** Concurrent runs share the one bench warehouse,
+  so one run's resize (and its teardown reset to `XSMALL`) changes the other's
+  reference size. Run one Snowflake e2e scenario at a time.
+
+## End-to-end sinks: BigQuery
+
+An e2e run with a BigQuery sink writes to a scratch dataset,
+`bench_<session>`, in the bench GCP project. At teardown, even when the sweep
+fails, it deletes the dataset with its contents (already gone counts as done).
+
+- Credentials are in the Secrets Manager secret
+  `redpanda-connect-bench/bigquery`, as JSON
+  `{project, credentials_json, location}`. `credentials_json` is a
+  service-account key JSON string; `location` is optional and defaults to
+  `US`. The operator creates the secret by hand; Terraform does not. Until it
+  exists, the reaper skips its BigQuery sweep.
+- The service account needs BigQuery Data Editor and BigQuery Job User on the
+  bench project only. Do not create `bench_*` datasets by hand there: the
+  reaper deletes any `bench_*` dataset older than `orphan_ttl_hours` (4 h).
+- The orchestrator reads the secret with its own credentials for its API calls
+  (create, count, delete). Connect gets the key on the runner host only. Each
+  point's bench script fetches the secret, writes `credentials_json` to
+  `/opt/bench/secrets/bigquery.json` (mode 0600), and removes the file on exit.
+  `gcp_bigquery` has no credentials-file field, so Connect is launched with
+  `GOOGLE_APPLICATION_CREDENTIALS=/opt/bench/secrets/bigquery.json` and uses
+  application-default credentials; the plan removes `credentials_json` from
+  the config. The key is never in a placeholder, a rendered config, an SSM
+  command or a log line.
+- The runner host role can read the secret only during a run that needs it,
+  under the same `sink_secrets_enabled` gate as the Snowflake secret.
+- The output creates its table, `t`. The plan forces
+  `create_disposition: CREATE_IF_NEEDED`; when the customer had `CREATE_NEVER`
+  the plan carries the caveat `schema_evolution_forced`. Until the first write
+  the table does not exist, so it counts as 0. A missing table after rows have
+  been counted fails the run.
+- The count check reads `SELECT COUNT(*)` before and after each point. Streamed
+  rows become visible with a delay, so each count is re-read every 10 s until
+  two reads agree, for at most 90 s.
+
+## Results catalogue
+
+Design: [Bench Bot](docs/bench-bot-design.md) (catalogue, sizing, connector coverage) and [Bench Bot part 2](docs/bench-bot-agent-design.md) (the Slack agent, end-to-end runs, grants).
+
+Every completed bench sweep writes one entry to the results catalogue in the
+`redpanda-connect-bench-catalog` bucket, at
+`catalog/v1/<input>/<entry_id>.json`. Only bench sweeps are catalogued: soak
+runs and arm and binary A/B runs are not, and the runner does not write
+entries for builds from a dirty working tree (`catalog import` cannot detect a
+dirty build, so check that before importing).
+Each entry records the connector identity, the workload, the Connect version
+and build SHA, and the measured capacity at each vCPU point. The sizing
+constants (headroom, CUs per vCPU, bytes per CU) live in
+`catalog/sizing.json`.
+
+The `catalog` CLI (`go run ./cmd/catalog`) reads and fills it. It prints JSON.
+
+```sh
+# find entries matching a workload (or pass --config <pipeline.yaml>)
+go run ./cmd/catalog query --repo ../.. --input postgres_cdc --output redpanda --message-size 1200
+
+# size CUs for a target throughput from one entry
+go run ./cmd/catalog recommend --repo ../.. --entry-id <entry_id> --target-mb-s 40
+
+# backfill entries from historical result JSON
+go run ./cmd/catalog import --repo ../.. --results-root <dir laid out as connector/scenario/*.json>
+```
+
+`--repo` must be a full clone of this repo with tags fetched
+(`git fetch --tags`). Staleness compares each entry's build SHA against the
+latest release tag, and `import` reads scenarios and describes build SHAs
+from it, so a shallow or tagless clone gives wrong or `unknown` answers.
+
+An e2e entry's `capacity_mb_s` is input-equivalent (`capacity_basis:
+input_equivalent`): the msg/s measured at the output times the workload's
+message size, so a pipeline that shrinks or grows messages is still sized by
+the input rate it sustains. The bytes measured at the output are in each
+point's `output_mb_s`. Source entries have no `capacity_basis`: their
+capacity is the output bytes, as before.
+
+The catalogue app on Google Cloud Run reads this bucket and creates plan
+objects through the `redpanda-connect-bench-catalog-app` role, by GCP web
+identity (no AWS keys). The persistent stack creates it only when
+`bench_catalog_gcp_sa_unique_id` is set; read the id with
+`gcloud iam service-accounts describe bench-catalog-sa@rp-internal-agents.iam.gserviceaccount.com --format='value(uniqueId)'`.
+The role's ARN is the output `bench_catalog_app_role_arn`.
+
+## Bench Bot runs by hand (operator)
+
+The Bench Bot agent normally builds, claims and dispatches plans. To run one
+by hand (for example the first end-to-end run of a new account):
+
+```sh
+# 1. build: store a plan from a customer config
+go run ./cmd/benchplan build --config cfg.yaml --message-size 1024 --target-mb-s 40 \
+  --store s3://redpanda-connect-bench-catalog
+# 2. claim: the approval the workflow refuses to run without
+go run ./cmd/benchplan claim --plan s3://redpanda-connect-bench-catalog/plans/<id>.json --approver <your name>
+# 3. dispatch, only if claim printed "won": true
+gh workflow run bench_bot.yml -f plan_id=<id>
+```
+
+The workflow's log is public: it prints `benchplan summary` (component names,
+caveats, sink, estimate), never the plan's pipeline. `benchplan show` prints
+the whole plan and is for local use only. Before taking the shared-stack lock
+the workflow lints the rendered Connect config; a config Connect rejects ends
+with outcome `invalid_config` and spends nothing.
+
 ## Layout
 
 | Path | Role |
@@ -95,6 +271,7 @@ and re-enabled after.
 | `terraform/shared/` | per-session VPC, hosts, brokers, results bucket |
 | `terraform/stacks/<engine>/` | per-session RDS Postgres / RDS MySQL |
 | `terraform/persistent/` | applied once: dashboards, alarms, OIDC, reaper, archive |
+| `catalog/`, `cmd/catalog/` | results catalogue and its query/recommend/import CLI |
 | `cleanup-lambda/` | the orphan reaper (own Go module) |
 | `SOAK.md` | soak operations runbook |
 

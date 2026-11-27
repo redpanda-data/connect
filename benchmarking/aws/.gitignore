@@ -14,6 +14,7 @@ seeders/dist/
 
 # Stray local builds (e.g. accidental `go build` without -o)
 runner/runner
+cmd/catalog/catalog
 cleanup-lambda/bootstrap
 cleanup-lambda/bootstrap.zip
 cleanup-lambda/cleanup-lambda

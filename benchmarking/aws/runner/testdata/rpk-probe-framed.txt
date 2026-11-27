@@ -1,0 +1,22 @@
+###src:t0 1795216549
+###src:hwm0 PARTITION  LEADER  EPOCH  REPLICAS  LOG-START-OFFSET  HIGH-WATERMARK
+###src:hwm0 0          0       1      [0]       0                 50
+###src:hwm0 1          0       1      [0]       0                 0
+###src:hwm0 2          0       1      [0]       0                 0
+###src:t1 1795216551
+###src:hwm1 PARTITION  LEADER  EPOCH  REPLICAS  LOG-START-OFFSET  HIGH-WATERMARK
+###src:hwm1 0          0       1      [0]       0                 50
+###src:hwm1 1          0       1      [0]       0                 0
+###src:hwm1 2          0       1      [0]       0                 0
+###src:group GROUP                  zz_probe_p1
+###src:group COORDINATOR-NODE       0
+###src:group COORDINATOR-PARTITION  __consumer_offsets/1
+###src:group STATE                  Empty
+###src:group BALANCER               
+###src:group MEMBERS                0
+###src:group TOTAL-LAG              30
+###src:group 
+###src:group TOPIC         PARTITION  CURRENT-OFFSET  LOG-START-OFFSET  LOG-END-OFFSET  LAG   MEMBER-ID  CLIENT-ID  HOST
+###src:group zz_probe_src  0          20              0                 50              30                          
+###src:group zz_probe_src  1          -               0                 0               -                           
+###src:group zz_probe_src  2          -               0                 0               -                           

@@ -4,3 +4,7 @@ output "dashboard_urls" {
     k => "https://${var.region}.console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards/dashboard/${d.dashboard_name}"
   }
 }
+
+output "bench_catalog_app_role_arn" {
+  value = local.bench_catalog_app_enabled ? aws_iam_role.bench_catalog_app[0].arn : ""
+}

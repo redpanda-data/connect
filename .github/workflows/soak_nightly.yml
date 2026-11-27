@@ -101,10 +101,11 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.plan.outputs.scenarios) }}
     runs-on: ubuntu-latest
-    # Provisioning (~15m) + 95m window + teardown (~15m) + slack. Must stay
-    # under the 4h credential session below. Per matrix job, so the full
-    # scheduled rotation may take rotation-size × this.
-    timeout-minutes: 220
+    # Up to 2h waiting for the shared-stack lock, then provisioning (~15m)
+    # + 95m window + teardown (~15m) + slack. Credentials are refreshed once
+    # the lock is held, so the soak itself has a full 4h session. Per matrix
+    # job, so the full scheduled rotation may take rotation-size × this.
+    timeout-minutes: 340
     env:
       REDPANDA_LICENSE_SECRET: redpanda-connect-bench/license
     steps:
@@ -200,6 +201,33 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         uses: $/.github/actions/setup-task
 
+      - name: Build benchplan
+        if: steps.gate.outputs.run == 'true'
+        working-directory: benchmarking/aws
+        run: go build -o "$RUNNER_TEMP/benchplan" ./cmd/benchplan
+
+      # Bot runs and soaks share one stack. The runner preflight alone leaves
+      # a window (a bot run holds the lock but its EC2 does not exist yet)
+      # in which a soak's preflight would pass, so soaks take the same lock.
+      # It waits for the stack to be empty; exit 3 means it stayed busy 2h.
+      - name: Acquire the shared-stack lock
+        id: lock
+        if: steps.gate.outputs.run == 'true'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          "$RUNNER_TEMP/benchplan" lock acquire --store s3://redpanda-connect-bench-catalog --holder "soak-$RUN_ID" --ttl 4h --wait 2h --poll 2m
+
+      # The lock wait can use up to 2h of the 4h provisioner session.
+      - name: Refresh AWS credentials
+        id: reauth
+        if: steps.gate.outputs.run == 'true'
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: arn:aws:iam::605419575229:role/rpcn-bench-gha-provisioner
+          aws-region: us-east-2
+          role-duration-seconds: 14400
+
       - name: Run soak
         if: steps.gate.outputs.run == 'true'
         working-directory: benchmarking/aws
@@ -214,6 +242,15 @@ jobs:
           SCENARIO: ${{ matrix.scenario }}
         run: |
           task aws:bench scenario="$SCENARIO" 2>&1 | tee "$RUNNER_TEMP/soak-run.log"
+
+      # A no-op unless this run holds the lock.
+      - name: Release the shared-stack lock
+        id: release
+        if: always() && steps.lock.outcome != 'skipped'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          "$RUNNER_TEMP/benchplan" lock release --store s3://redpanda-connect-bench-catalog --holder "soak-$RUN_ID"
 
       - name: Verify teardown actually completed
         if: always() && steps.gate.outputs.run == 'true'

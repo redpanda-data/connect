@@ -9,6 +9,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -156,4 +157,18 @@ func TestDetectAnomaliesWithProm_NoPromKeepsZeros(t *testing.T) {
 	require.Len(t, anomalies, 1)
 	require.Equal(t, 0, anomalies[0].GoroutinesAtStart)
 	require.Equal(t, uint64(0), anomalies[0].GCPauseDeltaNS)
+}
+
+func TestConnectExitedAnomaly(t *testing.T) {
+	a, fail := connectExitedAnomaly([]byte(makeLog(30, 60) + connectExitedMarker + " exit=137\n"))
+	require.True(t, fail)
+	require.Equal(t, anomalyConnectExited, a.Kind)
+	require.Contains(t, a.Note, "exit code 137")
+	require.Contains(t, a.Note, "memory limit")
+	require.True(t, strings.HasPrefix(a.Note, anomalyConnectExited+": "), a.Note)
+
+	_, fail = connectExitedAnomaly([]byte(makeLog(30, 60)))
+	require.False(t, fail, "a log without the marker is a normal exit")
+	_, fail = connectExitedAnomaly(nil)
+	require.False(t, fail)
 }

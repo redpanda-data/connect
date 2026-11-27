@@ -1,0 +1,42 @@
+name: bot-bbbbbbbbbbbb
+direction: e2e
+connector: http_server
+stack: none
+infra:
+    runner:
+        instance_type: c8g.4xlarge
+    memory_per_vcpu_bytes: 4000000000
+dataset:
+    row_size_bytes: 1000 # from the plan workload
+workload:
+    write_rate_per_sec: 450000
+    duration: 15m
+    warmup: 2m
+pipeline:
+    input:
+        redpanda:
+            consumer_group: ${BENCH_CONSUMER_GROUP}
+            seed_brokers:
+                - ${BENCH_REDPANDA_BROKERS}
+            start_offset: earliest
+            topics:
+                - ${BENCH_TOPIC}
+    output:
+        drop: {}
+sink:
+    kind: drop
+matrix:
+    cpu_points:
+        - 1
+        - 2
+        - 4
+        - 8
+catalog:
+    fingerprint: c66830153d0e0a1397191f04c13d67b06579592364fb89f44ac93ec1096d58e1
+    input: http_server
+    processors: []
+    output: drop
+    caveats:
+        - sink_not_measured
+        - source_approximated
+    source_approximated: true

@@ -11,6 +11,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -18,6 +21,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/glue"
+	gluetypes "github.com/aws/aws-sdk-go-v2/service/glue/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
@@ -56,6 +61,10 @@ type FakeAWS struct {
 	RouteTables      map[string]ec2types.RouteTable
 	InternetGateways map[string]ec2types.InternetGateway
 	SecurityGroups   map[string]ec2types.SecurityGroup
+	// GlueDatabases is every Glue database in the fake account: its
+	// CreateTime and tables. GluePageSize, when set, pages GetDatabases.
+	GlueDatabases map[string]FakeGlueDB
+	GluePageSize  int
 	// FailOn maps "<Method>:<id>" to an error that method call returns
 	// instead of succeeding, so tests can exercise the errored-delete path.
 	FailOn map[string]error
@@ -87,6 +96,72 @@ type FakeAWS struct {
 	// tests can assert Sweep threads the caller's ctx through rather than
 	// substituting context.Background().
 	SeenCtx context.Context //nolint:containedctx // test fake records the ctx it was invoked with
+}
+
+// FakeGlueDB is one faked Glue database.
+type FakeGlueDB struct {
+	Created time.Time
+	Tables  []string
+}
+
+func (f *FakeAWS) GetDatabases(_ context.Context, in *glue.GetDatabasesInput, _ ...func(*glue.Options)) (*glue.GetDatabasesOutput, error) {
+	if err := f.failIfConfigured("GetDatabases", ""); err != nil {
+		return nil, err
+	}
+	var names []string
+	for n := range f.GlueDatabases {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	start := 0
+	if in.NextToken != nil {
+		start, _ = strconv.Atoi(*in.NextToken)
+	}
+	end := len(names)
+	out := &glue.GetDatabasesOutput{}
+	if f.GluePageSize > 0 && start+f.GluePageSize < end {
+		end = start + f.GluePageSize
+		out.NextToken = aws.String(strconv.Itoa(end))
+	}
+	for _, n := range names[start:end] {
+		created := f.GlueDatabases[n].Created
+		out.DatabaseList = append(out.DatabaseList, gluetypes.Database{Name: aws.String(n), CreateTime: &created})
+	}
+	return out, nil
+}
+
+func (f *FakeAWS) GetTables(_ context.Context, in *glue.GetTablesInput, _ ...func(*glue.Options)) (*glue.GetTablesOutput, error) {
+	db, ok := f.GlueDatabases[aws.ToString(in.DatabaseName)]
+	if !ok {
+		return nil, &gluetypes.EntityNotFoundException{}
+	}
+	out := &glue.GetTablesOutput{}
+	for _, t := range db.Tables {
+		out.TableList = append(out.TableList, gluetypes.Table{Name: aws.String(t)})
+	}
+	return out, nil
+}
+
+func (f *FakeAWS) DeleteTable(_ context.Context, in *glue.DeleteTableInput, _ ...func(*glue.Options)) (*glue.DeleteTableOutput, error) {
+	dbName, name := aws.ToString(in.DatabaseName), aws.ToString(in.Name)
+	if err := f.failIfConfigured("DeleteTable", dbName+"."+name); err != nil {
+		return nil, err
+	}
+	f.CallLog = append(f.CallLog, "DeleteTable:"+dbName+"."+name)
+	db := f.GlueDatabases[dbName]
+	db.Tables = slices.DeleteFunc(slices.Clone(db.Tables), func(t string) bool { return t == name })
+	f.GlueDatabases[dbName] = db
+	return &glue.DeleteTableOutput{}, nil
+}
+
+func (f *FakeAWS) DeleteDatabase(_ context.Context, in *glue.DeleteDatabaseInput, _ ...func(*glue.Options)) (*glue.DeleteDatabaseOutput, error) {
+	name := aws.ToString(in.Name)
+	if err := f.failIfConfigured("DeleteDatabase", name); err != nil {
+		return nil, err
+	}
+	f.CallLog = append(f.CallLog, "DeleteDatabase:"+name)
+	delete(f.GlueDatabases, name)
+	return &glue.DeleteDatabaseOutput{}, nil
 }
 
 func (f *FakeAWS) failIfConfigured(call, id string) error {
@@ -729,7 +804,7 @@ func TestSweep_MixedFreshAndStale(t *testing.T) {
 		IAMRoles:  map[string]time.Time{"rpcn-bench-host-old": old},
 	}
 
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"i-old"}, api.Terminated)
 	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
@@ -749,7 +824,7 @@ func TestSweep_NothingStaleNoPublish(t *testing.T) {
 		},
 		EC2Instances: map[string]ec2types.Instance{"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young}},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Empty(t, api.Terminated)
 	require.Empty(t, api.SNSMessages, "no publish on no-op runs")
@@ -774,7 +849,7 @@ func TestSweep_GetResourcesPagination(t *testing.T) {
 			"page2-db": {DBInstanceIdentifier: aws.String("page2-db"), InstanceCreateTime: &old},
 		},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"i-page1"}, api.Terminated, "second page must be fetched via PaginationToken")
 	require.Equal(t, []string{"page2-db"}, api.DeletedDBs, "second page must be fetched via PaginationToken")
@@ -800,7 +875,7 @@ func TestSweep_ErroredDeleteNotReportedDestroyed(t *testing.T) {
 		},
 		FailOn: map[string]error{"TerminateInstances:i-old": errAssertion("boom")},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, report.DestroyedCount)
 	require.Empty(t, report.Destroyed)
@@ -829,7 +904,7 @@ func TestSweep_PublishUsesPerProtocolEnvelope(t *testing.T) {
 			"i-old": {InstanceId: aws.String("i-old"), LaunchTime: &old},
 		},
 	}
-	_, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	_, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Len(t, api.SNSMessages, 1)
 	require.Equal(t, []string{"json"}, api.SNSStructures)
@@ -873,7 +948,7 @@ func TestSweep_StaleTagIndexEntryIsSilent(t *testing.T) {
 			"DescribeDBInstances:vanished-db": &smithy.GenericAPIError{Code: "DBInstanceNotFound", Message: "not found"},
 		},
 	}
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, report.Errors)
 	require.Empty(t, report.Failed)
@@ -889,7 +964,7 @@ func TestSweep_ThreadsCallerContext(t *testing.T) {
 	api := &FakeAWS{}
 	ctx := context.WithValue(t.Context(), ctxKey{}, "marker")
 
-	_, err := Sweep(ctx, api, now, 3*time.Hour, "arn:sns:topic")
+	_, err := Sweep(ctx, api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, api.SeenCtx)
 	require.NotEqual(t, context.Background(), api.SeenCtx, "Sweep must thread the caller's ctx through, not substitute context.Background()")
@@ -939,7 +1014,7 @@ func TestSweep_FullStrandedStack(t *testing.T) {
 		},
 	}
 
-	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic")
+	report, err := Sweep(t.Context(), api, now, 3*time.Hour, "arn:sns:topic", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 0, report.Errors)
 
@@ -987,3 +1062,56 @@ func indexOfCall(calls []string, want string) int {
 type errAssertion string
 
 func (e errAssertion) Error() string { return string(e) }
+
+func TestSweepGlue_SelectsBenchPrefixOlderThanTTL(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-5 * time.Hour)
+	young := now.Add(-30 * time.Minute)
+	api := &FakeAWS{
+		GluePageSize: 2,
+		GlueDatabases: map[string]FakeGlueDB{
+			"bench_old_session":   {Created: old, Tables: []string{"bench_dst", "other"}},
+			"bench_young_session": {Created: young, Tables: []string{"bench_dst"}},
+			"bench_old_empty":     {Created: old},
+			"customer_analytics":  {Created: old, Tables: []string{"events"}},
+			"benchmark_old":       {Created: old}, // shares letters, not the bench_ prefix
+		},
+	}
+	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"DeleteDatabase:bench_old_empty",
+		"DeleteTable:bench_old_session.bench_dst",
+		"DeleteTable:bench_old_session.other",
+		"DeleteDatabase:bench_old_session",
+	}, api.CallLog)
+	require.Contains(t, api.GlueDatabases, "bench_young_session")
+	require.Contains(t, api.GlueDatabases, "customer_analytics")
+	require.Contains(t, api.GlueDatabases, "benchmark_old")
+	require.Equal(t, 2, report.DestroyedCount)
+	require.Equal(t, []string{"glue-database:bench_old_empty", "glue-database:bench_old_session"}, report.Destroyed)
+	require.NotEmpty(t, api.SNSMessages)
+}
+
+func TestSweepGlue_FailedTableKeepsDatabaseAndReports(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	api := &FakeAWS{
+		GlueDatabases: map[string]FakeGlueDB{"bench_x": {Created: now.Add(-5 * time.Hour), Tables: []string{"t1"}}},
+		FailOn:        map[string]error{"DeleteTable:bench_x.t1": errors.New("denied")},
+	}
+	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, report.Errors)
+	require.Zero(t, report.DestroyedCount)
+	require.NotContains(t, api.CallLog, "DeleteDatabase:bench_x", "the database stays until its tables are gone")
+	require.Contains(t, report.Failed[0], "glue-database:bench_x")
+}
+
+func TestSweepGlue_ListFailureIsReportedNotFatal(t *testing.T) {
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	api := &FakeAWS{FailOn: map[string]error{"GetDatabases:": errors.New("AccessDenied")}}
+	report, err := Sweep(t.Context(), api, now, 4*time.Hour, "arn:sns:topic", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, report.Errors)
+	require.Contains(t, report.Failed[0], "glue-databases")
+}

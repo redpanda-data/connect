@@ -1,0 +1,12 @@
+GROUP                  zz_bench_capture_p1
+COORDINATOR-NODE       0
+COORDINATOR-PARTITION  __consumer_offsets/2
+STATE                  Empty
+BALANCER               
+MEMBERS                0
+TOTAL-LAG              20
+
+TOPIC                 PARTITION  CURRENT-OFFSET  LOG-START-OFFSET  LOG-END-OFFSET  LAG   MEMBER-ID  CLIENT-ID  HOST
+zz_bench_capture_src  0          10              0                 30              20                          
+zz_bench_capture_src  1          -               0                 0               -                           
+zz_bench_capture_src  2          -               0                 0               -                           

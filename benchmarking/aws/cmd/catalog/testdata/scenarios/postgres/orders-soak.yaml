@@ -1,0 +1,9 @@
+name: postgres-orders-soak
+connector: postgres_cdc
+soak: true
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      schema: public
+      tables: [orders]

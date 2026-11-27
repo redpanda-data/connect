@@ -6,7 +6,7 @@ ZIP := bootstrap.zip
 
 zip: $(ZIP)
 
-$(ZIP): main.go sweep.go go.mod go.sum
+$(ZIP): main.go sweep.go snowflake.go go.mod go.sum
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap .
 	zip -j $@ bootstrap
 	rm -f bootstrap

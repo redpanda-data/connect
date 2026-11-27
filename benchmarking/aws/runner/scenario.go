@@ -13,9 +13,12 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/connect/benchmarking/aws/catalog"
 )
 
 const (
@@ -64,6 +67,10 @@ var instanceTypeVCPU = map[string]int{
 	"c8g.16xlarge": 64,
 }
 
+// stackNone is the stack of an e2e scenario with no source stack: the input
+// reads a Redpanda topic that a sustained producer fills (producer.go).
+const stackNone = "none"
+
 // Direction is the role the connector-under-test plays in the pipeline.
 // Source connectors read an external system and write into Redpanda (CDC);
 // sink connectors read from Redpanda and write into an external system.
@@ -72,20 +79,29 @@ type Direction string
 const (
 	DirectionSource Direction = "source"
 	DirectionSink   Direction = "sink"
+	// DirectionE2E runs a whole customer pipeline (source stack or preloaded
+	// topic, into a bench sink) rather than one connector in isolation.
+	DirectionE2E Direction = "e2e"
 )
 
 type Scenario struct {
-	Name        string         `yaml:"name"`
-	Description string         `yaml:"description"`
-	Connector   string         `yaml:"connector"`
-	Direction   Direction      `yaml:"direction,omitempty"`
-	Stack       string         `yaml:"stack"`
-	Infra       InfraSpec      `yaml:"infra"`
-	Dataset     DatasetSpec    `yaml:"dataset"`
-	Workload    *WorkloadSpec  `yaml:"workload,omitempty"`
-	Pipeline    map[string]any `yaml:"pipeline"`
-	Matrix      MatrixSpec     `yaml:"matrix"`
-	Reset       []ResetStep    `yaml:"reset"`
+	Name        string        `yaml:"name"`
+	Description string        `yaml:"description"`
+	Connector   string        `yaml:"connector"`
+	Direction   Direction     `yaml:"direction,omitempty"`
+	Stack       string        `yaml:"stack"`
+	Infra       InfraSpec     `yaml:"infra"`
+	Dataset     DatasetSpec   `yaml:"dataset"`
+	Workload    *WorkloadSpec `yaml:"workload,omitempty"`
+	// Sink is the bench sink an e2e scenario writes to. Required for
+	// direction: e2e.
+	Sink     *SinkSpec      `yaml:"sink,omitempty"`
+	Pipeline map[string]any `yaml:"pipeline"`
+	Matrix   MatrixSpec     `yaml:"matrix"`
+	Reset    []ResetStep    `yaml:"reset"`
+	// Catalog is the catalogue identity of a rendered Bench Bot plan
+	// (plan.Render). Optional, direction e2e only; see CatalogSpec.
+	Catalog *CatalogSpec `yaml:"catalog,omitempty"`
 	// Soak marks this scenario as a long, single-CPU-point, sustained-moderate-
 	// load run whose purpose is catching leaks/stalls/rotation bugs over wall
 	// clock — unlike the short max-load sweeps matrix.cpu_points/arms are for.
@@ -97,6 +113,12 @@ type Scenario struct {
 type InfraSpec struct {
 	Source map[string]any `yaml:"source"`
 	Runner RunnerSpec     `yaml:"runner"`
+	// MemoryPerVCPUBytes, when > 0, runs Connect at each sweep point under a
+	// hard cgroup memory cap of MemoryPerVCPUBytes x vCPU (systemd scope,
+	// swap disabled). Zero (default) leaves memory uncapped. When set it must
+	// be 4000000000 (one vCPU's CUs of memory per catalog/sizing.json), and
+	// GOMEMLIMIT becomes 90% of the cap.
+	MemoryPerVCPUBytes int64 `yaml:"memory_per_vcpu_bytes,omitempty"`
 }
 
 type RunnerSpec struct {
@@ -109,6 +131,44 @@ type DatasetSpec struct {
 	Tables            []string `yaml:"tables"`
 	Seeder            string   `yaml:"seeder"`
 	ExpectedPeakMBSec int      `yaml:"expected_peak_mb_s,omitempty"`
+}
+
+// CatalogSpec is a plan's catalogue identity. The plan fingerprinted the
+// customer's original config before swapping identity, which the scenario
+// pipeline cannot reproduce, so the entry takes these values as given.
+type CatalogSpec struct {
+	Fingerprint        string   `yaml:"fingerprint"`
+	Input              string   `yaml:"input"`
+	Processors         []string `yaml:"processors"`
+	Output             string   `yaml:"output"`
+	Caveats            []string `yaml:"caveats"`
+	SourceApproximated bool     `yaml:"source_approximated"`
+}
+
+var catalogFingerprintRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func (c *CatalogSpec) validate(d Direction) error {
+	if d != DirectionE2E {
+		return fmt.Errorf("catalog is only allowed for direction %q", DirectionE2E)
+	}
+	if !catalogFingerprintRe.MatchString(c.Fingerprint) {
+		return fmt.Errorf("catalog.fingerprint %q: want 64 lower-case hex characters", c.Fingerprint)
+	}
+	if c.Input == "" || c.Output == "" {
+		return errors.New("catalog.input and catalog.output are required")
+	}
+	for _, cv := range c.Caveats {
+		if _, ok := catalog.KnownCaveats[cv]; !ok {
+			return fmt.Errorf("catalog.caveats: unknown caveat %q", cv)
+		}
+	}
+	return nil
+}
+
+// SinkSpec names the bench sink of an e2e scenario.
+type SinkSpec struct {
+	Kind string `yaml:"kind"`
+	Size string `yaml:"size,omitempty"`
 }
 
 type WorkloadSpec struct {
@@ -262,19 +322,43 @@ func (s *Scenario) applyDirectionDefault() {
 	}
 }
 
+// MemoryLimited reports whether sweep points run under a hard memory cap.
+func (s *Scenario) MemoryLimited() bool {
+	return s.Infra.MemoryPerVCPUBytes > 0
+}
+
 func (s *Scenario) Validate() error {
 	if s.Name == "" {
 		return errors.New("name is required")
+	}
+	if s.Infra.MemoryPerVCPUBytes < 0 {
+		return fmt.Errorf("infra.memory_per_vcpu_bytes must be >= 0, got %d", s.Infra.MemoryPerVCPUBytes)
+	}
+	if s.Infra.MemoryPerVCPUBytes > 0 {
+		// The catalogue converts measured memory to CUs with the sizing
+		// config, so the cap must be exactly one vCPU's worth of CU memory.
+		cfg, err := catalog.DefaultSizingConfig()
+		if err != nil {
+			return fmt.Errorf("sizing config: %w", err)
+		}
+		if want := cfg.BytesPerCU * int64(cfg.CUsPerVCPU); s.Infra.MemoryPerVCPUBytes != want {
+			return fmt.Errorf("infra.memory_per_vcpu_bytes must be %d (bytes_per_cu x cus_per_vcpu), got %d", want, s.Infra.MemoryPerVCPUBytes)
+		}
 	}
 	if s.Connector == "" {
 		return errors.New("connector is required")
 	}
 	switch s.Direction {
-	case DirectionSource, DirectionSink, "":
+	case DirectionSource, DirectionSink, DirectionE2E, "":
 		// "" is tolerated for direct struct construction in tests; LoadScenario
 		// normalizes it via applyDirectionDefault.
 	default:
-		return fmt.Errorf("direction %q is invalid; must be %q or %q", s.Direction, DirectionSource, DirectionSink)
+		return fmt.Errorf("direction %q is invalid; must be %q, %q or %q", s.Direction, DirectionSource, DirectionSink, DirectionE2E)
+	}
+	if s.Catalog != nil {
+		if err := s.Catalog.validate(s.Direction); err != nil {
+			return err
+		}
 	}
 	topo, err := topologyFor(s.Direction)
 	if err != nil {
@@ -285,6 +369,19 @@ func (s *Scenario) Validate() error {
 	}
 	if s.Stack == "" {
 		return errors.New("stack is required")
+	}
+	if s.Stack == stackNone {
+		if s.Direction != DirectionE2E {
+			return fmt.Errorf("stack %q is only allowed for direction %q", stackNone, DirectionE2E)
+		}
+		if s.Workload == nil || s.Workload.WriteRatePerSec <= 0 {
+			return fmt.Errorf("stack %q requires workload.write_rate_per_sec > 0", stackNone)
+		}
+		for _, c := range s.Matrix.CPUPoints {
+			if c > maxStackNoneVCPU {
+				return fmt.Errorf("stack %q: matrix.cpu_points value %d exceeds %d: cores %s are reserved for the producer", stackNone, c, maxStackNoneVCPU, producerCores)
+			}
+		}
 	}
 	if len(s.Matrix.CPUPoints) == 0 {
 		return errors.New("matrix.cpu_points must contain at least one value")
@@ -407,6 +504,8 @@ func (s *Scenario) Validate() error {
 		if s.Workload.Duration < minDuration {
 			return fmt.Errorf("workload.duration %s is below minimum %s", s.Workload.Duration, minDuration)
 		}
+	} else if s.Direction == DirectionE2E {
+		return errors.New("direction e2e requires a workload")
 	} else {
 		// Bounded-dataset scenario: require the size hint and verify wall-clock estimate.
 		if s.Dataset.ExpectedPeakMBSec == 0 {
@@ -419,6 +518,33 @@ func (s *Scenario) Validate() error {
 			return fmt.Errorf("bounded-dataset run would complete in %ds at %d MB/s — below minimum %s; increase dataset",
 				estSeconds, s.Dataset.ExpectedPeakMBSec, minDuration)
 		}
+	}
+	return nil
+}
+
+// sinkKinds is the set of bench sinks an e2e scenario may name.
+var sinkKinds = []string{"redpanda", "s3", "iceberg", "snowflake", "bigquery", "drop"}
+
+// snowflakeSizes is the set of warehouse sizes a snowflake sink may use.
+var snowflakeSizes = []string{"XSMALL", "SMALL", "MEDIUM", "LARGE", "XLARGE"}
+
+// validateSink checks an e2e scenario's sink, defaulting a snowflake size.
+func (s *Scenario) validateSink() error {
+	if s.Sink == nil || s.Sink.Kind == "" {
+		return errors.New("direction e2e requires sink.kind")
+	}
+	if !slices.Contains(sinkKinds, s.Sink.Kind) {
+		return fmt.Errorf("sink.kind %q is invalid; must be one of %v", s.Sink.Kind, sinkKinds)
+	}
+	if s.Sink.Kind == "snowflake" {
+		if s.Sink.Size == "" {
+			s.Sink.Size = "XSMALL"
+		}
+		if !slices.Contains(snowflakeSizes, s.Sink.Size) {
+			return fmt.Errorf("sink.size %q is invalid for snowflake; must be one of %v", s.Sink.Size, snowflakeSizes)
+		}
+	} else if s.Sink.Size != "" {
+		return fmt.Errorf("sink.size is only valid for snowflake, not %q", s.Sink.Kind)
 	}
 	return nil
 }

@@ -17,7 +17,11 @@
 {{- end }}
 {{ if .Anomalies }}
 {{ range .Anomalies }}
+{{- if .Dip }}
 > ⚠ At {{.VCPU}} vCPU: {{.DurationSec}}s dip to {{printf "%.2f" .MinRatio}}× median MB/sec from t={{.StartT}}s — investigate before publishing.
+{{- else }}
+> ⚠ At {{.VCPU}} vCPU: {{.Note}}
+{{- end }}
 {{ end }}
 {{ end }}
 Raw samples + Prometheus snapshots: [`{{.JSONPath}}`]({{.JSONPath}})

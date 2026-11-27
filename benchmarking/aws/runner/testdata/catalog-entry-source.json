@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "bench-1",
+  "scenario": "postgres/orders-cdc",
+  "input": "postgres_cdc",
+  "processors": null,
+  "output": "redpanda",
+  "fingerprint": "de15b265c8d3260dfd23314a19723c21bcfbaed391891bf74a9c2d4dcae4f712",
+  "workload": {
+    "message_size_bytes": 1200,
+    "mode": "cdc",
+    "offered_rate_per_sec": 5000
+  },
+  "connect_version": "v4.50.0-3-gabc123",
+  "build_sha": "abc123",
+  "infra": {
+    "runner_instance_type": "c7i.4xlarge",
+    "region": "us-east-2"
+  },
+  "sink_measured": true,
+  "external_calls_stubbed": false,
+  "memory_limited": false,
+  "points": [
+    {
+      "vcpu": 1,
+      "cus": 10,
+      "capacity_mb_s": 10,
+      "capacity_msg_s": 100,
+      "peak_rss_bytes": 1000
+    },
+    {
+      "vcpu": 2,
+      "cus": 20,
+      "capacity_mb_s": 20,
+      "capacity_msg_s": 200,
+      "peak_rss_bytes": 2000
+    },
+    {
+      "vcpu": 4,
+      "cus": 40,
+      "capacity_mb_s": 30,
+      "capacity_msg_s": 300,
+      "peak_rss_bytes": 3000
+    },
+    {
+      "vcpu": 8,
+      "cus": 80,
+      "capacity_mb_s": 40,
+      "capacity_msg_s": 400,
+      "peak_rss_bytes": 4000
+    }
+  ],
+  "run_url": "https://x/run/1",
+  "recorded_at": "2026-11-20T00:00:00Z"
+}

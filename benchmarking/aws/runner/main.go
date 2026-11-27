@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,6 +100,9 @@ type benchOpts struct {
 	// raw artifacts are copied to — see uploadSoakResult. Unlike the
 	// session results bucket, this one is NOT force_destroy'd at teardown.
 	soakArchiveBucket string
+	// catalogBucket is the persistent bucket a completed bench sweep's
+	// catalogue entry is written to.
+	catalogBucket string
 	// preflightOn gates the concurrent-bench-session guard (see
 	// preflightCheck). Defaults to true; --preflight=off is the emergency
 	// escape hatch for an operator who is certain no other session is live.
@@ -134,6 +138,8 @@ func benchCmd(args []string) error {
 		"S3 bucket a soak run's result.json + raw artifacts are archived to, since the session results "+
 			"bucket is force_destroy'd at teardown. Created by the persistent terraform stack "+
 			"(`task aws:persistent`).")
+	catalogBucket := fs.String("catalog-bucket", defaultCatalogBucket,
+		"S3 bucket a completed bench sweep's results-catalogue entry is written to.")
 	preflight := &preflightFlag{on: true}
 	fs.Var(preflight, "preflight",
 		`"on" (default) or "off": guard against a concurrent bench session already holding the shared `+
@@ -162,6 +168,7 @@ func benchCmd(args []string) error {
 		licenseFile:       *licenseFile,
 		licenseSecret:     *licenseSecret,
 		soakArchiveBucket: *soakArchiveBucket,
+		catalogBucket:     *catalogBucket,
 		preflightOn:       preflight.on,
 		binaries:          binaries.m,
 	}
@@ -323,11 +330,8 @@ func runBench(opts benchOpts) (errOut error) {
 		BackendFile: backendAbs,
 		StateKey:    "shared",
 	}
-	tfStack := &Terraform{
-		Dir:         StackDir(opts.repoRoot, s.Stack),
-		BackendFile: backendAbs,
-		StateKey:    s.Stack,
-	}
+	// Stack none has no source system: its stack terraform is a no-op.
+	tfStack := stackTerraform(s, opts.repoRoot, backendAbs)
 
 	if err := tfShared.Init(); err != nil {
 		return fmt.Errorf("terraform init shared: %w", err)
@@ -337,11 +341,7 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	sessionID := newSessionID()
 	names := newBenchNames(sessionID, s.Connector)
-	sharedVars := map[string]string{
-		"region":               opts.region,
-		"runner_instance_type": s.Infra.Runner.InstanceType,
-		"bench_session_id":     sessionID,
-	}
+	sharedVars := sharedStackVars(s, opts.region, sessionID)
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
 	// The per-connector stack (e.g. the postgres stack's RDS instance,
 	// subnet/parameter groups, and SGs) stamps this onto its resources via
@@ -428,110 +428,189 @@ func runBench(opts benchOpts) (errOut error) {
 		fmt.Printf("[3/7] skipping default build: staging provided --binary mappings %v\n", sortedBinaryNames(opts.binaries))
 	}
 
-	plan := buildSweepPlan(s)
-	// legacy scenarios (no matrix.arms) share one config across every point,
-	// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
-	// path, so the six existing scenarios are byte-for-byte unchanged.
-	legacy := len(s.Matrix.Arms) == 0
-	var sets []renderedPointConfigs
-	if legacy {
-		set, err := renderPointConfigs(s, sharedOuts, topo, names, plan[0])
-		if err != nil {
-			return fmt.Errorf("render pipeline config: %w", err)
-		}
-		sets = []renderedPointConfigs{set}
-	} else {
-		for _, p := range plan {
-			set, err := renderPointConfigs(s, sharedOuts, topo, names, p)
-			if err != nil {
-				return fmt.Errorf("render pipeline config for %s: %w", p.Key(), err)
-			}
-			sets = append(sets, set)
-		}
-	}
-	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
-		return fmt.Errorf("stage artefacts: %w", err)
-	}
-	fmt.Println("[4/7] staged binary + config on runner")
-
-	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names, execTimeout); err != nil {
-		return fmt.Errorf("seed: %w", err)
-	}
-	fmt.Println("[5/7] seed complete")
-
 	ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
 	if err != nil {
 		return err
 	}
-	logFetcher, err := NewS3LogFetcher(ctx, opts.region)
-	if err != nil {
-		return err
+	// An e2e run writes to the customer's real sink: withSink below
+	// provisions this run's scratch in it, so its ${BENCH_*} values are in
+	// sharedOuts before any config renders, and removes it before the
+	// terraform destroy defer runs. It runs after the build so the runner
+	// host has had that long to boot; ssmRPK also waits for its rpk install.
+	deps := SinkDeps{
+		Region:    opts.region,
+		Outs:      sharedOuts,
+		SessionID: sessionID,
+		RPK:       ssmRPK{SSM: ssmExec, Instance: sharedOuts["runner_instance_id"]},
 	}
-
-	mr := &MatrixRunner{
-		SSM:             ssmExec,
-		LogFetcher:      logFetcher,
-		RunnerInstance:  sharedOuts["runner_instance_id"],
-		LoadGenInstance: sharedOuts["load_gen_instance_id"],
-		ConfigPath:      "/opt/bench/config.yaml",
-		ConfigPaths: func() map[string]pointConfigPaths {
-			if legacy {
-				return nil // every point uses ConfigPath
-			}
-			return runnerConfigPaths(sets)
-		}(),
-		BinaryPath:               "/opt/bench/redpanda-connect",
-		Bucket:                   sharedOuts["results_bucket"],
-		SessionID:                sessionID,
-		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
-		RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
-		Topology:                 topo,
-		Names:                    names,
-		Outs:                     sharedOuts,
-		HeartbeatSec:             heartbeatSec,
-		PromScrapeSec:            promScrapeSec,
-		CheckpointSec:            checkpointSec,
-		ExpectedRecordsPerSec:    expectedRecordsPerSec,
-	}
-	// A soak run publishes per-minute CloudWatch metrics as it goes, so an
-	// operator (or an alarm) can watch a run that may still have 23 hours
-	// left, instead of only finding out something went wrong when the
-	// result JSON lands at the end. Deliberately orchestrator-side (see
-	// MatrixRunner.Emitter): the runner EC2 instance role is never given
-	// cloudwatch:PutMetricData, so a future PR-mode binary running under
-	// that role cannot spoof the metrics that judge it.
-	if s.Soak {
-		emitter, err := NewCloudWatchEmitter(ctx, opts.region, CloudWatchNamespace, s.Connector, s.Name)
-		if err != nil {
-			return fmt.Errorf("build CloudWatch emitter: %w", err)
+	if s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "iceberg" {
+		if deps.Glue, err = newGlueClient(ctx, opts.region); err != nil {
+			return err
 		}
-		mr.Emitter = emitter
-		fmt.Printf("soak profile: publishing metrics to CloudWatch namespace %q, dimensions Connector=%q Scenario=%q\n",
-			CloudWatchNamespace, s.Connector, s.Name)
 	}
-	// Reset must cover the union of every arm's tables (planMaxStreams), not
-	// just this scenario's own Streams, so one precomputed reset script serves
-	// every point in the plan regardless of its stream count.
-	reset, err := topo.ResetScript(s, sharedOuts, names.WithStreams(planMaxStreams(plan)))
+	if s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "snowflake" {
+		sm, err := NewSecretsManagerClient(ctx, opts.region)
+		if err != nil {
+			return fmt.Errorf("build secrets manager client for the snowflake sink: %w", err)
+		}
+		if deps.Snowflake, deps.SnowflakeTarget, err = loadSnowflake(ctx, sm, openGoSnowflake); err != nil {
+			return err
+		}
+		if c, ok := deps.Snowflake.(io.Closer); ok {
+			defer c.Close()
+		}
+	}
+	if s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "bigquery" {
+		sm, err := NewSecretsManagerClient(ctx, opts.region)
+		if err != nil {
+			return fmt.Errorf("build secrets manager client for the bigquery sink: %w", err)
+		}
+		if deps.BigQuery, deps.BigQueryTarget, err = loadBigQuery(ctx, sm, openGoBigQuery); err != nil {
+			return err
+		}
+		if c, ok := deps.BigQuery.(io.Closer); ok {
+			defer c.Close()
+		}
+	}
+	sink, err := sinkForScenario(s, deps)
 	if err != nil {
 		return err
 	}
-	workload, err := topo.WorkloadScript(s, sharedOuts, names)
-	if err != nil {
+	// render, stage, seed and the sweep all run inside the sink's
+	// lifecycle: withSink tears the scratch down whether they succeed, fail
+	// or are cancelled.
+	var points []SweepPoint
+	var logFetcher LogFetcher
+	// soakPointErr is a soak's failed point (for example Connect killed
+	// hours in). It is returned only after the result is written and
+	// archived: a late crash is what a soak exists to find, so its report
+	// must survive the failure.
+	var soakPointErr error
+	if err := withSink(ctx, sink, sessionID, func(placeholders map[string]string) error {
+		maps.Copy(sharedOuts, placeholders)
+		var err error
+		plan := buildSweepPlan(s)
+		// legacy scenarios (no matrix.arms) share one config across every point,
+		// staged at the historical stage/config.yaml -> /opt/bench/config.yaml
+		// path, so the six existing scenarios are byte-for-byte unchanged. Stack
+		// none renders per point too: each point has its own consumer group.
+		legacy := !perPointConfigs(s)
+		var sets []renderedPointConfigs
+		if legacy {
+			set, err := renderPointConfigs(s, sharedOuts, topo, names, plan[0])
+			if err != nil {
+				return fmt.Errorf("render pipeline config: %w", err)
+			}
+			sets = []renderedPointConfigs{set}
+		} else {
+			for _, p := range plan {
+				set, err := renderPointConfigs(s, sharedOuts, topo, names, p)
+				if err != nil {
+					return fmt.Errorf("render pipeline config for %s: %w", p.Key(), err)
+				}
+				sets = append(sets, set)
+			}
+		}
+		if s.Direction == DirectionE2E {
+			if err := checkPlaceholdersResolved(sets); err != nil {
+				return err
+			}
+		}
+		if err := stageArtefacts(ctx, opts, sharedOuts, binPath, sets, legacy, execTimeout); err != nil {
+			return fmt.Errorf("stage artefacts: %w", err)
+		}
+		fmt.Println("[4/7] staged binary + config on runner")
+
+		if err := runSeeder(ctx, opts, s, sharedOuts, topo, names, execTimeout); err != nil {
+			return fmt.Errorf("seed: %w", err)
+		}
+		fmt.Println("[5/7] seed complete")
+
+		logFetcher, err = NewS3LogFetcher(ctx, opts.region)
+		if err != nil {
+			return err
+		}
+
+		mr := &MatrixRunner{
+			SSM:             ssmExec,
+			LogFetcher:      logFetcher,
+			RunnerInstance:  sharedOuts["runner_instance_id"],
+			LoadGenInstance: workloadInstance(s, sharedOuts),
+			ConfigPath:      "/opt/bench/config.yaml",
+			ConfigPaths: func() map[string]pointConfigPaths {
+				if legacy {
+					return nil // every point uses ConfigPath
+				}
+				return runnerConfigPaths(sets)
+			}(),
+			BinaryPath:               "/opt/bench/redpanda-connect",
+			MemoryPerVCPUBytes:       s.Infra.MemoryPerVCPUBytes,
+			Bucket:                   sharedOuts["results_bucket"],
+			SessionID:                sessionID,
+			RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
+			RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
+			Topology:                 topo,
+			Names:                    names,
+			Outs:                     sharedOuts,
+			HeartbeatSec:             heartbeatSec,
+			PromScrapeSec:            promScrapeSec,
+			CheckpointSec:            checkpointSec,
+			ExpectedRecordsPerSec:    expectedRecordsPerSec,
+			SourceProbe:              sourceProbeFor(s, sharedOuts, names),
+			Sink:                     countableSink(sink, s, plan),
+			HostSetup:                hostSetupFor(sink),
+			HostEnv:                  hostEnvFor(sink),
+			E2E:                      s.Direction == DirectionE2E,
+			SinkDrop:                 s.Direction == DirectionE2E && s.Sink != nil && s.Sink.Kind == "drop",
+			WorkloadRatePerSec:       e2eWorkloadRate(s),
+		}
+		// A soak run publishes per-minute CloudWatch metrics as it goes, so an
+		// operator (or an alarm) can watch a run that may still have 23 hours
+		// left, instead of only finding out something went wrong when the
+		// result JSON lands at the end. Deliberately orchestrator-side (see
+		// MatrixRunner.Emitter): the runner EC2 instance role is never given
+		// cloudwatch:PutMetricData, so a future PR-mode binary running under
+		// that role cannot spoof the metrics that judge it.
+		if s.Soak {
+			emitter, err := NewCloudWatchEmitter(ctx, opts.region, CloudWatchNamespace, s.Connector, s.Name)
+			if err != nil {
+				return fmt.Errorf("build CloudWatch emitter: %w", err)
+			}
+			mr.Emitter = emitter
+			fmt.Printf("soak profile: publishing metrics to CloudWatch namespace %q, dimensions Connector=%q Scenario=%q\n",
+				CloudWatchNamespace, s.Connector, s.Name)
+		}
+		// Reset must cover the union of every arm's tables (planMaxStreams), not
+		// just this scenario's own Streams, so one precomputed reset script serves
+		// every point in the plan regardless of its stream count.
+		reset, err := topo.ResetScript(s, sharedOuts, names.WithStreams(planMaxStreams(plan)))
+		if err != nil {
+			return err
+		}
+		workload, err := topo.WorkloadScript(s, sharedOuts, names)
+		if err != nil {
+			return err
+		}
+		points, err = mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
+		if soakFailedPoint(s, points, err) {
+			fmt.Fprintf(os.Stderr, "soak point failed; writing and archiving the result before failing the run: %v\n", err)
+			soakPointErr = err
+			return nil
+		}
 		return err
-	}
-	points, err := mr.Run(ctx, plan, s.Matrix.GoMemLimitPerVCPU, warmup, duration, reset, workload)
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	fmt.Println("[6/7] sweep complete")
 
 	result := &Result{
-		Scenario:     fmt.Sprintf("%s/%s", s.Stack, strings.TrimPrefix(s.Name, s.Stack+"-")),
-		ScenarioHash: hashScenario(s),
-		GitSHA:       gitSHA(opts.repoRoot),
-		StartedAt:    time.Now().Add(-totalDuration(s, len(points))).UTC(),
-		FinishedAt:   time.Now().UTC(),
+		SessionID:      sessionID,
+		Scenario:       fmt.Sprintf("%s/%s", s.Stack, strings.TrimPrefix(s.Name, s.Stack+"-")),
+		ScenarioHash:   hashScenario(s),
+		GitSHA:         gitSHA(opts.repoRoot),
+		ConnectVersion: gitDescribe(opts.repoRoot),
+		StartedAt:      time.Now().Add(-totalDuration(s, len(points))).UTC(),
+		FinishedAt:     time.Now().UTC(),
 		Infra: ResultInfra{
 			RunnerInstanceType:  s.Infra.Runner.InstanceType,
 			SourceInstanceClass: asString(s.Infra.Source["instance_class"]),
@@ -558,12 +637,24 @@ func runBench(opts benchOpts) (errOut error) {
 			GOMAXPROCS:   p.GOMAXPROCS,
 			Streams:      p.Streams,
 			Backlog:      p.Backlog,
+
+			ProducerRateMsgPerSec: p.ProducerRateMsgPerSec,
+			ConsumerLagEnd:        p.ConsumerLagEnd,
 		})
 	}
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")
 	jsonPath, err := WriteResultJSON(resultsDir, result)
 	if err != nil {
 		return err
+	}
+	if shouldCatalogue(s, result) {
+		// Non-fatal, like the soak archive upload below: a valid local result
+		// must not fail the run because the catalogue is unreachable.
+		if id, err := catalogueSweep(ctx, opts, s, result, sessionID, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: catalogue entry: %v\n", err)
+		} else if id != "" {
+			fmt.Print(catalogueEntryLine(id))
+		}
 	}
 	mdPath := filepath.Join(opts.repoRoot, "docs/benchmark-results", s.Stack+".md")
 	if err := AppendMarkdown(mdPath, result, strings.TrimSpace(s.Description)); err != nil {
@@ -596,10 +687,10 @@ func runBench(opts benchOpts) (errOut error) {
 	// of the two-run comparison markdown below.
 	var soakRegressionErr error
 	if s.Soak {
-		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher)
+		entry, err := uploadSoakResult(ctx, opts.region, sharedOuts["results_bucket"], opts.soakArchiveBucket, sessionID, s, result, jsonPath, topo, logFetcher, soakPointErr != nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: archive soak result to S3: %v\n", err)
-		} else if !s.IsBinaryArmScenario() {
+		} else if !s.IsBinaryArmScenario() && soakPointErr == nil {
 			soakRegressionErr = compareSoakRunToBaseline(ctx, opts, s, sessionID, entry, logFetcher)
 		}
 		if s.IsBinaryArmScenario() {
@@ -614,10 +705,22 @@ func runBench(opts benchOpts) (errOut error) {
 	// set here, immediately before the return the deferred teardown above
 	// observes — see its own comment for why a regression must never be
 	// treated like an ordinary failure for --keep-on-fail purposes.
+	// A failed soak point outranks a regression verdict, and it is a
+	// genuine failure, so soakRegressionOnly stays false for it.
+	if soakPointErr != nil {
+		return soakPointErr
+	}
 	if soakRegressionErr != nil {
 		soakRegressionOnly = true
 	}
 	return soakRegressionErr
+}
+
+// soakFailedPoint reports whether a soak's Run error is a measured point
+// that failed a check, so the run still has a result to write and archive.
+// Any other error (no samples, SSM, cancellation) has nothing to report.
+func soakFailedPoint(s *Scenario, points []SweepPoint, err error) bool {
+	return s.Soak && len(points) > 0 && errors.Is(err, errPointFailed)
 }
 
 // soakIndexEntry is the small per-run record a rolling-baseline comparator
@@ -731,7 +834,11 @@ func buildSoakArchivePlanForPoints(sessionID, scenarioName string, points []Poin
 // archived (not just the first), and the soak-index entry is skipped
 // entirely, since a one-off base-vs-PR A/B must never be mixed into the
 // rolling baseline's median (see compareSoakBaseline).
-func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher) (soakIndexEntry, error) {
+//
+// failed is true when the soak's point failed a check (see soakFailedPoint).
+// Its result and raw artifacts are archived, but its soak-index entry is
+// not written: a partial window would skew the rolling baseline's median.
+func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket, sessionID string, s *Scenario, result *Result, jsonPath string, topo Topology, logFetcher LogFetcher, failed bool) (soakIndexEntry, error) {
 	entry := buildSoakIndexEntry(sessionID, s, result)
 	entry.BuildSHA = gitHeadSHA()
 	if archiveBucket == "" {
@@ -755,7 +862,7 @@ func uploadSoakResult(ctx context.Context, region, sessionBucket, archiveBucket,
 
 	// A binary-arm soak's entry must never land in soak-index/ — see the
 	// doc comment above.
-	if !s.IsBinaryArmScenario() {
+	if !s.IsBinaryArmScenario() && !failed {
 		indexRaw, err := json.Marshal(entry)
 		if err != nil {
 			return entry, fmt.Errorf("marshal soak index entry: %w", err)
@@ -1004,11 +1111,7 @@ func downCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve backend.hcl: %w", err)
 	}
-	stack := &Terraform{
-		Dir:         StackDir(*repoRoot, s.Stack),
-		BackendFile: backendAbs,
-		StateKey:    s.Stack,
-	}
+	stack := stackTerraform(s, *repoRoot, backendAbs)
 	shared := &Terraform{
 		Dir:         SharedDir(*repoRoot),
 		BackendFile: backendAbs,
@@ -1185,6 +1288,13 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	cfg := rootSections(s)
 	cfg["input"] = input
 	cfg["output"] = output
+	// An e2e scenario carries the customer's own processors under
+	// pipeline.processors; the topology only rewrites input/output.
+	if s.Direction == DirectionE2E {
+		if pl, ok := s.Pipeline["pipeline"]; ok {
+			cfg["pipeline"] = pl
+		}
+	}
 	// A scenario may declare a top-level buffer (e.g. memory) to decouple a
 	// fast input from a commit-latency-bound output like the iceberg sink.
 	if buf, ok := s.Pipeline["buffer"]; ok {
@@ -1200,6 +1310,7 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 // by BenchNames (WithStreams/WithStream, _s<i>).
 func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, names BenchNames, p sweepPoint) (renderedPointConfigs, error) {
 	out := renderedPointConfigs{Key: p.Key()}
+	outs = pointOuts(outs, names, p.Key())
 
 	// Arms carry a merged pipeline; arm-less points use the scenario's own.
 	armScenario := *s
@@ -1237,6 +1348,11 @@ func renderPointConfigs(s *Scenario, outs map[string]string, topo Topology, name
 			return renderedPointConfigs{}, fmt.Errorf("render stream %d of %s: %w", i, out.Key, err)
 		}
 		cfg := map[string]any{"input": input, "output": output}
+		if armScenario.Direction == DirectionE2E {
+			if pl, ok := armScenario.Pipeline["pipeline"]; ok {
+				cfg["pipeline"] = pl
+			}
+		}
 		if buf, ok := armScenario.Pipeline["buffer"]; ok {
 			cfg["buffer"] = buf
 		}
@@ -1308,6 +1424,25 @@ func binaryNamesReferenced(s *Scenario) map[string]bool {
 	return out
 }
 
+// sinkSecretKinds are the e2e sink kinds whose credentials the runner host
+// fetches from Secrets Manager itself.
+var sinkSecretKinds = []string{"snowflake", "bigquery"}
+
+// sharedStackVars are the shared stack's terraform variables.
+// sink_secrets_enabled attaches the runner host role's read grant on the
+// sink credential secrets, and is true only for an e2e run whose sink needs
+// one: every other run (soaks, which may run PR binaries, included) gets a
+// host role that cannot read them.
+func sharedStackVars(s *Scenario, region, sessionID string) map[string]string {
+	secrets := s.Direction == DirectionE2E && s.Sink != nil && slices.Contains(sinkSecretKinds, s.Sink.Kind)
+	return map[string]string{
+		"region":               region,
+		"runner_instance_type": s.Infra.Runner.InstanceType,
+		"bench_session_id":     sessionID,
+		"sink_secrets_enabled": strconv.FormatBool(secrets),
+	}
+}
+
 // validateBinaryFlags checks --binary mappings against the scenario's
 // referenced logical binary names BEFORE any AWS spend: every name an arm
 // references must have a mapping, and every mapping must be referenced by
@@ -1317,6 +1452,16 @@ func binaryNamesReferenced(s *Scenario) map[string]bool {
 // the first check anyway; catching both in one pass gives a single clear
 // error instead of two confusing ones.
 func validateBinaryFlags(s *Scenario, binaries map[string]string) error {
+	// The stack-none producer runs the default staged binary
+	// (producerBinary), which --binary mappings replace.
+	if s.Stack == stackNone && len(binaries) > 0 {
+		return fmt.Errorf("scenario %s: stack %q does not support --binary mappings: its producer runs the default %s", s.Name, stackNone, producerBinary)
+	}
+	// An e2e run may hold sink secrets on the runner host (see
+	// sharedStackVars), so it never runs a binary built elsewhere.
+	if s.Direction == DirectionE2E && len(binaries) > 0 {
+		return fmt.Errorf("scenario %s: e2e scenarios do not take --binary mappings: bot runs build from the checkout only", s.Name)
+	}
 	referenced := binaryNamesReferenced(s)
 
 	var missing []string
@@ -1498,6 +1643,18 @@ chmod 0600 /opt/bench/license.jwt
 }
 
 func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames, execTimeout time.Duration) error {
+	if s.Stack == stackNone {
+		// No seeder binary: the seed step only creates the source topic.
+		script, err := topo.SeedScript(s, outs, names)
+		if err != nil {
+			return err
+		}
+		ssmExec, err := NewSSMExecutor(ctx, opts.region, execTimeout)
+		if err != nil {
+			return err
+		}
+		return ssmExec.Run(ctx, workloadInstance(s, outs), script, streamingOnLine(os.Stdout, "seed"))
+	}
 	if s.Dataset.Seeder == "" {
 		return nil
 	}
@@ -1545,5 +1702,13 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	if err != nil {
 		return err
 	}
-	return ssmExec.Run(ctx, outs["load_gen_instance_id"], script, streamingOnLine(os.Stdout, "seed"))
+	return ssmExec.Run(ctx, workloadInstance(s, outs), script, streamingOnLine(os.Stdout, "seed"))
+}
+
+// sourceProbeFor is a stack-none scenario's source probe, or nil.
+func sourceProbeFor(s *Scenario, outs map[string]string, n BenchNames) *SourceProbeArgs {
+	if s.Stack != stackNone {
+		return nil
+	}
+	return &SourceProbeArgs{Brokers: outs["redpanda_broker_endpoints"], Topic: n.SourceTopic()}
 }

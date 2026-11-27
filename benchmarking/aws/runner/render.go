@@ -24,14 +24,20 @@ import (
 // Result is the canonical per-run artefact, written as JSON and rendered to
 // markdown.
 type Result struct {
-	Scenario     string        `json:"scenario"`
-	ScenarioHash string        `json:"scenario_hash"`
-	GitSHA       string        `json:"git_sha"`
-	StartedAt    time.Time     `json:"started_at"`
-	FinishedAt   time.Time     `json:"finished_at"`
-	Infra        ResultInfra   `json:"infra"`
-	Dataset      ResultDataset `json:"dataset"`
-	Points       []PointResult `json:"points"`
+	// SessionID is the bench session ID the sweep ran under. It is also the
+	// sweep's catalogue entry ID, so `catalog import` can recognise a run the
+	// runner has already catalogued.
+	SessionID    string `json:"session_id,omitempty"`
+	Scenario     string `json:"scenario"`
+	ScenarioHash string `json:"scenario_hash"`
+	GitSHA       string `json:"git_sha"`
+	// ConnectVersion is the git-describe string of the build under test.
+	ConnectVersion string        `json:"connect_version,omitempty"`
+	StartedAt      time.Time     `json:"started_at"`
+	FinishedAt     time.Time     `json:"finished_at"`
+	Infra          ResultInfra   `json:"infra"`
+	Dataset        ResultDataset `json:"dataset"`
+	Points         []PointResult `json:"points"`
 }
 
 type ResultInfra struct {
@@ -82,6 +88,13 @@ type PointResult struct {
 	// only when the scenario set an expected write rate (soak scenarios).
 	// Empty for every non-soak point.
 	Backlog []BacklogPoint `json:"backlog,omitempty"`
+
+	// ProducerRateMsgPerSec is a stack-none point's achieved producer rate:
+	// the source topic's high-watermark growth over the window.
+	ProducerRateMsgPerSec float64 `json:"producer_rate_msg_s,omitempty"`
+	// ConsumerLagEnd is a stack-none point's consumer group lag at window
+	// end, in records. Nil for every other scenario.
+	ConsumerLagEnd *int64 `json:"consumer_lag_end,omitempty"`
 }
 
 // WriteResultJSON writes the result to <dir>/<connector>/<scenario>/<timestamp>.json.
@@ -143,6 +156,10 @@ type anomalyView struct {
 	DurationSec int
 	MinRatio    float64
 	StartT      int
+	// Dip is true for a throughput dip; other anomalies (Kind set) print
+	// Note instead of the dip sentence.
+	Dip  bool
+	Note string
 }
 
 // AppendMarkdown appends a results section to the target file.
@@ -183,6 +200,7 @@ func AppendMarkdown(target string, r *Result, description string) error {
 		for _, a := range p.Anomalies {
 			anomalies = append(anomalies, anomalyView{
 				VCPU: p.VCPU, DurationSec: a.DurationSec, MinRatio: a.MinRatio, StartT: a.StartT,
+				Dip: a.Kind == "", Note: a.Note,
 			})
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 )
 
 // BenchNames is the source of truth for the per-session resource names a
@@ -65,6 +66,31 @@ func (n BenchNames) WithStream(idx int) BenchNames {
 // ConnectTopic is the single topic Connect writes to in a source bench.
 func (n BenchNames) ConnectTopic() string {
 	return fmt.Sprintf("bench_%s_%s_connect", n.SessionID, n.Connector)
+}
+
+// scratchName lower-cases v and maps every byte outside [a-z0-9_] to '_', the
+// shape of a per-run scratch name.
+func scratchName(v string) string {
+	b := []byte(strings.ToLower(v))
+	for i, c := range b {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '_' {
+			b[i] = '_'
+		}
+	}
+	return string(b)
+}
+
+// SourceTopic is the topic a stack-none scenario's producer fills and its
+// input reads: bench_<session>_src.
+func (n BenchNames) SourceTopic() string {
+	return "bench_" + scratchName(n.SessionID) + "_src"
+}
+
+// ConsumerGroup is the input's consumer group at one sweep point:
+// bench_<session>_p<pointKey>. A fresh group per point makes each point read
+// the source topic from its oldest retained offset.
+func (n BenchNames) ConsumerGroup(pointKey string) string {
+	return "bench_" + scratchName(n.SessionID) + "_p" + scratchName(pointKey)
 }
 
 // MetricInputs carries everything EngineSeries needs to turn a metrics dump
@@ -181,6 +207,10 @@ type Topology interface {
 	// framing samples under "###timestamp=<unix>" into $RP) and ends by setting
 	// RP_SCRAPER=$!. Upload copies $RP to S3 after the bench process exits.
 	MetricSidecar(args MetricSidecarArgs) MetricSidecar
+	// SummaryFromSamples reports whether a point's Summary is computed from
+	// the Connect log's rolling-stats samples (measured at the output) rather
+	// than from broker-side series.
+	SummaryFromSamples() bool
 }
 
 // topologyFor selects the implementation for a scenario's direction. An empty
@@ -197,6 +227,8 @@ func topologyFor(d Direction) (Topology, error) {
 		return sourceTopology{}, nil
 	case DirectionSink:
 		return nil, fmt.Errorf("direction %q is not supported in this build: sink scenarios return with the iceberg-sink stack PR", d)
+	case DirectionE2E:
+		return e2eTopology{}, nil
 	default:
 		return nil, fmt.Errorf("unknown direction %q", d)
 	}

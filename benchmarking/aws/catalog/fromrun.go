@@ -1,0 +1,191 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+package catalog
+
+import (
+	"errors"
+	"fmt"
+	"regexp"
+	"slices"
+	"time"
+)
+
+// RunPoint is one measured sweep point of a bench run.
+type RunPoint struct {
+	VCPU                    int
+	Engine, Arm, Binary     string
+	MedianMBps, MedianMsgps float64
+	RSSBytes                []uint64 // process RSS samples; the peak is kept
+	LimitedBy               string   // see Point.LimitedBy
+	OutputMBps              float64  // see Point.OutputMBps
+}
+
+// BenchSourceOutput is the catalogued identity of a source-direction bench's
+// output: the component only. The harness's benchmark processor and its
+// per-session topic are measurement plumbing, not part of the workload a
+// customer runs, so they are left out of the entry's processors and
+// fingerprint.
+func BenchSourceOutput() map[string]any {
+	return map[string]any{"redpanda": map[string]any{}}
+}
+
+// BenchSourcePipeline builds the catalogued pipeline of a source-direction
+// bench scenario from its pipeline section: the scenario's input, its
+// pipeline.pipeline section (if any) and BenchSourceOutput. The runner and
+// the importer both use it so their entries share one identity.
+func BenchSourcePipeline(scenario map[string]any) map[string]any {
+	p := map[string]any{"input": scenario["input"], "output": BenchSourceOutput()}
+	if pp, ok := scenario["pipeline"]; ok {
+		p["pipeline"] = pp
+	}
+	return p
+}
+
+// Identity is a catalogue identity given whole, rather than derived from
+// RunInput.Pipeline: an e2e run's plan fingerprints the customer's original
+// config, which the identity-swapped pipeline the bench ran cannot reproduce.
+type Identity struct {
+	Fingerprint string
+	Input       string
+	Processors  []string
+	Output      string
+}
+
+var fingerprintRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// RunInput is a completed bench run in the shape EntryFromRun maps to an
+// Entry. It is shared by the runner and the historical-results importer.
+type RunInput struct {
+	ID, Scenario, GitSHA, ConnectVersion, InstanceType, Region, RunURL, ResultKey string
+
+	// Pipeline is {"input":..., "pipeline":{"processors":...}, "output":...}.
+	// It is ignored when Identity is set.
+	Pipeline map[string]any
+	// Identity, when set, is the entry's fingerprint and components.
+	Identity *Identity
+	// SourceApproximated and Caveats come from the plan, if any.
+	SourceApproximated bool
+	Caveats            []string
+	MessageSizeBytes   int
+	OfferedRatePerSec  int
+	Soak               bool
+	MemoryLimited      bool
+	// SinkMeasured is true when throughput was measured end to end, with the
+	// output writing to a real sink.
+	SinkMeasured bool
+	// CapacityBasis is Entry.CapacityBasis; "" for the legacy output basis.
+	CapacityBasis string
+	// SinkSize is the sink's size (Snowflake warehouse), if any.
+	SinkSize string
+	// AWSCostUSD is the run's AWS cost; nil when not recorded.
+	AWSCostUSD *float64
+	Points     []RunPoint
+	Now        time.Time
+}
+
+// EntryFromRun maps a completed bench sweep to a catalogue Entry. Soak runs
+// and arm/binary comparison runs are not catalogue material and are rejected,
+// as are runs whose build or Connect version is not identifiable.
+func EntryFromRun(r RunInput) (Entry, error) {
+	if r.GitSHA == "" || r.GitSHA == "unknown" {
+		return Entry{}, errors.New("build sha unknown")
+	}
+	if r.ConnectVersion == "" || r.ConnectVersion == "unknown" {
+		return Entry{}, errors.New("connect version unknown")
+	}
+	if r.Soak {
+		return Entry{}, errors.New("soak result")
+	}
+	if r.InstanceType == "" {
+		return Entry{}, errors.New("runner instance type missing")
+	}
+	var points []Point
+	for _, p := range r.Points {
+		if p.Arm != "" || p.Binary != "" {
+			return Entry{}, errors.New("arm/binary result")
+		}
+		if p.Engine != "" && p.Engine != "connect" {
+			continue
+		}
+		var peak uint64
+		for _, b := range p.RSSBytes {
+			peak = max(peak, b)
+		}
+		points = append(points, Point{
+			VCPU:          float64(p.VCPU),
+			CUs:           p.VCPU * 10,
+			CapacityMBps:  p.MedianMBps,
+			CapacityMsgps: p.MedianMsgps,
+			OutputMBps:    p.OutputMBps,
+			PeakRSSBytes:  peak,
+			LimitedBy:     p.LimitedBy,
+		})
+	}
+	input, processors, output, fp, err := runIdentity(r)
+	if err != nil {
+		return Entry{}, err
+	}
+	var caveats []string
+	if len(r.Caveats) > 0 {
+		caveats = slices.Compact(slices.Sorted(slices.Values(r.Caveats)))
+	}
+	e := Entry{
+		SchemaVersion: SchemaVersion,
+		ID:            r.ID,
+		Scenario:      r.Scenario,
+		Input:         input,
+		Processors:    processors,
+		Output:        output,
+		Fingerprint:   fp,
+		Workload: Workload{
+			MessageSizeBytes:  r.MessageSizeBytes,
+			Mode:              ModeFor(input),
+			OfferedRatePerSec: r.OfferedRatePerSec,
+		},
+		ConnectVersion: r.ConnectVersion,
+		BuildSHA:       r.GitSHA,
+		Infra:          Infra{RunnerInstanceType: r.InstanceType, Region: r.Region, SinkSize: r.SinkSize},
+		SinkMeasured:   r.SinkMeasured,
+		// A plan that stubbed external calls says so in its caveats.
+		ExternalStubbed:    slices.Contains(caveats, CaveatExternalStubbed),
+		MemoryLimited:      r.MemoryLimited,
+		SourceApproximated: r.SourceApproximated,
+		Caveats:            caveats,
+		CapacityBasis:      r.CapacityBasis,
+		Points:             points,
+		AWSCostUSD:         r.AWSCostUSD,
+		RunURL:             r.RunURL,
+		ResultKey:          r.ResultKey,
+		RecordedAt:         r.Now,
+	}
+	if err := e.Validate(); err != nil {
+		return Entry{}, fmt.Errorf("invalid entry: %w", err)
+	}
+	return e, nil
+}
+
+// runIdentity returns the run's components and fingerprint: r.Identity when
+// set, otherwise derived from r.Pipeline.
+func runIdentity(r RunInput) (input string, processors []string, output, fp string, err error) {
+	if id := r.Identity; id != nil {
+		if !fingerprintRe.MatchString(id.Fingerprint) {
+			return "", nil, "", "", fmt.Errorf("identity fingerprint %q: want 64 lower-case hex characters", id.Fingerprint)
+		}
+		return id.Input, slices.Clone(id.Processors), id.Output, id.Fingerprint, nil
+	}
+	input, processors, output, err = Components(r.Pipeline)
+	if err != nil {
+		return "", nil, "", "", fmt.Errorf("components: %w", err)
+	}
+	fp, err = Fingerprint(r.Pipeline)
+	if err != nil {
+		return "", nil, "", "", fmt.Errorf("fingerprint: %w", err)
+	}
+	return input, processors, output, fp, nil
+}

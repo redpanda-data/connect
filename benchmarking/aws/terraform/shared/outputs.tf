@@ -5,6 +5,9 @@ output "private_subnet_ids" { value = aws_subnet.private[*].id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "results_bucket" { value = aws_s3_bucket.results.bucket }
 
+# The Glue Iceberg REST catalog is addressed by account id (the iceberg sink's warehouse).
+output "aws_account_id" { value = data.aws_caller_identity.current.account_id }
+
 # Instance profile shared by the runner + load-gen hosts (SSM + S3 access). A
 # connector stack that provisions its OWN EC2 source (e.g. self-hosted mongod)
 # attaches this so the box is SSM-reachable and can self-stage the seeder from
