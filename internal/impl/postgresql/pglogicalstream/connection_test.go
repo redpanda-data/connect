@@ -10,6 +10,7 @@ package pglogicalstream
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
@@ -199,13 +200,68 @@ func TestFreshPasswordLockIsPerConfig(t *testing.T) {
 	<-building
 	defer close(release)
 
+	type result struct {
+		password string
+		err      error
+	}
 	for _, cfg := range []*Config{
 		{DBConfig: &pgconn.Config{Password: "pw"}},
 		{DBConfig: &pgconn.Config{Password: "pw"}, RefreshAuthToken: func(context.Context) error { return nil }},
 	} {
-		password, err := cfg.freshPassword(t.Context())
-		require.NoError(t, err)
-		assert.Equal(t, "pw", password)
+		done := make(chan result, 1)
+		go func() {
+			password, err := cfg.freshPassword(t.Context())
+			done <- result{password, err}
+		}()
+		select {
+		case r := <-done:
+			require.NoError(t, r.err)
+			assert.Equal(t, "pw", r.password)
+		case <-time.After(time.Second):
+			t.Fatal("freshPassword waited on the lock of another config")
+		}
+	}
+}
+
+type fakeConnector struct {
+	driver.Connector
+	err error
+}
+
+func (f fakeConnector) Connect(context.Context) (driver.Conn, error) {
+	return nil, f.err
+}
+
+func TestAuthResetConnectorForgetsRejectedToken(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err    error
+		forget bool
+	}{
+		"dial error": {
+			err:    &pgconn.ConnectError{Config: &pgconn.Config{}},
+			forget: false,
+		},
+		"rejected token": {
+			err:    fmt.Errorf("connecting: %w", &pgconn.PgError{Code: invalidPasswordCode}),
+			forget: true,
+		},
+		"other server error": {
+			err:    &pgconn.PgError{Code: "53300"},
+			forget: false,
+		},
+		"connected": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			builtAt := time.Now()
+			cfg := &Config{
+				DBConfig:         &pgconn.Config{},
+				RefreshAuthToken: func(context.Context) error { return nil },
+				authTokenBuiltAt: builtAt,
+			}
+			_, err := authResetConnector{Connector: fakeConnector{err: tc.err}, cfg: cfg}.Connect(t.Context())
+			require.ErrorIs(t, err, tc.err)
+			assert.Equal(t, tc.forget, cfg.authTokenBuiltAt.IsZero())
+		})
 	}
 }
 
@@ -246,4 +302,47 @@ func TestIntegrationOpenPgConnectionSurvivesTokenExpiry(t *testing.T) {
 	var one int
 	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT 1`).Scan(&one))
 	assert.Equal(t, 1, one)
+}
+
+// The server can reject a token before authTokenMaxAge, for example when the
+// temporary credentials that signed it expire first. The connection that gets
+// the rejection fails, and the next one builds a new token.
+func TestIntegrationOpenPgConnectionRebuildsRejectedToken(t *testing.T) {
+	integration.CheckSkip(t)
+
+	replURL := createDockerInstance(t)
+
+	dsn := strings.ReplaceAll(replURL, " replication=database", "")
+	dbConf, err := pgconn.ParseConfig(dsn)
+	require.NoError(t, err)
+
+	var token atomic.Value
+	token.Store("secret")
+	var builds atomic.Int32
+	db, err := openPgConnectionFromConfig(&Config{
+		DBRawDSN: dsn,
+		DBConfig: dbConf,
+		RefreshAuthToken: func(context.Context) error {
+			builds.Add(1)
+			dbConf.Password = token.Load().(string)
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	defer db.Close()
+	db.SetMaxIdleConns(0)
+
+	_, err = db.ExecContext(t.Context(), `ALTER ROLE user_name PASSWORD 'rotated'`)
+	require.NoError(t, err)
+	token.Store("rotated")
+
+	// The token is still young, so this connection uses it and is refused.
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, db.QueryRowContext(t.Context(), `SELECT 1`).Err(), &pgErr)
+	assert.Equal(t, invalidPasswordCode, pgErr.Code)
+
+	var one int
+	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT 1`).Scan(&one))
+	assert.Equal(t, 1, one)
+	assert.Equal(t, int32(2), builds.Load())
 }

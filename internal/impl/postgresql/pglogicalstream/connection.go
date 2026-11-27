@@ -11,6 +11,8 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -74,6 +76,37 @@ func (c *Config) freshPassword(ctx context.Context) (string, error) {
 	return c.DBConfig.Password, nil
 }
 
+// forgetAuthToken makes the next connection build a new auth token whatever
+// the age of the current one. It is called when the server rejects the token,
+// which can happen before authTokenMaxAge, for example when the temporary AWS
+// credentials that signed it expire first.
+func (c *Config) forgetAuthToken() {
+	if c.RefreshAuthToken == nil {
+		return
+	}
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	c.authTokenBuiltAt = time.Time{}
+}
+
+// invalidPasswordCode is the SQLSTATE of a failed password authentication.
+const invalidPasswordCode = "28P01"
+
+// authResetConnector forgets the auth token of cfg when the server rejects it,
+// so the pool does not keep connecting with it until it ages out.
+type authResetConnector struct {
+	driver.Connector
+	cfg *Config
+}
+
+func (a authResetConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	conn, err := a.Connector.Connect(ctx)
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == invalidPasswordCode {
+		a.cfg.forgetAuthToken()
+	}
+	return conn, err
+}
+
 // dbConfigCopy returns a copy of DBConfig that is safe to connect with while
 // another goroutine refreshes the auth token.
 func (c *Config) dbConfigCopy() *pgconn.Config {
@@ -103,7 +136,7 @@ func openPgConnectionWithParams(cfg *Config, params map[string]string) (*sql.DB,
 	// physical connections whenever it needs one. Take the password when a
 	// connection is opened rather than once here, or every connection opened
 	// after the token expires fails to authenticate.
-	return stdlib.OpenDB(*parsedCfg.ConnConfig, stdlib.OptionBeforeConnect(
+	connector := stdlib.GetConnector(*parsedCfg.ConnConfig, stdlib.OptionBeforeConnect(
 		func(ctx context.Context, connCfg *pgx.ConnConfig) error {
 			password, err := cfg.freshPassword(ctx)
 			if err != nil {
@@ -112,7 +145,11 @@ func openPgConnectionWithParams(cfg *Config, params map[string]string) (*sql.DB,
 			connCfg.Password = password
 			return nil
 		},
-	)), nil
+	))
+	if cfg.RefreshAuthToken != nil {
+		connector = authResetConnector{Connector: connector, cfg: cfg}
+	}
+	return sql.OpenDB(connector), nil
 }
 
 func getPostgresVersion(cfg *Config) (int, error) {
