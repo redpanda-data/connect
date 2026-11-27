@@ -320,7 +320,7 @@ func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *k
 	if err != nil && errors.Is(err, kerr.TopicAlreadyExists) {
 		m.log.Infof("Topic migration: destination topic '%s' for source '%s' already exists", dstTopic, topic)
 
-		dstInfo, _, err := topicDetailsWithClient(ctx, dstAdm, dstTopic)
+		dstInfo, err := existingTopicDetails(ctx, dstAdm, dstTopic)
 		if err != nil {
 			return fmt.Errorf("get destination topic details %s: %w", dstTopic, err)
 		}
@@ -399,44 +399,66 @@ func (m *topicMigrator) topicReplicationFactor(rf int) int16 {
 	return int16(rf)
 }
 
+// Timing of the retries in existingTopicDetails.
+const (
+	existingTopicRetryBackoff = 100 * time.Millisecond
+	existingTopicRetryTimeout = 10 * time.Second
+)
+
+// existingTopicDetails returns the details of a topic that CreateTopic has just
+// reported as already existing. Redpanda reports TopicAlreadyExists as soon as
+// the topic is created, but metadata requests can return
+// UNKNOWN_TOPIC_OR_PARTITION until the metadata reaches the broker serving
+// them. That happens when the topic was created a moment earlier, for example
+// by another pipeline or an earlier sync. Retry for a short while instead of
+// failing the sync.
+func existingTopicDetails(ctx context.Context, adm *kadm.Client, topic string) (kadm.TopicDetail, error) {
+	ctx, cancel := context.WithTimeout(ctx, existingTopicRetryTimeout)
+	defer cancel()
+
+	for {
+		d, err := listTopicDetails(ctx, adm, topic)
+		if err == nil || !errors.Is(err, kerr.UnknownTopicOrPartition) {
+			return d, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return d, err
+		case <-time.After(existingTopicRetryBackoff):
+		}
+	}
+}
+
+func listTopicDetails(ctx context.Context, adm *kadm.Client, topic string) (kadm.TopicDetail, error) {
+	topics, err := adm.ListTopics(ctx, topic)
+	if err != nil {
+		return kadm.TopicDetail{}, err
+	}
+	d, ok := topics[topic]
+	if !ok {
+		return d, fmt.Errorf("topic %s not found", topic)
+	}
+	return d, d.Err
+}
+
 func topicDetailsWithClient(ctx context.Context, adm *kadm.Client, topic string) (kadm.TopicDetail, kadm.ResourceConfig, error) {
-	var (
-		d  kadm.TopicDetail
-		rc kadm.ResourceConfig
-	)
+	var rc kadm.ResourceConfig
 
-	{
-		topics, err := adm.ListTopics(ctx, topic)
-		if err != nil {
-			return d, rc, err
-		}
-
-		var ok bool
-		d, ok = topics[topic]
-		if !ok {
-			return d, rc, fmt.Errorf("topic %s not found", topic)
-		}
-
-		if d.Err != nil {
-			return d, rc, d.Err
-		}
+	d, err := listTopicDetails(ctx, adm, topic)
+	if err != nil {
+		return d, rc, err
 	}
 
-	{
-		rcs, err := adm.DescribeTopicConfigs(ctx, topic)
-		if err != nil {
-			return d, rc, err
-		}
-		rc, err = rcs.On(topic, nil)
-		if err != nil {
-			return d, rc, err
-		}
-		if rc.Err != nil {
-			return d, rc, rc.Err
-		}
+	rcs, err := adm.DescribeTopicConfigs(ctx, topic)
+	if err != nil {
+		return d, rc, err
 	}
-
-	return d, rc, nil
+	rc, err = rcs.On(topic, nil)
+	if err != nil {
+		return d, rc, err
+	}
+	return d, rc, rc.Err
 }
 
 type topicConfig map[string]*string

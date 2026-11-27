@@ -200,6 +200,7 @@ parquet                   ,input     ,parquet                   ,certified  ,n  
 parquet                   ,processor ,parquet                   ,community  ,y          ,n     ,n              ,not yet certified for cloud
 parquet_decode            ,processor ,parquet_decode            ,certified  ,n          ,y     ,y              ,
 parquet_encode            ,processor ,parquet_encode            ,certified  ,n          ,y     ,y              ,
+parquet_encode_protobuf   ,processor ,parquet_encode_protobuf   ,community  ,n          ,n     ,n              ,not yet certified for cloud
 parse_log                 ,processor ,parse_log                 ,community  ,n          ,y     ,y              ,
 pg_stream                 ,input     ,pg_stream                 ,enterprise ,y          ,y     ,y              ,
 pinecone                  ,output    ,pinecone                  ,certified  ,n          ,y     ,y              ,
