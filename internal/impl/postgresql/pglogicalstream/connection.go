@@ -89,8 +89,19 @@ func (c *Config) forgetAuthToken() {
 	c.authTokenBuiltAt = time.Time{}
 }
 
-// invalidPasswordCode is the SQLSTATE of a failed password authentication.
-const invalidPasswordCode = "28P01"
+// SQLSTATEs a server reports when it rejects the auth token. Password
+// authentication fails with invalid_password, but RDS IAM authentication goes
+// through PAM, and Postgres reports a PAM rejection as
+// invalid_authorization_specification.
+const (
+	invalidPasswordCode          = "28P01"
+	invalidAuthorizationSpecCode = "28000"
+)
+
+func isAuthRejected(err error) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && (pgErr.Code == invalidPasswordCode || pgErr.Code == invalidAuthorizationSpecCode)
+}
 
 // authResetConnector forgets the auth token of cfg when the server rejects it,
 // so the pool does not keep connecting with it until it ages out.
@@ -101,7 +112,7 @@ type authResetConnector struct {
 
 func (a authResetConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	conn, err := a.Connector.Connect(ctx)
-	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == invalidPasswordCode {
+	if isAuthRejected(err) {
 		a.cfg.forgetAuthToken()
 	}
 	return conn, err

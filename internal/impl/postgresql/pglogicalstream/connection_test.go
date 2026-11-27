@@ -245,6 +245,10 @@ func TestAuthResetConnectorForgetsRejectedToken(t *testing.T) {
 			err:    fmt.Errorf("connecting: %w", &pgconn.PgError{Code: invalidPasswordCode}),
 			forget: true,
 		},
+		"rejected IAM token via PAM": {
+			err:    fmt.Errorf("connecting: %w", &pgconn.PgError{Code: invalidAuthorizationSpecCode}),
+			forget: true,
+		},
 		"other server error": {
 			err:    &pgconn.PgError{Code: "53300"},
 			forget: false,
