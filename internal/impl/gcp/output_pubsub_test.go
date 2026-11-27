@@ -445,3 +445,85 @@ validate_topic: %v
 		})
 	}
 }
+
+func TestPubSubOutput_OrderingKeyResumePublish(t *testing.T) {
+	ctx := t.Context()
+
+	conf, err := newPubSubOutputConfig().ParseYAML(`
+    project: sample-project
+    topic: test
+    ordering_key: '${! meta("key").or("") }'
+    `,
+		nil,
+	)
+	require.NoError(t, err, "bad output config")
+
+	client := &mockPubSubClient{}
+
+	topic := &mockTopic{}
+	topic.On("Exists").Return(true, nil).Once()
+	topic.On("EnableOrdering").Return().Once()
+	topic.On("ResumePublish", "key-a").Return().Once()
+	topic.On("ResumePublish", "key-b").Return().Once()
+	topic.On("Stop").Return().Once()
+
+	client.On("Topic", "test").Return(topic).Once()
+	client.On("Close").Return(nil).Once()
+
+	// Two messages with key-a fail, one with key-b fails, one with empty ordering key fails.
+	// ResumePublish should be called once for key-a, once for key-b, and not at all for "".
+	resA1 := &mockPublishResult{}
+	resA1.On("Get").Return("", errors.New("transient error a1")).Once()
+	topic.On("Publish", "a1", mock.AnythingOfType("*pubsub.Message")).Return(resA1).Once()
+
+	resA2 := &mockPublishResult{}
+	resA2.On("Get").Return("", errors.New("paused error a2")).Once()
+	topic.On("Publish", "a2", mock.AnythingOfType("*pubsub.Message")).Return(resA2).Once()
+
+	resB1 := &mockPublishResult{}
+	resB1.On("Get").Return("", errors.New("transient error b1")).Once()
+	topic.On("Publish", "b1", mock.AnythingOfType("*pubsub.Message")).Return(resB1).Once()
+
+	resEmpty := &mockPublishResult{}
+	resEmpty.On("Get").Return("", errors.New("transient error empty")).Once()
+	topic.On("Publish", "empty", mock.AnythingOfType("*pubsub.Message")).Return(resEmpty).Once()
+
+	// Subsequent retry succeeds after ResumePublish.
+	resA1Retry := &mockPublishResult{}
+	resA1Retry.On("Get").Return("msg-id-a1", nil).Once()
+	topic.On("Publish", "a1", mock.AnythingOfType("*pubsub.Message")).Return(resA1Retry).Once()
+
+	out, err := newPubSubOutput(conf)
+	require.NoError(t, err, "failed to create output")
+	out.client = client
+	t.Cleanup(func() {
+		err = out.Close(ctx)
+		require.NoError(t, err, "closing output failed")
+
+		mock.AssertExpectationsForObjects(
+			t,
+			client,
+			topic,
+			resA1, resA2, resB1, resEmpty, resA1Retry,
+		)
+	})
+
+	require.NoError(t, out.Connect(ctx), "connect failed")
+
+	msgA1 := service.NewMessage([]byte("a1"))
+	msgA1.MetaSet("key", "key-a")
+	msgA2 := service.NewMessage([]byte("a2"))
+	msgA2.MetaSet("key", "key-a")
+	msgB1 := service.NewMessage([]byte("b1"))
+	msgB1.MetaSet("key", "key-b")
+	msgEmpty := service.NewMessage([]byte("empty"))
+
+	err = out.WriteBatch(ctx, service.MessageBatch{msgA1, msgA2, msgB1, msgEmpty})
+	var bErr *service.BatchError
+	require.ErrorAs(t, err, &bErr)
+	require.Equal(t, 4, bErr.IndexedErrors())
+
+	// Retry succeeds and does not call ResumePublish again.
+	err = out.WriteBatch(ctx, service.MessageBatch{msgA1})
+	require.NoError(t, err)
+}
