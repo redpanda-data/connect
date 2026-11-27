@@ -714,3 +714,45 @@ func TestIntegrationMongoCDCIncrementalSnapshotShardedWatermarkPerCollection(t *
 	assert.Positive(t, got.readByColl["busy"])
 	t.Logf("snapshot read %d documents, %d updates streamed", got.readByColl["busy"], got.ops["update"])
 }
+
+// TestIntegrationMongoCDCSnapshotShardedOperationTime runs a blocking snapshot
+// through mongos. The operation_time metadata of a read message is the time of
+// the snapshot. mongos is a router and has no oplog of its own. The test
+// expects each read message to have a non-zero operation_time that is not
+// later than the changes streamed after the snapshot.
+func TestIntegrationMongoCDCSnapshotShardedOperationTime(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	uri := startShardedCluster(t)
+	h := newIncrementalHarnessOn(t, uri, connectTo(t, uri))
+	h.db.CreateShardedCollection(t, "foo")
+	h.db.InsertMany(t, "foo",
+		bson.M{"_id": 0, "v": 0},
+		bson.M{"_id": 1, "v": 0},
+		bson.M{"_id": 2, "v": 0},
+	)
+	h.db.CreateCollection(t, "markers")
+
+	stream := h.stream(`
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  stream_snapshot: true
+  collections:
+    - 'foo'
+    - 'markers'
+`)
+	wait := stream.RunAsync(t)
+	h.waitReads("foo", 3)
+	h.waitStreamed("after-snapshot")
+	stream.Stop(t)
+	wait()
+
+	// replayChecked fails on a zero operation_time, and on a streamed change
+	// with an operation_time before the last read.
+	got := replayChecked(t, h.output)
+	assert.Equal(t, 3, got.readByColl["foo"])
+	assert.Positive(t, got.ops["insert"])
+}
