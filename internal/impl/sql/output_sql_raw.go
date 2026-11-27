@@ -68,7 +68,7 @@ output:
       root = [
         this.user.id,
         this.user.name,
-        meta("kafka_topic"),
+        metadata("kafka_topic"),
       ]
 `,
 		).
@@ -110,7 +110,7 @@ output:
       count: 100
       period: 100ms
     queries:
-      - when: 'root = meta("kafka_tombstone_message") == "true"'
+      - when: 'root = metadata("kafka_tombstone_message").string() == "true"'
         query: 'DELETE FROM users WHERE id = $1'
         args_mapping: 'root = [this.id]'
       - query: |
