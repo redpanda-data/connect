@@ -513,6 +513,8 @@ cache_resources:
 		)
 	})
 
+	t.Run("dynamic_bucket", func(t *testing.T) { s3DynamicBucketSuite(t, lsPort) })
+
 	t.Run("object_canned_acl_round_trip", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
@@ -660,4 +662,161 @@ func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+// newDynamicBucketWriter builds a connected aws_s3 writer against LocalStack
+// with the given bucket and path expressions.
+func newDynamicBucketWriter(t *testing.T, ctx context.Context, port, bucketExpr, pathExpr string) *amazonS3Writer {
+	t.Helper()
+	parsed, err := s3oOutputSpec().ParseYAML(fmt.Sprintf(`
+bucket: '%s'
+path: '%s'
+endpoint: http://localhost:%s
+force_path_style_urls: true
+region: eu-west-1
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx
+`, bucketExpr, pathExpr, port), nil)
+	require.NoError(t, err)
+	conf, err := s3oConfigFromParsed(parsed)
+	require.NoError(t, err)
+	w, err := newAmazonS3Writer(conf, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, w.Connect(ctx))
+	return w
+}
+
+func s3ObjectBody(ctx context.Context, t *testing.T, client *s3.Client, bucket, key string) (string, bool) {
+	t.Helper()
+	out, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
+	if err != nil {
+		return "", false
+	}
+	defer out.Body.Close()
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(out.Body)
+	require.NoError(t, err)
+	return buf.String(), true
+}
+
+// uniqueBucketPrefix returns a bucket name prefix that is unique per call, so
+// tests can be re-run (-count=N) against the shared LocalStack container.
+func uniqueBucketPrefix(base string) string {
+	return fmt.Sprintf("%s-%x", base, time.Now().UnixNano())
+}
+
+func metaMsg(body string, kv ...string) *service.Message {
+	m := service.NewMessage([]byte(body))
+	for i := 0; i+1 < len(kv); i += 2 {
+		m.MetaSetMut(kv[i], kv[i+1])
+	}
+	return m
+}
+
+// s3DynamicBucketSuite covers the behavior of an interpolated bucket that needs
+// a real S3: multi-tenant routing, one bad bucket among good ones, and the
+// unchanged behavior of static buckets.
+func s3DynamicBucketSuite(t *testing.T, lsPort string) {
+	client := newLocalStackS3Client(t, lsPort)
+
+	t.Run("many_messages_two_tenants_keep_bodies_in_right_bucket", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+		defer cancel()
+		mt := uniqueBucketPrefix("mt")
+		require.NoError(t, awstest.CreateBucket(ctx, lsPort, mt+"-acme"))
+		require.NoError(t, awstest.CreateBucket(ctx, lsPort, mt+"-globex"))
+
+		w := newDynamicBucketWriter(t, ctx, lsPort, mt+`-${! metadata("tenant") }`, `${! metadata("id") }.txt`)
+
+		var batch service.MessageBatch
+		want := map[string]map[string]string{mt + "-acme": {}, mt + "-globex": {}}
+		for i := range 20 {
+			tenant := "acme"
+			if i%3 == 0 {
+				tenant = "globex"
+			}
+			id := fmt.Sprintf("msg-%d", i)
+			body := fmt.Sprintf("payload for %s", id)
+			batch = append(batch, metaMsg(body, "tenant", tenant, "id", id))
+			want[mt+"-"+tenant][id+".txt"] = body
+		}
+		require.NoError(t, w.WriteBatch(ctx, batch))
+
+		for bucket, objs := range want {
+			for key, body := range objs {
+				got, ok := s3ObjectBody(ctx, t, client, bucket, key)
+				require.True(t, ok, "%s/%s missing", bucket, key)
+				assert.Equal(t, body, got, "%s/%s", bucket, key)
+			}
+		}
+		// Nothing leaked into the other tenant's bucket.
+		for key := range want[mt+"-acme"] {
+			_, ok := s3ObjectBody(ctx, t, client, mt+"-globex", key)
+			assert.False(t, ok, "acme object %s leaked into globex bucket", key)
+		}
+	})
+
+	t.Run("one_bad_bucket_does_not_block_good_messages", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		pf := uniqueBucketPrefix("pf")
+		require.NoError(t, awstest.CreateBucket(ctx, lsPort, pf+"-acme"))
+		require.NoError(t, awstest.CreateBucket(ctx, lsPort, pf+"-globex"))
+
+		w := newDynamicBucketWriter(t, ctx, lsPort, pf+`-${! metadata("tenant") }`, `${! metadata("id") }.txt`)
+		batch := service.MessageBatch{
+			metaMsg("a", "tenant", "acme", "id", "0"),
+			metaMsg("b", "tenant", "does-not-exist", "id", "1"),
+			metaMsg("c", "tenant", "globex", "id", "2"),
+		}
+		// The indexer must be created before the batch is dispatched.
+		indexer := batch.Index()
+		err := w.WriteBatch(ctx, batch)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), pf+"-does-not-exist")
+
+		var batchErr *service.BatchError
+		require.ErrorAs(t, err, &batchErr)
+		assert.Equal(t, 1, batchErr.IndexedErrors(), "only the message with the bad bucket should be failed")
+		failed := -1
+		batchErr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, merr error) bool {
+			if merr != nil {
+				failed = i
+			}
+			return true
+		})
+		assert.Equal(t, 1, failed, "failed index must point at the bad message")
+
+		_, ok := s3ObjectBody(ctx, t, client, pf+"-acme", "0.txt")
+		assert.True(t, ok, "good message before the bad one must be uploaded")
+		_, ok = s3ObjectBody(ctx, t, client, pf+"-globex", "2.txt")
+		assert.True(t, ok, "good message after the bad one must be uploaded")
+	})
+
+	t.Run("static_bucket_still_works_and_connection_test_checks_it", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		static := uniqueBucketPrefix("static")
+		require.NoError(t, awstest.CreateBucket(ctx, lsPort, static))
+
+		w := newDynamicBucketWriter(t, ctx, lsPort, static, `${! metadata("id") }.txt`)
+		require.NoError(t, w.WriteBatch(ctx, service.MessageBatch{metaMsg("static body", "id", "s1")}))
+		got, ok := s3ObjectBody(ctx, t, client, static, "s1.txt")
+		require.True(t, ok)
+		assert.Equal(t, "static body", got)
+
+		res := w.ConnectionTest(ctx)
+		require.Len(t, res, 1)
+		assert.NoError(t, res[0].Err, "existing static bucket must pass the connection test")
+
+		missingName := uniqueBucketPrefix("static-missing")
+		missing := newDynamicBucketWriter(t, ctx, lsPort, missingName, `k.txt`)
+		res = missing.ConnectionTest(ctx)
+		require.Len(t, res, 1)
+		require.Error(t, res[0].Err, "missing static bucket must fail the connection test")
+		assert.NotErrorIs(t, res[0].Err, service.ErrConnectionTestNotSupported)
+		assert.Contains(t, res[0].Err.Error(), missingName)
+	})
 }
