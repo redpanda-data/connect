@@ -16,8 +16,11 @@ package mongodb
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -345,6 +348,20 @@ func clientFields() []*service.ConfigField {
 
 //------------------------------------------------------------------------------
 
+const (
+	fieldPreserveBinary = "preserve_binary"
+)
+
+func compatibilityFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewBoolField(fieldPreserveBinary).
+			Description("Whether to preserve raw binary fields ([]byte) as native MongoDB BinData. When false, they are encoded as base64 strings.").
+			Version("4.116.0").Default(false),
+	}
+}
+
+//------------------------------------------------------------------------------
+
 // Operation represents the operation that will be performed by MongoDB.
 type Operation string
 
@@ -585,10 +602,11 @@ Define a ` + "`" + `hint_map` + "`" + ` to improve performance when finding docu
 }
 
 type writeMaps struct {
-	filterMap   *bloblang.Executor
-	documentMap *bloblang.Executor
-	hintMap     *bloblang.Executor
-	upsert      bool
+	filterMap      *bloblang.Executor
+	documentMap    *bloblang.Executor
+	hintMap        *bloblang.Executor
+	upsert         bool
+	preserveBinary bool
 }
 
 func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps writeMaps, err error) {
@@ -608,6 +626,9 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 		}
 	}
 	if maps.upsert, err = conf.FieldBool(commonFieldUpsert); err != nil {
+		return
+	}
+	if maps.preserveBinary, err = conf.FieldBool(fieldPreserveBinary); err != nil {
 		return
 	}
 
@@ -645,10 +666,11 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 }
 
 type writeMapsExec struct {
-	filterMap   *service.MessageBatchBloblangExecutor
-	documentMap *service.MessageBatchBloblangExecutor
-	hintMap     *service.MessageBatchBloblangExecutor
-	upsert      bool
+	filterMap      *service.MessageBatchBloblangExecutor
+	documentMap    *service.MessageBatchBloblangExecutor
+	hintMap        *service.MessageBatchBloblangExecutor
+	upsert         bool
+	preserveBinary bool
 }
 
 func (w writeMaps) exec(b service.MessageBatch) (e writeMapsExec) {
@@ -662,10 +684,11 @@ func (w writeMaps) exec(b service.MessageBatch) (e writeMapsExec) {
 		e.hintMap = b.BloblangExecutor(w.hintMap)
 	}
 	e.upsert = w.upsert
+	e.preserveBinary = w.preserveBinary
 	return
 }
 
-func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error) {
+func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor, preserveBinary bool) (any, error) {
 	msg, err := m.Query(i)
 	if err != nil {
 		return nil, err
@@ -674,16 +697,77 @@ func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error)
 		return nil, nil
 	}
 
-	valBytes, err := msg.AsBytes()
+	structured, err := msg.AsStructured()
 	if err != nil {
 		return nil, err
 	}
 
-	var ejsonVal any
+	return processExtJSON(structured, preserveBinary)
+}
+
+var extJSONKeys = map[string]struct{}{
+	"$oid": {}, "$date": {}, "$binary": {}, "$type": {},
+	"$numberInt": {}, "$numberLong": {}, "$numberDouble": {}, "$numberDecimal": {},
+	"$symbol": {}, "$code": {}, "$scope": {}, "$timestamp": {},
+	"$regularExpression": {}, "$dbPointer": {}, "$ref": {}, "$id": {},
+	"$minKey": {}, "$maxKey": {}, "$undefined": {},
+}
+
+func convertExtJSONObject(val any) (any, error) {
+	doc := map[string]any{"": val}
+	valBytes, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+
+	var ejsonVal bson.D
 	if err := bson.UnmarshalExtJSON(valBytes, true, &ejsonVal); err != nil {
 		return nil, err
 	}
-	return ejsonVal, nil
+	return ejsonVal[0].Value, nil
+}
+
+func processExtJSON(val any, preserveBinary bool) (any, error) {
+	switch v := val.(type) {
+	case map[string]any:
+		elements := make([]bson.E, 0, len(v))
+
+		for k, item := range v {
+			if _, isExt := extJSONKeys[k]; isExt {
+				return convertExtJSONObject(v)
+			}
+
+			ejsonVal, err := processExtJSON(item, preserveBinary)
+			if err != nil {
+				return nil, err
+			}
+			elements = append(elements, bson.E{Key: k, Value: ejsonVal})
+		}
+
+		sort.Slice(elements, func(i, j int) bool {
+			return elements[i].Key < elements[j].Key
+		})
+		return bson.D(elements), nil
+
+	case []any:
+		for i, item := range v {
+			ejsonVal, err := processExtJSON(item, preserveBinary)
+			if err != nil {
+				return nil, err
+			}
+			v[i] = ejsonVal
+		}
+		return v, nil
+
+	case []byte:
+		if preserveBinary {
+			return v, nil
+		}
+		return base64.StdEncoding.EncodeToString(v), nil
+
+	default:
+		return v, nil
+	}
 }
 
 func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
@@ -693,21 +777,22 @@ func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
 	documentValWanted := operation.isDocumentAllowed()
 
 	if filterValWanted && w.filterMap != nil {
-		if filterJSON, err = extJSONFromMap(i, w.filterMap); err != nil {
+		if filterJSON, err = extJSONFromMap(i, w.filterMap, w.preserveBinary); err != nil {
 			err = fmt.Errorf("executing filter_map: %v", err)
 			return
 		}
 	}
 
 	if documentValWanted && w.documentMap != nil {
-		if docJSON, err = extJSONFromMap(i, w.documentMap); err != nil {
+		docJSON, err = extJSONFromMap(i, w.documentMap, w.preserveBinary)
+		if err != nil {
 			err = fmt.Errorf("executing document_map: %v", err)
 			return
 		}
 	}
 
 	if w.hintMap != nil {
-		if hintJSON, err = extJSONFromMap(i, w.hintMap); err != nil {
+		if hintJSON, err = extJSONFromMap(i, w.hintMap, w.preserveBinary); err != nil {
 			return
 		}
 	}
