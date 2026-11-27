@@ -176,9 +176,9 @@ func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
 	return nil
 }
 
-// Write stores the file handle and SFTP session in the writer, and writes the message to the file. This approach allows
-// us to reuse the same session across multiple writes, which is particularly useful when the codec requires appending
-// to files. The current implementation does not support parallel writes.
+// Write writes the message to the file. For a codec that appends, it stores the file handle and SFTP session in the
+// writer, so the next writes to the same path reuse them. The all-bytes codec closes the file after each message.
+// The current implementation does not support parallel writes.
 func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error) {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
@@ -262,6 +262,18 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 		s.closeHandle(handle)
 		s.closeClient()
 		return fmt.Errorf("writing message to SFTP server: %w", err)
+	}
+
+	if !s.appendMode {
+		// Each all-bytes message is a whole file, so the next message to the
+		// same path must open the file again with O_TRUNC. The data is on the
+		// server only after Close succeeds.
+		err := handle.Close()
+		s.closeClient()
+		if err != nil {
+			return fmt.Errorf("closing remote file: %w", err)
+		}
+		return nil
 	}
 
 	s.handle = handle
