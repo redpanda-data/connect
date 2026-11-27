@@ -371,15 +371,15 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 	assert.Equal(t, 1, fc.prepareCount("V$LOGMNR_CONTENTS"),
 		"the contents query must be prepared once (first cycle) and reused on every subsequent cycle")
 
-	assert.Equal(t, cycles, fc.queryCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+	assert.Equal(t, cycles, fc.queryCount(currentSCNQuery),
 		"the CURRENT_SCN check must execute once per cycle")
-	assert.Equal(t, 1, fc.prepareCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+	assert.Equal(t, 1, fc.prepareCount(currentSCNQuery),
 		"the CURRENT_SCN check must be prepared once (first cycle) and reused on every subsequent cycle")
 
 	require.NoError(t, lm.Close())
 	assert.Equal(t, 1, fc.closeCount("V$LOGMNR_CONTENTS"),
 		"the cached V$LOGMNR_CONTENTS statement must be closed exactly once")
-	assert.Equal(t, 1, fc.closeCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+	assert.Equal(t, 1, fc.closeCount(currentSCNQuery),
 		"the cached CURRENT_SCN statement must be closed exactly once")
 
 	// A second Close() must be a genuine no-op - not just error-free, but
@@ -387,8 +387,28 @@ func TestMiningCycleReusesPreparedStatementsAcrossCycles(t *testing.T) {
 	require.NoError(t, lm.Close())
 	assert.Equal(t, 1, fc.closeCount("V$LOGMNR_CONTENTS"),
 		"a second Close() must not attempt to close the already-closed V$LOGMNR_CONTENTS statement again")
-	assert.Equal(t, 1, fc.closeCount("SELECT CURRENT_SCN FROM V$DATABASE"),
+	assert.Equal(t, 1, fc.closeCount(currentSCNQuery),
 		"a second Close() must not attempt to close the already-closed CURRENT_SCN statement again")
+}
+
+func TestMiningCycleUpdatesDBZoneWhenIdle(t *testing.T) {
+	lm := NewMiner(nil, []replication.UserTable{{Schema: "S", Name: "T"}}, &publisherStub{}, NewDefaultConfig(), nil, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	conn, fc := newFakeSQLConn(t, nil)
+
+	for _, offsetSecs := range []int64{19800, -18000} {
+		// The database is at currentSCN, so the cycle returns early as caught up.
+		fc.currentSCN = lm.currentSCN
+		fc.dbOffsetSecs = offsetSecs
+
+		caughtUp, err := lm.miningCycle(t.Context(), conn)
+		require.NoError(t, err)
+		require.True(t, caughtUp)
+
+		require.NotNil(t, lm.dbZone.zone)
+		_, got := time.Now().In(lm.dbZone.zone).Zone()
+		assert.Equal(t, int(offsetSecs), got)
+	}
+	assert.Zero(t, fc.queryCount("V$LOGMNR_CONTENTS"), "an idle cycle must not query LogMiner contents")
 }
 
 func TestReadChangesReturnsOnCancelDuringBackoff(t *testing.T) {
@@ -407,7 +427,7 @@ func TestReadChangesReturnsOnCancelDuringBackoff(t *testing.T) {
 	go func() { errCh <- lm.ReadChanges(ctx, 100) }()
 
 	require.Eventually(t, func() bool {
-		return fc.queryCount("SELECT CURRENT_SCN FROM V$DATABASE") >= 1
+		return fc.queryCount(currentSCNQuery) >= 1
 	}, 5*time.Second, 10*time.Millisecond, "the first mining cycle did not run")
 
 	cancel()
@@ -449,6 +469,8 @@ type fakeConn struct {
 	prepares   []string
 	closes     []string
 	currentSCN uint64
+	// dbOffsetSecs is the database UTC offset returned alongside CURRENT_SCN.
+	dbOffsetSecs int64
 	// contentRows, when set, serves V$LOGMNR_CONTENTS queries instead of an empty result.
 	contentRows func() driver.Rows
 	// contentCalls records every V$LOGMNR_CONTENTS query with its bound args.
@@ -558,10 +580,12 @@ func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.N
 		c.contentCalls = append(c.contentCalls, call)
 	}
 	switch {
-	case strings.Contains(query, "TIMEZONE_HOUR"):
-		return &fakeOffsetRow{}, nil
 	case strings.Contains(query, "CURRENT_SCN"):
-		return &fakeSCNRow{scn: c.currentSCN}, nil
+		row := &fakeSCNRow{scn: c.currentSCN}
+		if strings.Contains(query, "TIMEZONE_HOUR") {
+			row.offsetSecs = &c.dbOffsetSecs
+		}
+		return row, nil
 	case strings.Contains(query, "V$LOGMNR_CONTENTS"):
 		// By default no redo events are returned - most tests only care about
 		// how many times the query gets prepared/executed, not about the events
@@ -651,14 +675,20 @@ func (r *fakeRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// fakeSCNRow implements driver.Rows over a single CURRENT_SCN value, satisfying
-// miningCycle's `SELECT CURRENT_SCN FROM V$DATABASE` query.
+// fakeSCNRow implements driver.Rows over a single CURRENT_SCN value and, when
+// offsetSecs is set, the UTC offset column of miningCycle's currentSCNQuery.
 type fakeSCNRow struct {
-	scn  uint64
-	done bool
+	scn        uint64
+	offsetSecs *int64
+	done       bool
 }
 
-func (*fakeSCNRow) Columns() []string { return []string{"CURRENT_SCN"} }
+func (r *fakeSCNRow) Columns() []string {
+	if r.offsetSecs != nil {
+		return []string{"CURRENT_SCN", "OFFSET"}
+	}
+	return []string{"CURRENT_SCN"}
+}
 
 func (*fakeSCNRow) Close() error { return nil }
 
@@ -667,25 +697,9 @@ func (r *fakeSCNRow) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 	dest[0] = int64(r.scn)
-	r.done = true
-	return nil
-}
-
-// fakeOffsetRow implements driver.Rows over the single UTC offset value that
-// refreshDBZone reads from SYSTIMESTAMP. The fake database host is UTC.
-type fakeOffsetRow struct {
-	done bool
-}
-
-func (*fakeOffsetRow) Columns() []string { return []string{"OFFSET"} }
-
-func (*fakeOffsetRow) Close() error { return nil }
-
-func (r *fakeOffsetRow) Next(dest []driver.Value) error {
-	if r.done {
-		return io.EOF
+	if r.offsetSecs != nil {
+		dest[1] = *r.offsetSecs
 	}
-	dest[0] = int64(0)
 	r.done = true
 	return nil
 }
