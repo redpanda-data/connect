@@ -134,8 +134,7 @@ func TestOpenPgConnectionRefreshesAuthToken(t *testing.T) {
 func TestIntegrationOpenPgConnectionSurvivesTokenExpiry(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, replURL := createDockerInstance(t)
-	defer cleanup()
+	replURL := createDockerInstance(t)
 
 	dsn := strings.ReplaceAll(replURL, " replication=database", "")
 	dbConf, err := pgconn.ParseConfig(dsn)
