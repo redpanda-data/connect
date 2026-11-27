@@ -1,0 +1,31 @@
+# Read back the users record written by config/examples/aerospike_kafka_topics.yaml.
+# Produce {"user_id":"u-42","email":"a@b.com","ttl":"24H"} to the users topic first.
+#
+#   task run CONF=./config/examples/aerospike_lookup.yaml
+http:
+  enabled: false
+input:
+  generate:
+    mapping: |
+      root.user_id = "u-42"
+    interval: 0s
+    count: 1
+pipeline:
+  processors:
+    - aerospike_lookup:
+        hosts:
+          - 127.0.0.1:3000
+        cluster_name: redpanda-demo
+        namespace: test
+        set: users
+        key: '${! json("user_id") }'
+        not_found: error
+        emit_metadata: true
+    - log:
+        level: INFO
+        message: 'read ${! content() } gen=${! meta("aerospike_generation") }'
+output:
+  drop: {}
+logger:
+  level: INFO
+  format: logfmt

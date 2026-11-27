@@ -67,7 +67,7 @@ func TestParseTTL(t *testing.T) {
 	}{
 		{"0s", as.TTLServerDefault, false},
 		{"0", as.TTLServerDefault, false},
-		{"", as.TTLServerDefault, false},
+		{"", as.TTLDontUpdate, false},
 		{"never", as.TTLDontExpire, false},
 		{"-1", as.TTLDontExpire, false},
 		{"keep", as.TTLDontUpdate, false},
@@ -274,6 +274,39 @@ func TestMapMessageStructuredObjectIsNotTombstone(t *testing.T) {
 	assert.Equal(t, opWrite, op.kind)
 }
 
+func TestIsTombstone(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		msg  func() *service.Message
+		want bool
+	}{
+		{"empty bytes", func() *service.Message { return service.NewMessage(nil) }, true},
+		{"whitespace bytes", func() *service.Message { return service.NewMessage([]byte(" \n")) }, true},
+		{"null bytes", func() *service.Message { return service.NewMessage([]byte("null")) }, true},
+		{"structured nil", func() *service.Message {
+			m := service.NewMessage(nil)
+			m.SetStructured(nil)
+			return m
+		}, true},
+		{"structured empty string", func() *service.Message {
+			m := service.NewMessage(nil)
+			m.SetStructured("")
+			return m
+		}, false},
+		{"structured string null", func() *service.Message {
+			m := service.NewMessage(nil)
+			m.SetStructured("null")
+			return m
+		}, false},
+		{"json string null", func() *service.Message { return service.NewMessage([]byte(`"null"`)) }, false},
+		{"object", func() *service.Message { return service.NewMessage([]byte(`{}`)) }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isTombstone(tc.msg()))
+		})
+	}
+}
+
 func TestMapMessageDynamicOperation(t *testing.T) {
 	w := newTestWriter(t, `
 hosts: [ "localhost:3000" ]
@@ -405,6 +438,172 @@ bins: 'root = this.without("id")'
 	assert.Contains(t, err.Error(), "not an integer")
 }
 
+func TestMapMessageFencing(t *testing.T) {
+	w := newTestWriter(t, `
+hosts: [ "localhost:3000" ]
+namespace: test
+key: '${! json("id") }'
+bins: 'root = this.without("id")'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+
+	msg := service.NewMessage([]byte(`{"id":"u1","v":1}`))
+	msg.MetaSet("kafka_offset", "42")
+
+	op, err := mapOne(t, w, msg)
+	require.NoError(t, err)
+	assert.True(t, op.hasFence)
+	assert.Equal(t, int64(42), op.fence)
+	assert.Equal(t, int64(42), op.bins["_off"])
+}
+
+func TestMapMessageFencedDeleteWritesTombstone(t *testing.T) {
+	w := newTestWriter(t, `
+hosts: [ "localhost:3000" ]
+namespace: test
+key: '${! meta("k") }'
+bins: 'root = this'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+
+	msg := service.NewMessage([]byte(``))
+	msg.MetaSet("k", "u1")
+	msg.MetaSet("kafka_offset", "9")
+
+	op, err := mapOne(t, w, msg)
+	require.NoError(t, err)
+	assert.Equal(t, opDelete, op.kind)
+	assert.True(t, op.hasFence)
+	assert.Equal(t, int64(9), op.fence)
+	assert.Equal(t, int64(9), op.bins["_off"])
+	assert.Equal(t, true, op.bins["_deleted"])
+}
+
+func TestMapMessageFencingRejectsReservedBins(t *testing.T) {
+	w := newTestWriter(t, `
+hosts: [ "localhost:3000" ]
+namespace: test
+key: '${! json("id") }'
+bins: 'root = this.without("id")'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+
+	for _, tc := range []struct {
+		body  string
+		field string
+	}{
+		{`{"id":"u1","v":1,"_off":"x"}`, "fencing.bin"},
+		{`{"id":"u1","v":1,"_deleted":true}`, "fencing.tombstone_bin"},
+	} {
+		msg := service.NewMessage([]byte(tc.body))
+		msg.MetaSet("kafka_offset", "42")
+
+		_, err := mapOne(t, w, msg)
+		require.Error(t, err, tc.body)
+		assert.Contains(t, err.Error(), "reserved by '"+tc.field+"'")
+	}
+}
+
+func TestMapMessageReservedBinsAllowedWithoutFencing(t *testing.T) {
+	w := newTestWriter(t, baseConfig)
+
+	op, err := mapOne(t, w, service.NewMessage([]byte(`{"id":"u1","_fence":1,"_deleted":true}`)))
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), op.bins["_fence"])
+	assert.Equal(t, true, op.bins["_deleted"])
+}
+
+func TestConfigRejectsFenceBinMatchingTombstoneBin(t *testing.T) {
+	conf, err := outputSpec().ParseYAML(`
+hosts: [ "localhost:3000" ]
+namespace: test
+key: 'k'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _deleted
+  tombstone_bin: _deleted
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parseOutputConfig(conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must not be the same")
+}
+
+func TestConfigRejectsFencingWithKeepTTL(t *testing.T) {
+	for _, ttl := range []string{"", "ttl: keep\n", "ttl: -2\n"} {
+		conf, err := outputSpec().ParseYAML(`
+hosts: [ "localhost:3000" ]
+namespace: test
+key: 'k'
+`+ttl+`fencing:
+  enabled: true
+`, nil)
+		require.NoError(t, err)
+
+		_, err = parseOutputConfig(conf)
+		require.Error(t, err, ttl)
+		assert.ErrorIs(t, err, errFencedKeepTTL)
+	}
+}
+
+func TestConfigRejectsKeepTombstoneTTL(t *testing.T) {
+	conf, err := outputSpec().ParseYAML(`
+hosts: [ "localhost:3000" ]
+namespace: test
+key: 'k'
+ttl: 0
+fencing:
+  enabled: true
+  tombstone_ttl: keep
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parseOutputConfig(conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tombstone_ttl")
+}
+
+func TestMapMessageRejectsFencingWithInterpolatedKeepTTL(t *testing.T) {
+	w := newTestWriter(t, baseConfig+`
+ttl: '${! meta("ttl").or("") }'
+fencing:
+  enabled: true
+  value: '${! meta("kafka_offset") }'
+`)
+
+	for _, ttl := range []string{"keep", ""} {
+		msg := service.NewMessage([]byte(`{"id":"u1","a":1}`))
+		msg.MetaSet("kafka_offset", "1")
+		if ttl != "" {
+			msg.MetaSet("ttl", ttl)
+		}
+
+		_, err := mapOne(t, w, msg)
+		require.Error(t, err, ttl)
+		assert.ErrorIs(t, err, errFencedKeepTTL)
+	}
+
+	msg := service.NewMessage([]byte(`{"id":"u1","a":1}`))
+	msg.MetaSet("kafka_offset", "1")
+	msg.MetaSet("ttl", "60s")
+	_, err := mapOne(t, w, msg)
+	require.NoError(t, err)
+}
+
 func TestMapMessageRejectsEmptyKey(t *testing.T) {
 	w := newTestWriter(t, baseConfig)
 
@@ -476,6 +675,23 @@ func TestMapMessageOmitsGenerationWhenEmpty(t *testing.T) {
 	write, ok := rec.(*as.BatchWrite)
 	require.True(t, ok)
 	assert.Equal(t, as.NONE, write.Policy.GenerationPolicy)
+}
+
+func TestConfigRejectsLongFenceBin(t *testing.T) {
+	conf, err := outputSpec().ParseYAML(`
+hosts: [ "localhost:3000" ]
+namespace: test
+key: 'k'
+ttl: 0
+fencing:
+  enabled: true
+  bin: this_bin_name_is_too_long
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parseOutputConfig(conf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds the Aerospike limit of 15")
 }
 
 func TestParseConfigSkillDefaults(t *testing.T) {

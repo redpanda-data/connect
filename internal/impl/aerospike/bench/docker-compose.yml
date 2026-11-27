@@ -1,0 +1,17 @@
+name: rpcn-aerospike-bench
+
+services:
+  aerospike:
+    image: aerospike/aerospike-server-enterprise:8.1
+    container_name: rpcn-aerospike-bench
+    hostname: rpcn-aerospike-bench
+    ports:
+      - "127.0.0.1:3310:3000"
+    # Pin the node so runs are comparable: four dedicated cores and a memory
+    # cap above the 4 GiB namespace. Connect runs on the host, so its CPU
+    # count is set with CORES (GOMAXPROCS) and its memory with GOMEMLIMIT.
+    cpuset: "0-3"
+    mem_limit: 6g
+    volumes:
+      - ./aerospike.conf:/opt/rpcn/aerospike.conf:ro
+    command: ["--config-file", "/opt/rpcn/aerospike.conf"]

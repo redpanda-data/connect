@@ -34,7 +34,8 @@ env:
 jobs:
   integration-test:
     if: ${{ github.event_name != 'issue_comment' && github.event.inputs.filter == '' && (github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)')) }}
-    runs-on: ubuntu-latest-32
+    # Forks without the ubuntu-latest-32 larger runner set the INTEGRATION_RUNNER repo variable.
+    runs-on: ${{ vars.INTEGRATION_RUNNER || 'ubuntu-latest-32' }}
     env:
       CGO_ENABLED: 0
     steps:
@@ -128,7 +129,8 @@ jobs:
         (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '')
       )
-    runs-on: ubuntu-latest-32
+    # Forks without the ubuntu-latest-32 larger runner set the INTEGRATION_RUNNER repo variable.
+    runs-on: ${{ vars.INTEGRATION_RUNNER || 'ubuntu-latest-32' }}
     env:
       CGO_ENABLED: 0
     steps:

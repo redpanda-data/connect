@@ -1,0 +1,114 @@
+# Runs the Aerospike Enterprise Edition tests (TestEE*) against the stack in
+# internal/impl/aerospike/testdata/ee. They need an Enterprise feature key,
+# which only the aerospike/redpanda-connect fork holds, so the job runs only
+# there. It is skipped in any other repository, including this one, and on
+# pull requests from other forks, which get no secrets.
+#
+# The fork sets the AEROSPIKE_FEATURE_KEY repository secret to the contents of
+# features.conf.
+
+name: Aerospike EE tests
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'internal/impl/aerospike/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/aerospike_ee_test.yml'
+  pull_request:
+    paths:
+      - 'internal/impl/aerospike/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/aerospike_ee_test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aerospike-ee-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ee-test:
+    if: >-
+      github.repository == 'aerospike/redpanda-connect' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: 0
+      EE_DIR: internal/impl/aerospike/testdata/ee
+      # docker compose reads it for every command, including down.
+      AEROSPIKE_FEATURE_KEY: ${{ github.workspace }}/internal/impl/aerospike/testdata/ee/features.conf
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.1.0
+        with:
+          persist-credentials: false
+
+      # The EE stack is not on every ref this workflow sees, for example dev
+      # before the Aerospike follow-up merges.
+      - name: Check for the EE stack
+        id: stack
+        run: |
+          if [[ -f "$EE_DIR/up.sh" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$EE_DIR/up.sh is not on this ref, so there are no EE tests to run."
+          fi
+
+      - name: Install Go
+        if: steps.stack.outputs.present == 'true'
+        uses: $/.github/actions/setup-go
+        with:
+          cache-name: aerospike-ee
+
+      - name: Write the feature key
+        if: steps.stack.outputs.present == 'true'
+        env:
+          FEATURE_KEY: ${{ secrets.AEROSPIKE_FEATURE_KEY }}
+        run: |
+          if [[ -z "$FEATURE_KEY" ]]; then
+            echo "::error::Set the AEROSPIKE_FEATURE_KEY repository secret to the contents of features.conf."
+            exit 1
+          fi
+          printf '%s\n' "$FEATURE_KEY" > "$AEROSPIKE_FEATURE_KEY"
+
+      - name: Start the Enterprise stack
+        if: steps.stack.outputs.present == 'true'
+        run: bash "$EE_DIR/up.sh"
+
+      - name: Run TestEE
+        if: steps.stack.outputs.present == 'true'
+        env:
+          AEROSPIKE_EE_HOSTS: 127.0.0.1:3100,127.0.0.1:3110
+          AEROSPIKE_SEC_HOST: 127.0.0.1:3200
+          AEROSPIKE_TLS_HOST: 127.0.0.1:clusterA:4333
+        run: |
+          export AEROSPIKE_TLS_CA="$GITHUB_WORKSPACE/$EE_DIR/certs/ca.pem"
+          go test -count=1 -timeout 20m -v -run 'TestEE' ./internal/impl/aerospike/ 2>&1 | tee ee-test.log
+          # A TestEE test skips when it cannot reach the stack, which would
+          # otherwise pass this job without testing anything.
+          if grep -q -- '--- SKIP: TestEE' ee-test.log; then
+            echo "::error::Some TestEE tests skipped. The Enterprise stack was not reachable."
+            exit 1
+          fi
+
+      - name: Server logs
+        if: failure() && steps.stack.outputs.present == 'true'
+        run: docker compose -f "$EE_DIR/docker-compose.yml" logs --no-color --tail 200 as-ee-1 as-ee-2 as-ee-sec
+
+      - name: Stop the Enterprise stack
+        if: always() && steps.stack.outputs.present == 'true'
+        run: |
+          docker compose -f "$EE_DIR/docker-compose.yml" down -v || true
+          rm -f "$AEROSPIKE_FEATURE_KEY"

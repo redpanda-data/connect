@@ -1,0 +1,60 @@
+version: "3"
+
+silent: true
+
+tasks:
+  up:
+    desc: Start the local single-node Enterprise server and wait until it answers
+    cmds:
+      - docker compose up -d
+      # cluster-stable prints the cluster key once the node is stable, and an
+      # ERROR line before that. "status" reports ok too early, so writes hit
+      # INVALID_NODE_ERROR during startup. Stop after 60 tries so a node that
+      # never becomes stable, for example an expired feature key, fails the task.
+      - |
+        tries=0
+        until docker exec rpcn-aerospike-bench asinfo -v 'cluster-stable:size=1' 2>/dev/null | grep -qvE '^ERROR|^$'; do
+          tries=$((tries + 1))
+          if [ "$tries" -ge 60 ]; then
+            echo "Aerospike did not become cluster-stable after 60 tries" >&2
+            exit 1
+          fi
+          sleep 2
+        done
+      - echo "Aerospike Enterprise ready on 127.0.0.1:3310"
+
+  down:
+    desc: Stop the server and delete its data
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  run:
+    desc: "Write COUNT records (task run COUNT=100000 BATCH=10 CORES=1)"
+    vars:
+      COUNT: '{{.COUNT | default "100000"}}'
+      BATCH: '{{.BATCH | default "10"}}'
+      PERIOD: '{{.PERIOD | default "200ms"}}'
+      CORES: '{{.CORES | default "1"}}'
+    env:
+      COUNT: "{{.COUNT}}"
+      BATCH: "{{.BATCH}}"
+      PERIOD: "{{.PERIOD}}"
+      GOMAXPROCS: "{{.CORES}}"
+      GOMEMLIMIT: "1GiB"
+    cmds:
+      - go run . run ./benchmark_config.yaml
+
+  bench:
+    desc: "Start the server, write COUNT records, then stop it"
+    vars:
+      COUNT: '{{.COUNT | default "100000"}}'
+      BATCH: '{{.BATCH | default "10"}}'
+      PERIOD: '{{.PERIOD | default "200ms"}}'
+      CORES: '{{.CORES | default "1"}}'
+    cmds:
+      - task: up
+      - |
+        status=0
+        task run COUNT="{{.COUNT}}" BATCH="{{.BATCH}}" PERIOD="{{.PERIOD}}" CORES="{{.CORES}}" || status=$?
+        task down || status=$?
+        exit "$status"

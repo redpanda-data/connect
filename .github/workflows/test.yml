@@ -17,6 +17,11 @@ jobs:
         with:
           # TestNewSpecsHaveVersions reads the previous release tag.
           fetch-depth: 0
+          fetch-tags: true
+      - name: Fetch upstream release tags
+        # A fork does not carry the upstream vX.Y.Z tags. The version check
+        # needs the highest tag reachable from HEAD.
+        run: git fetch --no-tags https://github.com/redpanda-data/connect.git 'refs/tags/v*:refs/tags/v*'
       - name: Free disk space if low
         uses: $/.github/actions/free-disk-space-if-low
       - name: Install Go
@@ -46,6 +51,11 @@ jobs:
         with:
           # TestNewSpecsHaveVersions reads the release tags.
           fetch-depth: 0
+          fetch-tags: true
+      - name: Fetch upstream release tags
+        # A fork does not carry the upstream vX.Y.Z tags. The version check
+        # needs the highest tag reachable from HEAD.
+        run: git fetch --no-tags https://github.com/redpanda-data/connect.git 'refs/tags/v*:refs/tags/v*'
       - name: Free disk space if low
         uses: $/.github/actions/free-disk-space-if-low
       - name: Install Go
@@ -146,10 +156,11 @@ jobs:
   # result: Antora errors, broken anchors, and unconverted markup on the
   # pages the PR changes block. When the PR changes a published page, it
   # comments with the changed pages and a preview link, and asks the docs
-  # team to review. See docs/README.md.
+  # team to review. See docs/README.md. It clones Redpanda's private docs
+  # repositories, which only the upstream repository has credentials for.
   docs-check:
     needs: [docs, docs-base, docs-changed]
-    if: needs.docs-changed.outputs.changed == 'true'
+    if: github.repository == 'redpanda-data/connect' && needs.docs-changed.outputs.changed == 'true'
     permissions:
       contents: read
       id-token: write

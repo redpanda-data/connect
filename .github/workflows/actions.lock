@@ -3,6 +3,10 @@
 # Docs: https://gh.io/actions-lockfile
 version: 'v0.0.3'
 workflows:
+    '.github/workflows/aerospike_ee_test.yml':
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v6.1.0'
+        - 'actions/setup-go@v6.5.0'
     '.github/workflows/auto-label-integration.yml': []
     '.github/workflows/claude-code-review.yml':
         - 'actions/checkout@v6.1.0'

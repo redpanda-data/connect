@@ -1,0 +1,49 @@
+# Local write benchmark for output.aerospike.
+# The record is one 512-byte "name" bin. key, namespace, and ttl are not
+# stored as bins. The default batch is 10 records or 200ms.
+# There is no broker: generate writes straight to a single-node Enterprise
+# server, so the rate measured is the output's.
+
+http:
+  enabled: true
+  address: 127.0.0.1:4195
+  debug_endpoints: true
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
+
+input:
+  generate:
+    count: ${COUNT:100000}
+    interval: ""
+    mapping: |
+      root.key = counter()
+      root.namespace = "test"
+      root.ttl = 15000
+      root.name = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+pipeline:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  aerospike:
+    hosts: [ "127.0.0.1:3310" ]
+    cluster_name: redpanda-demo
+    namespace: test
+    set: players
+    key: '${! json("key") }'
+    bins: 'root = this.without("key", "namespace", "ttl")'
+    operation: replace
+    ttl: '${! json("ttl").or("keep") }'
+    batching:
+      count: ${BATCH:10}
+      period: ${PERIOD:200ms}
+
+logger:
+  level: INFO
+  format: logfmt

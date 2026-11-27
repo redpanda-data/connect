@@ -15,8 +15,20 @@
 package aerospike
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"log/slog"
+	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +36,7 @@ import (
 	as "github.com/aerospike/aerospike-client-go/v8"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/youmark/pkcs8"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -47,6 +60,14 @@ func TestToAerospike(t *testing.T) {
 		{"bool", true, true, true},
 		{"nil deletes the bin", nil, true, nil},
 		{"int64 passes through", int64(9), true, int64(9)},
+		{"float at 2^63 stays float", float64(1 << 63), true, float64(1 << 63)},
+		{"json integer coerced", json.Number("10"), true, int64(10)},
+		{"json integral float coerced", json.Number("10.0"), true, int64(10)},
+		{"json exponent coerced", json.Number("1e3"), true, int64(1000)},
+		{"json fraction stays float", json.Number("10.5"), true, 10.5},
+		{"json integer left as float", json.Number("10"), false, float64(10)},
+		{"json integral float left alone", json.Number("10.0"), false, float64(10)},
+		{"json integer above int64 left as float", json.Number("9223372036854775808"), false, float64(1 << 63)},
 	}
 
 	for _, tc := range tests {
@@ -55,6 +76,14 @@ func TestToAerospike(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
+	}
+}
+
+func TestToAerospikeRejectsIntegerOutOfRange(t *testing.T) {
+	for _, n := range []string{"9223372036854775808", "-9223372036854775809"} {
+		_, err := toAerospike(json.Number(n), true)
+		require.Error(t, err, n)
+		assert.Contains(t, err.Error(), "exceeds the Aerospike integer range")
 	}
 }
 
@@ -75,6 +104,65 @@ func TestToAerospikeNested(t *testing.T) {
 	}, got)
 }
 
+// TestFromAerospikeMapKeys covers the conversion that actually matters on read:
+// Aerospike map keys are not restricted to strings, so a map bin unpacks as
+// map[any]any, which encoding/json cannot marshal at all.
+func TestFromAerospikeMapKeys(t *testing.T) {
+	in := map[any]any{
+		"name": "Ada",
+		1:      "int key",
+		"nested": map[any]any{
+			2: []any{map[any]any{"deep": true}},
+		},
+	}
+
+	got := fromAerospike(in)
+
+	want := map[string]any{
+		"name": "Ada",
+		"1":    "int key",
+		"nested": map[string]any{
+			"2": []any{map[string]any{"deep": true}},
+		},
+	}
+	assert.Equal(t, want, got)
+}
+
+// TestFromAerospikeOrderedMap covers key-ordered maps, which the client unpacks
+// as []as.MapPair rather than map[any]any.
+func TestFromAerospikeOrderedMap(t *testing.T) {
+	in := []as.MapPair{
+		{Key: "name", Value: "Ada"},
+		{Key: 1, Value: "int key"},
+		{Key: "nested", Value: map[any]any{
+			"list": []any{[]as.MapPair{{Key: "deep", Value: true}}},
+		}},
+		{Key: "empty", Value: []as.MapPair{}},
+	}
+
+	got := fromAerospike(in)
+
+	want := map[string]any{
+		"name": "Ada",
+		"1":    "int key",
+		"nested": map[string]any{
+			"list": []any{map[string]any{"deep": true}},
+		},
+		"empty": map[string]any{},
+	}
+	assert.Equal(t, want, got)
+
+	_, err := json.Marshal(got)
+	require.NoError(t, err)
+}
+
+func TestFromAerospikePassthrough(t *testing.T) {
+	assert.Equal(t, "x", fromAerospike("x"))
+	assert.Equal(t, 5, fromAerospike(5))
+	assert.Nil(t, fromAerospike(nil))
+	assert.Equal(t, []any{int64(1), "a"}, fromAerospike([]any{int64(1), "a"}))
+}
+
 func TestValidateBinName(t *testing.T) {
 	assert.NoError(t, validateBinName("a"))
 	assert.NoError(t, validateBinName("123456789012345")) // exactly 15
@@ -84,6 +172,14 @@ func TestValidateBinName(t *testing.T) {
 	assert.Contains(t, err.Error(), "exceeds the Aerospike limit of 15")
 
 	assert.Error(t, validateBinName(""))
+}
+
+func TestIsFencedTombstone(t *testing.T) {
+	assert.False(t, isFencedTombstone(nil, defaultTombstoneBin))
+	assert.False(t, isFencedTombstone(map[string]any{"tier": "gold"}, defaultTombstoneBin))
+	assert.False(t, isFencedTombstone(map[string]any{defaultTombstoneBin: false}, defaultTombstoneBin))
+	assert.False(t, isFencedTombstone(map[string]any{defaultTombstoneBin: nil}, defaultTombstoneBin))
+	assert.True(t, isFencedTombstone(map[string]any{defaultTombstoneBin: true}, defaultTombstoneBin))
 }
 
 func parseClientYAML(t *testing.T, yaml string) (*clientConfig, error) {
@@ -189,6 +285,451 @@ credentials:
 	assert.Contains(t, err.Error(), "Password authentication is disabled")
 }
 
+// An encrypted PKCS#8 key is decrypted while the client config is parsed.
+// A wrong password fails before any seed is dialed.
+func TestClientCertPassword(t *testing.T) {
+	const password = "right-secret"
+	certPEM, keyPEM := encryptedPKCS8Key(t, password)
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "client.pem")
+	keyPath := filepath.Join(dir, "client.key")
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0o600))
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0o600))
+
+	yaml := `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+  client_certs:
+    - cert_file: ` + certPath + `
+      key_file: ` + keyPath + `
+      password: ` + password + `
+`
+	c, err := parseClientYAML(t, yaml)
+	require.NoError(t, err)
+	require.NotNil(t, c.Policy.TlsConfig)
+	require.NotEmpty(t, c.Policy.TlsConfig.Certificates)
+
+	yaml = `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+  client_certs:
+    - cert_file: ` + certPath + `
+      key_file: ` + keyPath + `
+      password: wrong-secret
+`
+	_, err = parseClientYAML(t, yaml)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pkcs8: incorrect password")
+}
+
+func encryptedPKCS8Key(t *testing.T, password string) (certPEM, keyPEM []byte) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "rpcn"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	enc, err := pkcs8.ConvertPrivateKeyToPKCS8(key, []byte(password))
+	require.NoError(t, err)
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: enc})
+	return certPEM, keyPEM
+}
+
+func TestParsePasswordFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "aerospike-password")
+	require.NoError(t, os.WriteFile(path, []byte("p@ss w0rd \r\nignored\n"), 0o600))
+
+	t.Run("first line keeps trailing spaces", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+credentials:
+  username: rpcn
+  password_file: `+path+`
+`)
+		require.NoError(t, err)
+		assert.Equal(t, "rpcn", c.Policy.User)
+		assert.Equal(t, "p@ss w0rd ", c.Policy.Password)
+	})
+
+	t.Run("both password and file", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+credentials:
+  username: rpcn
+  password: secret
+  password_file: `+path+`
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not both")
+		assert.NotContains(t, err.Error(), "p@ss")
+	})
+
+	t.Run("username without a password", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+credentials:
+  username: rpcn
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "set 'password' or 'password_file'")
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		missing := filepath.Join(dir, "missing")
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+credentials:
+  username: rpcn
+  password_file: `+missing+`
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot read")
+		assert.ErrorIs(t, err, os.ErrNotExist)
+		assert.NotContains(t, err.Error(), "p@ss")
+	})
+
+	t.Run("directory is not a password file", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+credentials:
+  username: rpcn
+  password_file: `+dir+`
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot read")
+		assert.NotErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("empty file is rejected", func(t *testing.T) {
+		empty := filepath.Join(dir, "empty")
+		require.NoError(t, os.WriteFile(empty, []byte("\n"), 0o600))
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+credentials:
+  username: rpcn
+  password_file: `+empty+`
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "is empty")
+	})
+
+	t.Run("pki ignores the file", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+auth_mode: pki
+credentials:
+  password_file: `+path+`
+`)
+		require.NoError(t, err)
+		assert.Equal(t, as.AuthModePKI, c.Policy.AuthMode)
+		assert.Empty(t, c.Policy.Password)
+	})
+}
+
+func suiteNamed(t *testing.T, suites []*tls.CipherSuite, name string) *tls.CipherSuite {
+	t.Helper()
+	for _, suite := range suites {
+		if suite.Name == name {
+			return suite
+		}
+	}
+	t.Fatalf("cipher suite %s is not in this Go build", name)
+	return nil
+}
+
+func TestParseTLSCiphers(t *testing.T) {
+	secure := suiteNamed(t, tls.CipherSuites(), "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256")
+	insecure := suiteNamed(t, tls.InsecureCipherSuites(), "TLS_RSA_WITH_AES_128_CBC_SHA")
+
+	t.Run("empty leaves the tls default", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+`)
+		require.NoError(t, err)
+		require.NotNil(t, c.Policy.TlsConfig)
+		assert.Contains(t, c.Policy.TlsConfig.CipherSuites, secure.ID)
+		assert.NotContains(t, c.Policy.TlsConfig.CipherSuites, insecure.ID)
+	})
+
+	t.Run("allow-list is case insensitive and drops a repeat", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+ciphers:
+  - `+strings.ToLower(secure.Name)+`
+  - `+secure.Name+`
+  - `+insecure.Name+`
+`)
+		require.NoError(t, err)
+		assert.Equal(t, []uint16{secure.ID, insecure.ID}, c.Policy.TlsConfig.CipherSuites)
+		assert.Equal(t, []string{insecure.Name}, c.insecureCiphers)
+	})
+
+	t.Run("unknown name", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+ciphers: ["NOT_A_CIPHER"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `unknown cipher "NOT_A_CIPHER"`)
+	})
+
+	t.Run("tls 1.3 is not configurable", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+ciphers: ["TLS_AES_128_GCM_SHA256"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "TLS 1.3")
+	})
+
+	t.Run("insecure suite warns at startup", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+		mgr := service.MockResources(service.MockResourcesOptUseLogger(logger))
+		conf, err := outputSpec().ParseYAML(`
+hosts: ["127.0.0.1:1"]
+namespace: test
+key: k
+tls:
+  enabled: true
+ciphers: ["`+insecure.Name+`"]
+`, nil)
+		require.NoError(t, err)
+		_, _, _, err = newAerospikeOutput(conf, mgr)
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "insecure cipher suites")
+		assert.Contains(t, buf.String(), insecure.Name)
+	})
+
+	t.Run("requires tls", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+ciphers: ["`+secure.Name+`"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "requires 'tls.enabled'")
+	})
+}
+
+func TestParseTLSProtocols(t *testing.T) {
+	t.Run("empty leaves tls 1.2 and tls 1.3", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+`)
+		require.NoError(t, err)
+		assert.Equal(t, uint16(tls.VersionTLS12), c.Policy.TlsConfig.MinVersion)
+		assert.Zero(t, c.Policy.TlsConfig.MaxVersion)
+	})
+
+	t.Run("tls 1.2 does not offer tls 1.3", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+protocols: ["tlsv1.2", "TLSv1.2"]
+`)
+		require.NoError(t, err)
+		assert.Equal(t, uint16(tls.VersionTLS12), c.Policy.TlsConfig.MinVersion)
+		assert.Equal(t, uint16(tls.VersionTLS12), c.Policy.TlsConfig.MaxVersion)
+	})
+
+	t.Run("tls 1.3 does not offer tls 1.2", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+protocols: ["TLSv1.3"]
+`)
+		require.NoError(t, err)
+		assert.Equal(t, uint16(tls.VersionTLS13), c.Policy.TlsConfig.MinVersion)
+		assert.Zero(t, c.Policy.TlsConfig.MaxVersion)
+	})
+
+	t.Run("both names leave the default versions", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+protocols: ["TLSv1.2", "TLSv1.3"]
+`)
+		require.NoError(t, err)
+		assert.Equal(t, uint16(tls.VersionTLS12), c.Policy.TlsConfig.MinVersion)
+		assert.Zero(t, c.Policy.TlsConfig.MaxVersion)
+	})
+
+	t.Run("unknown protocol", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+protocols: ["TLSv1.1"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `unknown protocol "TLSv1.1"`)
+	})
+
+	t.Run("empty name", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+protocols: [" "]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty protocol name")
+	})
+
+	t.Run("requires tls", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+protocols: ["TLSv1.2"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "requires 'tls.enabled'")
+	})
+
+	t.Run("ciphers with tls 1.3 only fails startup", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+protocols: ["TLSv1.3"]
+ciphers: ["TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "TLS 1.3 only")
+	})
+}
+
+func TestParseRevokeCertificates(t *testing.T) {
+	t.Run("empty leaves the ca check alone", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+`)
+		require.NoError(t, err)
+		assert.Nil(t, c.Policy.TlsConfig.VerifyPeerCertificate)
+	})
+
+	t.Run("listed serial rejects that certificate", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+revoke_certificates: ["02", "2", "9223372036854775808"]
+`)
+		require.NoError(t, err)
+		require.NotNil(t, c.Policy.TlsConfig.VerifyPeerCertificate)
+		err = c.Policy.TlsConfig.VerifyPeerCertificate(nil, [][]*x509.Certificate{{
+			{SerialNumber: big.NewInt(2)},
+		}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "serial 2 is revoked")
+
+		large, ok := new(big.Int).SetString("9223372036854775808", 10)
+		require.True(t, ok)
+		err = c.Policy.TlsConfig.VerifyPeerCertificate(nil, [][]*x509.Certificate{{
+			{SerialNumber: large},
+		}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "serial 9223372036854775808 is revoked")
+
+		require.NoError(t, c.Policy.TlsConfig.VerifyPeerCertificate(nil, [][]*x509.Certificate{{
+			{SerialNumber: big.NewInt(99)},
+		}}))
+	})
+
+	t.Run("chain serial is rejected", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+revoke_certificates: ["1"]
+`)
+		require.NoError(t, err)
+		err = c.Policy.TlsConfig.VerifyPeerCertificate(nil, [][]*x509.Certificate{{
+			{SerialNumber: big.NewInt(2)},
+			{SerialNumber: big.NewInt(1)},
+		}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "serial 1 is revoked")
+	})
+
+	t.Run("hex prefix is accepted", func(t *testing.T) {
+		c, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+revoke_certificates: ["0x10", "16", "0x1E240"]
+`)
+		require.NoError(t, err)
+		err = c.Policy.TlsConfig.VerifyPeerCertificate(nil, [][]*x509.Certificate{{
+			{SerialNumber: big.NewInt(16)},
+		}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "serial 16 is revoked")
+
+		hexSerial, ok := new(big.Int).SetString("1E240", 16)
+		require.True(t, ok)
+		err = c.Policy.TlsConfig.VerifyPeerCertificate(nil, [][]*x509.Certificate{{
+			{SerialNumber: hexSerial},
+		}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "serial 123456 is revoked")
+	})
+
+	t.Run("hex without a prefix is rejected", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+revoke_certificates: ["12ab"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `serial "12ab"`)
+	})
+
+	t.Run("empty serial", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+tls:
+  enabled: true
+revoke_certificates: [" "]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty serial number")
+	})
+
+	t.Run("requires tls", func(t *testing.T) {
+		_, err := parseClientYAML(t, `
+hosts: ["127.0.0.1:1"]
+revoke_certificates: ["2"]
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "requires 'tls.enabled'")
+	})
+}
+
 func TestParseHost(t *testing.T) {
 	tests := []struct {
 		in      string
@@ -290,7 +831,7 @@ func TestConnectCancelledContext(t *testing.T) {
 
 func parseBatchYAML(t *testing.T, yaml string) (*as.BatchPolicy, error) {
 	t.Helper()
-	spec := service.NewConfigSpec().Fields(batchPolicyFieldsWithRetries(0)...)
+	spec := service.NewConfigSpec().Fields(batchPolicyFields()...)
 	parsed, err := spec.ParseYAML(yaml, nil)
 	if err != nil {
 		return nil, err
@@ -376,6 +917,7 @@ func TestParseBatchPolicyZeroIsAllNodes(t *testing.T) {
 	p, err := parseBatchYAML(t, "")
 	require.NoError(t, err)
 	assert.Equal(t, 0, p.ConcurrentNodes)
+	assert.Equal(t, 2, p.MaxRetries)
 	assert.True(t, p.RespondAllKeys)
 }
 
@@ -407,9 +949,22 @@ func TestParseCommitLevel(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseReplicaPolicy(t *testing.T) {
+	got, err := parseReplicaPolicy("sequence")
+	require.NoError(t, err)
+	assert.Equal(t, as.SEQUENCE, got)
+
+	got, err = parseReplicaPolicy("master")
+	require.NoError(t, err)
+	assert.Equal(t, as.MASTER, got)
+
+	_, err = parseReplicaPolicy("nearest")
+	require.Error(t, err)
+}
+
 func parseKeyYAML(t *testing.T, yaml string) (*keyConfig, error) {
 	t.Helper()
-	spec := service.NewConfigSpec().Fields(outputKeyFields()...)
+	spec := service.NewConfigSpec().Fields(keyFields()...)
 	parsed, err := spec.ParseYAML(yaml, nil)
 	if err != nil {
 		return nil, err

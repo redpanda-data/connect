@@ -50,6 +50,7 @@ const (
 	aerospikeImage         = "aerospike/aerospike-server:8.2"
 	integrationNamespace   = "test"
 	integrationOutputSet   = "rpa_e2e"
+	integrationLookupSet   = "rpa_lookup"
 	integrationDigestSet   = "rpa_digest"
 	aerospikeContainerPort = "3000/tcp"
 )
@@ -110,6 +111,9 @@ func startAerospike() (string, error) {
 			hc.PortBindings = mobynet.PortMap{
 				mobynet.MustParsePort(aerospikeContainerPort): {{HostIP: netip.MustParseAddr("127.0.0.1"), HostPort: hostPortStr}},
 			}
+			// testdata/aerospike.conf sets proto-fd-max 15000, which the server
+			// refuses to start with under a lower open file limit.
+			hc.Ulimits = []*container.Ulimit{{Name: "nofile", Soft: 15000, Hard: 15000}}
 		}),
 		testcontainers.WithCmd("--config-file", "/opt/aerospike/etc/aerospike.conf"),
 		testcontainers.WithFiles(testcontainers.ContainerFile{
@@ -254,6 +258,42 @@ func outputRead(t *testing.T, client *as.Client, id string) *as.Record {
 func msg(t *testing.T, body string) *service.Message {
 	t.Helper()
 	return service.NewMessage([]byte(body))
+}
+
+func lookupSetup(t *testing.T, extraYAML string) (*lookupProcessor, *as.Client) {
+	t.Helper()
+	hosts := integrationHost(t)
+
+	yaml := `
+hosts: [ "` + hosts + `" ]
+namespace: ` + integrationNamespace + `
+set: ` + integrationLookupSet + `
+key: '${! json("user_id") }'
+` + extraYAML
+
+	p := newTestProcessor(t, yaml)
+	t.Cleanup(func() { _ = p.Close(context.Background()) })
+
+	client, err := as.NewClientWithPolicyAndHost(p.conf.client.Policy, p.conf.client.Hosts...)
+	require.NoError(t, err)
+	t.Cleanup(client.Close)
+
+	require.NoError(t, client.Truncate(nil, integrationNamespace, integrationLookupSet, nil))
+	return p, client
+}
+
+func seed(t *testing.T, client *as.Client, id string, bins as.BinMap) {
+	t.Helper()
+	key, err := as.NewKey(integrationNamespace, integrationLookupSet, id)
+	require.NoError(t, err)
+	require.NoError(t, client.Put(nil, key, bins))
+}
+
+func structured(t *testing.T, m *service.Message) any {
+	t.Helper()
+	v, err := m.AsStructured()
+	require.NoError(t, err)
+	return v
 }
 
 func TestIntegrationWriteAndRead(t *testing.T) {
@@ -746,6 +786,81 @@ bins: 'root = if content().length() == 0 { {"touch": true} } else { this }'
 	assert.Equal(t, true, rec.Bins["touch"])
 }
 
+func TestIntegrationFencing(t *testing.T) {
+	w, client := outputSetup(t, `
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("off") }'
+`)
+
+	newer := msg(t, `{"id":"f1","v":"second"}`)
+	newer.MetaSet("off", "10")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newer}))
+	assert.Equal(t, "second", outputRead(t, client, "f1").Bins["v"])
+
+	stale := msg(t, `{"id":"f1","v":"first"}`)
+	stale.MetaSet("off", "3")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{stale}))
+
+	rec := outputRead(t, client, "f1")
+	assert.Equal(t, "second", rec.Bins["v"], "a stale replay must not overwrite newer data")
+	assert.Equal(t, 10, rec.Bins["_off"])
+
+	newest := msg(t, `{"id":"f1","v":"third"}`)
+	newest.MetaSet("off", "11")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newest}))
+	assert.Equal(t, "third", outputRead(t, client, "f1").Bins["v"])
+}
+
+func TestIntegrationFencingDeleteThenStaleWrite(t *testing.T) {
+	w, client := outputSetup(t, `
+key: '${! meta("k") }'
+bins: 'root = this'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("off") }'
+`)
+
+	create := msg(t, `{"v":"live"}`)
+	create.MetaSet("k", "fd1")
+	create.MetaSet("off", "10")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
+	require.NotNil(t, outputRead(t, client, "fd1"))
+
+	tombstone := msg(t, ``)
+	tombstone.MetaSet("k", "fd1")
+	tombstone.MetaSet("off", "11")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone}))
+
+	rec := outputRead(t, client, "fd1")
+	require.NotNil(t, rec, "a fenced delete must leave a tombstone record")
+	assert.Equal(t, true, rec.Bins["_deleted"])
+	assert.Equal(t, 11, rec.Bins["_off"])
+
+	stale := msg(t, `{"v":"resurrect"}`)
+	stale.MetaSet("k", "fd1")
+	stale.MetaSet("off", "3")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{stale}))
+
+	rec = outputRead(t, client, "fd1")
+	require.NotNil(t, rec)
+	assert.Equal(t, true, rec.Bins["_deleted"], "a stale write must not resurrect a fenced delete")
+	assert.NotContains(t, rec.Bins, "v")
+
+	newer := msg(t, `{"v":"again"}`)
+	newer.MetaSet("k", "fd1")
+	newer.MetaSet("off", "12")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{newer}))
+	rec = outputRead(t, client, "fd1")
+	require.NotNil(t, rec)
+	assert.Equal(t, "again", rec.Bins["v"])
+	assert.NotContains(t, rec.Bins, "_deleted")
+}
+
 func TestIntegrationTTL(t *testing.T) {
 	w, client := outputSetup(t, "ttl: 1h\n")
 
@@ -1124,6 +1239,159 @@ func TestIntegrationReplaceOnlyClearsOldBins(t *testing.T) {
 	assert.NotContains(t, rec.Bins, "b", "replace_only must drop bins not named in the write")
 }
 
+func TestIntegrationFencedDeleteThenReplaceOnly(t *testing.T) {
+	w, client := outputSetup(t, `
+key: '${! meta("k") }'
+bins: 'root = this'
+operation: '${! meta("op").or("write") }'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("off") }'
+`)
+
+	create := msg(t, `{"v":"live","extra":1}`)
+	create.MetaSet("k", "fdro1")
+	create.MetaSet("op", "write")
+	create.MetaSet("off", "10")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
+
+	tombstone := msg(t, ``)
+	tombstone.MetaSet("k", "fdro1")
+	tombstone.MetaSet("off", "11")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone}))
+
+	rec := outputRead(t, client, "fdro1")
+	require.NotNil(t, rec, "a fenced delete must leave a tombstone record")
+	assert.Equal(t, true, rec.Bins["_deleted"])
+
+	repl := msg(t, `{"v":"back"}`)
+	repl.MetaSet("k", "fdro1")
+	repl.MetaSet("op", "replace_only")
+	repl.MetaSet("off", "12")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{repl}))
+
+	rec = outputRead(t, client, "fdro1")
+	require.NotNil(t, rec)
+	assert.Equal(t, "back", rec.Bins["v"])
+	assert.Equal(t, 12, rec.Bins["_off"])
+	assert.NotContains(t, rec.Bins, "_deleted", "replace_only must remove the tombstone")
+	assert.NotContains(t, rec.Bins, "extra", "replace_only must drop bins it does not name")
+}
+
+func TestIntegrationFencedDeleteThenReplaceOnlyInOneBatch(t *testing.T) {
+	w, client := outputSetup(t, `
+key: '${! meta("k") }'
+bins: 'root = this'
+operation: '${! meta("op").or("write") }'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("off") }'
+`)
+
+	create := msg(t, `{"v":"live","extra":1}`)
+	create.MetaSet("k", "fdro2")
+	create.MetaSet("op", "write")
+	create.MetaSet("off", "10")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
+
+	tombstone := msg(t, ``)
+	tombstone.MetaSet("k", "fdro2")
+	tombstone.MetaSet("off", "11")
+	repl := msg(t, `{"v":"back"}`)
+	repl.MetaSet("k", "fdro2")
+	repl.MetaSet("op", "replace_only")
+	repl.MetaSet("off", "12")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone, repl}))
+
+	rec := outputRead(t, client, "fdro2")
+	require.NotNil(t, rec)
+	assert.Equal(t, "back", rec.Bins["v"], "the replace_only payload must survive coalescing with the delete")
+	assert.Equal(t, 12, rec.Bins["_off"])
+	assert.NotContains(t, rec.Bins, "_deleted")
+	assert.NotContains(t, rec.Bins, "extra")
+}
+
+func TestIntegrationFencedDeleteThenUpdateOnlyInOneBatch(t *testing.T) {
+	// update_only after a fenced delete folds to replace. The update carries a
+	// nil tombstone bin, which REPLACE rejects, so the write omits it and the
+	// replace drops the tombstone by not naming it.
+	w, client := outputSetup(t, `
+key: '${! meta("k") }'
+bins: 'root = this'
+operation: '${! meta("op").or("write") }'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("off") }'
+`)
+
+	create := msg(t, `{"v":"live","extra":1}`)
+	create.MetaSet("k", "fduo1")
+	create.MetaSet("op", "write")
+	create.MetaSet("off", "10")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
+
+	tombstone := msg(t, ``)
+	tombstone.MetaSet("k", "fduo1")
+	tombstone.MetaSet("off", "11")
+	upd := msg(t, `{"v":"back"}`)
+	upd.MetaSet("k", "fduo1")
+	upd.MetaSet("op", "update_only")
+	upd.MetaSet("off", "12")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone, upd}))
+
+	rec := outputRead(t, client, "fduo1")
+	require.NotNil(t, rec)
+	assert.Equal(t, "back", rec.Bins["v"], "the update_only payload must survive coalescing with the delete")
+	assert.Equal(t, 12, rec.Bins["_off"])
+	assert.NotContains(t, rec.Bins, "_deleted")
+	assert.NotContains(t, rec.Bins, "extra", "bins the delete removed must not survive the folded replace")
+}
+
+func TestIntegrationFencedUpdateOnlyAfterDeleteInLaterBatch(t *testing.T) {
+	// In separate batches nothing folds: UPDATE_ONLY runs against the
+	// tombstone and clears it with a nil tombstone bin.
+	w, client := outputSetup(t, `
+key: '${! meta("k") }'
+bins: 'root = this'
+operation: '${! meta("op").or("write") }'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("off") }'
+`)
+
+	create := msg(t, `{"v":"live","extra":1}`)
+	create.MetaSet("k", "fduo2")
+	create.MetaSet("off", "10")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{create}))
+
+	tombstone := msg(t, ``)
+	tombstone.MetaSet("k", "fduo2")
+	tombstone.MetaSet("off", "11")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{tombstone}))
+
+	rec := outputRead(t, client, "fduo2")
+	require.NotNil(t, rec)
+	require.Contains(t, rec.Bins, "_deleted")
+
+	upd := msg(t, `{"v":"back"}`)
+	upd.MetaSet("k", "fduo2")
+	upd.MetaSet("op", "update_only")
+	upd.MetaSet("off", "12")
+	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{upd}))
+
+	rec = outputRead(t, client, "fduo2")
+	require.NotNil(t, rec)
+	assert.Equal(t, map[string]any{"v": "back", "_off": 12}, map[string]any(rec.Bins))
+}
+
 func TestIntegrationReplaceOnlyFailsWhenMissing(t *testing.T) {
 	w, client := outputSetup(t, "operation: replace_only\n")
 
@@ -1390,14 +1658,16 @@ func TestIntegrationGenerationSurvivesCoalescing(t *testing.T) {
 	require.Error(t, err, "a stale generation must not be dropped by coalescing")
 	assert.Contains(t, firstIndexedError(t, indexer, err).Error(), "generation check failed")
 
+	// The unchecked write comes later for the same key, so it fails too
+	// rather than landing before the retry of the compare-and-set message.
 	var batchErr *service.BatchError
 	require.ErrorAs(t, err, &batchErr)
-	assert.Equal(t, 1, batchErr.IndexedErrors(), "only the compare-and-set message should fail")
+	assert.Equal(t, 2, batchErr.IndexedErrors())
 
 	rec := outputRead(t, client, "g2")
 	require.NotNil(t, rec)
 	assert.Equal(t, "second", rec.Bins["v"], "the stale write must not have landed")
-	assert.Equal(t, true, rec.Bins["other"], "the unchecked write must still have landed")
+	assert.NotContains(t, rec.Bins, "other", "the later write must wait for the compare-and-set retry")
 }
 
 // Keys with no compare-and-set message still coalesce, so the exemption has not
@@ -1440,4 +1710,339 @@ func TestIntegrationUnlimitedTotalTimeout(t *testing.T) {
 
 	require.NoError(t, w.WriteBatch(t.Context(), service.MessageBatch{msg(t, `{"id":"t2","v":"ok"}`)}))
 	assert.Equal(t, "ok", outputRead(t, client, "t2").Bins["v"])
+}
+
+func TestIntegrationLookupEnriches(t *testing.T) {
+	p, client := lookupSetup(t, "")
+
+	seed(t, client, "u1", as.BinMap{"tier": "gold", "ltv": 4200, "country": "GB"})
+
+	batch := service.MessageBatch{service.NewMessage([]byte(`{"user_id":"u1","evt":"click"}`))}
+	out, err := p.ProcessBatch(t.Context(), batch)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0], 1)
+
+	assert.Equal(t, map[string]any{
+		"tier": "gold", "ltv": 4200, "country": "GB",
+	}, structured(t, out[0][0]))
+
+	assert.Equal(t, map[string]any{"user_id": "u1", "evt": "click"}, structured(t, batch[0]))
+}
+
+// Fencing is invisible to the read side: a record written with a fence must
+// enrich a message with its data and nothing else.
+func TestIntegrationLookupHidesFencingBins(t *testing.T) {
+	p, client := lookupSetup(t, "fence_bin: _off\n")
+
+	seed(t, client, "fu1", as.BinMap{"tier": "gold", "_off": 42})
+
+	out, err := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"fu1"}`))})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, out[0][0]))
+}
+
+func TestIntegrationLookupSelectedBinsOnly(t *testing.T) {
+	p, client := lookupSetup(t, "bins: [ tier ]\n")
+
+	seed(t, client, "u1", as.BinMap{"tier": "gold", "ltv": 4200})
+
+	out, err := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"u1"}`))})
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, out[0][0]))
+}
+
+func TestIntegrationLookupDeduplicatedFanOut(t *testing.T) {
+	p, client := lookupSetup(t, "")
+
+	seed(t, client, "u1", as.BinMap{"tier": "gold"})
+	seed(t, client, "u2", as.BinMap{"tier": "silver"})
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"user_id":"u1","evt":1}`)),
+		service.NewMessage([]byte(`{"user_id":"u2","evt":2}`)),
+		service.NewMessage([]byte(`{"user_id":"u1","evt":3}`)),
+	}
+
+	out, err := p.ProcessBatch(t.Context(), batch)
+	require.NoError(t, err)
+	require.Len(t, out[0], 3)
+
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, out[0][0]))
+	assert.Equal(t, map[string]any{"tier": "silver"}, structured(t, out[0][1]))
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, out[0][2]))
+}
+
+func TestIntegrationLookupNestedCDTsBecomeJSON(t *testing.T) {
+	p, client := lookupSetup(t, "")
+
+	seed(t, client, "u1", as.BinMap{
+		"prefs": map[string]any{"theme": "dark", "n": 3},
+		"tags":  []any{"a", "b"},
+	})
+
+	out, err := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"u1"}`))})
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]any{
+		"prefs": map[string]any{"theme": "dark", "n": 3},
+		"tags":  []any{"a", "b"},
+	}, structured(t, out[0][0]))
+
+	_, err = out[0][0].AsBytes()
+	require.NoError(t, err)
+}
+
+// TestIntegrationLookupKeyOrderedMapBecomesJSON seeds a map the way Java and
+// Python clients commonly write it, with MapPolicy KEY_ORDERED. The client
+// unpacks that as []as.MapPair, and the nested value as map[any]any.
+func TestIntegrationLookupKeyOrderedMapBecomesJSON(t *testing.T) {
+	p, client := lookupSetup(t, "")
+
+	key, asErr := as.NewKey(integrationNamespace, integrationLookupSet, "ordered")
+	require.NoError(t, asErr)
+	policy := as.NewMapPolicy(as.MapOrder.KEY_ORDERED, as.MapWriteMode.UPDATE)
+	_, asErr = client.Operate(nil, key,
+		as.MapPutItemsOp(policy, "prefs", map[any]any{
+			"theme": "dark",
+			"n":     3,
+			"inner": map[string]any{"tags": []any{"a", "b"}},
+		}),
+	)
+	require.NoError(t, asErr)
+
+	rec, asErr := client.Get(nil, key, "prefs")
+	require.NoError(t, asErr)
+	require.IsType(t, []as.MapPair{}, rec.Bins["prefs"], "seeded map should be key-ordered")
+
+	out, err := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"ordered"}`))})
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]any{
+		"prefs": map[string]any{
+			"theme": "dark",
+			"n":     3,
+			"inner": map[string]any{"tags": []any{"a", "b"}},
+		},
+	}, structured(t, out[0][0]))
+
+	_, err = out[0][0].AsBytes()
+	require.NoError(t, err)
+}
+
+func TestIntegrationLookupNotFoundNull(t *testing.T) {
+	p, _ := lookupSetup(t, "")
+
+	out, err := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"missing"}`))})
+	require.NoError(t, err)
+	require.Len(t, out[0], 1)
+
+	assert.Nil(t, structured(t, out[0][0]))
+	assert.NoError(t, out[0][0].GetError())
+}
+
+func TestIntegrationLookupNotFoundDrop(t *testing.T) {
+	p, client := lookupSetup(t, "not_found: drop\n")
+
+	seed(t, client, "u1", as.BinMap{"tier": "gold"})
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"user_id":"u1"}`)),
+		service.NewMessage([]byte(`{"user_id":"missing"}`)),
+	}
+
+	out, err := p.ProcessBatch(t.Context(), batch)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0], 1, "the unmatched message should be dropped")
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, out[0][0]))
+}
+
+func TestIntegrationLookupNotFoundError(t *testing.T) {
+	p, _ := lookupSetup(t, "not_found: error\n")
+
+	out, err := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"missing"}`))})
+	require.NoError(t, err)
+
+	require.Error(t, out[0][0].GetError())
+}
+
+func TestIntegrationLookupEmitsMetadata(t *testing.T) {
+	p, client := lookupSetup(t, "emit_metadata: true\n")
+
+	key, err := as.NewKey(integrationNamespace, integrationLookupSet, "u1")
+	require.NoError(t, err)
+	wp := as.NewWritePolicy(0, 3600)
+	require.NoError(t, client.Put(wp, key, as.BinMap{"tier": "gold"}))
+
+	out, procErr := p.ProcessBatch(t.Context(),
+		service.MessageBatch{service.NewMessage([]byte(`{"user_id":"u1"}`))})
+	require.NoError(t, procErr)
+
+	gen, ok := out[0][0].MetaGet(metaGeneration)
+	require.True(t, ok)
+	assert.Equal(t, "1", gen)
+
+	// The metadata is documented as feeding the output's generation and ttl
+	// fields, so both have to come back in a form those fields accept.
+	ttl, ok := out[0][0].MetaGet(metaTTL)
+	require.True(t, ok)
+	parsed, ttlErr := parseTTL(ttl)
+	require.NoError(t, ttlErr)
+	assert.InDelta(t, 3600, parsed, 60)
+}
+
+func TestIntegrationLookupKeyFailureIsolated(t *testing.T) {
+	p, client := lookupSetup(t, "")
+
+	seed(t, client, "u1", as.BinMap{"tier": "gold"})
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"user_id":"u1"}`)),
+		service.NewMessage([]byte(`{"nope":true}`)),
+	}
+
+	out, err := p.ProcessBatch(t.Context(), batch)
+	require.NoError(t, err)
+	require.Len(t, out[0], 2)
+
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, out[0][0]))
+	require.Error(t, out[0][1].GetError())
+	assert.Contains(t, out[0][1].GetError().Error(), "not a usable record key")
+}
+
+// TestIntegrationLookupReadsOutputWrites runs the read-modify-write loop the
+// two components document together: records come from the output rather than a
+// raw client, both sides keep their default fence and tombstone bin names, and
+// the generation the lookup reports drives the output's compare-and-set.
+func TestIntegrationLookupReadsOutputWrites(t *testing.T) {
+	w, client := outputSetup(t, `
+operation: '${! meta("op").or("write") }'
+generation: '${! meta("aerospike_generation").or("") }'
+ttl: 0
+fencing:
+  enabled: true
+  value: '${! meta("off") }'
+`)
+	p := newTestProcessor(t, `
+hosts: [ "`+integrationHost(t)+`" ]
+namespace: `+integrationNamespace+`
+set: `+integrationOutputSet+`
+key: '${! json("id") }'
+emit_metadata: true
+`)
+	t.Cleanup(func() { _ = p.Close(context.Background()) })
+
+	write := func(body, off, gen, op string) error {
+		m := msg(t, body)
+		m.MetaSet("off", off)
+		if gen != "" {
+			m.MetaSet("aerospike_generation", gen)
+		}
+		if op != "" {
+			m.MetaSet("op", op)
+		}
+		return w.WriteBatch(t.Context(), service.MessageBatch{m})
+	}
+	lookup := func() *service.Message {
+		out, err := p.ProcessBatch(t.Context(), service.MessageBatch{msg(t, `{"id":"rt1"}`)})
+		require.NoError(t, err)
+		require.Len(t, out, 1)
+		require.Len(t, out[0], 1)
+		require.NoError(t, out[0][0].GetError())
+		return out[0][0]
+	}
+
+	require.NoError(t, write(`{"id":"rt1","tier":"gold"}`, "1", "", ""))
+	require.Equal(t, 1, outputRead(t, client, "rt1").Bins[defaultFenceBin], "the output should have written the fence bin")
+
+	read := lookup()
+	assert.Equal(t, map[string]any{"tier": "gold"}, structured(t, read), "the fence bin must not reach the reader")
+	gen, ok := read.MetaGet(metaGeneration)
+	require.True(t, ok)
+	assert.Equal(t, "1", gen)
+
+	require.NoError(t, write(`{"id":"rt1","tier":"silver"}`, "2", gen, ""))
+
+	stale := msg(t, `{"id":"rt1","tier":"bronze"}`)
+	stale.MetaSet("off", "3")
+	stale.MetaSet("aerospike_generation", gen)
+	staleBatch := service.MessageBatch{stale}
+	indexer := staleBatch.Index()
+	err := w.WriteBatch(t.Context(), staleBatch)
+	require.Error(t, err)
+	assert.Contains(t, firstIndexedError(t, indexer, err).Error(), "generation check failed")
+
+	read = lookup()
+	assert.Equal(t, map[string]any{"tier": "silver"}, structured(t, read))
+	gen, _ = read.MetaGet(metaGeneration)
+	assert.Equal(t, "2", gen)
+
+	require.NoError(t, write(`{"id":"rt1"}`, "4", "", "delete"))
+	rec := outputRead(t, client, "rt1")
+	require.NotNil(t, rec, "a fenced delete leaves a tombstone record")
+	assert.Equal(t, true, rec.Bins[defaultTombstoneBin])
+
+	assert.Nil(t, structured(t, lookup()), "the lookup must report a tombstone as not found")
+}
+
+func TestIntegrationCloseWaitsForInFlightCommands(t *testing.T) {
+	w, _ := outputSetup(t, "")
+
+	client, release := w.conn.acquire()
+	require.NotNil(t, client)
+
+	closed := make(chan error, 1)
+	go func() { closed <- w.conn.close(context.Background()) }()
+
+	// The connection is detached at once, but the client stays open for the
+	// command that acquired it.
+	require.Eventually(t, func() bool {
+		c, r := w.conn.acquire()
+		r()
+		return c == nil
+	}, 5*time.Second, 10*time.Millisecond)
+	key, err := as.NewKey(integrationNamespace, integrationOutputSet, "close-in-flight")
+	require.NoError(t, err)
+	require.NoError(t, client.PutBins(nil, key, as.NewBin("v", 1)))
+	select {
+	case err := <-closed:
+		t.Fatalf("close returned while the client was in use: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	release()
+	select {
+	case err := <-closed:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("close did not return after the client was released")
+	}
+	assert.False(t, client.IsConnected())
+}
+
+func TestIntegrationDropKeepsClientForHolder(t *testing.T) {
+	w, _ := outputSetup(t, "")
+
+	client, release := w.conn.acquire()
+	require.NotNil(t, client)
+	w.conn.drop()
+
+	key, err := as.NewKey(integrationNamespace, integrationOutputSet, "drop-in-flight")
+	require.NoError(t, err)
+	require.NoError(t, client.PutBins(nil, key, as.NewBin("v", 1)))
+	release()
+	require.Eventually(t, func() bool { return !client.IsConnected() }, 10*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, w.Connect(t.Context()))
+	requireWrite(t, w, `{"id":"drop-reconnect","v":1}`)
 }
