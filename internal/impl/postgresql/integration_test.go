@@ -1141,7 +1141,7 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	// running tests in the look to test different PostgreSQL versions
-	for _, version := range []string{"17", "16", "15", "14", "13", "12"} {
+	for _, version := range []string{"19", "18", "17", "16", "15", "14"} {
 		v := version
 		t.Run(version, func(t *testing.T) {
 			t.Parallel()
