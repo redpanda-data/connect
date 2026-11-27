@@ -16,9 +16,12 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const testMod = "example.com/m"
@@ -132,6 +135,37 @@ func TestParseGoListTestDeps(t *testing.T) {
 	assert.Equal(t, map[string]map[string]bool{
 		"./a": {"fmt": true, testMod + "/a": true, testMod + "/lib": true},
 	}, got)
+}
+
+// TestGoListTestDepsCGOPackage checks that a package that builds only with cgo
+// gets its test dependencies when the environment sets CGO_ENABLED=0, as CI
+// does, and that go list does not fail for the other packages.
+func TestGoListTestDepsCGOPackage(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":            "module " + testMod + "\n\ngo 1.22\n",
+		"lib/lib.go":        "package lib\n",
+		"plain/plain.go":    "package plain\n",
+		"plain/x_test.go":   "package plain\n",
+		"cgoonly/cgo.go":    "//go:build cgo\n\npackage cgoonly\n\nimport _ \"" + testMod + "/lib\"\n",
+		"cgoonly/x_test.go": "//go:build cgo\n\npackage cgoonly\n",
+	}
+	for name, content := range files {
+		p := filepath.Join(dir, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	}
+	t.Chdir(dir)
+	t.Setenv("CGO_ENABLED", "0")
+	t.Setenv("GOFLAGS", "")
+
+	deps, err := goListTestDeps(testMod, []TestPackage{
+		{Path: "./plain"},
+		{Path: "./cgoonly", CGO: true},
+	})
+	require.NoError(t, err)
+	assert.True(t, deps["./cgoonly"][testMod+"/lib"])
+	assert.True(t, deps["./plain"][testMod+"/plain"])
 }
 
 func TestWriteAffected(t *testing.T) {

@@ -44,6 +44,8 @@ go run ./cmd/tools/integration run kafka redis
 
 - **Per-Package Timeout** -- Each package in [`packages.json`](packages.json) can specify a custom `timeout` field. Default is 5 minutes.
 
+- **Per-Package cgo** -- A package in [`packages.json`](packages.json) with `"cgo": true` runs with `CGO_ENABLED=1`, also when CI sets `CGO_ENABLED=0`. The `affected` command also lists its dependencies with `CGO_ENABLED=1`. Use it for packages that build only with cgo.
+
 - **Docker Cleanup** -- Ryuk, the testcontainers reaper, is on by default. It removes the containers, networks, and volumes of each package about 10 seconds after its test binary exits, also when the run is interrupted or crashes. If you disable it (`TESTCONTAINERS_RYUK_DISABLED=true`), containers will not be cleaned up and will accumulate.
 
 - **Parallel Packages** -- `--parallel N` tests up to N packages at the same time. The runner starts them in the order of [`packages.json`](packages.json). With N above 1, each package writes its output as one block when it is done, so the packages show in the order they finish. With the default of 1, a package writes its lines as they happen. Keep the default of 1 on a small Docker VM: packages that run at the same time share its CPU and memory.
