@@ -37,6 +37,10 @@ var (
 	errCodeRedoLogHeaderMismatch = 1368
 )
 
+// currentSCNQuery returns the database's current SCN and its current UTC
+// offset in seconds, read from SYSTIMESTAMP.
+const currentSCNQuery = `SELECT CURRENT_SCN, EXTRACT(TIMEZONE_HOUR FROM SYSTIMESTAMP) * 3600 + EXTRACT(TIMEZONE_MINUTE FROM SYSTIMESTAMP) * 60 FROM V$DATABASE`
+
 // Publisher is the ChangePublisher that LogMiner sends change events and
 // checkpoint requests to. The snapshot does not checkpoint the mined position,
 // so this method is not part of replication.ChangePublisher.
@@ -69,6 +73,9 @@ type LogMiner struct {
 	contentStmt    *sql.Stmt
 	currentSCNStmt *sql.Stmt
 
+	// dbZone is the database's current UTC offset, used to convert LogMiner
+	// wall-clock timestamps to UTC.
+	dbZone dbZone
 	// Redo logs don't include data types so we have to find lob types up front.
 	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
 	lobColTypes map[string]string
@@ -299,17 +306,25 @@ func (lm *LogMiner) endExpiredIdleSession(ctx context.Context, conn *sql.Conn) {
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
-	// Get database's current SCN to know our target
+	// Get the database's current SCN to know our target, and its UTC offset to
+	// convert LogMiner timestamps. Stored before the early returns below so idle
+	// cycles keep the offset current.
 	if lm.currentSCNStmt == nil {
-		stmt, err := conn.PrepareContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE")
+		stmt, err := conn.PrepareContext(ctx, currentSCNQuery)
 		if err != nil {
 			return false, fmt.Errorf("preparing current SCN query: %w", err)
 		}
 		lm.currentSCNStmt = stmt
 	}
-	var dbCurrentSCN uint64
-	if err := lm.currentSCNStmt.QueryRowContext(ctx).Scan(&dbCurrentSCN); err != nil {
-		return false, fmt.Errorf("fetching current SCN: %w", err)
+	var (
+		dbCurrentSCN uint64
+		offsetSecs   int
+	)
+	if err := lm.currentSCNStmt.QueryRowContext(ctx).Scan(&dbCurrentSCN, &offsetSecs); err != nil {
+		return false, fmt.Errorf("fetching current SCN and UTC offset: %w", err)
+	}
+	if lm.dbZone.setOffset(offsetSecs) {
+		lm.log.Infof("Database UTC offset is %s; LogMiner timestamps are converted from it", lm.dbZone)
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
@@ -1336,6 +1351,7 @@ func (lm *LogMiner) readLogMinerRows(ctx context.Context, rows *sql.Rows, batche
 			}
 			return err
 		}
+		event.Timestamp = wallClockIn(event.Timestamp, lm.dbZone.zone)
 		rowsInBatch++
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
@@ -1726,4 +1742,38 @@ func adaptWindowSize(currentSize int, hitCap bool, minSize, maxSize, increment i
 		return min(currentSize+increment, maxSize)
 	}
 	return max(currentSize-increment, minSize)
+}
+
+// wallClockIn returns t's wall-clock fields as a time in zone, since the driver
+// labels LogMiner's zoneless DATE values as UTC. A nil zone or zero t returns t
+// unchanged.
+func wallClockIn(t time.Time, zone *time.Location) time.Time {
+	if zone == nil || t.IsZero() {
+		return t
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), zone)
+}
+
+// dbZone holds the database's UTC offset. The zero value has a nil zone,
+// which leaves timestamps unconverted.
+type dbZone struct {
+	zone *time.Location
+	secs int
+}
+
+// setOffset sets the UTC offset to secs, reporting whether it changed.
+func (z *dbZone) setOffset(secs int) bool {
+	if z.zone != nil && z.secs == secs {
+		return false
+	}
+	z.zone = time.FixedZone("", secs)
+	z.secs = secs
+	return true
+}
+
+func (z dbZone) String() string {
+	if z.zone == nil {
+		return "unset"
+	}
+	return time.Now().In(z.zone).Format("-07:00") // "-07:00" is Go's ±hh:mm layout
 }

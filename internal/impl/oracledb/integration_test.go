@@ -11,6 +11,7 @@ package oracledb_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -3213,4 +3214,112 @@ oracledb_cdc:
 	assert.Contains(t, logBuf.String(), "retrying from SCN")
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
+// TestIntegrationOracleDBCDCConvertsHostOffset checks LogMiner timestamps on a
+// non-UTC host (the shared container runs at Asia/Kolkata, +05:30), and that
+// go-ora still labels DATE values UTC, which the conversion relies on.
+func TestIntegrationOracleDBCDCConvertsHostOffset(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+
+	t.Run("Converts LogMiner timestamps using the host offset", func(t *testing.T) {
+		var dbOffsetSecs int
+		require.NoError(t, db.QueryRowContext(t.Context(),
+			`SELECT EXTRACT(TIMEZONE_HOUR FROM SYSTIMESTAMP) * 3600 + EXTRACT(TIMEZONE_MINUTE FROM SYSTIMESTAMP) * 60 FROM DUAL`).Scan(&dbOffsetSecs))
+		// Fail rather than skip: a UTC host means the container TZ setting was lost
+		// and this test (and the non-UTC coverage of the whole suite) is vacuous.
+		require.NotZero(t, dbOffsetSecs, "database host clock is UTC; the shared container must run with TZ=%s", oracledbtest.HostTimezone)
+		offset := time.Duration(dbOffsetSecs) * time.Second
+
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), db.Schema+".foo",
+			"CREATE TABLE "+db.Schema+".foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+
+		cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  checkpoint_cache_table_name: ` + db.CheckpointTable() + `
+  snapshot_mode: none
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["` + db.Schema + `.FOO"]
+  batching:
+    count: 1`
+
+		var logBuf oracledbtest.SyncBuffer
+		logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, &logBuf), &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+		msgChan := make(chan *service.Message, 10)
+		stream := oracledbtest.StartPipelineWithLogger(t, cfg, logger, func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		})
+		t.Cleanup(func() {
+			if err := stream.StopWithin(10 * time.Second); err != nil {
+				t.Log(err)
+			}
+		})
+
+		oracledbtest.WaitForStreaming(t, &logBuf)
+
+		t.Log("Then: the detected database offset is logged")
+		wantLog := "Database UTC offset is " + time.Now().In(time.FixedZone("", dbOffsetSecs)).Format("-07:00")
+		require.Eventually(t, func() bool {
+			return strings.Contains(logBuf.String(), wantLog)
+		}, 10*time.Second, 100*time.Millisecond, "expected log %q", wantLog)
+
+		db.MustExec("INSERT INTO " + db.Schema + ".foo (val) VALUES (1)")
+		msgs := oracledbtest.CollectMessages(t, msgChan, 1)
+		require.Len(t, msgs, 1)
+
+		t.Log("Then: timestamps are close to now, not shifted by the host offset")
+		const tolerance = 2 * time.Minute
+		now := time.Now()
+		for _, key := range []string{"source_ts_ms", "commit_ts_ms"} {
+			str, ok := msgs[0].MetaGet(key)
+			require.Truef(t, ok, "missing %q metadata", key)
+			ms, err := strconv.ParseInt(str, 10, 64)
+			require.NoErrorf(t, err, "%s %q is not a valid int64", key, str)
+			got := time.UnixMilli(ms)
+
+			assert.WithinDurationf(t, now, got, tolerance, "%s should be close to now", key)
+			// Unconverted, the host wall-clock digits labelled UTC land at now+offset.
+			assert.Greaterf(t, got.Sub(now.Add(offset)).Abs(), tolerance, "%s must not be close to now+%s (unconverted)", key, offset)
+		}
+	})
+
+	// Tripwire: go-ora ignores SERVER LOCATION (sijms/go-ora#686). If this fails,
+	// add a "SERVER LOCATION=UTC" connection override so DATE/TIMESTAMP values
+	// stay UTC-labelled, and check TIMESTAMP WITH LOCAL TIME ZONE handling.
+	t.Run("go-ora ignores SERVER LOCATION for DATE and TIMESTAMP", func(t *testing.T) {
+		sep := "?"
+		if strings.Contains(connStr, "?") {
+			sep = "&"
+		}
+		kolkataDB, err := sql.Open("oracle", connStr+sep+"SERVER%20LOCATION=Asia/Kolkata")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = kolkataDB.Close() })
+
+		var gotDate, gotTS time.Time
+		require.NoError(t, kolkataDB.QueryRowContext(t.Context(), `SELECT
+			TO_DATE('2026-01-15 10:30:00', 'YYYY-MM-DD HH24:MI:SS'),
+			TO_TIMESTAMP('2026-01-15 10:30:00.123456', 'YYYY-MM-DD HH24:MI:SS.FF6')
+			FROM DUAL`).Scan(&gotDate, &gotTS))
+
+		const msg = "go-ora now applies the server time zone to DATE/TIMESTAMP values (see sijms/go-ora#686). " +
+			"Pin the driver to UTC (go-ora option \"SERVER LOCATION=UTC\") in the oracledb_cdc connection string overrides so column values and " +
+			"LogMiner timestamps stay UTC-labelled (the host offset conversion assumes that), and check TIMESTAMP WITH LOCAL TIME ZONE handling."
+
+		wantDate := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
+		wantTS := time.Date(2026, 1, 15, 10, 30, 0, 123456000, time.UTC)
+		assert.True(t, wantDate.Equal(gotDate), "DATE: got %s, want %s. %s", gotDate, wantDate, msg)
+		assert.True(t, wantTS.Equal(gotTS), "TIMESTAMP: got %s, want %s. %s", gotTS, wantTS, msg)
+		assert.Equal(t, time.UTC, gotDate.Location(), "DATE location. %s", msg)
+		assert.Equal(t, time.UTC, gotTS.Location(), "TIMESTAMP location. %s", msg)
+	})
 }

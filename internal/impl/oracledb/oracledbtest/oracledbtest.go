@@ -594,6 +594,10 @@ type containerCfg struct {
 	connStr   string
 }
 
+// HostTimezone is the OS time zone of the shared Oracle container. It is not
+// UTC, so tests exercise the database host offset handling.
+const HostTimezone = "Asia/Kolkata"
+
 // shared is the Oracle Free container that all tests in a package use. Oracle
 // Free takes up to three minutes to boot, and a small Docker VM, such as the
 // one on a developer laptop, has memory for one instance only.
@@ -654,6 +658,10 @@ func startContainer(ctx context.Context) (cfg containerCfg, err error) {
 		testcontainers.WithExposedPorts("1521/tcp"),
 		testcontainers.WithEnv(map[string]string{
 			"ORACLE_PWD": "YourPassword123",
+			// A host clock that is not UTC, so that every test runs against a
+			// database whose LogMiner timestamps need an offset conversion.
+			// Asia/Kolkata is +05:30 with no DST.
+			"TZ": HostTimezone,
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("DATABASE IS READY TO USE!").WithStartupTimeout(3*time.Minute),
