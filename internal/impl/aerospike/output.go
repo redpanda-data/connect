@@ -68,14 +68,14 @@ Each message is mapped to a single Aerospike record. The record is addressed by
 digest itself and the stored user key is null. The bins are produced by the
 ` + "`bins`" + ` Bloblang mapping.
 
-### Shaping data
+== Shaping data
 
 This output deliberately has no transform language of its own — use Bloblang, either in a
 ` + "`mapping`" + ` processor upstream or in the ` + "`bins`" + ` field. Aerospike bin names are
 capped at 15 characters, so any source field with a longer name must be renamed in the
 mapping rather than passed through.
 
-### Record model
+== Record model
 
 This output writes whole bins (` + "`PutOp`" + `). It will not append to a list, increment a
 counter, or patch a map in place — those need a modeled operate in application code.
@@ -86,7 +86,7 @@ single-digit KiB. Sets are a name, not a shard key. Do not interpolate an unboun
 value. A small fixed list of topic names is fine. Readers address records by primary key, so do
 not rely on the data being queryable as a join.
 
-### Batching and hot keys
+== Batching and hot keys
 
 Writes are dispatched with a single batch command per output batch. Configure ` + "`batching`" + `,
 otherwise every message is its own command. Aerospike enforces
@@ -102,7 +102,7 @@ same record key, which reorders those two writes and can leave an older value in
 Raise it only when keys do not repeat across batches, and prefer larger batches to recover
 throughput.
 
-### Delivery guarantees
+== Delivery guarantees
 
 Redpanda Connect delivers at least once, so a message may be written more than once after a
 retry. Full-record writes are naturally idempotent.
@@ -113,7 +113,7 @@ written. The rejection does not go away on retry, so with ` + "`auto_replay_nack
 that message is replayed forever and holds the source partition. Wrap this output in
 ` + "`output.fallback`" + ` so the rejected message is sent somewhere else instead of being retried.
 
-### What this output does not do
+== What this output does not do
 
 Writes are whole-bin puts. Atomic increments, list append, and map operations are not
 available — shape the record in Bloblang and write the full bin values. There is no input;
