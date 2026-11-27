@@ -373,127 +373,164 @@ pg_stream:
 
 // TestIntegrationPostgresInfiniteTimestamps verifies that the PostgreSQL
 // special values infinity and -infinity in date, timestamp and timestamptz
-// columns reach the output as null on both the snapshot and the streaming
-// path, and in the before metadata of an update. The snapshot used to fail the
-// scan and restart in a loop. See CON-588.
+// columns reach the output as set by infinite_timestamps, on both the snapshot
+// and the streaming path, and in the before metadata of an update. The snapshot
+// used to fail the scan and restart in a loop. See CON-588.
 func TestIntegrationPostgresInfiniteTimestamps(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
 
-	db.MustExec(t, "CREATE TABLE validity (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp);")
-	db.MustExec(t, "INSERT INTO validity VALUES (1, now(), now()::date, now()::timestamp);")
-	db.MustExec(t, "INSERT INTO validity VALUES (2, 'infinity', '-infinity', 'infinity');")
+	// The payload is JSON, so a sentinel time.Time arrives as its RFC 3339
+	// string.
+	tests := []struct {
+		mode             string
+		positiveInfinity any
+		negativeInfinity any
+	}{
+		{
+			mode:             "as_null",
+			positiveInfinity: nil,
+			negativeInfinity: nil,
+		},
+		{
+			mode:             "as_string",
+			positiveInfinity: "infinity",
+			negativeInfinity: "-infinity",
+		},
+		{
+			mode:             "as_sentinel",
+			positiveInfinity: "9999-12-31T23:59:59.999999Z",
+			negativeInfinity: "0001-01-01T00:00:00Z",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			table := "validity_" + tt.mode
+			db.MustExec(t, fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY, valid_to timestamptz, valid_on date, valid_ts timestamp);", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (1, now(), now()::date, now()::timestamp);", table))
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (2, 'infinity', '-infinity', 'infinity');", table))
 
-	template := fmt.Sprintf(`
+			template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
-    slot_name: test_slot_infinite_timestamps
+    slot_name: test_slot_infinite_%s
     stream_snapshot: true
+    infinite_timestamps: %s
     schema: public
     tables:
-       - validity
-`, databaseURL)
+       - %s
+`, databaseURL, tt.mode, tt.mode, table)
 
-	var (
-		receivedMu sync.Mutex
-		received   []map[string]any
-		// befores holds the before metadata of each row in received, nil
-		// when the row has none.
-		befores []any
-	)
-	builder := service.NewStreamBuilder()
-	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
-	require.NoError(t, builder.AddInputYAML(template))
-	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
-		b, err := m.AsBytes()
-		if err != nil {
-			return err
-		}
-		var row map[string]any
-		if err := json.Unmarshal(b, &row); err != nil {
-			return err
-		}
-		before, _ := m.MetaGetMut("before")
-		receivedMu.Lock()
-		received = append(received, row)
-		befores = append(befores, before)
-		receivedMu.Unlock()
-		return nil
-	}))
-	stream, err := builder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+			var (
+				receivedMu sync.Mutex
+				received   []map[string]any
+				// befores holds the before metadata of each row in received, nil
+				// when the row has none.
+				befores []any
+			)
+			builder := service.NewStreamBuilder()
+			require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+			require.NoError(t, builder.AddInputYAML(template))
+			require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+				b, err := m.AsBytes()
+				if err != nil {
+					return err
+				}
+				var row map[string]any
+				if err := json.Unmarshal(b, &row); err != nil {
+					return err
+				}
+				before, _ := m.MetaGetMut("before")
+				receivedMu.Lock()
+				received = append(received, row)
+				befores = append(befores, before)
+				receivedMu.Unlock()
+				return nil
+			}))
+			stream, err := builder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
 
-	require.Eventually(t, func() bool {
-		receivedMu.Lock()
-		defer receivedMu.Unlock()
-		return len(received) == 2
-	}, 30*time.Second, 100*time.Millisecond, "the snapshot must deliver both rows, the infinite one included")
+			require.Eventually(t, func() bool {
+				receivedMu.Lock()
+				defer receivedMu.Unlock()
+				return len(received) == 2
+			}, 30*time.Second, 100*time.Millisecond, "the snapshot must deliver both rows, the infinite one included")
 
-	// Streamed after the snapshot, so this row goes through the pgoutput decoder.
-	db.MustExec(t, "INSERT INTO validity VALUES (3, '-infinity', 'infinity', '-infinity');")
+			// Streamed after the snapshot, so this row goes through the pgoutput decoder.
+			db.MustExec(t, fmt.Sprintf("INSERT INTO %s VALUES (3, '-infinity', 'infinity', '-infinity');", table))
 
-	require.Eventually(t, func() bool {
-		receivedMu.Lock()
-		defer receivedMu.Unlock()
-		return len(received) == 3
-	}, 30*time.Second, 100*time.Millisecond, "the streamed row was never delivered")
+			require.Eventually(t, func() bool {
+				receivedMu.Lock()
+				defer receivedMu.Unlock()
+				return len(received) == 3
+			}, 30*time.Second, 100*time.Millisecond, "the streamed row was never delivered")
 
-	receivedMu.Lock()
-	got := append([]map[string]any(nil), received...)
-	receivedMu.Unlock()
+			receivedMu.Lock()
+			got := append([]map[string]any(nil), received...)
+			receivedMu.Unlock()
 
-	require.Equal(t, float64(1), got[0]["id"])
-	require.NotNil(t, got[0]["valid_to"], "a finite snapshot value must still be delivered")
+			require.Equal(t, float64(1), got[0]["id"])
+			require.NotNil(t, got[0]["valid_to"], "a finite snapshot value must still be delivered")
 
-	require.Equal(t, float64(2), got[1]["id"])
-	require.Contains(t, got[1], "valid_to", "snapshot timestamptz")
-	require.Nil(t, got[1]["valid_to"], "snapshot timestamptz")
-	require.Contains(t, got[1], "valid_on", "snapshot date")
-	require.Nil(t, got[1]["valid_on"], "snapshot date")
-	require.Contains(t, got[1], "valid_ts", "snapshot timestamp")
-	require.Nil(t, got[1]["valid_ts"], "snapshot timestamp")
+			require.Equal(t, float64(2), got[1]["id"])
+			require.Equal(t, map[string]any{
+				"id":       float64(2),
+				"valid_to": tt.positiveInfinity,
+				"valid_on": tt.negativeInfinity,
+				"valid_ts": tt.positiveInfinity,
+			}, got[1], "snapshot")
 
-	require.Equal(t, float64(3), got[2]["id"])
-	require.Contains(t, got[2], "valid_to", "streamed timestamptz")
-	require.Nil(t, got[2]["valid_to"], "streamed timestamptz")
-	require.Contains(t, got[2], "valid_on", "streamed date")
-	require.Nil(t, got[2]["valid_on"], "streamed date")
-	require.Contains(t, got[2], "valid_ts", "streamed timestamp")
-	require.Nil(t, got[2]["valid_ts"], "streamed timestamp")
+			require.Equal(t, map[string]any{
+				"id":       float64(3),
+				"valid_to": tt.negativeInfinity,
+				"valid_on": tt.positiveInfinity,
+				"valid_ts": tt.negativeInfinity,
+			}, got[2], "stream")
 
-	// With REPLICA IDENTITY FULL the update carries the old row, infinite
-	// values included, as before metadata. It must hold null like the payload.
-	db.MustExec(t, "ALTER TABLE validity REPLICA IDENTITY FULL;")
-	db.MustExec(t, "UPDATE validity SET valid_to = now(), valid_on = now()::date, valid_ts = now()::timestamp WHERE id = 3;")
+			// With REPLICA IDENTITY FULL the update carries the old row, infinite
+			// values included, as before metadata. It must hold the same values as
+			// the payload. The metadata is not JSON, so a sentinel is a time.Time:
+			// marshal it to compare it like the payload.
+			db.MustExec(t, fmt.Sprintf("ALTER TABLE %s REPLICA IDENTITY FULL;", table))
+			db.MustExec(t, fmt.Sprintf("UPDATE %s SET valid_to = now(), valid_on = now()::date, valid_ts = now()::timestamp WHERE id = 3;", table))
 
-	require.Eventually(t, func() bool {
-		receivedMu.Lock()
-		defer receivedMu.Unlock()
-		return len(received) == 4
-	}, 30*time.Second, 100*time.Millisecond, "the update was never delivered")
+			require.Eventually(t, func() bool {
+				receivedMu.Lock()
+				defer receivedMu.Unlock()
+				return len(received) == 4
+			}, 30*time.Second, 100*time.Millisecond, "the update was never delivered")
 
-	receivedMu.Lock()
-	updated, updatedBefore := received[3], befores[3]
-	receivedMu.Unlock()
+			receivedMu.Lock()
+			updated, updatedBefore := received[3], befores[3]
+			receivedMu.Unlock()
 
-	require.Equal(t, float64(3), updated["id"])
-	require.NotNil(t, updated["valid_to"], "the updated row holds finite values")
-	before, ok := updatedBefore.(map[string]any)
-	require.True(t, ok, "the update must carry before metadata, got %T", updatedBefore)
-	for _, col := range []string{"valid_to", "valid_on", "valid_ts"} {
-		require.Contains(t, before, col, "before %s", col)
-		require.Nil(t, before[col], "before %s", col)
+			require.Equal(t, float64(3), updated["id"])
+			require.NotNil(t, updated["valid_to"], "the updated row holds finite values")
+			require.IsType(t, map[string]any{}, updatedBefore, "the update must carry before metadata")
+			beforeJSON, err := json.Marshal(updatedBefore)
+			require.NoError(t, err)
+			var before map[string]any
+			require.NoError(t, json.Unmarshal(beforeJSON, &before))
+			for col, want := range map[string]any{
+				"valid_to": tt.negativeInfinity,
+				"valid_on": tt.positiveInfinity,
+				"valid_ts": tt.negativeInfinity,
+			} {
+				require.Contains(t, before, col, "before %s", col)
+				require.Equal(t, want, before[col], "before %s", col)
+			}
+
+			require.NoError(t, stream.StopWithin(30*time.Second))
+		})
 	}
-
-	require.NoError(t, stream.StopWithin(30*time.Second))
 }
 
 // TestIntegrationPostgresInfinitePrimaryKeySnapshot verifies that the initial
