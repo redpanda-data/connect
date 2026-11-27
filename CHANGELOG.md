@@ -7,33 +7,28 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- aerospike: Added Aerospike output for writing and deleting records with support for multiple operations, batching with per-key coalescing, TTL and generation checks, and various authentication methods. ([@abhilashmandaliya](https://github.com/abhilashmandaliya), [#5020](https://github.com/redpanda-data/connect/pull/5020))
-- aws_dynamodb_cdc: Added incremental snapshot mode for DynamoDB CDC that backfills tables page by page while streaming, with support for single and multi-table mode, signal-based execution, and automatic deduplication of snapshot rows against stream events. ([@squiidz](https://github.com/squiidz), [#4886](https://github.com/redpanda-data/connect/pull/4886))
-- oracledb_cdc: Added configurable socket timeout for Oracle CDC connections with a default of 5 minutes, helping prevent long waits on network issues and improving connection reliability. ([@josephwoodward](https://github.com/josephwoodward), [#4898](https://github.com/redpanda-data/connect/pull/4898))
+- aerospike: Added new Aerospike output connector supporting write, replace, delete operations with batching, TTL, generation checks, and multiple authentication methods. ([@abhilashmandaliya](https://github.com/abhilashmandaliya), [#5020](https://github.com/redpanda-data/connect/pull/5020))
 
 ### Fixed
 
-- mysql_cdc: Fixed MySQL CDC to parse DATE and DATETIME strings from the binlog instead of mapping them to null, preventing data loss for dates before 1970 and handling zero values correctly. ([@Leward](https://github.com/Leward), [#5095](https://github.com/redpanda-data/connect/pull/5095))
-- oracledb_cdc: Fixed Oracle CDC crash when processing transactions that write LOBs on existing rows and then delete them, preventing infinite crash loops. ([@josephwoodward](https://github.com/josephwoodward), [#5274](https://github.com/redpanda-data/connect/pull/5274))
-- postgres_cdc: Fixed PostgreSQL CDC to properly check tables in FOR ALL TABLES publications with EXCEPT clauses, preventing configured excluded tables from passing validation. ([@Leward](https://github.com/Leward), [#5265](https://github.com/redpanda-data/connect/pull/5265))
+- mysql_cdc: Fixed MySQL CDC to properly parse DATE and DATETIME strings from the binlog for pre-1970 dates and zero values instead of losing them or causing restart loops. ([@Leward](https://github.com/Leward), [#5095](https://github.com/redpanda-data/connect/pull/5095))
+- mysql_cdc: Fixed MySQL CDC snapshot to give the same date values as the stream for zero and invalid dates, and fixed primary key paging that was stuck on partial-zero dates. ([@Leward](https://github.com/Leward), [#5105](https://github.com/redpanda-data/connect/pull/5105))
+- oracledb_cdc: Fixed Oracle CDC nil map panic when merging LOBs into DELETE events and improved LOB matching to UPDATE events by their post-image values. ([@josephwoodward](https://github.com/josephwoodward), [#5274](https://github.com/redpanda-data/connect/pull/5274))
 
 ### Changed
 
-- aws_dynamodb_cdc: Changed DynamoDB CDC snapshot deduplication to allow up to 1 minute of clock skew between host and AWS clocks, preventing data loss when host clock runs ahead. ([@Leward](https://github.com/Leward), [#5285](https://github.com/redpanda-data/connect/pull/5285))
-- iceberg: Changed Iceberg output to interpolate schema_evolution.table_location, allowing dynamic table location configuration based on message content. ([@Leward](https://github.com/Leward), [#5235](https://github.com/redpanda-data/connect/pull/5235))
-- iceberg: Reorganized Iceberg documentation to move catalog notes out of field descriptions and clarify storage backend configuration requirements. ([@Leward](https://github.com/Leward), [#5256](https://github.com/redpanda-data/connect/pull/5256))
-- iceberg: Changed Iceberg output to reject configurations with more than one storage backend block at both parse time and lint time, preventing silent ignoring of storage settings. ([@Leward](https://github.com/Leward), [#5278](https://github.com/redpanda-data/connect/pull/5278))
-- kafka: Changed Redpanda output to write batches concurrently by using a read-write mutex instead of holding a lock for the entire produce operation, enabling max_in_flight to have effect and improving throughput significantly. ([@glennib](https://github.com/glennib), [#5073](https://github.com/redpanda-data/connect/pull/5073))
-- mysql_cdc: Changed MySQL CDC snapshot to parse DATE, DATETIME and TIMESTAMP strings the same way as the stream, ensuring consistency and preventing infinite snapshot loops on partial-zero date keys. ([@Leward](https://github.com/Leward), [#5105](https://github.com/redpanda-data/connect/pull/5105))
-- postgres_cdc: Changed PostgreSQL CDC to emit infinite dates and timestamps as strings instead of failing or nulling them, ensuring compatibility with typed sinks. ([@Leward](https://github.com/Leward), [#5065](https://github.com/redpanda-data/connect/pull/5065))
-- postgres_cdc: Changed PostgreSQL CDC to emit intervals and time ranges as PostgreSQL text on the stream, matching the snapshot format and fixing decoding failures on PostgreSQL 17. ([@Leward](https://github.com/Leward), [#5098](https://github.com/redpanda-data/connect/pull/5098))
-- postgres_cdc: Changed PostgreSQL CDC to start single-task snapshot tables before chunked ones and warn users that parallel snapshots hold connections. ([@josephwoodward](https://github.com/josephwoodward), [#5262](https://github.com/redpanda-data/connect/pull/5262))
-- postgres_cdc: Changed PostgreSQL CDC error messages for FOR ALL TABLES publications to suggest using ALTER PUBLICATION SET ALL TABLES EXCEPT instead of ADD TABLE, which PostgreSQL rejects. ([@Leward](https://github.com/Leward), [#5270](https://github.com/redpanda-data/connect/pull/5270))
-- postgres_cdc: Changed PostgreSQL CDC to support interval, bit string, and range types as primary keys in incremental snapshots by ensuring snapshot and stream emit them consistently as text. ([@josephwoodward](https://github.com/josephwoodward), [#5287](https://github.com/redpanda-data/connect/pull/5287))
-
-### Deprecated
-
-- iceberg: Deprecated the aws_s3 and gcp_cloud_storage bucket fields in Iceberg output as they are unused, with table location now determining data file placement. ([@Leward](https://github.com/Leward), [#5268](https://github.com/redpanda-data/connect/pull/5268))
+- dynamodb_cdc: Added 1-minute clock skew tolerance to DynamoDB CDC snapshot deduplication to handle cases where host clock runs ahead of AWS servers. ([@Leward](https://github.com/Leward), [#5285](https://github.com/redpanda-data/connect/pull/5285))
+- iceberg: Made Iceberg output's schema_evolution.table_location an interpolated field to support dynamic table locations based on message content. ([@Leward](https://github.com/Leward), [#5235](https://github.com/redpanda-data/connect/pull/5235))
+- iceberg: Reorganized Iceberg documentation to move catalog notes out of commit.max_snapshot_age field description into dedicated catalog integration section. ([@Leward](https://github.com/Leward), [#5256](https://github.com/redpanda-data/connect/pull/5256))
+- iceberg: Deprecated optional aws_s3 and gcp_cloud_storage bucket fields in Iceberg output since table location determines data file placement. ([@Leward](https://github.com/Leward), [#5268](https://github.com/redpanda-data/connect/pull/5268))
+- iceberg: Added validation to reject Iceberg output configs that specify multiple storage backends (aws_s3, gcp_cloud_storage, azure_blob_storage) simultaneously. ([@Leward](https://github.com/Leward), [#5278](https://github.com/redpanda-data/connect/pull/5278))
+- kafka: Improved Redpanda output throughput by writing batches concurrently using a read-write mutex, allowing max_in_flight to control parallel produce requests instead of serializing them. ([@glennib](https://github.com/glennib), [#5073](https://github.com/redpanda-data/connect/pull/5073))
+- oracledb_cdc: Added configurable socket timeout for Oracle CDC connections with a default of 5 minutes to prevent indefinite hangs on network issues. ([@josephwoodward](https://github.com/josephwoodward), [#4898](https://github.com/redpanda-data/connect/pull/4898))
+- postgres_cdc: Changed PostgreSQL CDC to emit infinite dates and timestamps as strings in the stream instead of null, matching the snapshot behavior and preserving exact values for type-safe sinks. ([@Leward](https://github.com/Leward), [#5065](https://github.com/redpanda-data/connect/pull/5065))
+- postgres_cdc: Changed PostgreSQL CDC stream to emit intervals and time ranges as PostgreSQL text format, matching the snapshot behavior and fixing PostgreSQL 17 infinity decode failures. ([@Leward](https://github.com/Leward), [#5098](https://github.com/redpanda-data/connect/pull/5098))
+- postgres_cdc: Optimized PostgreSQL CDC snapshots to start single-task tables before chunked ones and added warnings about connection usage in parallel snapshots. ([@josephwoodward](https://github.com/josephwoodward), [#5262](https://github.com/redpanda-data/connect/pull/5262))
+- postgres_cdc: Added helpful hints for PostgreSQL CDC when tables don't stream with FOR ALL TABLES publications, including guidance on using the EXCEPT clause. ([@Leward](https://github.com/Leward), [#5270](https://github.com/redpanda-data/connect/pull/5270))
+- postgres_cdc: Added support for interval, bit string, and range type primary keys in PostgreSQL CDC incremental snapshots by ensuring consistent encoding between snapshot and stream paths. Note: `bit/varbit` types now emitted as their correct bit strings as opposed to encoded type ([@josephwoodward](https://github.com/josephwoodward), [#5287](https://github.com/redpanda-data/connect/pull/5287))
 
 ## 4.119.0 - 2026-11-20
 
