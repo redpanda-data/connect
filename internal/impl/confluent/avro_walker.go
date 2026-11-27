@@ -91,7 +91,7 @@ func kafkaConnectTypeOpt() avro.SchemaOpt {
 				if err != nil {
 					return nil, err
 				}
-				return time.UnixMilli(0).UTC().AddDate(int(n), 0, 0), nil
+				return time.Date(int(n), 1, 1, 0, 0, 0, 0, time.UTC), nil
 			case "io.debezium.time.Timestamp", "io.debezium.time.Time":
 				n, err := bloblang.ValueAsInt64(value)
 				if err != nil {
@@ -103,7 +103,9 @@ func kafkaConnectTypeOpt() avro.SchemaOpt {
 				if err != nil {
 					return nil, err
 				}
-				return time.UnixMilli(0).UTC().Add(time.Duration(n) * time.Microsecond), nil
+				// time.Duration overflows before 1677 and after 2262, so
+				// do not add the value as a Duration.
+				return time.UnixMicro(n).UTC(), nil
 			case "io.debezium.time.NanoTimestamp", "io.debezium.time.NanoTime":
 				n, err := bloblang.ValueAsInt64(value)
 				if err != nil {

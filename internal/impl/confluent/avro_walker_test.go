@@ -372,6 +372,14 @@ func TestAvroKafkaConnectTypes(t *testing.T) {
             }
         },
         {
+            "name": "inserted_y",
+            "type": {
+                "type": "int",
+                "connect.version": 1,
+                "connect.name": "io.debezium.time.Year"
+            }
+        },
+        {
             "name": "inserted_dt",
             "type": [
                 "null",
@@ -391,6 +399,18 @@ func TestAvroKafkaConnectTypes(t *testing.T) {
                     "type": "long",
                     "connect.version": 1,
                     "connect.name": "io.debezium.time.NanoTimestamp"
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "inserted_dt3",
+            "type": [
+                "null",
+                {
+                    "type": "long",
+                    "connect.version": 1,
+                    "connect.name": "io.debezium.time.MicroTimestamp"
                 }
             ],
             "default": null
@@ -475,8 +495,10 @@ func TestAvroKafkaConnectTypes(t *testing.T) {
 			input: `{
   "id": 1001,
 	"inserted_d": 14558,
+	"inserted_y": 2024,
 	"inserted_dt": 1257894000000,
 	"inserted_dt2": 1257894000000000000,
+	"inserted_dt3": 253402300799000000,
 	"decvalue": null,
 	"__op": null,
 	"__source_commit_lsn": null,
@@ -486,8 +508,10 @@ func TestAvroKafkaConnectTypes(t *testing.T) {
 			output: `{
   "id": 1001,
 	"inserted_d": "2009-11-10T00:00:00Z",
+	"inserted_y": "2024-01-01T00:00:00Z",
 	"inserted_dt": "2009-11-10T23:00:00Z",
 	"inserted_dt2": "2009-11-10T23:00:00Z",
+	"inserted_dt3": "9999-12-31T23:59:59Z",
 	"decvalue": null,
 	"__op": null,
 	"__source_commit_lsn": null,
