@@ -299,6 +299,98 @@ storage:
 	assert.Nil(t, cfg.TableLocation)
 }
 
+// TestStorageBlocksLint pins that a config can set at most one storage backend.
+// The parser reads only the first block it finds, so a second block must be a
+// lint error and not be silently ignored.
+func TestStorageBlocksLint(t *testing.T) {
+	linter := service.GlobalEnvironment().NewComponentConfigLinter()
+	base := `
+iceberg:
+  catalog:
+    url: http://localhost:8181/api/catalog
+  namespace: ns
+  table: t
+`
+	cases := []struct {
+		name     string
+		storage  string
+		wantLint bool
+	}{
+		{
+			name:     "no storage block",
+			storage:  "",
+			wantLint: false,
+		},
+		{
+			name:     "empty storage block",
+			storage:  "  storage: {}\n",
+			wantLint: false,
+		},
+		{
+			name:     "aws_s3 only",
+			storage:  "  storage:\n    aws_s3:\n      bucket: b\n",
+			wantLint: false,
+		},
+		{
+			name:     "gcp_cloud_storage only",
+			storage:  "  storage:\n    gcp_cloud_storage:\n      bucket: b\n",
+			wantLint: false,
+		},
+		{
+			name:     "azure_blob_storage only",
+			storage:  "  storage:\n    azure_blob_storage:\n      storage_account: a\n      container: c\n",
+			wantLint: false,
+		},
+		{
+			name:     "aws_s3 and gcp_cloud_storage",
+			storage:  "  storage:\n    aws_s3:\n      bucket: b\n    gcp_cloud_storage:\n      bucket: b\n",
+			wantLint: true,
+		},
+		{
+			name:     "all three",
+			storage:  "  storage:\n    aws_s3:\n      bucket: b\n    gcp_cloud_storage:\n      bucket: b\n    azure_blob_storage:\n      storage_account: a\n      container: c\n",
+			wantLint: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lints, err := linter.LintOutputYAML([]byte(base + tc.storage))
+			require.NoError(t, err)
+			var found []string
+			for _, l := range lints {
+				if strings.Contains(l.Error(), "at most one of") {
+					found = append(found, l.Error())
+				}
+			}
+			if tc.wantLint {
+				assert.NotEmpty(t, found, "expected a storage lint, got: %v", lints)
+			} else {
+				assert.Empty(t, lints, "expected no lint")
+			}
+		})
+	}
+}
+
+// TestParseStoragePropsRejectsTwoBlocks pins that the parser also rejects two
+// storage blocks, so the config fails when lint does not run.
+func TestParseStoragePropsRejectsTwoBlocks(t *testing.T) {
+	conf, err := icebergOutputConfig().ParseYAML(`
+catalog:
+  url: http://localhost:8181/api/catalog
+namespace: ns
+table: t
+storage:
+  aws_s3:
+    bucket: b
+  gcp_cloud_storage:
+    bucket: b
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parseStorageProps(conf)
+	require.EqualError(t, err, "storage: specify at most one of aws_s3, gcp_cloud_storage or azure_blob_storage, got aws_s3, gcp_cloud_storage")
+}
+
 // TestRuntimeNoticeWiring pins the startup log notices wired in
 // newIcebergOutputFromConfig (currently 0% covered): the max_in_flight ordering
 // WARNING, the copy-on-write write-amplification INFO, and the

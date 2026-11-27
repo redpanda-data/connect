@@ -617,6 +617,12 @@ func TestIntegrationPostgresTextRangesAndIntervals(t *testing.T) {
 		{"counts_list", "int4range[]", `'{"[1,)"}'`, `'{"[1,10]"}'`, `{"[1,)"}`, `{"[1,11)"}`},
 		{"totals", "nummultirange", `'{[1.5,)}'`, `'{[1.5,2.5)}'`, `{[1.5,)}`, `{[1.5,2.5)}`},
 		{"big_counts", "int8range", `'(,100]'`, `'[1,100)'`, `(,101)`, `[1,100)`},
+		// Bit strings have no infinity, so the two rows just hold different
+		// values. The stream used to emit them as pgtype.Bits structs.
+		{"flags", "bit(8)", `B'01010101'`, `B'11110000'`, `01010101`, `11110000`},
+		{"mask", "varbit(8)", `B'0101'`, `B'1'`, `0101`, `1`},
+		{"flags_list", "bit(8)[]", `'{01010101,11110000}'`, `'{00000001}'`, `{01010101,11110000}`, `{00000001}`},
+		{"masks", "varbit(8)[]", `'{0101,1}'`, `'{11111111}'`, `{0101,1}`, `{11111111}`},
 	}
 
 	var defs, infinite, finite []string
@@ -1135,7 +1141,7 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	// running tests in the look to test different PostgreSQL versions
-	for _, version := range []string{"17", "16", "15", "14", "13", "12"} {
+	for _, version := range []string{"19", "18", "17", "16", "15", "14"} {
 		v := version
 		t.Run(version, func(t *testing.T) {
 			t.Parallel()

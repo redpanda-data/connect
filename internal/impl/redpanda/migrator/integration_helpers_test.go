@@ -122,7 +122,17 @@ func startRedpandaSourceAndDestination(t *testing.T, opts ...redpandatestConfigO
 	t.Cleanup(func() { dst.Client.Close() })
 
 	src.Admin = kadm.NewClient(src.Client)
-	dst.Admin = kadm.NewClient(dst.Client)
+
+	// The destination admin uses its own client, not dst.Client. dst.Client
+	// consumes migratorTestTopic before the topic exists, so its metadata
+	// cache keeps UNKNOWN_TOPIC_OR_PARTITION for the topic. franz-go v1.22.2
+	// does not drop that entry when the client creates the topic, and
+	// kadm.Client.ListTopics reads the cache. A topic lookup on dst.Client
+	// right after the create then fails.
+	dstAdminClient, err := kgo.NewClient(kgo.SeedBrokers(dst.BrokerAddr))
+	require.NoError(t, err)
+	t.Cleanup(func() { dstAdminClient.Close() })
+	dst.Admin = kadm.NewClient(dstAdminClient)
 
 	src.CreateTopic(migratorTestTopic)
 

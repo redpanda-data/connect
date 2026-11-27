@@ -105,18 +105,42 @@ const (
 )
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	// t.Context() is canceled before cleanup functions run, so the close must
+	// not depend on its cancellation.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 5*time.Second)
 	defer cancel()
 	require.NoError(t, conn.Close(ctx))
 }
 
-func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
+// connectTestDB opens a connection to dbURL for one test. The test cleanup
+// closes it.
+func connectTestDB(t *testing.T, dbURL string) *pgconn.PgConn {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	t.Cleanup(func() { closeConn(t, conn) })
+	return conn
+}
+
+// execSQL runs one or more SQL statements on conn and reads all results.
+func execSQL(t *testing.T, ctx context.Context, conn *pgconn.PgConn, sql string) {
+	t.Helper()
+	_, err := conn.Exec(ctx, sql).ReadAll()
+	require.NoError(t, err)
+}
+
+// createDockerInstance starts PostgreSQL 16 with logical replication enabled
+// and returns its replication DSN.
+func createDockerInstance(t *testing.T) string {
 	return createDockerInstanceVersion(t, 16)
 }
 
 // createDockerInstanceVersion starts the given major version of PostgreSQL
-// with logical replication enabled.
-func createDockerInstanceVersion(t *testing.T, version int) (cleanup func(), dbURL string) {
+// with logical replication enabled and returns its replication DSN. The test
+// cleanup removes the container.
+func createDockerInstanceVersion(t *testing.T, version int) string {
 	ctr, err := testcontainers.Run(t.Context(), fmt.Sprintf("postgres:%d", version),
 		testcontainers.WithExposedPorts("5432/tcp"),
 		testcontainers.WithEnv(map[string]string{
@@ -147,24 +171,15 @@ func createDockerInstanceVersion(t *testing.T, version int) (cleanup func(), dbU
 		return db.Ping() == nil
 	}, 2*time.Minute, time.Second)
 
-	cleanup = func() {
-		// Container cleanup is handled by testcontainers.CleanupContainer
-	}
-
-	return cleanup, databaseURL
+	return databaseURL
 }
 
 func TestIntegrationIdentifySystem(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
+	conn := connectTestDB(t, createDockerInstance(t))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*100)
 	defer cancel()
-
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
 
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)
@@ -180,31 +195,22 @@ func TestIntegrationIdentifySystem(t *testing.T) {
 func TestIntegrationCreateReplicationSlot(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
+	conn := connectTestDB(t, createDockerInstance(t))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
-	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
+	_, _, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
 }
 
 func TestIntegrationDropReplicationSlot(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
+	conn := connectTestDB(t, createDockerInstance(t))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
-
-	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
+	_, _, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
 
 	err = DropReplicationSlot(ctx, conn, slotName, DropReplicationSlotOptions{})
@@ -217,14 +223,9 @@ func TestIntegrationDropReplicationSlot(t *testing.T) {
 func TestIntegrationCopyReplicationSlot(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
+	conn := connectTestDB(t, createDockerInstance(t))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
-
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
 
 	lsn, _, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: true})
 	require.NoError(t, err)
@@ -241,19 +242,11 @@ func TestIntegrationCopyReplicationSlot(t *testing.T) {
 func TestIntegrationCreatePublication(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
-	defer cancel()
-
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
+	conn := connectTestDB(t, createDockerInstance(t))
 
 	publicationName := "test_publication"
 	schema := `"public"`
-	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
+	err := CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
 	tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
@@ -261,9 +254,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.Empty(t, tables)
 	assert.True(t, forAllTables)
 
-	multiReader := conn.Exec(t.Context(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+	execSQL(t, t.Context(), conn, "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
 
 	publicationWithTables := "test_pub_with_tables"
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
@@ -293,9 +284,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.False(t, forAllTables)
 
 	// Add more tables to publication
-	multiReader = conn.Exec(t.Context(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+	execSQL(t, t.Context(), conn, "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
 
 	// Pass more tables to the publication
 	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
@@ -339,19 +328,13 @@ func TestIntegrationCreatePublication(t *testing.T) {
 
 	// Create a schema with a quoted identifier
 	caseSensitiveSchema := `"FooBar"`
-	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE SCHEMA %s;", caseSensitiveSchema))
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+	execSQL(t, t.Context(), conn, fmt.Sprintf("CREATE SCHEMA %s;", caseSensitiveSchema))
 
 	caseSensitiveTable := `"Foo"`
-	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+	execSQL(t, t.Context(), conn, fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
 
 	caseSensitiveTable2 := `"Bar"`
-	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
-	_, err = multiReader.ReadAll()
-	require.NoError(t, err)
+	execSQL(t, t.Context(), conn, fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
 
 	// Pass tables to the schema with quoted identifiers
 	publicationQuotedIdentifiers := "quoted_identifiers"
@@ -382,8 +365,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
 		"CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');",
 	} {
-		_, err = conn.Exec(t.Context(), sql).ReadAll()
-		require.NoError(t, err)
+		execSQL(t, t.Context(), conn, sql)
 	}
 	events := []TableFQN{{schema, `"events"`}}
 	require.NoError(t, CreatePublication(t.Context(), conn, "pub_partitioned", events))
@@ -400,27 +382,20 @@ func TestIntegrationCreatePublication(t *testing.T) {
 func TestIntegrationCreatePublicationRejectsSchemaPublication(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
-
+	conn := connectTestDB(t, createDockerInstance(t))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
-
-	_, err = conn.Exec(ctx, `
+	execSQL(t, ctx, conn, `
 CREATE TABLE t (id int PRIMARY KEY);
 CREATE TABLE u (id int PRIMARY KEY);
 CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA public;
-`).ReadAll()
-	require.NoError(t, err)
+`)
 
 	// The schema streams u too, so keeping it while adding t would stream a
 	// table that is not configured.
 	tableT := TableFQN{Schema: `"public"`, Table: `"t"`}
-	err = CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT})
+	err := CreatePublication(ctx, conn, "pub_schema", []TableFQN{tableT})
 	require.ErrorIs(t, err, errSchemaPublication)
 	assert.Contains(t, err.Error(), `ALTER PUBLICATION pub_schema SET TABLE "public"."t";`)
 	members, err := getPublicationMembers(ctx, conn, "pub_schema")
@@ -430,8 +405,7 @@ CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA public;
 	// The fix swaps the schema for the configured table in one statement,
 	// so t is published as soon as it runs and the next sync has nothing
 	// left to do.
-	_, err = conn.Exec(ctx, `ALTER PUBLICATION pub_schema SET TABLE "public"."t";`).ReadAll()
-	require.NoError(t, err)
+	execSQL(t, ctx, conn, `ALTER PUBLICATION pub_schema SET TABLE "public"."t";`)
 	tables, allTables, err := GetPublicationTables(ctx, conn, "pub_schema")
 	require.NoError(t, err)
 	assert.False(t, allTables)
@@ -446,8 +420,7 @@ CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA public;
 
 	// Without a table list every table is wanted, so a schema publication is
 	// recreated FOR ALL TABLES as before.
-	_, err = conn.Exec(ctx, `CREATE PUBLICATION pub_schema_all FOR TABLES IN SCHEMA public;`).ReadAll()
-	require.NoError(t, err)
+	execSQL(t, ctx, conn, `CREATE PUBLICATION pub_schema_all FOR TABLES IN SCHEMA public;`)
 	require.NoError(t, CreatePublication(ctx, conn, "pub_schema_all", nil))
 	_, allTables, err = GetPublicationTables(ctx, conn, "pub_schema_all")
 	require.NoError(t, err)
@@ -457,21 +430,15 @@ CREATE PUBLICATION pub_schema FOR TABLES IN SCHEMA public;
 func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
-
+	dbURL := createDockerInstance(t)
+	conn := connectTestDB(t, dbURL)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
-
-	_, err = conn.Exec(ctx, `
+	execSQL(t, ctx, conn, `
 		CREATE TABLE listed (id serial PRIMARY KEY, name text);
 		CREATE TABLE unlisted (id serial PRIMARY KEY, name text);
-	`).ReadAll()
-	require.NoError(t, err)
+	`)
 
 	schema := `"public"`
 	listed := TableFQN{Schema: schema, Table: `"listed"`}
@@ -479,8 +446,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 
 	t.Run("FOR TABLE publication with members", func(t *testing.T) {
 		pub := "pub_with_members"
-		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed;", pub)).ReadAll()
-		require.NoError(t, err)
+		execSQL(t, ctx, conn, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed;", pub))
 		require.False(t, publicationIsForAllTables(t, conn, pub))
 
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
@@ -499,8 +465,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 	t.Run("FOR TABLE publication emptied of every member", func(t *testing.T) {
 		// This is what the bug used to leave behind, so a restart must repair it.
 		pub := "pub_without_members"
-		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed; ALTER PUBLICATION %s DROP TABLE listed;", pub, pub)).ReadAll()
-		require.NoError(t, err)
+		execSQL(t, ctx, conn, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed; ALTER PUBLICATION %s DROP TABLE listed;", pub, pub))
 		require.False(t, publicationIsForAllTables(t, conn, pub))
 
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
@@ -514,8 +479,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 
 	t.Run("FOR TABLE publication with a table list is altered in place", func(t *testing.T) {
 		pub := "pub_altered"
-		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed;", pub)).ReadAll()
-		require.NoError(t, err)
+		execSQL(t, ctx, conn, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed;", pub))
 
 		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{unlisted}))
 
@@ -529,8 +493,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		// An empty member list used to be mistaken for FOR ALL TABLES and left
 		// alone, so the configured tables never streamed.
 		pub := "pub_emptied_then_listed"
-		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed; ALTER PUBLICATION %s DROP TABLE listed;", pub, pub)).ReadAll()
-		require.NoError(t, err)
+		execSQL(t, ctx, conn, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed; ALTER PUBLICATION %s DROP TABLE listed;", pub, pub))
 
 		require.NoError(t, CreatePublication(ctx, conn, pub, []TableFQN{listed}))
 
@@ -544,8 +507,7 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 		// publish_via_partition_root is what the incremental snapshot needs for
 		// partitioned tables, so losing it on recreation would break them.
 		pub := "pub_with_options"
-		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed WITH (publish = 'insert', publish_via_partition_root = true);", pub)).ReadAll()
-		require.NoError(t, err)
+		execSQL(t, ctx, conn, fmt.Sprintf("CREATE PUBLICATION %s FOR TABLE listed WITH (publish = 'insert', publish_via_partition_root = true);", pub))
 
 		require.NoError(t, CreatePublication(ctx, conn, pub, nil))
 
@@ -565,13 +527,12 @@ func TestIntegrationCreatePublicationSwitchesToAllTables(t *testing.T) {
 
 	t.Run("recreating without superuser explains what to do", func(t *testing.T) {
 		pub := "pub_owned_by_non_superuser"
-		_, err := conn.Exec(ctx, fmt.Sprintf(`
+		execSQL(t, ctx, conn, fmt.Sprintf(`
 			CREATE ROLE pub_owner LOGIN REPLICATION PASSWORD 'secret';
 			GRANT CREATE ON DATABASE dbname TO pub_owner;
 			CREATE PUBLICATION %s FOR TABLE listed;
 			ALTER PUBLICATION %s OWNER TO pub_owner;
-		`, pub, pub)).ReadAll()
-		require.NoError(t, err)
+		`, pub, pub))
 
 		ownerConn, err := pgconn.Connect(ctx, strings.Replace(dbURL, "user=user_name", "user=pub_owner", 1))
 		require.NoError(t, err)
@@ -604,6 +565,7 @@ func TestIntegrationValidatePublication(t *testing.T) {
 	// External mode supports PostgreSQL 12 or later. 12 cannot publish a
 	// partitioned table, 13 adds publish_via_partition_root and 15 adds row
 	// filters and column lists, which the queries read as NULL before then.
+	// TestIntegrationValidatePublicationAllTablesExcept covers 19.
 	for _, version := range []int{12, 14, 17} {
 		t.Run(strconv.Itoa(version), func(t *testing.T) {
 			testValidatePublication(t, version)
@@ -612,46 +574,35 @@ func TestIntegrationValidatePublication(t *testing.T) {
 }
 
 func testValidatePublication(t *testing.T, version int) {
-	cleanup, dbURL := createDockerInstanceVersion(t, version)
-	defer cleanup()
-
+	conn := connectTestDB(t, createDockerInstanceVersion(t, version))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
-
-	exec := func(sql string) {
-		t.Helper()
-		_, err := conn.Exec(ctx, sql).ReadAll()
-		require.NoError(t, err)
-	}
 	validate := func(publication string, tables []TableFQN) error {
 		t.Helper()
 		filtered, err := ValidatePublication(ctx, conn, publication, tables)
 		assert.Empty(t, filtered)
 		return err
 	}
-	exec("CREATE TABLE orders (id serial PRIMARY KEY, note text);")
-	exec("CREATE TABLE users (id serial PRIMARY KEY);")
-	exec("CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
-	exec("CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
+	execSQL(t, ctx, conn, "CREATE TABLE orders (id serial PRIMARY KEY, note text);")
+	execSQL(t, ctx, conn, "CREATE TABLE users (id serial PRIMARY KEY);")
+	execSQL(t, ctx, conn, "CREATE TABLE events (id int, at date, PRIMARY KEY (id, at)) PARTITION BY RANGE (at);")
+	execSQL(t, ctx, conn, "CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');")
 
 	schema := `"public"`
 	orders := TableFQN{schema, `"orders"`}
 	users := TableFQN{schema, `"users"`}
 	events := TableFQN{schema, `"events"`}
 
-	err = validate("pub_missing", []TableFQN{orders})
+	err := validate("pub_missing", []TableFQN{orders})
 	require.ErrorIs(t, err, errPublicationNotFound)
 
 	// Before PostgreSQL 13 a partitioned table is published through its
 	// partitions only.
 	if version >= 13 {
-		exec("CREATE PUBLICATION pub_some FOR TABLE orders, events;")
+		execSQL(t, ctx, conn, "CREATE PUBLICATION pub_some FOR TABLE orders, events;")
 	} else {
-		exec("CREATE PUBLICATION pub_some FOR TABLE orders, events_2026;")
+		execSQL(t, ctx, conn, "CREATE PUBLICATION pub_some FOR TABLE orders, events_2026;")
 	}
 	require.NoError(t, validate("pub_some", []TableFQN{orders}))
 	require.NoError(t, validate("pub_some", nil))
@@ -672,19 +623,23 @@ func testValidatePublication(t *testing.T, version int) {
 
 	// A publication listing only some partitions does not cover the
 	// partitioned table, but does cover the partition it lists.
-	exec("CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
-	exec("CREATE PUBLICATION pub_partial FOR TABLE events_2026;")
+	execSQL(t, ctx, conn, "CREATE TABLE events_2027 PARTITION OF events FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_partial FOR TABLE events_2026;")
 	err = validate("pub_partial", []TableFQN{events})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `"public"."events"`)
 	require.NoError(t, validate("pub_partial", []TableFQN{{schema, `"events_2026"`}}))
 
-	exec("CREATE PUBLICATION pub_all FOR ALL TABLES;")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_all FOR ALL TABLES;")
 	require.NoError(t, validate("pub_all", []TableFQN{orders, users, events}))
+	// FOR ALL TABLES does not stream a table that does not exist, so it fails
+	// like any other publication.
+	err = validate("pub_all", []TableFQN{{schema, `"no_such_table"`}})
+	require.ErrorContains(t, err, `FOR ALL TABLES publication pub_all does not stream table(s) "public"."no_such_table"`)
 
 	// A publication that leaves out updates or deletes would silently drop
 	// them, so it fails, naming the option.
-	exec("CREATE PUBLICATION pub_inserts FOR TABLE orders WITH (publish = 'insert');")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_inserts FOR TABLE orders WITH (publish = 'insert');")
 	err = validate("pub_inserts", []TableFQN{orders})
 	require.ErrorIs(t, err, errPublicationOperations)
 	assert.Contains(t, err.Error(), "does not publish update, delete")
@@ -703,7 +658,7 @@ func testValidatePublication(t *testing.T, version int) {
 	// covered too.
 	require.NoError(t, validate("pub_some", []TableFQN{events}))
 
-	exec("CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_root FOR TABLE events WITH (publish_via_partition_root = true);")
 	require.NoError(t, validate("pub_root", []TableFQN{events, {schema, `"events_2027"`}}))
 
 	if version < 15 {
@@ -712,18 +667,126 @@ func testValidatePublication(t *testing.T, version int) {
 
 	// A row filter or a column list still streams, so it is reported rather
 	// than failed.
-	exec("CREATE PUBLICATION pub_rowfilter FOR TABLE orders WHERE (id > 10), users;")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_rowfilter FOR TABLE orders WHERE (id > 10), users;")
 	filtered, err := ValidatePublication(ctx, conn, "pub_rowfilter", []TableFQN{orders, users})
 	require.NoError(t, err)
 	assert.Equal(t, []TableFQN{orders}, filtered)
-	exec("CREATE PUBLICATION pub_columns FOR TABLE orders (id), users;")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_columns FOR TABLE orders (id), users;")
 	filtered, err = ValidatePublication(ctx, conn, "pub_columns", []TableFQN{orders, users})
 	require.NoError(t, err)
 	assert.Equal(t, []TableFQN{orders}, filtered)
-	exec("CREATE PUBLICATION pub_all_columns FOR TABLE orders (id, note);")
+	execSQL(t, ctx, conn, "CREATE PUBLICATION pub_all_columns FOR TABLE orders (id, note);")
 	filtered, err = ValidatePublication(ctx, conn, "pub_all_columns", []TableFQN{orders})
 	require.NoError(t, err)
 	assert.Empty(t, filtered, "a column list naming every column filters nothing")
+}
+
+// TestIntegrationValidatePublicationAllTablesExcept checks that
+// ValidatePublication rejects a configured table that a FOR ALL TABLES
+// publication excludes with EXCEPT.
+//
+// Context:
+//   - PostgreSQL 19 adds FOR ALL TABLES EXCEPT (TABLE ...). puballtables is
+//     still true, but the excluded tables do not stream.
+//
+// Expected behavior:
+//   - A table that the publication does not exclude is accepted.
+//   - An excluded table is rejected, so the input fails to start instead of
+//     silently not streaming the table. This includes an excluded partitioned
+//     table with no partition yet.
+//   - After a partition is added, a partitioned table that the publication
+//     does not exclude is still accepted, and an excluded one is still
+//     rejected.
+//   - The error does not suggest ALTER PUBLICATION ... ADD TABLE, because
+//     PostgreSQL rejects it on a FOR ALL TABLES publication.
+//
+// The test runs on PostgreSQL 19 only, since older versions have no EXCEPT.
+func TestIntegrationValidatePublicationAllTablesExcept(t *testing.T) {
+	integration.CheckSkip(t)
+
+	conn := connectTestDB(t, createDockerInstanceVersion(t, 19))
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	for _, sql := range []string{
+		"CREATE TABLE orders (id serial PRIMARY KEY);",
+		"CREATE TABLE users (id serial PRIMARY KEY);",
+		"CREATE TABLE planned (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE TABLE skipped (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE PUBLICATION pub_except FOR ALL TABLES EXCEPT (TABLE users, TABLE skipped);",
+	} {
+		execSQL(t, ctx, conn, sql)
+	}
+
+	_, err := ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"orders"`}, {`"public"`, `"planned"`}})
+	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"skipped"`}})
+	require.ErrorContains(t, err, `"public"."skipped"`)
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"users"`}})
+	require.ErrorContains(t, err, `"public"."users"`)
+	assert.ErrorContains(t, err, "SET ALL TABLES EXCEPT")
+
+	for _, sql := range []string{
+		"CREATE TABLE planned_2026 PARTITION OF planned FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE TABLE skipped_2026 PARTITION OF skipped FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+	} {
+		execSQL(t, ctx, conn, sql)
+	}
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"planned"`}})
+	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_except", []TableFQN{{`"public"`, `"skipped"`}})
+	require.ErrorContains(t, err, `"public"."skipped"`)
+}
+
+// TestIntegrationValidatePublicationForeignPartition checks that a foreign
+// table partition does not stop a partitioned table from counting as covered.
+//
+// Context:
+//   - A write to a foreign table goes to the remote server, so it never reaches
+//     this server's WAL and no publication can stream it.
+//   - FOR TABLE of a partitioned table lists its foreign partitions in
+//     pg_publication_tables. FOR ALL TABLES leaves them out.
+//
+// Expected behavior:
+//   - The partitioned table is covered with both kinds of publication, since
+//     every partition that can stream is published.
+//   - Under FOR ALL TABLES, a partitioned table with no local partition (none
+//     yet, or only a foreign one) is covered. pg_publication_tables lists
+//     nothing for it, but any local partition added later streams.
+func TestIntegrationValidatePublicationForeignPartition(t *testing.T) {
+	integration.CheckSkip(t)
+
+	conn := connectTestDB(t, createDockerInstance(t))
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
+	defer cancel()
+
+	for _, sql := range []string{
+		"CREATE EXTENSION postgres_fdw;",
+		"CREATE SERVER archive FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'dbname');",
+		"CREATE TABLE events (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE TABLE events_2026 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+		"CREATE FOREIGN TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') SERVER archive;",
+		"CREATE TABLE archived (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE FOREIGN TABLE archived_2025 PARTITION OF archived FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') SERVER archive;",
+		"CREATE TABLE planned (id int, at date) PARTITION BY RANGE (at);",
+		"CREATE PUBLICATION pub_all FOR ALL TABLES;",
+		"CREATE PUBLICATION pub_events FOR TABLE events;",
+	} {
+		execSQL(t, ctx, conn, sql)
+	}
+
+	events := []TableFQN{{`"public"`, `"events"`}}
+	_, err := ValidatePublication(ctx, conn, "pub_all", events)
+	require.NoError(t, err)
+	_, err = ValidatePublication(ctx, conn, "pub_events", events)
+	require.NoError(t, err)
+
+	_, err = ValidatePublication(ctx, conn, "pub_all", []TableFQN{{`"public"`, `"archived"`}, {`"public"`, `"planned"`}})
+	require.NoError(t, err)
 }
 
 // TestIntegrationAllTablesExceptHints checks the hints that the runtime
@@ -746,7 +809,7 @@ func testValidatePublication(t *testing.T, version int) {
 func TestIntegrationAllTablesExceptHints(t *testing.T) {
 	integration.CheckSkip(t)
 
-	_, dbURL := createDockerInstanceVersion(t, 19)
+	dbURL := createDockerInstanceVersion(t, 19)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
@@ -814,7 +877,7 @@ func TestIntegrationBackfillRequiresTablePublishedAsItself(t *testing.T) {
 }
 
 func testBackfillRequiresTablePublishedAsItself(t *testing.T, version int) {
-	_, dbURL := createDockerInstanceVersion(t, version)
+	dbURL := createDockerInstanceVersion(t, version)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 
@@ -926,15 +989,10 @@ func testBackfillRequiresTablePublishedAsItself(t *testing.T, version int) {
 func TestIntegrationStartReplication(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
-
+	dbURL := createDockerInstance(t)
+	conn := connectTestDB(t, dbURL)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
-
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
 
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)
@@ -972,7 +1030,7 @@ func TestIntegrationStartReplication(t *testing.T) {
 		require.NoError(t, err)
 		defer closeConn(t, conn)
 
-		_, err = conn.Exec(ctx, `
+		execSQL(t, ctx, conn, `
 create table t(id int primary key, name text);
 
 insert into t values (1, 'foo');
@@ -984,8 +1042,7 @@ update t set name='quz' where id=3;
 delete from t where id=2;
 
 drop table t;
-`).ReadAll()
-		require.NoError(t, err)
+`)
 	}()
 
 	rxKeepAlive := func() PrimaryKeepaliveMessage {
@@ -1087,15 +1144,9 @@ drop table t;
 func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
 	integration.CheckSkip(t)
 
-	cleanup, dbURL := createDockerInstance(t)
-	defer cleanup()
-
+	conn := connectTestDB(t, createDockerInstance(t))
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
-
-	conn, err := pgconn.Connect(ctx, dbURL)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
 
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)

@@ -10,11 +10,15 @@ package dynamodb
 
 import (
 	"context"
+	"log/slog"
+	"net/http"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
@@ -103,6 +107,81 @@ func TestConvertTableRecordsToBatchSnapshotDedupe(t *testing.T) {
 	require.Equal(t, []string{"after-start"}, kept)
 }
 
+// The snapshot dedupe allows 1 min of clock skew. A host clock that the SDK
+// measures further ahead of AWS must log a warning, because the dedupe can then
+// skip writes made after the snapshot start.
+func TestWarnIfHostClockAhead(t *testing.T) {
+	tests := []struct {
+		name       string
+		dateOffset time.Duration
+		noDate     bool
+		wantLevels []slog.Level
+	}{
+		{
+			name:       "host and AWS agree",
+			dateOffset: 0,
+			wantLevels: nil,
+		},
+		{
+			name:       "host 30 s ahead of AWS",
+			dateOffset: -30 * time.Second,
+			wantLevels: nil,
+		},
+		{
+			name:       "host 2 min ahead of AWS",
+			dateOffset: -2 * time.Minute,
+			wantLevels: []slog.Level{slog.LevelWarn},
+		},
+		{
+			name:       "host 2 min behind AWS",
+			dateOffset: 2 * time.Minute,
+			wantLevels: nil,
+		},
+		{
+			name:       "no Date header",
+			noDate:     true,
+			wantLevels: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				mu     sync.Mutex
+				levels []slog.Level
+			)
+			// An empty substr records every log line.
+			d := &dynamoDBCDCInput{
+				log: service.NewLoggerFromSlog(slog.New(levelRecorder{substr: "", mu: &mu, levels: &levels})),
+			}
+			client := newStubDynamoClient(dateStubTransport{dateOffset: tt.dateOffset, noDate: tt.noDate})
+			out, err := client.DescribeTable(t.Context(), &dynamodb.DescribeTableInput{TableName: aws.String("t")})
+			require.NoError(t, err)
+
+			d.warnIfHostClockAhead(out.ResultMetadata)
+
+			mu.Lock()
+			assert.Equal(t, tt.wantLevels, levels)
+			mu.Unlock()
+		})
+	}
+}
+
+// dateStubTransport answers every DynamoDB call with an empty table and a Date
+// header dateOffset away from the host clock, or no Date header when noDate is
+// set.
+type dateStubTransport struct {
+	dateOffset time.Duration
+	noDate     bool
+}
+
+func (s dateStubTransport) Do(req *http.Request) (*http.Response, error) {
+	resp := jsonResponse(req, http.StatusOK, `{"Table":{"TableName":"t"}}`)
+	if !s.noDate {
+		resp.Header.Set("Date", time.Now().Add(s.dateOffset).UTC().Format(http.TimeFormat))
+	}
+	return resp, nil
+}
+
 func TestShouldSkipFailoverRecord(t *testing.T) {
 	cutoff := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
 	rec := func(ts *time.Time) streamstypes.Record {
@@ -146,7 +225,7 @@ func TestGlobalTableValidation_EmptyReplicas(t *testing.T) {
 		globalTableReplicas: nil,
 		startFrom:           "trim_horizon",
 		batchSize:           100,
-		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100, idleShardGrace: time.Minute},
 	}
 	err := validateDynamoDBCDCConfig(conf)
 	require.Error(t, err)
@@ -624,7 +703,7 @@ func TestCheckpointNamespaceValidation_RejectsDelimiter(t *testing.T) {
 		checkpointNamespace: "dev#alice",
 		startFrom:           "trim_horizon",
 		batchSize:           100,
-		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100, idleShardGrace: time.Minute},
 	}
 	err := validateDynamoDBCDCConfig(conf)
 	require.Error(t, err)
@@ -644,7 +723,7 @@ func TestBatchSizeValidation(t *testing.T) {
 		checkpointTable: "cps",
 		startFrom:       "trim_horizon",
 		batchSize:       100,
-		snapshot:        snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+		snapshot:        snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100, idleShardGrace: time.Minute},
 	}
 	require.NoError(t, validateDynamoDBCDCConfig(conf))
 
