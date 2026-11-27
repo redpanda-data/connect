@@ -79,6 +79,23 @@ type LogMiner struct {
 	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
 	// replayed after the INSERT is buffered so inferLOBLocator can find it.
 	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
+	// lobInsertTxns maps each open transaction that inserted into a table with
+	// a LOB column to its start SCN. It is only filled while LOBEnabled is
+	// false. miningCycle reads it through lobPinSCN and starts the LogMiner
+	// session at the lowest value. Entries leave at COMMIT and ROLLBACK, so a
+	// transaction that ends stops the pin.
+	lobInsertTxns map[sqlredo.TransactionID]uint64
+	// lobTables holds the "SCHEMA.TABLE" names, in upper case, of the tables
+	// with a LOB column. It is built with lobColTypes. It is a separate set,
+	// because Oracle omits some LOB columns from the INSERT SQL_REDO, so the
+	// columns of an INSERT cannot tell if its table has a LOB column.
+	lobTables map[string]struct{}
+	// txnStartSCN maps an open transaction to the SCN of its START row. It is
+	// only filled while LOBEnabled is false and lobTables is not empty. The
+	// transaction cache cannot give this SCN cheaply, because the cache
+	// resource backend reads all events of the transaction to do it. Entries
+	// leave at COMMIT and ROLLBACK.
+	txnStartSCN map[sqlredo.TransactionID]uint64
 	// lobReplay is the in-flight window that re-mines open LOB transactions.
 	// It stays set until the window succeeds, so a retry resets them again.
 	lobReplay *lobReplay
@@ -143,6 +160,9 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher Publishe
 		dmlParser:        sqlredo.NewParser(),
 		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		lobInsertTxns:    make(map[sqlredo.TransactionID]uint64),
+		lobTables:        make(map[string]struct{}),
+		txnStartSCN:      make(map[sqlredo.TransactionID]uint64),
 		windowSize:       cfg.SCNWindowSize,
 		redoVolume:       newRedoVolumeStrategy(cfg.RedoVolumeMin, cfg.RedoVolumeGrowthMax),
 	}
@@ -350,7 +370,10 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	var (
+		// sessionStart is where the LogMiner session starts. queryFrom is the
+		// lower bound of the rows that the connector reads.
 		sessionStart = lm.currentSCN
+		queryFrom    = lm.currentSCN
 		processEvent = lm.processRedoEvent
 	)
 	if lm.cfg.LOBEnabled {
@@ -363,6 +386,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		warn, age := lm.lobWarner.observe(replay, time.Now())
 		if replay != nil {
 			sessionStart = replay.fromSCN - 1
+			queryFrom = sessionStart
 			// The preselected files start at currentSCN and may not cover fromSCN.
 			if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, sessionStart, endSCN); err != nil {
 				return false, fmt.Errorf("collecting redo logs for LOB replay: %w", err)
@@ -378,6 +402,27 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				}
 				return lm.processRedoEvent(ctx, ev)
 			}
+		}
+	}
+
+	// LOB columns are disabled. Oracle writes an INSERT into a table with a LOB
+	// column as two redo changes: the INSERT with EMPTY_CLOB(), then the LOB
+	// value. In one LogMiner session, LogMiner shows the second change as a
+	// LOB-only UPDATE, and the connector suppresses it. If a window ends between
+	// the two, a session that starts after the INSERT does not know the INSERT,
+	// so LogMiner shows the LOB change as a second full-row INSERT, and the row
+	// is published twice. To prevent this, the session starts at the start of
+	// the oldest open transaction that inserted into such a table. The query
+	// still reads only rows above currentSCN, so the connector does not process
+	// rows twice. The session only costs Oracle the extra read of the redo.
+	if !lm.cfg.LOBEnabled {
+		if pin, pinned := lm.lobPinSCN(); pinned && pin <= lm.currentSCN {
+			sessionStart = pin - 1
+			// The preselected files start at currentSCN and may not cover the pin.
+			if logFiles, err = lm.logCollector.GetLogsBySCNRange(ctx, conn, sessionStart, endSCN); err != nil {
+				return false, fmt.Errorf("collecting redo logs for pinned session start: %w", err)
+			}
+			lm.log.Debugf("Starting LogMiner session at SCN %d, the start of an open transaction with a LOB table INSERT; reading rows above SCN %d", sessionStart, lm.currentSCN)
 		}
 	}
 
@@ -426,7 +471,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, sessionStart, endSCN, len(logFiles), processEvent); err != nil {
+	if lastSCN, err := lm.queryLogMinerContents(ctx, conn, queryFrom, endSCN, len(logFiles), processEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
 			// Resume just before the last processed SCN rather than from the start
@@ -532,6 +577,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
 			return fmt.Errorf("starting transaction %s: %w", redoEvent.TransactionID, err)
 		}
+		if !lm.cfg.LOBEnabled && len(lm.lobTables) > 0 {
+			lm.txnStartSCN[redoEvent.TransactionID] = redoEvent.SCN
+		}
 
 	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
@@ -552,6 +600,17 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
 			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
+		}
+		if !lm.cfg.LOBEnabled && len(lm.lobTables) > 0 && event.Operation == sqlredo.OpInsert {
+			_, isLOBTable := lm.lobTables[strings.ToUpper(event.Schema+"."+event.Table)]
+			_, recorded := lm.lobInsertTxns[redoEvent.TransactionID]
+			if isLOBTable && !recorded {
+				startSCN, exists := lm.txnStartSCN[redoEvent.TransactionID]
+				if !exists {
+					startSCN = redoEvent.SCN
+				}
+				lm.lobInsertTxns[redoEvent.TransactionID] = startSCN
+			}
 		}
 
 	case sqlredo.OpSelectLobLocator:
@@ -837,6 +896,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 			lm.lobReplay.end(redoEvent.TransactionID)
 		}
+		delete(lm.lobInsertTxns, redoEvent.TransactionID)
+		delete(lm.txnStartSCN, redoEvent.TransactionID)
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
@@ -845,6 +906,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 			lm.lobReplay.end(redoEvent.TransactionID)
 		}
+		delete(lm.lobInsertTxns, redoEvent.TransactionID)
+		delete(lm.txnStartSCN, redoEvent.TransactionID)
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
 		}
@@ -853,8 +916,20 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
+// lobPinSCN returns the lowest start SCN of the recorded transactions.
+// ok is false when there is none.
+func (lm *LogMiner) lobPinSCN() (scn uint64, ok bool) {
+	for _, start := range lm.lobInsertTxns {
+		if !ok || start < scn {
+			scn, ok = start, true
+		}
+	}
+	return scn, ok
+}
+
 func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 	lm.lobColTypes = make(map[string]string)
+	lm.lobTables = make(map[string]struct{})
 	if len(lm.tables) == 0 {
 		return nil
 	}
@@ -917,6 +992,7 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 		// example: "TESTDB.PRODUCTS.DESCRIPTION" : "CLOB"
 		k := fmt.Sprintf("%s.%s.%s", owner, tableName, columnName)
 		lm.lobColTypes[k] = dataType
+		lm.lobTables[strings.ToUpper(owner+"."+tableName)] = struct{}{}
 	}
 
 	return rows.Err()

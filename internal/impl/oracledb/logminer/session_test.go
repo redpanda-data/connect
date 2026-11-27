@@ -453,6 +453,10 @@ type fakeConn struct {
 	contentRows func() driver.Rows
 	// contentCalls records every V$LOGMNR_CONTENTS query with its bound args.
 	contentCalls []contentCall
+	// startArgs records the bound args of every START_LOGMNR call: STARTSCN, ENDSCN.
+	startArgs [][]any
+	// logRangeArgs records the bound args of every log file range query: start SCN, end SCN.
+	logRangeArgs [][]any
 }
 
 type contentCall struct {
@@ -557,6 +561,9 @@ func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.N
 		}
 		c.contentCalls = append(c.contentCalls, call)
 	}
+	if strings.Contains(query, "V$ARCHIVED_LOG") {
+		c.logRangeArgs = append(c.logRangeArgs, namedValues(args))
+	}
 	switch {
 	case strings.Contains(query, "CURRENT_SCN"):
 		return &fakeSCNRow{scn: c.currentSCN}, nil
@@ -574,10 +581,21 @@ func (c *fakeConn) QueryContext(_ context.Context, query string, args []driver.N
 	}
 }
 
-func (c *fakeConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func namedValues(args []driver.NamedValue) []any {
+	vals := make([]any, 0, len(args))
+	for _, a := range args {
+		vals = append(vals, a.Value)
+	}
+	return vals
+}
+
+func (c *fakeConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.execs = append(c.execs, query)
+	if strings.Contains(query, "START_LOGMNR") {
+		c.startArgs = append(c.startArgs, namedValues(args))
+	}
 	return driver.ResultNoRows, nil
 }
 
