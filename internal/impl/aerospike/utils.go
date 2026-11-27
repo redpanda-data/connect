@@ -29,16 +29,17 @@ import (
 //
 // Sentinels and Go durations (24h, 90s) are accepted. S/M/H/D units are
 // case-insensitive and a bare number is seconds, so 24H, 1D and 3600 parse
-// the same way.
+// the same way. An empty value is keep, the default of the ttl field, so an
+// interpolation that resolves to nothing does not reset the expiration.
 func parseTTL(s string) (uint32, error) {
 	s = strings.TrimSpace(s)
 	lower := strings.ToLower(s)
 	switch lower {
-	case "", "0", "0s", "default":
+	case "0", "0s", "default":
 		return as.TTLServerDefault, nil
 	case "never", "-1":
 		return as.TTLDontExpire, nil
-	case "keep", "-2":
+	case "", "keep", "-2":
 		return as.TTLDontUpdate, nil
 	}
 
@@ -93,4 +94,15 @@ func parseTTLSeconds(lower string) (int64, error) {
 		return 0, errors.New("the minimum resolution is one second")
 	}
 	return secs, nil
+}
+
+// formatTTL renders a record's expiration in the form parseTTL accepts, so a
+// TTL read by aerospike_lookup can be fed straight back into the output's ttl
+// field. The client reports a record that never expires as a sentinel rather
+// than a duration, which would otherwise surface to the user as "4294967295".
+func formatTTL(expiration uint32) string {
+	if expiration == as.TTLDontExpire {
+		return "never"
+	}
+	return (time.Duration(expiration) * time.Second).String()
 }

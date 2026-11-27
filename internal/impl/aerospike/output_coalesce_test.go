@@ -297,6 +297,158 @@ func TestFoldTracksAllSourceIndexes(t *testing.T) {
 	assert.Equal(t, []int{3, 7, 9}, acc.indexes)
 }
 
+func TestFoldKeepsHigherFence(t *testing.T) {
+	newer := opWith(t, 0, "u1", opWrite, map[string]any{"a": 10})
+	newer.hasFence, newer.fence = true, 10
+	stale := opWith(t, 1, "u1", opWrite, map[string]any{"a": 3})
+	stale.hasFence, stale.fence = true, 3
+
+	newer.fold(stale)
+	assert.Equal(t, opWrite, newer.kind)
+	assert.Equal(t, int64(10), newer.fence)
+	assert.Equal(t, map[string]any{"a": 10}, newer.bins)
+	assert.Equal(t, []int{0, 1}, newer.indexes)
+
+	del := opWith(t, 2, "u1", opDelete, map[string]any{"_deleted": true})
+	del.hasFence, del.fence = true, 11
+	newer.fold(del)
+	assert.Equal(t, opDelete, newer.kind)
+	assert.Equal(t, int64(11), newer.fence)
+	assert.Equal(t, true, newer.bins["_deleted"])
+}
+
+func TestFoldIgnoresEqualFence(t *testing.T) {
+	// The server admits only a strictly greater fence, so sequential
+	// write{a}@5 then write{b}@5 leaves {a}. Merging would also write {b}.
+	first := opWith(t, 0, "u1", opWrite, map[string]any{"a": 1})
+	first.hasFence, first.fence = true, 5
+	same := opWith(t, 1, "u1", opWrite, map[string]any{"b": 2})
+	same.hasFence, same.fence = true, 5
+
+	first.fold(same)
+	assert.Equal(t, opWrite, first.kind)
+	assert.Equal(t, int64(5), first.fence)
+	assert.Equal(t, map[string]any{"a": 1}, first.bins)
+	assert.Equal(t, []int{0, 1}, first.indexes)
+}
+
+func TestCanFoldFencedHigherFencePartialWriteStartsNewRound(t *testing.T) {
+	// A partial write with a higher fence lands on whatever the earlier op
+	// left, and that depends on whether the earlier op passed the fence on
+	// the server. Only a whole-record op has one outcome either way.
+	for _, prevKind := range []opKind{opWrite, opReplace, opDelete} {
+		for _, nextKind := range []opKind{opWrite, opUpdateOnly, opCreateOnly} {
+			t.Run(prevKind.String()+"_then_"+nextKind.String(), func(t *testing.T) {
+				prev := opWith(t, 0, "u1", prevKind, map[string]any{"a": 1})
+				prev.hasFence, prev.fence = true, 3
+				next := opWith(t, 1, "u1", nextKind, map[string]any{"b": 2})
+				next.hasFence, next.fence = true, 10
+
+				assert.False(t, prev.canFold(next))
+				out := coalesceOps([]*pendingOp{prev, next}, true)
+				require.Len(t, out, 2)
+				assert.Equal(t, 0, out[0].round)
+				assert.Equal(t, 1, out[1].round)
+			})
+		}
+	}
+}
+
+func TestCanFoldFencedHigherFenceWholeRecord(t *testing.T) {
+	for _, prevKind := range []opKind{opWrite, opReplace, opDelete} {
+		for _, nextKind := range []opKind{opReplace, opReplaceOnly, opDelete} {
+			t.Run(prevKind.String()+"_then_"+nextKind.String(), func(t *testing.T) {
+				prev := opWith(t, 0, "u1", prevKind, map[string]any{"a": 1})
+				prev.hasFence, prev.fence = true, 3
+				next := opWith(t, 1, "u1", nextKind, map[string]any{"b": 2})
+				next.hasFence, next.fence = true, 10
+
+				assert.True(t, prev.canFold(next))
+			})
+		}
+	}
+}
+
+func TestCanFoldFencedOnlyAfterWriteReplaceOrDelete(t *testing.T) {
+	// Sequentially an update_only or replace_only fails on a missing key no
+	// matter the fence, so nothing may be absorbed into it.
+	for _, prevKind := range []opKind{opUpdateOnly, opReplaceOnly, opCreateOnly} {
+		t.Run(prevKind.String(), func(t *testing.T) {
+			prev := opWith(t, 0, "u1", prevKind, map[string]any{"a": 1})
+			prev.hasFence, prev.fence = true, 10
+			stale := opWith(t, 1, "u1", opWrite, map[string]any{"b": 2})
+			stale.hasFence, stale.fence = true, 3
+
+			assert.False(t, prev.canFold(stale))
+		})
+	}
+}
+
+func TestCanFoldFencedAbsorbsLowerOrEqualFence(t *testing.T) {
+	for _, nextKind := range []opKind{opWrite, opUpdateOnly, opReplace, opReplaceOnly, opDelete} {
+		t.Run(nextKind.String(), func(t *testing.T) {
+			prev := opWith(t, 0, "u1", opWrite, map[string]any{"a": 1})
+			prev.hasFence, prev.fence = true, 10
+			stale := opWith(t, 1, "u1", nextKind, map[string]any{"b": 2})
+			stale.hasFence, stale.fence = true, 10
+
+			require.True(t, prev.canFold(stale))
+			prev.fold(stale)
+			assert.Equal(t, opWrite, prev.kind)
+			assert.Equal(t, int64(10), prev.fence)
+			assert.Equal(t, map[string]any{"a": 1}, prev.bins)
+			assert.Equal(t, []int{0, 1}, prev.indexes)
+		})
+	}
+}
+
+func TestCanFoldFencedNeverFoldsCreateOnly(t *testing.T) {
+	// The server checks existence before the fence, and the record exists
+	// after any fenced write, replace, or delete, so create_only fails with
+	// KEY_EXISTS. Absorbing it would acknowledge it instead.
+	for _, prevKind := range []opKind{opWrite, opReplace, opDelete} {
+		for _, fence := range []int64{3, 10, 12} {
+			prev := opWith(t, 0, "u1", prevKind, map[string]any{"a": 1})
+			prev.hasFence, prev.fence = true, 10
+			next := opWith(t, 1, "u1", opCreateOnly, map[string]any{"b": 2})
+			next.hasFence, next.fence = true, fence
+
+			assert.False(t, prev.canFold(next), "%v then create_only@%d", prevKind, fence)
+		}
+	}
+}
+
+func TestCoalesceFencedStaleWriteThenCreateOnlyIsTwoRounds(t *testing.T) {
+	// Stored fence 11: write@10 is filtered out and create_only@12 fails with
+	// KEY_EXISTS. Folded, the create_only would have been absorbed or merged
+	// into a write that the server never applies.
+	stale := opWith(t, 0, "u1", opWrite, map[string]any{"a": 1})
+	stale.hasFence, stale.fence = true, 10
+	create := opWith(t, 1, "u1", opCreateOnly, map[string]any{"b": 2})
+	create.hasFence, create.fence = true, 12
+
+	out := coalesceOps([]*pendingOp{stale, create}, true)
+	require.Len(t, out, 2)
+	assert.Equal(t, opWrite, out[0].kind)
+	assert.Equal(t, opCreateOnly, out[1].kind)
+	assert.Equal(t, 1, out[1].round)
+}
+
+func TestFoldFencedReplaceOnlyAfterDeleteIsReplace(t *testing.T) {
+	// A fenced delete leaves a tombstone, so the later replace_only succeeds.
+	// Keeping the delete would acknowledge that message and drop its bins.
+	del := opWith(t, 0, "u1", opDelete, map[string]any{"_deleted": true})
+	del.hasFence, del.fence = true, 3
+	repl := opWith(t, 1, "u1", opReplaceOnly, map[string]any{"b": 2})
+	repl.hasFence, repl.fence = true, 10
+
+	del.fold(repl)
+	assert.Equal(t, opReplace, del.kind)
+	assert.Equal(t, int64(10), del.fence)
+	assert.Equal(t, map[string]any{"b": 2}, del.bins)
+	assert.Equal(t, []int{0, 1}, del.indexes)
+}
+
 func TestPlanBatchCoalescesRepeatedKeys(t *testing.T) {
 	w := newTestWriter(t, baseConfig)
 
@@ -526,6 +678,52 @@ func TestWriteBatchLaterRoundFailureKeepsEarlierRounds(t *testing.T) {
 	assert.Equal(t, []int{2}, failed)
 }
 
+// A later message for a key must not land before the retry of an earlier
+// message for that key that failed.
+func TestWriteBatchSkipsKeyAfterFailedRound(t *testing.T) {
+	w := newTestWriter(t, baseConfig+"\noperation: create_only\n")
+	var calls [][]string
+	w.operate = func(_ *as.BatchPolicy, recs []as.BatchRecordIfc) error {
+		keys := make([]string, len(recs))
+		for i, r := range recs {
+			rec := r.BatchRec()
+			keys[i] = rec.Key.Value().String()
+			rec.ResultCode = types.OK
+			if len(calls) == 0 && keys[i] == "u1" {
+				rec.ResultCode = types.TIMEOUT
+			}
+		}
+		calls = append(calls, keys)
+		return nil
+	}
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":"u1","a":1}`)),
+		service.NewMessage([]byte(`{"id":"u2","a":1}`)),
+		service.NewMessage([]byte(`{"id":"u1","a":2}`)),
+		service.NewMessage([]byte(`{"id":"u2","a":2}`)),
+		service.NewMessage([]byte(`{"id":"u1","a":3}`)),
+	}
+	indexer := batch.Index()
+	err := w.WriteBatch(t.Context(), batch)
+	require.Error(t, err)
+	assert.Equal(t, [][]string{{"u1", "u2"}, {"u2"}}, calls)
+
+	var berr *service.BatchError
+	require.ErrorAs(t, err, &berr)
+	failed := map[int]string{}
+	berr.WalkMessagesIndexedBy(indexer, func(i int, _ *service.Message, msgErr error) bool {
+		if msgErr != nil {
+			failed[i] = msgErr.Error()
+		}
+		return true
+	})
+	require.Len(t, failed, 3)
+	assert.Contains(t, failed, 0)
+	assert.Contains(t, failed[2], "earlier message for this key in the batch failed")
+	assert.Contains(t, failed[4], "earlier message for this key in the batch failed")
+}
+
 func TestPlanBatchRejectsAllNullReplace(t *testing.T) {
 	for _, op := range []string{"replace", "replace_only"} {
 		t.Run(op, func(t *testing.T) {
@@ -560,27 +758,88 @@ func TestPlanBatchKeepsNullBinOnWrite(t *testing.T) {
 	assert.Len(t, bw.Ops, 1, "write deletes a bin by putting nil")
 }
 
+func TestPlanBatchFencedReplaceKeepsAllNullPayload(t *testing.T) {
+	for _, op := range []string{"replace", "replace_only"} {
+		t.Run(op, func(t *testing.T) {
+			w := newTestWriter(t, baseConfig+`
+operation: `+op+`
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+			msg := service.NewMessage([]byte(`{"id":"u1","a":null}`))
+			msg.MetaSet("kafka_offset", "5")
+
+			ops, failures := w.planBatch(service.MessageBatch{msg})
+			require.Empty(t, failures)
+			require.Len(t, ops, 1)
+			assert.Equal(t, int64(5), ops[0].bins["_off"])
+
+			bw, ok := w.buildRecord(ops[0]).(*as.BatchWrite)
+			require.True(t, ok)
+			assert.Len(t, bw.Ops, 1, "the fence bin is still sent")
+		})
+	}
+}
+
+func TestCoalesceNullBinRules(t *testing.T) {
+	// An all-null write or update_only fails with KEY_NOT_FOUND on a missing
+	// key and deletes an existing record, so the record state after it is
+	// unknown. Nothing folds into it, and a fold that would produce one keeps
+	// the messages in separate rounds.
+	cases := []struct {
+		name  string
+		prev  *pendingOp
+		next  *pendingOp
+		folds bool
+	}{
+		{"null write then update_only", opWith(t, 0, "u1", opWrite, map[string]any{"a": nil}), opWith(t, 1, "u1", opUpdateOnly, map[string]any{"b": 1}), false},
+		{"null write then replace_only", opWith(t, 0, "u1", opWrite, map[string]any{"a": nil}), opWith(t, 1, "u1", opReplaceOnly, map[string]any{"b": 1}), false},
+		{"null write then write", opWith(t, 0, "u1", opWrite, map[string]any{"a": nil}), opWith(t, 1, "u1", opWrite, map[string]any{"b": 1}), false},
+		{"null update_only then update_only", opWith(t, 0, "u1", opUpdateOnly, map[string]any{"a": nil}), opWith(t, 1, "u1", opUpdateOnly, map[string]any{"b": 1}), false},
+		{"delete then null write", opWith(t, 0, "u1", opDelete, nil), opWith(t, 1, "u1", opWrite, map[string]any{"a": nil}), false},
+		{"write then write nulling every bin", opWith(t, 0, "u1", opWrite, map[string]any{"a": 1}), opWith(t, 1, "u1", opWrite, map[string]any{"a": nil}), false},
+		{"write then update_only nulling every bin", opWith(t, 0, "u1", opWrite, map[string]any{"a": 1}), opWith(t, 1, "u1", opUpdateOnly, map[string]any{"a": nil}), false},
+		{"write then write nulling some bins", opWith(t, 0, "u1", opWrite, map[string]any{"a": 1, "b": 2}), opWith(t, 1, "u1", opWrite, map[string]any{"a": nil}), true},
+		{"write then update_only", opWith(t, 0, "u1", opWrite, map[string]any{"a": 1}), opWith(t, 1, "u1", opUpdateOnly, map[string]any{"b": 2}), true},
+		{"replace then null write", opWith(t, 0, "u1", opReplace, map[string]any{"a": 1}), opWith(t, 1, "u1", opWrite, map[string]any{"a": nil}), true},
+		{"replace_only then null update_only", opWith(t, 0, "u1", opReplaceOnly, map[string]any{"a": 1}), opWith(t, 1, "u1", opUpdateOnly, map[string]any{"a": nil}), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.folds, tc.prev.canFold(tc.next))
+		})
+	}
+}
+
+func TestPlanBatchDeleteThenNullWriteIsTwoRounds(t *testing.T) {
+	w := newTestWriter(t, baseConfig+"\noperation: '${! meta(\"op\") }'\n")
+
+	del := service.NewMessage([]byte(`{"id":"u1"}`))
+	del.MetaSet("op", "delete")
+	nullWrite := service.NewMessage([]byte(`{"id":"u1","a":null}`))
+	nullWrite.MetaSet("op", "write")
+
+	ops, failures := w.planBatch([]*service.Message{del, nullWrite})
+	require.Empty(t, failures)
+	require.Len(t, ops, 2)
+	assert.Equal(t, opDelete, ops[0].kind)
+	assert.Equal(t, opWrite, ops[1].kind)
+	assert.Equal(t, 1, ops[1].round)
+}
+
 func TestPlanBatchNullReplaceFoldsToDelete(t *testing.T) {
 	w := newTestWriter(t, baseConfig+"\noperation: '${! meta(\"op\") }'\n")
 
-	// Run one at a time, the delete succeeds and the null write only deletes
-	// bins on a record that is already gone. Failing both would replay forever.
-	// These are plain deletes: the earlier op would have created the record or
-	// removed it, so a missing key is already the end state.
+	// Run one at a time, the replace creates the record and the null write
+	// removes every bin, which deletes it. The replace guarantees the record
+	// exists, so the delete needs no existence check.
 	cases := []struct {
 		name string
 		msgs []*service.Message
 	}{
-		{
-			name: "delete then null write",
-			msgs: func() []*service.Message {
-				del := service.NewMessage([]byte(`{"id":"u1"}`))
-				del.MetaSet("op", "delete")
-				nullWrite := service.NewMessage([]byte(`{"id":"u1","a":null}`))
-				nullWrite.MetaSet("op", "write")
-				return []*service.Message{del, nullWrite}
-			}(),
-		},
 		{
 			name: "replace then null write",
 			msgs: func() []*service.Message {
@@ -746,7 +1005,7 @@ func TestBuildRecordReplaceOmitsNilBin(t *testing.T) {
 			w := newTestWriter(t, baseConfig+"\noperation: "+kind.String()+"\n")
 			op := newPendingOp(0, testKey(t, "u1"), kind, 0)
 			op.setBin("a", 1)
-			op.setBin("b", nil)
+			op.setBin("_deleted", nil)
 
 			bw, ok := w.buildRecord(op).(*as.BatchWrite)
 			require.True(t, ok)
@@ -757,7 +1016,7 @@ func TestBuildRecordReplaceOmitsNilBin(t *testing.T) {
 	w := newTestWriter(t, baseConfig+"\noperation: write\n")
 	op := newPendingOp(0, testKey(t, "u1"), opWrite, 0)
 	op.setBin("a", 1)
-	op.setBin("b", nil)
+	op.setBin("_deleted", nil)
 	bw, ok := w.buildRecord(op).(*as.BatchWrite)
 	require.True(t, ok)
 	assert.Len(t, bw.Ops, 2, "write still deletes a bin by putting nil")
@@ -775,6 +1034,69 @@ func TestBuildRecordReplaceOnly(t *testing.T) {
 	assert.Equal(t, as.REPLACE_ONLY, bw.Policy.RecordExistsAction)
 }
 
+func TestBuildRecordFencedReplaceOnlySkipsTombstoneClear(t *testing.T) {
+	w := newTestWriter(t, baseConfig+`
+operation: replace_only
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+
+	msg := service.NewMessage([]byte(`{"id":"u1","a":1}`))
+	msg.MetaSet("kafka_offset", "5")
+
+	op, err := mapOne(t, w, msg)
+	require.NoError(t, err)
+	assert.NotContains(t, op.bins, "_deleted", "replace_only deletes unnamed bins, so the tombstone is not cleared with a nil put")
+
+	bw, ok := w.buildRecord(op).(*as.BatchWrite)
+	require.True(t, ok)
+	assert.Equal(t, as.REPLACE_ONLY, bw.Policy.RecordExistsAction)
+	// Payload and fence bin. No nil tombstone put.
+	assert.Len(t, bw.Ops, 2)
+}
+
+func TestBuildRecordAppliesFenceExpression(t *testing.T) {
+	w := newTestWriter(t, baseConfig+`
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+
+	msg := service.NewMessage([]byte(`{"id":"u1","a":1}`))
+	msg.MetaSet("kafka_offset", "5")
+
+	op, err := mapOne(t, w, msg)
+	require.NoError(t, err)
+
+	bw, ok := w.buildRecord(op).(*as.BatchWrite)
+	require.True(t, ok)
+	assert.NotNil(t, bw.Policy.FilterExpression)
+	// Payload, fence bin, and a nil tombstone bin so a prior fenced delete is cleared.
+	assert.Len(t, bw.Ops, 3)
+}
+
+func TestBuildRecordWritesFenceFromOp(t *testing.T) {
+	w := newTestWriter(t, baseConfig+`
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+
+	op := opWith(t, 0, "u1", opReplace, map[string]any{"a": 1})
+	op.hasFence, op.fence = true, 12
+
+	_, ok := w.buildRecord(op).(*as.BatchWrite)
+	require.True(t, ok)
+	assert.Equal(t, int64(12), op.bins["_off"])
+}
+
 func TestBuildRecordDelete(t *testing.T) {
 	w := newTestWriter(t, baseConfig)
 
@@ -783,6 +1105,35 @@ func TestBuildRecordDelete(t *testing.T) {
 
 	_, ok := rec.(*as.BatchDelete)
 	assert.True(t, ok)
+}
+
+func TestBuildRecordFencedDeleteIsReplace(t *testing.T) {
+	// An empty body is the tombstone, so the key has to come from metadata
+	// rather than from the body that baseConfig reads it out of.
+	w := newTestWriter(t, `
+hosts: [ "localhost:3000" ]
+namespace: test
+set: users
+key: '${! meta("k") }'
+bins: 'root = this'
+ttl: 0
+fencing:
+  enabled: true
+  bin: _off
+  value: '${! meta("kafka_offset") }'
+`)
+	msg := service.NewMessage([]byte(``))
+	msg.MetaSet("k", "u1")
+	msg.MetaSet("kafka_offset", "4")
+
+	op, err := mapOne(t, w, msg)
+	require.NoError(t, err)
+
+	bw, ok := w.buildRecord(op).(*as.BatchWrite)
+	require.True(t, ok)
+	assert.Equal(t, as.REPLACE, bw.Policy.RecordExistsAction)
+	assert.NotNil(t, bw.Policy.FilterExpression)
+	assert.Equal(t, uint32(as.TTLDontExpire), bw.Policy.Expiration)
 }
 
 func TestClassifyRecord(t *testing.T) {
@@ -795,6 +1146,9 @@ func TestClassifyRecord(t *testing.T) {
 		contains             string
 	}{
 		{name: "ok", code: types.OK, kind: opWrite},
+		// The fence rejected a stale message. That is the fence working, not a
+		// delivery failure — nacking here would retry forever.
+		{name: "filtered out is a success", code: types.FILTERED_OUT, kind: opWrite},
 		// Deleting an absent record is the desired end state, which keeps
 		// deletes idempotent under redelivery.
 		{name: "missing key on delete is a success", code: types.KEY_NOT_FOUND_ERROR, kind: opDelete},
@@ -854,4 +1208,24 @@ func TestClassifyRecordFlagsInDoubt(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "in doubt")
+}
+
+func TestFilteredOutCountIncludesFoldedIndexes(t *testing.T) {
+	op := opWith(t, 0, "u1", opWrite, map[string]any{"a": 1})
+	op.fold(opWith(t, 1, "u1", opWrite, map[string]any{"b": 2}))
+	op.fold(opWith(t, 2, "u1", opWrite, map[string]any{"c": 3}))
+
+	filtered := &as.BatchRecord{Key: testKey(t, "u1"), ResultCode: types.FILTERED_OUT}
+	assert.Equal(t, 3, filteredOutCount(filtered, op))
+
+	ok := &as.BatchRecord{Key: testKey(t, "u1"), ResultCode: types.OK}
+	assert.Equal(t, 0, filteredOutCount(ok, op))
+}
+
+func TestHandleRecordFilteredOutIsSuccess(t *testing.T) {
+	w := new(aerospikeWriter)
+	op := opWith(t, 0, "u1", opWrite, map[string]any{"a": 1})
+	rec := &as.BatchRecord{Key: testKey(t, "u1"), ResultCode: types.FILTERED_OUT}
+
+	assert.NoError(t, w.handleRecord(rec, op))
 }

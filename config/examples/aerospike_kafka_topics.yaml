@@ -43,6 +43,55 @@ output:
         output:
           aerospike:
             hosts: ["127.0.0.1:3000"]
+            # Mutual TLS uses host:tlsname:port. tlsname is the server certificate name.
+            # Password login still sends credentials. The client certificate is the TLS identity.
+            # hosts: [ "as1.internal:clusterA:4333" ]
+            # auth_mode: internal
+            # credentials:
+            #   username: rpcn
+            #   password: ${AEROSPIKE_PASSWORD:secret}
+            # tls:
+            #   enabled: true
+            #   root_cas_file: /certs/ca.pem
+            #   client_certs:
+            #     - cert_file: /certs/client.pem
+            #       key_file: /certs/client.key
+            #       # password: ${AEROSPIKE_KEY_PASSWORD:secret}  # only when the PEM key is encrypted
+            #
+            # PKI sends no password. The certificate subject CN is the Aerospike username.
+            # auth_mode: pki
+            # tls:
+            #   enabled: true
+            #   root_cas_file: /certs/ca.pem
+            #   client_certs:
+            #     - cert_file: /certs/client.pem
+            #       key_file: /certs/client.key
+            # cert_refresh_interval: 1h
+            # Re-reads those same files when their contents change. A different filename
+            # is a config change. Connections already open keep their current session.
+            # With root_cas_file set, an IP seed needs cluster_name or a tlsname on the host.
+            # ciphers is the TLS 1.2 allow-list. Empty leaves the tls default.
+            # It applies only when tls.enabled is true. TLS 1.3 suites stay on
+            # unless protocols is TLSv1.2. ciphers with protocols: [TLSv1.3]
+            # fails startup.
+            # ciphers:
+            #   - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+            #   - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+            # protocols is the version allow-list. Empty offers TLS 1.2 and TLS 1.3.
+            # protocols:
+            #   - TLSv1.2
+            # revoke_certificates rejects a listed serial. Use a decimal integer,
+            # or hex with a 0x prefix. openssl x509 -noout -serial prints hex.
+            # A serial is unique only for its issuing CA. With skip_cert_verify,
+            # only certificates the server sends are checked.
+            # revoke_certificates:
+            #   - "123123"
+            #   - "0x1E0F3"
+            # password_file is the first line of a file, read once at startup.
+            # An empty first line fails startup. A rotated file is read on restart.
+            # credentials:
+            #   username: rpcn
+            #   password_file: /var/secrets/aerospike-password
             cluster_name: redpanda-demo
             namespace: test
             set: users

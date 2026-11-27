@@ -106,6 +106,9 @@ type pendingOp struct {
 	generation    uint32
 	hasGeneration bool
 
+	fence    int64
+	hasFence bool
+
 	// deleteRequiresRecord marks a delete that stands in for a replace_only
 	// whose bins were all nulled by a later update_only. A plain delete of a
 	// missing key succeeds. This one fails, so the existence check survives.
@@ -165,12 +168,29 @@ func (p *pendingOp) take(next *pendingOp) {
 //   - create_only folds only after a delete. The delete removes the record,
 //     so the create succeeds and the result is a replace.
 //
+// A null bin deletes that bin, and the record goes when its last bin does. A
+// write or update_only that sets no bin fails on a missing key, and whether
+// the record exists after it depends on bins the batch does not know about,
+// so nothing folds into it. A later write or update_only folds only when the
+// result still sets a bin.
+//
 // Every other pair waits for a later round. For example, create_only{a:1}
 // then create_only{a:2} on a new key stores a=1 and fails the second message
 // with KEY_EXISTS, which one command cannot do. A delete that coalescing made
 // from replace_only keeps its existence check, so nothing folds into it.
+//
+// Fenced ops follow canFoldFenced.
 func (p *pendingOp) canFold(next *pendingOp) bool {
+	if p.hasFence {
+		return p.canFoldFenced(next)
+	}
 	if p.kind == opDelete && p.deleteRequiresRecord {
+		return false
+	}
+	if (p.kind == opWrite || p.kind == opUpdateOnly) && !p.setsBin() {
+		return false
+	}
+	if (next.kind == opWrite || next.kind == opUpdateOnly) && !p.foldKeepsBin(next) {
 		return false
 	}
 	switch next.kind {
@@ -179,7 +199,81 @@ func (p *pendingOp) canFold(next *pendingOp) bool {
 	case opUpdateOnly, opReplaceOnly:
 		return p.kind == opWrite || p.kind == opReplace || p.kind == opUpdateOnly || p.kind == opReplaceOnly
 	case opCreateOnly:
-		return p.kind == opDelete
+		// A create_only with no bin fails on the server either way, while the
+		// replace it would fold into succeeds.
+		return p.kind == opDelete && next.setsBin()
+	}
+	return false
+}
+
+// canFoldFenced applies the fold rules when fencing is on. The server writes a
+// message only when its fence is higher than the stored one, so whether an
+// earlier message was written depends on a fence the batch does not know.
+//
+//   - A later message whose fence is not higher is filtered out after the
+//     earlier one, whether that one was written or filtered out. It folds as
+//     a no-op, but only after write, replace, or delete: those do not fail on
+//     the key's existence, so the later message cannot be written against an
+//     unchanged record.
+//   - A later create_only never folds. The record exists after any fenced
+//     write, replace, or delete, and the server checks existence before the
+//     fence, so it fails with KEY_EXISTS whatever its fence.
+//   - A later message with a higher fence folds only when it replaces the
+//     whole record (replace, replace_only, or delete) and the earlier one is
+//     write, replace, or delete. The record then holds the later payload either
+//     way, and it exists, so replace_only's check passes. A partial write
+//     waits for a later round: merged into the earlier payload, it would write
+//     those bins even when the server would have filtered that message out.
+func (p *pendingOp) canFoldFenced(next *pendingOp) bool {
+	switch p.kind {
+	case opWrite, opReplace, opDelete:
+	default:
+		return false
+	}
+	if next.kind == opCreateOnly {
+		return false
+	}
+	if next.fence <= p.fence {
+		return true
+	}
+	switch next.kind {
+	case opReplace, opReplaceOnly, opDelete:
+		return true
+	}
+	return false
+}
+
+// setsBin reports whether the op writes at least one bin value, so the record
+// exists after it.
+func (p *pendingOp) setsBin() bool {
+	for _, v := range p.bins {
+		if v != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// foldKeepsBin reports whether folding the write or update_only next into p
+// leaves a command that still sets a bin. A replace or replace_only that ends
+// up with no bins becomes a delete, which is the record those messages leave.
+func (p *pendingOp) foldKeepsBin(next *pendingOp) bool {
+	if p.kind == opReplace || p.kind == opReplaceOnly {
+		return true
+	}
+	if next.setsBin() {
+		return true
+	}
+	if p.kind == opDelete {
+		return false
+	}
+	for name, v := range p.bins {
+		if v == nil {
+			continue
+		}
+		if nv, ok := next.bins[name]; !ok || nv != nil {
+			return true
+		}
 	}
 	return false
 }
@@ -193,11 +287,27 @@ func (p *pendingOp) canFold(next *pendingOp) bool {
 // command reaches the record before it is deleted, and keep would carry over
 // its expiration.
 //
+// A fenced message whose fence is not higher only adds its index. One with a
+// higher fence replaces the payload, the fence, and the ttl. Fencing rejects
+// a ttl of keep, so that ttl is always explicit.
+//
 // Generation is deliberately not merged here: coalesceOps never folds an
 // operation carrying a compare-and-set check, because one command can only
 // carry one expected generation.
 func (p *pendingOp) fold(next *pendingOp) {
 	p.indexes = append(p.indexes, next.indexes...)
+	if p.hasFence {
+		if next.fence <= p.fence {
+			return
+		}
+		p.fence = next.fence
+		p.ttl = next.ttl
+		p.take(next)
+		if p.kind == opReplaceOnly {
+			p.kind = opReplace
+		}
+		return
+	}
 	switch {
 	case p.kind == opDelete && next.ttl == as.TTLDontUpdate:
 		p.ttl = as.TTLServerDefault
@@ -232,8 +342,8 @@ func (p *pendingOp) fold(next *pendingOp) {
 
 	// A later write or update_only can null every bin of an earlier replace.
 	// That command would send no operations, and a record with no bins does
-	// not exist, so the fold is a delete. An all-null replace or replace_only
-	// never reaches here: mapMessage rejects that message on its own.
+	// not exist, so the fold is a delete. An unfenced all-null replace or
+	// replace_only never reaches here: mapMessage rejects that message on its own.
 	//
 	// replace_only keeps its existence check. The delete fails when the key
 	// is missing, which is what [replace_only{a:1}, update_only{a:null}]
@@ -304,6 +414,7 @@ type batchMapper struct {
 	op         *service.MessageBatchInterpolationExecutor
 	ttl        *service.MessageBatchInterpolationExecutor
 	generation *service.MessageBatchInterpolationExecutor
+	fence      *service.MessageBatchInterpolationExecutor
 }
 
 func newBatchMapper(conf *aerospikeConfig, batch service.MessageBatch) *batchMapper {
@@ -318,6 +429,9 @@ func newBatchMapper(conf *aerospikeConfig, batch service.MessageBatch) *batchMap
 	}
 	if !conf.ttlIsStatic {
 		m.ttl = batch.InterpolationExecutor(conf.ttl)
+	}
+	if conf.fenceEnabled {
+		m.fence = batch.InterpolationExecutor(conf.fenceValue)
 	}
 	if lit, ok := conf.generation.Static(); !ok || strings.TrimSpace(lit) != "" {
 		m.generation = batch.InterpolationExecutor(conf.generation)
@@ -348,12 +462,35 @@ func (m *batchMapper) mapMessage(index int) (*pendingOp, error) {
 	} else if ok {
 		op.generation, op.hasGeneration = gen, true
 	}
-	if kind == opDelete {
+	if m.conf.fenceEnabled {
+		if ttl == as.TTLDontUpdate {
+			return nil, errFencedKeepTTL
+		}
+		fence, err := m.resolveFence(index)
+		if err != nil {
+			return nil, err
+		}
+		op.fence, op.hasFence = fence, true
+		op.setBin(m.conf.fenceBin, fence)
+		if kind == opDelete {
+			op.setBin(m.conf.tombstoneBin, true)
+			return op, nil
+		}
+	} else if kind == opDelete {
 		return op, nil
 	}
 
 	if err := m.applyBins(op, index); err != nil {
 		return nil, err
+	}
+
+	if m.conf.fenceEnabled && kind != opReplace && kind != opReplaceOnly && kind != opCreateOnly {
+		// UPDATE merges. A prior fenced delete left a tombstone bin that must
+		// be removed or readers, including aerospike_lookup, will still treat
+		// the record as missing. replace and replace_only delete bins they do
+		// not name, and create_only fails while the tombstone record exists,
+		// so those three do not clear it here.
+		op.setBin(m.conf.tombstoneBin, nil)
 	}
 
 	if len(op.binOrder) == 0 {
@@ -362,7 +499,8 @@ func (m *batchMapper) mapMessage(index int) (*pendingOp, error) {
 
 	// Reject this message before coalescing. Folding an all-null replace into
 	// an earlier write would delete the record that write just created.
-	// write and update_only keep a null: that put deletes the bin.
+	// Fencing has already stored the fence bin, so a fenced payload still has
+	// a value to send. write and update_only keep a null: that put deletes the bin.
 	if kind == opReplace || kind == opReplaceOnly {
 		if len(op.putOps(kind.recordExistsAction())) == 0 {
 			return nil, nullReplaceError(kind, false)
@@ -424,6 +562,18 @@ func (m *batchMapper) resolveGeneration(index int) (uint32, bool, error) {
 	return uint32(v), true, nil
 }
 
+func (m *batchMapper) resolveFence(index int) (int64, error) {
+	raw, err := m.fence.TryString(index)
+	if err != nil {
+		return 0, fmt.Errorf("interpolating '%v.%v': %w", aoFieldFencing, aoFieldFencingValue, err)
+	}
+	fence, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("field '%v.%v' resolved to %q, which is not an integer: %w", aoFieldFencing, aoFieldFencingValue, raw, err)
+	}
+	return fence, nil
+}
+
 // applyBins runs the bins mapping and converts the resulting object into bins.
 func (m *batchMapper) applyBins(op *pendingOp, index int) error {
 	mapped, err := m.bins.Query(index)
@@ -461,6 +611,9 @@ func (m *batchMapper) applyBins(op *pendingOp, index int) error {
 			}
 			return fmt.Errorf("%w; rename it in the '%v' mapping", err, aoFieldBins)
 		}
+		if field := m.fencingBinField(name); field != "" {
+			return fmt.Errorf("mapping in field '%v' produced bin %q, which is reserved by '%v.%v'; drop or rename it in the mapping, for example with this.without(%q)", aoFieldBins, name, aoFieldFencing, field, name)
+		}
 		value, err := toAerospike(obj[name], m.conf.coerceInts)
 		if err != nil {
 			return fmt.Errorf("bin %q: %w", name, err)
@@ -480,18 +633,28 @@ func (m *batchMapper) applyBins(op *pendingOp, index int) error {
 	return nil
 }
 
+// fencingBinField names the fencing field that owns bin name, or returns ""
+// when fencing is off or the name is free. Letting the mapping write these
+// bins would replace the fence the filter expression compares against, or
+// mark a live record as a tombstone.
+func (m *batchMapper) fencingBinField(name string) string {
+	if !m.conf.fenceEnabled {
+		return ""
+	}
+	switch name {
+	case m.conf.fenceBin:
+		return aoFieldFencingBin
+	case m.conf.tombstoneBin:
+		return aoFieldFencingTombstoneBin
+	}
+	return ""
+}
+
 // isTombstone reports whether a message carries no payload, which is the Kafka
 // convention for "this key is deleted".
 func isTombstone(msg *service.Message) bool {
 	if v, err := msg.AsStructured(); err == nil {
-		if v == nil {
-			return true
-		}
-		if s, ok := v.(string); ok {
-			trimmed := strings.TrimSpace(s)
-			return trimmed == "" || trimmed == "null"
-		}
-		return false
+		return v == nil
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
