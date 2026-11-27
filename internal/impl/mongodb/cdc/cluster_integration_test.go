@@ -464,16 +464,11 @@ func TestIntegrationIncSnapshotDepsPrepareWaitsForMajority(t *testing.T) {
 // then, a read with majority read concern returns the version of the document
 // before the write.
 //
-// In that window, the two sources of the incremental snapshot disagree about
-// the write:
-//   - The change stream starts one tick after the last write that the primary
-//     applied. The write is before the start, so the stream does not return
-//     it.
-//   - The chunk reads use majority read concern, so they return the version
-//     before the write.
-//
-// The snapshot can then emit the chunk with the older document, and the output
-// never has the write. The test expects foo/1 with v=1 in the output.
+// In that window, the chunk reads use majority read concern, so they return the
+// version before the write. The write reaches the output only if the change
+// stream returns it after it commits. A stream that opens after the last write
+// that the primary applied does not return it, and the output never has the
+// write. The test expects foo/1 with v=1 in the output.
 func TestIntegrationMongoCDCIncrementalSnapshotUnreplicatedWrite(t *testing.T) {
 	integration.CheckSkip(t)
 	// Starts its own containers on its own network.
@@ -505,9 +500,10 @@ mongodb_cdc:
 `)
 	wait := stream.RunAsync(t)
 
-	// Keep replication stopped until the input either reads foo or waits for the
-	// majority snapshot. The "reading" log fires only when the first chunk is
-	// released, which is after Prepare, so a wait never logs it.
+	// Keep replication stopped until the input reads foo, so that the chunk
+	// reads miss the write. An input that opens the stream from a resume token
+	// waits for the majority snapshot before the first chunk instead. It logs
+	// "reading" only after replication resumes, so a wait also ends this phase.
 	readingFoo := func() bool {
 		return len(h.logs.matching("Incremental snapshot reading collection foo")) > 0
 	}
@@ -522,11 +518,16 @@ mongodb_cdc:
 	secondary.resumeReplication()
 
 	h.waitReads("foo", 3)
+	// The chunk can emit foo/1 before the write commits, and the stream emits
+	// the write after it. Stop only when the output has the write.
+	assert.Eventually(t, func() bool {
+		return replay(h.output).of("foo")["foo/1"] == 1
+	}, 30*time.Second, 100*time.Millisecond, "the unreplicated update of foo/1 is missing from the output")
 	stream.Stop(t)
 	wait()
 
 	got := replayChecked(t, h.output)
-	assert.Equal(t, map[string]float64{"foo/0": 0, "foo/1": 1, "foo/2": 0}, got.of("foo"), "the unreplicated update of foo/1 is missing from the output")
+	assert.Equal(t, map[string]float64{"foo/0": 0, "foo/1": 1, "foo/2": 0}, got.of("foo"))
 }
 
 // TestIntegrationIncSnapshotDepsReadFromPrimary connects with

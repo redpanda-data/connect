@@ -1762,13 +1762,17 @@ func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) 
 		// delivers the event itself - this short-lived stream is discarded.
 		//
 		// With a snapshot about to run that is fine: adopting the token makes
-		// the event pre-snapshot data by definition, and the snapshot scan -
-		// which only starts once this call returns, and reads the collection's
-		// current state rather than an as-of-`ts` view - captures its effect,
-		// so at-least-once holds. Without a snapshot nothing covers the event,
-		// so returning its token would silently skip a change; error instead,
-		// which the sharded no-snapshot caller turns into a retried Connect
-		// failure - loud and recoverable rather than silently lossy.
+		// the event pre-snapshot data, and the snapshot reads, which start only
+		// after this call returns, capture its effect, so at-least-once holds.
+		// The blocking snapshot reads the current state of each collection. The
+		// incremental snapshot reads with majority read concern, and the event
+		// is majority committed, because a change stream returns only
+		// majority-committed changes.
+		//
+		// Without a snapshot nothing covers the event, so returning its token
+		// would silently skip a change. Return an error instead: the sharded
+		// no-snapshot caller turns it into a Connect failure that is retried,
+		// which is loud and recoverable rather than silently lossy.
 		if !m.readsSnapshot() {
 			return nil, errors.New("unable to determine start position prior to streaming: the change stream returned an event while capturing the start position and no snapshot is configured to cover it; retrying, or enable `stream_snapshot` or `incremental_snapshot.enabled` to make first starts robust on busy clusters")
 		}
