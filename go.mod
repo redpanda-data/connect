@@ -142,7 +142,7 @@ require (
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
 	github.com/oklog/ulid/v2 v2.1.2
-	github.com/opensearch-project/opensearch-go/v3 v3.1.0
+	github.com/opensearch-project/opensearch-go/v4 v4.3.0
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/parquet-go/parquet-go v0.29.0
 	github.com/pebbe/zmq4 v1.4.0
