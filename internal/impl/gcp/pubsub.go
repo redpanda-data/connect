@@ -31,6 +31,7 @@ type pubsubTopic interface {
 	Exists(ctx context.Context) (bool, error)
 	Publish(ctx context.Context, msg *pubsub.Message) publishResult
 	EnableOrdering()
+	ResumePublish(orderingKey string)
 	Stop()
 }
 
@@ -67,6 +68,10 @@ func (at *airGappedTopic) Publish(ctx context.Context, msg *pubsub.Message) publ
 
 func (at *airGappedTopic) EnableOrdering() {
 	at.t.EnableMessageOrdering = true
+}
+
+func (at *airGappedTopic) ResumePublish(orderingKey string) {
+	at.t.ResumePublish(orderingKey)
 }
 
 func (at *airGappedTopic) Stop() {

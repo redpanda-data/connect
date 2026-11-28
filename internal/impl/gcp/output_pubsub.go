@@ -263,7 +263,7 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 	}
 
 	for i, msg := range batch {
-		res, err := out.writeMessage(ctx, topics, msg)
+		topic, orderingKey, res, err := out.writeMessage(ctx, topics, msg)
 		if err != nil {
 			batchErrFailed(i, err)
 			continue
@@ -272,7 +272,12 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 		p.Go(func(ctx context.Context) (*serverResult, error) {
 			_, err := res.Get(ctx)
 			if err != nil {
-				return &serverResult{batchIndex: i, err: err}, nil
+				return &serverResult{
+					batchIndex:  i,
+					err:         err,
+					topic:       topic,
+					orderingKey: orderingKey,
+				}, nil
 			}
 			return nil, nil
 		})
@@ -283,9 +288,24 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 		return fmt.Errorf("getting publish results: %w", err)
 	}
 
+	type resumeKey struct {
+		topic       pubsubTopic
+		orderingKey string
+	}
+	var resumed map[resumeKey]struct{}
 	for _, res := range getResults {
 		if res == nil {
 			continue
+		}
+		if res.orderingKey != "" {
+			if resumed == nil {
+				resumed = make(map[resumeKey]struct{})
+			}
+			rk := resumeKey{topic: res.topic, orderingKey: res.orderingKey}
+			if _, ok := resumed[rk]; !ok {
+				res.topic.ResumePublish(res.orderingKey)
+				resumed[rk] = struct{}{}
+			}
 		}
 		batchErrFailed(res.batchIndex, res.err)
 	}
@@ -314,10 +334,10 @@ func (out *pubsubOutput) Close(_ context.Context) error {
 	return err
 }
 
-func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[string]pubsubTopic, msg *service.Message) (publishResult, error) {
+func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[string]pubsubTopic, msg *service.Message) (pubsubTopic, string, publishResult, error) {
 	topicName, err := out.topicQ.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("resolving topic name: %w", err)
+		return nil, "", nil, fmt.Errorf("resolving topic name: %w", err)
 	}
 
 	topic, found := cachedTopics[topicName]
@@ -325,7 +345,7 @@ func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[stri
 	if !found {
 		t, err := out.getTopic(ctx, topicName)
 		if err != nil {
-			return nil, fmt.Errorf("getting topic: %s: %w", topicName, err)
+			return nil, "", nil, fmt.Errorf("getting topic: %s: %w", topicName, err)
 		}
 
 		cachedTopics[topicName] = t
@@ -347,22 +367,22 @@ func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[stri
 		attr[key] = value
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("building message attributes: %w", err)
+		return nil, "", nil, fmt.Errorf("building message attributes: %w", err)
 	}
 
 	var orderingKey string
 	if out.orderingKeyQ != nil {
 		if orderingKey, err = out.orderingKeyQ.TryString(msg); err != nil {
-			return nil, fmt.Errorf("building ordering key: %w", err)
+			return nil, "", nil, fmt.Errorf("building ordering key: %w", err)
 		}
 	}
 
 	data, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("getting bytes from message: %w", err)
+		return nil, "", nil, fmt.Errorf("getting bytes from message: %w", err)
 	}
 
-	return topic.Publish(ctx, &pubsub.Message{
+	return topic, orderingKey, topic.Publish(ctx, &pubsub.Message{
 		Data:        data,
 		Attributes:  attr,
 		OrderingKey: orderingKey,
@@ -398,8 +418,10 @@ func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic
 }
 
 type serverResult struct {
-	batchIndex int
-	err        error
+	batchIndex  int
+	err         error
+	topic       pubsubTopic
+	orderingKey string
 }
 
 func init() {

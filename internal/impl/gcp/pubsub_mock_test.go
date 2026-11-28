@@ -60,6 +60,10 @@ func (mt *mockTopic) EnableOrdering() {
 	mt.Called()
 }
 
+func (mt *mockTopic) ResumePublish(orderingKey string) {
+	mt.Called(orderingKey)
+}
+
 func (mt *mockTopic) Stop() {
 	mt.Called()
 }
