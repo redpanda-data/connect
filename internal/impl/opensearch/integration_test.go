@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	os "github.com/opensearch-project/opensearch-go/v3"
-	osapi "github.com/opensearch-project/opensearch-go/v3/opensearchapi"
+	os "github.com/opensearch-project/opensearch-go/v4"
+	osapi "github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

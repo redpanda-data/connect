@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
-	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchutil"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/redact"

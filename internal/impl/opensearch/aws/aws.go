@@ -17,8 +17,8 @@ package aws
 import (
 	"context"
 
-	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
-	"github.com/opensearch-project/opensearch-go/v3/signer/awsv2"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/v4/signer/awsv2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
